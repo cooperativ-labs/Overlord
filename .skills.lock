@@ -1,0 +1,31 @@
+# .skills.lock — auto-generated, commit to repo
+locked_at: 2026-02-11T11:51:15.213Z
+skills:
+  - slug: code-review
+    registry: local
+    version: 1.0.0
+    sha256: 21a09de41fe2bbaa3815abf8033537f88838fc6bc49312e6381eb50efdc9f6bd
+  - slug: edge-functions
+    registry: local
+    version: 1.0.0
+    sha256: 154aeff750c4be7324ec9efc7ec7c223734421276490c91613450eb03ed0e5c6
+  - slug: loading-button
+    registry: local
+    version: 1.0.0
+    sha256: f9920fa40bef30e5786fbd3ce8d8dee60ba31f6f5b6f9577f4758427da84ae05
+  - slug: next-project-setup
+    registry: local
+    version: 1.0.0
+    sha256: f6b0d274c32d1f2ca5f02eed71c1482c8a009745d3c721a82228f972d7b710c9
+  - slug: supabase-client-setup
+    registry: local
+    version: 1.0.0
+    sha256: ba0a084f0f5be1ce05f27ac81cbed9f31396cb69cce71e24eb11f3e62e72971a
+  - slug: supabase-rls
+    registry: local
+    version: 1.0.0
+    sha256: f94fcf3b9ea98d1971e97f4888edde39c71f95c7b70789f1a35e792ab1aa303b
+  - slug: zod-v4-patterns
+    registry: local
+    version: 1.0.0
+    sha256: e43ec9383a90fb3cca3a0fcdbebbd7e3f28e504948e721dfb2b39462eb715804

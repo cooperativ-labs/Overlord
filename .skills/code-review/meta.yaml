@@ -1,0 +1,11 @@
+slug: code-review
+registry: local
+version: 1.0.0
+name: code-review
+description: Conducts comprehensive code reviews identifying poor practices,
+  inefficiencies, potential bugs, security vulnerabilities, and provides
+  recommendations for making code DRYer and more maintainable. Use when
+  reviewing files, PRs, or code quality.
+tags: []
+compat: []
+sha256: 21a09de41fe2bbaa3815abf8033537f88838fc6bc49312e6381eb50efdc9f6bd

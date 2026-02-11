@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /api/
+Disallow: /login/
+Disallow: /sign-up/
+Disallow: /settings/
+Disallow: /manage-subscription/ 

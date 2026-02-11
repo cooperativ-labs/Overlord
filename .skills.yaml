@@ -1,0 +1,12 @@
+sources:
+  - name: "local"
+    kind: "local"
+install_path: ".skills"
+skills:
+  - slug: "code-review"
+  - slug: "edge-functions"
+  - slug: "loading-button"
+  - slug: "next-project-setup"
+  - slug: "supabase-client-setup"
+  - slug: "supabase-rls"
+  - slug: "zod-v4-patterns"
