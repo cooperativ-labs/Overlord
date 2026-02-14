@@ -4,39 +4,44 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { BoardColumn } from '@/lib/orchestrator/types';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
+
+type KanbanColumnModel = {
+  id: string;
+  title: string;
+};
 
 export default function KanbanColumn({
   column,
   tickets
 }: {
-  column: BoardColumn;
+  column: KanbanColumnModel;
   tickets: Ticket[];
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: column.slug });
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const ticketIds = tickets.map(t => t.id);
 
   return (
-    <Card
+    <div
       ref={setNodeRef}
-      className={`min-h-[20rem] min-w-[18rem] ${isOver ? 'ring-2 ring-primary/40' : ''}`}
+      className={`flex min-w-[280px] shrink-0 flex-1 flex-col rounded-lg bg-muted/30 transition-colors ${
+        isOver ? 'bg-muted/60' : ''
+      }`}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">{column.title}</CardTitle>
-          <Badge variant="outline">{tickets.length}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
+      <div className="flex items-center justify-between gap-2 px-4 py-3">
+        <h3 className="text-sm font-semibold tracking-tight">{column.title}</h3>
+        <Badge variant="secondary" className="rounded-full">
+          {tickets.length}
+        </Badge>
+      </div>
+      <div className="flex-1 px-3 pb-3">
         <SortableContext items={ticketIds} strategy={verticalListSortingStrategy}>
-          <ScrollArea className="h-[28rem] pr-2">
-            <div className="grid gap-2">
+          <ScrollArea className="h-[calc(100vh-16rem)]">
+            <div className="flex flex-col gap-2 pr-2">
               {tickets.length === 0 ? (
-                <div className="text-muted-foreground rounded-md border border-dashed p-3 text-sm">
+                <div className="text-muted-foreground rounded-md bg-background/50 p-4 text-center text-xs">
                   No tickets
                 </div>
               ) : (
@@ -45,7 +50,7 @@ export default function KanbanColumn({
             </div>
           </ScrollArea>
         </SortableContext>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

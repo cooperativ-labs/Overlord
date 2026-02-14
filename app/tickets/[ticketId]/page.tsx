@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { updateTicketStatusAction } from '@/lib/actions/tickets';
 import { createClient } from '@/supabase/utils/server';
 
-const statuses = [
+const fallbackStatuses = [
   'draft',
   'review',
   'refine',
@@ -36,7 +36,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
     { data: ticket, error: ticketError },
     { data: events },
     { data: state },
-    { data: artifacts }
+    { data: artifacts },
+    { data: statuses }
   ] = await Promise.all([
     supabase.from('tickets').select('*').eq('id', ticketId).single(),
     supabase
@@ -56,7 +57,8 @@ export default async function TicketDetailPage({ params }: PageProps) {
       .select('*')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(20),
+    supabase.from('ticket_statuses').select('name').order('position', { ascending: true })
   ]);
 
   if (ticketError || !ticket) {
@@ -72,6 +74,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
 
   const attachCommand = buildAttachCommand(ticket.ticket_number);
   const chatGptLink = `https://chat.openai.com/?q=${encodeURIComponent(`attach ${ticket.ticket_number ?? ''}`)}`;
+  const statusOptions = statuses?.map(status => status.name) ?? fallbackStatuses;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
@@ -179,7 +182,7 @@ export default async function TicketDetailPage({ params }: PageProps) {
                   name="status"
                   className="border-input bg-background h-9 rounded-md border px-3 text-sm"
                 >
-                  {statuses.map(status => (
+                  {statusOptions.map(status => (
                     <option key={status} value={status}>
                       {status}
                     </option>

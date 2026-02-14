@@ -1,5 +1,5 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { createClient } from '@/supabase/utils/server';
 
 import KanbanBoard from './(components)/KanbanBoard';
@@ -46,25 +46,26 @@ export default async function TicketsPage({
 
   const tickets = ticketsResult.data ?? [];
   const columns = columnsResult.data ?? [];
+  const statuses =
+    columns?.map((col: { name?: string; slug?: string; id?: string; position: number }) => ({
+      name: col.name ?? col.slug ?? String(col.id ?? ''),
+      position: col.position
+    })) ?? [];
   const sorted = sortByStatus(tickets);
 
-  const showBoard = view === 'board' && columns.length > 0;
+  const showBoard = view === 'board' && statuses.length > 0;
 
   return (
-    <div className="grid gap-4">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <CardTitle>Ticket Inbox</CardTitle>
-              <CardDescription>
-                Drag tickets between columns to change their status.
-              </CardDescription>
-            </div>
-            <TicketsViewToggle />
-          </div>
-        </CardHeader>
-      </Card>
+    <div className="flex flex-col gap-4">
+      <nav className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+        <div>
+          <h1 className="text-lg font-semibold">Ticket Inbox</h1>
+          <p className="text-muted-foreground text-sm">
+            Drag tickets between columns to change their status.
+          </p>
+        </div>
+        <TicketsViewToggle />
+      </nav>
 
       {ticketsResult.error ? (
         <Alert variant="destructive">
@@ -73,7 +74,7 @@ export default async function TicketsPage({
       ) : null}
 
       {showBoard ? (
-        <KanbanBoard tickets={tickets} columns={columns} />
+        <KanbanBoard tickets={tickets} statuses={statuses} />
       ) : (
         <Card>
           <CardContent className="pt-6">

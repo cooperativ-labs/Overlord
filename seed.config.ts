@@ -11,5 +11,12 @@ export default defineConfig({
     await client.connect();
     return new SeedPg(client);
   },
-  select: ["!*", "public.*", "auth.users", "auth.identities", "auth.sessions"],
+  select: [
+    "!*",
+    "public.*",
+    "auth.users",
+    "auth.identities",
+    "auth.sessions",
+    "auth.oauth_clients",
+  ],
 });

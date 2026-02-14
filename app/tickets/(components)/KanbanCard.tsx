@@ -31,7 +31,7 @@ export default function KanbanCard({
 
   if (isDragOverlay) {
     return (
-      <div className="w-full max-w-sm rounded-lg border border-dashed border-primary/40 bg-card shadow-lg">
+      <div className="w-full rounded-md border border-dashed border-primary/40 bg-card shadow-lg">
         <KanbanCardBody ticket={ticket} />
       </div>
     );
@@ -45,7 +45,7 @@ export default function KanbanCard({
   return (
     <Card
       ref={setNodeRef}
-      className={`cursor-grab ${isDragging ? 'opacity-40' : ''}`}
+      className={`cursor-grab border-border/40 shadow-sm ${isDragging ? 'opacity-40' : ''}`}
       style={style}
       {...listeners}
       {...attributes}
@@ -57,7 +57,7 @@ export default function KanbanCard({
 
 function KanbanCardBody({ ticket }: { ticket: Ticket }) {
   return (
-    <CardContent className="space-y-3 pt-6">
+    <CardContent className="space-y-2.5 p-3">
       <h4 className="text-sm leading-snug font-medium">
         <Link
           href={`/tickets/${ticket.id}`}
@@ -68,9 +68,15 @@ function KanbanCardBody({ ticket }: { ticket: Ticket }) {
         </Link>
       </h4>
       <div className="flex flex-wrap gap-1.5">
-        <Badge variant="outline">{ticket.status}</Badge>
-        <Badge>{ticket.priority}</Badge>
-        {ticket.assigned_agent ? <Badge variant="secondary">{ticket.assigned_agent}</Badge> : null}
+        <Badge variant="outline" className="text-xs">
+          {ticket.status}
+        </Badge>
+        <Badge className="text-xs">{ticket.priority}</Badge>
+        {ticket.assigned_agent ? (
+          <Badge variant="secondary" className="text-xs">
+            {ticket.assigned_agent}
+          </Badge>
+        ) : null}
       </div>
     </CardContent>
   );

@@ -1,34 +1,67 @@
 'use client';
 
 import {
-  closestCorners,
   DndContext,
   type DragEndEvent,
   type DragOverEvent,
   DragOverlay,
   type DragStartEvent,
   PointerSensor,
+  pointerWithin,
   useSensor,
   useSensors
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { useOptimistic, useRef, useState, useTransition } from 'react';
+import { Columns3, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { reorderTicketsAction } from '@/lib/actions/tickets';
-import type { BoardColumn } from '@/lib/orchestrator/types';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
 import KanbanColumn from './KanbanColumn';
 
+const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
+
+type StatusColumn = {
+  id: string;
+  title: string;
+  position: number;
+};
+
+function toColumnTitle(status: string): string {
+  return status
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 export default function KanbanBoard({
   tickets: initialTickets,
-  columns
+  statuses
 }: {
   tickets: Ticket[];
-  columns: BoardColumn[];
+  statuses: Array<{ name: string; position: number }>;
 }) {
   const [, startTransition] = useTransition();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+
+  const columns: StatusColumn[] = statuses.map(status => ({
+    id: status.name,
+    title: toColumnTitle(status.name),
+    position: status.position
+  }));
+
+  const allColumnSlugs = columns.map(c => c.id);
+  const [visibleSlugs, setVisibleSlugs] = useState<Set<string>>(() => new Set(allColumnSlugs));
 
   const [optimisticTickets, applyOptimistic] = useOptimistic(
     initialTickets,
@@ -44,25 +77,18 @@ export default function KanbanBoard({
   const sortedColumns = [...columns].sort((a, b) => a.position - b.position);
 
   // Build lookups
-  const columnBySlug = new Map(columns.map(c => [c.slug, c]));
-  const statusToSlug = new Map<string, string>();
-  for (const col of columns) {
-    for (const s of col.statuses) {
-      statusToSlug.set(s, col.slug);
-    }
-  }
+  const columnById = new Map(columns.map(c => [c.id, c]));
 
   // Group tickets into columns
   function groupTickets(tickets: Ticket[]) {
     const groups = new Map<string, Ticket[]>();
     const uncategorized: Ticket[] = [];
     for (const col of sortedColumns) {
-      groups.set(col.slug, []);
+      groups.set(col.id, []);
     }
     for (const ticket of tickets) {
-      const slug = statusToSlug.get(ticket.status);
-      if (slug && groups.has(slug)) {
-        groups.get(slug)!.push(ticket);
+      if (groups.has(ticket.status)) {
+        groups.get(ticket.status)!.push(ticket);
       } else {
         uncategorized.push(ticket);
       }
@@ -72,16 +98,37 @@ export default function KanbanBoard({
 
   const { groups: columnTickets, uncategorized } = groupTickets(optimisticTickets);
 
+  // Default uncategorized column to visible when it has tickets
+  useEffect(() => {
+    if (uncategorized.length > 0) {
+      setVisibleSlugs(prev =>
+        prev.has(UNCATEGORIZED_COLUMN_ID) ? prev : new Set(prev).add(UNCATEGORIZED_COLUMN_ID)
+      );
+    }
+  }, [uncategorized.length]);
+
+  const toggleColumnVisibility = (slug: string) => {
+    setVisibleSlugs(prev => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  };
+
+  const visibleSortedColumns = sortedColumns.filter(col => visibleSlugs.has(col.id));
+  const showUncategorized = uncategorized.length > 0 && visibleSlugs.has(UNCATEGORIZED_COLUMN_ID);
+
   // Find which column slug a ticket ID belongs to
   function findColumnSlug(ticketId: string): string | undefined {
     const ticket = workingTickets.current.find(t => t.id === ticketId);
     if (!ticket) return undefined;
-    return statusToSlug.get(ticket.status);
+    return ticket.status;
   }
 
   // Resolve an over.id to a column slug — it could be a column slug or a ticket id
   function resolveOverColumn(overId: string): string | undefined {
-    if (columnBySlug.has(overId)) return overId;
+    if (columnById.has(overId)) return overId;
     return findColumnSlug(overId);
   }
 
@@ -99,9 +146,9 @@ export default function KanbanBoard({
     if (!activeSlug || !overSlug || activeSlug === overSlug) return;
 
     // Move ticket to the target column by changing its status
-    const targetColumn = columnBySlug.get(overSlug);
-    if (!targetColumn || targetColumn.statuses.length === 0) return;
-    const newStatus = targetColumn.statuses[0];
+    const targetColumn = columnById.get(overSlug);
+    if (!targetColumn) return;
+    const newStatus = targetColumn.id;
 
     const updated = workingTickets.current.map(t =>
       t.id === active.id ? { ...t, status: newStatus } : t
@@ -139,10 +186,8 @@ export default function KanbanBoard({
     }
 
     const orderedIds = reordered.map(t => t.id);
-    const col = columnBySlug.get(columnSlug);
-    const originalSlug = statusToSlug.get(
-      initialTickets.find(t => t.id === activeId)?.status ?? ''
-    );
+    const col = columnById.get(columnSlug);
+    const originalSlug = initialTickets.find(t => t.id === activeId)?.status;
     const statusChanged = originalSlug !== columnSlug;
 
     startTransition(async () => {
@@ -155,37 +200,77 @@ export default function KanbanBoard({
 
       await reorderTicketsAction(
         orderedIds,
-        statusChanged && col ? { ticketId: activeId, newStatus: col.statuses[0] } : undefined
+        statusChanged && col ? { ticketId: activeId, newStatus: col.id } : undefined
       );
     });
   }
 
+  const uncategorizedColumn: StatusColumn = {
+    id: UNCATEGORIZED_COLUMN_ID,
+    title: 'Uncategorized',
+    position: 999
+  };
+
   return (
     <DndContext
+      id="tickets-kanban-dnd"
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {sortedColumns.map(col => (
-          <KanbanColumn key={col.id} column={col} tickets={columnTickets.get(col.slug) ?? []} />
-        ))}
-        {uncategorized.length > 0 && (
-          <KanbanColumn
-            column={{
-              id: '__uncategorized',
-              title: 'Uncategorized',
-              slug: '__uncategorized',
-              statuses: [],
-              position: 999,
-              created_at: '',
-              updated_at: ''
-            }}
-            tickets={uncategorized}
-          />
-        )}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="mb-2 flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Columns3 className="h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Show columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {sortedColumns.map(col => {
+                const visible = visibleSlugs.has(col.id);
+                return (
+                  <DropdownMenuItem
+                    key={col.id}
+                    onClick={() => toggleColumnVisibility(col.id)}
+                    className="gap-2"
+                  >
+                    {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    {col.title}
+                  </DropdownMenuItem>
+                );
+              })}
+              {uncategorized.length > 0 && (
+                <DropdownMenuItem
+                  onClick={() => toggleColumnVisibility(UNCATEGORIZED_COLUMN_ID)}
+                  className="gap-2"
+                >
+                  {visibleSlugs.has(UNCATEGORIZED_COLUMN_ID) ? (
+                    <Eye className="h-4 w-4" />
+                  ) : (
+                    <EyeOff className="h-4 w-4" />
+                  )}
+                  Uncategorized
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-auto">
+          <div className="inline-flex flex-nowrap gap-3 pb-4">
+            {visibleSortedColumns.map(col => (
+              <KanbanColumn key={col.id} column={col} tickets={columnTickets.get(col.id) ?? []} />
+            ))}
+            {showUncategorized && (
+              <KanbanColumn column={uncategorizedColumn} tickets={uncategorized} />
+            )}
+          </div>
+        </div>
       </div>
 
       <DragOverlay>
