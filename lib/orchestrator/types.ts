@@ -24,6 +24,16 @@ export const protocolEventTypes = [
   "alert",
 ] as const;
 
+export type BoardColumn = {
+  id: string;
+  title: string;
+  slug: string;
+  statuses: string[];
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export const connectionMethods = [
   "mcp",
   "cli",

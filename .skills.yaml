@@ -1,7 +1,7 @@
 sources:
   - name: "local"
     kind: "local"
-install_path: ".skills"
+install_path: ".claude/skills"
 skills:
   - slug: "code-review"
   - slug: "edge-functions"

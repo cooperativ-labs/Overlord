@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { internalErrorResponse, parseProtocolBody } from "@/app/api/protocol/_lib";
-import { resolveSession } from "@/lib/orchestrator/protocol-db";
-import { readContextSchema } from "@/lib/orchestrator/validation";
-import { createClient } from "@/lib/supabase/server";
+import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { resolveSession } from '@/lib/orchestrator/protocol-db';
+import { readContextSchema } from '@/lib/orchestrator/validation';
+import { createClient } from '@/supabase/utils/server';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, readContextSchema);
@@ -20,14 +20,14 @@ export async function POST(request: Request) {
     }
 
     let stateQuery = supabase
-      .from("shared_state")
-      .select("*")
+      .from('shared_state')
+      .select('*')
       .or(`ticket_id.eq.${ticketId},ticket_id.is.null`)
-      .order("created_at", { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(limit);
 
     if (query) {
-      stateQuery = stateQuery.ilike("state_key", `%${query}%`);
+      stateQuery = stateQuery.ilike('state_key', `%${query}%`);
     }
 
     const { data: rows, error } = await stateQuery;
@@ -35,17 +35,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await supabase.from("ticket_events").insert({
-      event_type: "context_read",
+    await supabase.from('ticket_events').insert({
+      event_type: 'context_read',
       payload: { query },
       session_id: resolved.session.id,
-      summary: query ? `Read context query: ${query}` : "Read latest context entries.",
-      ticket_id: ticketId,
+      summary: query ? `Read context query: ${query}` : 'Read latest context entries.',
+      ticket_id: ticketId
     });
 
     return NextResponse.json({
       context: rows ?? [],
-      count: rows?.length ?? 0,
+      count: rows?.length ?? 0
     });
   } catch (error) {
     return internalErrorResponse(error);

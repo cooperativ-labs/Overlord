@@ -48,3 +48,12 @@ select
   array['mvp', 'bootstrap'],
   'seed'
 from public.tickets;
+
+insert into public.board_columns (title, slug, statuses, position) values
+  ('Backlog',     'backlog',      '{draft}',              0),
+  ('To Do',       'todo',         '{review,refine}',      1),
+  ('In Progress', 'in-progress',  '{execute}',            2),
+  ('Review',      'review',       '{deliver}',            3),
+  ('Done',        'done',         '{complete}',           4),
+  ('Blocked',     'blocked',      '{blocked,cancelled}',  5)
+on conflict (slug) do nothing;

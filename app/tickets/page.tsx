@@ -1,6 +1,8 @@
-import Link from "next/link";
+import { createClient } from "@/supabase/utils/server";
 
-import { createClient } from "@/lib/supabase/server";
+import KanbanBoard from "./_components/KanbanBoard";
+import TicketListView from "./_components/TicketListView";
+import TicketsViewToggle from "./_components/TicketsViewToggle";
 
 const statusOrder = [
   "draft",
@@ -18,57 +20,62 @@ function sortByStatus<T extends { status: string }>(items: T[]): T[] {
   return [...items].sort((left, right) => {
     const leftWeight = statusWeight.get(left.status) ?? 999;
     const rightWeight = statusWeight.get(right.status) ?? 999;
-    if (leftWeight !== rightWeight) {
-      return leftWeight - rightWeight;
-    }
-    return 0;
+    return leftWeight - rightWeight;
   });
 }
 
-export default async function TicketsPage() {
-  const supabase = await createClient();
-  const { data: tickets, error } = await supabase
-    .from("tickets")
-    .select("id,ticket_number,title,status,priority,assigned_agent,updated_at")
-    .order("updated_at", { ascending: false });
+export default async function TicketsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view = "board" } = await searchParams;
 
-  const sorted = sortByStatus(tickets ?? []);
+  const supabase = await createClient();
+
+  const [ticketsResult, columnsResult] = await Promise.all([
+    supabase
+      .from("tickets")
+      .select("id,ticket_number,title,status,priority,assigned_agent,updated_at,board_position")
+      .order("board_position", { ascending: true })
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("board_columns")
+      .select("*")
+      .order("position", { ascending: true }),
+  ]);
+
+  const tickets = ticketsResult.data ?? [];
+  const columns = columnsResult.data ?? [];
+  const sorted = sortByStatus(tickets);
+
+  const showBoard = view === "board" && columns.length > 0;
 
   return (
     <div className="grid" style={{ gap: 18 }}>
       <section className="card card-pad">
-        <h2 style={{ marginTop: 0 }}>Ticket Inbox</h2>
-        <p className="muted small" style={{ marginTop: 8 }}>
-          Chat is intentionally deferred for MVP. This dashboard focuses on ticket specs, protocol
-          events, and attach flows for external agent runtimes.
-        </p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 4 }}>Ticket Inbox</h2>
+            <p className="muted small" style={{ margin: 0 }}>
+              Drag tickets between columns to change their status.
+            </p>
+          </div>
+          <TicketsViewToggle />
+        </div>
       </section>
 
-      <section className="ticket-list">
-        {error ? (
-          <article className="notice">Failed to load tickets: {error.message}</article>
-        ) : null}
-        {!sorted.length && !error ? (
-          <article className="card card-pad">No tickets yet. Create the first one.</article>
-        ) : null}
-        {sorted.map((ticket) => (
-          <article className="ticket-item" key={ticket.id}>
-            <h3>
-              <Link href={`/tickets/${ticket.id}`}>
-                {ticket.ticket_number ?? "TICKET-????"} - {ticket.title}
-              </Link>
-            </h3>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span className="badge">{ticket.status}</span>
-              <span className="badge">priority {ticket.priority}</span>
-              {ticket.assigned_agent ? <span className="badge">{ticket.assigned_agent}</span> : null}
-              <span className="small muted">
-                updated {new Date(ticket.updated_at).toLocaleString()}
-              </span>
-            </div>
-          </article>
-        ))}
-      </section>
+      {ticketsResult.error ? (
+        <article className="notice">
+          Failed to load tickets: {ticketsResult.error.message}
+        </article>
+      ) : null}
+
+      {showBoard ? (
+        <KanbanBoard tickets={tickets} columns={columns} />
+      ) : (
+        <TicketListView tickets={sorted} />
+      )}
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { parseProtocolBody, internalErrorResponse } from "@/app/api/protocol/_lib";
-import { listTicketsSchema } from "@/lib/orchestrator/validation";
-import { createClient } from "@/lib/supabase/server";
+import { parseProtocolBody, internalErrorResponse } from '@/app/api/protocol/_lib';
+import { listTicketsSchema } from '@/lib/orchestrator/validation';
+import { createClient } from '@/supabase/utils/server';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, listTicketsSchema);
@@ -12,13 +12,13 @@ export async function POST(request: Request) {
 
   try {
     const supabase = await createClient();
-    let query = supabase.from("tickets").select("*").order("updated_at", { ascending: false });
+    let query = supabase.from('tickets').select('*').order('updated_at', { ascending: false });
 
     if (!parsed.data.includeCompleted) {
-      query = query.neq("status", "complete");
+      query = query.neq('status', 'complete');
     }
     if (parsed.data.statuses?.length) {
-      query = query.in("status", parsed.data.statuses);
+      query = query.in('status', parsed.data.statuses);
     }
 
     const { data, error } = await query;
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       tickets: data,
-      count: data.length,
+      count: data.length
     });
   } catch (error) {
     return internalErrorResponse(error);

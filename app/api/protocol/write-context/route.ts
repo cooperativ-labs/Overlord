@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { internalErrorResponse, parseProtocolBody } from "@/app/api/protocol/_lib";
-import { resolveSession } from "@/lib/orchestrator/protocol-db";
-import { writeContextSchema } from "@/lib/orchestrator/validation";
-import { createClient } from "@/lib/supabase/server";
+import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { resolveSession } from '@/lib/orchestrator/protocol-db';
+import { writeContextSchema } from '@/lib/orchestrator/validation';
+import { createClient } from '@/supabase/utils/server';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, writeContextSchema);
@@ -20,35 +20,35 @@ export async function POST(request: Request) {
     }
 
     const { data: state, error: stateError } = await supabase
-      .from("shared_state")
+      .from('shared_state')
       .insert({
         session_id: resolved.session.id,
         state_key: key,
         state_value: value,
         tags,
-        ticket_id: ticketId,
+        ticket_id: ticketId
       })
-      .select("*")
+      .select('*')
       .single();
 
     if (stateError || !state) {
       return NextResponse.json(
-        { error: stateError?.message ?? "Failed to write shared state." },
+        { error: stateError?.message ?? 'Failed to write shared state.' },
         { status: 500 }
       );
     }
 
-    await supabase.from("ticket_events").insert({
-      event_type: "context_write",
+    await supabase.from('ticket_events').insert({
+      event_type: 'context_write',
       payload: { key, tags },
       session_id: resolved.session.id,
       summary: `Wrote context key ${key}.`,
-      ticket_id: ticketId,
+      ticket_id: ticketId
     });
 
     return NextResponse.json({
       context: state,
-      ok: true,
+      ok: true
     });
   } catch (error) {
     return internalErrorResponse(error);

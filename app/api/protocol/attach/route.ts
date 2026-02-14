@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { internalErrorResponse, parseProtocolBody } from "@/app/api/protocol/_lib";
-import { attachSchema } from "@/lib/orchestrator/validation";
-import { createClient } from "@/lib/supabase/server";
+import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { attachSchema } from '@/lib/orchestrator/validation';
+import { createClient } from '@/supabase/utils/server';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, attachSchema);
@@ -19,58 +19,58 @@ export async function POST(request: Request) {
 
     const [{ data: ticket, error: ticketError }, { data: session, error: sessionError }] =
       await Promise.all([
-        supabase.from("tickets").select("*").eq("id", ticketId).single(),
+        supabase.from('tickets').select('*').eq('id', ticketId).single(),
         supabase
-          .from("agent_sessions")
+          .from('agent_sessions')
           .insert({
             agent_identifier: agentIdentifier,
             connection_method: connectionMethod,
             metadata,
             session_key: sessionKey,
-            ticket_id: ticketId,
+            ticket_id: ticketId
           })
-          .select("*")
-          .single(),
+          .select('*')
+          .single()
       ]);
 
     if (ticketError || !ticket) {
       return NextResponse.json(
-        { error: ticketError?.message ?? "Ticket not found." },
-        { status: ticketError?.code === "PGRST116" ? 404 : 500 }
+        { error: ticketError?.message ?? 'Ticket not found.' },
+        { status: ticketError?.code === 'PGRST116' ? 404 : 500 }
       );
     }
     if (sessionError || !session) {
       return NextResponse.json(
-        { error: sessionError?.message ?? "Failed to create session." },
+        { error: sessionError?.message ?? 'Failed to create session.' },
         { status: 500 }
       );
     }
 
-    await supabase.from("ticket_events").insert({
-      event_type: "system",
+    await supabase.from('ticket_events').insert({
+      event_type: 'system',
       payload: {
         agent_identifier: agentIdentifier,
-        connection_method: connectionMethod,
+        connection_method: connectionMethod
       },
       phase: ticket.status,
       session_id: session.id,
       summary: `${agentIdentifier} attached via ${connectionMethod}.`,
-      ticket_id: ticketId,
+      ticket_id: ticketId
     });
 
     const [{ data: history }, { data: sharedState }] = await Promise.all([
       supabase
-        .from("ticket_events")
-        .select("*")
-        .eq("ticket_id", ticketId)
-        .order("created_at", { ascending: false })
+        .from('ticket_events')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false })
         .limit(50),
       supabase
-        .from("shared_state")
-        .select("*")
+        .from('shared_state')
+        .select('*')
         .or(`ticket_id.eq.${ticketId},ticket_id.is.null`)
-        .order("created_at", { ascending: false })
-        .limit(50),
+        .order('created_at', { ascending: false })
+        .limit(50)
     ]);
 
     return NextResponse.json({
@@ -78,10 +78,10 @@ export async function POST(request: Request) {
       session: {
         id: session.id,
         sessionKey: session.session_key,
-        state: session.session_state,
+        state: session.session_state
       },
       sharedState: sharedState ?? [],
-      ticket,
+      ticket
     });
   } catch (error) {
     return internalErrorResponse(error);

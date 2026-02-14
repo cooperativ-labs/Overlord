@@ -60,6 +60,24 @@ export const writeContextSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(80)).optional().default([]),
 });
 
+export const createBoardColumnSchema = z.object({
+  title: z.string().trim().min(1).max(120),
+  slug: z.string().trim().min(1).max(60),
+  statuses: z.array(z.string().trim().min(1)).min(1),
+  position: z.number().int().min(0),
+});
+
+export const updateBoardColumnSchema = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+  slug: z.string().trim().min(1).max(60).optional(),
+  statuses: z.array(z.string().trim().min(1)).min(1).optional(),
+  position: z.number().int().min(0).optional(),
+});
+
+export const reorderBoardColumnsSchema = z.object({
+  orderedIds: z.array(z.string().uuid()).min(1),
+});
+
 export const deliverSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: z.string().uuid(),

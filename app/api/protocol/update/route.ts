@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 
-import { internalErrorResponse, parseProtocolBody } from "@/app/api/protocol/_lib";
-import { resolveSession } from "@/lib/orchestrator/protocol-db";
-import { updateSchema } from "@/lib/orchestrator/validation";
-import { createClient } from "@/lib/supabase/server";
+import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { resolveSession } from '@/lib/orchestrator/protocol-db';
+import { updateSchema } from '@/lib/orchestrator/validation';
+import { createClient } from '@/supabase/utils/server';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, updateSchema);
@@ -19,13 +19,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
 
-    const { error: eventError } = await supabase.from("ticket_events").insert({
-      event_type: "update",
+    const { error: eventError } = await supabase.from('ticket_events').insert({
+      event_type: 'update',
       payload,
       phase: phase ?? null,
       session_id: resolved.session.id,
       summary,
-      ticket_id: ticketId,
+      ticket_id: ticketId
     });
     if (eventError) {
       return NextResponse.json({ error: eventError.message }, { status: 500 });
@@ -33,16 +33,16 @@ export async function POST(request: Request) {
 
     if (phase) {
       const { error: ticketError } = await supabase
-        .from("tickets")
+        .from('tickets')
         .update({ status: phase })
-        .eq("id", ticketId);
+        .eq('id', ticketId);
       if (ticketError) {
         return NextResponse.json({ error: ticketError.message }, { status: 500 });
       }
     }
 
     return NextResponse.json({
-      ok: true,
+      ok: true
     });
   } catch (error) {
     return internalErrorResponse(error);

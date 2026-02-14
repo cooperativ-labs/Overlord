@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { updateTicketStatusAction } from "@/lib/actions/tickets";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/supabase/utils/server";
 
 const statuses = ["draft", "review", "refine", "execute", "deliver", "complete", "blocked"] as const;
 
@@ -58,9 +59,14 @@ export default async function TicketDetailPage({ params }: PageProps) {
     <div className="grid grid-two">
       <section className="stack">
         <article className="card card-pad">
-          <h2 style={{ marginTop: 0 }}>
-            {ticket.ticket_number} - {ticket.title}
-          </h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <h2 style={{ marginTop: 0 }}>
+              {ticket.ticket_number} - {ticket.title}
+            </h2>
+            <Link className="btn btn-ghost" href={`/tickets/${ticketId}/edit`}>
+              Edit Ticket
+            </Link>
+          </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
             <span className="badge">{ticket.status}</span>
             <span className="badge">priority {ticket.priority}</span>
