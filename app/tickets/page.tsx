@@ -1,8 +1,10 @@
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/supabase/utils/server';
 
-import KanbanBoard from './_components/KanbanBoard';
-import TicketListView from './_components/TicketListView';
-import TicketsViewToggle from './_components/TicketsViewToggle';
+import KanbanBoard from './(components)/KanbanBoard';
+import TicketListView from './(components)/TicketListView';
+import TicketsViewToggle from './(components)/TicketsViewToggle';
 
 const statusOrder = [
   'draft',
@@ -49,27 +51,35 @@ export default async function TicketsPage({
   const showBoard = view === 'board' && columns.length > 0;
 
   return (
-    <div className="grid" style={{ gap: 18 }}>
-      <section className="card card-pad">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h2 style={{ marginTop: 0, marginBottom: 4 }}>Ticket Inbox</h2>
-            <p className="muted small" style={{ margin: 0 }}>
-              Drag tickets between columns to change their status.
-            </p>
+    <div className="grid gap-4">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle>Ticket Inbox</CardTitle>
+              <CardDescription>
+                Drag tickets between columns to change their status.
+              </CardDescription>
+            </div>
+            <TicketsViewToggle />
           </div>
-          <TicketsViewToggle />
-        </div>
-      </section>
+        </CardHeader>
+      </Card>
 
       {ticketsResult.error ? (
-        <article className="notice">Failed to load tickets: {ticketsResult.error.message}</article>
+        <Alert variant="destructive">
+          <AlertDescription>Failed to load tickets: {ticketsResult.error.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {showBoard ? (
         <KanbanBoard tickets={tickets} columns={columns} />
       ) : (
-        <TicketListView tickets={sorted} />
+        <Card>
+          <CardContent className="pt-6">
+            <TicketListView tickets={sorted} />
+          </CardContent>
+        </Card>
       )}
     </div>
   );

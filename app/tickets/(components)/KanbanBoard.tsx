@@ -168,7 +168,7 @@ export default function KanbanBoard({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="kanban-board">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {sortedColumns.map(col => (
           <KanbanColumn key={col.id} column={col} tickets={columnTickets.get(col.slug) ?? []} />
         ))}

@@ -4,6 +4,9 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
 
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+
 export type Ticket = {
   id: string;
   ticket_number: string | null;
@@ -28,8 +31,8 @@ export default function KanbanCard({
 
   if (isDragOverlay) {
     return (
-      <div className="kanban-card-overlay">
-        <CardContent ticket={ticket} />
+      <div className="w-full max-w-sm rounded-lg border border-dashed border-primary/40 bg-card shadow-lg">
+        <KanbanCardBody ticket={ticket} />
       </div>
     );
   }
@@ -40,31 +43,35 @@ export default function KanbanCard({
   };
 
   return (
-    <div
+    <Card
       ref={setNodeRef}
-      className={`kanban-card${isDragging ? ' dragging' : ''}`}
+      className={`cursor-grab ${isDragging ? 'opacity-40' : ''}`}
       style={style}
       {...listeners}
       {...attributes}
     >
-      <CardContent ticket={ticket} />
-    </div>
+      <KanbanCardBody ticket={ticket} />
+    </Card>
   );
 }
 
-function CardContent({ ticket }: { ticket: Ticket }) {
+function KanbanCardBody({ ticket }: { ticket: Ticket }) {
   return (
-    <>
-      <h4 className="kanban-card-title">
-        <Link href={`/tickets/${ticket.id}`} onClick={e => e.stopPropagation()}>
+    <CardContent className="space-y-3 pt-6">
+      <h4 className="text-sm leading-snug font-medium">
+        <Link
+          href={`/tickets/${ticket.id}`}
+          className="hover:underline"
+          onClick={e => e.stopPropagation()}
+        >
           {ticket.ticket_number ?? 'TICKET-????'} - {ticket.title}
         </Link>
       </h4>
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        <span className="badge">{ticket.status}</span>
-        <span className="badge">{ticket.priority}</span>
-        {ticket.assigned_agent ? <span className="badge">{ticket.assigned_agent}</span> : null}
+      <div className="flex flex-wrap gap-1.5">
+        <Badge variant="outline">{ticket.status}</Badge>
+        <Badge>{ticket.priority}</Badge>
+        {ticket.assigned_agent ? <Badge variant="secondary">{ticket.assigned_agent}</Badge> : null}
       </div>
-    </>
+    </CardContent>
   );
 }

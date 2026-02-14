@@ -1,5 +1,10 @@
 import { redirect } from 'next/navigation';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { createTicketAction } from '@/lib/actions/tickets';
 
 export default function NewTicketPage() {
@@ -11,72 +16,78 @@ export default function NewTicketPage() {
   }
 
   return (
-    <div className="grid">
-      <section className="card card-pad">
-        <h2 style={{ marginTop: 0 }}>Create Ticket</h2>
-        <p className="muted small">
-          Structured ticket fields are the source of truth for agent execution.
-        </p>
-
-        <form action={submit} className="grid" style={{ marginTop: 12 }}>
-          <div className="field">
-            <label htmlFor="title">Title</label>
-            <input id="title" name="title" required />
-          </div>
-
-          <div className="field">
-            <label htmlFor="objective">Objective</label>
-            <textarea id="objective" name="objective" required />
-          </div>
-
-          <div className="field">
-            <label htmlFor="context">Context & Reference Files</label>
-            <textarea id="context" name="context" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="constraints">Constraints</label>
-            <textarea id="constraints" name="constraints" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="availableTools">Available Tools</label>
-            <textarea id="availableTools" name="availableTools" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="acceptanceCriteria">Acceptance Criteria</label>
-            <textarea id="acceptanceCriteria" name="acceptanceCriteria" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="outputFormat">Output Format</label>
-            <textarea id="outputFormat" name="outputFormat" />
-          </div>
-
-          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div className="field">
-              <label htmlFor="assignedAgent">Assigned Agent</label>
-              <input id="assignedAgent" name="assignedAgent" placeholder="Claude Code" />
+    <div className="grid gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Create Ticket</CardTitle>
+          <CardDescription>
+            Structured ticket fields are the source of truth for agent execution.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={submit} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="title">Title</Label>
+              <Input id="title" name="title" required />
             </div>
-            <div className="field">
-              <label htmlFor="priority">Priority</label>
-              <select defaultValue="medium" id="priority" name="priority">
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-primary" type="submit">
-              Save Ticket
-            </button>
-          </div>
-        </form>
-      </section>
+            <div className="grid gap-2">
+              <Label htmlFor="objective">Objective</Label>
+              <Textarea id="objective" name="objective" required />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="context">Context &amp; Reference Files</Label>
+              <Textarea id="context" name="context" />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="constraints">Constraints</Label>
+              <Textarea id="constraints" name="constraints" />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="availableTools">Available Tools</Label>
+              <Textarea id="availableTools" name="availableTools" />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="acceptanceCriteria">Acceptance Criteria</Label>
+              <Textarea id="acceptanceCriteria" name="acceptanceCriteria" />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="outputFormat">Output Format</Label>
+              <Textarea id="outputFormat" name="outputFormat" />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="assignedAgent">Assigned Agent</Label>
+                <Input id="assignedAgent" name="assignedAgent" placeholder="Claude Code" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="priority">Priority</Label>
+                <select
+                  defaultValue="medium"
+                  id="priority"
+                  name="priority"
+                  className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit">Save Ticket</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { updateTicketStatusAction } from '@/lib/actions/tickets';
 import { createClient } from '@/supabase/utils/server';
 
@@ -68,140 +74,199 @@ export default async function TicketDetailPage({ params }: PageProps) {
   const chatGptLink = `https://chat.openai.com/?q=${encodeURIComponent(`attach ${ticket.ticket_number ?? ''}`)}`;
 
   return (
-    <div className="grid grid-two">
-      <section className="stack">
-        <article className="card card-pad">
-          <div
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
-          >
-            <h2 style={{ marginTop: 0 }}>
-              {ticket.ticket_number} - {ticket.title}
-            </h2>
-            <Link className="btn btn-ghost" href={`/tickets/${ticketId}/edit`}>
-              Edit Ticket
-            </Link>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-            <span className="badge">{ticket.status}</span>
-            <span className="badge">priority {ticket.priority}</span>
-            {ticket.assigned_agent ? <span className="badge">{ticket.assigned_agent}</span> : null}
-          </div>
+    <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+      <section className="grid gap-4">
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <CardTitle>
+                {ticket.ticket_number} - {ticket.title}
+              </CardTitle>
+              <Button asChild variant="ghost">
+                <Link href={`/tickets/${ticketId}/edit`}>Edit Ticket</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{ticket.status}</Badge>
+              <Badge>priority {ticket.priority}</Badge>
+              {ticket.assigned_agent ? (
+                <Badge variant="secondary">{ticket.assigned_agent}</Badge>
+              ) : null}
+            </div>
 
-          <div className="stack">
-            <div className="kv">
-              <strong>Objective</strong>
-              <span className="small">{ticket.objective}</span>
+            <div className="grid gap-3 text-sm">
+              <div className="grid gap-1">
+                <strong>Objective</strong>
+                <span className="text-muted-foreground">{ticket.objective}</span>
+              </div>
+              <Separator />
+              <div className="grid gap-1">
+                <strong>Context</strong>
+                <span className="text-muted-foreground">{ticket.context || 'None provided.'}</span>
+              </div>
+              <Separator />
+              <div className="grid gap-1">
+                <strong>Constraints</strong>
+                <span className="text-muted-foreground">
+                  {ticket.constraints || 'None provided.'}
+                </span>
+              </div>
+              <Separator />
+              <div className="grid gap-1">
+                <strong>Available Tools</strong>
+                <span className="text-muted-foreground">
+                  {ticket.available_tools || 'None provided.'}
+                </span>
+              </div>
+              <Separator />
+              <div className="grid gap-1">
+                <strong>Acceptance Criteria</strong>
+                <span className="text-muted-foreground">
+                  {ticket.acceptance_criteria || 'None provided.'}
+                </span>
+              </div>
+              <Separator />
+              <div className="grid gap-1">
+                <strong>Output Format</strong>
+                <span className="text-muted-foreground">
+                  {ticket.output_format || 'None provided.'}
+                </span>
+              </div>
             </div>
-            <div className="kv">
-              <strong>Context</strong>
-              <span className="small">{ticket.context || 'None provided.'}</span>
-            </div>
-            <div className="kv">
-              <strong>Constraints</strong>
-              <span className="small">{ticket.constraints || 'None provided.'}</span>
-            </div>
-            <div className="kv">
-              <strong>Available Tools</strong>
-              <span className="small">{ticket.available_tools || 'None provided.'}</span>
-            </div>
-            <div className="kv">
-              <strong>Acceptance Criteria</strong>
-              <span className="small">{ticket.acceptance_criteria || 'None provided.'}</span>
-            </div>
-            <div className="kv">
-              <strong>Output Format</strong>
-              <span className="small">{ticket.output_format || 'None provided.'}</span>
-            </div>
-          </div>
-        </article>
+          </CardContent>
+        </Card>
 
-        <article className="card card-pad">
-          <h3 style={{ marginTop: 0 }}>Ticket Events</h3>
-          <div className="stack">
-            {events?.length ? null : <span className="small muted">No events yet.</span>}
+        <Card>
+          <CardHeader>
+            <CardTitle>Ticket Events</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {events?.length ? null : (
+              <Alert>
+                <AlertDescription>No events yet.</AlertDescription>
+              </Alert>
+            )}
             {events?.map(event => (
-              <article className="ticket-item" key={event.id}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span className="badge">{event.event_type}</span>
-                  {event.phase ? <span className="badge">{event.phase}</span> : null}
-                  <span className="small muted">{new Date(event.created_at).toLocaleString()}</span>
+              <article className="grid gap-2 rounded-lg border p-3" key={event.id}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{event.event_type}</Badge>
+                  {event.phase ? <Badge variant="secondary">{event.phase}</Badge> : null}
+                  <span className="text-muted-foreground text-xs">
+                    {new Date(event.created_at).toLocaleString()}
+                  </span>
                 </div>
-                <p className="small" style={{ marginBottom: 0 }}>
-                  {event.summary || 'No summary provided.'}
-                </p>
+                <p className="text-sm">{event.summary || 'No summary provided.'}</p>
               </article>
             ))}
-          </div>
-        </article>
+          </CardContent>
+        </Card>
       </section>
 
-      <aside className="stack">
-        <article className="card card-pad">
-          <h3 style={{ marginTop: 0 }}>Lifecycle</h3>
-          <form action={transition} className="stack">
-            <div className="field">
-              <label htmlFor="status">Set Status</label>
-              <select defaultValue={ticket.status} id="status" name="status">
-                {statuses.map(status => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button className="btn btn-primary" type="submit">
-              Update Status
-            </button>
-          </form>
-        </article>
+      <aside className="grid gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Lifecycle</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form action={transition} className="grid gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="status">Set Status</Label>
+                <select
+                  defaultValue={ticket.status}
+                  id="status"
+                  name="status"
+                  className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+                >
+                  {statuses.map(status => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button type="submit">Update Status</Button>
+            </form>
+          </CardContent>
+        </Card>
 
-        <article className="card card-pad">
-          <h3 style={{ marginTop: 0 }}>Open In...</h3>
-          <div className="stack small">
-            <div className="kv">
+        <Card>
+          <CardHeader>
+            <CardTitle>Open In...</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+            <div className="grid gap-1">
               <strong>Terminal / Claude Code</strong>
-              <code>{attachCommand}</code>
+              <code className="rounded border bg-muted px-2 py-1">{attachCommand}</code>
             </div>
-            <div className="kv">
+            <div className="grid gap-1">
               <strong>Claude App</strong>
-              <code>{`Attach to ${ticket.ticket_number}`}</code>
+              <code className="rounded border bg-muted px-2 py-1">{`Attach to ${ticket.ticket_number}`}</code>
             </div>
-            <div className="kv">
+            <div className="grid gap-1">
               <strong>ChatGPT</strong>
-              <a className="btn btn-ghost" href={chatGptLink} rel="noreferrer" target="_blank">
-                Open prefilled attach prompt
-              </a>
+              <Button asChild variant="outline">
+                <a href={chatGptLink} rel="noreferrer" target="_blank">
+                  Open prefilled attach prompt
+                </a>
+              </Button>
             </div>
-          </div>
-        </article>
+          </CardContent>
+        </Card>
 
-        <article className="card card-pad">
-          <h3 style={{ marginTop: 0 }}>Shared State</h3>
-          <div className="stack small">
-            {state?.length ? null : <span className="muted">No shared state entries yet.</span>}
+        <Card>
+          <CardHeader>
+            <CardTitle>Shared State</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+            {state?.length ? null : (
+              <Alert>
+                <AlertDescription>No shared state entries yet.</AlertDescription>
+              </Alert>
+            )}
             {state?.map(item => (
-              <div className="kv" key={item.id}>
+              <div className="grid gap-1 rounded-md border p-3" key={item.id}>
                 <strong>{item.state_key}</strong>
-                <code>{JSON.stringify(item.state_value, null, 2)}</code>
+                <code className="max-h-40 overflow-auto rounded border bg-muted p-2 text-xs">
+                  {JSON.stringify(item.state_value, null, 2)}
+                </code>
               </div>
             ))}
-          </div>
-        </article>
+          </CardContent>
+        </Card>
 
-        <article className="card card-pad">
-          <h3 style={{ marginTop: 0 }}>Artifacts</h3>
-          <div className="stack small">
-            {artifacts?.length ? null : <span className="muted">No artifacts delivered yet.</span>}
+        <Card>
+          <CardHeader>
+            <CardTitle>Artifacts</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+            {artifacts?.length ? null : (
+              <Alert>
+                <AlertDescription>No artifacts delivered yet.</AlertDescription>
+              </Alert>
+            )}
             {artifacts?.map(artifact => (
-              <div className="kv" key={artifact.id}>
+              <div className="grid gap-1 rounded-md border p-3" key={artifact.id}>
                 <strong>{artifact.label}</strong>
-                <span className="muted">{artifact.artifact_type}</span>
-                {artifact.uri ? <a href={artifact.uri}>{artifact.uri}</a> : null}
-                {artifact.content ? <code>{artifact.content}</code> : null}
+                <span className="text-muted-foreground">{artifact.artifact_type}</span>
+                {artifact.uri ? (
+                  <a
+                    className="text-primary underline-offset-4 hover:underline"
+                    href={artifact.uri}
+                  >
+                    {artifact.uri}
+                  </a>
+                ) : null}
+                {artifact.content ? (
+                  <code className="max-h-40 overflow-auto rounded border bg-muted p-2 text-xs">
+                    {artifact.content}
+                  </code>
+                ) : null}
               </div>
             ))}
-          </div>
-        </article>
+          </CardContent>
+        </Card>
       </aside>
     </div>
   );

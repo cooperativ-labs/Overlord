@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { updateTicketAction } from '@/lib/actions/tickets';
 import { createClient } from '@/supabase/utils/server';
 
@@ -30,94 +35,104 @@ export default async function EditTicketPage({ params }: PageProps) {
   }
 
   return (
-    <div className="grid">
-      <section className="card card-pad">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ marginTop: 0 }}>Edit Ticket</h2>
-          <Link className="btn btn-ghost" href={`/tickets/${ticketId}`}>
-            Cancel
-          </Link>
-        </div>
-        <p className="muted small">
-          Structured ticket fields are the source of truth for agent execution.
-        </p>
-
-        <form action={submit} className="grid" style={{ marginTop: 12 }}>
-          <div className="field">
-            <label htmlFor="title">Title</label>
-            <input defaultValue={ticket.title} id="title" name="title" required />
+    <div className="grid gap-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>Edit Ticket</CardTitle>
+            <Button asChild variant="ghost">
+              <Link href={`/tickets/${ticketId}`}>Cancel</Link>
+            </Button>
           </div>
+          <CardDescription>
+            Structured ticket fields are the source of truth for agent execution.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={submit} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="title">Title</Label>
+              <Input defaultValue={ticket.title} id="title" name="title" required />
+            </div>
 
-          <div className="field">
-            <label htmlFor="objective">Objective</label>
-            <textarea defaultValue={ticket.objective} id="objective" name="objective" required />
-          </div>
+            <div className="grid gap-2">
+              <Label htmlFor="objective">Objective</Label>
+              <Textarea defaultValue={ticket.objective} id="objective" name="objective" required />
+            </div>
 
-          <div className="field">
-            <label htmlFor="context">Context & Reference Files</label>
-            <textarea defaultValue={ticket.context ?? ''} id="context" name="context" />
-          </div>
+            <div className="grid gap-2">
+              <Label htmlFor="context">Context &amp; Reference Files</Label>
+              <Textarea defaultValue={ticket.context ?? ''} id="context" name="context" />
+            </div>
 
-          <div className="field">
-            <label htmlFor="constraints">Constraints</label>
-            <textarea defaultValue={ticket.constraints ?? ''} id="constraints" name="constraints" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="availableTools">Available Tools</label>
-            <textarea
-              defaultValue={ticket.available_tools ?? ''}
-              id="availableTools"
-              name="availableTools"
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="acceptanceCriteria">Acceptance Criteria</label>
-            <textarea
-              defaultValue={ticket.acceptance_criteria ?? ''}
-              id="acceptanceCriteria"
-              name="acceptanceCriteria"
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="outputFormat">Output Format</label>
-            <textarea
-              defaultValue={ticket.output_format ?? ''}
-              id="outputFormat"
-              name="outputFormat"
-            />
-          </div>
-
-          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div className="field">
-              <label htmlFor="assignedAgent">Assigned Agent</label>
-              <input
-                defaultValue={ticket.assigned_agent ?? ''}
-                id="assignedAgent"
-                name="assignedAgent"
-                placeholder="Claude Code"
+            <div className="grid gap-2">
+              <Label htmlFor="constraints">Constraints</Label>
+              <Textarea
+                defaultValue={ticket.constraints ?? ''}
+                id="constraints"
+                name="constraints"
               />
             </div>
-            <div className="field">
-              <label htmlFor="priority">Priority</label>
-              <select defaultValue={ticket.priority} id="priority" name="priority">
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button className="btn btn-primary" type="submit">
-              Save Changes
-            </button>
-          </div>
-        </form>
-      </section>
+            <div className="grid gap-2">
+              <Label htmlFor="availableTools">Available Tools</Label>
+              <Textarea
+                defaultValue={ticket.available_tools ?? ''}
+                id="availableTools"
+                name="availableTools"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="acceptanceCriteria">Acceptance Criteria</Label>
+              <Textarea
+                defaultValue={ticket.acceptance_criteria ?? ''}
+                id="acceptanceCriteria"
+                name="acceptanceCriteria"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="outputFormat">Output Format</Label>
+              <Textarea
+                defaultValue={ticket.output_format ?? ''}
+                id="outputFormat"
+                name="outputFormat"
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="assignedAgent">Assigned Agent</Label>
+                <Input
+                  defaultValue={ticket.assigned_agent ?? ''}
+                  id="assignedAgent"
+                  name="assignedAgent"
+                  placeholder="Claude Code"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="priority">Priority</Label>
+                <select
+                  defaultValue={ticket.priority}
+                  id="priority"
+                  name="priority"
+                  className="border-input bg-background h-9 rounded-md border px-3 text-sm"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit">Save Changes</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
