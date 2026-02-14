@@ -1,28 +1,28 @@
-"use client";
+'use client';
 
 import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
   closestCorners,
-  useSensor,
-  useSensors,
+  DndContext,
   type DragEndEvent,
   type DragOverEvent,
+  DragOverlay,
   type DragStartEvent,
-} from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
-import { useOptimistic, useRef, useState, useTransition } from "react";
+  PointerSensor,
+  useSensor,
+  useSensors
+} from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
+import { useOptimistic, useRef, useState, useTransition } from 'react';
 
-import { reorderTicketsAction } from "@/lib/actions/tickets";
-import type { BoardColumn } from "@/lib/orchestrator/types";
+import { reorderTicketsAction } from '@/lib/actions/tickets';
+import type { BoardColumn } from '@/lib/orchestrator/types';
 
-import KanbanCard, { type Ticket } from "./KanbanCard";
-import KanbanColumn from "./KanbanColumn";
+import KanbanCard, { type Ticket } from './KanbanCard';
+import KanbanColumn from './KanbanColumn';
 
 export default function KanbanBoard({
   tickets: initialTickets,
-  columns,
+  columns
 }: {
   tickets: Ticket[];
   columns: BoardColumn[];
@@ -39,14 +39,12 @@ export default function KanbanBoard({
   const workingTickets = useRef(optimisticTickets);
   workingTickets.current = optimisticTickets;
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const sortedColumns = [...columns].sort((a, b) => a.position - b.position);
 
   // Build lookups
-  const columnBySlug = new Map(columns.map((c) => [c.slug, c]));
+  const columnBySlug = new Map(columns.map(c => [c.slug, c]));
   const statusToSlug = new Map<string, string>();
   for (const col of columns) {
     for (const s of col.statuses) {
@@ -76,7 +74,7 @@ export default function KanbanBoard({
 
   // Find which column slug a ticket ID belongs to
   function findColumnSlug(ticketId: string): string | undefined {
-    const ticket = workingTickets.current.find((t) => t.id === ticketId);
+    const ticket = workingTickets.current.find(t => t.id === ticketId);
     if (!ticket) return undefined;
     return statusToSlug.get(ticket.status);
   }
@@ -88,7 +86,7 @@ export default function KanbanBoard({
   }
 
   function handleDragStart(event: DragStartEvent) {
-    const ticket = workingTickets.current.find((t) => t.id === event.active.id);
+    const ticket = workingTickets.current.find(t => t.id === event.active.id);
     setActiveTicket(ticket ?? null);
   }
 
@@ -105,7 +103,7 @@ export default function KanbanBoard({
     if (!targetColumn || targetColumn.statuses.length === 0) return;
     const newStatus = targetColumn.statuses[0];
 
-    const updated = workingTickets.current.map((t) =>
+    const updated = workingTickets.current.map(t =>
       t.id === active.id ? { ...t, status: newStatus } : t
     );
     workingTickets.current = updated;
@@ -124,7 +122,7 @@ export default function KanbanBoard({
     const columnSlug = resolveOverColumn(overId) ?? findColumnSlug(activeId);
     if (!columnSlug) return;
 
-    const ticket = workingTickets.current.find((t) => t.id === activeId);
+    const ticket = workingTickets.current.find(t => t.id === activeId);
     if (!ticket) return;
 
     // Get the current column's tickets in order
@@ -132,36 +130,32 @@ export default function KanbanBoard({
     const colTickets = groups.get(columnSlug) ?? [];
 
     // If dropped on another ticket in the same column, reorder
-    const oldIndex = colTickets.findIndex((t) => t.id === activeId);
-    const newIndex = colTickets.findIndex((t) => t.id === overId);
+    const oldIndex = colTickets.findIndex(t => t.id === activeId);
+    const newIndex = colTickets.findIndex(t => t.id === overId);
 
     let reordered = colTickets;
     if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
       reordered = arrayMove(colTickets, oldIndex, newIndex);
     }
 
-    const orderedIds = reordered.map((t) => t.id);
+    const orderedIds = reordered.map(t => t.id);
     const col = columnBySlug.get(columnSlug);
     const originalSlug = statusToSlug.get(
-      initialTickets.find((t) => t.id === activeId)?.status ?? ""
+      initialTickets.find(t => t.id === activeId)?.status ?? ''
     );
     const statusChanged = originalSlug !== columnSlug;
 
     startTransition(async () => {
       // Apply optimistic reorder
       const positionMap = new Map(orderedIds.map((id, i) => [id, i]));
-      const updated = workingTickets.current.map((t) =>
-        positionMap.has(t.id)
-          ? { ...t, board_position: positionMap.get(t.id)! }
-          : t
+      const updated = workingTickets.current.map(t =>
+        positionMap.has(t.id) ? { ...t, board_position: positionMap.get(t.id)! } : t
       );
       applyOptimistic(updated);
 
       await reorderTicketsAction(
         orderedIds,
-        statusChanged && col
-          ? { ticketId: activeId, newStatus: col.statuses[0] }
-          : undefined
+        statusChanged && col ? { ticketId: activeId, newStatus: col.statuses[0] } : undefined
       );
     });
   }
@@ -175,23 +169,19 @@ export default function KanbanBoard({
       onDragEnd={handleDragEnd}
     >
       <div className="kanban-board">
-        {sortedColumns.map((col) => (
-          <KanbanColumn
-            key={col.id}
-            column={col}
-            tickets={columnTickets.get(col.slug) ?? []}
-          />
+        {sortedColumns.map(col => (
+          <KanbanColumn key={col.id} column={col} tickets={columnTickets.get(col.slug) ?? []} />
         ))}
         {uncategorized.length > 0 && (
           <KanbanColumn
             column={{
-              id: "__uncategorized",
-              title: "Uncategorized",
-              slug: "__uncategorized",
+              id: '__uncategorized',
+              title: 'Uncategorized',
+              slug: '__uncategorized',
               statuses: [],
               position: 999,
-              created_at: "",
-              updated_at: "",
+              created_at: '',
+              updated_at: ''
             }}
             tickets={uncategorized}
           />
@@ -199,9 +189,7 @@ export default function KanbanBoard({
       </div>
 
       <DragOverlay>
-        {activeTicket ? (
-          <KanbanCard ticket={activeTicket} isDragOverlay />
-        ) : null}
+        {activeTicket ? <KanbanCard ticket={activeTicket} isDragOverlay /> : null}
       </DragOverlay>
     </DndContext>
   );

@@ -9,7 +9,15 @@ import reactHooksPlugin from 'eslint-plugin-react-hooks';
 export default [
   js.configs.recommended,
   {
-    ignores: ['.next/**', 'node_modules/**', 'dist/**', 'build/**', 'coverage/**'],
+    ignores: [
+        '.next/**',
+        'node_modules/**',
+        'dist/**',
+        'build/**',
+        'coverage/**',
+        'seed.config.ts',
+        'seed.ts'
+      ],
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
       parser: tsParser,
@@ -38,7 +46,11 @@ export default [
       ...tsPlugin.configs.recommended.rules,
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
-      'prettier/prettier': ['warn', {}, { usePrettierrc: true }],
+      'prettier/prettier': [
+        'warn',
+        { singleQuote: true },
+        { usePrettierrc: true }
+      ],
       'react/prop-types': 'off',
       'react/jsx-uses-react': 'error',
       'react/jsx-uses-vars': 'error',

@@ -1,24 +1,24 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import './globals.css';
 
-import { createClient } from "@/supabase/utils/server";
-import { signOut } from "@/lib/actions/auth";
+import type { Metadata } from 'next';
+import Link from 'next/link';
 
-import "./globals.css";
+import { signOut } from '@/lib/actions/auth';
+import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
-  title: "Orchestrator",
-  description: "Local-first AI agent orchestration dashboard",
+  title: 'Orchestrator',
+  description: 'Local-first AI agent orchestration dashboard'
 };
 
 export default async function RootLayout({
-  children,
+  children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user }
   } = await supabase.auth.getUser();
 
   return (
@@ -30,9 +30,7 @@ export default async function RootLayout({
               <h1 className="topbar-title">
                 <Link href="/tickets">Orchestrator</Link>
               </h1>
-              <p className="topbar-subtitle">
-                Ticket orchestration for external AI agents
-              </p>
+              <p className="topbar-subtitle">Ticket orchestration for external AI agents</p>
             </div>
             {user ? (
               <div className="topbar-user">

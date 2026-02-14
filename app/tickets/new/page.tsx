@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
+import { redirect } from 'next/navigation';
 
-import { createTicketAction } from "@/lib/actions/tickets";
+import { createTicketAction } from '@/lib/actions/tickets';
 
 export default function NewTicketPage() {
   async function submit(formData: FormData) {
-    "use server";
+    'use server';
 
     const { id } = await createTicketAction(formData);
     redirect(`/tickets/${id}`);
@@ -54,7 +54,7 @@ export default function NewTicketPage() {
             <textarea id="outputFormat" name="outputFormat" />
           </div>
 
-          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="field">
               <label htmlFor="assignedAgent">Assigned Agent</label>
               <input id="assignedAgent" name="assignedAgent" placeholder="Claude Code" />
@@ -70,7 +70,7 @@ export default function NewTicketPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-primary" type="submit">
               Save Ticket
             </button>

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from 'next/link';
 
 type Ticket = {
   id: string;
@@ -12,26 +12,22 @@ type Ticket = {
 
 export default function TicketListView({ tickets }: { tickets: Ticket[] }) {
   if (!tickets.length) {
-    return (
-      <article className="card card-pad">No tickets yet. Create the first one.</article>
-    );
+    return <article className="card card-pad">No tickets yet. Create the first one.</article>;
   }
 
   return (
     <section className="ticket-list">
-      {tickets.map((ticket) => (
+      {tickets.map(ticket => (
         <article className="ticket-item" key={ticket.id}>
           <h3>
             <Link href={`/tickets/${ticket.id}`}>
-              {ticket.ticket_number ?? "TICKET-????"} - {ticket.title}
+              {ticket.ticket_number ?? 'TICKET-????'} - {ticket.title}
             </Link>
           </h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <span className="badge">{ticket.status}</span>
             <span className="badge">priority {ticket.priority}</span>
-            {ticket.assigned_agent ? (
-              <span className="badge">{ticket.assigned_agent}</span>
-            ) : null}
+            {ticket.assigned_agent ? <span className="badge">{ticket.assigned_agent}</span> : null}
             <span className="small muted">
               updated {new Date(ticket.updated_at).toLocaleString()}
             </span>

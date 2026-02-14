@@ -1,7 +1,7 @@
-import { signIn, signUp } from "@/lib/actions/auth";
+import { signIn, signUp } from '@/lib/actions/auth';
 
 export default async function LoginPage({
-  searchParams,
+  searchParams
 }: {
   searchParams: Promise<{ error?: string; message?: string }>;
 }) {
@@ -13,7 +13,14 @@ export default async function LoginPage({
         <h1 className="login-title">Sign in to Orchestrator</h1>
 
         {error && <div className="notice">{error}</div>}
-        {message && <div className="notice" style={{ borderColor: "#ade3cf", background: "#eefbf5", color: "var(--brand)" }}>{message}</div>}
+        {message && (
+          <div
+            className="notice"
+            style={{ borderColor: '#ade3cf', background: '#eefbf5', color: 'var(--brand)' }}
+          >
+            {message}
+          </div>
+        )}
 
         <form className="stack">
           <div className="field">
