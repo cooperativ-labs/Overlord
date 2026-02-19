@@ -1,4 +1,4 @@
-import { createClient } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type EventInsert = {
   eventType:
@@ -21,7 +21,7 @@ type EventInsert = {
 };
 
 export async function resolveSession(sessionKey: string, ticketId: string) {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const { data: session, error } = await supabase
     .from('agent_sessions')
     .select('*')
@@ -48,7 +48,7 @@ export async function resolveSession(sessionKey: string, ticketId: string) {
 }
 
 export async function insertTicketEvent(input: EventInsert) {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   return supabase.from('ticket_events').insert({
     event_type: input.eventType,
     is_blocking: input.isBlocking ?? false,

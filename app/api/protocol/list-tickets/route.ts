@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { parseProtocolBody, internalErrorResponse } from '@/app/api/protocol/_lib';
 import { listTicketsSchema } from '@/lib/orchestrator/validation';
-import { createClient } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, listTicketsSchema);
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
     let query = supabase.from('tickets').select('*').order('updated_at', { ascending: false });
 
     if (!parsed.data.includeCompleted) {

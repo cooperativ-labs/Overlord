@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { attachSchema } from '@/lib/orchestrator/validation';
-import { createClient } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, attachSchema);
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
     const { ticketId, agentIdentifier, connectionMethod, metadata } = parsed.data;
     const sessionKey = randomUUID();
 

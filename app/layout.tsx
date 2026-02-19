@@ -4,10 +4,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { AppSidebar } from '@/components/app-sidebar';
+import { NewTicketButton } from '@/components/features/NewTicketButton';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { signOut } from '@/lib/actions/auth';
+import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
@@ -25,20 +27,23 @@ export default async function RootLayout({
     data: { user }
   } = await supabase.auth.getUser();
 
+  const projects = await getProjectsForCurrentUser();
+
   return (
     <html lang="en">
       <body>
         <SidebarProvider defaultOpen>
           {user ? (
-            <div className="flex h-dvh w-full">
+            <div className="flex h-dvh w-full overflow-hidden">
               <AppSidebar
                 user={{
                   name: user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User',
                   email: user.email ?? '',
                   avatar: user.user_metadata?.avatar_url ?? ''
                 }}
+                projects={projects}
               />
-              <SidebarInset>
+              <SidebarInset className="min-w-0 overflow-hidden">
                 <header className="flex flex-col gap-4 border-b bg-card p-4 text-card-foreground md:flex-row md:items-center md:justify-between">
                   <div className="flex min-w-0 items-center gap-2">
                     <SidebarTrigger className="-ml-1" />
@@ -56,18 +61,16 @@ export default async function RootLayout({
                         Sign out
                       </Button>
                     </form>
-                    <Button asChild>
-                      <Link href="/new">New Ticket</Link>
-                    </Button>
+                    <NewTicketButton />
                   </div>
                 </header>
-                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4 md:p-6">
+                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
                   {children}
                 </main>
               </SidebarInset>
             </div>
           ) : (
-            <main className="min-h-dvh p-4 md:p-6">{children}</main>
+            <main className="min-h-dvh ">{children}</main>
           )}
         </SidebarProvider>
       </body>

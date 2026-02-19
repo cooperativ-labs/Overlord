@@ -6,15 +6,10 @@ const ticketStatusSchema = z.enum(ticketStatuses);
 const connectionMethodSchema = z.enum(connectionMethods);
 
 export const createTicketSchema = z.object({
-  title: z.string().trim().min(3).max(180),
-  objective: z.string().trim().min(1),
-  context: z.string().trim().max(20_000).optional().default(''),
-  constraints: z.string().trim().max(20_000).optional().default(''),
+  title: z.string().trim().max(180).optional().default(''),
+  description: z.string().trim().min(1).max(20_000),
   availableTools: z.string().trim().max(20_000).optional().default(''),
-  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
-  outputFormat: z.string().trim().max(20_000).optional().default(''),
-  assignedAgent: z.string().trim().max(120).optional().default(''),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium')
+  acceptanceCriteria: z.string().trim().max(20_000).optional().default('')
 });
 
 export const listTicketsSchema = z.object({

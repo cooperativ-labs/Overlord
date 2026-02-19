@@ -2,20 +2,111 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { getPlatformUrl } from '@/lib/env';
+import { buildTicketPromptMarkdown } from '@/lib/orchestrator/ticket-prompt';
 import { createTicketSchema } from '@/lib/orchestrator/validation';
 import { createClient } from '@/supabase/utils/server';
 
-export async function createTicketAction(formData: FormData) {
+function deriveTitleFromDescription(description: string): string {
+  const trimmed = description.trim();
+  if (trimmed.length <= 60) return trimmed;
+  return trimmed.slice(0, 60) + '…';
+}
+
+const hexColorPattern = /^#([0-9a-fA-F]{6})$/;
+
+function normalizeHexColor(value: string) {
+  const trimmed = value.trim();
+  if (!hexColorPattern.test(trimmed)) {
+    throw new Error('Color must be a valid hex value like #d4d4d8.');
+  }
+  return trimmed.toLowerCase();
+}
+
+function revalidateTicketBoards(organizationIds: Iterable<number>) {
+  revalidatePath('/u');
+  for (const organizationId of organizationIds) {
+    revalidatePath(`/${organizationId}`);
+  }
+}
+
+function revalidateTicketDetails(items: Iterable<{ organizationId: number; ticketId: string }>) {
+  for (const { organizationId, ticketId } of items) {
+    revalidatePath(`/${organizationId}/${ticketId}`);
+  }
+}
+
+export async function createTicketInColumnAction(
+  status: string,
+  objective: string,
+  organizationId?: number
+) {
+  const supabase = await createClient();
+  const trimmedObjective = objective.trim() || null;
+
+  const insertPayload: {
+    status: string;
+    objective: string | null;
+    title: string | null;
+    organization_id?: number;
+  } = {
+    status,
+    objective: trimmedObjective,
+    title: trimmedObjective ? deriveTitleFromDescription(trimmedObjective) : null
+  };
+
+  if (organizationId !== undefined) {
+    insertPayload.organization_id = organizationId;
+  }
+
+  const { data, error } = await supabase
+    .from('tickets')
+    .insert(insertPayload)
+    .select('id,organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to create ticket.');
+  }
+
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId: data.id }]);
+  return { id: data.id, organizationId: data.organization_id };
+}
+
+export async function createBlankTicketAction(organizationId?: number) {
+  const supabase = await createClient();
+
+  const insertPayload: {
+    status: string;
+    organization_id?: number;
+  } = { status: 'draft' };
+
+  if (organizationId !== undefined) {
+    insertPayload.organization_id = organizationId;
+  }
+
+  const { data, error } = await supabase
+    .from('tickets')
+    .insert(insertPayload)
+    .select('id,organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to create ticket.');
+  }
+
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId: data.id }]);
+  return { id: data.id, organizationId: data.organization_id };
+}
+
+export async function createTicketAction(formData: FormData, organizationId?: number) {
   const parsed = createTicketSchema.safeParse({
     title: formData.get('title'),
-    objective: formData.get('objective'),
-    context: formData.get('context'),
-    constraints: formData.get('constraints'),
+    description: formData.get('description'),
     availableTools: formData.get('availableTools'),
-    acceptanceCriteria: formData.get('acceptanceCriteria'),
-    outputFormat: formData.get('outputFormat'),
-    assignedAgent: formData.get('assignedAgent'),
-    priority: formData.get('priority')
+    acceptanceCriteria: formData.get('acceptanceCriteria')
   });
 
   if (!parsed.success) {
@@ -23,21 +114,30 @@ export async function createTicketAction(formData: FormData) {
   }
 
   const supabase = await createClient();
+
+  const insertPayload: {
+    acceptance_criteria: string | null;
+    available_tools: string;
+    objective: string;
+    status: string;
+    title: string;
+    organization_id?: number;
+  } = {
+    acceptance_criteria: parsed.data.acceptanceCriteria || null,
+    available_tools: parsed.data.availableTools,
+    objective: parsed.data.description,
+    status: 'draft',
+    title: parsed.data.title || deriveTitleFromDescription(parsed.data.description)
+  };
+
+  if (organizationId !== undefined) {
+    insertPayload.organization_id = organizationId;
+  }
+
   const { data, error } = await supabase
     .from('tickets')
-    .insert({
-      acceptance_criteria: parsed.data.acceptanceCriteria,
-      assigned_agent: parsed.data.assignedAgent || null,
-      available_tools: parsed.data.availableTools,
-      constraints: parsed.data.constraints,
-      context: parsed.data.context,
-      objective: parsed.data.objective,
-      output_format: parsed.data.outputFormat,
-      priority: parsed.data.priority,
-      status: 'draft',
-      title: parsed.data.title
-    })
-    .select('id')
+    .insert(insertPayload)
+    .select('id,organization_id')
     .single();
 
   if (error || !data) {
@@ -50,21 +150,17 @@ export async function createTicketAction(formData: FormData) {
     ticket_id: data.id
   });
 
-  revalidatePath('/tickets');
-  return { id: data.id };
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId: data.id }]);
+  return { id: data.id, organizationId: data.organization_id };
 }
 
 export async function updateTicketAction(ticketId: string, formData: FormData) {
   const parsed = createTicketSchema.safeParse({
     title: formData.get('title'),
-    objective: formData.get('objective'),
-    context: formData.get('context'),
-    constraints: formData.get('constraints'),
+    description: formData.get('description'),
     availableTools: formData.get('availableTools'),
-    acceptanceCriteria: formData.get('acceptanceCriteria'),
-    outputFormat: formData.get('outputFormat'),
-    assignedAgent: formData.get('assignedAgent'),
-    priority: formData.get('priority')
+    acceptanceCriteria: formData.get('acceptanceCriteria')
   });
 
   if (!parsed.success) {
@@ -72,23 +168,20 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('tickets')
     .update({
-      acceptance_criteria: parsed.data.acceptanceCriteria,
-      assigned_agent: parsed.data.assignedAgent || null,
+      acceptance_criteria: parsed.data.acceptanceCriteria || null,
       available_tools: parsed.data.availableTools,
-      constraints: parsed.data.constraints,
-      context: parsed.data.context,
-      objective: parsed.data.objective,
-      output_format: parsed.data.outputFormat,
-      priority: parsed.data.priority,
-      title: parsed.data.title
+      objective: parsed.data.description,
+      title: parsed.data.title || null
     })
-    .eq('id', ticketId);
+    .eq('id', ticketId)
+    .select('organization_id')
+    .single();
 
-  if (error) {
-    throw new Error(error.message ?? 'Failed to update ticket.');
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update ticket.');
   }
 
   await supabase.from('ticket_events').insert({
@@ -97,15 +190,54 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     ticket_id: ticketId
   });
 
-  revalidatePath('/tickets');
-  revalidatePath(`/tickets/${ticketId}`);
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId }]);
+}
+
+const editableFields = ['title', 'objective', 'available_tools', 'acceptance_criteria'] as const;
+type EditableField = (typeof editableFields)[number];
+
+export async function updateTicketFieldAction(
+  ticketId: string,
+  field: EditableField,
+  value: string
+) {
+  if (!editableFields.includes(field)) {
+    throw new Error('Invalid field.');
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ [field]: value.trim() || null })
+    .eq('id', ticketId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update ticket.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: `${field.replace('_', ' ')} updated.`,
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId }]);
 }
 
 export async function updateTicketStatusAction(ticketId: string, status: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from('tickets').update({ status }).eq('id', ticketId);
-  if (error) {
-    throw new Error(error.message);
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ status })
+    .eq('id', ticketId)
+    .select('organization_id')
+    .single();
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update ticket status.');
   }
 
   await supabase.from('ticket_events').insert({
@@ -115,8 +247,80 @@ export async function updateTicketStatusAction(ticketId: string, status: string)
     ticket_id: ticketId
   });
 
-  revalidatePath('/tickets');
-  revalidatePath(`/tickets/${ticketId}`);
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId }]);
+}
+
+export async function setTicketProjectAction(ticketId: string, projectId: string | null) {
+  const supabase = await createClient();
+  const nextProjectId = projectId?.trim() || null;
+  const { data: existingTicket, error: existingTicketError } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+
+  if (existingTicketError || !existingTicket) {
+    throw new Error(existingTicketError?.message ?? 'Ticket not found.');
+  }
+
+  if ((existingTicket.project_id ?? null) === nextProjectId) {
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({
+      everhour_project_id: null,
+      everhour_task_id: null,
+      project_id: nextProjectId
+    })
+    .eq('id', ticketId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update ticket project.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: nextProjectId ? 'Project updated.' : 'Project cleared.',
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId }]);
+}
+
+export async function createProjectAction(input: {
+  organizationId: number;
+  name: string;
+  color: string;
+}) {
+  const trimmedName = input.name.trim();
+  if (!trimmedName) {
+    throw new Error('Project name is required.');
+  }
+
+  const color = normalizeHexColor(input.color);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('projects')
+    .insert({
+      organization_id: input.organizationId,
+      name: trimmedName,
+      color
+    })
+    .select('id,name,color,organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to create project.');
+  }
+
+  revalidateTicketBoards([data.organization_id]);
+  return { id: data.id, name: data.name, color: data.color, everhour_project_id: null };
 }
 
 export async function reorderTicketsAction(
@@ -124,6 +328,22 @@ export async function reorderTicketsAction(
   statusChange?: { ticketId: string; newStatus: string }
 ) {
   const supabase = await createClient();
+  const organizationIds = new Set<number>();
+
+  if (orderedIds.length > 0) {
+    const { data: affectedTickets, error: affectedTicketsError } = await supabase
+      .from('tickets')
+      .select('id,organization_id')
+      .in('id', orderedIds);
+
+    if (affectedTicketsError) {
+      throw new Error(affectedTicketsError.message);
+    }
+
+    for (const ticket of affectedTickets ?? []) {
+      organizationIds.add(ticket.organization_id);
+    }
+  }
 
   // Update positions for all tickets in the list
   for (let i = 0; i < orderedIds.length; i++) {
@@ -138,13 +358,16 @@ export async function reorderTicketsAction(
 
   // If a ticket also changed columns, update its status
   if (statusChange) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('tickets')
       .update({ status: statusChange.newStatus })
-      .eq('id', statusChange.ticketId);
-    if (error) {
-      throw new Error(error.message);
+      .eq('id', statusChange.ticketId)
+      .select('organization_id')
+      .single();
+    if (error || !data) {
+      throw new Error(error?.message ?? 'Failed to update ticket status.');
     }
+    organizationIds.add(data.organization_id);
 
     await supabase.from('ticket_events').insert({
       event_type: 'status_change',
@@ -152,7 +375,51 @@ export async function reorderTicketsAction(
       summary: `Status changed to ${statusChange.newStatus}.`,
       ticket_id: statusChange.ticketId
     });
+
+    revalidateTicketDetails([
+      { organizationId: data.organization_id, ticketId: statusChange.ticketId }
+    ]);
   }
 
-  revalidatePath('/tickets');
+  revalidateTicketBoards(organizationIds);
+}
+
+export async function deleteTicketAction(ticketId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('tickets')
+    .delete()
+    .eq('id', ticketId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to delete ticket.');
+  }
+
+  revalidatePath('/u');
+  revalidatePath(`/${data.organization_id}`);
+  return { organizationId: data.organization_id };
+}
+
+/** Returns the full LLM prompt for a ticket (for copy-to-clipboard). RLS applies. */
+export async function getTicketPromptForCopy(
+  ticketId: string
+): Promise<{ error?: string; prompt?: string }> {
+  const supabase = await createClient();
+  const { data: ticket, error } = await supabase
+    .from('tickets')
+    .select(
+      'id, title, objective, acceptance_criteria, available_tools, status, priority'
+    )
+    .eq('id', ticketId)
+    .single();
+
+  if (error || !ticket) {
+    return { error: error?.message ?? 'Ticket not found.' };
+  }
+
+  const platformUrl = getPlatformUrl();
+  const prompt = buildTicketPromptMarkdown(ticket, platformUrl);
+  return { prompt };
 }

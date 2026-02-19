@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { resolveSession } from '@/lib/orchestrator/protocol-db';
 import { askSchema } from '@/lib/orchestrator/validation';
-import { createClient } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, askSchema);
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
 
   try {
     const { ticketId, question, phase, payload, sessionKey } = parsed.data;
-    const supabase = await createClient();
+    const supabase = createServiceRoleClient();
     const resolved = await resolveSession(sessionKey, ticketId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });

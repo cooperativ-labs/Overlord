@@ -46,10 +46,14 @@ function toColumnTitle(status: string): string {
 
 export default function KanbanBoard({
   tickets: initialTickets,
-  statuses
+  statuses,
+  showOrganizationName = false,
+  organizationId
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number }>;
+  showOrganizationName?: boolean;
+  organizationId?: number;
 }) {
   const [, startTransition] = useTransition();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
@@ -221,7 +225,7 @@ export default function KanbanBoard({
       onDragEnd={handleDragEnd}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="mb-2 flex justify-end">
+        <div className="mb-2 flex justify-end px-4 md:px-6">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -262,19 +266,36 @@ export default function KanbanBoard({
           </DropdownMenu>
         </div>
         <div className="min-h-0 min-w-0 flex-1 overflow-x-auto">
-          <div className="inline-flex flex-nowrap gap-3 pb-4">
+          <div className="inline-flex flex-nowrap gap-3 pb-4 px-4 md:px-6">
             {visibleSortedColumns.map(col => (
-              <KanbanColumn key={col.id} column={col} tickets={columnTickets.get(col.id) ?? []} />
+              <KanbanColumn
+                key={col.id}
+                column={col}
+                tickets={columnTickets.get(col.id) ?? []}
+                showOrganizationName={showOrganizationName}
+                organizationId={organizationId}
+              />
             ))}
             {showUncategorized && (
-              <KanbanColumn column={uncategorizedColumn} tickets={uncategorized} />
+              <KanbanColumn
+                column={uncategorizedColumn}
+                tickets={uncategorized}
+                showOrganizationName={showOrganizationName}
+                organizationId={organizationId}
+              />
             )}
           </div>
         </div>
       </div>
 
       <DragOverlay>
-        {activeTicket ? <KanbanCard ticket={activeTicket} isDragOverlay /> : null}
+        {activeTicket ? (
+          <KanbanCard
+            ticket={activeTicket}
+            isDragOverlay
+            showOrganizationName={showOrganizationName}
+          />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );

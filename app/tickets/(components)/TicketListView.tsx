@@ -1,19 +1,30 @@
 import Link from 'next/link';
 
+import { CopyTicketPromptButton } from '@/components/features/CopyTicketPromptButton';
+import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { getDisplayTitle, getTicketIdentifier } from '@/lib/helpers/tickets';
 
 type Ticket = {
   id: string;
-  ticket_number: string | null;
-  title: string;
+  title: string | null;
+  objective: string | null;
+  organization_id: number;
   status: string;
   priority: string;
   assigned_agent: string | null;
   updated_at: string;
+  organization_name?: string | null;
 };
 
-export default function TicketListView({ tickets }: { tickets: Ticket[] }) {
+export default function TicketListView({
+  tickets,
+  showOrganizationName = false
+}: {
+  tickets: Ticket[];
+  showOrganizationName?: boolean;
+}) {
   if (!tickets.length) {
     return (
       <Card>
@@ -27,11 +38,28 @@ export default function TicketListView({ tickets }: { tickets: Ticket[] }) {
       {tickets.map(ticket => (
         <Card key={ticket.id}>
           <CardContent className="space-y-2 pt-6">
-            <h3 className="font-medium">
-              <Link href={`/tickets/${ticket.id}`} className="hover:underline">
-                {ticket.ticket_number ?? 'TICKET-????'} - {ticket.title}
-              </Link>
-            </h3>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 space-y-1">
+                <h3 className="font-medium">
+                  <Link
+                    href={`/${ticket.organization_id}/${ticket.id}`}
+                    className="hover:underline"
+                  >
+                    {getTicketIdentifier(ticket.id)} — {getDisplayTitle(ticket)}
+                  </Link>
+                </h3>
+                {showOrganizationName && ticket.organization_name ? (
+                  <p className="text-muted-foreground text-xs">{ticket.organization_name}</p>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <DeleteTicketButton
+                  ticketId={ticket.id}
+                  className="h-8 w-8 text-red-600 border-red-600/30 hover:text-white hover:bg-red-600"
+                />
+                <CopyTicketPromptButton ticketId={ticket.id} variant="icon" className="h-8 w-8" />
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{ticket.status}</Badge>
               <Badge>priority {ticket.priority}</Badge>
