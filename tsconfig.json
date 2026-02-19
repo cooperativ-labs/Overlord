@@ -37,6 +37,8 @@
   ],
   "exclude": [
     "node_modules",
+    "electron",
+    "dist-electron",
     "seed.config.ts",
     "seed.ts",
     "scripts/**"

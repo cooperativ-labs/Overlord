@@ -1,0 +1,33 @@
+appId: com.cooperativ.orchestrator
+productName: Orchestrator
+directories:
+  output: release
+  buildResources: electron/resources
+
+files:
+  - "dist-electron/**/*"
+  - ".next/standalone/**/*"
+  - ".next/static/**/*"
+  - "public/**/*"
+  - "supabase/config.toml"
+  - "supabase/migrations/**/*"
+  - "supabase/seed.sql"
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  icon: electron/resources/icon.icns
+  hardenedRuntime: true
+  entitlements: electron/resources/entitlements.mac.plist
+  entitlementsInherit: electron/resources/entitlements.mac.plist
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  icon: electron/resources/icon.png
+
+npmRebuild: true

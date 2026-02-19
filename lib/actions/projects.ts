@@ -65,3 +65,75 @@ export async function updateProjectColorAction(input: {
   revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
 }
 
+export async function updateProjectNameAction(input: {
+  projectId: string;
+  name: string;
+}): Promise<void> {
+  const trimmedName = input.name.trim();
+  if (!trimmedName) {
+    throw new Error('Project name is required.');
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ name: trimmedName })
+    .eq('id', input.projectId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update project name.');
+  }
+
+  revalidatePath('/u');
+  revalidatePath(`/${data.organization_id}`);
+  revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
+}
+
+export type CreateProjectResult = {
+  id: string;
+  name: string;
+  color: string;
+  organizationId: number;
+};
+
+export async function createProject(input: {
+  organizationId: number;
+  name: string;
+  color: string;
+}): Promise<CreateProjectResult> {
+  const trimmedName = input.name.trim();
+  if (!trimmedName) {
+    throw new Error('Project name is required.');
+  }
+
+  const color = normalizeHexColor(input.color);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('projects')
+    .insert({
+      organization_id: input.organizationId,
+      name: trimmedName,
+      color
+    })
+    .select('id,name,color,organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to create project.');
+  }
+
+  revalidatePath('/u');
+  revalidatePath(`/${data.organization_id}`);
+  revalidatePath(`/${data.organization_id}/projects/${data.id}`);
+
+  return {
+    id: data.id,
+    name: data.name,
+    color: data.color,
+    organizationId: data.organization_id
+  };
+}
+

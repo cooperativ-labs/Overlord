@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 
 import { createClient } from '@/supabase/utils/server';
 
+import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
+
 import TicketsBoardContent from '../../../tickets/(components)/TicketsBoardContent';
 
 type PageProps = {
@@ -21,7 +23,7 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
   const supabase = await createClient();
   const { data: project, error } = await supabase
     .from('projects')
-    .select('id,name,organization_id')
+    .select('id,name,color,organization_id,everhour_project_id')
     .eq('id', projectId)
     .eq('organization_id', parsedOrganizationId)
     .single();
@@ -31,12 +33,19 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
   }
 
   return (
-    <TicketsBoardContent
-      view={view}
-      organizationId={parsedOrganizationId}
-      projectId={project.id}
-      title={`${project.name} Tasks`}
-      description={`Tasks for ${project.name}.`}
-    />
+    <div className="flex flex-col ">
+      <ProjectSettingsSection
+        projectId={project.id}
+        organizationId={parsedOrganizationId}
+        initialName={project.name}
+        initialColor={project.color}
+        everhourProjectId={project.everhour_project_id}
+      />
+      <TicketsBoardContent
+        view={view}
+        organizationId={parsedOrganizationId}
+        projectId={project.id}
+      />
+    </div>
   );
 }

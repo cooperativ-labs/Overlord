@@ -11,6 +11,12 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import { createProjectAction, setTicketProjectAction } from '@/lib/actions/tickets';
 
+import {
+  DEFAULT_PROJECT_COLOR,
+  ProjectColorSetter,
+  toHexColor
+} from '@/components/features/projects/ProjectColorSetter';
+
 type ProjectOption = {
   id: string;
   name: string;
@@ -24,30 +30,6 @@ type TicketProjectSelectProps = {
   currentProjectId: string | null;
   projects: ProjectOption[];
 };
-
-const defaultProjectColor = '#d4d4d8';
-const hexColorPattern = /^#([0-9a-fA-F]{6})$/;
-const presetProjectColors = [
-  '#d4d4d8',
-  '#f87171',
-  '#fb923c',
-  '#facc15',
-  '#4ade80',
-  '#2dd4bf',
-  '#38bdf8',
-  '#818cf8',
-  '#c084fc',
-  '#f472b6'
-];
-
-function toHexColor(value: string) {
-  const trimmed = value.trim();
-  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-  if (!hexColorPattern.test(withHash)) {
-    throw new Error('Use a valid 6-digit hex color, like #d4d4d8.');
-  }
-  return withHash.toLowerCase();
-}
 
 export function TicketProjectSelect({
   ticketId,
@@ -64,7 +46,7 @@ export function TicketProjectSelect({
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState('');
-  const [colorInput, setColorInput] = useState(defaultProjectColor);
+  const [colorInput, setColorInput] = useState(DEFAULT_PROJECT_COLOR);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createButtonState, setCreateButtonState] = useState<ButtonLoadingState>('default');
   const [syncButtonState, setSyncButtonState] = useState<ButtonLoadingState>('default');
@@ -93,10 +75,6 @@ export function TicketProjectSelect({
     });
   }
 
-  function handleColorInputChange(value: string) {
-    setColorInput(value);
-  }
-
   async function handleCreateProject() {
     setCreateButtonState('loading');
     setCreateError(null);
@@ -108,6 +86,9 @@ export function TicketProjectSelect({
       }
 
       const color = toHexColor(colorInput);
+      if (!color) {
+        throw new Error('Use a valid 6-digit hex color, like #d4d4d8.');
+      }
       const created = await createProjectAction({ organizationId, name: trimmedName, color });
       await setTicketProjectAction(ticketId, created.id);
 
@@ -117,7 +98,7 @@ export function TicketProjectSelect({
       setSavedProjectId(created.id);
       setSelectedProjectId(created.id);
       setName('');
-      setColorInput(defaultProjectColor);
+      setColorInput(DEFAULT_PROJECT_COLOR);
       setShowCreateForm(false);
       setCreateButtonState('success');
       router.refresh();
@@ -262,31 +243,7 @@ export function TicketProjectSelect({
 
               <div className="space-y-2">
                 <Label>Project color</Label>
-                <div className="grid grid-cols-5 gap-2">
-                  {presetProjectColors.map(color => {
-                    const isActive = color.toLowerCase() === colorInput.trim().toLowerCase();
-                    return (
-                      <button
-                        key={color}
-                        type="button"
-                        className={`h-8 w-8 rounded-[4px] border transition ${isActive ? 'ring-2 ring-primary ring-offset-2' : ''}`}
-                        style={{ backgroundColor: color, borderColor: color }}
-                        aria-label={`Use color ${color}`}
-                        onClick={() => setColorInput(color)}
-                      />
-                    );
-                  })}
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="new-project-color">Custom hex</Label>
-                  <Input
-                    id="new-project-color"
-                    value={colorInput}
-                    onChange={event => handleColorInputChange(event.target.value)}
-                    placeholder="#d4d4d8"
-                    spellCheck={false}
-                  />
-                </div>
+                <ProjectColorSetter value={colorInput} onSelect={setColorInput} />
               </div>
 
               {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
@@ -309,7 +266,7 @@ export function TicketProjectSelect({
                   onClick={() => {
                     setShowCreateForm(false);
                     setName('');
-                    setColorInput(defaultProjectColor);
+                    setColorInput(DEFAULT_PROJECT_COLOR);
                     setCreateError(null);
                     setCreateButtonState('default');
                   }}

@@ -84,21 +84,21 @@ type RawTicket = {
   everhour_task_id: string | null;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
-    | { name: string; color: string; everhour_project_id: string | null }
-    | Array<{
-        name: string;
-        color: string;
-        everhour_project_id: string | null;
-      }>
-    | null;
+  | { name: string; color: string; everhour_project_id: string | null }
+  | Array<{
+    name: string;
+    color: string;
+    everhour_project_id: string | null;
+  }>
+  | null;
 };
 
 export default async function TicketsBoardContent({
   view = 'board',
   organizationId,
   showOrganizationName = false,
-  title = 'Ticket Inbox',
-  description = 'Drag tickets between columns to change their status.',
+  title,
+  description,
   projectId
 }: TicketsBoardContentProps) {
   const supabase = await createClient();

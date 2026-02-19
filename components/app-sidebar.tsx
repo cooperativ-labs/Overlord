@@ -5,12 +5,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 
+import { useProjectCreator } from '@/components/features/projects/ProjectCreatorContext';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
@@ -28,6 +28,7 @@ import {
   SidebarMenuItem,
   SidebarRail
 } from '@/components/ui/sidebar';
+import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { updateProjectColorAction } from '@/lib/actions/projects';
 
@@ -42,19 +43,6 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   projects: SidebarProject[];
 };
 
-const presetProjectColors = [
-  '#d4d4d8',
-  '#f87171',
-  '#fb923c',
-  '#facc15',
-  '#4ade80',
-  '#2dd4bf',
-  '#38bdf8',
-  '#818cf8',
-  '#c084fc',
-  '#f472b6'
-];
-
 type ProjectColorMenuProps = {
   projectId: string;
   color: string;
@@ -62,46 +50,38 @@ type ProjectColorMenuProps = {
 
 function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
   const router = useRouter();
+  const [open, setOpen] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
 
   async function handleChangeColor(nextColor: string) {
-    if (nextColor === color || isUpdating) {
+    if (nextColor.toLowerCase() === color.toLowerCase() || isUpdating) {
       return;
     }
 
     setIsUpdating(true);
     try {
-      await updateProjectColorAction({ projectId, color: nextColor });
+      await updateProjectColorAction({ projectId, color: nextColor.toLowerCase() });
       router.refresh();
+      setOpen(false);
     } finally {
       setIsUpdating(false);
     }
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <SidebarMenuAction showOnHover disabled={isUpdating}>
           <MoreHorizontal />
           <span className="sr-only">Project options</span>
         </SidebarMenuAction>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="right" align="start" className="w-44 rounded-lg">
-        {presetProjectColors.map(nextColor => (
-          <DropdownMenuItem
-            key={nextColor}
-            className="gap-2"
-            onClick={() => handleChangeColor(nextColor)}
-          >
-            <span
-              className="h-3 w-3 rounded-[6px] border"
-              style={{ backgroundColor: nextColor, borderColor: nextColor }}
-            />
-            <span className="text-xs">
-              {nextColor.toLowerCase() === color.toLowerCase() ? 'Current color' : nextColor}
-            </span>
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent side="right" align="start" className="w-auto rounded-lg p-2">
+        <ProjectColorSetter
+          value={color}
+          onSelect={handleChangeColor}
+
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -109,6 +89,16 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
 
 export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
   const pathname = usePathname();
+  const { openProjectCreator } = useProjectCreator();
+
+  const defaultOrganizationId = React.useMemo(() => {
+    const segments = pathname.split('/').filter(Boolean);
+    const firstSegment = segments[0];
+    if (typeof firstSegment === 'string' && /^\d+$/.test(firstSegment)) {
+      return Number(firstSegment);
+    }
+    return projects[0]?.organizationId ?? null;
+  }, [pathname, projects]);
 
   const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
   const isMyTasksActive = pathname === '/u' || pathname.startsWith('/u/');
@@ -163,10 +153,22 @@ export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
 
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
           <SidebarGroupLabel>Projects</SidebarGroupLabel>
-          <SidebarGroupAction asChild>
-            <button type="button" aria-label="Add project">
-              <Plus className="h-3 w-3" />
-            </button>
+          <SidebarGroupAction
+            type="button"
+            aria-label="Add project"
+            disabled={defaultOrganizationId === null}
+            title={
+              defaultOrganizationId === null
+                ? 'Open a workspace to create a project'
+                : 'Add project'
+            }
+            onClick={() => {
+              if (defaultOrganizationId !== null) {
+                openProjectCreator({ organizationId: defaultOrganizationId });
+              }
+            }}
+          >
+            <Plus className="h-3 w-3" />
           </SidebarGroupAction>
           <SidebarGroupContent>
             <SidebarMenu>
