@@ -11,14 +11,18 @@ export async function POST(
 
   const { data: ticket } = await supabase
     .from('tickets')
-    .select('title,objective,acceptance_criteria,available_tools')
+    .select('title,objective,acceptance_criteria,available_tools,execution_target')
     .eq('id', ticketId)
     .single();
 
   if (!ticket) return NextResponse.json({ deleted: false });
 
   const isEmpty =
-    !ticket.title && !ticket.objective && !ticket.acceptance_criteria && !ticket.available_tools;
+    !ticket.title &&
+    !ticket.objective &&
+    !ticket.acceptance_criteria &&
+    !ticket.available_tools &&
+    ticket.execution_target === 'agent';
 
   if (isEmpty) {
     await supabase.from('tickets').delete().eq('id', ticketId);

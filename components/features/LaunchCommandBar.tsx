@@ -1,6 +1,6 @@
 'use client';
 
-import { Play, Terminal } from 'lucide-react';
+import { Bot, Play, Terminal } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -11,15 +11,24 @@ type Props = {
   claudeCommand: string;
   codexCommand: string;
   chatGptLink: string;
+  workingDirectory?: string | null;
 };
 
-function LaunchButton({ label, command }: { label: string; command: string }) {
+function LaunchButton({
+  label,
+  command,
+  workingDirectory
+}: {
+  label: string;
+  command: string;
+  workingDirectory?: string | null;
+}) {
   const [copied, setCopied] = useState(false);
   const { isElectron, sendCommand } = useTerminal();
 
   async function handleClick() {
     if (isElectron) {
-      await sendCommand(command);
+      await sendCommand(command, { cwd: workingDirectory ?? undefined });
     } else {
       await navigator.clipboard.writeText(command);
       setCopied(true);
@@ -46,7 +55,35 @@ function LaunchButton({ label, command }: { label: string; command: string }) {
   );
 }
 
-export function LaunchCommandBar({ claudeCommand, codexCommand, chatGptLink }: Props) {
+function RunAgentButton({
+  command,
+  workingDirectory
+}: {
+  command: string;
+  workingDirectory?: string | null;
+}) {
+  const { isElectron, sendCommand } = useTerminal();
+
+  if (!isElectron) return null;
+
+  async function handleClick() {
+    await sendCommand(command, { cwd: workingDirectory ?? undefined });
+  }
+
+  return (
+    <Button className="h-6 gap-1.5 text-xs" size="sm" variant="default" onClick={handleClick}>
+      <Bot className="h-3 w-3" />
+      Run Agent
+    </Button>
+  );
+}
+
+export function LaunchCommandBar({
+  claudeCommand,
+  codexCommand,
+  chatGptLink,
+  workingDirectory
+}: Props) {
   const { isElectron } = useTerminal();
 
   return (
@@ -54,8 +91,18 @@ export function LaunchCommandBar({ claudeCommand, codexCommand, chatGptLink }: P
       <span className="text-xs font-medium text-muted-foreground">
         {isElectron ? 'Run agent' : 'Launch agent'}
       </span>
-      <LaunchButton label="Claude Code" command={claudeCommand} />
-      <LaunchButton label="Codex" command={codexCommand} />
+      <LaunchButton
+        label="Claude Code"
+        command={claudeCommand}
+        workingDirectory={workingDirectory}
+      />
+      <LaunchButton label="Codex" command={codexCommand} workingDirectory={workingDirectory} />
+      {isElectron && (
+        <>
+          <div className="h-4 w-px bg-border" />
+          <RunAgentButton command={claudeCommand} workingDirectory={workingDirectory} />
+        </>
+      )}
       <div className="h-4 w-px bg-border" />
       <Button asChild className="h-6 text-xs" size="sm" variant="outline">
         <a href={chatGptLink} rel="noreferrer" target="_blank">

@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 const electronAPI = {
   terminal: {
-    spawn: (command?: string) => ipcRenderer.invoke('terminal:spawn', command),
+    spawn: (command?: string, cwd?: string) => ipcRenderer.invoke('terminal:spawn', { command, cwd }),
     write: (id: string, data: string) => ipcRenderer.send('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.send('terminal:resize', id, cols, rows),
@@ -23,7 +23,9 @@ const electronAPI = {
         ipcRenderer.removeListener('terminal:exit', handler);
       };
     },
-    openExternal: (command: string) => ipcRenderer.invoke('terminal:open-external', command)
+    openExternal: (command: string, cwd?: string) =>
+      ipcRenderer.invoke('terminal:open-external', { command, cwd }),
+    chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },
   supabase: {
     getStatus: () => ipcRenderer.invoke('supabase:status'),

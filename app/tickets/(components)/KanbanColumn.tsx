@@ -23,12 +23,14 @@ export default function KanbanColumn({
   column,
   tickets,
   showOrganizationName = false,
-  organizationId
+  organizationId,
+  projectId
 }: {
   column: KanbanColumnModel;
   tickets: Ticket[];
   showOrganizationName?: boolean;
   organizationId?: number;
+  projectId?: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const ticketIds = tickets.map(t => t.id);
@@ -47,7 +49,7 @@ export default function KanbanColumn({
     if (trimmed) {
       startTransition(async () => {
         try {
-          await createTicketInColumnAction(column.id, trimmed, organizationId);
+          await createTicketInColumnAction(column.id, trimmed, organizationId, projectId);
         } catch {
           // revalidation will restore server truth
         }

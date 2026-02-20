@@ -5,6 +5,7 @@ import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { getDisplayTitle, getTicketIdentifier } from '@/lib/helpers/tickets';
+import type { Database } from '@/types/database.types';
 
 type Ticket = {
   id: string;
@@ -13,6 +14,7 @@ type Ticket = {
   organization_id: number;
   status: string;
   priority: string;
+  execution_target: Database['public']['Enums']['ticket_execution_target'];
   assigned_agent: string | null;
   updated_at: string;
   organization_name?: string | null;
@@ -63,6 +65,9 @@ export default function TicketListView({
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{ticket.status}</Badge>
               <Badge>priority {ticket.priority}</Badge>
+              <Badge variant="outline" className="capitalize">
+                {ticket.execution_target}
+              </Badge>
               {ticket.assigned_agent ? (
                 <Badge variant="secondary">{ticket.assigned_agent}</Badge>
               ) : null}

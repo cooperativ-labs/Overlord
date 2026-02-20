@@ -12,6 +12,8 @@ export function buildTicketPromptMarkdown(
     objective: string | null;
     acceptance_criteria: string | null;
     available_tools: string | null;
+    execution_target: 'agent' | 'human' | null;
+    project_id: string | null;
     status: string | null;
     priority: string | number | null;
   },
@@ -22,6 +24,8 @@ export function buildTicketPromptMarkdown(
 
   const section = (heading: string, body: string | null) =>
     body?.trim() ? `### ${heading}\n\n${body.trim()}\n` : '';
+  const executionTargetLabel = ticket.execution_target === 'human' ? 'Human' : 'Agent';
+  const projectLabel = ticket.project_id ?? 'none';
 
   return `# Cooperativ Orchestrator — Agent Instructions
 
@@ -33,6 +37,8 @@ Complete the work described below, then deliver a summary back to the platform.
 - **Reference:** ${ref}
 - **Status:** ${ticket.status ?? 'unknown'}
 - **Priority:** ${ticket.priority ?? 'unset'}
+- **Execution Target:** ${executionTargetLabel}
+- **Project ID:** ${projectLabel}
 
 ${section('Objective', ticket.objective)}
 ${section('Acceptance Criteria', ticket.acceptance_criteria)}
@@ -55,8 +61,8 @@ Content-Type: application/json
 
 {
   "ticketId": "$TICKET_ID",
-  "agentIdentifier": "claude-code",
-  "connectionMethod": "claude_code",
+  "agentIdentifier": "<your-agent-id, e.g. codex or claude-code>",
+  "connectionMethod": "<mcp|cli|rest|chatgpt|claude_app|claude_code|other>",
   "metadata": {}
 }
 \`\`\`
@@ -83,7 +89,22 @@ POST $PLATFORM_URL/api/protocol/update
 
 Setting \`phase\` changes the ticket's visible status. Use \`"execute"\` while actively working.
 
-### 3 — Ask a blocking question (when you cannot proceed)
+### 3 — Record important decisions
+
+Call this when you make a meaningful implementation decision that future sessions should inherit.
+
+\`\`\`
+POST $PLATFORM_URL/api/protocol/decision
+{
+  "sessionKey": "<from attach>",
+  "ticketId": "$TICKET_ID",
+  "title": "Short decision summary",
+  "rationale": "Why this choice was made.",
+  "impact": "Tradeoffs or follow-up implications."
+}
+\`\`\`
+
+### 4 — Ask a blocking question (when you cannot proceed)
 
 \`\`\`
 POST $PLATFORM_URL/api/protocol/ask
@@ -97,7 +118,7 @@ POST $PLATFORM_URL/api/protocol/ask
 
 Stop working after calling ask. The ticket moves to \`review\` until a human responds. Do not guess.
 
-### 4 — Read / write shared context (optional)
+### 5 — Read / write shared context (optional)
 
 Persist findings or decisions that future agent sessions should know about.
 
@@ -109,7 +130,25 @@ POST $PLATFORM_URL/api/protocol/write-context
 { "sessionKey": "...", "ticketId": "$TICKET_ID", "key": "descriptive-key", "value": <any JSON>, "tags": [] }
 \`\`\`
 
-### 5 — Deliver (always last, when work is fully complete)
+### 6 — Create a follow-up ticket for human help (optional)
+
+When you are blocked by a human-only action (for example local configuration, credentials, or access), create a new ticket in the same project.
+
+\`\`\`
+POST $PLATFORM_URL/api/protocol/create-ticket
+{
+  "sessionKey": "<from attach>",
+  "ticketId": "$TICKET_ID",
+  "title": "Short follow-up title",
+  "objective": "What a human needs to do.",
+  "acceptanceCriteria": "How to verify the human task is complete.",
+  "executionTarget": "human"
+}
+\`\`\`
+
+This endpoint creates the follow-up ticket in the same organization/project as the current ticket and links it in events.
+
+### 7 — Deliver (always last, when work is fully complete)
 
 \`\`\`
 POST $PLATFORM_URL/api/protocol/deliver
@@ -124,7 +163,18 @@ POST $PLATFORM_URL/api/protocol/deliver
 }
 \`\`\`
 
-Deliver marks the ticket \`complete\` and ends your session. Do not call deliver if you used ask and have not received an answer.
+Deliver moves the ticket to \`review\` and ends your session. Do not call deliver if you used ask and have not received an answer.
+
+### 8 — Return a restart command on the ticket
+
+Include a restart command in your deliver artifacts so a future session can relaunch from the ticket immediately.
+If you omit it, \`/api/protocol/deliver\` will append one automatically based on your attached \`agentIdentifier\`.
+
+For codex sessions, use this format:
+
+\`\`\`bash
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID codex "$(curl -s -H 'Authorization: Bearer $AGENT_TOKEN' $PLATFORM_URL/api/protocol/context/$TICKET_ID)"
+\`\`\`
 
 ---
 
@@ -133,6 +183,8 @@ Deliver marks the ticket \`complete\` and ends your session. Do not call deliver
 - Always attach before anything else.
 - Always deliver when done — even for minor changes. The PM needs the feedback loop.
 - Post at least one update before delivering.
+- If blocked on human-only work, create a follow-up ticket in the same project using \`/api/protocol/create-ticket\`.
+- Include a \`Restart session command\` artifact when delivering when possible. The deliver endpoint auto-appends one if missing.
 - The \`summary\` in deliver is what the PM reads first — write it as a clear narrative, not a list of commands.
 - Use \`write-context\` for decisions, constraints, or facts a future agent session should know.
 `;

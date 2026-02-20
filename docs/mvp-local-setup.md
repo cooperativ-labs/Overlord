@@ -25,11 +25,54 @@ All protocol calls require:
 
 `Authorization: Bearer <token>`
 
+## Install agent permissions
+
+Run the installer once after cloning the repo to pre-approve Orchestrator protocol
+calls so agents don't trigger repeated permission prompts:
+
+```bash
+yarn install-agent-permissions
+```
+
+Options:
+- `--agent=claude|codex|all` — target a specific runtime (default: `all`)
+- `--platform-url=<url>` — override the default `http://localhost:3000`
+- `--dry-run` — preview changes without writing files
+
+Verify permissions are correctly installed:
+
+```bash
+yarn verify-agent-permissions
+```
+
+### Rollback
+
+The installer creates a timestamped backup before modifying any file. To restore:
+
+```bash
+# Find the backup
+ls .claude/settings.local.json.backup-*
+
+# Restore
+cp .claude/settings.local.json.backup-<timestamp> .claude/settings.local.json
+```
+
+### Troubleshooting
+
+- **Permission prompts still appear:** Run `yarn verify-agent-permissions` to check for
+  missing entries. The verifier will print the exact remediation command.
+- **Custom platform URL:** If your local dev server runs on a different port, pass
+  `--platform-url=http://localhost:<port>` to both install and verify.
+- **Broad `curl:*` wildcard present:** The verifier will report OK if `Bash(curl:*)`
+  exists (it covers all curl commands). The installer only adds scoped entries for
+  new setups.
+
 ## Protocol endpoints
 - `POST /api/protocol/list-tickets`
 - `POST /api/protocol/attach`
 - `POST /api/protocol/ask`
 - `POST /api/protocol/update`
+- `POST /api/protocol/decision`
 - `POST /api/protocol/read-context`
 - `POST /api/protocol/write-context`
 - `POST /api/protocol/deliver`

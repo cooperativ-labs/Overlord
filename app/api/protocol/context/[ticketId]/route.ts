@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { getAgentApiToken, getPlatformUrl } from '@/lib/env';
-import { buildTicketPromptMarkdown } from '@/lib/orchestrator/ticket-prompt';
+import { buildLaunchCommands } from '@/lib/orchestrator/launch-commands';
 import { ensureAgentToken } from '@/lib/orchestrator/protocol-auth';
+import { buildTicketPromptMarkdown } from '@/lib/orchestrator/ticket-prompt';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
@@ -16,7 +17,9 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   const { data: ticket, error } = await supabase
     .from('tickets')
-    .select('id, title, objective, acceptance_criteria, available_tools, status, priority')
+    .select(
+      'id, title, objective, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
+    )
     .eq('id', ticketId)
     .single();
 
@@ -43,12 +46,15 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { ticketId } = await params;
   const platformUrl = getPlatformUrl();
   const token = getAgentApiToken();
-  const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
-  const curlFragment = `"$(curl -s -H 'Authorization: Bearer ${token}' ${contextUrl})"`;
+  const { claudeCode, codex, contextUrl } = buildLaunchCommands({
+    platformUrl,
+    ticketId,
+    token
+  });
 
   return NextResponse.json({
-    claudeCode: `PLATFORM_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId} claude --system ${curlFragment}`,
-    codex: `PLATFORM_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId} codex ${curlFragment}`,
+    claudeCode,
+    codex,
     contextUrl
   });
 }

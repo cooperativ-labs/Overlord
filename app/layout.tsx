@@ -59,7 +59,7 @@ export default async function RootLayout({
                   </div>
                 </div>
               ) : (
-                <main className="min-h-dvh ">{children}</main>
+                <main className="min-h-dvh w-full ">{children}</main>
               )}
             </SidebarProvider>
           </ProjectCreatorProvider>

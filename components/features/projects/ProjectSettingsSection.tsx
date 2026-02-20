@@ -3,12 +3,18 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { useElectron } from '@/components/features/terminal/useElectron';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
-import { updateProjectColorAction, updateProjectNameAction } from '@/lib/actions/projects';
+import {
+  updateProjectColorAction,
+  updateProjectNameAction,
+  updateProjectWorkingDirectoryAction
+} from '@/lib/actions/projects';
 import { cn } from '@/lib/utils';
 
 import { ProjectColorSetter } from './ProjectColorSetter';
@@ -18,7 +24,7 @@ type ProjectSettingsSectionProps = {
   organizationId: number;
   initialName: string;
   initialColor: string;
-  everhourProjectId: string | null;
+  initialWorkingDirectory: string | null;
 };
 
 export function ProjectSettingsSection({
@@ -26,27 +32,37 @@ export function ProjectSettingsSection({
   organizationId,
   initialName,
   initialColor,
-  everhourProjectId
+  initialWorkingDirectory
 }: ProjectSettingsSectionProps) {
+  const { api, isElectron } = useElectron();
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [savedName, setSavedName] = useState(initialName);
   const [nameEditing, setNameEditing] = useState(false);
   const [savedColor, setSavedColor] = useState(initialColor);
+  const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
+  const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [nameSaveState, setNameSaveState] = useState<ButtonLoadingState>('default');
   const [colorSaveState, setColorSaveState] = useState<ButtonLoadingState>('default');
+  const [workingDirectorySaveState, setWorkingDirectorySaveState] =
+    useState<ButtonLoadingState>('default');
   const [syncButtonState, setSyncButtonState] = useState<ButtonLoadingState>('default');
   const [nameError, setNameError] = useState<string | null>(null);
   const [colorError, setColorError] = useState<string | null>(null);
+  const [workingDirectoryError, setWorkingDirectoryError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const isEverhourSynced = Boolean(everhourProjectId);
-
   useEffect(() => {
     setSavedColor(initialColor);
   }, [initialColor]);
+
+  useEffect(() => {
+    const next = initialWorkingDirectory ?? '';
+    setWorkingDirectory(next);
+    setSavedWorkingDirectory(next);
+  }, [initialWorkingDirectory]);
 
   useEffect(() => {
     if (nameEditing) nameInputRef.current?.focus();
@@ -117,6 +133,40 @@ export function ProjectSettingsSection({
       setSyncButtonState('error');
       setSyncMessage(error instanceof Error ? error.message : 'Failed to sync Everhour projects.');
     }
+  }
+
+  async function handleSaveWorkingDirectory(nextValue?: string) {
+    const normalized = (nextValue ?? workingDirectory).trim();
+    if (normalized === savedWorkingDirectory) {
+      return;
+    }
+
+    setWorkingDirectorySaveState('loading');
+    setWorkingDirectoryError(null);
+    try {
+      await updateProjectWorkingDirectoryAction({
+        projectId,
+        workingDirectory: normalized || null
+      });
+      setSavedWorkingDirectory(normalized);
+      setWorkingDirectory(normalized);
+      setWorkingDirectorySaveState('success');
+      router.refresh();
+    } catch (error) {
+      setWorkingDirectorySaveState('error');
+      setWorkingDirectoryError(
+        error instanceof Error ? error.message : 'Failed to update working directory.'
+      );
+    }
+  }
+
+  async function handleChooseDirectory() {
+    if (!api) return;
+    setWorkingDirectoryError(null);
+    const chosenPath = await api.terminal.chooseDirectory();
+    if (!chosenPath) return;
+    setWorkingDirectory(chosenPath);
+    await handleSaveWorkingDirectory(chosenPath);
   }
 
   return (
@@ -199,6 +249,51 @@ export function ProjectSettingsSection({
             </span>
           ) : null}
         </div>
+      </div>
+
+      <div className="mt-4 grid gap-2 md:max-w-2xl">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Local Working Directory
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={workingDirectory}
+            onBlur={() => handleSaveWorkingDirectory()}
+            onChange={e => setWorkingDirectory(e.target.value)}
+            placeholder="/absolute/path/to/your/project"
+            className="h-8 min-w-[320px] flex-1"
+            disabled={workingDirectorySaveState === 'loading'}
+          />
+          {isElectron ? (
+            <Button
+              className="h-8"
+              size="sm"
+              variant="outline"
+              disabled={workingDirectorySaveState === 'loading'}
+              onClick={handleChooseDirectory}
+            >
+              Choose folder
+            </Button>
+          ) : null}
+          <LoadingButton
+            buttonState={workingDirectorySaveState}
+            setButtonState={setWorkingDirectorySaveState}
+            text="Save path"
+            loadingText="Saving…"
+            successText="Saved"
+            errorText="Retry"
+            reset
+            size="sm"
+            variant="outline"
+            onClick={() => handleSaveWorkingDirectory()}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          `Run Agent` will open terminal sessions in this directory for tickets in this project.
+        </p>
+        {workingDirectoryError ? (
+          <p className="text-xs text-destructive">{workingDirectoryError}</p>
+        ) : null}
       </div>
     </section>
   );

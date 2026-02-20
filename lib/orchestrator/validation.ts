@@ -1,15 +1,21 @@
 import { z } from 'zod';
 
-import { connectionMethods, ticketStatuses } from '@/lib/orchestrator/types';
+import {
+  connectionMethods,
+  ticketExecutionTargets,
+  ticketStatuses
+} from '@/lib/orchestrator/types';
 
 const ticketStatusSchema = z.enum(ticketStatuses);
 const connectionMethodSchema = z.enum(connectionMethods);
+const ticketExecutionTargetSchema = z.enum(ticketExecutionTargets);
 
 export const createTicketSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
   description: z.string().trim().min(1).max(20_000),
   availableTools: z.string().trim().max(20_000).optional().default(''),
-  acceptanceCriteria: z.string().trim().max(20_000).optional().default('')
+  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
+  executionTarget: ticketExecutionTargetSchema.default('agent')
 });
 
 export const listTicketsSchema = z.object({
@@ -36,6 +42,16 @@ export const updateSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: z.string().uuid(),
   summary: z.string().trim().min(1).max(20_000),
+  phase: ticketStatusSchema.optional(),
+  payload: z.record(z.string(), z.unknown()).optional().default({})
+});
+
+export const decisionSchema = z.object({
+  sessionKey: z.string().uuid(),
+  ticketId: z.string().uuid(),
+  title: z.string().trim().min(1).max(240),
+  rationale: z.string().trim().max(20_000).optional().default(''),
+  impact: z.string().trim().max(20_000).optional().default(''),
   phase: ticketStatusSchema.optional(),
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
@@ -71,4 +87,15 @@ export const deliverSchema = z.object({
     )
     .optional()
     .default([])
+});
+
+export const createFollowUpTicketSchema = z.object({
+  sessionKey: z.string().uuid(),
+  ticketId: z.string().uuid(),
+  title: z.string().trim().max(180).optional().default(''),
+  objective: z.string().trim().min(1).max(20_000),
+  availableTools: z.string().trim().max(20_000).optional().default(''),
+  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
+  executionTarget: ticketExecutionTargetSchema.default('human'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium')
 });

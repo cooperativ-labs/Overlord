@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 export type TerminalMode = 'embedded' | 'external';
-export type ExternalTerminalApp = 'terminal' | 'iterm' | 'warp';
+export type ExternalTerminalApp = 'default' | 'terminal' | 'iterm' | 'warp';
 
 interface StoreData {
   terminalMode: TerminalMode;
@@ -14,7 +14,7 @@ interface StoreData {
 
 const defaults: StoreData = {
   terminalMode: 'embedded',
-  externalTerminalApp: 'terminal',
+  externalTerminalApp: 'default',
   windowBounds: { width: 1400, height: 900 }
 };
 

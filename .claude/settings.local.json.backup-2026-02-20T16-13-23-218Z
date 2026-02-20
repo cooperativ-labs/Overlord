@@ -1,0 +1,50 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(xargs:*)",
+      "Bash(git -C /Users/jake/Development/Cooperativ/orchestrator log --oneline -20)",
+      "Bash(git -C /Users/jake/Development/Cooperativ/orchestrator log --oneline -10)",
+      "Bash(git -C /Users/jake/Development/Cooperativ/orchestrator diff --name-status HEAD~1)",
+      "Bash(git -C /Users/jake/Development/Cooperativ/orchestrator diff --stat HEAD)",
+      "Bash(ls:*)",
+      "Bash(git -C /Users/jake/Development/Cooperativ/orchestrator status --short)",
+      "Bash(yarn add:*)",
+      "Bash(yarn generate)",
+      "Bash(yarn type-check:*)",
+      "Bash(yarn build-dev:*)",
+      "Bash(npx next build:*)",
+      "Skill(code-review)",
+      "Bash(supabase status:*)",
+      "Skill(loading-button)",
+      "Skill(loading-button:*)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(supabase db reset:*)",
+      "Bash(printf:*)",
+      "Bash(yarn build:*)",
+      "Bash(env)",
+      "WebFetch(domain:everhour.docs.apiary.io)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "mcp__deepwiki__ask_question",
+      "WebFetch(domain:apitracker.io)",
+      "WebFetch(domain:support.everhour.com)",
+      "Bash(SESSION_KEY=\"34065b63-bd88-48bd-baa4-ded5fd6e5c03\")",
+      "Bash(TICKET=\"a5cc4ac8-8e39-47ac-bc12-3988769db659\")",
+      "Bash(__NEW_LINE_69ed19cbf1dc0ef1__ curl -v -X POST \"http://localhost:3000/api/protocol/update\" -H \"Content-Type: application/json\" -H \"Authorization: Bearer orchestrator-local-dev-token\" --data-raw '{\"\"sessionKey\"\":\"\"34065b63-bd88-48bd-baa4-ded5fd6e5c03\"\",\"\"ticketId\"\":\"\"a5cc4ac8-8e39-47ac-bc12-3988769db659\"\",\"\"summary\"\":\"\"Researched Everhour API. Now creating the implementation guide.\"\",\"\"phase\"\":\"\"execute\"\"}')",
+      "mcp__shadcn__get_add_command_for_items",
+      "Bash(npx shadcn@latest add resizable:*)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "Bash(find:*)",
+      "Bash(npx shadcn@latest add sheet:*)",
+      "Bash(yarn electron:build-main:*)",
+      "Bash(cat:*)",
+      "Bash(npm ls:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
+}

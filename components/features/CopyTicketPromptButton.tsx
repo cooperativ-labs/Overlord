@@ -12,6 +12,7 @@ type Props = {
   ticketId: string;
   variant?: 'icon' | 'default';
   className?: string;
+  runInTerminal?: boolean;
 };
 
 /**
@@ -19,7 +20,12 @@ type Props = {
  * information back via the orchestrator protocol) to the clipboard.
  * In Electron, sends the prompt to the active terminal instead.
  */
-export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }: Props) {
+export function CopyTicketPromptButton({
+  ticketId,
+  variant = 'icon',
+  className,
+  runInTerminal = true
+}: Props) {
   const [copied, setCopied] = useState(false);
   const { isElectron, sendCommand } = useTerminal();
 
@@ -31,7 +37,7 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
       return;
     }
 
-    if (isElectron) {
+    if (isElectron && runInTerminal) {
       await sendCommand(prompt);
     } else {
       await navigator.clipboard.writeText(prompt);
@@ -43,7 +49,11 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
   if (variant === 'icon') {
     return (
       <Button
-        aria-label={isElectron ? 'Send ticket prompt to terminal' : 'Copy ticket prompt for LLM'}
+        aria-label={
+          isElectron && runInTerminal
+            ? 'Send ticket prompt to terminal'
+            : 'Copy ticket prompt for LLM'
+        }
         className={className}
         size="icon"
         variant="ghost"
@@ -51,7 +61,7 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
       >
         {copied ? (
           <Check className="h-4 w-4 text-green-600" />
-        ) : isElectron ? (
+        ) : isElectron && runInTerminal ? (
           <Play className="h-4 w-4" />
         ) : (
           <Copy className="h-4 w-4" />
@@ -67,7 +77,7 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
           <Check className="h-4 w-4" />
           Copied!
         </>
-      ) : isElectron ? (
+      ) : isElectron && runInTerminal ? (
         <>
           <Play className="h-4 w-4" />
           Run prompt

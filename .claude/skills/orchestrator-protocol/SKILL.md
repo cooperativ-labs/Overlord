@@ -1,4 +1,4 @@
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 ---
 Name: orchestrator-protocol
 Description: Use when the environment contains PLATFORM_URL and TICKET_ID. Instructs the agent to attach to the Cooperativ orchestrator, post progress updates, ask blocking questions, manage shared context, and deliver a final summary when work is complete.
@@ -29,7 +29,7 @@ POST $PLATFORM_URL/api/protocol/attach
 {
   "ticketId": "$TICKET_ID",
   "agentIdentifier": "claude-code",   // or "codex", etc.
-  "connectionMethod": "claude_code",  // one of: mcp | cli | rest | claude_code | other
+  "connectionMethod": "claude_code",  // one of: mcp | cli | rest | chatgpt | claude_app | claude_code | other
   "metadata": {}
 }
 ```
@@ -60,7 +60,7 @@ POST $PLATFORM_URL/api/protocol/update
   "sessionKey": "<from attach>",
   "ticketId": "$TICKET_ID",
   "summary": "Human-readable description of what was done and why.",
-  "phase": "execute",   // optional — one of: draft | review | refine | execute | deliver | blocked
+  "phase": "execute",   // optional — one of: draft | execute | review | deliver | complete | blocked | cancelled
   "payload": {}         // optional — any structured data worth persisting
 }
 ```
@@ -69,7 +69,28 @@ Setting `phase` moves the ticket to that status. Use `"execute"` while actively 
 
 ---
 
-### 3. Ask a Blocking Question (when you need human input)
+### 3. Record Important Decisions (optional)
+
+Use this when you make a meaningful implementation decision that future sessions should inherit.
+
+```
+POST $PLATFORM_URL/api/protocol/decision
+{
+  "sessionKey": "<from attach>",
+  "ticketId": "$TICKET_ID",
+  "title": "Short decision summary",
+  "rationale": "Why this choice was made.",
+  "impact": "Tradeoffs or follow-up implications.",
+  "phase": "execute",   // optional
+  "payload": {}         // optional structured context
+}
+```
+
+This writes both a timeline event and a persisted `shared_state` record tagged `decision`.
+
+---
+
+### 4. Ask a Blocking Question (when you need human input)
 
 Use this when you cannot proceed without a decision from the PM/user. It marks the event `is_blocking: true` and moves the ticket to `review` (or the phase you specify). Stop working and wait after calling this.
 
@@ -86,7 +107,7 @@ POST $PLATFORM_URL/api/protocol/ask
 
 ---
 
-### 4. Read Shared Context (optional)
+### 5. Read Shared Context (optional)
 
 Retrieve persisted key/value state scoped to this ticket or global to the workspace.
 
@@ -104,7 +125,7 @@ POST $PLATFORM_URL/api/protocol/read-context
 
 ---
 
-### 5. Write Shared Context (optional)
+### 6. Write Shared Context (optional)
 
 Persist findings, decisions, or data that future agents or sessions should know about.
 
@@ -123,7 +144,7 @@ Use this for things like: confirmed architecture decisions, discovered constrain
 
 ---
 
-### 6. Deliver (always last)
+### 7. Deliver (always last)
 
 Call this when the ticket work is fully complete. It marks the session `completed`, moves the ticket to `complete`, and stores artifacts. **Do not call this if the work is blocked or incomplete.**
 
@@ -149,6 +170,7 @@ POST $PLATFORM_URL/api/protocol/deliver
 ```
 
 The `summary` field is what the PM will read first — make it clear and narrative, not a list of shell commands.
+If you omit a `Restart session command` artifact, the deliver route auto-appends one as a `note`.
 
 **Artifact types** (use these labels consistently): `file_changes`, `next_steps`, `test_results`, `migration`, `decision`, `note`, `url`.
 
@@ -161,6 +183,7 @@ The `summary` field is what the PM will read first — make it clear and narrati
 - Post at least one `update` before `deliver` so the timeline shows meaningful intermediate progress.
 - If you hit an unresolvable blocker, call `ask` — do not guess.
 - Use `write-context` for any information a future agent session should know (e.g., "auth uses service role key, not anon key").
+- Include a `Restart session command` artifact when practical; `deliver` will auto-append one if missing.
 - Never call `deliver` if you called `ask` and haven't received an answer — leave the session open.
 - The `phase` field in `update` is optional; only set it when the ticket's visible status should change.
 

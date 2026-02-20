@@ -56,7 +56,7 @@ export default async function EditTicketPage({ params }: PageProps) {
               <Link href={`/${parsedOrganizationId}/${ticketId}`}>Cancel</Link>
             </Button>
           </div>
-          <CardDescription>Describe the task for the agent to work on.</CardDescription>
+          <CardDescription>Describe the task and who should complete it.</CardDescription>
         </CardHeader>
         <CardContent>
           <form action={submit} className="grid gap-4">
@@ -80,6 +80,19 @@ export default async function EditTicketPage({ params }: PageProps) {
                 placeholder="Describe what the agent should do, including any context and constraints..."
                 required
               />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="executionTarget">Who should complete this?</Label>
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                defaultValue={ticket.execution_target ?? 'agent'}
+                id="executionTarget"
+                name="executionTarget"
+              >
+                <option value="agent">Agent</option>
+                <option value="human">Human</option>
+              </select>
             </div>
 
             <div className="grid gap-2">

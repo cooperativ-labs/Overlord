@@ -6,6 +6,7 @@ import { getPlatformUrl } from '@/lib/env';
 import { buildTicketPromptMarkdown } from '@/lib/orchestrator/ticket-prompt';
 import { createTicketSchema } from '@/lib/orchestrator/validation';
 import { createClient } from '@/supabase/utils/server';
+import type { Database } from '@/types/database.types';
 
 function deriveTitleFromDescription(description: string): string {
   const trimmed = description.trim();
@@ -39,16 +40,19 @@ function revalidateTicketDetails(items: Iterable<{ organizationId: number; ticke
 export async function createTicketInColumnAction(
   status: string,
   objective: string,
-  organizationId?: number
+  organizationId?: number,
+  projectId?: string
 ) {
   const supabase = await createClient();
   const trimmedObjective = objective.trim() || null;
+  const trimmedProjectId = projectId?.trim() || null;
 
   const insertPayload: {
     status: string;
     objective: string | null;
     title: string | null;
     organization_id?: number;
+    project_id?: string | null;
   } = {
     status,
     objective: trimmedObjective,
@@ -59,6 +63,10 @@ export async function createTicketInColumnAction(
     insertPayload.organization_id = organizationId;
   }
 
+  if (trimmedProjectId) {
+    insertPayload.project_id = trimmedProjectId;
+  }
+
   const { data, error } = await supabase
     .from('tickets')
     .insert(insertPayload)
@@ -70,22 +78,31 @@ export async function createTicketInColumnAction(
   }
 
   revalidateTicketBoards([data.organization_id]);
+  if (trimmedProjectId) {
+    revalidatePath(`/${data.organization_id}/projects/${trimmedProjectId}`);
+  }
   revalidateTicketDetails([{ organizationId: data.organization_id, ticketId: data.id }]);
   return { id: data.id, organizationId: data.organization_id };
 }
 
-export async function createBlankTicketAction(organizationId?: number) {
+export async function createBlankTicketAction(organizationId?: number, projectId?: string) {
   const supabase = await createClient();
+  const trimmedProjectId = projectId?.trim() || null;
 
   const insertPayload: {
     status: string;
     organization_id?: number;
+    project_id?: string | null;
   } = { status: 'draft' };
 
   if (organizationId !== undefined) {
     insertPayload.organization_id = organizationId;
   }
 
+  if (trimmedProjectId) {
+    insertPayload.project_id = trimmedProjectId;
+  }
+
   const { data, error } = await supabase
     .from('tickets')
     .insert(insertPayload)
@@ -97,6 +114,9 @@ export async function createBlankTicketAction(organizationId?: number) {
   }
 
   revalidateTicketBoards([data.organization_id]);
+  if (trimmedProjectId) {
+    revalidatePath(`/${data.organization_id}/projects/${trimmedProjectId}`);
+  }
   revalidateTicketDetails([{ organizationId: data.organization_id, ticketId: data.id }]);
   return { id: data.id, organizationId: data.organization_id };
 }
@@ -106,7 +126,8 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     title: formData.get('title'),
     description: formData.get('description'),
     availableTools: formData.get('availableTools'),
-    acceptanceCriteria: formData.get('acceptanceCriteria')
+    acceptanceCriteria: formData.get('acceptanceCriteria'),
+    executionTarget: formData.get('executionTarget')
   });
 
   if (!parsed.success) {
@@ -118,6 +139,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
   const insertPayload: {
     acceptance_criteria: string | null;
     available_tools: string;
+    execution_target: Database['public']['Enums']['ticket_execution_target'];
     objective: string;
     status: string;
     title: string;
@@ -125,6 +147,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
   } = {
     acceptance_criteria: parsed.data.acceptanceCriteria || null,
     available_tools: parsed.data.availableTools,
+    execution_target: parsed.data.executionTarget,
     objective: parsed.data.description,
     status: 'draft',
     title: parsed.data.title || deriveTitleFromDescription(parsed.data.description)
@@ -160,7 +183,8 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     title: formData.get('title'),
     description: formData.get('description'),
     availableTools: formData.get('availableTools'),
-    acceptanceCriteria: formData.get('acceptanceCriteria')
+    acceptanceCriteria: formData.get('acceptanceCriteria'),
+    executionTarget: formData.get('executionTarget')
   });
 
   if (!parsed.success) {
@@ -173,6 +197,7 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     .update({
       acceptance_criteria: parsed.data.acceptanceCriteria || null,
       available_tools: parsed.data.availableTools,
+      execution_target: parsed.data.executionTarget,
       objective: parsed.data.description,
       title: parsed.data.title || null
     })
@@ -244,6 +269,36 @@ export async function updateTicketStatusAction(ticketId: string, status: string)
     event_type: 'status_change',
     phase: status,
     summary: `Status changed to ${status}.`,
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketDetails([{ organizationId: data.organization_id, ticketId }]);
+}
+
+export async function updateTicketExecutionTargetAction(
+  ticketId: string,
+  executionTarget: Database['public']['Enums']['ticket_execution_target']
+) {
+  if (executionTarget !== 'agent' && executionTarget !== 'human') {
+    throw new Error('Invalid execution target.');
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ execution_target: executionTarget })
+    .eq('id', ticketId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update ticket execution target.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: `Execution target updated to ${executionTarget}.`,
     ticket_id: ticketId
   });
 
@@ -410,7 +465,7 @@ export async function getTicketPromptForCopy(
   const { data: ticket, error } = await supabase
     .from('tickets')
     .select(
-      'id, title, objective, acceptance_criteria, available_tools, status, priority'
+      'id, title, objective, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
     )
     .eq('id', ticketId)
     .single();

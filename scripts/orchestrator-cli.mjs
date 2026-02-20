@@ -29,6 +29,7 @@ Usage:
   yarn orchestrator list
   yarn orchestrator attach <ticketId> "<agentIdentifier>" [connectionMethod]
   yarn orchestrator update <sessionKey> <ticketId> "<summary>" [phase]
+  yarn orchestrator decision <sessionKey> <ticketId> "<title>" ["<rationale>"] ["<impact>"] [phase]
   yarn orchestrator ask <sessionKey> <ticketId> "<question>" [phase]
 `);
 }
@@ -74,6 +75,25 @@ async function main() {
       sessionKey,
       ticketId,
       summary,
+      ...(phase ? { phase } : {}),
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "decision") {
+    const [sessionKey, ticketId, title, rationale, impact, phase] = args;
+    if (!sessionKey || !ticketId || !title) {
+      printUsage();
+      process.exitCode = 1;
+      return;
+    }
+    const result = await request("/api/protocol/decision", {
+      sessionKey,
+      ticketId,
+      title,
+      ...(rationale ? { rationale } : {}),
+      ...(impact ? { impact } : {}),
       ...(phase ? { phase } : {}),
     });
     console.log(JSON.stringify(result, null, 2));

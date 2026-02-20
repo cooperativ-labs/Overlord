@@ -48,12 +48,14 @@ export default function KanbanBoard({
   tickets: initialTickets,
   statuses,
   showOrganizationName = false,
-  organizationId
+  organizationId,
+  projectId
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number }>;
   showOrganizationName?: boolean;
   organizationId?: number;
+  projectId?: string;
 }) {
   const [, startTransition] = useTransition();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
@@ -274,6 +276,7 @@ export default function KanbanBoard({
                 tickets={columnTickets.get(col.id) ?? []}
                 showOrganizationName={showOrganizationName}
                 organizationId={organizationId}
+                projectId={projectId}
               />
             ))}
             {showUncategorized && (
@@ -282,6 +285,7 @@ export default function KanbanBoard({
                 tickets={uncategorized}
                 showOrganizationName={showOrganizationName}
                 organizationId={organizationId}
+                projectId={projectId}
               />
             )}
           </div>

@@ -10,7 +10,7 @@ type TerminalContextValue = {
   isElectron: boolean;
   terminalMode: TerminalMode;
   setTerminalMode: (mode: TerminalMode) => void;
-  sendCommand: (command: string) => Promise<void>;
+  sendCommand: (command: string, options?: { cwd?: string }) => Promise<void>;
   isTerminalOpen: boolean;
   activeTerminalId: string | null;
   closeTerminal: () => Promise<void>;
@@ -18,10 +18,15 @@ type TerminalContextValue = {
 
 const TerminalContext = createContext<TerminalContextValue | null>(null);
 
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export function TerminalProvider({ children }: { children: ReactNode }) {
   const { api, isElectron } = useElectron();
   const [terminalMode, setTerminalModeState] = useState<TerminalMode>('embedded');
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+  const [activeTerminalCwd, setActiveTerminalCwd] = useState<string | null>(null);
 
   // Load saved terminal mode on mount
   useEffect(() => {
@@ -41,31 +46,40 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   );
 
   const sendCommand = useCallback(
-    async (command: string) => {
+    async (command: string, options?: { cwd?: string }) => {
       if (!api) return;
+      const cwd = options?.cwd?.trim() || undefined;
 
       if (terminalMode === 'external') {
-        await api.terminal.openExternal(command);
+        await api.terminal.openExternal(command, cwd);
         return;
       }
 
       // Embedded mode
       if (activeTerminalId) {
+        if (cwd && cwd !== activeTerminalCwd) {
+          api.terminal.write(activeTerminalId, `cd ${shellQuote(cwd)}\r`);
+          setActiveTerminalCwd(cwd);
+          // Wait for cd to complete before writing the next command
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
         // Write command to existing terminal
         api.terminal.write(activeTerminalId, command + '\r');
       } else {
         // Spawn a new terminal with the command
-        const id = await api.terminal.spawn(command);
+        const id = await api.terminal.spawn(command, cwd);
         setActiveTerminalId(id);
+        setActiveTerminalCwd(cwd ?? null);
       }
     },
-    [api, terminalMode, activeTerminalId]
+    [api, terminalMode, activeTerminalId, activeTerminalCwd]
   );
 
   const closeTerminal = useCallback(async () => {
     if (!api || !activeTerminalId) return;
     await api.terminal.kill(activeTerminalId);
     setActiveTerminalId(null);
+    setActiveTerminalCwd(null);
   }, [api, activeTerminalId]);
 
   return (

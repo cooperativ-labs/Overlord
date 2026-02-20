@@ -98,8 +98,8 @@ export function TimerButton({
 
   const buttonText = useMemo(() => {
     if (isRunningThisTicket) return formatElapsed(elapsedSeconds);
-    if (isRunningAnotherTicket) return 'Start Here';
-    return 'Start Timer';
+    if (isRunningAnotherTicket) return 'Start';
+    return 'Start';
   }, [elapsedSeconds, isRunningAnotherTicket, isRunningThisTicket]);
 
   async function handleTimerClick() {

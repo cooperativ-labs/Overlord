@@ -22,7 +22,7 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
   const supabase = await createClient();
   const { data: project, error } = await supabase
     .from('projects')
-    .select('id,name,color,organization_id,everhour_project_id')
+    .select('id,name,color,organization_id,local_working_directory')
     .eq('id', projectId)
     .eq('organization_id', parsedOrganizationId)
     .single();
@@ -38,7 +38,7 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
         organizationId={parsedOrganizationId}
         initialName={project.name}
         initialColor={project.color}
-        everhourProjectId={project.everhour_project_id}
+        initialWorkingDirectory={project.local_working_directory}
       />
       <TicketsBoardContent
         view={view}

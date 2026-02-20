@@ -1,8 +1,7 @@
 export const ticketStatuses = [
   'draft',
-  'review',
-  'refine',
   'execute',
+  'review',
   'deliver',
   'complete',
   'blocked',
@@ -33,3 +32,5 @@ export const connectionMethods = [
   'claude_code',
   'other'
 ] as const;
+
+export const ticketExecutionTargets = ['agent', 'human'] as const;

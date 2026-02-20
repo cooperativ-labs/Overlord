@@ -9,11 +9,25 @@ import {
   toHexColor
 } from '@/components/features/projects/ProjectColorSetter';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger
+} from '@/components/ui/select';
 import { createProjectAction, setTicketProjectAction } from '@/lib/actions/tickets';
 
 type ProjectOption = {
@@ -30,6 +44,8 @@ type TicketProjectSelectProps = {
   projects: ProjectOption[];
 };
 
+const NO_PROJECT_VALUE = '__none__';
+
 export function TicketProjectSelect({
   ticketId,
   organizationId,
@@ -43,14 +59,12 @@ export function TicketProjectSelect({
   const [isSavingProject, startSavingProject] = useTransition();
   const [updateError, setUpdateError] = useState<string | null>(null);
 
+  const [isSelectOpen, setIsSelectOpen] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState('');
   const [colorInput, setColorInput] = useState(DEFAULT_PROJECT_COLOR);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createButtonState, setCreateButtonState] = useState<ButtonLoadingState>('default');
-  const [syncButtonState, setSyncButtonState] = useState<ButtonLoadingState>('default');
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
 
   const selectedProject = useMemo(
     () => availableProjects.find(project => project.id === selectedProjectId) ?? null,
@@ -72,6 +86,16 @@ export function TicketProjectSelect({
         setUpdateError(error instanceof Error ? error.message : 'Failed to update project.');
       }
     });
+  }
+
+  function handleCreateDialogOpenChange(next: boolean) {
+    if (!next) {
+      setName('');
+      setColorInput(DEFAULT_PROJECT_COLOR);
+      setCreateError(null);
+      setCreateButtonState('default');
+    }
+    setShowCreateForm(next);
   }
 
   async function handleCreateProject() {
@@ -96,10 +120,8 @@ export function TicketProjectSelect({
       );
       setSavedProjectId(created.id);
       setSelectedProjectId(created.id);
-      setName('');
-      setColorInput(DEFAULT_PROJECT_COLOR);
-      setShowCreateForm(false);
       setCreateButtonState('success');
+      handleCreateDialogOpenChange(false);
       router.refresh();
     } catch (error) {
       setCreateButtonState('error');
@@ -111,172 +133,116 @@ export function TicketProjectSelect({
     ? { backgroundColor: selectedProject.color, borderColor: selectedProject.color }
     : undefined;
 
-  async function handleSyncEverhourProjects() {
-    setSyncButtonState('loading');
-    setSyncMessage(null);
-    setCreateError(null);
-
-    try {
-      const result = await syncEverhourProjectsForOrganization(organizationId);
-      setAvailableProjects(result.projects);
-
-      if (selectedProjectId) {
-        const selectedStillExists = result.projects.some(
-          project => project.id === selectedProjectId
-        );
-        if (!selectedStillExists) {
-          setSelectedProjectId('');
-          setSavedProjectId('');
-        }
-      }
-
-      setSyncButtonState('success');
-      const baseMessage = `Synced ${result.totalLocal} local project${result.totalLocal === 1 ? '' : 's'} to Everhour (${result.created} created, ${result.linked} linked, ${result.mapped} mapped).`;
-      const failedMessage =
-        result.failedProjects.length > 0
-          ? ` Could not auto-create: ${result.failedProjects.join(', ')}. Create these in Everhour, then sync again.`
-          : '';
-      setSyncMessage(`${baseMessage}${failedMessage}`);
-      router.refresh();
-    } catch (error) {
-      setSyncButtonState('error');
-      setSyncMessage(error instanceof Error ? error.message : 'Failed to sync Everhour projects.');
-    }
-  }
-
   return (
-    <section className="mb-6 rounded-lg  p-3">
+    <section className="mb-6 rounded-lg p-3">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         Project
       </h2>
-      <button
-        type="button"
-        className="mt-2 inline-flex w-full items-center justify-between rounded-full border border-stone-300 bg-white px-3 py-1.5 text-left text-xs shadow-sm transition hover:bg-stone-50"
-        onClick={() => setShowSettings(value => !value)}
-        aria-expanded={showSettings}
-      >
-        <span className="flex items-center gap-2">
-          {selectedProject ? (
-            <span className="h-3 w-3 rounded-[6px] border" style={projectIndicatorStyle} />
-          ) : (
-            <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
-          )}
-          <span className="text-sm font-medium">
-            {selectedProject?.name ?? 'No project selected'}
-          </span>
-        </span>
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          {showSettings ? 'Hide' : 'Change'}
-        </span>
-      </button>
+      <div className="mt-2 space-y-2">
+        <Select
+          open={isSelectOpen}
+          onOpenChange={setIsSelectOpen}
+          value={selectedProjectId || NO_PROJECT_VALUE}
+          onValueChange={value => handleProjectChange(value === NO_PROJECT_VALUE ? '' : value)}
+          disabled={isSavingProject}
+        >
+          <SelectTrigger
+            id="ticket-project-select"
+            aria-label="Select project"
+            className="h-auto w-full rounded-full border-stone-300 bg-white px-3 py-1.5 text-left shadow-sm hover:bg-stone-50"
+          >
+            <span className="flex items-center gap-2 pr-2">
+              {selectedProject ? (
+                <span className="h-3 w-3 rounded-[6px] border" style={projectIndicatorStyle} />
+              ) : (
+                <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
+              )}
+              <span className="text-sm font-medium">
+                {selectedProject?.name ?? 'No project selected'}
+              </span>
+            </span>
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value={NO_PROJECT_VALUE}>No project</SelectItem>
+            {availableProjects.map(project => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
+            <SelectSeparator />
+            <div className="p-1 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setIsSelectOpen(false);
+                  handleCreateDialogOpenChange(true);
+                }}
+              >
+                Create new project
+              </Button>
+            </div>
+          </SelectContent>
+        </Select>
+        {isSavingProject ? <p className="text-xs text-muted-foreground">Saving project…</p> : null}
+        {updateError ? <p className="text-xs text-destructive">{updateError}</p> : null}
+      </div>
 
-      {showSettings ? (
-        <div className="mt-4 space-y-3 rounded-md border border-stone-200 bg-white p-3">
-          <div className="space-y-2">
-            <Label htmlFor="ticket-project-select">Assign project</Label>
-            <select
-              id="ticket-project-select"
-              className="h-9 w-full rounded-md border bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-              value={selectedProjectId}
-              onChange={event => handleProjectChange(event.target.value)}
-              disabled={isSavingProject}
-            >
-              <option value="">No project</option>
-              {availableProjects.map(project => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                  {project.everhour_project_id ? ' (Everhour)' : ''}
-                </option>
-              ))}
-            </select>
-            {isSavingProject ? (
-              <p className="text-xs text-muted-foreground">Saving project…</p>
-            ) : null}
-            {updateError ? <p className="text-xs text-destructive">{updateError}</p> : null}
-            {selectedProject && !selectedProject.everhour_project_id ? (
-              <p className="text-xs text-muted-foreground">
-                This project is local only. Sync projects to Everhour to enable timer task creation.
-              </p>
-            ) : null}
+      <Dialog open={showCreateForm} onOpenChange={handleCreateDialogOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New project</DialogTitle>
+            <DialogDescription>Create a project and assign it to this ticket.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-project-name">Project name</Label>
+              <Input
+                id="new-project-name"
+                value={name}
+                onChange={event => setName(event.target.value)}
+                placeholder="e.g. Mobile App"
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    handleCreateProject();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Project color</Label>
+              <ProjectColorSetter value={colorInput} onSelect={setColorInput} />
+            </div>
+
+            {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              size="sm"
               onClick={() => {
-                setShowCreateForm(value => !value);
-                setCreateError(null);
-                setCreateButtonState('default');
+                handleCreateDialogOpenChange(false);
               }}
             >
-              Create new project
+              Cancel
             </Button>
             <LoadingButton
-              buttonState={syncButtonState}
-              setButtonState={setSyncButtonState}
-              text="Sync Projects to Everhour"
-              loadingText="Syncing…"
-              successText="Synced"
-              errorText="Retry"
+              buttonState={createButtonState}
+              setButtonState={setCreateButtonState}
+              text="Create project"
+              loadingText="Creating project…"
+              successText="Project created"
+              errorText="Failed to create"
               reset
-              size="sm"
-              variant="outline"
-              onClick={handleSyncEverhourProjects}
+              onClick={handleCreateProject}
             />
-          </div>
-          {syncMessage ? <p className="text-xs text-muted-foreground">{syncMessage}</p> : null}
-
-          {showCreateForm ? (
-            <div className="space-y-3 border-t pt-3">
-              <div className="space-y-2">
-                <Label htmlFor="new-project-name">Project name</Label>
-                <Input
-                  id="new-project-name"
-                  value={name}
-                  onChange={event => setName(event.target.value)}
-                  placeholder="e.g. Mobile App"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Project color</Label>
-                <ProjectColorSetter value={colorInput} onSelect={setColorInput} />
-              </div>
-
-              {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
-
-              <div className="flex flex-wrap items-center gap-2">
-                <LoadingButton
-                  buttonState={createButtonState}
-                  setButtonState={setCreateButtonState}
-                  text="Create project"
-                  loadingText="Creating project…"
-                  successText="Project created"
-                  errorText="Failed to create"
-                  reset
-                  onClick={handleCreateProject}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowCreateForm(false);
-                    setName('');
-                    setColorInput(DEFAULT_PROJECT_COLOR);
-                    setCreateError(null);
-                    setCreateButtonState('default');
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

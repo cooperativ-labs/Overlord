@@ -240,6 +240,7 @@ export type Database = {
           created_at: string
           everhour_project_id: string | null
           id: string
+          local_working_directory: string | null
           name: string
           organization_id: number
           updated_at: string
@@ -249,6 +250,7 @@ export type Database = {
           created_at?: string
           everhour_project_id?: string | null
           id?: string
+          local_working_directory?: string | null
           name: string
           organization_id: number
           updated_at?: string
@@ -258,6 +260,7 @@ export type Database = {
           created_at?: string
           everhour_project_id?: string | null
           id?: string
+          local_working_directory?: string | null
           name?: string
           organization_id?: number
           updated_at?: string
@@ -421,6 +424,7 @@ export type Database = {
           created_by: string
           everhour_project_id: string | null
           everhour_task_id: string | null
+          execution_target: Database["public"]["Enums"]["ticket_execution_target"]
           id: string
           objective: string | null
           organization_id: number
@@ -444,6 +448,7 @@ export type Database = {
           created_by?: string
           everhour_project_id?: string | null
           everhour_task_id?: string | null
+          execution_target?: Database["public"]["Enums"]["ticket_execution_target"]
           id?: string
           objective?: string | null
           organization_id: number
@@ -467,6 +472,7 @@ export type Database = {
           created_by?: string
           everhour_project_id?: string | null
           everhour_task_id?: string | null
+          execution_target?: Database["public"]["Enums"]["ticket_execution_target"]
           id?: string
           objective?: string | null
           organization_id?: number
@@ -585,6 +591,7 @@ export type Database = {
         | "deliver"
         | "status_change"
         | "alert"
+      ticket_execution_target: "agent" | "human"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status_type: "draft" | "execute" | "review" | "complete"
     }
@@ -746,6 +753,7 @@ export const Constants = {
         "status_change",
         "alert",
       ],
+      ticket_execution_target: ["agent", "human"],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status_type: ["draft", "execute", "review", "complete"],
     },

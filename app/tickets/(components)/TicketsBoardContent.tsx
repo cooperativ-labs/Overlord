@@ -1,21 +1,13 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { createClient } from '@/supabase/utils/server';
+import type { Database } from '@/types/database.types';
 
 import KanbanBoard from './KanbanBoard';
 import TicketListView from './TicketListView';
 import TicketsViewToggle from './TicketsViewToggle';
 
-const statusOrder = [
-  'draft',
-  'review',
-  'refine',
-  'execute',
-  'deliver',
-  'complete',
-  'blocked',
-  'cancelled'
-];
+const statusOrder = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'];
 
 function sortByStatus<T extends { status: string }>(items: T[]): T[] {
   const statusWeight = new Map(statusOrder.map((status, index) => [status, index]));
@@ -74,6 +66,7 @@ type RawTicket = {
   id: string;
   title: string | null;
   objective: string | null;
+  execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
   assigned_agent: string | null;
@@ -93,6 +86,12 @@ type RawTicket = {
     | null;
 };
 
+type SessionState = Database['public']['Enums']['session_state'];
+type AgentSessionForBoard = Pick<
+  Database['public']['Tables']['agent_sessions']['Row'],
+  'ticket_id' | 'session_state'
+>;
+
 export default async function TicketsBoardContent({
   view = 'board',
   organizationId,
@@ -106,7 +105,7 @@ export default async function TicketsBoardContent({
   let ticketsQuery = supabase
     .from('tickets')
     .select(
-      'id,title,objective,status,priority,assigned_agent,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+      'id,title,objective,execution_target,status,priority,assigned_agent,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
     )
     .order('board_position', { ascending: true })
     .order('updated_at', { ascending: false });
@@ -128,6 +127,23 @@ export default async function TicketsBoardContent({
   const [ticketsResult, statusesResult] = await Promise.all([ticketsQuery, statusesQuery]);
 
   const rawTickets = (ticketsResult.data ?? []) as RawTicket[];
+  const ticketIds = rawTickets.map(ticket => ticket.id);
+  const latestSessionByTicket = new Map<string, SessionState>();
+
+  if (ticketIds.length > 0) {
+    const { data: sessions } = await supabase
+      .from('agent_sessions')
+      .select('ticket_id,session_state')
+      .in('ticket_id', ticketIds)
+      .order('attached_at', { ascending: false });
+
+    for (const session of (sessions ?? []) as AgentSessionForBoard[]) {
+      if (!latestSessionByTicket.has(session.ticket_id)) {
+        latestSessionByTicket.set(session.ticket_id, session.session_state);
+      }
+    }
+  }
+
   const tickets = rawTickets.map(({ organization, project, ...ticket }) => {
     const p = getRelationItem(project);
     return {
@@ -135,7 +151,8 @@ export default async function TicketsBoardContent({
       organization_name: getOrganizationName(organization),
       project_name: p?.name ?? null,
       project_color: p?.color ?? null,
-      project_everhour_project_id: p?.everhour_project_id ?? null
+      project_everhour_project_id: p?.everhour_project_id ?? null,
+      agent_session_state: latestSessionByTicket.get(ticket.id) ?? null
     };
   });
   const statuses = dedupeStatuses(statusesResult.data ?? []);
@@ -167,6 +184,7 @@ export default async function TicketsBoardContent({
           statuses={statuses}
           showOrganizationName={showOrganizationName}
           organizationId={organizationId}
+          projectId={projectId}
         />
       ) : (
         <Card>

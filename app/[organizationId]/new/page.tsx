@@ -51,6 +51,24 @@ export default async function NewTicketPage({ params }: PageProps) {
           <div className="grid gap-2">
             <Label
               className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
+              htmlFor="executionTarget"
+            >
+              Who Should Complete This?
+            </Label>
+            <select
+              id="executionTarget"
+              name="executionTarget"
+              defaultValue="agent"
+              className="h-10 rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="agent">Agent</option>
+              <option value="human">Human</option>
+            </select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label
+              className="text-xs font-semibold uppercase tracking-widest text-muted-foreground"
               htmlFor="acceptanceCriteria"
             >
               Acceptance Criteria{' '}
@@ -60,7 +78,7 @@ export default async function NewTicketPage({ params }: PageProps) {
               className="min-h-24 resize-none"
               id="acceptanceCriteria"
               name="acceptanceCriteria"
-              placeholder="How will you know the agent is done?"
+              placeholder="How will you know this task is done?"
             />
           </div>
 

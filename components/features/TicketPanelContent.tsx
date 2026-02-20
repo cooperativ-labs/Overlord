@@ -1,12 +1,16 @@
 import { X } from 'lucide-react';
 import Link from 'next/link';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import { CopyTicketPromptButton } from '@/components/features/CopyTicketPromptButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
-import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { InlineEditField } from '@/components/features/InlineEditField';
 import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
+import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
+import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { Badge } from '@/components/ui/badge';
@@ -14,26 +18,28 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { getAgentApiToken, getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { buildLaunchCommands } from '@/lib/orchestrator/launch-commands';
 import { createClient } from '@/supabase/utils/server';
 
-const fallbackStatuses = [
-  'draft',
-  'review',
-  'refine',
-  'execute',
-  'deliver',
-  'complete',
-  'blocked'
-] as const;
+const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
 
-function buildLaunchCommands(ticketId: string, platformUrl: string, token: string) {
-  const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
-  const curlFragment = `"$(curl -s -H 'Authorization: Bearer ${token}' ${contextUrl})"`;
-  const envPrefix = `PLATFORM_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
-  return {
-    claudeCode: `${envPrefix} claude --system ${curlFragment}`,
-    codex: `${envPrefix} codex ${curlFragment}`
-  };
+function resolveWorkingDirectory(value: string | null | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+
+  let resolved = raw;
+  const home = os.homedir();
+
+  if (raw === '~') {
+    resolved = home;
+  } else if (raw.startsWith('~/')) {
+    resolved = path.join(home, raw.slice(2));
+  } else if (!path.isAbsolute(raw)) {
+    resolved = path.resolve(raw);
+  }
+
+  const normalized = path.normalize(resolved);
+  return fs.existsSync(normalized) ? normalized : null;
 }
 
 export async function TicketPanelContent({
@@ -52,7 +58,8 @@ export async function TicketPanelContent({
     { data: artifacts },
     { data: statuses },
     { data: everhourIntegration },
-    { data: projects }
+    { data: projects },
+    { data: agentSession }
   ] = await Promise.all([
     supabase
       .from('tickets')
@@ -91,9 +98,16 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('projects')
-      .select('id,name,color,everhour_project_id')
+      .select('id,name,color,everhour_project_id,local_working_directory')
       .eq('organization_id', organizationId)
-      .order('name', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('agent_sessions')
+      .select('*')
+      .eq('ticket_id', ticketId)
+      .order('attached_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
   ]);
 
   if (ticketError || !ticket) {
@@ -108,12 +122,21 @@ export async function TicketPanelContent({
   const agentToken = getAgentApiToken();
   const workspaceRoot = getWorkspaceRoot();
   const editorScheme = getEditorScheme();
-  const { claudeCode, codex } = buildLaunchCommands(ticketId, platformUrl, agentToken);
+  const { claudeCode, codex } = buildLaunchCommands({
+    platformUrl,
+    ticketId,
+    token: agentToken
+  });
   const ticketIdentifier = getTicketIdentifier(ticket.id);
   const chatGptLink = `https://chat.openai.com/?q=${encodeURIComponent(`attach ${ticketIdentifier}`)}`;
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
   const hasEverhourIntegration = Boolean(everhourIntegration?.id);
   const projectOptions = projects ?? [];
+  const projectWorkingDirectory = projectOptions.find(
+    project => project.id === ticket.project_id
+  )?.local_working_directory;
+  const workingDirectory =
+    resolveWorkingDirectory(projectWorkingDirectory) ?? resolveWorkingDirectory(workspaceRoot);
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -126,7 +149,7 @@ export async function TicketPanelContent({
               ticketId={ticketId}
             />
           ) : (
-            <CopyTicketPromptButton ticketId={ticketId} variant="default" />
+            <CopyTicketPromptButton ticketId={ticketId} runInTerminal={false} variant="default" />
           )}
           <DeleteTicketButton ticketId={ticketId} ticketLabel={ticketIdentifier} />
           <Button asChild size="icon" variant="ghost" className="h-8 w-8">
@@ -156,6 +179,11 @@ export async function TicketPanelContent({
             ticketId={ticketId}
           />
           <div className="h-4 w-px bg-border" />
+          <TicketExecutionTargetSelect
+            currentExecutionTarget={ticket.execution_target ?? 'agent'}
+            ticketId={ticketId}
+          />
+          <div className="h-4 w-px bg-border" />
           <Badge className="rounded-full" variant="outline">
             Priority {ticket.priority}
           </Badge>
@@ -177,6 +205,7 @@ export async function TicketPanelContent({
           chatGptLink={chatGptLink}
           claudeCommand={claudeCode}
           codexCommand={codex}
+          workingDirectory={workingDirectory}
         />
 
         {!hasEverhourIntegration ? (
@@ -239,113 +268,16 @@ export async function TicketPanelContent({
 
         <Separator className="mb-6" />
 
-        <section className="mb-6">
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Activity
-          </h2>
-          {!events?.length ? (
-            <p className="text-sm italic text-muted-foreground">No events yet.</p>
-          ) : (
-            <div className="grid gap-3">
-              {events.map(event => (
-                <article className="flex gap-3" key={event.id}>
-                  <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30" />
-                  <div className="grid gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-medium">{event.event_type}</span>
-                      {event.phase ? (
-                        <Badge className="h-5 rounded-full px-2 text-xs" variant="secondary">
-                          {event.phase}
-                        </Badge>
-                      ) : null}
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(event.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {event.summary ?? 'No summary.'}
-                    </p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {(state?.length ?? 0) > 0 || (artifacts?.length ?? 0) > 0 ? (
-          <>
-            <Separator className="mb-6" />
-            <div className="grid gap-6">
-              {(state?.length ?? 0) > 0 ? (
-                <section>
-                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    Shared State
-                  </h2>
-                  <div className="grid gap-3">
-                    {state!.map(item => (
-                      <div key={item.id}>
-                        <p className="mb-1 text-xs font-medium">{item.state_key}</p>
-                        <code className="block max-h-32 overflow-auto rounded border bg-muted p-2 text-xs">
-                          {JSON.stringify(item.state_value, null, 2)}
-                        </code>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              {(artifacts?.length ?? 0) > 0 ? (
-                <section>
-                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    Artifacts
-                  </h2>
-                  <div className="grid gap-4">
-                    {artifacts!.map(artifact => (
-                      <div key={artifact.id}>
-                        <p className="mb-0.5 text-xs font-medium">{artifact.label}</p>
-                        <p className="mb-1 text-xs text-muted-foreground">
-                          {artifact.artifact_type}
-                        </p>
-                        {artifact.uri ? (
-                          <a
-                            className="text-xs text-primary underline-offset-4 hover:underline"
-                            href={artifact.uri}
-                          >
-                            {artifact.uri}
-                          </a>
-                        ) : null}
-                        {artifact.content ? (
-                          artifact.artifact_type === 'file_changes' ? (
-                            <FileChangesArtifact
-                              content={artifact.content}
-                              editorScheme={editorScheme}
-                              workspaceRoot={workspaceRoot}
-                            />
-                          ) : artifact.artifact_type === 'next_steps' ? (
-                            <ul className="mt-1 grid gap-1 pl-3">
-                              {artifact.content
-                                .split('\n')
-                                .map((l: string) => l.trim())
-                                .filter(Boolean)
-                                .map((line: string, i: number) => (
-                                  <li className="list-disc text-xs text-muted-foreground" key={i}>
-                                    {line.replace(/^[-*]\s+/, '')}
-                                  </li>
-                                ))}
-                            </ul>
-                          ) : (
-                            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded border bg-muted p-2 text-xs">
-                              {artifact.content}
-                            </pre>
-                          )
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-            </div>
-          </>
-        ) : null}
+        <TicketPanelLive
+          ticketId={ticketId}
+          initialEvents={events ?? []}
+          initialArtifacts={artifacts ?? []}
+          initialSession={agentSession ?? null}
+          initialState={state ?? []}
+          editorScheme={editorScheme}
+          workspaceRoot={workspaceRoot}
+          workingDirectory={workingDirectory}
+        />
       </div>
     </div>
   );

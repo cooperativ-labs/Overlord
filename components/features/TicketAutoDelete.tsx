@@ -7,8 +7,8 @@ import { useEffect, useRef } from 'react';
  * When the user navigates away without adding any content, calls the
  * delete-if-empty API so the empty draft is cleaned up automatically.
  *
- * The server-side endpoint only deletes if all content fields are still null,
- * so edits made by the user are always safe.
+ * The server-side endpoint only deletes if all content fields are still empty
+ * and execution target remains at the default, so edits made by the user are safe.
  */
 export function TicketAutoDelete({ ticketId }: { ticketId: string }) {
   const isMounted = useRef(false);

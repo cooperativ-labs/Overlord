@@ -1,12 +1,13 @@
 'use client';
 
-import { Inbox, ListChecks, MoreHorizontal, Plus } from 'lucide-react';
+import { Inbox, ListChecks, MoreHorizontal, Plus, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import { useProjectCreator } from '@/components/features/projects/ProjectCreatorContext';
+import { SettingsModal } from '@/components/modals/SettingsModal';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
 import {
@@ -86,6 +87,7 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
 export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
   const pathname = usePathname();
   const { openProjectCreator } = useProjectCreator();
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   const defaultOrganizationId = React.useMemo(() => {
     const segments = pathname.split('/').filter(Boolean);
@@ -194,8 +196,17 @@ export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Settings" onClick={() => setSettingsOpen(true)}>
+              <Settings />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <NavUser user={user} />
       </SidebarFooter>
+      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       <SidebarRail />
     </Sidebar>
   );

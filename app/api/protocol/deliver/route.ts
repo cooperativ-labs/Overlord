@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { getAgentApiToken, getPlatformUrl } from '@/lib/env';
+import {
+  buildLaunchCommands,
+  selectRestartSessionCommand
+} from '@/lib/orchestrator/launch-commands';
 import { resolveSession } from '@/lib/orchestrator/protocol-db';
 import { deliverSchema } from '@/lib/orchestrator/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -37,8 +42,37 @@ export async function POST(request: Request) {
       );
     }
 
-    if (artifacts.length) {
-      const artifactRows = artifacts.map(artifact => ({
+    const { claudeCode, codex } = buildLaunchCommands({
+      platformUrl: getPlatformUrl(),
+      ticketId,
+      token: getAgentApiToken()
+    });
+    const restartCommand = selectRestartSessionCommand(resolved.session.agent_identifier, {
+      claudeCode,
+      codex
+    });
+    const hasRestartArtifact = artifacts.some(
+      artifact => artifact.label.trim().toLowerCase() === 'restart session command'
+    );
+    const artifactsToPersist = hasRestartArtifact
+      ? artifacts
+      : [
+          ...artifacts,
+          {
+            type: 'note',
+            label: 'Restart session command',
+            content: `\`\`\`bash\n${restartCommand}\n\`\`\``,
+            uri: undefined,
+            metadata: {
+              agent_identifier: resolved.session.agent_identifier,
+              generated_by: 'protocol_deliver',
+              restart_session_command: true
+            }
+          }
+        ];
+
+    if (artifactsToPersist.length) {
+      const artifactRows = artifactsToPersist.map(artifact => ({
         artifact_type: artifact.type,
         content: artifact.content ?? null,
         event_id: event.id,
@@ -55,7 +89,7 @@ export async function POST(request: Request) {
     }
 
     const [{ error: ticketError }, { error: sessionError }] = await Promise.all([
-      supabase.from('tickets').update({ status: 'complete' }).eq('id', ticketId),
+      supabase.from('tickets').update({ status: 'review' }).eq('id', ticketId),
       supabase
         .from('agent_sessions')
         .update({
@@ -72,9 +106,9 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      artifacts: artifacts.length,
+      artifacts: artifactsToPersist.length,
       ok: true,
-      status: 'complete'
+      status: 'review'
     });
   } catch (error) {
     return internalErrorResponse(error);

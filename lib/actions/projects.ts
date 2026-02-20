@@ -92,6 +92,32 @@ export async function updateProjectNameAction(input: {
   revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
 }
 
+export async function updateProjectWorkingDirectoryAction(input: {
+  projectId: string;
+  workingDirectory: string | null;
+}): Promise<void> {
+  const normalized =
+    typeof input.workingDirectory === 'string' && input.workingDirectory.trim().length > 0
+      ? input.workingDirectory.trim()
+      : null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ local_working_directory: normalized })
+    .eq('id', input.projectId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update project working directory.');
+  }
+
+  revalidatePath('/u');
+  revalidatePath(`/${data.organization_id}`);
+  revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
+}
+
 export type CreateProjectResult = {
   id: string;
   name: string;
@@ -136,4 +162,3 @@ export async function createProject(input: {
     organizationId: data.organization_id
   };
 }
-

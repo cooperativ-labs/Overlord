@@ -10,6 +10,8 @@ import { saveEverhourApiKey } from '@/lib/actions/everhour';
 type EverhourSettingsProps = {
   initiallyConnected: boolean;
   lastUpdatedAt: string | null;
+  /** When true, omits card border/background and uses tighter spacing (e.g. inside a modal). */
+  compact?: boolean;
 };
 
 function getErrorMessage(error: unknown): string {
@@ -19,7 +21,11 @@ function getErrorMessage(error: unknown): string {
   return 'Failed to save Everhour API key.';
 }
 
-export function EverhourSettings({ initiallyConnected, lastUpdatedAt }: EverhourSettingsProps) {
+export function EverhourSettings({
+  initiallyConnected,
+  lastUpdatedAt,
+  compact = false
+}: EverhourSettingsProps) {
   const [apiKey, setApiKey] = useState('');
   const [connected, setConnected] = useState(initiallyConnected);
   const [savedAt, setSavedAt] = useState<string | null>(lastUpdatedAt);
@@ -50,7 +56,11 @@ export function EverhourSettings({ initiallyConnected, lastUpdatedAt }: Everhour
   }
 
   return (
-    <section className="max-w-2xl space-y-3 rounded-lg border bg-card p-5">
+    <section
+      className={
+        compact ? 'max-w-2xl space-y-3' : 'max-w-2xl space-y-3 rounded-lg border bg-card p-5'
+      }
+    >
       <div className="space-y-1">
         <h2 className="text-base font-semibold">Everhour</h2>
         <p className="text-muted-foreground text-sm">

@@ -148,6 +148,23 @@ export function SidePanel() {
     if (!isOpen) lastContentRef.current = null;
   }, [isOpen]);
 
+  // -- Click-outside-to-close (desktop only) ------------------------------
+
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen || isMobile) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node) && closePath) {
+        router.push(closePath);
+      }
+    };
+
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [isOpen, isMobile, closePath, router]);
+
   // -- Mobile: Sheet ------------------------------------------------------
 
   if (isMobile) {
@@ -171,6 +188,7 @@ export function SidePanel() {
 
   return (
     <div
+      ref={panelRef}
       className={cn(
         'relative flex h-full shrink-0 border-l bg-background transition-[width] duration-200 ease-in-out',
         !isOpen && 'w-0 overflow-hidden border-l-0'

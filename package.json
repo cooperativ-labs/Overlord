@@ -37,7 +37,9 @@
     "electron:build-main": "tsc -p electron/tsconfig.json",
     "electron:dev": "yarn electron:build-main && concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && yarn electron:build-main && electron-builder",
-    "electron:pack": "next build && yarn electron:build-main && electron-builder --dir"
+    "electron:pack": "next build && yarn electron:build-main && electron-builder --dir",
+    "install-agent-permissions": "node scripts/install-agent-permissions.mjs",
+    "verify-agent-permissions": "node scripts/verify-agent-permissions.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -61,7 +63,9 @@
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4",
+    "remark-gfm": "^4.0.1",
     "resend": "^6.9.2",
     "tailwind": "^4.0.0",
     "tailwind-merge": "^3.4.0",
