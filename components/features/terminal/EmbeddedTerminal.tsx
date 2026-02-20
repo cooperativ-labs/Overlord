@@ -1,5 +1,7 @@
 'use client';
 
+import '@xterm/xterm/css/xterm.css';
+
 import { useEffect, useRef } from 'react';
 
 import { useElectron } from './useElectron';
@@ -23,7 +25,6 @@ export function EmbeddedTerminal({ terminalId }: Props) {
       // Dynamic imports for xterm (only available client-side)
       const { Terminal } = await import('@xterm/xterm');
       const { FitAddon } = await import('@xterm/addon-fit');
-      await import('@xterm/xterm/css/xterm.css');
 
       if (!containerRef.current || !api) return;
 
@@ -46,7 +47,7 @@ export function EmbeddedTerminal({ terminalId }: Props) {
       fitAddon.fit();
 
       // Pipe keyboard input to PTY
-      term.onData((data) => {
+      term.onData(data => {
         api!.terminal.write(terminalId!, data);
       });
 

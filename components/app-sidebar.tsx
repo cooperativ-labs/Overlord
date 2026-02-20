@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 
+import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import { useProjectCreator } from '@/components/features/projects/ProjectCreatorContext';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
@@ -28,7 +29,6 @@ import {
   SidebarMenuItem,
   SidebarRail
 } from '@/components/ui/sidebar';
-import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { updateProjectColorAction } from '@/lib/actions/projects';
 
@@ -77,11 +77,7 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
         </SidebarMenuAction>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="start" className="w-auto rounded-lg p-2">
-        <ProjectColorSetter
-          value={color}
-          onSelect={handleChangeColor}
-
-        />
+        <ProjectColorSetter value={color} onSelect={handleChangeColor} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -123,7 +119,7 @@ export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
-      <SidebarHeader>
+      <SidebarHeader className="electron-sidebar-offset">
         <TeamSwitcher teams={teams} />
       </SidebarHeader>
       <SidebarContent>

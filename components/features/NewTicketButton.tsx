@@ -32,6 +32,7 @@ export function NewTicketButton() {
     <LoadingButton
       buttonState={buttonState}
       setButtonState={setButtonState}
+      size="sm"
       text="New Ticket"
       loadingText="Creating…"
       successText="Opening…"

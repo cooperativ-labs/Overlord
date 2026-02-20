@@ -253,7 +253,6 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
       variant="ghost"
-      size="icon"
       className={cn('size-7', className)}
       onClick={event => {
         onClick?.(event);
@@ -261,7 +260,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      <PanelLeftIcon size={20} />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   );
@@ -548,7 +547,7 @@ function SidebarMenuAction({
         'peer-data-[size=lg]/menu-button:top-2.5',
         'group-data-[collapsible=icon]:hidden',
         showOnHover &&
-        'peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0',
+          'peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0',
         className
       )}
       {...props}

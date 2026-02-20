@@ -3,6 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import {
+  DEFAULT_PROJECT_COLOR,
+  ProjectColorSetter,
+  toHexColor
+} from '@/components/features/projects/ProjectColorSetter';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -17,11 +22,6 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { createProject } from '@/lib/actions/projects';
-import {
-  DEFAULT_PROJECT_COLOR,
-  ProjectColorSetter,
-  toHexColor
-} from '@/components/features/projects/ProjectColorSetter';
 
 type ProjectCreatorModalProps = {
   open: boolean;

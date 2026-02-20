@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation';
 
-import { createClient } from '@/supabase/utils/server';
-
 import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
+import { createClient } from '@/supabase/utils/server';
 
 import TicketsBoardContent from '../../../tickets/(components)/TicketsBoardContent';
 

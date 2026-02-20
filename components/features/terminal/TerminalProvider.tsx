@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode
-} from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useElectron } from './useElectron';
 
@@ -33,7 +26,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   // Load saved terminal mode on mount
   useEffect(() => {
     if (api) {
-      api.settings.get<TerminalMode>('terminalMode').then((mode) => {
+      api.settings.get<TerminalMode>('terminalMode').then(mode => {
         if (mode) setTerminalModeState(mode);
       });
     }

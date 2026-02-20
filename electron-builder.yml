@@ -19,9 +19,7 @@ mac:
     - zip
   category: public.app-category.developer-tools
   icon: electron/resources/icon.icns
-  hardenedRuntime: true
-  entitlements: electron/resources/entitlements.mac.plist
-  entitlementsInherit: electron/resources/entitlements.mac.plist
+  identity: null  # Skip code signing for local dev; remove this for distribution
 
 linux:
   target:
@@ -29,5 +27,8 @@ linux:
     - deb
   category: Development
   icon: electron/resources/icon.png
+
+asarUnpack:
+  - "node_modules/node-pty/**/*"
 
 npmRebuild: true

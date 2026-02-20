@@ -33,8 +33,9 @@
     "seed": "npx tsx seed.ts > supabase/seed.sql",
     "seed:sync": "npx @snaplet/seed sync",
     "sync:template-vars": "npx tsx scripts/sync-template-variables.ts",
+    "electron:clean": "rm -rf release dist-electron .next",
     "electron:build-main": "tsc -p electron/tsconfig.json",
-    "electron:dev": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:dev": "yarn electron:build-main && concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && yarn electron:build-main && electron-builder",
     "electron:pack": "next build && yarn electron:build-main && electron-builder --dir"
   },
@@ -52,7 +53,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "electron-store": "^10.0.1",
     "lucide-react": "^0.575.0",
     "next": "^16.1.6",
     "next-pwa": "^5.6.0",

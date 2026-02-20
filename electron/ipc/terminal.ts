@@ -29,7 +29,7 @@ export function registerTerminalIpc(): void {
   });
 
   ipcMain.handle('terminal:open-external', (_event, command: string) => {
-    const termApp = store.get('externalTerminalApp', 'terminal');
+    const termApp = store.get('externalTerminalApp', 'terminal') as string;
     const escaped = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
     let script: string;

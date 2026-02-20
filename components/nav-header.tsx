@@ -12,15 +12,15 @@ type NavHeaderProps = {
 
 export function NavHeader({ userEmail }: NavHeaderProps) {
   return (
-    <header className="flex flex-col gap-4 border-b bg-card p-4 text-card-foreground md:flex-row md:items-center md:justify-between">
+    <header className="electron-drag-region flex flex-col gap-4 border-b bg-card px-4 py-2 text-card-foreground md:flex-row md:items-center md:justify-between">
       <div className="flex min-w-0 items-center gap-2">
-        <SidebarTrigger className="-ml-1" />
+        <SidebarTrigger className="-ml-1 electron-no-drag" />
         <Separator orientation="vertical" className="h-4" />
-        <h1 className="text-xl leading-tight font-semibold">
+        <h1 className="text-lg leading-tight font-semibold electron-no-drag">
           <Link href="/">Orchestrator</Link>
         </h1>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 electron-no-drag">
         <span className="text-muted-foreground max-w-full truncate text-sm">{userEmail}</span>
         <form action={signOut}>
           <Button type="submit" variant="ghost">

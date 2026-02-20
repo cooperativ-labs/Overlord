@@ -123,3 +123,26 @@
     @apply min-h-dvh w-full bg-background text-foreground;
   }
 }
+
+/* Electron-only styles — active when ElectronDetector sets data-electron on <html> */
+.electron-titlebar {
+  display: none;
+}
+
+html[data-electron] .electron-titlebar {
+  display: block;
+  height: 1.5rem; /* 36px — matches trafficLightPosition */
+  background: var(--sidebar);
+}
+
+html[data-electron] .electron-drag-region {
+  -webkit-app-region: drag;
+}
+
+html[data-electron] .electron-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+html[data-electron] .electron-sidebar-offset {
+  padding-top: 1.75rem; /* 40px — clears traffic lights */
+}

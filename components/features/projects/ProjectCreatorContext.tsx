@@ -27,11 +27,7 @@ export function ProjectCreatorProvider({ children }: ProjectCreatorProviderProps
     <ProjectCreatorContext.Provider value={{ openProjectCreator }}>
       {children}
       {organizationId !== null && (
-        <ProjectCreatorModal
-          open={open}
-          onOpenChange={setOpen}
-          organizationId={organizationId}
-        />
+        <ProjectCreatorModal open={open} onOpenChange={setOpen} organizationId={organizationId} />
       )}
     </ProjectCreatorContext.Provider>
   );

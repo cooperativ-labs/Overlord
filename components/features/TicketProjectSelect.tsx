@@ -3,6 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 
+import {
+  DEFAULT_PROJECT_COLOR,
+  ProjectColorSetter,
+  toHexColor
+} from '@/components/features/projects/ProjectColorSetter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,12 +15,6 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import { createProjectAction, setTicketProjectAction } from '@/lib/actions/tickets';
-
-import {
-  DEFAULT_PROJECT_COLOR,
-  ProjectColorSetter,
-  toHexColor
-} from '@/components/features/projects/ProjectColorSetter';
 
 type ProjectOption = {
   id: string;

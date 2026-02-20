@@ -35,11 +35,7 @@ type ProjectColorSetterProps = {
   className?: string;
 };
 
-export function ProjectColorSetter({
-  value,
-  onSelect,
-  className
-}: ProjectColorSetterProps) {
+export function ProjectColorSetter({ value, onSelect, className }: ProjectColorSetterProps) {
   const [hexInput, setHexInput] = useState(value);
 
   useEffect(() => {
@@ -62,9 +58,7 @@ export function ProjectColorSetter({
               type="button"
               className={cn(
                 'h-4 w-4 rounded-[4px] border transition ring-offset-1',
-                isActive
-                  ? 'ring-2 ring-primary'
-                  : 'hover:ring-2 hover:ring-primary/50'
+                isActive ? 'ring-2 ring-primary' : 'hover:ring-2 hover:ring-primary/50'
               )}
               style={{ backgroundColor: color, borderColor: color }}
               aria-label={`Use color ${color}`}

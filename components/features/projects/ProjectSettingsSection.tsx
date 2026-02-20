@@ -6,17 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
-import {
-  updateProjectColorAction,
-  updateProjectNameAction
-} from '@/lib/actions/projects';
+import { updateProjectColorAction, updateProjectNameAction } from '@/lib/actions/projects';
+import { cn } from '@/lib/utils';
 
 import { ProjectColorSetter } from './ProjectColorSetter';
 
@@ -174,11 +167,7 @@ export function ProjectSettingsSection({
               />
             </PopoverTrigger>
             <PopoverContent className="w-auto p-2" align="start">
-              <ProjectColorSetter
-                value={savedColor}
-                onSelect={handleSelectColor}
-
-              />
+              <ProjectColorSetter value={savedColor} onSelect={handleSelectColor} />
             </PopoverContent>
           </Popover>
           {colorSaveState === 'loading' ? (
@@ -202,7 +191,10 @@ export function ProjectSettingsSection({
             onClick={handleSyncEverhour}
           />
           {syncMessage ? (
-            <span className="max-w-[240px] truncate text-xs text-muted-foreground" title={syncMessage}>
+            <span
+              className="max-w-[240px] truncate text-xs text-muted-foreground"
+              title={syncMessage}
+            >
               {syncMessage}
             </span>
           ) : null}

@@ -84,13 +84,13 @@ type RawTicket = {
   everhour_task_id: string | null;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
-  | { name: string; color: string; everhour_project_id: string | null }
-  | Array<{
-    name: string;
-    color: string;
-    everhour_project_id: string | null;
-  }>
-  | null;
+    | { name: string; color: string; everhour_project_id: string | null }
+    | Array<{
+        name: string;
+        color: string;
+        everhour_project_id: string | null;
+      }>
+    | null;
 };
 
 export default async function TicketsBoardContent({
