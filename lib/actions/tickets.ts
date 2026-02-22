@@ -3,8 +3,8 @@
 import { revalidatePath } from 'next/cache';
 
 import { getPlatformUrl } from '@/lib/env';
-import { buildTicketPromptMarkdown } from '@/lib/orchestrator/ticket-prompt';
-import { createTicketSchema } from '@/lib/orchestrator/validation';
+import { buildTicketPromptMarkdown } from '@/lib/overlord/ticket-prompt';
+import { createTicketSchema } from '@/lib/overlord/validation';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 

@@ -6,7 +6,7 @@
 
 ## Overview
 
-This guide covers adding Everhour time-tracking to each ticket in the Cooperativ orchestrator app. The feature includes:
+This guide covers adding Everhour time-tracking to each ticket in the Cooperativ overlord app. The feature includes:
 
 1. **Timer UX on each ticket** — start/stop a running timer linked to the Everhour task
 2. **Task sync** — automatically create an Everhour task the first time a timer is started, using the ticket ID and ticket name

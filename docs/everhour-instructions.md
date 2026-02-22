@@ -1,6 +1,6 @@
 # Everhour Connection Instructions
 
-Follow these steps to connect your Everhour account to Orchestrator.
+Follow these steps to connect your Everhour account to Overlord.
 
 ## 1. Generate your Everhour API token
 
@@ -21,11 +21,11 @@ Apply the migration that adds:
 
 ## 3. Save your token in the app
 
-1. Open `/account` in Orchestrator.
+1. Open `/account` in Overlord.
 2. In the Everhour section, paste your API key.
 3. Click `Save Key`.
 
-## 4. Sync your Orchestrator projects to Everhour
+## 4. Sync your Overlord projects to Everhour
 
 1. Open any ticket in the target organization.
 2. In the `Project` section, click `Sync Projects to Everhour`.

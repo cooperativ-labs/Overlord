@@ -1,10 +1,15 @@
 {
-  "name": "orchestrator",
-  "description": "Orchestrator is a platform for managing AI agent workflows.",
-  "author": "Cooperativ",
+  "name": "overlord",
+  "description": "Overlord is a platform for managing AI agent workflows.",
+  "author": "Overlord",
   "version": "0.1.0",
   "private": true,
   "main": "dist-electron/main.js",
+  "bin": {
+    "coop": "bin/coop.mjs",
+    "cooperativ": "bin/coop.mjs",
+    "overlord": "bin/coop.mjs"
+  },
   "scripts": {
     "start": "supabase start",
     "stop": "supabase stop",

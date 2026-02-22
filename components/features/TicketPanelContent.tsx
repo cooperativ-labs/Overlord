@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { getAgentApiToken, getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
-import { buildLaunchCommands } from '@/lib/orchestrator/launch-commands';
+import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
 
 const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
@@ -202,6 +202,7 @@ export async function TicketPanelContent({
         />
 
         <LaunchCommandBar
+          ticketId={ticketId}
           chatGptLink={chatGptLink}
           claudeCommand={claudeCode}
           codexCommand={codex}

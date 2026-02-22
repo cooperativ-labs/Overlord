@@ -17,7 +17,7 @@ export function NavHeader({ userEmail }: NavHeaderProps) {
         <SidebarTrigger className="-ml-1 electron-no-drag" />
         <Separator orientation="vertical" className="h-4" />
         <h1 className="text-lg leading-tight font-semibold electron-no-drag">
-          <Link href="/">Orchestrator</Link>
+          <Link href="/">Overlord</Link>
         </h1>
       </div>
       <div className="flex flex-wrap items-center gap-2 electron-no-drag">

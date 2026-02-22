@@ -5,6 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { type AgentType, prepareAgentLaunch } from '../services/agent-launcher';
 import { store } from '../services/settings-store';
 import {
   killTerminal,
@@ -88,7 +89,7 @@ export function registerTerminalIpc(): void {
     // through AppleScript string interpolation.
     const scriptPath = path.join(
       os.tmpdir(),
-      `cooperativ-launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sh`
+      `overlord-launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sh`
     );
 
     let scriptContent = '#!/bin/bash\n';
@@ -106,7 +107,7 @@ export function registerTerminalIpc(): void {
       `bash ${shellQuote(scriptPath)};`,
       'else',
       `echo "Launch script missing: ${scriptPath}";`,
-      'echo "Re-run the launch command from Cooperativ to generate a new script.";',
+      'echo "Re-run the launch command from Overlord to generate a new script.";',
       'fi'
     ].join(' ');
     const termApp = store.get('externalTerminalApp', 'default') as string;
@@ -186,6 +187,120 @@ export function registerTerminalIpc(): void {
 
     return runAppleScript(script);
   });
+
+  ipcMain.handle(
+    'terminal:launch-agent',
+    async (event, payload: { ticketId: string; agent: AgentType; cwd?: string }) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win) throw new Error('No window found');
+
+      const { command, cwd, env } = await prepareAgentLaunch({
+        ticketId: payload.ticketId,
+        agent: payload.agent,
+        cwd: payload.cwd
+      });
+
+      const terminalMode = store.get('terminalMode', 'embedded') as string;
+
+      if (terminalMode === 'external') {
+        // For external terminal, write a self-contained script
+        const scriptPath = path.join(
+          os.tmpdir(),
+          `overlord-launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sh`
+        );
+
+        const envLines = Object.entries(env)
+          .map(([k, v]) => `export ${k}=${shellQuote(v)}`)
+          .join('\n');
+
+        let scriptContent = '#!/bin/bash\n';
+        if (cwd) {
+          scriptContent += `cd ${shellQuote(cwd)}\n`;
+        }
+        scriptContent += `${envLines}\n`;
+        scriptContent += `${command}\n`;
+
+        fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
+
+        setTimeout(() => {
+          try {
+            fs.unlinkSync(scriptPath);
+          } catch {
+            // Already deleted — ignore
+          }
+        }, 15 * 60_000);
+
+        const launchCmd = `bash ${shellQuote(scriptPath)}`;
+        const termApp = store.get('externalTerminalApp', 'default') as string;
+        const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
+        const openInTab = launchMode === 'tab';
+        const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+        let script: string;
+        switch (termApp) {
+          case 'iterm':
+            script = openInTab
+              ? `
+                  tell application "iTerm"
+                    activate
+                    if (count of windows) = 0 then
+                      create window with default profile
+                    else
+                      tell current window
+                        create tab with default profile
+                      end tell
+                    end if
+                    tell current session of current window
+                      write text "${escapedLaunchCmd}"
+                    end tell
+                  end tell
+                `
+              : `
+                  tell application "iTerm"
+                    activate
+                    create window with default profile
+                    tell current session of current window
+                      write text "${escapedLaunchCmd}"
+                    end tell
+                  end tell
+                `;
+            break;
+          case 'warp':
+            exec(`open -a Warp`);
+            return new Promise<void>(resolve => {
+              setTimeout(() => {
+                runAppleScript(
+                  `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
+                ).finally(() => resolve());
+              }, 1000);
+            });
+          default:
+            script = openInTab
+              ? `
+                  tell application "Terminal"
+                    activate
+                    if (count of windows) = 0 then
+                      do script "${escapedLaunchCmd}"
+                    else
+                      do script "${escapedLaunchCmd}" in front window
+                    end if
+                  end tell
+                `
+              : `
+                  tell application "Terminal"
+                    activate
+                    do script "${escapedLaunchCmd}"
+                  end tell
+                `;
+        }
+
+        return runAppleScript(script);
+      }
+
+      // Embedded terminal — spawn PTY with env vars baked in
+      return spawnTerminal(win, command, cwd, env);
+    }
+  );
 
   ipcMain.handle('terminal:choose-directory', async event => {
     const win = BrowserWindow.fromWebContents(event.sender);

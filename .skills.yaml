@@ -10,4 +10,4 @@ skills:
   - slug: "supabase-client-setup"
   - slug: "supabase-rls"
   - slug: "zod-v4-patterns"
-  - slug: "orchestrator-protocol"
+  - slug: "overlord-protocol"

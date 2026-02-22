@@ -13,7 +13,7 @@ import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
-  title: 'Orchestrator',
+  title: 'Overlord',
   description: 'Local-first AI agent orchestration dashboard'
 };
 
@@ -39,7 +39,7 @@ export default async function RootLayout({
               {user ? (
                 <div className="flex h-dvh w-full flex-col overflow-hidden">
                   {/* Electron title bar drag region — hidden in browser */}
-                  <div className="electron-titlebar electron-drag-region shrink-0" />
+                  <div className="electron-drag-region shrink-0" />
                   <div className="flex min-h-0 flex-1 overflow-hidden">
                     <AppSidebar
                       user={{

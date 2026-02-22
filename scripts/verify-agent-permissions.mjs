@@ -3,7 +3,7 @@
 /**
  * verify-agent-permissions.mjs
  *
- * Validates that all required Orchestrator protocol permissions are present
+ * Validates that all required Overlord protocol permissions are present
  * in the agent's configuration file.
  *
  * Usage:
@@ -154,7 +154,7 @@ function main() {
     return;
   }
 
-  console.log("Orchestrator Agent Permission Verifier");
+  console.log("Overlord Agent Permission Verifier");
   console.log(`Platform URL: ${opts.platformUrl}`);
 
   let ok = true;

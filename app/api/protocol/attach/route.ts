@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { attachSchema } from '@/lib/orchestrator/validation';
+import { attachSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {

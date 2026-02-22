@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { getAgentApiToken, getPlatformUrl } from '@/lib/env';
-import {
-  buildLaunchCommands,
-  selectRestartSessionCommand
-} from '@/lib/orchestrator/launch-commands';
-import { resolveSession } from '@/lib/orchestrator/protocol-db';
-import { deliverSchema } from '@/lib/orchestrator/validation';
+import { buildLaunchCommands, selectRestartSessionCommand } from '@/lib/overlord/launch-commands';
+import { resolveSession } from '@/lib/overlord/protocol-db';
+import { deliverSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {

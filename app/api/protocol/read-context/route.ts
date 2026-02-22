@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { resolveSession } from '@/lib/orchestrator/protocol-db';
-import { readContextSchema } from '@/lib/orchestrator/validation';
+import { resolveSession } from '@/lib/overlord/protocol-db';
+import { readContextSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {

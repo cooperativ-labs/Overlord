@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { findOpenBlockingQuestions } from '@/lib/orchestrator/conversation';
+import { findOpenBlockingQuestions } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
 
 import { useTerminal } from './terminal/TerminalProvider';

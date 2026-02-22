@@ -7,6 +7,7 @@ interface ElectronAPI {
     onData: (callback: (id: string, data: string) => void) => () => void;
     onExit: (callback: (id: string, code: number) => void) => () => void;
     openExternal: (command: string, cwd?: string) => Promise<void>;
+    launchAgent: (ticketId: string, agent: 'claude' | 'codex', cwd?: string) => Promise<string | void>;
     chooseDirectory: () => Promise<string | null>;
   };
   supabase: {

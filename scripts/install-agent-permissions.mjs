@@ -3,7 +3,7 @@
 /**
  * install-agent-permissions.mjs
  *
- * One-time installer that pre-configures agent permissions for Orchestrator
+ * One-time installer that pre-configures agent permissions for Overlord
  * protocol access so agents can call the local API without repeated approval
  * prompts.
  *
@@ -199,7 +199,7 @@ function main() {
     return;
   }
 
-  console.log(`Orchestrator Agent Permission Installer`);
+  console.log(`Overlord Agent Permission Installer`);
   console.log(`Platform URL: ${opts.platformUrl}`);
   console.log(`Target agent: ${opts.agent}`);
   if (opts.dryRun) console.log(`Mode: DRY RUN`);

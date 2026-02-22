@@ -1,16 +1,16 @@
 <!-- version: 1.1.0 -->
 ---
-Name: orchestrator-protocol
-Description: Use when the environment contains PLATFORM_URL and TICKET_ID. Instructs the agent to attach to the Cooperativ orchestrator, post progress updates, ask blocking questions, manage shared context, and deliver a final summary when work is complete.
+Name: overlord-protocol
+Description: Use when the environment contains PLATFORM_URL and TICKET_ID. Instructs the agent to attach to the Cooperativ overlord, post progress updates, ask blocking questions, manage shared context, and deliver a final summary when work is complete.
 ---
 
-# orchestrator-protocol
+# overlord-protocol
 
 ## When to Apply
 
 Apply this skill whenever the following environment variables are present:
 
-- `PLATFORM_URL` — base URL of the running orchestrator (e.g. `http://localhost:3000`)
+- `PLATFORM_URL` — base URL of the running overlord (e.g. `http://localhost:3000`)
 - `TICKET_ID` — UUID of the ticket to work on
 - `AGENT_TOKEN` — bearer token for the protocol API
 

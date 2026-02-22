@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ZodType } from 'zod';
 
-import { ensureAgentToken } from '@/lib/orchestrator/protocol-auth';
+import { ensureAgentToken } from '@/lib/overlord/protocol-auth';
 
 export async function parseProtocolBody<T>(request: Request, schema: ZodType<T>) {
   const authResponse = ensureAgentToken(request);

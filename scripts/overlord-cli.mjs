@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
-import process from "node:process";
+import process from 'node:process';
 
-const baseUrl = process.env.ORCHESTRATOR_BASE_URL ?? "http://localhost:3000";
-const token = process.env.ORCHESTRATOR_AGENT_TOKEN ?? "orchestrator-local-dev-token";
+const baseUrl = process.env.OVERLORD_BASE_URL ?? 'http://localhost:3000';
+const token = process.env.OVERLORD_AGENT_TOKEN ?? 'overlord-local-dev-token';
 
 async function request(path, body) {
   const response = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
+    method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json'
     },
-    body: JSON.stringify(body ?? {}),
+    body: JSON.stringify(body ?? {})
   });
 
   const payload = await response.json();
@@ -23,14 +23,14 @@ async function request(path, body) {
 }
 
 function printUsage() {
-  console.log(`orchestrator CLI
+  console.log(`overlord CLI
 
 Usage:
-  yarn orchestrator list
-  yarn orchestrator attach <ticketId> "<agentIdentifier>" [connectionMethod]
-  yarn orchestrator update <sessionKey> <ticketId> "<summary>" [phase]
-  yarn orchestrator decision <sessionKey> <ticketId> "<title>" ["<rationale>"] ["<impact>"] [phase]
-  yarn orchestrator ask <sessionKey> <ticketId> "<question>" [phase]
+  yarn overlord list
+  yarn overlord attach <ticketId> "<agentIdentifier>" [connectionMethod]
+  yarn overlord update <sessionKey> <ticketId> "<summary>" [phase]
+  yarn overlord decision <sessionKey> <ticketId> "<title>" ["<rationale>"] ["<impact>"] [phase]
+  yarn overlord ask <sessionKey> <ticketId> "<question>" [phase]
 `);
 }
 
@@ -42,76 +42,76 @@ async function main() {
     return;
   }
 
-  if (command === "list") {
-    const result = await request("/api/protocol/list-tickets", {});
+  if (command === 'list') {
+    const result = await request('/api/protocol/list-tickets', {});
     console.log(JSON.stringify(result, null, 2));
     return;
   }
 
-  if (command === "attach") {
-    const [ticketId, agentIdentifier, connectionMethod = "cli"] = args;
+  if (command === 'attach') {
+    const [ticketId, agentIdentifier, connectionMethod = 'cli'] = args;
     if (!ticketId || !agentIdentifier) {
       printUsage();
       process.exitCode = 1;
       return;
     }
-    const result = await request("/api/protocol/attach", {
+    const result = await request('/api/protocol/attach', {
       ticketId,
       agentIdentifier,
-      connectionMethod,
+      connectionMethod
     });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
 
-  if (command === "update") {
+  if (command === 'update') {
     const [sessionKey, ticketId, summary, phase] = args;
     if (!sessionKey || !ticketId || !summary) {
       printUsage();
       process.exitCode = 1;
       return;
     }
-    const result = await request("/api/protocol/update", {
+    const result = await request('/api/protocol/update', {
       sessionKey,
       ticketId,
       summary,
-      ...(phase ? { phase } : {}),
+      ...(phase ? { phase } : {})
     });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
 
-  if (command === "decision") {
+  if (command === 'decision') {
     const [sessionKey, ticketId, title, rationale, impact, phase] = args;
     if (!sessionKey || !ticketId || !title) {
       printUsage();
       process.exitCode = 1;
       return;
     }
-    const result = await request("/api/protocol/decision", {
+    const result = await request('/api/protocol/decision', {
       sessionKey,
       ticketId,
       title,
       ...(rationale ? { rationale } : {}),
       ...(impact ? { impact } : {}),
-      ...(phase ? { phase } : {}),
+      ...(phase ? { phase } : {})
     });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
 
-  if (command === "ask") {
+  if (command === 'ask') {
     const [sessionKey, ticketId, question, phase] = args;
     if (!sessionKey || !ticketId || !question) {
       printUsage();
       process.exitCode = 1;
       return;
     }
-    const result = await request("/api/protocol/ask", {
+    const result = await request('/api/protocol/ask', {
       sessionKey,
       ticketId,
       question,
-      ...(phase ? { phase } : {}),
+      ...(phase ? { phase } : {})
     });
     console.log(JSON.stringify(result, null, 2));
     return;
@@ -121,7 +121,7 @@ async function main() {
   process.exitCode = 1;
 }
 
-main().catch((error) => {
+main().catch(error => {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });

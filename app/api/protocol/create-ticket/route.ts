@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
-import { resolveSession } from '@/lib/orchestrator/protocol-db';
-import { createFollowUpTicketSchema } from '@/lib/orchestrator/validation';
+import { resolveSession } from '@/lib/overlord/protocol-db';
+import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 function deriveTitleFromObjective(objective: string): string {

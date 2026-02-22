@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { getAgentApiToken, getPlatformUrl } from '@/lib/env';
-import { buildLaunchCommands } from '@/lib/orchestrator/launch-commands';
-import { ensureAgentToken } from '@/lib/orchestrator/protocol-auth';
-import { buildTicketPromptMarkdown } from '@/lib/orchestrator/ticket-prompt';
+import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
+import { ensureAgentToken } from '@/lib/overlord/protocol-auth';
+import { buildTicketPromptMarkdown } from '@/lib/overlord/ticket-prompt';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
@@ -30,12 +30,28 @@ export async function GET(request: Request, { params }: RouteContext) {
     );
   }
 
+  // Look up the project's local working directory if the ticket has a project
+  let workingDirectory: string | null = null;
+  if (ticket.project_id) {
+    const { data: project } = await supabase
+      .from('projects')
+      .select('local_working_directory')
+      .eq('id', ticket.project_id)
+      .single();
+    workingDirectory = project?.local_working_directory ?? null;
+  }
+
   const platformUrl = getPlatformUrl();
   const markdown = buildTicketPromptMarkdown(ticket, platformUrl);
 
-  return new NextResponse(markdown, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'text/plain; charset=utf-8'
+  };
+  if (workingDirectory) {
+    headers['X-Working-Directory'] = workingDirectory;
+  }
+
+  return new NextResponse(markdown, { headers });
 }
 
 // Convenience: also expose the launch commands so the UI can fetch them

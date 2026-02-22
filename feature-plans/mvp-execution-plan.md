@@ -34,7 +34,7 @@ Exit criteria: protocol works end-to-end via curl/Postman and persists state cor
 Exit criteria: PM can run ticket lifecycle without chat, via structured forms + event timeline.
 
 ## Phase 4: External Attach Integrations (Week 3-4)
-1. CLI adapter: `orchestrator attach TICKET-###`, `update`, `ask`, `deliver`.
+1. CLI adapter: `overlord attach TICKET-###`, `update`, `ask`, `deliver`.
 2. Claude Code path: local CLI bridge + optional local MCP server exposing protocol tools.
 3. Claude app path: MCP config instructions + attach command UX.
 4. ChatGPT path: Custom GPT Action schema against REST API + deep link with prefilled `attach`.

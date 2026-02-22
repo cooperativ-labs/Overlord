@@ -101,7 +101,7 @@ Instructions tell agent to call:
 Code:
 
 - `app/api/protocol/context/[ticketId]/route.ts`
-- `lib/orchestrator/ticket-prompt.ts`
+- `lib/overlord/ticket-prompt.ts`
 
 ### 2) Protocol routes persist ticket-scoped events
 
@@ -114,8 +114,8 @@ All protocol routes:
 Code:
 
 - `app/api/protocol/_lib.ts`
-- `lib/orchestrator/protocol-auth.ts`
-- `lib/orchestrator/validation.ts`
+- `lib/overlord/protocol-auth.ts`
+- `lib/overlord/validation.ts`
 - `supabase/utils/service-role.ts`
 
 Primary write behavior:
@@ -137,7 +137,7 @@ Code:
 - `app/api/protocol/read-context/route.ts`
 - `app/api/protocol/write-context/route.ts`
 - `app/api/protocol/deliver/route.ts`
-- `lib/orchestrator/protocol-db.ts`
+- `lib/overlord/protocol-db.ts`
 
 ### 2.5) User answers/follow-ups are ticket events too
 
@@ -158,7 +158,7 @@ Code:
 
 - `app/api/tickets/[ticketId]/conversation/route.ts`
 - `components/features/TicketConversationComposer.tsx`
-- `lib/orchestrator/conversation.ts`
+- `lib/overlord/conversation.ts`
 
 ### 3) Realtime fan-out is ticket-filtered
 
@@ -250,6 +250,6 @@ sequenceDiagram
 
 ## Operational Notes
 
-- Auth for protocol routes uses a single bearer token (`ORCHESTRATOR_AGENT_TOKEN`, fallback local token in `lib/env.ts`).
+- Auth for protocol routes uses a single bearer token (`OVERLORD_AGENT_TOKEN`, fallback local token in `lib/env.ts`).
 - Protocol routes intentionally use service-role DB client; route auth is the security gate.
 - Current SQL policies in the initial local migration include permissive local policies for several protocol tables; this is convenient for local dev, but production hardening should verify least-privilege policy posture.

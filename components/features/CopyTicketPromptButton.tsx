@@ -17,7 +17,7 @@ type Props = {
 
 /**
  * Copies the full LLM prompt for this ticket (ticket content + instructions to pass
- * information back via the orchestrator protocol) to the clipboard.
+ * information back via the overlord protocol) to the clipboard.
  * In Electron, sends the prompt to the active terminal instead.
  */
 export function CopyTicketPromptButton({

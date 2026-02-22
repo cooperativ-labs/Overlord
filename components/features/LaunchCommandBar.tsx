@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useTerminal } from './terminal/TerminalProvider';
 
 type Props = {
+  ticketId: string;
   claudeCommand: string;
   codexCommand: string;
   chatGptLink: string;
@@ -16,21 +17,25 @@ type Props = {
 
 function LaunchButton({
   label,
-  command,
+  agent,
+  ticketId,
+  clipboardCommand,
   workingDirectory
 }: {
   label: string;
-  command: string;
+  agent: 'claude' | 'codex';
+  ticketId: string;
+  clipboardCommand: string;
   workingDirectory?: string | null;
 }) {
   const [copied, setCopied] = useState(false);
-  const { isElectron, sendCommand } = useTerminal();
+  const { isElectron, launchAgent } = useTerminal();
 
   async function handleClick() {
     if (isElectron) {
-      await sendCommand(command, { cwd: workingDirectory ?? undefined });
+      await launchAgent(ticketId, agent, workingDirectory ?? undefined);
     } else {
-      await navigator.clipboard.writeText(command);
+      await navigator.clipboard.writeText(clipboardCommand);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -56,18 +61,18 @@ function LaunchButton({
 }
 
 function RunAgentButton({
-  command,
+  ticketId,
   workingDirectory
 }: {
-  command: string;
+  ticketId: string;
   workingDirectory?: string | null;
 }) {
-  const { isElectron, sendCommand } = useTerminal();
+  const { isElectron, launchAgent } = useTerminal();
 
   if (!isElectron) return null;
 
   async function handleClick() {
-    await sendCommand(command, { cwd: workingDirectory ?? undefined });
+    await launchAgent(ticketId, 'claude', workingDirectory ?? undefined);
   }
 
   return (
@@ -79,6 +84,7 @@ function RunAgentButton({
 }
 
 export function LaunchCommandBar({
+  ticketId,
   claudeCommand,
   codexCommand,
   chatGptLink,
@@ -93,14 +99,22 @@ export function LaunchCommandBar({
       </span>
       <LaunchButton
         label="Claude Code"
-        command={claudeCommand}
+        agent="claude"
+        ticketId={ticketId}
+        clipboardCommand={claudeCommand}
         workingDirectory={workingDirectory}
       />
-      <LaunchButton label="Codex" command={codexCommand} workingDirectory={workingDirectory} />
+      <LaunchButton
+        label="Codex"
+        agent="codex"
+        ticketId={ticketId}
+        clipboardCommand={codexCommand}
+        workingDirectory={workingDirectory}
+      />
       {isElectron && (
         <>
           <div className="h-4 w-px bg-border" />
-          <RunAgentButton command={claudeCommand} workingDirectory={workingDirectory} />
+          <RunAgentButton ticketId={ticketId} workingDirectory={workingDirectory} />
         </>
       )}
       <div className="h-4 w-px bg-border" />

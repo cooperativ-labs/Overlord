@@ -70,7 +70,7 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
                 <div className="flex size-8 items-center justify-center rounded-md">
                   <GalleryVerticalEnd className="size-6" />
                 </div>
-                <span className="sr-only">Orchestrator</span>
+                <span className="sr-only">Overlord</span>
               </Link>
               <h1 className="text-xl font-bold">Welcome back</h1>
               <FieldDescription>
@@ -111,9 +111,9 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
                 <div className="flex size-8 items-center justify-center rounded-md">
                   <GalleryVerticalEnd className="size-6" />
                 </div>
-                <span className="sr-only">Orchestrator</span>
+                <span className="sr-only">Overlord</span>
               </Link>
-              <h1 className="text-xl font-bold">Welcome to Orchestrator</h1>
+              <h1 className="text-xl font-bold">Welcome to Overlord</h1>
               <FieldDescription>
                 Already have an account?{' '}
                 <button

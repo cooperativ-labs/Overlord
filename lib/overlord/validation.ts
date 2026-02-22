@@ -1,10 +1,6 @@
 import { z } from 'zod';
 
-import {
-  connectionMethods,
-  ticketExecutionTargets,
-  ticketStatuses
-} from '@/lib/orchestrator/types';
+import { connectionMethods, ticketExecutionTargets, ticketStatuses } from '@/lib/overlord/types';
 
 const ticketStatusSchema = z.enum(ticketStatuses);
 const connectionMethodSchema = z.enum(connectionMethods);

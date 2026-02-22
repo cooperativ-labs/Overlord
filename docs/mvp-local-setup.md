@@ -19,7 +19,7 @@ Supabase API: `http://127.0.0.1:54321`
 ## Agent protocol auth
 Set a local token in `.env.local`:
 
-`ORCHESTRATOR_AGENT_TOKEN=orchestrator-local-dev-token`
+`OVERLORD_AGENT_TOKEN=overlord-local-dev-token`
 
 All protocol calls require:
 
@@ -27,7 +27,7 @@ All protocol calls require:
 
 ## Install agent permissions
 
-Run the installer once after cloning the repo to pre-approve Orchestrator protocol
+Run the installer once after cloning the repo to pre-approve Overlord protocol
 calls so agents don't trigger repeated permission prompts:
 
 ```bash
@@ -81,7 +81,7 @@ cp .claude/settings.local.json.backup-<timestamp> .claude/settings.local.json
 ```bash
 curl -X POST http://localhost:3000/api/protocol/attach \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer orchestrator-local-dev-token" \
+  -H "Authorization: Bearer overlord-local-dev-token" \
   -d '{
     "ticketId":"<uuid>",
     "agentIdentifier":"Claude Code",
@@ -93,6 +93,6 @@ curl -X POST http://localhost:3000/api/protocol/attach \
 Use the built-in helper to call protocol endpoints from terminal workflows:
 
 ```bash
-yarn orchestrator list
-yarn orchestrator attach <ticketId> "Claude Code" cli
+yarn overlord list
+yarn overlord attach <ticketId> "Claude Code" cli 
 ```

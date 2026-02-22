@@ -25,7 +25,12 @@ export function normalizeTerminalCwd(cwd?: string): string | undefined {
   return fs.existsSync(normalized) ? normalized : undefined;
 }
 
-export function spawnTerminal(mainWindow: BrowserWindow, command?: string, cwd?: string): string {
+export function spawnTerminal(
+  mainWindow: BrowserWindow,
+  command?: string,
+  cwd?: string,
+  extraEnv?: Record<string, string>
+): string {
   const id = `term-${++counter}`;
   const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh');
   const resolvedCwd = normalizeTerminalCwd(cwd) ?? homeDirectory;
@@ -35,7 +40,7 @@ export function spawnTerminal(mainWindow: BrowserWindow, command?: string, cwd?:
     cols: 120,
     rows: 30,
     cwd: resolvedCwd,
-    env: { ...process.env } as Record<string, string>
+    env: { ...process.env, ...extraEnv } as Record<string, string>
   });
 
   term.onData(data => {

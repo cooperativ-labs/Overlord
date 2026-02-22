@@ -1,5 +1,5 @@
-appId: com.cooperativ.orchestrator
-productName: Orchestrator
+appId: com.cooperativ.overlord
+productName: Overlord
 directories:
   output: release
   buildResources: electron/resources

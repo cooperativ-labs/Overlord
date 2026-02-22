@@ -12,7 +12,7 @@ Full codebase review of the Orchestrator project (Next.js 16 + Supabase). The co
 
 ### 1. API routes bypass middleware auth — agents use Supabase server client as the user's session
 
-- **Location:** `app/api/protocol/*/route.ts`, `lib/orchestrator/protocol-db.ts`
+- **Location:** `app/api/protocol/*/route.ts`, `lib/overlord/protocol-db.ts`
 - **Category:** Security
 
 The protocol API routes authenticate via a bearer token (`ensureAgentToken`), but then call `createClient()` from `supabase/utils/server.ts` which uses `cookies()` to create a Supabase client from the user's browser session. Since these are machine-to-machine API calls from agents, there is no user cookie session. Queries execute with whatever permissions an unauthenticated Supabase client has.
@@ -99,7 +99,7 @@ Many tables have `FOR ALL TO anon, authenticated USING (true) WITH CHECK (true)`
 - **Location:** `components/app-sidebar.tsx`
 - **Category:** Poor Practice
 
-The sidebar contains hardcoded mail sample data, "Acme Inc" branding, and dummy navigation items (Inbox, Drafts, Sent, Junk, Trash) unrelated to the orchestrator app. Nav items link to `#` and randomly shuffle sample emails on click.
+The sidebar contains hardcoded mail sample data, "Acme Inc" branding, and dummy navigation items (Inbox, Drafts, Sent, Junk, Trash) unrelated to the overlord app. Nav items link to `#` and randomly shuffle sample emails on click.
 
 **Recommendation:** Replace with actual navigation items (Tickets, Settings, etc.) and remove all sample data.
 
@@ -123,11 +123,11 @@ The "Continue with Apple" and "Continue with Google" buttons have `type="button"
 
 Two separate `Ticket` type definitions with slightly different fields.
 
-**Recommendation:** Create a single shared type in `lib/orchestrator/types.ts`.
+**Recommendation:** Create a single shared type in `lib/overlord/types.ts`.
 
 ### 10. Type mismatch between DB enum and app-level status values
 
-- **Location:** `lib/orchestrator/types.ts`, migration SQL
+- **Location:** `lib/overlord/types.ts`, migration SQL
 - **Category:** Potential Bug
 
 The `ticket_status_type` DB enum has 4 values (`draft, execute, review, complete`). The app code `ticketStatuses` has 8 values (`draft, review, refine, execute, deliver, complete, blocked, cancelled`). The `tickets.status` column is `text`, so it works at runtime, but the enum is misleading.
@@ -208,7 +208,7 @@ The middleware exports `proxy as default` from `@/supabase/utils/proxy`, but `pr
 - **Location:** `app/page.tsx:9-18`, `app/tickets/page.tsx:9-18`
 - **Category:** DRY Violation
 
-Should be imported from `lib/orchestrator/types.ts`.
+Should be imported from `lib/overlord/types.ts`.
 
 ### 19. Missing `loading.tsx` and `error.tsx` boundary files
 

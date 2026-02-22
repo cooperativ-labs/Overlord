@@ -6,7 +6,7 @@ import { TicketConversationComposer } from '@/components/features/TicketConversa
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
-import { getConversationEntryType } from '@/lib/orchestrator/conversation';
+import { getConversationEntryType } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];

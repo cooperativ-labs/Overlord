@@ -3,7 +3,7 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 /**
  * Builds the full prompt text for attaching a ticket to an LLM (e.g. when the user
  * pastes ticket context into Claude or ChatGPT). Includes ticket details and instructions
- * for the LLM to pass information back via the orchestrator protocol.
+ * for the LLM to pass information back via the overlord protocol.
  */
 export function buildTicketPromptMarkdown(
   ticket: {
@@ -27,9 +27,9 @@ export function buildTicketPromptMarkdown(
   const executionTargetLabel = ticket.execution_target === 'human' ? 'Human' : 'Agent';
   const projectLabel = ticket.project_id ?? 'none';
 
-  return `# Cooperativ Orchestrator — Agent Instructions
+  return `# Overlord — Agent Instructions
 
-You are an AI coding agent working on ticket **${ref}: ${title}** via the Cooperativ orchestrator.
+You are an AI coding agent working on ticket **${ref}: ${title}** via Overlord.
 Complete the work described below, then deliver a summary back to the platform.
 
 ## Your Ticket
@@ -45,7 +45,7 @@ ${section('Acceptance Criteria', ticket.acceptance_criteria)}
 ${section('Available Tools / Constraints', ticket.available_tools)}
 ---
 
-## Orchestrator Protocol
+## Overlord Protocol
 
 - **Base URL:** ${platformUrl}/api/protocol
 - **Ticket ID:** ${ticket.id}
@@ -170,10 +170,16 @@ Deliver moves the ticket to \`review\` and ends your session. Do not call delive
 Include a restart command in your deliver artifacts so a future session can relaunch from the ticket immediately.
 If you omit it, \`/api/protocol/deliver\` will append one automatically based on your attached \`agentIdentifier\`.
 
-For codex sessions, use this format:
+For Claude Code sessions, use this format:
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID codex "$(curl -s -H 'Authorization: Bearer $AGENT_TOKEN' $PLATFORM_URL/api/protocol/context/$TICKET_ID)"
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord run claude
+\`\`\`
+
+For Codex sessions:
+
+\`\`\`bash
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord run codex
 \`\`\`
 
 ---
