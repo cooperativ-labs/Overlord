@@ -67,6 +67,18 @@ Content-Type: application/json
 }
 \`\`\`
 
+Use this exact shell shape for the first attach call:
+
+\`\`\`bash
+curl -sS -X POST "$PLATFORM_URL/api/protocol/attach" \
+  -H "Authorization: Bearer $AGENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"ticketId":"'$TICKET_ID'","agentIdentifier":"codex","connectionMethod":"cli","metadata":{}}'
+\`\`\`
+
+Replace \`agentIdentifier\` and \`connectionMethod\` when needed for your runtime.
+Do not build the JSON body with \`jq\` unless absolutely necessary.
+
 The response includes:
 - \`session.sessionKey\` — store this, required for every subsequent call
 - \`ticket\` — full ticket record
@@ -83,11 +95,18 @@ POST $PLATFORM_URL/api/protocol/update
   "sessionKey": "<from attach>",
   "ticketId": "$TICKET_ID",
   "summary": "What you did and why.",
-  "phase": "execute"
+  "phase": "execute",
+  "payload": {
+    "notifications": [
+      { "message": "Need clarification on migration order.", "kind": "question", "blocking": true },
+      { "message": "Background sync started.", "level": "info", "kind": "event" }
+    ]
+  }
 }
 \`\`\`
 
 Setting \`phase\` changes the ticket's visible status. Use \`"execute"\` while actively working.
+When \`payload.notifications\` is provided, Overlord will fan these out into app-visible notification events.
 
 ### 3 — Record important decisions
 
@@ -173,14 +192,18 @@ If you omit it, \`/api/protocol/deliver\` will append one automatically based on
 For Claude Code sessions, use this format:
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord run claude
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
 \`\`\`
 
 For Codex sessions:
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord run codex
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
 \`\`\`
+
+To target a specific native agent session ID, optionally set one of:
+- \`CLAUDE_SESSION_ID=<session-id>\` before \`npx overlord resume claude\`
+- \`CODEX_SESSION_ID=<session-id>\` before \`npx overlord resume codex\`
 
 ---
 
@@ -193,5 +216,6 @@ PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx ove
 - Include a \`Restart session command\` artifact when delivering when possible. The deliver endpoint auto-appends one if missing.
 - The \`summary\` in deliver is what the PM reads first — write it as a clear narrative, not a list of commands.
 - Use \`write-context\` for decisions, constraints, or facts a future agent session should know.
+- Prefer direct \`curl\` JSON payloads for protocol calls; avoid brittle shell quoting and \`jq\` payload wrappers.
 `;
 }

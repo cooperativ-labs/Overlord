@@ -135,15 +135,14 @@ export function TicketProjectSelect({
 
   return (
     <section className="mb-6 rounded-lg p-3">
-      <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        Project
-      </h2>
       <div className="mt-2 space-y-2">
         <Select
           open={isSelectOpen}
           onOpenChange={setIsSelectOpen}
           value={selectedProjectId || NO_PROJECT_VALUE}
-          onValueChange={value => handleProjectChange(value === NO_PROJECT_VALUE ? '' : value)}
+          onValueChange={(value: string | undefined) =>
+            handleProjectChange(value === NO_PROJECT_VALUE ? '' : (value ?? ''))
+          }
           disabled={isSavingProject}
         >
           <SelectTrigger

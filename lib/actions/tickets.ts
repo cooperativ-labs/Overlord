@@ -37,6 +37,36 @@ function revalidateTicketDetails(items: Iterable<{ organizationId: number; ticke
   }
 }
 
+async function assignTicketToColumnEnd(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ticketId: string,
+  status: string,
+  organizationId: number
+) {
+  const { data: tailTicket, error: tailTicketError } = await supabase
+    .from('tickets')
+    .select('board_position')
+    .eq('organization_id', organizationId)
+    .eq('status', status)
+    .neq('id', ticketId)
+    .order('board_position', { ascending: false })
+    .limit(1);
+
+  if (tailTicketError) {
+    throw new Error(tailTicketError.message);
+  }
+
+  const maxBoardPosition = tailTicket?.[0]?.board_position ?? -1;
+  const { error: updateError } = await supabase
+    .from('tickets')
+    .update({ board_position: maxBoardPosition + 1 })
+    .eq('id', ticketId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+}
+
 export async function createTicketInColumnAction(
   status: string,
   objective: string,
@@ -77,6 +107,8 @@ export async function createTicketInColumnAction(
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
 
+  await assignTicketToColumnEnd(supabase, data.id, status, data.organization_id);
+
   revalidateTicketBoards([data.organization_id]);
   if (trimmedProjectId) {
     revalidatePath(`/${data.organization_id}/projects/${trimmedProjectId}`);
@@ -112,6 +144,8 @@ export async function createBlankTicketAction(organizationId?: number, projectId
   if (error || !data) {
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
+
+  await assignTicketToColumnEnd(supabase, data.id, 'draft', data.organization_id);
 
   revalidateTicketBoards([data.organization_id]);
   if (trimmedProjectId) {
@@ -166,6 +200,8 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
   if (error || !data) {
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
+
+  await assignTicketToColumnEnd(supabase, data.id, 'draft', data.organization_id);
 
   await supabase.from('ticket_events').insert({
     event_type: 'system',

@@ -1,4 +1,6 @@
 import { execFile } from 'child_process';
+import { app } from 'electron';
+import fs from 'fs';
 import path from 'path';
 
 export class SupabaseManager {
@@ -6,9 +8,23 @@ export class SupabaseManager {
   private projectDir: string;
 
   constructor() {
-    // In dev, use the project root's supabase/ directory
-    // In production, it's bundled alongside the app
-    this.projectDir = path.resolve(__dirname, '..');
+    const cwd = process.cwd();
+    const cwdHasSupabaseConfig = fs.existsSync(path.join(cwd, 'supabase', 'config.toml'));
+
+    if (cwdHasSupabaseConfig) {
+      // Preferred for local packaged runs: user launches the app from the repository root.
+      this.projectDir = cwd;
+      return;
+    }
+
+    if (!app.isPackaged) {
+      // Dev Electron process runs from `<repo>/dist-electron/services`.
+      this.projectDir = path.resolve(__dirname, '..', '..');
+      return;
+    }
+
+    // Packaged app fallback: use a real directory outside app.asar to avoid ENOTDIR.
+    this.projectDir = app.getPath('userData');
   }
 
   async start(): Promise<void> {
@@ -25,7 +41,9 @@ export class SupabaseManager {
             console.error('Supabase start error:', stderr);
             return reject(new Error(`Failed to start Supabase: ${stderr || err.message}`));
           }
-          console.log('Supabase started:', stdout);
+          if (stdout?.trim()) {
+            console.warn('Supabase started:', stdout);
+          }
           this.running = true;
           resolve();
         }

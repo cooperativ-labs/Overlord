@@ -9,17 +9,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const SOURCE_FILE = path.join(
-  __dirname,
-  '../supabase/functions/_shared/templateVariables.ts'
-);
+const SOURCE_FILE = path.join(__dirname, '../supabase/functions/_shared/templateVariables.ts');
 const TARGET_FILE = path.join(__dirname, '../types/messageTemplate.ts');
 
 function extractCategoryVariables(content: string): Record<string, string[]> | null {
   // Extract the CATEGORY_VARIABLES object from the source
-  const match = content.match(
-    /export const CATEGORY_VARIABLES[^=]*=\s*(\{[\s\S]*?\n\});/
-  );
+  const match = content.match(/export const CATEGORY_VARIABLES[^=]*=\s*(\{[\s\S]*?\n\});/);
   if (!match) return null;
 
   const objectStr = match[1];
@@ -32,9 +27,7 @@ function extractCategoryVariables(content: string): Record<string, string[]> | n
   while ((categoryMatch = categoryRegex.exec(objectStr)) !== null) {
     const category = categoryMatch[1];
     const variablesStr = categoryMatch[2];
-    const variables = variablesStr
-      .match(/'([^']+)'/g)
-      ?.map(v => v.replace(/'/g, '')) || [];
+    const variables = variablesStr.match(/'([^']+)'/g)?.map(v => v.replace(/'/g, '')) || [];
     result[category] = variables;
   }
 

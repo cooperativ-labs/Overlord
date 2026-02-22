@@ -26,9 +26,10 @@ export default function NewTicketPage() {
             className="min-h-48 resize-none border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
             id="description"
             name="description"
-            placeholder="Describe the task. Dump your idea here — no title needed…"
+            placeholder="Describe the task in markdown. Dump your idea here — no title needed…"
             required
           />
+          <p className="mt-2 text-xs text-muted-foreground">Markdown supported.</p>
         </section>
 
         <Separator />

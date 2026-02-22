@@ -30,9 +30,9 @@ export function getPlatformUrl(): string {
 }
 
 export function getSupabaseSecretKey(): string {
-  const value = process.env.SUPABASE_SECRET_KEY;
+  const value = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!value) {
-    throw new Error('Missing SUPABASE_SECRET_KEY.');
+    throw new Error('Missing SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY).');
   }
   return value;
 }

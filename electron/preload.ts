@@ -38,6 +38,9 @@ const electronAPI = {
     get: (key: string) => ipcRenderer.invoke('settings:get', key),
     set: (key: string, value: unknown) => ipcRenderer.invoke('settings:set', key, value)
   },
+  app: {
+    notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body })
+  },
   isElectron: true as const
 };
 

@@ -8927,7 +8927,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dotenv@npm:^17.2.1":
+"dotenv@npm:^17.2.1, dotenv@npm:^17.3.1":
   version: 17.3.1
   resolution: "dotenv@npm:17.3.1"
   checksum: 10c0/c78e0c2d5a549c751e544cc60e2b95e7cb67e0c551f42e094d161c6b297aa44b630a3c2dcacf5569e529a6c2a6b84e2ab9be8d37b299d425df5a18b81ce4a35f
@@ -14692,6 +14692,7 @@ __metadata:
     clsx: "npm:^2.1.1"
     concurrently: "npm:^9.2.1"
     date-fns: "npm:^4.1.0"
+    dotenv: "npm:^17.3.1"
     electron: "npm:^40.6.0"
     electron-builder: "npm:^26.8.1"
     eslint: "npm:^10.0.0"

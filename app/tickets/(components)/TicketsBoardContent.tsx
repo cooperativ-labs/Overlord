@@ -108,7 +108,7 @@ export default async function TicketsBoardContent({
       'id,title,objective,execution_target,status,priority,assigned_agent,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
     )
     .order('board_position', { ascending: true })
-    .order('updated_at', { ascending: false });
+    .order('created_at', { ascending: true });
 
   let statusesQuery = supabase
     .from('ticket_statuses')

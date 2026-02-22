@@ -4,6 +4,13 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/env';
 
 export async function updateSession(request: NextRequest) {
+  // Protocol endpoints are authenticated via bearer token, not Supabase session cookies.
+  // Bypass auth session refresh entirely to avoid turning protocol calls into 500s
+  // when local auth/session checks fail.
+  if (request.nextUrl.pathname.startsWith('/api/protocol')) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({
     request
   });
@@ -35,7 +42,7 @@ export async function updateSession(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const publicPaths = ['/login', '/auth', '/confirm-email', '/privacy', '/terms', '/api/protocol'];
+  const publicPaths = ['/login', '/auth', '/confirm-email', '/privacy', '/terms'];
   const isPublic = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
   if (!user && !isPublic) {

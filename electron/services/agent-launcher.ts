@@ -19,8 +19,15 @@ type LaunchAgentResult = {
   env: Record<string, string>;
 };
 
+type ContextCommandsResponse = {
+  claudeCode: string;
+  codex: string;
+};
+
 function getPlatformUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? PLATFORM_URL_DEFAULT;
+  // Electron should target the locally running Overlord app by default.
+  // NEXT_PUBLIC_SITE_URL may point to a deployed web instance and break local launches.
+  return process.env.PLATFORM_URL ?? PLATFORM_URL_DEFAULT;
 }
 
 function getAgentToken(): string {
@@ -36,6 +43,11 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const platformUrl = getPlatformUrl();
   const agentToken = getAgentToken();
   const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}`;
+  const launchEnv = {
+    PLATFORM_URL: platformUrl,
+    AGENT_TOKEN: agentToken,
+    TICKET_ID: input.ticketId
+  };
 
   // Fetch context from the API (runs in the main process — no shell needed)
   const response = await fetch(contextUrl, {
@@ -43,7 +55,20 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch ticket context: ${response.status} ${response.statusText}`);
+    const fallback = await fetchContextCommandFallback(contextUrl, agentToken, input.agent);
+    if (fallback) {
+      return {
+        command: fallback,
+        cwd: input.cwd || undefined,
+        env: launchEnv
+      };
+    }
+
+    const details = await readErrorBody(response);
+    const suffix = details ? ` - ${details}` : ' - <empty response body>';
+    throw new Error(
+      `Failed to fetch ticket context (${contextUrl}): ${response.status} ${response.statusText}${suffix}`
+    );
   }
 
   // Use the project's working directory from the API if the caller didn't provide one
@@ -82,14 +107,55 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   return {
     command,
     cwd: resolvedCwd,
-    env: {
-      PLATFORM_URL: platformUrl,
-      AGENT_TOKEN: agentToken,
-      TICKET_ID: input.ticketId
-    }
+    env: launchEnv
   };
 }
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+async function readErrorBody(response: Response): Promise<string> {
+  try {
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const payload = (await response.json()) as { error?: unknown };
+      const message = typeof payload?.error === 'string' ? payload.error.trim() : '';
+      return message;
+    }
+
+    const text = (await response.text()).trim();
+    if (!text) return '';
+    const compact = text.replace(/\s+/g, ' ');
+    return compact.slice(0, 500);
+  } catch {
+    return '';
+  }
+}
+
+async function fetchContextCommandFallback(
+  contextUrl: string,
+  agentToken: string,
+  agent: AgentType
+): Promise<string | null> {
+  try {
+    const response = await fetch(contextUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${agentToken}` }
+    });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as Partial<ContextCommandsResponse>;
+    if (agent === 'claude') {
+      return typeof payload.claudeCode === 'string' && payload.claudeCode.trim().length > 0
+        ? payload.claudeCode
+        : null;
+    }
+
+    return typeof payload.codex === 'string' && payload.codex.trim().length > 0
+      ? payload.codex
+      : null;
+  } catch {
+    return null;
+  }
 }

@@ -22,7 +22,7 @@ export default [
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        project: ['tsconfig.json', 'electron/tsconfig.json'],
+        project: ['tsconfig.json', 'electron/tsconfig.json', 'scripts/tsconfig.json'],
         ecmaVersion: 2022,
         sourceType: 'module',
         ecmaFeatures: {

@@ -8,6 +8,7 @@
  *
  * Usage:
  *   coop run <agent>           Launch an agent (claude or codex)
+ *   coop resume <agent>        Resume an agent session with fresh ticket context
  *   coop context               Print the ticket context to stdout
  *   coop help                  Show this help message
  *
@@ -18,9 +19,6 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { writeFileSync, unlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import process from "node:process";
 
 // ---------------------------------------------------------------------------
@@ -70,55 +68,63 @@ async function fetchContext() {
 // Commands
 // ---------------------------------------------------------------------------
 
-async function runAgent(agent) {
+async function runAgent(agent, mode = "run") {
   if (!agent || !["claude", "codex"].includes(agent)) {
-    console.error('Usage: coop run <agent>  (agent must be "claude" or "codex")');
+    console.error(
+      'Usage: coop run <agent> | coop resume <agent>  (agent must be "claude" or "codex")'
+    );
     process.exit(1);
   }
 
   const context = await fetchContext();
 
-  // Write context to a temp file so we avoid shell quoting issues
-  const contextFile = join(
-    tmpdir(),
-    `overlord-ctx-${TICKET_ID.slice(-8)}-${Date.now()}.md`
-  );
-  writeFileSync(contextFile, context, "utf-8");
-
-  const cleanup = () => {
-    try {
-      unlinkSync(contextFile);
-    } catch {
-      // Already deleted — ignore
-    }
-  };
-
-  // Clean up on exit
-  process.on("exit", cleanup);
-  process.on("SIGINT", () => {
-    cleanup();
-    process.exit(130);
-  });
-
   try {
     if (agent === "claude") {
-      execFileSync(
-        "claude",
-        [
-          "--append-system-prompt",
-          context,
-          "Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.",
-        ],
-        { stdio: "inherit", env: process.env }
-      );
+      if (mode === "resume") {
+        const claudeSessionId = process.env.CLAUDE_SESSION_ID?.trim();
+        const args = claudeSessionId
+          ? ["--resume", claudeSessionId, context]
+          : ["--continue", context];
+        execFileSync("claude", args, { stdio: "inherit", env: process.env });
+      } else {
+        execFileSync(
+          "claude",
+          [
+            "--append-system-prompt",
+            context,
+            "Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.",
+          ],
+          { stdio: "inherit", env: process.env }
+        );
+      }
     } else {
-      execFileSync("codex", [context], {
-        stdio: "inherit",
-        env: process.env,
-      });
+      if (mode === "resume") {
+        const codexSessionId = process.env.CODEX_SESSION_ID?.trim();
+        const args = codexSessionId
+          ? ["resume", codexSessionId, context]
+          : ["resume", "--last", context];
+        execFileSync("codex", args, { stdio: "inherit", env: process.env });
+      } else {
+        execFileSync("codex", [context], {
+          stdio: "inherit",
+          env: process.env,
+        });
+      }
     }
-  } finally {
-    cleanup();
+  } catch (error) {
+    const isResume = mode === "resume";
+    const noSessionHint =
+      agent === "claude"
+        ? "No prior Claude session was found for this workspace. Start one with `coop run claude` first."
+        : "No prior Codex session was found for this workspace. Start one with `coop run codex` first.";
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isResume) {
+      console.error(`${message}\n${noSessionHint}`);
+    } else {
+      console.error(message);
+    }
+    process.exit(1);
   }
 }
 
@@ -132,6 +138,7 @@ function printHelp() {
 
 Usage:
   coop run <agent>       Launch an agent (claude or codex)
+  coop resume <agent>    Resume using native agent resume commands
   coop context           Print the ticket context to stdout
   coop help              Show this help message
 
@@ -146,6 +153,19 @@ Examples:
   AGENT_TOKEN=my-token \\
   TICKET_ID=abc-123 \\
   coop run claude
+
+  # Resume latest Claude session for this workspace with fresh ticket context
+  PLATFORM_URL=http://localhost:3000 \\
+  AGENT_TOKEN=my-token \\
+  TICKET_ID=abc-123 \\
+  coop resume claude
+
+  # Resume a specific native session id
+  PLATFORM_URL=http://localhost:3000 \\
+  AGENT_TOKEN=my-token \\
+  TICKET_ID=abc-123 \\
+  CLAUDE_SESSION_ID=<session-id> \\
+  coop resume claude
 
   # Pipe ticket context to another tool
   coop context | pbcopy
@@ -168,6 +188,11 @@ async function main() {
 
   if (command === "run") {
     await runAgent(args[0]);
+    return;
+  }
+
+  if (command === "resume") {
+    await runAgent(args[0], "resume");
     return;
   }
 

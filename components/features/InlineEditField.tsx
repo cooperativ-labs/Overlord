@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
+import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { updateTicketFieldAction } from '@/lib/actions/tickets';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +18,8 @@ type Props = {
   displayClassName?: string;
   /** Classes applied to the input/textarea (edit mode) */
   inputClassName?: string;
+  /** Render saved value as markdown in view mode */
+  renderMarkdown?: boolean;
 };
 
 export function InlineEditField({
@@ -26,7 +29,8 @@ export function InlineEditField({
   multiline = false,
   placeholder = 'Click to add…',
   displayClassName,
-  inputClassName
+  inputClassName,
+  renderMarkdown = false
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [savedValue, setSavedValue] = useState(initialValue);
@@ -136,7 +140,13 @@ export function InlineEditField({
       }}
     >
       {savedValue ? (
-        <span className="whitespace-pre-wrap">{savedValue}</span>
+        renderMarkdown ? (
+          <MarkdownContent compact className="pointer-events-none">
+            {savedValue}
+          </MarkdownContent>
+        ) : (
+          <span className="whitespace-pre-wrap">{savedValue}</span>
+        )
       ) : (
         <span className="italic text-muted-foreground">{placeholder}</span>
       )}

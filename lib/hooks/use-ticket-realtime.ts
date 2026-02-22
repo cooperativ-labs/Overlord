@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
@@ -9,6 +9,7 @@ type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type SharedState = Database['public']['Tables']['shared_state']['Row'];
+type JsonValue = Database['public']['Tables']['ticket_events']['Row']['payload'];
 
 const MAX_ROWS = 50;
 
@@ -49,6 +50,36 @@ function pickNewestSession(previous: AgentSession | null, incoming: AgentSession
   return incoming.attached_at > previous.attached_at ? incoming : previous;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getEventPayload(payload: JsonValue): Record<string, unknown> {
+  return isRecord(payload) ? payload : {};
+}
+
+function isAgentNotificationEvent(event: TicketEvent): boolean {
+  if (event.event_type !== 'alert' && event.event_type !== 'question') return false;
+  const payload = getEventPayload(event.payload);
+  return payload.entry_type === 'agent_notification';
+}
+
+function getNotificationTitle(ticketId: string, event: TicketEvent): string {
+  if (event.event_type === 'question') {
+    return `Agent Question (${ticketId.slice(-8)})`;
+  }
+  return `Agent Notification (${ticketId.slice(-8)})`;
+}
+
+function getNotificationBody(event: TicketEvent): string {
+  const payload = getEventPayload(event.payload);
+  const message = typeof payload.message === 'string' ? payload.message.trim() : '';
+  const summary = event.summary?.trim() ?? '';
+  if (summary) return summary;
+  if (message) return message;
+  return 'New agent event received.';
+}
+
 type UseTicketRealtimeOptions = {
   ticketId: string;
   initialEvents: TicketEvent[];
@@ -68,6 +99,11 @@ export function useTicketRealtime({
   const [artifacts, setArtifacts] = useState<Artifact[]>(initialArtifacts);
   const [session, setSession] = useState<AgentSession | null>(initialSession);
   const [sharedState, setSharedState] = useState<SharedState[]>(initialSharedState);
+  const notifiedEventIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    notifiedEventIdsRef.current = new Set();
+  }, [ticketId]);
 
   useEffect(() => {
     setEvents(initialEvents);
@@ -142,7 +178,21 @@ export function useTicketRealtime({
           filter: `ticket_id=eq.${ticketId}`
         },
         payload => {
-          setEvents(previous => mergeNewestById([payload.new], previous, row => row.created_at));
+          const incomingEvent = payload.new;
+          setEvents(previous => mergeNewestById([incomingEvent], previous, row => row.created_at));
+
+          if (
+            isAgentNotificationEvent(incomingEvent) &&
+            !notifiedEventIdsRef.current.has(incomingEvent.id)
+          ) {
+            notifiedEventIdsRef.current.add(incomingEvent.id);
+            if (notifiedEventIdsRef.current.size > 500) {
+              notifiedEventIdsRef.current.clear();
+            }
+            const title = getNotificationTitle(ticketId, incomingEvent);
+            const body = getNotificationBody(incomingEvent);
+            void window.electronAPI?.app?.notify(title, body);
+          }
         }
       )
       .on<Artifact>(

@@ -193,7 +193,6 @@ export async function TicketPanelContent({
             </Badge>
           ) : null}
         </div>
-
         <TicketProjectSelect
           ticketId={ticketId}
           organizationId={organizationId}
@@ -234,6 +233,7 @@ export async function TicketPanelContent({
             field="objective"
             initialValue={ticket.objective ?? ''}
             multiline
+            renderMarkdown
             placeholder="No description — click to add one."
             ticketId={ticketId}
           />

@@ -19,9 +19,11 @@ export function MarkdownContent({
   className = '',
   compact = false
 }: MarkdownContentProps) {
+  const proseBaseClasses =
+    'prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-a:text-primary';
   const proseClasses = compact
-    ? 'prose prose-sm prose-muted dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-pre:my-1'
-    : 'prose prose-sm prose-muted dark:prose-invert max-w-none';
+    ? `${proseBaseClasses} prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-pre:my-1`
+    : proseBaseClasses;
 
   return (
     <div className={`${proseClasses} ${className}`}>

@@ -10,6 +10,11 @@ export type LaunchCommands = {
   contextUrl: string;
 };
 
+export type ResumeCommands = {
+  claudeCode: string;
+  codex: string;
+};
+
 /**
  * Builds human-readable launch commands for clipboard / display use.
  * These use the `coop` CLI which handles context fetching internally.
@@ -29,6 +34,24 @@ export function buildLaunchCommands({
     claudeCode: `${envBlock} npx overlord run claude`,
     codex: `${envBlock} npx overlord run codex`,
     contextUrl
+  };
+}
+
+/**
+ * Builds restart commands that use each agent's native resume flow.
+ * The `overlord resume` subcommand fetches latest ticket context and
+ * passes it as the first resumed prompt so new system messages are included.
+ */
+export function buildResumeCommands({
+  ticketId,
+  platformUrl,
+  token
+}: BuildLaunchCommandsInput): ResumeCommands {
+  const envBlock = `PLATFORM_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
+
+  return {
+    claudeCode: `${envBlock} npx overlord resume claude`,
+    codex: `${envBlock} npx overlord resume codex`
   };
 }
 

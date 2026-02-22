@@ -60,6 +60,7 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
     if (entryType === 'decision') return 'decision';
     if (entryType === 'follow_up') return 'follow_up';
     if (entryType === 'answer') return 'answer';
+    if (event.event_type === 'alert') return 'notification';
     return event.event_type;
   }
 

@@ -7,7 +7,11 @@ interface ElectronAPI {
     onData: (callback: (id: string, data: string) => void) => () => void;
     onExit: (callback: (id: string, code: number) => void) => () => void;
     openExternal: (command: string, cwd?: string) => Promise<void>;
-    launchAgent: (ticketId: string, agent: 'claude' | 'codex', cwd?: string) => Promise<string | void>;
+    launchAgent: (
+      ticketId: string,
+      agent: 'claude' | 'codex',
+      cwd?: string
+    ) => Promise<string | void>;
     chooseDirectory: () => Promise<string | null>;
   };
   supabase: {
@@ -17,6 +21,9 @@ interface ElectronAPI {
   settings: {
     get: <T = unknown>(key: string) => Promise<T>;
     set: (key: string, value: unknown) => Promise<void>;
+  };
+  app: {
+    notify: (title: string, body: string) => Promise<boolean>;
   };
   isElectron: true;
 }

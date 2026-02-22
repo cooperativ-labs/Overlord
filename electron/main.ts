@@ -1,4 +1,6 @@
 import { app, BrowserWindow } from 'electron';
+import { config as loadDotenv } from 'dotenv';
+import fs from 'fs';
 import path from 'path';
 
 import { registerAppIpc } from './ipc/app';
@@ -10,6 +12,25 @@ import { SupabaseManager } from './services/supabase-manager';
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 const supabaseManager = new SupabaseManager();
+
+function loadLocalEnvForPackagedRuns() {
+  if (isDev) return;
+
+  const cwd = process.cwd();
+  const envFiles = ['.env.local', '.env'];
+
+  for (const envFile of envFiles) {
+    const envPath = path.join(cwd, envFile);
+    if (!fs.existsSync(envPath)) continue;
+
+    const result = loadDotenv({ path: envPath, override: false });
+    if (result.error) {
+      console.error(`[env] Failed to load ${envFile}:`, result.error);
+    } else {
+      console.log(`[env] Loaded ${envFile} from ${envPath}`);
+    }
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -40,6 +61,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  loadLocalEnvForPackagedRuns();
+
   // Start local Supabase
   try {
     await supabaseManager.start();
