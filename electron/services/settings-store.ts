@@ -4,10 +4,12 @@ import path from 'path';
 
 export type TerminalMode = 'embedded' | 'external';
 export type ExternalTerminalApp = 'default' | 'terminal' | 'iterm' | 'warp';
+export type ExternalTerminalLaunchMode = 'window' | 'tab';
 
 interface StoreData {
   terminalMode: TerminalMode;
   externalTerminalApp: ExternalTerminalApp;
+  externalTerminalLaunchMode: ExternalTerminalLaunchMode;
   windowBounds: { width: number; height: number; x?: number; y?: number };
   [key: string]: unknown;
 }
@@ -15,6 +17,7 @@ interface StoreData {
 const defaults: StoreData = {
   terminalMode: 'embedded',
   externalTerminalApp: 'default',
+  externalTerminalLaunchMode: 'window',
   windowBounds: { width: 1400, height: 900 }
 };
 

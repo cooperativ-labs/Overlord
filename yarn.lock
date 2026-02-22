@@ -5975,21 +5975,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^20.9.0":
-  version: 20.19.33
-  resolution: "@types/node@npm:20.19.33"
-  dependencies:
-    undici-types: "npm:~6.21.0"
-  checksum: 10c0/a1a6234a2b6fa577fbb1ccc471e5e54a79c6e1a51be10a67b034461b752a50017854810e943494f20b3c3c6d14df84c93757e0a2ec57aa81c830d6faeab72cf2
-  languageName: node
-  linkType: hard
-
 "@types/node@npm:^22.5.5":
   version: 22.19.11
   resolution: "@types/node@npm:22.19.11"
   dependencies:
     undici-types: "npm:~6.21.0"
   checksum: 10c0/4b274acf27ec31aa83b50ef22088f83c783e6bcd7dcb40b4834f64f44868b6bf68725214220f15a0c776928f7c0f7f26f03c05cd5868f0526340af3f4af4b58b
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^24.9.0":
+  version: 24.10.13
+  resolution: "@types/node@npm:24.10.13"
+  dependencies:
+    undici-types: "npm:~7.16.0"
+  checksum: 10c0/4ff0b9b060b5477c0fec5b11a176f294be588104ab546295db65b17a92ba0a6077b52ad92dd3c0d2154198c7f9d0021e6c1d42b00c9ac7ebfd85632afbcc48a4
   languageName: node
   linkType: hard
 
@@ -6529,28 +6529,24 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@xterm/addon-fit@npm:^0.10.0":
-  version: 0.10.0
-  resolution: "@xterm/addon-fit@npm:0.10.0"
-  peerDependencies:
-    "@xterm/xterm": ^5.0.0
-  checksum: 10c0/76926120fc940376afef2cb68b15aec2a99fc628b6e3cc84f2bcb1682ca9b87f982b3c10ff206faf4ebc5b410467b81a7b5e83be37b4ac386586f472e4fa1c61
-  languageName: node
-  linkType: hard
-
-"@xterm/addon-web-links@npm:^0.11.0":
+"@xterm/addon-fit@npm:^0.11.0":
   version: 0.11.0
-  resolution: "@xterm/addon-web-links@npm:0.11.0"
-  peerDependencies:
-    "@xterm/xterm": ^5.0.0
-  checksum: 10c0/9426bed80afa954b0ea97771d041eb44e77a64e560ce8b8ef507a5d3a763979af18ae9f74ed54007bb7e235d0daf035be2a33f90d8edfecb431caf8ba0b0664e
+  resolution: "@xterm/addon-fit@npm:0.11.0"
+  checksum: 10c0/c0ce94f7e877d07e7197d15d041cc629ce2e853016400aadddc9810838ea8a26e836f87f325eba36df88c03feb72d9f13cd8c3bb41ee31e701f1058edb8553c3
   languageName: node
   linkType: hard
 
-"@xterm/xterm@npm:^5.5.0":
-  version: 5.5.0
-  resolution: "@xterm/xterm@npm:5.5.0"
-  checksum: 10c0/358801feece58617d777b2783bec68dac1f52f736da3b0317f71a34f4e25431fb0b1920244f678b8d673f797145b4858c2a5ccb463a4a6df7c10c9093f1c9267
+"@xterm/addon-web-links@npm:^0.12.0":
+  version: 0.12.0
+  resolution: "@xterm/addon-web-links@npm:0.12.0"
+  checksum: 10c0/1c4847f43948483a6a0f59994090b8b9d9f6006a1e4a8deed7d9c28fcb47422d77eb418fb8fc63fbfb0c486c49e4646b73188ff2efac5290b680db34f298f334
+  languageName: node
+  linkType: hard
+
+"@xterm/xterm@npm:^6.0.0":
+  version: 6.0.0
+  resolution: "@xterm/xterm@npm:6.0.0"
+  checksum: 10c0/b99122553f323a65b708e5eba9903d4c5a1bcb59fe576d29d6e91a33002bccfd1b99403e1e839e1942f4952039db6d3d74ca9d65ed0399b4e9a0a5f35b8c12d9
   languageName: node
   linkType: hard
 
@@ -8251,7 +8247,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"concurrently@npm:^9.1.2":
+"concurrently@npm:^9.2.1":
   version: 9.2.1
   resolution: "concurrently@npm:9.2.1"
   dependencies:
@@ -9013,7 +9009,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron-builder@npm:^26.0.12":
+"electron-builder@npm:^26.8.1":
   version: 26.8.1
   resolution: "electron-builder@npm:26.8.1"
   dependencies:
@@ -9057,16 +9053,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:^34.3.0":
-  version: 34.5.8
-  resolution: "electron@npm:34.5.8"
+"electron@npm:^40.6.0":
+  version: 40.6.0
+  resolution: "electron@npm:40.6.0"
   dependencies:
     "@electron/get": "npm:^2.0.0"
-    "@types/node": "npm:^20.9.0"
+    "@types/node": "npm:^24.9.0"
     extract-zip: "npm:^2.0.1"
   bin:
     electron: cli.js
-  checksum: 10c0/1fd2975d41f3ef29e165f5677137c6ce6f69ec8e7f5db9db14cfd6859c8b28ea4bc91a83cc646551918f634034ffd2cde417a5ff7631e401ca5bcb711db1aa9f
+  checksum: 10c0/c97eccb9375d6704a3fc0c4b06496dfee52dec7fb5ac956907bd9afb3ecfa03cfeb026b3040f5f443e54c46905e3ba42dad266780ca235c838e937cf86457716
   languageName: node
   linkType: hard
 
@@ -14255,7 +14251,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-pty@npm:^1.0.0":
+"node-pty@npm:^1.1.0":
   version: 1.1.0
   resolution: "node-pty@npm:1.1.0"
   dependencies:
@@ -14666,17 +14662,17 @@ __metadata:
     "@types/pg": "npm:^8.16.0"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
-    "@xterm/addon-fit": "npm:^0.10.0"
-    "@xterm/addon-web-links": "npm:^0.11.0"
-    "@xterm/xterm": "npm:^5.5.0"
+    "@xterm/addon-fit": "npm:^0.11.0"
+    "@xterm/addon-web-links": "npm:^0.12.0"
+    "@xterm/xterm": "npm:^6.0.0"
     autoprefixer: "npm:^10.4.24"
     browser-image-compression: "npm:^2.0.2"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
-    concurrently: "npm:^9.1.2"
+    concurrently: "npm:^9.2.1"
     date-fns: "npm:^4.1.0"
-    electron: "npm:^34.3.0"
-    electron-builder: "npm:^26.0.12"
+    electron: "npm:^40.6.0"
+    electron-builder: "npm:^26.8.1"
     eslint: "npm:^10.0.0"
     eslint-config-next: "npm:^16.1.6"
     eslint-formatter-table: "npm:^7.32.1"
@@ -14690,7 +14686,7 @@ __metadata:
     next: "npm:^16.1.6"
     next-pwa: "npm:^5.6.0"
     next-themes: "npm:^0.4.6"
-    node-pty: "npm:^1.0.0"
+    node-pty: "npm:^1.1.0"
     pg: "npm:^8.18.0"
     postcss: "npm:^8.5.6"
     prettier: "npm:^3.8.1"

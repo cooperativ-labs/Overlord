@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { parseProtocolBody, internalErrorResponse } from '@/app/api/protocol/_lib';
+import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { listTicketsSchema } from '@/lib/orchestrator/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 

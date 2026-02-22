@@ -39,18 +39,28 @@ const externalTerminalAppOptions = [
   { value: 'warp', label: 'Warp' }
 ] as const;
 
+const externalTerminalLaunchModeOptions = [
+  { value: 'window', label: 'New window' },
+  { value: 'tab', label: 'New tab' }
+] as const;
+
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { isElectron, api } = useElectron();
   const { terminalMode, setTerminalMode } = useTerminal();
   const [terminalApp, setTerminalApp] = useState('default');
+  const [terminalLaunchMode, setTerminalLaunchMode] = useState('window');
   const [everhourConnected, setEverhourConnected] = useState(false);
   const [everhourUpdatedAt, setEverhourUpdatedAt] = useState<string | null>(null);
   const [everhourStatusLoaded, setEverhourStatusLoaded] = useState(false);
 
   useEffect(() => {
     if (!api || !open) return;
-    api.settings.get<string>('externalTerminalApp').then(value => {
-      if (value) setTerminalApp(value);
+    Promise.all([
+      api.settings.get<string>('externalTerminalApp'),
+      api.settings.get<string>('externalTerminalLaunchMode')
+    ]).then(([appValue, launchModeValue]) => {
+      if (appValue) setTerminalApp(appValue);
+      if (launchModeValue) setTerminalLaunchMode(launchModeValue);
     });
   }, [api, open]);
 
@@ -77,6 +87,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   async function handleTerminalAppChange(value: string) {
     setTerminalApp(value);
     await api?.settings.set('externalTerminalApp', value);
+  }
+
+  async function handleTerminalLaunchModeChange(value: string) {
+    setTerminalLaunchMode(value);
+    await api?.settings.set('externalTerminalLaunchMode', value);
   }
 
   return (
@@ -115,22 +130,42 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </p>
               </div>
               {terminalMode === 'external' && (
-                <div className="grid gap-2">
-                  <Label htmlFor="terminal-app">External terminal application</Label>
-                  <Select value={terminalApp} onValueChange={handleTerminalAppChange}>
-                    <SelectTrigger id="terminal-app">
-                      <SelectValue placeholder="Select terminal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {externalTerminalAppOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="terminal-app">External terminal application</Label>
+                    <Select value={terminalApp} onValueChange={handleTerminalAppChange}>
+                      <SelectTrigger id="terminal-app">
+                        <SelectValue placeholder="Select terminal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {externalTerminalAppOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
+                    <Select
+                      value={terminalLaunchMode}
+                      onValueChange={handleTerminalLaunchModeChange}
+                    >
+                      <SelectTrigger id="terminal-launch-mode">
+                        <SelectValue placeholder="Select behavior" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {externalTerminalLaunchModeOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Choose which app opens when running agents in external mode.
+                    Choose the app and whether launches open in a new window or tab.
                   </p>
                 </div>
               )}

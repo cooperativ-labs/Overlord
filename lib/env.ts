@@ -1,10 +1,10 @@
-const LOCAL_AGENT_TOKEN = "orchestrator-local-dev-token";
-const LOCAL_PLATFORM_URL = "http://localhost:3000";
+const LOCAL_AGENT_TOKEN = 'orchestrator-local-dev-token';
+const LOCAL_PLATFORM_URL = 'http://localhost:3000';
 
 export function getSupabaseUrl(): string {
   const value = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   if (!value) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL.");
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL.');
   }
   return value;
 }
@@ -15,7 +15,7 @@ export function getSupabasePublishableKey(): string {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
   if (!value) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY)."
+      'Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY).'
     );
   }
   return value;

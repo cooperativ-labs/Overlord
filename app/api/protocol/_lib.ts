@@ -1,15 +1,14 @@
-import { ZodType } from "zod";
+import { NextResponse } from 'next/server';
+import { ZodType } from 'zod';
 
-import { NextResponse } from "next/server";
-
-import { ensureAgentToken } from "@/lib/orchestrator/protocol-auth";
+import { ensureAgentToken } from '@/lib/orchestrator/protocol-auth';
 
 export async function parseProtocolBody<T>(request: Request, schema: ZodType<T>) {
   const authResponse = ensureAgentToken(request);
   if (authResponse) {
     return {
       errorResponse: authResponse,
-      data: null,
+      data: null
     };
   }
 
@@ -20,27 +19,27 @@ export async function parseProtocolBody<T>(request: Request, schema: ZodType<T>)
       return {
         errorResponse: NextResponse.json(
           {
-            error: parsed.error.issues[0]?.message ?? "Invalid payload.",
+            error: parsed.error.issues[0]?.message ?? 'Invalid payload.'
           },
           { status: 400 }
         ),
-        data: null,
+        data: null
       };
     }
 
     return {
       errorResponse: null,
-      data: parsed.data,
+      data: parsed.data
     };
   } catch {
     return {
-      errorResponse: NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
-      data: null,
+      errorResponse: NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 }),
+      data: null
     };
   }
 }
 
 export function internalErrorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unexpected error.";
+  const message = error instanceof Error ? error.message : 'Unexpected error.';
   return NextResponse.json({ error: message }, { status: 500 });
 }

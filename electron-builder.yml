@@ -7,8 +7,6 @@ directories:
 files:
   - "dist-electron/**/*"
   - ".next/standalone/**/*"
-  - ".next/static/**/*"
-  - "public/**/*"
   - "supabase/config.toml"
   - "supabase/migrations/**/*"
   - "supabase/seed.sql"
@@ -18,17 +16,17 @@ mac:
     - dmg
     - zip
   category: public.app-category.developer-tools
-  icon: electron/resources/icon.icns
-  identity: null  # Skip code signing for local dev; remove this for distribution
+  icon: public/images/512.png
 
 linux:
   target:
     - AppImage
     - deb
   category: Development
-  icon: electron/resources/icon.png
+  icon: public/images/512.png
 
 asarUnpack:
   - "node_modules/node-pty/**/*"
+  - ".next/standalone/**/*"
 
 npmRebuild: true

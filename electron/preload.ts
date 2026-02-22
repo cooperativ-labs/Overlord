@@ -2,7 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 const electronAPI = {
   terminal: {
-    spawn: (command?: string, cwd?: string) => ipcRenderer.invoke('terminal:spawn', { command, cwd }),
+    spawn: (command?: string, cwd?: string) =>
+      ipcRenderer.invoke('terminal:spawn', { command, cwd }),
     write: (id: string, data: string) => ipcRenderer.send('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.send('terminal:resize', id, cols, rows),

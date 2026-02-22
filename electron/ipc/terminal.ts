@@ -1,10 +1,11 @@
+import { exec } from 'child_process';
 import { BrowserWindow, ipcMain } from 'electron';
 import { dialog } from 'electron';
-import { exec } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { store } from '../services/settings-store';
 import {
   killTerminal,
   normalizeTerminalCwd,
@@ -12,7 +13,6 @@ import {
   spawnTerminal,
   writeToTerminal
 } from '../services/terminal-manager';
-import { store } from '../services/settings-store';
 
 type TerminalLaunchPayload =
   | string
@@ -23,14 +23,17 @@ type TerminalLaunchPayload =
 
 function runAppleScript(script: string) {
   return new Promise<void>((resolve, reject) => {
-    exec(`osascript -e '${script.replace(/'/g, "'\\''")}'`, (err) => {
+    exec(`osascript -e '${script.replace(/'/g, "'\\''")}'`, err => {
       if (err) reject(err);
       else resolve();
     });
   });
 }
 
-function normalizeLaunchPayload(payload?: TerminalLaunchPayload): { command?: string; cwd?: string } {
+function normalizeLaunchPayload(payload?: TerminalLaunchPayload): {
+  command?: string;
+  cwd?: string;
+} {
   if (!payload) return {};
   if (typeof payload === 'string') {
     return { command: payload };
@@ -96,30 +99,65 @@ export function registerTerminalIpc(): void {
 
     fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
 
-    // The terminal command sources the script then removes the temp file
-    const launchCmd = `source ${shellQuote(scriptPath)} ; rm -f ${shellQuote(scriptPath)}`;
+    // Run via bash and keep the script around briefly so delayed/replayed launches
+    // do not immediately fail with "no such file or directory".
+    const launchCmd = [
+      `if [ -f ${shellQuote(scriptPath)} ]; then`,
+      `bash ${shellQuote(scriptPath)};`,
+      'else',
+      `echo "Launch script missing: ${scriptPath}";`,
+      'echo "Re-run the launch command from Cooperativ to generate a new script.";',
+      'fi'
+    ].join(' ');
     const termApp = store.get('externalTerminalApp', 'default') as string;
+    const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
+    const openInTab = launchMode === 'tab';
     const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    // Best-effort cleanup after a reasonable grace period.
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(scriptPath);
+      } catch {
+        // Already deleted or unavailable — ignore.
+      }
+    }, 15 * 60_000);
 
     let script: string;
 
     switch (termApp) {
       case 'iterm':
-        script = `
-          tell application "iTerm"
-            activate
-            create window with default profile
-            tell current session of current window
-              write text "${escapedLaunchCmd}"
-            end tell
-          end tell
-        `;
+        script = openInTab
+          ? `
+              tell application "iTerm"
+                activate
+                if (count of windows) = 0 then
+                  create window with default profile
+                else
+                  tell current window
+                    create tab with default profile
+                  end tell
+                end if
+                tell current session of current window
+                  write text "${escapedLaunchCmd}"
+                end tell
+              end tell
+            `
+          : `
+              tell application "iTerm"
+                activate
+                create window with default profile
+                tell current session of current window
+                  write text "${escapedLaunchCmd}"
+                end tell
+              end tell
+            `;
         break;
       case 'warp':
         // Warp supports direct CLI invocation
         exec(`open -a Warp`);
         // Give Warp time to open, then use AppleScript to type command
-        return new Promise<void>((resolve) => {
+        return new Promise<void>(resolve => {
           setTimeout(() => {
             runAppleScript(
               `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
@@ -127,28 +165,29 @@ export function registerTerminalIpc(): void {
           }, 1000);
         });
       default: // 'terminal' or 'default'
-        script = `
-          tell application "Terminal"
-            activate
-            do script "${escapedLaunchCmd}"
-          end tell
-        `;
+        script = openInTab
+          ? `
+              tell application "Terminal"
+                activate
+                if (count of windows) = 0 then
+                  do script "${escapedLaunchCmd}"
+                else
+                  do script "${escapedLaunchCmd}" in front window
+                end if
+              end tell
+            `
+          : `
+              tell application "Terminal"
+                activate
+                do script "${escapedLaunchCmd}"
+              end tell
+            `;
     }
-
-    // Clean up the temp file after a generous timeout as a safety net
-    // (the script itself also removes it via the `rm -f` above)
-    setTimeout(() => {
-      try {
-        fs.unlinkSync(scriptPath);
-      } catch {
-        // Already deleted by the terminal command — ignore
-      }
-    }, 60_000);
 
     return runAppleScript(script);
   });
 
-  ipcMain.handle('terminal:choose-directory', async (event) => {
+  ipcMain.handle('terminal:choose-directory', async event => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = win
       ? await dialog.showOpenDialog(win, {

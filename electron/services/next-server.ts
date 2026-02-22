@@ -1,11 +1,20 @@
-import { fork, ChildProcess } from 'child_process';
+import { ChildProcess, fork } from 'child_process';
+import { app } from 'electron';
 import path from 'path';
 
 let serverProcess: ChildProcess | null = null;
 
+function getServerPath(): string {
+  const appPath = app.getAppPath();
+  // When asar is used, unpacked files are in app.asar.unpacked instead of app.asar
+  const unpackedPath = appPath.replace('app.asar', 'app.asar.unpacked');
+  return path.join(unpackedPath, '.next', 'standalone', 'server.js');
+}
+
 export function startNextServer(): Promise<void> {
   return new Promise((resolve, reject) => {
-    const serverPath = path.join(__dirname, '..', '.next', 'standalone', 'server.js');
+    const serverPath = getServerPath();
+    console.log('[next] Starting server from:', serverPath);
 
     serverProcess = fork(serverPath, [], {
       env: {
@@ -28,7 +37,16 @@ export function startNextServer(): Promise<void> {
       console.error('[next]', data.toString());
     });
 
-    serverProcess.on('error', reject);
+    serverProcess.on('error', err => {
+      console.error('[next] Failed to start server:', err);
+      reject(err);
+    });
+
+    serverProcess.on('exit', code => {
+      if (code !== null && code !== 0) {
+        console.error('[next] Server exited with code:', code);
+      }
+    });
 
     // Resolve after timeout even if we didn't see the "Ready" message
     setTimeout(resolve, 8000);

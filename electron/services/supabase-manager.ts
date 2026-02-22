@@ -34,19 +34,14 @@ export class SupabaseManager {
   }
 
   async stop(): Promise<void> {
-    return new Promise((resolve) => {
-      execFile(
-        'supabase',
-        ['stop'],
-        { cwd: this.projectDir, timeout: 30_000 },
-        (err) => {
-          if (err) {
-            console.error('Supabase stop error:', err);
-          }
-          this.running = false;
-          resolve();
+    return new Promise(resolve => {
+      execFile('supabase', ['stop'], { cwd: this.projectDir, timeout: 30_000 }, err => {
+        if (err) {
+          console.error('Supabase stop error:', err);
         }
-      );
+        this.running = false;
+        resolve();
+      });
     });
   }
 
@@ -64,13 +59,9 @@ export class SupabaseManager {
 
   private checkDocker(): Promise<void> {
     return new Promise((resolve, reject) => {
-      execFile('docker', ['info'], { timeout: 10_000 }, (err) => {
+      execFile('docker', ['info'], { timeout: 10_000 }, err => {
         if (err) {
-          reject(
-            new Error(
-              'Docker is not running. Please start Docker Desktop and try again.'
-            )
-          );
+          reject(new Error('Docker is not running. Please start Docker Desktop and try again.'));
         } else {
           resolve();
         }

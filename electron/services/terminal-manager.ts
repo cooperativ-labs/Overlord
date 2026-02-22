@@ -1,8 +1,8 @@
 import { BrowserWindow } from 'electron';
 import fs from 'fs';
+import * as pty from 'node-pty';
 import os from 'os';
 import path from 'path';
-import * as pty from 'node-pty';
 
 const terminals = new Map<string, pty.IPty>();
 let counter = 0;
@@ -25,14 +25,9 @@ export function normalizeTerminalCwd(cwd?: string): string | undefined {
   return fs.existsSync(normalized) ? normalized : undefined;
 }
 
-export function spawnTerminal(
-  mainWindow: BrowserWindow,
-  command?: string,
-  cwd?: string
-): string {
+export function spawnTerminal(mainWindow: BrowserWindow, command?: string, cwd?: string): string {
   const id = `term-${++counter}`;
-  const shell =
-    process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh');
+  const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh');
   const resolvedCwd = normalizeTerminalCwd(cwd) ?? homeDirectory;
 
   const term = pty.spawn(shell, [], {
@@ -43,7 +38,7 @@ export function spawnTerminal(
     env: { ...process.env } as Record<string, string>
   });
 
-  term.onData((data) => {
+  term.onData(data => {
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('terminal:data', id, data);
     }

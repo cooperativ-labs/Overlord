@@ -197,12 +197,12 @@ export function SidePanel() {
       onTransitionEnd={onTransitionEnd}
     >
       {/* Drag handle */}
-      <div
+      {/* <div
         className="absolute inset-y-0 left-0 z-10 flex w-1.5 cursor-col-resize items-center justify-center hover:bg-accent/50 active:bg-accent"
         onPointerDown={onPointerDown}
       >
         <div className="h-8 w-1 rounded-full bg-border" />
-      </div>
+      </div> */}
 
       {/* Content */}
       <div className="ml-1.5 flex min-w-0 flex-1 flex-col overflow-hidden">{displayContent}</div>

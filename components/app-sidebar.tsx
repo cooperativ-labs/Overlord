@@ -120,7 +120,7 @@ export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
   ];
 
   return (
-    <Sidebar collapsible="icon" variant="inset" {...props}>
+    <Sidebar collapsible="icon" variant="floating" {...props}>
       <SidebarHeader className="electron-sidebar-offset">
         <TeamSwitcher teams={teams} />
       </SidebarHeader>
@@ -149,7 +149,7 @@ export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+        <SidebarGroup>
           <SidebarGroupLabel>Projects</SidebarGroupLabel>
           <SidebarGroupAction
             type="button"
@@ -179,13 +179,13 @@ export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
                   >
                     <Link href={`/${project.organizationId}/projects/${project.id}`}>
                       <span
-                        className="h-3 w-3 rounded-[6px] border"
+                        className="h-3 w-3 rounded-[6px] border group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:border-0"
                         style={{
                           backgroundColor: project.color,
                           borderColor: project.color
                         }}
                       />
-                      <span>{project.name}</span>
+                      <span className="group-data-[collapsible=icon]:hidden">{project.name}</span>
                     </Link>
                   </SidebarMenuButton>
                   <ProjectColorMenu projectId={project.id} color={project.color} />

@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
-
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { attachSchema } from '@/lib/orchestrator/validation';

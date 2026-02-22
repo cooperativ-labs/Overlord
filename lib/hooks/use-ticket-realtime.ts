@@ -154,9 +154,7 @@ export function useTicketRealtime({
           filter: `ticket_id=eq.${ticketId}`
         },
         payload => {
-          setArtifacts(previous =>
-            mergeNewestById([payload.new], previous, row => row.created_at)
-          );
+          setArtifacts(previous => mergeNewestById([payload.new], previous, row => row.created_at));
         }
       )
       .on<AgentSession>(
