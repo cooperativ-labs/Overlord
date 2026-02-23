@@ -16,7 +16,6 @@ type Props = {
   ticketId: string;
   projectId: string;
   events: TicketEvent[];
-  workingDirectory?: string | null;
 };
 
 type FileTreeResponse = {
@@ -46,14 +45,8 @@ async function postConversationEntry(
   }
 }
 
-export function TicketConversationComposer({
-  ticketId,
-  projectId,
-  events,
-  workingDirectory
-}: Props) {
-  const { isElectron, sendCommand } = useTerminal();
-  const [mirrorToTerminal, setMirrorToTerminal] = useState(true);
+export function TicketConversationComposer({ ticketId, projectId, events }: Props) {
+  const { isElectron } = useTerminal();
   const [followUpDraft, setFollowUpDraft] = useState('');
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [linkedFiles, setLinkedFiles] = useState<string[]>([]);
@@ -159,9 +152,6 @@ export function TicketConversationComposer({
         entryType: 'follow_up',
         message
       });
-      if (mirrorToTerminal && isElectron) {
-        await sendCommand(message, { cwd: workingDirectory ?? undefined });
-      }
       setFollowUpDraft('');
       setFollowUpFile('');
     } catch (error) {
@@ -183,9 +173,6 @@ export function TicketConversationComposer({
         message,
         parentEventId: questionId
       });
-      if (mirrorToTerminal && isElectron) {
-        await sendCommand(message, { cwd: workingDirectory ?? undefined });
-      }
       setAnswerDrafts(prev => ({ ...prev, [questionId]: '' }));
       setAnswerFiles(prev => ({ ...prev, [questionId]: '' }));
     } catch (error) {
@@ -201,16 +188,11 @@ export function TicketConversationComposer({
         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Agent Conversation
         </h3>
-        <label className="text-xs text-muted-foreground">
-          <input
-            checked={mirrorToTerminal}
-            className="mr-1 align-middle"
-            disabled={!isElectron}
-            type="checkbox"
-            onChange={event => setMirrorToTerminal(event.target.checked)}
-          />
-          Mirror to terminal
-        </label>
+        {!isElectron ? null : (
+          <span className="text-xs text-muted-foreground">
+            Terminal mirroring temporarily disabled
+          </span>
+        )}
       </div>
 
       {openQuestions.length > 0 ? (

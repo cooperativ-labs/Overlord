@@ -13,7 +13,7 @@
  *   node scripts/upload-electron-release.mjs --no-bump # use current version, build, upload
  */
 
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
@@ -90,6 +90,11 @@ function getReleaseArtifacts() {
   return files;
 }
 
+function cleanLocalReleaseDir() {
+  const releaseDir = join(ROOT, 'release');
+  rmSync(releaseDir, { recursive: true, force: true });
+}
+
 async function uploadFile(supabase, filePath, storagePath) {
   const buffer = readFileSync(filePath);
   return uploadBuffer(supabase, buffer, storagePath);
@@ -101,6 +106,68 @@ async function uploadBuffer(supabase, buffer, storagePath) {
     .upload(storagePath, buffer, { upsert: true, contentType: 'application/octet-stream' });
   if (error) throw new Error(`Upload failed ${storagePath}: ${error.message}`);
   return data;
+}
+
+function isDirectoryEntry(entry) {
+  return entry?.id == null || entry?.metadata == null;
+}
+
+async function listStorageEntries(supabase, path) {
+  const entries = [];
+  const pageSize = 100;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase.storage.from(BUCKET).list(path, {
+      limit: pageSize,
+      offset,
+      sortBy: { column: 'name', order: 'asc' }
+    });
+    if (error) throw new Error(`List failed ${path || '/'}: ${error.message}`);
+    if (!data || data.length === 0) break;
+    entries.push(...data);
+    if (data.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return entries;
+}
+
+async function listFilePathsRecursively(supabase, path) {
+  const entries = await listStorageEntries(supabase, path);
+  const filePaths = [];
+
+  for (const entry of entries) {
+    const childPath = path ? `${path}/${entry.name}` : entry.name;
+    if (isDirectoryEntry(entry)) {
+      const nestedFilePaths = await listFilePathsRecursively(supabase, childPath);
+      filePaths.push(...nestedFilePaths);
+      continue;
+    }
+    filePaths.push(childPath);
+  }
+
+  return filePaths;
+}
+
+async function removeStoragePaths(supabase, paths) {
+  const batchSize = 100;
+  for (let i = 0; i < paths.length; i += batchSize) {
+    const batch = paths.slice(i, i + batchSize);
+    const { error } = await supabase.storage.from(BUCKET).remove(batch);
+    if (error) throw new Error(`Delete failed for ${batch[0]}: ${error.message}`);
+  }
+}
+
+async function cleanRemoteElectronPrefix(supabase) {
+  const rootPath = PREFIX;
+  const existingPaths = await listFilePathsRecursively(supabase, rootPath);
+  if (existingPaths.length === 0) {
+    console.log(`[upload] No previous files found in ${BUCKET}/${rootPath}/`);
+    return;
+  }
+  console.log(`[upload] Deleting ${existingPaths.length} previous file(s) in ${BUCKET}/${rootPath}/...`);
+  await removeStoragePaths(supabase, existingPaths);
 }
 
 function prefixLatestYamlPaths(content, version) {
@@ -156,6 +223,9 @@ async function main() {
     console.log(`[upload] Using current version ${version} (no bump).`);
   }
 
+  console.log('[upload] Cleaning local release directory...');
+  cleanLocalReleaseDir();
+
   console.log('[upload] Running Electron build...');
   const { spawnSync } = await import('node:child_process');
   const buildResult = spawnSync('node', ['scripts/electron-build.mjs'], {
@@ -177,6 +247,8 @@ async function main() {
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }
   });
+
+  await cleanRemoteElectronPrefix(supabase);
 
   const versionPrefix = `${PREFIX}/${version}`;
   console.log(`[upload] Uploading ${artifacts.length} file(s) to ${BUCKET}/${versionPrefix}/...`);

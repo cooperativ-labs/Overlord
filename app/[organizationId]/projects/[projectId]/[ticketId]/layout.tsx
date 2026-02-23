@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { TicketPanelContent } from '@/components/features/TicketPanelContent';
+import { TicketPanelSkeleton } from '@/components/features/TicketPanelSkeleton';
 import { SidePanelSlot } from '@/components/ui/side-panel';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 
@@ -23,11 +25,13 @@ export default async function TicketDetailLayout({ children, params }: LayoutPro
       <SidePanelSlot
         closePath={buildProjectPath({ organizationId: parsedOrganizationId, projectId })}
       >
-        <TicketPanelContent
-          key={ticketId}
-          ticketId={ticketId}
-          organizationId={parsedOrganizationId}
-        />
+        <Suspense fallback={<TicketPanelSkeleton />}>
+          <TicketPanelContent
+            key={ticketId}
+            ticketId={ticketId}
+            organizationId={parsedOrganizationId}
+          />
+        </Suspense>
       </SidePanelSlot>
     </>
   );

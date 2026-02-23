@@ -1,14 +1,10 @@
 'use client';
 
 import { Play, StopCircle } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import {
-  type EverhourTimer,
-  getCurrentEverhourTimer,
-  startEverhourTimerForTicket,
-  stopEverhourTimer
-} from '@/lib/actions/everhour';
+import { useEverhourTimer } from '@/components/features/everhour/use-everhour-timer';
+import type { EverhourTimer } from '@/lib/actions/everhour';
 
 type KanbanTimerButtonProps = {
   initialTaskId: string | null;
@@ -35,33 +31,27 @@ function formatElapsed(seconds: number): string {
 }
 
 export function KanbanTimerButton({ initialTaskId, ticketId, className }: KanbanTimerButtonProps) {
-  const [currentTimer, setCurrentTimer] = useState<EverhourTimer>({ status: 'inactive' });
-  const [localTaskId, setLocalTaskId] = useState<string | null>(initialTaskId);
+  const [knownTaskId, setKnownTaskId] = useState<string | null>(initialTaskId);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const { timer, refresh, startForTicket, stop } = useEverhourTimer();
 
-  const timerTaskId = currentTimer.task?.id ?? null;
-  const isRunningThisTicket =
-    currentTimer.status === 'active' && localTaskId !== null && timerTaskId === localTaskId;
-
-  const refreshTimer = useCallback(async () => {
-    try {
-      const timer = await getCurrentEverhourTimer();
-      setCurrentTimer(timer);
-      setElapsedSeconds(getElapsedFromTimer(timer));
-      if (timer.task?.id && timer.task.id === initialTaskId) {
-        setLocalTaskId(timer.task.id);
-      }
-    } catch {
-      // Ignore - Everhour may not be connected
+  useEffect(() => {
+    if (initialTaskId) {
+      setKnownTaskId(previous => previous ?? initialTaskId);
     }
   }, [initialTaskId]);
 
+  const timerTaskId = timer.task?.id ?? null;
+  const isRunningThisTicket =
+    timer.status === 'active' && knownTaskId !== null && timerTaskId === knownTaskId;
+
   useEffect(() => {
-    void refreshTimer();
-    const poll = window.setInterval(refreshTimer, 30_000);
-    return () => window.clearInterval(poll);
-  }, [refreshTimer]);
+    setElapsedSeconds(getElapsedFromTimer(timer));
+    if (timer.task?.id && timer.task.id === initialTaskId) {
+      setKnownTaskId(timer.task.id);
+    }
+  }, [initialTaskId, timer]);
 
   useEffect(() => {
     if (!isRunningThisTicket) return;
@@ -82,13 +72,13 @@ export function KanbanTimerButton({ initialTaskId, ticketId, className }: Kanban
     setIsLoading(true);
     try {
       if (isRunningThisTicket) {
-        await stopEverhourTimer();
-        await refreshTimer();
+        await stop();
+        await refresh();
       } else {
-        const timer = await startEverhourTimerForTicket(ticketId);
-        setCurrentTimer(timer);
-        setElapsedSeconds(getElapsedFromTimer(timer));
-        if (timer.task?.id) setLocalTaskId(timer.task.id);
+        const startedTimer = await startForTicket(ticketId);
+        if (startedTimer.task?.id) {
+          setKnownTaskId(startedTimer.task.id);
+        }
       }
     } finally {
       setIsLoading(false);

@@ -2,8 +2,8 @@
 
 import { useTransition } from 'react';
 
-import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
+import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { TicketConversationComposer } from '@/components/features/TicketConversationComposer';
 import { Badge } from '@/components/ui/badge';
@@ -217,12 +217,7 @@ export function TicketPanelLive({
         />
       ) : null}
 
-      <TicketConversationComposer
-        ticketId={ticketId}
-        projectId={projectId}
-        events={events}
-        workingDirectory={workingDirectory}
-      />
+      <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} />
 
       <section className="mb-6">
         <div className="mb-4 flex items-center gap-2">

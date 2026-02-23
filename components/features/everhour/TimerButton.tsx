@@ -1,16 +1,12 @@
 'use client';
 
 import { Play, StopCircle } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { useEverhourTimer } from '@/components/features/everhour/use-everhour-timer';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import {
-  type EverhourTimer,
-  getCurrentEverhourTimer,
-  startEverhourTimerForTicket,
-  stopEverhourTimer
-} from '@/lib/actions/everhour';
+import type { EverhourTimer } from '@/lib/actions/everhour';
 
 type TimerButtonProps = {
   initialTaskId: string | null;
@@ -51,40 +47,30 @@ export function TimerButton({
   variant = 'default',
   className
 }: TimerButtonProps) {
-  const [currentTimer, setCurrentTimer] = useState<EverhourTimer>({ status: 'inactive' });
-  const [localTaskId, setLocalTaskId] = useState<string | null>(initialTaskId);
+  const [knownTaskId, setKnownTaskId] = useState<string | null>(initialTaskId);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [buttonState, setButtonState] = useState<ButtonLoadingState>('default');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const timerTaskId = currentTimer.task?.id ?? null;
-  const isRunningThisTicket =
-    currentTimer.status === 'active' && localTaskId !== null && timerTaskId === localTaskId;
-  const isRunningAnotherTicket = currentTimer.status === 'active' && !isRunningThisTicket;
+  const { errorMessage: pollError, timer, refresh, startForTicket, stop } = useEverhourTimer();
 
-  const refreshTimer = useCallback(async () => {
-    try {
-      const timer = await getCurrentEverhourTimer();
-      setCurrentTimer(timer);
-      setElapsedSeconds(getElapsedFromTimer(timer));
-      if (timer.task?.id && timer.task.id === initialTaskId) {
-        setLocalTaskId(timer.task.id);
-      }
-      setErrorMessage(null);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+  useEffect(() => {
+    if (initialTaskId) {
+      setKnownTaskId(previous => previous ?? initialTaskId);
     }
   }, [initialTaskId]);
 
+  const timerTaskId = timer.task?.id ?? null;
+  const isRunningThisTicket =
+    timer.status === 'active' && knownTaskId !== null && timerTaskId === knownTaskId;
+  const isRunningAnotherTicket = timer.status === 'active' && !isRunningThisTicket;
+
   useEffect(() => {
-    void refreshTimer();
-
-    const poll = window.setInterval(() => {
-      void refreshTimer();
-    }, 30_000);
-
-    return () => window.clearInterval(poll);
-  }, [refreshTimer]);
+    setElapsedSeconds(getElapsedFromTimer(timer));
+    if (timer.task?.id && timer.task.id === initialTaskId) {
+      setKnownTaskId(timer.task.id);
+    }
+  }, [initialTaskId, timer]);
 
   useEffect(() => {
     if (!isRunningThisTicket) return;
@@ -108,14 +94,12 @@ export function TimerButton({
 
     try {
       if (isRunningThisTicket) {
-        await stopEverhourTimer();
-        await refreshTimer();
+        await stop();
+        await refresh();
       } else {
-        const timer = await startEverhourTimerForTicket(ticketId);
-        setCurrentTimer(timer);
-        setElapsedSeconds(getElapsedFromTimer(timer));
-        if (timer.task?.id) {
-          setLocalTaskId(timer.task.id);
+        const startedTimer = await startForTicket(ticketId);
+        if (startedTimer.task?.id) {
+          setKnownTaskId(startedTimer.task.id);
         }
       }
       setButtonState('success');
@@ -158,8 +142,8 @@ export function TimerButton({
         />
       </div>
 
-      {!isCompact && errorMessage ? (
-        <p className="text-xs text-destructive">{errorMessage}</p>
+      {!isCompact && (errorMessage || pollError) ? (
+        <p className="text-xs text-destructive">{errorMessage ?? pollError}</p>
       ) : null}
     </div>
   );

@@ -255,8 +255,21 @@ async function stopCurrentTimerIfRunning(apiKey: string): Promise<void> {
 }
 
 function revalidateTicketPaths(organizationId: number, ticketId: string) {
+  revalidatePath('/u');
   revalidatePath(`/${organizationId}`);
   revalidatePath(`/${organizationId}/${ticketId}`);
+}
+
+function revalidateProjectTicketPaths(
+  organizationId: number,
+  projectId: string | null,
+  ticketId: string
+) {
+  if (!projectId) {
+    return;
+  }
+  revalidatePath(`/${organizationId}/projects/${projectId}`);
+  revalidatePath(`/${organizationId}/projects/${projectId}/${ticketId}`);
 }
 
 async function getAuthenticatedContext(): Promise<AuthenticatedContext> {
@@ -574,6 +587,7 @@ export async function ensureEverhourTaskForTicket(ticketId: string): Promise<{
   }
 
   revalidateTicketPaths(ticket.organization_id, ticket.id);
+  revalidateProjectTicketPaths(ticket.organization_id, ticket.project_id, ticket.id);
   return { projectId, taskId };
 }
 
