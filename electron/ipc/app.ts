@@ -1,8 +1,13 @@
 import { ipcMain, Notification } from 'electron';
 
+import { AppUpdaterService } from '../services/app-updater';
 import { store } from '../services/settings-store';
 
-export function registerAppIpc(): void {
+type RegisterAppIpcOptions = {
+  appUpdater: AppUpdaterService;
+};
+
+export function registerAppIpc({ appUpdater }: RegisterAppIpcOptions): void {
   ipcMain.handle('settings:get', (_event, key: string) => {
     return store.get(key);
   });
@@ -24,5 +29,21 @@ export function registerAppIpc(): void {
     });
     notification.show();
     return true;
+  });
+
+  ipcMain.handle('app-update:get-status', () => {
+    return appUpdater.getStatus();
+  });
+
+  ipcMain.handle('app-update:check', async () => {
+    return appUpdater.checkForUpdates();
+  });
+
+  ipcMain.handle('app-update:download', async () => {
+    return appUpdater.downloadUpdate();
+  });
+
+  ipcMain.handle('app-update:quit-and-install', () => {
+    return appUpdater.quitAndInstall();
   });
 }

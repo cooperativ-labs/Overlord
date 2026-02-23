@@ -16,8 +16,12 @@ import {
   updateProjectWorkingDirectoryAction
 } from '@/lib/actions/projects';
 import { cn } from '@/lib/utils';
+import type { Database } from '@/types/database.types';
 
 import { ProjectColorSetter } from './ProjectColorSetter';
+import { ProjectStatusSettings } from './ProjectStatusSettings';
+
+type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
 type ProjectSettingsSectionProps = {
   projectId: string;
@@ -25,6 +29,12 @@ type ProjectSettingsSectionProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
+  initialStatuses: Array<{
+    name: string;
+    position: number;
+    statusType: TicketStatusType;
+    isDefault: boolean;
+  }>;
   hasEverhourApiKey: boolean;
 };
 
@@ -34,6 +44,7 @@ export function ProjectSettingsSection({
   initialName,
   initialColor,
   initialWorkingDirectory,
+  initialStatuses,
   hasEverhourApiKey
 }: ProjectSettingsSectionProps) {
   const { api, isElectron } = useElectron();
@@ -346,6 +357,12 @@ export function ProjectSettingsSection({
           <p className="text-xs text-destructive">{workingDirectoryError}</p>
         ) : null}
       </div>
+
+      <ProjectStatusSettings
+        organizationId={organizationId}
+        projectId={projectId}
+        initialStatuses={initialStatuses}
+      />
     </section>
   );
 }

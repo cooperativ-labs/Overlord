@@ -46,6 +46,9 @@
     "electron:copy-static": "cp -r .next/static .next/standalone/.next/static",
     "electron:build": "node scripts/electron-build.mjs",
     "electron:pack": "node scripts/electron-build.mjs --dir",
+    "electron:upload:minor": "node scripts/upload-electron-release.mjs --minor",
+    "electron:upload:major": "node scripts/upload-electron-release.mjs --major",
+    "electron:upload:no-bump": "node scripts/upload-electron-release.mjs --no-bump",
     "install-agent-permissions": "node scripts/install-agent-permissions.mjs",
     "verify-agent-permissions": "node scripts/verify-agent-permissions.mjs"
   },
@@ -64,6 +67,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^0.575.0",
     "next": "^16.1.6",
     "next-pwa": "^5.6.0",

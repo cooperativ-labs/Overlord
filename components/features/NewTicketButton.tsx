@@ -7,7 +7,7 @@ import { useDefaultProject } from '@/components/features/projects/DefaultProject
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { createBlankTicketAction } from '@/lib/actions/tickets';
-import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
 
 export function NewTicketButton() {
   const router = useRouter();
@@ -26,19 +26,16 @@ export function NewTicketButton() {
   async function handleClick() {
     setButtonState('loading');
     try {
-      const {
-        id,
-        organizationId: createdOrganizationId,
-        projectId: createdProjectId
-      } = await createBlankTicketAction(organizationId, projectId);
+      const { organizationId: createdOrganizationId, projectId: createdProjectId } =
+        await createBlankTicketAction(organizationId, projectId);
       setButtonState('success');
       router.push(
-        `${buildTicketPath({
+        `${buildProjectPath({
           organizationId: createdOrganizationId,
-          projectId: createdProjectId,
-          ticketId: id
-        })}?new=1`
+          projectId: createdProjectId
+        })}?view=board`
       );
+      router.refresh();
     } catch {
       setButtonState('error');
     }

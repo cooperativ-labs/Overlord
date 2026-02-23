@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { reorderTicketsAction } from '@/lib/actions/tickets';
+import { createTicketInColumnAction, reorderTicketsAction } from '@/lib/actions/tickets';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
 import KanbanColumn from './KanbanColumn';
@@ -42,6 +42,12 @@ function toColumnTitle(status: string): string {
     .split('-')
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function deriveTitleFromObjective(objective: string): string {
+  const trimmed = objective.trim();
+  if (trimmed.length <= 60) return trimmed;
+  return `${trimmed.slice(0, 60)}...`;
 }
 
 export default function KanbanBoard({
@@ -211,6 +217,52 @@ export default function KanbanBoard({
     });
   }
 
+  async function handleCreateTicket(status: string, objective: string) {
+    const trimmedObjective = objective.trim();
+    if (!trimmedObjective) {
+      return;
+    }
+
+    const previous = workingTickets.current;
+    const positionInColumn =
+      previous
+        .filter(ticket => ticket.status === status)
+        .reduce((max, ticket) => Math.max(max, ticket.board_position), -1) + 1;
+
+    const referenceTicket =
+      previous.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? previous[0];
+
+    const optimisticTicket: Ticket = {
+      id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: deriveTitleFromObjective(trimmedObjective),
+      objective: trimmedObjective,
+      organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
+      project_id: projectId ?? referenceTicket?.project_id ?? '',
+      project_name: referenceTicket?.project_name ?? null,
+      project_color: referenceTicket?.project_color ?? null,
+      project_everhour_project_id: referenceTicket?.project_everhour_project_id ?? null,
+      everhour_task_id: null,
+      agent_session_state: null,
+      status,
+      priority: 'medium',
+      execution_target: 'agent',
+      assigned_agent: null,
+      board_position: positionInColumn,
+      organization_name: referenceTicket?.organization_name ?? null
+    };
+
+    const optimisticNext = [...previous, optimisticTicket];
+    workingTickets.current = optimisticNext;
+    startTransition(() => applyOptimistic(optimisticNext));
+
+    try {
+      await createTicketInColumnAction(status, trimmedObjective, organizationId, projectId);
+    } catch {
+      workingTickets.current = previous;
+      startTransition(() => applyOptimistic(previous));
+    }
+  }
+
   const uncategorizedColumn: StatusColumn = {
     id: UNCATEGORIZED_COLUMN_ID,
     title: 'Uncategorized',
@@ -275,8 +327,7 @@ export default function KanbanBoard({
                 column={col}
                 tickets={columnTickets.get(col.id) ?? []}
                 showOrganizationName={showOrganizationName}
-                organizationId={organizationId}
-                projectId={projectId}
+                onCreateTicket={handleCreateTicket}
               />
             ))}
             {showUncategorized && (
@@ -284,8 +335,7 @@ export default function KanbanBoard({
                 column={uncategorizedColumn}
                 tickets={uncategorized}
                 showOrganizationName={showOrganizationName}
-                organizationId={organizationId}
-                projectId={projectId}
+                onCreateTicket={handleCreateTicket}
               />
             )}
           </div>

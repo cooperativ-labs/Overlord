@@ -1,3 +1,21 @@
+type AppUpdatePhase =
+  | 'idle'
+  | 'unsupported'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error';
+
+interface AppUpdateStatus {
+  phase: AppUpdatePhase;
+  currentVersion: string;
+  availableVersion?: string;
+  progressPercent?: number;
+  message?: string;
+}
+
 interface ElectronAPI {
   terminal: {
     spawn: (command?: string, cwd?: string) => Promise<string>;
@@ -25,6 +43,13 @@ interface ElectronAPI {
   };
   app: {
     notify: (title: string, body: string) => Promise<boolean>;
+  };
+  appUpdate: {
+    getStatus: () => Promise<AppUpdateStatus>;
+    checkForUpdates: () => Promise<boolean>;
+    downloadUpdate: () => Promise<boolean>;
+    quitAndInstall: () => Promise<boolean>;
+    onStatus: (callback: (status: AppUpdateStatus) => void) => () => void;
   };
   isElectron: true;
 }

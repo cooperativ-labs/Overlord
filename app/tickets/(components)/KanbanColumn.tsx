@@ -3,14 +3,13 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { createTicketInColumnAction } from '@/lib/actions/tickets';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
 
@@ -23,21 +22,18 @@ export default function KanbanColumn({
   column,
   tickets,
   showOrganizationName = false,
-  organizationId,
-  projectId
+  onCreateTicket
 }: {
   column: KanbanColumnModel;
   tickets: Ticket[];
   showOrganizationName?: boolean;
-  organizationId?: number;
-  projectId?: string;
+  onCreateTicket: (status: string, objective: string) => Promise<void> | void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const ticketIds = tickets.map(t => t.id);
 
   const [isAdding, setIsAdding] = useState(false);
   const [value, setValue] = useState('');
-  const [, startTransition] = useTransition();
 
   const handleStartAdding = () => {
     setValue('');
@@ -47,13 +43,7 @@ export default function KanbanColumn({
   const handleBlur = () => {
     const trimmed = value.trim();
     if (trimmed) {
-      startTransition(async () => {
-        try {
-          await createTicketInColumnAction(column.id, trimmed, organizationId, projectId);
-        } catch {
-          // revalidation will restore server truth
-        }
-      });
+      void onCreateTicket(column.id, trimmed);
     }
     setIsAdding(false);
     setValue('');

@@ -13,6 +13,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import type { ButtonLoadingState } from '@/components/ui/loading-button';
+import { LoadingButton } from '@/components/ui/loading-button';
 import {
   Select,
   SelectContent,
@@ -44,6 +46,10 @@ const externalTerminalLaunchModeOptions = [
   { value: 'tab', label: 'New tab' }
 ] as const;
 
+type ElectronAppUpdateStatus = Awaited<
+  ReturnType<NonNullable<Window['electronAPI']>['appUpdate']['getStatus']>
+>;
+
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { isElectron, api } = useElectron();
   const { terminalMode, setTerminalMode } = useTerminal();
@@ -52,6 +58,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [everhourConnected, setEverhourConnected] = useState(false);
   const [everhourUpdatedAt, setEverhourUpdatedAt] = useState<string | null>(null);
   const [everhourStatusLoaded, setEverhourStatusLoaded] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<ElectronAppUpdateStatus | null>(null);
+  const [checkUpdateButtonState, setCheckUpdateButtonState] =
+    useState<ButtonLoadingState>('default');
+  const [downloadUpdateButtonState, setDownloadUpdateButtonState] =
+    useState<ButtonLoadingState>('default');
+  const [restartToUpdateButtonState, setRestartToUpdateButtonState] =
+    useState<ButtonLoadingState>('default');
 
   useEffect(() => {
     if (!api || !open) return;
@@ -79,6 +92,31 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       .finally(() => setEverhourStatusLoaded(true));
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !isElectron || !api) return;
+
+    api.appUpdate
+      .getStatus()
+      .then(status => {
+        setUpdateStatus(status);
+      })
+      .catch(() => {
+        setUpdateStatus(null);
+      });
+
+    const unsubscribe = api.appUpdate.onStatus(status => {
+      setUpdateStatus(status);
+      if (status.phase === 'available') {
+        setDownloadUpdateButtonState('default');
+      }
+      if (status.phase === 'downloaded') {
+        setRestartToUpdateButtonState('default');
+      }
+    });
+
+    return unsubscribe;
+  }, [api, isElectron, open]);
+
   function handleTerminalModeChange(value: string) {
     const mode = value === 'embedded' ? 'embedded' : 'external';
     setTerminalMode(mode);
@@ -93,6 +131,50 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     setTerminalLaunchMode(value);
     await api?.settings.set('externalTerminalLaunchMode', value);
   }
+
+  async function handleCheckForUpdates() {
+    if (!api) return;
+
+    setCheckUpdateButtonState('loading');
+    try {
+      const started = await api.appUpdate.checkForUpdates();
+      setCheckUpdateButtonState(started ? 'success' : 'error');
+    } catch (error) {
+      console.error('Failed to check for updates:', error);
+      setCheckUpdateButtonState('error');
+    }
+  }
+
+  async function handleDownloadUpdate() {
+    if (!api) return;
+
+    setDownloadUpdateButtonState('loading');
+    try {
+      const started = await api.appUpdate.downloadUpdate();
+      setDownloadUpdateButtonState(started ? 'success' : 'error');
+    } catch (error) {
+      console.error('Failed to download update:', error);
+      setDownloadUpdateButtonState('error');
+    }
+  }
+
+  async function handleRestartToInstallUpdate() {
+    if (!api) return;
+
+    setRestartToUpdateButtonState('loading');
+    try {
+      const started = await api.appUpdate.quitAndInstall();
+      setRestartToUpdateButtonState(started ? 'success' : 'error');
+    } catch (error) {
+      console.error('Failed to restart and install update:', error);
+      setRestartToUpdateButtonState('error');
+    }
+  }
+
+  const canDownloadUpdate = updateStatus?.phase === 'available';
+  const canRestartToInstallUpdate = updateStatus?.phase === 'downloaded';
+  const updateStatusMessage =
+    updateStatus?.message ?? 'Use Check for updates to look for a newer release.';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,6 +251,59 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </p>
                 </div>
               )}
+              <div className="grid gap-3 rounded-md border p-4">
+                <div className="grid gap-1">
+                  <Label>App updates</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Version {updateStatus?.currentVersion ?? 'unknown'}
+                    {updateStatus?.availableVersion
+                      ? ` • Latest ${updateStatus.availableVersion}`
+                      : ''}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
+                  {updateStatus?.phase === 'downloading' && (
+                    <p className="text-xs text-muted-foreground">
+                      Download progress: {updateStatus.progressPercent ?? 0}%
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <LoadingButton
+                    buttonState={checkUpdateButtonState}
+                    setButtonState={setCheckUpdateButtonState}
+                    text="Check for updates"
+                    loadingText="Checking..."
+                    successText="Check started"
+                    errorText="Try again"
+                    reset
+                    variant="outline"
+                    onClick={handleCheckForUpdates}
+                  />
+                  <LoadingButton
+                    buttonState={downloadUpdateButtonState}
+                    setButtonState={setDownloadUpdateButtonState}
+                    text="Download update"
+                    loadingText="Starting download..."
+                    successText="Download started"
+                    errorText="Unavailable"
+                    reset
+                    variant="outline"
+                    disabled={!canDownloadUpdate}
+                    onClick={handleDownloadUpdate}
+                  />
+                  <LoadingButton
+                    buttonState={restartToUpdateButtonState}
+                    setButtonState={setRestartToUpdateButtonState}
+                    text="Restart to install"
+                    loadingText="Restarting..."
+                    successText="Restarting..."
+                    errorText="Unavailable"
+                    variant="default"
+                    disabled={!canRestartToInstallUpdate}
+                    onClick={handleRestartToInstallUpdate}
+                  />
+                </div>
+              </div>
             </>
           )}
         </div>

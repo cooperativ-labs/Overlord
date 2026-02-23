@@ -6,6 +6,7 @@ import path from 'path';
 import { registerAppIpc } from './ipc/app';
 import { registerSupabaseIpc } from './ipc/supabase';
 import { registerTerminalIpc } from './ipc/terminal';
+import { AppUpdaterService } from './services/app-updater';
 import { findFreePort, startNextServer, stopNextServer } from './services/next-server';
 import { SupabaseManager } from './services/supabase-manager';
 
@@ -24,6 +25,10 @@ try {
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 const supabaseManager = new SupabaseManager();
+const appUpdater = new AppUpdaterService({
+  isPackaged: app.isPackaged,
+  currentVersion: app.getVersion()
+});
 
 function loadLocalEnvForPackagedRuns() {
   if (isDev) return;
@@ -50,7 +55,7 @@ function loadLocalEnvForPackagedRuns() {
     if (result.error) {
       console.error(`[env] Failed to load ${envFile}:`, result.error);
     } else {
-      console.log(`[env] Loaded ${envFile} from ${envPath}`);
+      console.warn(`[env] Loaded ${envFile} from ${envPath}`);
     }
   }
 }
@@ -80,7 +85,10 @@ function createWindow(port: number) {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    appUpdater.setMainWindow(null);
   });
+
+  appUpdater.setMainWindow(mainWindow);
 }
 
 app.whenReady().then(async () => {
@@ -110,9 +118,10 @@ app.whenReady().then(async () => {
   // Register IPC handlers
   registerTerminalIpc();
   registerSupabaseIpc(supabaseManager);
-  registerAppIpc();
+  registerAppIpc({ appUpdater });
 
   createWindow(port);
+  appUpdater.initialize();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

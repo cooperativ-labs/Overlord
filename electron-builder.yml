@@ -1,5 +1,6 @@
 appId: com.cooperativ.overlord
 productName: Overlord
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 directories:
   output: release
   buildResources: electron/resources

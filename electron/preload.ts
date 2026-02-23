@@ -41,6 +41,19 @@ const electronAPI = {
   app: {
     notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body })
   },
+  appUpdate: {
+    getStatus: () => ipcRenderer.invoke('app-update:get-status'),
+    checkForUpdates: () => ipcRenderer.invoke('app-update:check'),
+    downloadUpdate: () => ipcRenderer.invoke('app-update:download'),
+    quitAndInstall: () => ipcRenderer.invoke('app-update:quit-and-install'),
+    onStatus: (callback: (status: unknown) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, status: unknown) => callback(status);
+      ipcRenderer.on('app-update:status', handler);
+      return () => {
+        ipcRenderer.removeListener('app-update:status', handler);
+      };
+    }
+  },
   isElectron: true as const
 };
 

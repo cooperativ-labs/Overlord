@@ -99,3 +99,50 @@ Documentation, onboarding, and future tooling should refer to `ovld` as the defa
 
 - **Headless connector/daemon:** a later step (`ovld connector start`) so the web UI can enqueue work that a local machine claims and executes, without Electron being open.
 - **MCP server:** expose a stable tool surface (`create_ticket`, `list_tickets`, `enqueue_job`, `post_update`, `deliver`) that calls the same Overlord APIs and can be used by multiple agent runtimes.
+
+## Electron Auto-Update Hosting (Supabase Storage)
+
+For Electron app updates, host release artifacts in a public Supabase Storage bucket:
+
+- Bucket: `app-downloads`
+- Prefix: `electron/`
+- Version folder format: semver from `package.json` (example: `0.1.3`)
+
+### Required layout
+
+`electron-updater` (generic provider) expects metadata files at the feed root and can reference binaries inside version folders:
+
+```text
+app-downloads/
+  electron/
+    latest-mac.yml
+    latest-linux.yml
+    latest.yml
+    0.1.3/
+      Overlord-0.1.3-mac-arm64.zip
+      Overlord-0.1.3-mac-arm64.dmg
+      Overlord-0.1.3-linux-x64.AppImage
+```
+
+Important:
+- Keep `latest*.yml` at `electron/` (not only inside the version folder).
+- Artifact paths inside `latest*.yml` should point to the version folder (`<semver>/...`).
+- Bucket must be publicly readable for direct updater downloads.
+- Artifact filenames are generated from Electron Builder using:
+  `artifactName: "${productName}-${version}-${os}-${arch}.${ext}"`.
+
+### App configuration
+
+The Electron app resolves update feed URL in this order:
+
+1. `ELECTRON_UPDATE_URL` (explicit override)
+2. Derived from Supabase URL:
+   - base: `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
+   - bucket: `ELECTRON_UPDATE_BUCKET` (default `app-downloads`)
+   - prefix: `ELECTRON_UPDATE_PREFIX` (default `electron`)
+
+Derived feed URL format:
+
+```text
+<SUPABASE_URL>/storage/v1/object/public/<bucket>/<prefix>
+```

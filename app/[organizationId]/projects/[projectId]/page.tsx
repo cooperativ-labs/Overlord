@@ -24,21 +24,27 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
     data: { user }
   } = await supabase.auth.getUser();
 
-  const [{ data: project, error }, { data: everhourIntegration }] = await Promise.all([
-    supabase
-      .from('projects')
-      .select('id,name,color,organization_id,local_working_directory')
-      .eq('id', projectId)
-      .eq('organization_id', parsedOrganizationId)
-      .single(),
-    supabase
-      .from('user_integrations')
-      .select('api_key')
-      .eq('user_id', user?.id ?? '')
-      .eq('provider', 'everhour')
-      .limit(1)
-      .maybeSingle()
-  ]);
+  const [{ data: project, error }, { data: everhourIntegration }, { data: statuses }] =
+    await Promise.all([
+      supabase
+        .from('projects')
+        .select('id,name,color,organization_id,local_working_directory')
+        .eq('id', projectId)
+        .eq('organization_id', parsedOrganizationId)
+        .single(),
+      supabase
+        .from('user_integrations')
+        .select('api_key')
+        .eq('user_id', user?.id ?? '')
+        .eq('provider', 'everhour')
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('ticket_statuses')
+        .select('name,position,status_type,is_default')
+        .eq('organization_id', parsedOrganizationId)
+        .order('position', { ascending: true })
+    ]);
 
   if (error || !project) {
     notFound();
@@ -56,6 +62,12 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
         initialName={project.name}
         initialColor={project.color}
         initialWorkingDirectory={project.local_working_directory}
+        initialStatuses={(statuses ?? []).map(status => ({
+          name: status.name,
+          position: status.position,
+          statusType: status.status_type,
+          isDefault: status.is_default
+        }))}
         hasEverhourApiKey={hasEverhourApiKey}
       />
       <TicketsBoardContent

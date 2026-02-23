@@ -31,14 +31,43 @@ function parseFlags(args) {
 }
 
 async function apiPost(platformUrl, token, path, body) {
-  const res = await fetch(`${platformUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
+  const requestUrl = `${platformUrl}${path}`;
+  let res;
+  try {
+    res = await fetch(requestUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const causeCode = (
+      typeof error === 'object' &&
+      error !== null &&
+      'cause' in error &&
+      typeof error.cause === 'object' &&
+      error.cause !== null &&
+      'code' in error.cause
+    ) ? String(error.cause.code) : '';
+
+    let hint = 'Check your network and Overlord server settings.';
+    if (causeCode === 'ECONNREFUSED') {
+      hint = 'Connection refused. Verify Overlord is running and PLATFORM_URL points to the correct port.';
+    } else if (causeCode === 'ENOTFOUND') {
+      hint = 'Host not found. Verify PLATFORM_URL uses a valid hostname.';
+    } else if (causeCode === 'ETIMEDOUT') {
+      hint = 'Connection timed out. Verify server availability and local firewall/VPN settings.';
+    } else if (requestUrl.includes('localhost') || requestUrl.includes('127.0.0.1')) {
+      hint = 'Local server unreachable. Start Overlord (usually http://localhost:3000) or update PLATFORM_URL.';
+    }
+
+    throw new Error(
+      `Network error calling ${requestUrl}: ${message}${causeCode ? ` (${causeCode})` : ''}\n${hint}`
+    );
+  }
 
   const data = await res.json().catch(() => ({}));
 
