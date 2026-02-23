@@ -53,6 +53,7 @@ export function ProjectSettingsSection({
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const directoryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSavedColor(initialColor);
@@ -161,12 +162,45 @@ export function ProjectSettingsSection({
   }
 
   async function handleChooseDirectory() {
-    if (!api) return;
     setWorkingDirectoryError(null);
-    const chosenPath = await api.terminal.chooseDirectory();
-    if (!chosenPath) return;
-    setWorkingDirectory(chosenPath);
-    await handleSaveWorkingDirectory(chosenPath);
+
+    if (isElectron && api) {
+      const chosenPath = await api.terminal.chooseDirectory();
+      if (!chosenPath) return;
+      setWorkingDirectory(chosenPath);
+      await handleSaveWorkingDirectory(chosenPath);
+      return;
+    }
+
+    // Web: File System Access API or fallback to directory input
+    const w = typeof window !== 'undefined' ? (window as Window & { showDirectoryPicker?(): Promise<{ name: string }> }) : null;
+    if (w?.showDirectoryPicker) {
+      try {
+        const handle = await w.showDirectoryPicker();
+        const folderName = handle.name;
+        setWorkingDirectory(folderName);
+        await handleSaveWorkingDirectory(folderName);
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          setWorkingDirectoryError('Could not access the selected folder.');
+        }
+      }
+      return;
+    }
+
+    directoryInputRef.current?.click();
+  }
+
+  async function handleWebDirectoryInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const firstPath = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const folderName = firstPath ? firstPath.split('/')[0] : '';
+    e.target.value = '';
+    if (folderName) {
+      setWorkingDirectory(folderName);
+      await handleSaveWorkingDirectory(folderName);
+    }
   }
 
   return (
@@ -264,17 +298,25 @@ export function ProjectSettingsSection({
             className="h-8 min-w-[320px] flex-1"
             disabled={workingDirectorySaveState === 'loading'}
           />
-          {isElectron ? (
-            <Button
-              className="h-8"
-              size="sm"
-              variant="outline"
-              disabled={workingDirectorySaveState === 'loading'}
-              onClick={handleChooseDirectory}
-            >
-              Choose folder
-            </Button>
-          ) : null}
+          <input
+            ref={directoryInputRef}
+            type="file"
+            {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+            multiple
+            className="hidden"
+            aria-hidden
+            tabIndex={-1}
+            onChange={handleWebDirectoryInputChange}
+          />
+          <Button
+            className="h-8"
+            size="sm"
+            variant="outline"
+            disabled={workingDirectorySaveState === 'loading'}
+            onClick={handleChooseDirectory}
+          >
+            Choose folder
+          </Button>
           <LoadingButton
             buttonState={workingDirectorySaveState}
             setButtonState={setWorkingDirectorySaveState}

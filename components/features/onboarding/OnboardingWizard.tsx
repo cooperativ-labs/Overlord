@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   DEFAULT_PROJECT_COLOR,
@@ -39,6 +39,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
   const [workingDirectory, setWorkingDirectory] = useState('');
   const [projectError, setProjectError] = useState<string | null>(null);
   const [projectButtonState, setProjectButtonState] = useState<ButtonLoadingState>('default');
+  const directoryInputRef = useRef<HTMLInputElement>(null);
 
   async function handleCreateOrganization() {
     setOrgButtonState('loading');
@@ -55,11 +56,42 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
   }
 
   async function handleChooseDirectory() {
-    if (!api) return;
     setProjectError(null);
-    const chosenPath = await api.terminal.chooseDirectory();
-    if (!chosenPath) return;
-    setWorkingDirectory(chosenPath);
+
+    if (isElectron && api) {
+      const chosenPath = await api.terminal.chooseDirectory();
+      if (!chosenPath) return;
+      setWorkingDirectory(chosenPath);
+      return;
+    }
+
+    // Web: File System Access API or fallback to directory input
+    const w =
+      typeof window !== 'undefined'
+        ? (window as Window & { showDirectoryPicker?(): Promise<{ name: string }> })
+        : null;
+    if (w?.showDirectoryPicker) {
+      try {
+        const handle = await w.showDirectoryPicker();
+        setWorkingDirectory(handle.name);
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          setProjectError('Could not access the selected folder.');
+        }
+      }
+      return;
+    }
+
+    directoryInputRef.current?.click();
+  }
+
+  function handleWebDirectoryInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const firstPath = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const folderName = firstPath ? firstPath.split('/')[0] : '';
+    e.target.value = '';
+    if (folderName) setWorkingDirectory(folderName);
   }
 
   async function handleCreateProject() {
@@ -161,11 +193,19 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
                 placeholder="/absolute/path/to/your/project"
                 className="min-w-[260px] flex-1"
               />
-              {isElectron ? (
-                <Button type="button" variant="outline" size="sm" onClick={handleChooseDirectory}>
-                  Choose folder
-                </Button>
-              ) : null}
+              <input
+                ref={directoryInputRef}
+                type="file"
+                {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                multiple
+                className="hidden"
+                aria-hidden
+                tabIndex={-1}
+                onChange={handleWebDirectoryInputChange}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={handleChooseDirectory}>
+                Choose folder
+              </Button>
             </div>
             <FieldDescription>
               When you run agents for this project, terminals will open in this directory.

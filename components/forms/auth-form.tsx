@@ -13,8 +13,15 @@ import {
   FieldSeparator
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  LoadingButton,
+  type ButtonLoadingState
+} from '@/components/ui/loading-button';
 import { signIn, signUp } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
+
+const isRedirectError = (err: unknown): boolean =>
+  typeof err === 'object' && err !== null && (err as { digest?: string }).digest === 'NEXT_REDIRECT';
 
 type AuthMode = 'login' | 'signup';
 
@@ -27,8 +34,40 @@ type AuthFormProps = {
 
 export function AuthForm({ className, defaultMode = 'login', error, message }: AuthFormProps) {
   const [mode, setMode] = React.useState<AuthMode>(defaultMode);
+  const [signInButtonState, setSignInButtonState] =
+    React.useState<ButtonLoadingState>('default');
+  const [signUpButtonState, setSignUpButtonState] =
+    React.useState<ButtonLoadingState>('default');
 
   const isLogin = mode === 'login';
+
+  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSignInButtonState('loading');
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    try {
+      await signIn(formData);
+      setSignInButtonState('success');
+    } catch (err) {
+      if (isRedirectError(err)) throw err;
+      setSignInButtonState('error');
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSignUpButtonState('loading');
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    try {
+      await signUp(formData);
+      setSignUpButtonState('success');
+    } catch (err) {
+      if (isRedirectError(err)) throw err;
+      setSignUpButtonState('error');
+    }
+  };
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
@@ -63,7 +102,7 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
       </div>
 
       {isLogin ? (
-        <form action={signIn}>
+        <form onSubmit={handleSignIn}>
           <FieldGroup>
             <div className="flex flex-col items-center gap-2 text-center">
               <Link href="/" className="flex flex-col items-center gap-2 font-medium">
@@ -99,12 +138,19 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
               <Input id="login-password" name="password" type="password" required minLength={6} />
             </Field>
             <Field>
-              <Button type="submit">Sign in</Button>
+              <LoadingButton
+                type="submit"
+                buttonState={signInButtonState}
+                setButtonState={setSignInButtonState}
+                text="Sign in"
+                loadingText="Signing in..."
+                errorText="Sign in failed"
+              />
             </Field>
           </FieldGroup>
         </form>
       ) : (
-        <form action={signUp}>
+        <form onSubmit={handleSignUp}>
           <FieldGroup>
             <div className="flex flex-col items-center gap-2 text-center">
               <Link href="/" className="flex flex-col items-center gap-2 font-medium">
@@ -144,7 +190,15 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
               <Input id="signup-password" name="password" type="password" required minLength={6} />
             </Field>
             <Field>
-              <Button type="submit">Create Account</Button>
+              <LoadingButton
+                type="submit"
+                buttonState={signUpButtonState}
+                setButtonState={setSignUpButtonState}
+                text="Create Account"
+                loadingText="Creating account..."
+                successText="Check your email"
+                errorText="Sign up failed"
+              />
             </Field>
             <FieldSeparator>Or</FieldSeparator>
             <Field className="grid gap-4 sm:grid-cols-2">
