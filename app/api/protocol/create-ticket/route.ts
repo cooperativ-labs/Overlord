@@ -14,9 +14,7 @@ function deriveTitleFromObjective(objective: string): string {
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, createFollowUpTicketSchema);
-  if (parsed.errorResponse || !parsed.data) {
-    return parsed.errorResponse;
-  }
+  if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const {
@@ -29,9 +27,10 @@ export async function POST(request: Request) {
       ticketId,
       title
     } = parsed.data;
+    const { organizationId } = parsed.tokenContext;
 
     const supabase = createServiceRoleClient();
-    const resolved = await resolveSession(sessionKey, ticketId);
+    const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
@@ -40,6 +39,7 @@ export async function POST(request: Request) {
       .from('tickets')
       .select('id,organization_id,project_id')
       .eq('id', ticketId)
+      .eq('organization_id', organizationId)
       .single();
 
     if (sourceTicketError || !sourceTicket) {

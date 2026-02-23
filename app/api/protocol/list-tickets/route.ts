@@ -6,13 +6,16 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, listTicketsSchema);
-  if (parsed.errorResponse || !parsed.data) {
-    return parsed.errorResponse;
-  }
+  if (!parsed.ok) return parsed.errorResponse;
 
   try {
+    const { organizationId } = parsed.tokenContext;
     const supabase = createServiceRoleClient();
-    let query = supabase.from('tickets').select('*').order('updated_at', { ascending: false });
+    let query = supabase
+      .from('tickets')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('updated_at', { ascending: false });
 
     if (!parsed.data.includeCompleted) {
       query = query.neq('status', 'complete');

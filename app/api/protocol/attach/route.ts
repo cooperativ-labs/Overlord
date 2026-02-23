@@ -7,18 +7,22 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, attachSchema);
-  if (parsed.errorResponse || !parsed.data) {
-    return parsed.errorResponse;
-  }
+  if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const supabase = createServiceRoleClient();
     const { ticketId, agentIdentifier, connectionMethod, metadata } = parsed.data;
+    const { organizationId } = parsed.tokenContext;
     const sessionKey = randomUUID();
 
     const [{ data: ticket, error: ticketError }, { data: session, error: sessionError }] =
       await Promise.all([
-        supabase.from('tickets').select('*').eq('id', ticketId).single(),
+        supabase
+          .from('tickets')
+          .select('*')
+          .eq('id', ticketId)
+          .eq('organization_id', organizationId)
+          .single(),
         supabase
           .from('agent_sessions')
           .insert({

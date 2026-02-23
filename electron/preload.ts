@@ -26,8 +26,8 @@ const electronAPI = {
     },
     openExternal: (command: string, cwd?: string) =>
       ipcRenderer.invoke('terminal:open-external', { command, cwd }),
-    launchAgent: (ticketId: string, agent: 'claude' | 'codex', cwd?: string) =>
-      ipcRenderer.invoke('terminal:launch-agent', { ticketId, agent, cwd }),
+    launchAgent: (ticketId: string, agent: 'claude' | 'codex', cwd?: string, agentToken?: string) =>
+      ipcRenderer.invoke('terminal:launch-agent', { ticketId, agent, cwd, agentToken }),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },
   supabase: {

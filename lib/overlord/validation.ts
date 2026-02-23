@@ -85,6 +85,16 @@ export const deliverSchema = z.object({
     .default([])
 });
 
+export const createStandaloneTicketSchema = z.object({
+  title: z.string().trim().max(180).optional().default(''),
+  objective: z.string().trim().min(1).max(20_000),
+  availableTools: z.string().trim().max(20_000).optional().default(''),
+  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
+  executionTarget: ticketExecutionTargetSchema.default('agent'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  projectId: z.string().optional()
+});
+
 export const createFollowUpTicketSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: z.string().uuid(),

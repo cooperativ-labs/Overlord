@@ -2,7 +2,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const AGENT_TOKEN_DEFAULT = 'overlord-local-dev-token';
 const PLATFORM_URL_DEFAULT = 'http://localhost:3000';
 
 export type AgentType = 'claude' | 'codex';
@@ -11,6 +10,8 @@ type LaunchAgentInput = {
   ticketId: string;
   agent: AgentType;
   cwd?: string;
+  /** Per-user agent token from the agent_tokens table. Falls back to AGENT_TOKEN env var. */
+  agentToken?: string;
 };
 
 type LaunchAgentResult = {
@@ -30,10 +31,6 @@ function getPlatformUrl(): string {
   return process.env.PLATFORM_URL ?? PLATFORM_URL_DEFAULT;
 }
 
-function getAgentToken(): string {
-  return process.env.OVERLORD_AGENT_TOKEN ?? AGENT_TOKEN_DEFAULT;
-}
-
 /**
  * Fetches the ticket context markdown from the protocol API,
  * writes it to a temp file, and returns a clean shell command
@@ -41,7 +38,8 @@ function getAgentToken(): string {
  */
 export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<LaunchAgentResult> {
   const platformUrl = getPlatformUrl();
-  const agentToken = getAgentToken();
+  // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
+  const agentToken = input.agentToken ?? process.env.AGENT_TOKEN ?? '';
   const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}`;
   const launchEnv = {
     PLATFORM_URL: platformUrl,

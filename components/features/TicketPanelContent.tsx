@@ -14,7 +14,7 @@ import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { getAgentApiToken, getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
+import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
@@ -40,7 +40,8 @@ export async function TicketPanelContent({
     { data: statuses },
     { data: everhourIntegration },
     { data: projects },
-    { data: agentSession }
+    { data: agentSession },
+    { data: agentTokenRow }
   ] = await Promise.all([
     supabase
       .from('tickets')
@@ -88,6 +89,13 @@ export async function TicketPanelContent({
       .eq('ticket_id', ticketId)
       .order('attached_at', { ascending: false })
       .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('agent_tokens')
+      .select('token')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle()
   ]);
 
@@ -100,13 +108,13 @@ export async function TicketPanelContent({
   }
 
   const platformUrl = getPlatformUrl();
-  const agentToken = getAgentApiToken();
+  const agentToken = agentTokenRow?.token ?? null;
   const workspaceRoot = getWorkspaceRoot();
   const editorScheme = getEditorScheme();
   const { claudeCode, codex } = buildLaunchCommands({
     platformUrl,
     ticketId,
-    token: agentToken
+    token: agentToken ?? ''
   });
   const ticketIdentifier = getTicketIdentifier(ticket.id);
   const chatGptLink = `https://chat.openai.com/?q=${encodeURIComponent(`attach ${ticketIdentifier}`)}`;
@@ -214,6 +222,7 @@ export async function TicketPanelContent({
 
         <LaunchCommandBar
           ticketId={ticketId}
+          agentToken={agentToken}
           chatGptLink={chatGptLink}
           claudeCommand={claudeCode}
           codexCommand={codex}

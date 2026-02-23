@@ -20,8 +20,32 @@ type EventInsert = {
   ticketId: string;
 };
 
-export async function resolveSession(sessionKey: string, ticketId: string) {
+/**
+ * Resolves an agent session by sessionKey + ticketId.
+ * When organizationId is provided, it first verifies the ticket belongs to that org
+ * to prevent cross-org session access.
+ */
+export async function resolveSession(
+  sessionKey: string,
+  ticketId: string,
+  organizationId?: number
+) {
   const supabase = createServiceRoleClient();
+
+  // If org-scoped, verify the ticket belongs to this org before touching the session
+  if (organizationId !== undefined) {
+    const { data: ticket, error: ticketError } = await supabase
+      .from('tickets')
+      .select('id')
+      .eq('id', ticketId)
+      .eq('organization_id', organizationId)
+      .single();
+
+    if (ticketError || !ticket) {
+      return { error: 'Ticket not found or access denied.', session: null };
+    }
+  }
+
   const { data: session, error } = await supabase
     .from('agent_sessions')
     .select('*')

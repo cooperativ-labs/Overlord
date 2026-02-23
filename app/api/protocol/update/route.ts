@@ -11,14 +11,13 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, updateSchema);
-  if (parsed.errorResponse || !parsed.data) {
-    return parsed.errorResponse;
-  }
+  if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const { payload, phase, sessionKey, summary, ticketId } = parsed.data;
+    const { organizationId } = parsed.tokenContext;
     const supabase = createServiceRoleClient();
-    const resolved = await resolveSession(sessionKey, ticketId);
+    const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }

@@ -10,7 +10,8 @@ interface ElectronAPI {
     launchAgent: (
       ticketId: string,
       agent: 'claude' | 'codex',
-      cwd?: string
+      cwd?: string,
+      agentToken?: string
     ) => Promise<string | void>;
     chooseDirectory: () => Promise<string | null>;
   };

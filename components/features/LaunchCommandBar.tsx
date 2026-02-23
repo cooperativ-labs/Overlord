@@ -9,6 +9,7 @@ import { useTerminal } from './terminal/TerminalProvider';
 
 type Props = {
   ticketId: string;
+  agentToken?: string | null;
   claudeCommand: string;
   codexCommand: string;
   chatGptLink: string;
@@ -19,12 +20,14 @@ function LaunchButton({
   label,
   agent,
   ticketId,
+  agentToken,
   clipboardCommand,
   workingDirectory
 }: {
   label: string;
   agent: 'claude' | 'codex';
   ticketId: string;
+  agentToken?: string | null;
   clipboardCommand: string;
   workingDirectory?: string | null;
 }) {
@@ -33,7 +36,7 @@ function LaunchButton({
 
   async function handleClick() {
     if (isElectron) {
-      await launchAgent(ticketId, agent, workingDirectory ?? undefined);
+      await launchAgent(ticketId, agent, workingDirectory ?? undefined, agentToken ?? undefined);
     } else {
       await navigator.clipboard.writeText(clipboardCommand);
       setCopied(true);
@@ -62,9 +65,11 @@ function LaunchButton({
 
 function RunAgentButton({
   ticketId,
+  agentToken,
   workingDirectory
 }: {
   ticketId: string;
+  agentToken?: string | null;
   workingDirectory?: string | null;
 }) {
   const { isElectron, launchAgent } = useTerminal();
@@ -72,7 +77,7 @@ function RunAgentButton({
   if (!isElectron) return null;
 
   async function handleClick() {
-    await launchAgent(ticketId, 'claude', workingDirectory ?? undefined);
+    await launchAgent(ticketId, 'claude', workingDirectory ?? undefined, agentToken ?? undefined);
   }
 
   return (
@@ -85,6 +90,7 @@ function RunAgentButton({
 
 export function LaunchCommandBar({
   ticketId,
+  agentToken,
   claudeCommand,
   codexCommand,
   chatGptLink,
@@ -101,6 +107,7 @@ export function LaunchCommandBar({
         label="Claude Code"
         agent="claude"
         ticketId={ticketId}
+        agentToken={agentToken}
         clipboardCommand={claudeCommand}
         workingDirectory={workingDirectory}
       />
@@ -108,13 +115,14 @@ export function LaunchCommandBar({
         label="Codex"
         agent="codex"
         ticketId={ticketId}
+        agentToken={agentToken}
         clipboardCommand={codexCommand}
         workingDirectory={workingDirectory}
       />
       {isElectron && (
         <>
           <div className="h-4 w-px bg-border" />
-          <RunAgentButton ticketId={ticketId} workingDirectory={workingDirectory} />
+          <RunAgentButton ticketId={ticketId} agentToken={agentToken} workingDirectory={workingDirectory} />
         </>
       )}
       <div className="h-4 w-px bg-border" />

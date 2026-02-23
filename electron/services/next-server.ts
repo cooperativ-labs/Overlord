@@ -1,5 +1,6 @@
 import { ChildProcess, fork } from 'child_process';
 import { app } from 'electron';
+import net from 'net';
 import path from 'path';
 
 let serverProcess: ChildProcess | null = null;
@@ -11,15 +12,30 @@ function getServerPath(): string {
   return path.join(unpackedPath, '.next', 'standalone', 'server.js');
 }
 
-export function startNextServer(): Promise<void> {
+export function findFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : null;
+      server.close(err => {
+        if (err || !port) reject(err ?? new Error('Could not determine free port'));
+        else resolve(port);
+      });
+    });
+    server.on('error', reject);
+  });
+}
+
+export function startNextServer(port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const serverPath = getServerPath();
-    console.log('[next] Starting server from:', serverPath);
+    console.log(`[next] Starting server from: ${serverPath} on port ${port}`);
 
     serverProcess = fork(serverPath, [], {
       env: {
         ...process.env,
-        PORT: '3000',
+        PORT: String(port),
         HOSTNAME: 'localhost'
       },
       stdio: 'pipe'

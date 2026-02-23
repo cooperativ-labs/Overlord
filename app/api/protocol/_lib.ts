@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server';
 import { ZodType } from 'zod';
 
-import { ensureAgentToken } from '@/lib/overlord/protocol-auth';
+import { type AgentTokenContext, resolveAgentToken } from '@/lib/overlord/protocol-auth';
 
-export async function parseProtocolBody<T>(request: Request, schema: ZodType<T>) {
-  const authResponse = ensureAgentToken(request);
-  if (authResponse) {
-    return {
-      errorResponse: authResponse,
-      data: null
-    };
+type ParseOk<T> = { ok: true; data: T; tokenContext: AgentTokenContext };
+type ParseError = { ok: false; errorResponse: NextResponse };
+export type ParseResult<T> = ParseOk<T> | ParseError;
+
+export async function parseProtocolBody<T>(
+  request: Request,
+  schema: ZodType<T>
+): Promise<ParseResult<T>> {
+  const authResult = await resolveAgentToken(request);
+  if (authResult.error) {
+    return { ok: false, errorResponse: authResult.error };
   }
 
   try {
@@ -17,24 +21,23 @@ export async function parseProtocolBody<T>(request: Request, schema: ZodType<T>)
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
       return {
+        ok: false,
         errorResponse: NextResponse.json(
-          {
-            error: parsed.error.issues[0]?.message ?? 'Invalid payload.'
-          },
+          { error: parsed.error.issues[0]?.message ?? 'Invalid payload.' },
           { status: 400 }
-        ),
-        data: null
+        )
       };
     }
 
     return {
-      errorResponse: null,
-      data: parsed.data
+      ok: true,
+      data: parsed.data,
+      tokenContext: authResult.context
     };
   } catch {
     return {
-      errorResponse: NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 }),
-      data: null
+      ok: false,
+      errorResponse: NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
     };
   }
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { getAgentApiToken, getPlatformUrl } from '@/lib/env';
+import { getPlatformUrl } from '@/lib/env';
 import { buildResumeCommands, selectRestartSessionCommand } from '@/lib/overlord/launch-commands';
 import { resolveSession } from '@/lib/overlord/protocol-db';
 import { deliverSchema } from '@/lib/overlord/validation';
@@ -9,14 +9,13 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, deliverSchema);
-  if (parsed.errorResponse || !parsed.data) {
-    return parsed.errorResponse;
-  }
+  if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const { artifacts, sessionKey, summary, ticketId } = parsed.data;
+    const { organizationId, tokenValue } = parsed.tokenContext;
     const supabase = createServiceRoleClient();
-    const resolved = await resolveSession(sessionKey, ticketId);
+    const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
@@ -42,7 +41,7 @@ export async function POST(request: Request) {
     const { claudeCode, codex } = buildResumeCommands({
       platformUrl: getPlatformUrl(),
       ticketId,
-      token: getAgentApiToken()
+      token: tokenValue
     });
     const restartCommand = selectRestartSessionCommand(resolved.session.agent_identifier, {
       claudeCode,

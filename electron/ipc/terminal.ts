@@ -190,14 +190,18 @@ export function registerTerminalIpc(): void {
 
   ipcMain.handle(
     'terminal:launch-agent',
-    async (event, payload: { ticketId: string; agent: AgentType; cwd?: string }) => {
+    async (
+      event,
+      payload: { ticketId: string; agent: AgentType; cwd?: string; agentToken?: string }
+    ) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error('No window found');
 
       const { command, cwd, env } = await prepareAgentLaunch({
         ticketId: payload.ticketId,
         agent: payload.agent,
-        cwd: payload.cwd
+        cwd: payload.cwd,
+        agentToken: payload.agentToken
       });
 
       const terminalMode = store.get('terminalMode', 'embedded') as string;

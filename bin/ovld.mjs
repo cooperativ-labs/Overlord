@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
-import { runAgentLauncherCli } from "./_agent-launcher-cli.mjs";
+import { runCli } from './_cli/index.mjs';
 
-runAgentLauncherCli({ primaryCommand: "ovld" }).catch((error) => {
+runCli({ primaryCommand: 'ovld' }).catch((error) => {
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });
-

@@ -1,0 +1,95 @@
+import { NextResponse } from 'next/server';
+
+import { internalErrorResponse } from '@/app/api/protocol/_lib';
+import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
+
+function deriveTitleFromObjective(objective: string): string {
+  const trimmed = objective.trim();
+  if (trimmed.length <= 60) return trimmed;
+  return `${trimmed.slice(0, 60)}…`;
+}
+
+export async function POST(request: Request) {
+  const authResult = await resolveAgentToken(request);
+  if (authResult.error) return authResult.error;
+
+  const { organizationId } = authResult.context;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+  }
+
+  const parsed = createStandaloneTicketSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? 'Invalid payload.' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const { acceptanceCriteria, availableTools, executionTarget, objective, priority, projectId, title } =
+      parsed.data;
+
+    const supabase = createServiceRoleClient();
+
+    // Resolve project_id — use provided projectId or fall back to first project in org
+    let resolvedProjectId: string | null = projectId ?? null;
+    if (!resolvedProjectId) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .order('id', { ascending: true })
+        .limit(1)
+        .single();
+      resolvedProjectId = project?.id ?? null;
+    }
+
+    const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+
+    const { data: ticket, error: ticketError } = await supabase
+      .from('tickets')
+      .insert({
+        acceptance_criteria: acceptanceCriteria || null,
+        available_tools: availableTools,
+        execution_target: executionTarget,
+        objective,
+        organization_id: organizationId,
+        priority,
+        project_id: resolvedProjectId,
+        status: 'draft',
+        title: nextTitle
+      })
+      .select('id, organization_id, project_id, execution_target, status')
+      .single();
+
+    if (ticketError || !ticket) {
+      return NextResponse.json(
+        { error: ticketError?.message ?? 'Failed to create ticket.' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      ticket: {
+        executionTarget: ticket.execution_target,
+        id: ticket.id,
+        organizationId: ticket.organization_id,
+        projectId: ticket.project_id,
+        reference: getTicketIdentifier(ticket.id),
+        status: ticket.status,
+        title: nextTitle
+      }
+    });
+  } catch (error) {
+    return internalErrorResponse(error);
+  }
+}

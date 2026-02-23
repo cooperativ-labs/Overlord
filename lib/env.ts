@@ -1,4 +1,3 @@
-const LOCAL_AGENT_TOKEN = 'overlord-local-dev-token';
 const LOCAL_PLATFORM_URL = 'http://localhost:3000';
 
 export function getSupabaseUrl(): string {
@@ -19,10 +18,6 @@ export function getSupabasePublishableKey(): string {
     );
   }
   return value;
-}
-
-export function getAgentApiToken(): string {
-  return process.env.OVERLORD_AGENT_TOKEN ?? LOCAL_AGENT_TOKEN;
 }
 
 export function getPlatformUrl(): string {

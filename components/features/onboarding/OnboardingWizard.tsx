@@ -8,6 +8,7 @@ import {
   ProjectColorSetter
 } from '@/components/features/projects/ProjectColorSetter';
 import { useElectron } from '@/components/features/terminal/useElectron';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -42,10 +43,15 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
   async function handleCreateOrganization() {
+    const trimmed = organizationName.trim();
+    if (!trimmed) {
+      setOrgError('Organization name is required.');
+      return;
+    }
     setOrgButtonState('loading');
     setOrgError(null);
     try {
-      const result = await createFirstOrganization({ name: organizationName });
+      const result = await createFirstOrganization({ name: trimmed });
       setOrganizationId(result.organizationId);
       setOrgButtonState('success');
       setStep(2);
@@ -99,6 +105,11 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
       setProjectError('Organization is required before creating a project.');
       return;
     }
+    const trimmedName = projectName.trim();
+    if (!trimmedName) {
+      setProjectError('Project name is required.');
+      return;
+    }
 
     setProjectButtonState('loading');
     setProjectError(null);
@@ -106,7 +117,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
     try {
       const result = await createFirstProjectWithDirectory({
         organizationId,
-        name: projectName,
+        name: trimmedName,
         color: projectColor,
         workingDirectory: workingDirectory.trim() || null
       });
@@ -148,14 +159,23 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
             <Input
               id="onboarding-organization-name"
               value={organizationName}
-              onChange={event => setOrganizationName(event.target.value)}
+              onChange={event => {
+                setOrganizationName(event.target.value);
+                if (orgError) setOrgError(null);
+              }}
               placeholder="Acme Inc."
+              aria-invalid={!!orgError}
+              aria-describedby={orgError ? 'onboarding-org-error' : undefined}
             />
             <FieldDescription>
               You can invite teammates later. This is just the name of your workspace.
             </FieldDescription>
           </Field>
-          {orgError ? <p className="text-sm text-destructive">{orgError}</p> : null}
+          {orgError ? (
+            <Alert id="onboarding-org-error" variant="destructive" role="alert">
+              <AlertDescription>{orgError}</AlertDescription>
+            </Alert>
+          ) : null}
           <Field>
             <LoadingButton
               buttonState={orgButtonState}
@@ -175,13 +195,24 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
             <Input
               id="onboarding-project-name"
               value={projectName}
-              onChange={event => setProjectName(event.target.value)}
+              onChange={event => {
+                setProjectName(event.target.value);
+                if (projectError) setProjectError(null);
+              }}
               placeholder="Agent orchestration"
+              aria-invalid={!!projectError}
+              aria-describedby={projectError ? 'onboarding-project-error' : undefined}
             />
           </Field>
           <Field>
             <FieldLabel>Project color</FieldLabel>
-            <ProjectColorSetter value={projectColor} onSelect={setProjectColor} />
+            <ProjectColorSetter
+              value={projectColor}
+              onSelect={color => {
+                setProjectColor(color);
+                if (projectError) setProjectError(null);
+              }}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="onboarding-working-directory">Local directory</FieldLabel>
@@ -211,7 +242,11 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
               When you run agents for this project, terminals will open in this directory.
             </FieldDescription>
           </Field>
-          {projectError ? <p className="text-sm text-destructive">{projectError}</p> : null}
+          {projectError ? (
+            <Alert id="onboarding-project-error" variant="destructive" role="alert">
+              <AlertDescription>{projectError}</AlertDescription>
+            </Alert>
+          ) : null}
           <Field>
             <div className="flex items-center gap-3">
               <Button type="button" variant="outline" size="sm" onClick={() => setStep(1)}>

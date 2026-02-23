@@ -7,9 +7,6 @@ directories:
 files:
   - "dist-electron/**/*"
   - ".next/standalone/**/*"
-  - "supabase/config.toml"
-  - "supabase/migrations/**/*"
-  - "supabase/seed.sql"
 
 mac:
   target:

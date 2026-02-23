@@ -18,14 +18,13 @@ function buildDecisionKey(title: string): string {
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, decisionSchema);
-  if (parsed.errorResponse || !parsed.data) {
-    return parsed.errorResponse;
-  }
+  if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const { impact, payload, phase, rationale, sessionKey, ticketId, title } = parsed.data;
+    const { organizationId } = parsed.tokenContext;
     const supabase = createServiceRoleClient();
-    const resolved = await resolveSession(sessionKey, ticketId);
+    const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }

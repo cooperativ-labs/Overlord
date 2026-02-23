@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { createProject, updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
 import { createClient } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export type OnboardingState = {
   userName: string | null;
@@ -85,7 +86,22 @@ export async function createFirstOrganization(input: { name: string }): Promise<
     throw new Error(error.message ?? 'Failed to create organization.');
   }
 
-  return { organizationId: data as number };
+  const organizationId = data as number;
+
+  // Auto-create a default agent token for this user + org
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (user) {
+    const serviceSupabase = createServiceRoleClient();
+    await serviceSupabase.from('agent_tokens').insert({
+      user_id: user.id,
+      organization_id: organizationId,
+      name: 'Default CLI Token'
+    });
+  }
+
+  return { organizationId };
 }
 
 export async function createFirstProjectWithDirectory(input: {

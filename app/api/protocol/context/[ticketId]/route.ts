@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
-import { getAgentApiToken, getPlatformUrl } from '@/lib/env';
+import { getPlatformUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
-import { ensureAgentToken } from '@/lib/overlord/protocol-auth';
+import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { buildTicketPromptMarkdown } from '@/lib/overlord/ticket-prompt';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -11,18 +11,18 @@ type RouteContext = { params: Promise<{ ticketId: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
-    const authError = ensureAgentToken(request);
-    if (authError) return authError;
+    const authResult = await resolveAgentToken(request);
+    if (authResult.error) return authResult.error;
 
+    const { organizationId, tokenValue } = authResult.context;
     const { ticketId } = await params;
     const supabase = createServiceRoleClient();
 
     const { data: ticket, error } = await supabase
       .from('tickets')
-      // Use '*' to stay compatible with local DBs that may be behind on migrations.
-      // Strict column selection here can 500 when newer columns are missing.
       .select('*')
       .eq('id', ticketId)
+      .eq('organization_id', organizationId)
       .single();
 
     if (error || !ticket) {
@@ -57,16 +57,30 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 // Convenience: also expose the launch commands so the UI can fetch them
 export async function POST(request: Request, { params }: RouteContext) {
-  const authError = ensureAgentToken(request);
-  if (authError) return authError;
+  const authResult = await resolveAgentToken(request);
+  if (authResult.error) return authResult.error;
 
+  const { organizationId, tokenValue } = authResult.context;
   const { ticketId } = await params;
+
+  // Verify ticket belongs to this org
+  const supabase = createServiceRoleClient();
+  const { data: ticket, error } = await supabase
+    .from('tickets')
+    .select('id')
+    .eq('id', ticketId)
+    .eq('organization_id', organizationId)
+    .single();
+
+  if (error || !ticket) {
+    return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+  }
+
   const platformUrl = getPlatformUrl();
-  const token = getAgentApiToken();
   const { claudeCode, codex, contextUrl } = buildLaunchCommands({
     platformUrl,
     ticketId,
-    token
+    token: tokenValue
   });
 
   return NextResponse.json({
