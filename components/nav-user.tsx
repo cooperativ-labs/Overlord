@@ -2,7 +2,9 @@
 
 import { BadgeCheck, Bell, ChevronsUpDown, CreditCard, Download, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -30,6 +32,14 @@ export function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
+  const { isElectron } = useElectron();
+  const [port, setPort] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.electronAPI && window.location.port) {
+      setPort(window.location.port);
+    }
+  }, []);
 
   return (
     <SidebarMenu>
@@ -98,6 +108,14 @@ export function NavUser({
               <LogOut />
               Log out
             </DropdownMenuItem>
+            {isElectron && port && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                  <span className="text-muted-foreground text-xs">App running on port {port}</span>
+                </div>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

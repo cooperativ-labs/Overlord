@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -83,6 +84,8 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    await upsertDraftObjective(supabase, ticket.id, objective);
 
     return NextResponse.json({
       ok: true,

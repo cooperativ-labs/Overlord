@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Copy, Play, Terminal } from 'lucide-react';
+import { Bot, Copy, Terminal } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
 import { useTerminal } from './terminal/TerminalProvider';
 
@@ -18,8 +19,8 @@ type Props = {
   agentToken?: string | null;
   claudeCommand: string;
   codexCommand: string;
-  chatGptLink: string;
   workingDirectory?: string | null;
+  className?: string;
 };
 
 function LaunchButton({
@@ -113,44 +114,24 @@ function CopyAgentCommandButton({
   );
 }
 
-function RunAgentButton({
-  ticketId,
-  agentToken,
-  workingDirectory
-}: {
-  ticketId: string;
-  agentToken?: string | null;
-  workingDirectory?: string | null;
-}) {
-  const { isElectron, launchAgent } = useTerminal();
-
-  if (!isElectron) return null;
-
-  async function handleClick() {
-    await launchAgent(ticketId, 'claude', workingDirectory ?? undefined, agentToken ?? undefined);
-  }
-
-  return (
-    <Button className="h-6 gap-1.5 text-xs" size="sm" variant="default" onClick={handleClick}>
-      <Bot className="h-3 w-3" />
-      Run Agent
-    </Button>
-  );
-}
-
 export function LaunchCommandBar({
   ticketId,
   agentToken,
   claudeCommand,
   codexCommand,
-  chatGptLink,
-  workingDirectory
+  workingDirectory,
+  className
 }: Props) {
   const { isElectron } = useTerminal();
   const cursorCommand = codexCommand;
 
   return (
-    <div className="mb-8 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2.5">
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2.5',
+        className
+      )}
+    >
       <span className="text-xs font-medium text-muted-foreground">
         {isElectron ? 'Run agent' : 'Launch agent'}
       </span>

@@ -14,7 +14,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     const authResult = await resolveAgentToken(request);
     if (authResult.error) return authResult.error;
 
-    const { organizationId, tokenValue } = authResult.context;
+    const { organizationId } = authResult.context;
     const { ticketId } = await params;
     const supabase = createServiceRoleClient();
 
@@ -38,11 +38,26 @@ export async function GET(request: Request, { params }: RouteContext) {
       .eq('id', ticket.project_id)
       .maybeSingle();
     const workingDirectory = project?.local_working_directory ?? null;
+    const { data: draftObjective } = await supabase
+      .from('objectives')
+      .select('objective')
+      .eq('ticket_id', ticketId)
+      .eq('is_executed', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     const { searchParams } = new URL(request.url);
     const context = (searchParams.get('context') ?? undefined) as PromptContext | undefined;
     const platformUrl = getPlatformUrl();
-    const markdown = buildTicketPromptMarkdown(ticket, platformUrl, context);
+    const markdown = buildTicketPromptMarkdown(
+      {
+        ...ticket,
+        objective: draftObjective?.objective ?? ticket.objective
+      },
+      platformUrl,
+      context
+    );
 
     const headers: Record<string, string> = {
       'Content-Type': 'text/plain; charset=utf-8'

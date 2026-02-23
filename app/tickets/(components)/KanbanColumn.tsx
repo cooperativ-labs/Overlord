@@ -105,7 +105,7 @@ export default function KanbanColumn({
                   <CardContent className="p-2">
                     <Textarea
                       autoFocus
-                      placeholder="Describe the ticket…"
+                      placeholder="Write an objective…"
                       value={value}
                       onChange={e => setValue(e.target.value)}
                       onBlur={handleBlur}

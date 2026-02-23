@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveSession } from '@/lib/overlord/protocol-db';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -73,6 +74,8 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    await upsertDraftObjective(supabase, createdTicket.id, objective);
 
     const createdReference = getTicketIdentifier(createdTicket.id);
     const sourceReference = getTicketIdentifier(ticketId);

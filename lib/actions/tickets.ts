@@ -6,13 +6,14 @@ import { cookies } from 'next/headers';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getPlatformUrl } from '@/lib/env';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
+import { upsertDraftObjective } from '@/lib/objectives';
 import { buildTicketPromptMarkdown } from '@/lib/overlord/ticket-prompt';
 import { createTicketSchema } from '@/lib/overlord/validation';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
-function deriveTitleFromDescription(description: string): string {
-  const trimmed = description.trim();
+function deriveTitleFromObjective(objective: string): string {
+  const trimmed = objective.trim();
   if (trimmed.length <= 60) return trimmed;
   return trimmed.slice(0, 60) + '…';
 }
@@ -155,7 +156,7 @@ export async function createTicketInColumnAction(
   } = {
     status,
     objective: trimmedObjective,
-    title: trimmedObjective ? deriveTitleFromDescription(trimmedObjective) : null,
+    title: trimmedObjective ? deriveTitleFromObjective(trimmedObjective) : null,
     organization_id: selected.organizationId,
     project_id: selected.projectId
   };
@@ -170,6 +171,7 @@ export async function createTicketInColumnAction(
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
 
+  await upsertDraftObjective(supabase, data.id, trimmedObjective);
   await assignTicketToColumnEnd(supabase, data.id, status, data.organization_id);
 
   revalidateTicketBoards([data.organization_id]);
@@ -209,6 +211,7 @@ export async function createBlankTicketAction(organizationId?: number, projectId
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
 
+  await upsertDraftObjective(supabase, data.id, '');
   await assignTicketToColumnEnd(supabase, data.id, 'draft', data.organization_id);
 
   revalidateTicketBoards([data.organization_id]);
@@ -224,7 +227,7 @@ export async function createBlankTicketAction(organizationId?: number, projectId
 export async function createTicketAction(formData: FormData, organizationId?: number) {
   const parsed = createTicketSchema.safeParse({
     title: formData.get('title'),
-    description: formData.get('description'),
+    description: formData.get('objective') ?? formData.get('description'),
     availableTools: formData.get('availableTools'),
     acceptanceCriteria: formData.get('acceptanceCriteria'),
     executionTarget: formData.get('executionTarget')
@@ -252,7 +255,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     execution_target: parsed.data.executionTarget,
     objective: parsed.data.description,
     status: 'draft',
-    title: parsed.data.title || deriveTitleFromDescription(parsed.data.description),
+    title: parsed.data.title || deriveTitleFromObjective(parsed.data.description),
     organization_id: selected.organizationId,
     project_id: selected.projectId
   };
@@ -267,6 +270,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
 
+  await upsertDraftObjective(supabase, data.id, parsed.data.description);
   await assignTicketToColumnEnd(supabase, data.id, 'draft', data.organization_id);
 
   await supabase.from('ticket_events').insert({
@@ -288,7 +292,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
 export async function updateTicketAction(ticketId: string, formData: FormData) {
   const parsed = createTicketSchema.safeParse({
     title: formData.get('title'),
-    description: formData.get('description'),
+    description: formData.get('objective') ?? formData.get('description'),
     availableTools: formData.get('availableTools'),
     acceptanceCriteria: formData.get('acceptanceCriteria'),
     executionTarget: formData.get('executionTarget')
@@ -316,6 +320,7 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     throw new Error(error?.message ?? 'Failed to update ticket.');
   }
 
+  await upsertDraftObjective(supabase, ticketId, parsed.data.description);
   await supabase.from('ticket_events').insert({
     event_type: 'system',
     summary: 'Ticket updated by PM.',
@@ -344,15 +349,24 @@ export async function updateTicketFieldAction(
   }
 
   const supabase = await createClient();
+  const normalizedValue = value.trim();
+  const ticketUpdatePayload =
+    field === 'objective'
+      ? { objective: normalizedValue || null }
+      : { [field]: normalizedValue || null };
   const { data, error } = await supabase
     .from('tickets')
-    .update({ [field]: value.trim() || null })
+    .update(ticketUpdatePayload)
     .eq('id', ticketId)
     .select('organization_id,project_id')
     .single();
 
   if (error || !data) {
     throw new Error(error?.message ?? 'Failed to update ticket.');
+  }
+
+  if (field === 'objective') {
+    await upsertDraftObjective(supabase, ticketId, normalizedValue);
   }
 
   await supabase.from('ticket_events').insert({
@@ -481,6 +495,77 @@ export async function setTicketProjectAction(ticketId: string, projectId: string
   );
   revalidateTicketDetails([
     { organizationId: data.organization_id, projectId: data.project_id, ticketId }
+  ]);
+}
+
+export async function markObjectiveExecutedAction(ticketId: string, objectiveId: string) {
+  const supabase = await createClient();
+  const { data: objective, error: objectiveError } = await supabase
+    .from('objectives')
+    .select('id,is_executed,objective,ticket_id')
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId)
+    .single();
+
+  if (objectiveError || !objective) {
+    throw new Error(objectiveError?.message ?? 'Objective not found.');
+  }
+
+  if (objective.is_executed) {
+    return;
+  }
+
+  const { error: executeError } = await supabase
+    .from('objectives')
+    .update({ is_executed: true })
+    .eq('id', objectiveId);
+  if (executeError) {
+    throw new Error(executeError.message);
+  }
+
+  const { data: existingDraft, error: existingDraftError } = await supabase
+    .from('objectives')
+    .select('id')
+    .eq('ticket_id', ticketId)
+    .eq('is_executed', false)
+    .limit(1)
+    .maybeSingle();
+  if (existingDraftError) {
+    throw new Error(existingDraftError.message);
+  }
+
+  if (!existingDraft) {
+    const { error: insertDraftError } = await supabase.from('objectives').insert({
+      ticket_id: ticketId,
+      objective: '',
+      is_executed: false
+    });
+    if (insertDraftError) {
+      throw new Error(insertDraftError.message);
+    }
+  }
+
+  const { data: ticket, error: ticketError } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+  if (ticketError || !ticket) {
+    throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: 'Objective marked executed.',
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards([ticket.organization_id]);
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
   ]);
 }
 
@@ -620,7 +705,22 @@ export async function getTicketPromptForCopy(
     return { error: error?.message ?? 'Ticket not found.' };
   }
 
+  const { data: draftObjective } = await supabase
+    .from('objectives')
+    .select('objective')
+    .eq('ticket_id', ticketId)
+    .eq('is_executed', false)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const platformUrl = getPlatformUrl();
-  const prompt = buildTicketPromptMarkdown(ticket, platformUrl);
+  const prompt = buildTicketPromptMarkdown(
+    {
+      ...ticket,
+      objective: draftObjective?.objective ?? ticket.objective
+    },
+    platformUrl
+  );
   return { prompt };
 }

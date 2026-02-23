@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import Link from 'next/link';
 import fs from 'node:fs/promises';
 
@@ -7,12 +7,15 @@ import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { InlineEditField } from '@/components/features/InlineEditField';
 import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
+import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
@@ -44,7 +47,8 @@ export async function TicketPanelContent({
     { data: everhourIntegration },
     { data: projects },
     { data: agentSession },
-    { data: agentTokenRow }
+    { data: agentTokenRow },
+    { data: objectives }
   ] = await Promise.all([
     supabase
       .from('tickets')
@@ -100,7 +104,12 @@ export async function TicketPanelContent({
       .eq('organization_id', organizationId)
       .order('created_at', { ascending: true })
       .limit(1)
-      .maybeSingle()
+      .maybeSingle(),
+    supabase
+      .from('objectives')
+      .select('id,objective,is_executed,created_at')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
   ]);
 
   if (ticketError || !ticket) {
@@ -121,7 +130,6 @@ export async function TicketPanelContent({
     token: agentToken ?? ''
   });
   const ticketIdentifier = getTicketIdentifier(ticket.id);
-  const chatGptLink = `https://chat.openai.com/?q=${encodeURIComponent(`attach ${ticketIdentifier}`)}`;
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
   const everhourApiKey =
     typeof everhourIntegration?.api_key === 'string' ? everhourIntegration.api_key.trim() : '';
@@ -163,6 +171,12 @@ export async function TicketPanelContent({
     projectDirectoryExists && resolvedProjectDirectory
       ? (await listProjectFiles(resolvedProjectDirectory)).files
       : [];
+  const objectiveThreadItems = objectives ?? [];
+  const draftObjective = objectiveThreadItems.find(objective => !objective.is_executed) ?? null;
+  const executedObjectives = objectiveThreadItems.filter(
+    objective => objective.is_executed && objective.objective.trim().length > 0
+  );
+  const draftObjectiveValue = draftObjective?.objective ?? ticket.objective ?? '';
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -226,15 +240,6 @@ export async function TicketPanelContent({
           projects={projectOptions}
         />
 
-        <LaunchCommandBar
-          ticketId={ticketId}
-          agentToken={agentToken}
-          chatGptLink={chatGptLink}
-          claudeCommand={claudeCode}
-          codexCommand={codex}
-          workingDirectory={workingDirectory}
-        />
-
         {!hasEverhourApiKey ? (
           <>
             <Separator className="mb-6" />
@@ -251,19 +256,78 @@ export async function TicketPanelContent({
           </>
         ) : null}
 
-        <section className="mb-6">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Description
+        <section className="mb-8 rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary/90">
+            Objective
           </h2>
-          <InlineEditField
-            displayClassName="text-sm leading-relaxed"
-            field="objective"
-            fileMentionPaths={objectiveFileMentionPaths}
-            initialValue={ticket.objective ?? ''}
-            multiline
-            renderMarkdown
-            placeholder="No description — click to add one."
+          {executedObjectives.length > 0 ? (
+            <div className="mb-3 space-y-2">
+              {executedObjectives.map((objective, index) => (
+                <Collapsible key={objective.id}>
+                  <div className="flex items-start gap-1">
+                    <CollapsibleTrigger asChild>
+                      <button
+                        className="flex flex-1 items-center justify-between rounded-md border bg-background px-3 py-2 text-left hover:bg-muted/40"
+                        type="button"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">
+                            Previous Objective {executedObjectives.length - index}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Executed {new Date(objective.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </CollapsibleTrigger>
+                    <ObjectiveMenuButton
+                      ticketId={ticketId}
+                      objectiveId={objective.id}
+                      isExecuted={objective.is_executed}
+                      canMarkExecuted={objective.objective.trim().length > 0}
+                    />
+                  </div>
+                  <CollapsibleContent className="px-1 pb-2 pt-1">
+                    <MarkdownContent compact>{objective.objective}</MarkdownContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="rounded-md border bg-background p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Current Objective
+              </p>
+              <ObjectiveMenuButton
+                ticketId={ticketId}
+                objectiveId={draftObjective?.id ?? ''}
+                isExecuted={!draftObjective || draftObjective.is_executed}
+                canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
+              />
+            </div>
+            <InlineEditField
+              key={draftObjective?.id ?? 'current-objective'}
+              displayClassName="text-sm leading-relaxed"
+              field="objective"
+              fileMentionPaths={objectiveFileMentionPaths}
+              initialValue={draftObjectiveValue}
+              multiline
+              renderMarkdown
+              placeholder="No objective — click to add one."
+              ticketId={ticketId}
+            />
+          </div>
+
+          <LaunchCommandBar
+            className="mt-3 border-primary/25 bg-background/80"
             ticketId={ticketId}
+            agentToken={agentToken}
+            claudeCommand={claudeCode}
+            codexCommand={codex}
+            workingDirectory={workingDirectory}
           />
         </section>
 

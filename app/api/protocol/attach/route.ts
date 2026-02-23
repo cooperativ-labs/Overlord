@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { markDraftObjectiveExecuted } from '@/lib/objectives';
 import { attachSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId);
+
     await supabase.from('ticket_events').insert({
       event_type: 'system',
       payload: {
@@ -84,7 +87,10 @@ export async function POST(request: Request) {
         state: session.session_state
       },
       sharedState: sharedState ?? [],
-      ticket
+      ticket: {
+        ...ticket,
+        objective: objectiveExecution.executedObjective ?? ticket.objective
+      }
     });
   } catch (error) {
     return internalErrorResponse(error);

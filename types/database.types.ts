@@ -299,6 +299,41 @@ export type Database = {
         };
         Relationships: [];
       };
+      objectives: {
+        Row: {
+          created_at: string;
+          id: string;
+          is_executed: boolean;
+          objective: string;
+          ticket_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          is_executed?: boolean;
+          objective?: string;
+          ticket_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          is_executed?: boolean;
+          objective?: string;
+          ticket_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'objectives_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       projects: {
         Row: {
           color: string;

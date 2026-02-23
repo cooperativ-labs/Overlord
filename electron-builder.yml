@@ -4,6 +4,7 @@ artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 directories:
   output: release
   buildResources: electron/resources
+afterSign: scripts/notarize.cjs
 
 files:
   - "dist-electron/**/*"

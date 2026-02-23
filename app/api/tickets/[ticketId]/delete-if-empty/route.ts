@@ -14,12 +14,20 @@ export async function POST(
     .select('title,objective,acceptance_criteria,available_tools,execution_target')
     .eq('id', ticketId)
     .single();
+  const { data: nonEmptyObjective } = await supabase
+    .from('objectives')
+    .select('id')
+    .eq('ticket_id', ticketId)
+    .neq('objective', '')
+    .limit(1)
+    .maybeSingle();
 
   if (!ticket) return NextResponse.json({ deleted: false });
 
   const isEmpty =
     !ticket.title &&
     !ticket.objective &&
+    !nonEmptyObjective &&
     !ticket.acceptance_criteria &&
     !ticket.available_tools &&
     ticket.execution_target === 'agent';
