@@ -1,5 +1,5 @@
-import { app, BrowserWindow } from 'electron';
 import { config as loadDotenv } from 'dotenv';
+import { app, BrowserWindow } from 'electron';
 import fs from 'fs';
 import path from 'path';
 

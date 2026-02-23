@@ -6,8 +6,8 @@
   "private": true,
   "main": "dist-electron/main.js",
   "bin": {
-    "ovld": "bin/ovld.mjs",
-    "overlord": "bin/ovld.mjs"
+    "overlord": "bin/ovld.mjs",
+    "ovld": "bin/ovld.mjs"
   },
   "scripts": {
     "start": "supabase start",

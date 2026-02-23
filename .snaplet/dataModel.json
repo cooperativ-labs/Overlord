@@ -4392,6 +4392,20 @@
           "hasDefaultValue": false
         },
         {
+          "name": "projects",
+          "type": "projects",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "projectsToorganizations",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "ticket_statuses",
           "type": "ticket_statuses",
           "isRequired": false,
@@ -4425,6 +4439,182 @@
           "name": "organizations_pkey",
           "fields": [
             "id"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "projects": {
+      "id": "public.projects",
+      "schemaName": "public",
+      "tableName": "projects",
+      "fields": [
+        {
+          "id": "public.projects.id",
+          "name": "id",
+          "columnName": "id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.organization_id",
+          "name": "organization_id",
+          "columnName": "organization_id",
+          "type": "int4",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.name",
+          "name": "name",
+          "columnName": "name",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.color",
+          "name": "color",
+          "columnName": "color",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.created_at",
+          "name": "created_at",
+          "columnName": "created_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.updated_at",
+          "name": "updated_at",
+          "columnName": "updated_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.everhour_project_id",
+          "name": "everhour_project_id",
+          "columnName": "everhour_project_id",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.local_working_directory",
+          "name": "local_working_directory",
+          "columnName": "local_working_directory",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "organizations",
+          "type": "organizations",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "projectsToorganizations",
+          "relationFromFields": [
+            "organization_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "tickets",
+          "type": "tickets",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ticketsToprojects",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "projects_pkey",
+          "fields": [
+            "id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "projects_id_organization_id_key",
+          "fields": [
+            "id",
+            "organization_id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "projects_org_everhour_project_id_key",
+          "fields": [
+            "everhour_project_id",
+            "organization_id"
           ],
           "nullNotDistinct": false
         }
@@ -7071,7 +7261,7 @@
           "name": "title",
           "columnName": "title",
           "type": "text",
-          "isRequired": true,
+          "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
@@ -7085,7 +7275,7 @@
           "name": "objective",
           "columnName": "objective",
           "type": "text",
-          "isRequired": true,
+          "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
@@ -7141,12 +7331,12 @@
           "name": "acceptance_criteria",
           "columnName": "acceptance_criteria",
           "type": "text",
-          "isRequired": true,
+          "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
           "sequence": false,
-          "hasDefaultValue": true,
+          "hasDefaultValue": false,
           "isId": false,
           "maxLength": null
         },
@@ -7277,6 +7467,62 @@
           "maxLength": null
         },
         {
+          "id": "public.tickets.everhour_task_id",
+          "name": "everhour_task_id",
+          "columnName": "everhour_task_id",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.tickets.everhour_project_id",
+          "name": "everhour_project_id",
+          "columnName": "everhour_project_id",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.tickets.project_id",
+          "name": "project_id",
+          "columnName": "project_id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.tickets.execution_target",
+          "name": "execution_target",
+          "columnName": "execution_target",
+          "type": "ticket_execution_target",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "users",
           "type": "users",
           "isRequired": true,
@@ -7304,6 +7550,26 @@
             "organization_id"
           ],
           "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "projects",
+          "type": "projects",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "ticketsToprojects",
+          "relationFromFields": [
+            "organization_id",
+            "project_id"
+          ],
+          "relationToFields": [
+            "organization_id",
             "id"
           ],
           "isList": false,
@@ -7401,6 +7667,146 @@
           "name": "tickets_ticket_sequence_key",
           "fields": [
             "ticket_sequence"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "user_integrations": {
+      "id": "public.user_integrations",
+      "schemaName": "public",
+      "tableName": "user_integrations",
+      "fields": [
+        {
+          "id": "public.user_integrations.id",
+          "name": "id",
+          "columnName": "id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.user_integrations.user_id",
+          "name": "user_id",
+          "columnName": "user_id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.user_integrations.provider",
+          "name": "provider",
+          "columnName": "provider",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.user_integrations.api_key",
+          "name": "api_key",
+          "columnName": "api_key",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.user_integrations.metadata",
+          "name": "metadata",
+          "columnName": "metadata",
+          "type": "jsonb",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.user_integrations.created_at",
+          "name": "created_at",
+          "columnName": "created_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.user_integrations.updated_at",
+          "name": "updated_at",
+          "columnName": "updated_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "users",
+          "type": "users",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "user_integrationsTousers",
+          "relationFromFields": [
+            "user_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "user_integrations_pkey",
+          "fields": [
+            "id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "user_integrations_user_provider_key",
+          "fields": [
+            "provider",
+            "user_id"
           ],
           "nullNotDistinct": false
         }
@@ -8026,6 +8432,20 @@
           "isGenerated": false,
           "sequence": false,
           "hasDefaultValue": false
+        },
+        {
+          "name": "user_integrations",
+          "type": "user_integrations",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "user_integrationsTousers",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
         }
       ],
       "uniqueConstraints": [
@@ -8472,6 +8892,17 @@
         },
         {
           "name": "update"
+        }
+      ]
+    },
+    "ticket_execution_target": {
+      "schemaName": "public",
+      "values": [
+        {
+          "name": "agent"
+        },
+        {
+          "name": "human"
         }
       ]
     },

@@ -14730,8 +14730,6 @@ __metadata:
     wait-on: "npm:^8.0.3"
     zod: "npm:^4.3.6"
   bin:
-    coop: bin/coop.mjs
-    cooperativ: bin/ovld.mjs
     overlord: bin/ovld.mjs
     ovld: bin/ovld.mjs
   languageName: unknown

@@ -126,6 +126,16 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
               </FieldDescription>
             </div>
             <Field>
+              <FieldLabel htmlFor="signup-name">Name</FieldLabel>
+              <Input
+                id="signup-name"
+                name="name"
+                type="text"
+                placeholder="Ada Lovelace"
+                required
+              />
+            </Field>
+            <Field>
               <FieldLabel htmlFor="signup-email">Email</FieldLabel>
               <Input
                 id="signup-email"

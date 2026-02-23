@@ -168,7 +168,7 @@ alter table "public"."ticket_statuses" enable row level security;
     "organization_id" integer not null,
     "everhour_task_id" text,
     "everhour_project_id" text,
-    "project_id" uuid,
+    "project_id" uuid not null,
     "execution_target" public.ticket_execution_target not null default 'agent'::public.ticket_execution_target
       );
 
@@ -347,7 +347,7 @@ alter table "public"."tickets" add constraint "tickets_organization_id_fkey" FOR
 
 alter table "public"."tickets" validate constraint "tickets_organization_id_fkey";
 
-alter table "public"."tickets" add constraint "tickets_project_org_fkey" FOREIGN KEY (project_id, organization_id) REFERENCES public.projects(id, organization_id) ON UPDATE CASCADE ON DELETE SET NULL not valid;
+alter table "public"."tickets" add constraint "tickets_project_org_fkey" FOREIGN KEY (project_id, organization_id) REFERENCES public.projects(id, organization_id) ON UPDATE CASCADE ON DELETE RESTRICT not valid;
 
 alter table "public"."tickets" validate constraint "tickets_project_org_fkey";
 
@@ -365,45 +365,44 @@ alter table "public"."user_integrations" add constraint "user_integrations_user_
 
 set check_function_bodies = off;
 
-CREATE OR REPLACE FUNCTION public.handle_new_auth_user_organization_setup()
- RETURNS trigger
+CREATE OR REPLACE FUNCTION public.create_organization_for_current_user(target_name text)
+ RETURNS integer
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
 declare
   new_organization_id integer;
+  effective_name text;
 begin
+  if (select auth.uid()) is null then
+    raise exception 'create_organization_for_current_user must be called as an authenticated user';
+  end if;
+
+  effective_name := coalesce(
+    nullif(trim(target_name), ''),
+    nullif(
+      trim(coalesce((select raw_user_meta_data ->> 'name' from auth.users where id = auth.uid()), '')),
+      ''
+    ),
+    nullif(
+      trim(split_part(coalesce((select email from auth.users where id = auth.uid()), ''), '@', 1)),
+      ''
+    ),
+    'Organization ' || left((select auth.uid())::text, 8)
+  ) || ' Org';
+
   insert into public.organizations (name)
-  values (
-    coalesce(
-      nullif(trim(coalesce(new.raw_user_meta_data ->> 'name', '')), ''),
-      nullif(trim(split_part(coalesce(new.email, ''), '@', 1)), ''),
-      'Organization ' || left(new.id::text, 8)
-    ) || ' Org'
-  )
+  values (effective_name)
   returning id into new_organization_id;
 
   insert into public.members (organization_id, user_id, role)
-  values (new_organization_id, new.id, 'ADMIN')
+  values (new_organization_id, (select auth.uid()), 'ADMIN')
   on conflict (organization_id, user_id) do nothing;
 
   perform public.seed_default_ticket_statuses_for_organization(new_organization_id);
 
-  return new;
-end;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.handle_new_auth_user_ticket_statuses()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-begin
-  perform public.seed_default_ticket_statuses_for_account(new.id);
-  return new;
+  return new_organization_id;
 end;
 $function$
 ;
@@ -434,26 +433,6 @@ AS $function$
     target_organization_id,
     array['VIEWER', 'AGENT', 'MANAGER', 'ADMIN']::public.organization_role[]
   );
-$function$
-;
-
-CREATE OR REPLACE FUNCTION public.seed_default_ticket_statuses_for_account(target_account_id uuid)
- RETURNS void
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-begin
-  insert into public.ticket_statuses (account_id, name, status_type, position, is_default)
-  values
-    (target_account_id, 'draft', 'draft', 0, true),
-    (target_account_id, 'execute', 'execute', 1, true),
-    (target_account_id, 'review', 'review', 2, true),
-    (target_account_id, 'complete', 'complete', 3, true),
-    (target_account_id, 'blocked', 'execute', 4, true),
-    (target_account_id, 'cancelled', 'complete', 5, true)
-  on conflict (account_id, name) do nothing;
-end;
 $function$
 ;
 
@@ -1410,7 +1389,5 @@ CREATE TRIGGER set_tickets_organization_before_insert BEFORE INSERT ON public.ti
 CREATE TRIGGER set_tickets_updated_at BEFORE UPDATE ON public.tickets FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 CREATE TRIGGER set_user_integrations_updated_at BEFORE UPDATE ON public.user_integrations FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-CREATE TRIGGER on_auth_user_created_organization_setup AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user_organization_setup();
 
 
