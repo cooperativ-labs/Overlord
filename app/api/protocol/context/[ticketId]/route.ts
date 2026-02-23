@@ -4,7 +4,7 @@ import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getPlatformUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
-import { buildTicketPromptMarkdown } from '@/lib/overlord/ticket-prompt';
+import { buildTicketPromptMarkdown, type PromptContext } from '@/lib/overlord/ticket-prompt';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
@@ -39,8 +39,10 @@ export async function GET(request: Request, { params }: RouteContext) {
       .maybeSingle();
     const workingDirectory = project?.local_working_directory ?? null;
 
+    const { searchParams } = new URL(request.url);
+    const context = (searchParams.get('context') ?? undefined) as PromptContext | undefined;
     const platformUrl = getPlatformUrl();
-    const markdown = buildTicketPromptMarkdown(ticket, platformUrl);
+    const markdown = buildTicketPromptMarkdown(ticket, platformUrl, context);
 
     const headers: Record<string, string> = {
       'Content-Type': 'text/plain; charset=utf-8'

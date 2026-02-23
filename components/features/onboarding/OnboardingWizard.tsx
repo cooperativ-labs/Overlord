@@ -227,7 +227,10 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
               <input
                 ref={directoryInputRef}
                 type="file"
-                {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+                {...({
+                  webkitdirectory: '',
+                  directory: ''
+                } as React.InputHTMLAttributes<HTMLInputElement>)}
                 multiple
                 className="hidden"
                 aria-hidden

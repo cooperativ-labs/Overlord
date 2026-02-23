@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { createClient } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
+
 import { approveDevice } from './actions';
 
 export default async function DeviceAuthPage({
@@ -62,7 +63,9 @@ export default async function DeviceAuthPage({
         <div className="w-full max-w-md space-y-4 text-center">
           <h1 className="text-2xl font-semibold">Authorize CLI</h1>
           <p className="text-muted-foreground">
-            Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">ovld auth login</code> in your terminal to start the authorization process.
+            Run{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">ovld auth login</code>{' '}
+            in your terminal to start the authorization process.
           </p>
         </div>
       </div>
@@ -84,7 +87,8 @@ export default async function DeviceAuthPage({
           <h1 className="text-2xl font-semibold">Code Not Found</h1>
           <p className="text-muted-foreground">
             This authorization code was not found. Please run{' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">ovld auth login</code> again.
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">ovld auth login</code>{' '}
+            again.
           </p>
         </div>
       </div>
@@ -98,7 +102,8 @@ export default async function DeviceAuthPage({
           <h1 className="text-2xl font-semibold">Code Expired</h1>
           <p className="text-muted-foreground">
             This authorization code has expired or already been used. Please run{' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">ovld auth login</code> again.
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">ovld auth login</code>{' '}
+            again.
           </p>
         </div>
       </div>

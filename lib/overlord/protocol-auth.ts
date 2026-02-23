@@ -19,9 +19,9 @@ function extractBearerToken(request: Request): string | null {
  * Resolves an agent token from the Authorization header.
  * Returns a context object with user/org info on success, or a 401 NextResponse on failure.
  */
-export async function resolveAgentToken(request: Request): Promise<
-  { context: AgentTokenContext; error: null } | { context: null; error: NextResponse }
-> {
+export async function resolveAgentToken(
+  request: Request
+): Promise<{ context: AgentTokenContext; error: null } | { context: null; error: NextResponse }> {
   const providedToken = extractBearerToken(request);
   if (!providedToken) {
     return {

@@ -1,9 +1,15 @@
 'use client';
 
-import { Bot, Play, Terminal } from 'lucide-react';
+import { Bot, Copy, Play, Terminal } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 
 import { useTerminal } from './terminal/TerminalProvider';
 
@@ -48,7 +54,7 @@ function LaunchButton({
     <Button className="h-6 gap-1.5 text-xs" size="sm" variant="outline" onClick={handleClick}>
       {isElectron ? (
         <>
-          <Play className="h-3 w-3" />
+          <Bot className="h-3 w-3" />
           {label}
         </>
       ) : copied ? (
@@ -60,6 +66,50 @@ function LaunchButton({
         </>
       )}
     </Button>
+  );
+}
+
+type CopyAgent = 'claude' | 'codex' | 'cursor';
+
+function CopyAgentCommandButton({
+  claudeCommand,
+  codexCommand,
+  cursorCommand
+}: {
+  claudeCommand: string;
+  codexCommand: string;
+  cursorCommand: string;
+}) {
+  async function handleCopy({ agent }: { agent: CopyAgent }) {
+    const commandsByAgent: Record<CopyAgent, string> = {
+      claude: claudeCommand,
+      codex: codexCommand,
+      cursor: cursorCommand
+    };
+
+    await navigator.clipboard.writeText(commandsByAgent[agent]);
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button className="h-6 gap-1.5 text-xs" size="sm" variant="outline">
+          <Copy className="h-3 w-3" />
+          Copy command
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem className="text-xs" onClick={() => handleCopy({ agent: 'claude' })}>
+          Claude
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-xs" onClick={() => handleCopy({ agent: 'codex' })}>
+          Codex
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-xs" onClick={() => handleCopy({ agent: 'cursor' })}>
+          Cursor
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -97,6 +147,7 @@ export function LaunchCommandBar({
   workingDirectory
 }: Props) {
   const { isElectron } = useTerminal();
+  const cursorCommand = codexCommand;
 
   return (
     <div className="mb-8 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-2.5">
@@ -119,18 +170,23 @@ export function LaunchCommandBar({
         clipboardCommand={codexCommand}
         workingDirectory={workingDirectory}
       />
-      {isElectron && (
+      <CopyAgentCommandButton
+        claudeCommand={claudeCommand}
+        codexCommand={codexCommand}
+        cursorCommand={cursorCommand}
+      />
+      {/* {isElectron && (
         <>
           <div className="h-4 w-px bg-border" />
           <RunAgentButton ticketId={ticketId} agentToken={agentToken} workingDirectory={workingDirectory} />
         </>
-      )}
+      )} */}
       <div className="h-4 w-px bg-border" />
-      <Button asChild className="h-6 text-xs" size="sm" variant="outline">
+      {/* <Button asChild className="h-6 text-xs" size="sm" variant="outline">
         <a href={chatGptLink} rel="noreferrer" target="_blank">
           ChatGPT ↗
         </a>
-      </Button>
+      </Button> */}
     </div>
   );
 }

@@ -40,7 +40,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const platformUrl = getPlatformUrl();
   // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
   const agentToken = input.agentToken ?? process.env.AGENT_TOKEN ?? '';
-  const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}`;
+  const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}?context=electron`;
   const launchEnv = {
     PLATFORM_URL: platformUrl,
     AGENT_TOKEN: agentToken,

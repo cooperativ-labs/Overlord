@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
-import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 function deriveTitleFromObjective(objective: string): string {
@@ -34,8 +34,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { acceptanceCriteria, availableTools, executionTarget, objective, priority, projectId, title } =
-      parsed.data;
+    const {
+      acceptanceCriteria,
+      availableTools,
+      executionTarget,
+      objective,
+      priority,
+      projectId,
+      title
+    } = parsed.data;
 
     const supabase = createServiceRoleClient();
 

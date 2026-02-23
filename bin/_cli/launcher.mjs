@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { resolveAuth } from './credentials.mjs';
 
 async function fetchContext(platformUrl, agentToken, ticketId) {
-  const url = `${platformUrl}/api/protocol/context/${ticketId}`;
+  const url = `${platformUrl}/api/protocol/context/${ticketId}?context=cli`;
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${agentToken}` }
   });

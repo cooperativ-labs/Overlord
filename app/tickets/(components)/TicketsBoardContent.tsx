@@ -101,6 +101,9 @@ export default async function TicketsBoardContent({
   projectId
 }: TicketsBoardContentProps) {
   const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   let ticketsQuery = supabase
     .from('tickets')
@@ -124,7 +127,23 @@ export default async function TicketsBoardContent({
     ticketsQuery = ticketsQuery.eq('project_id', projectId);
   }
 
-  const [ticketsResult, statusesResult] = await Promise.all([ticketsQuery, statusesQuery]);
+  const [ticketsResult, statusesResult, everhourIntegrationResult] = await Promise.all([
+    ticketsQuery,
+    statusesQuery,
+    supabase
+      .from('user_integrations')
+      .select('api_key')
+      .eq('user_id', user?.id ?? '')
+      .eq('provider', 'everhour')
+      .limit(1)
+      .maybeSingle()
+  ]);
+
+  const everhourApiKey =
+    typeof everhourIntegrationResult.data?.api_key === 'string'
+      ? everhourIntegrationResult.data.api_key.trim()
+      : '';
+  const hasEverhourApiKey = everhourApiKey.length > 0;
 
   const rawTickets = (ticketsResult.data ?? []) as RawTicket[];
   const ticketIds = rawTickets.map(ticket => ticket.id);
@@ -154,7 +173,7 @@ export default async function TicketsBoardContent({
         organization_name: getOrganizationName(organization),
         project_name: p?.name ?? null,
         project_color: p?.color ?? null,
-        project_everhour_project_id: p?.everhour_project_id ?? null,
+        project_everhour_project_id: hasEverhourApiKey ? (p?.everhour_project_id ?? null) : null,
         agent_session_state: latestSessionByTicket.get(ticket.id) ?? null
       };
     });

@@ -31,6 +31,9 @@ export async function TicketPanelContent({
   organizationId: number;
 }) {
   const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   const [
     { data: ticket, error: ticketError },
@@ -74,7 +77,8 @@ export async function TicketPanelContent({
       .order('position', { ascending: true }),
     supabase
       .from('user_integrations')
-      .select('id')
+      .select('api_key')
+      .eq('user_id', user?.id ?? '')
       .eq('provider', 'everhour')
       .limit(1)
       .maybeSingle(),
@@ -119,7 +123,9 @@ export async function TicketPanelContent({
   const ticketIdentifier = getTicketIdentifier(ticket.id);
   const chatGptLink = `https://chat.openai.com/?q=${encodeURIComponent(`attach ${ticketIdentifier}`)}`;
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
-  const hasEverhourIntegration = Boolean(everhourIntegration?.id);
+  const everhourApiKey =
+    typeof everhourIntegration?.api_key === 'string' ? everhourIntegration.api_key.trim() : '';
+  const hasEverhourApiKey = everhourApiKey.length > 0;
   const projectOptions = projects ?? [];
   const activeProjectId = ticket.project_id ?? projectOptions[0]?.id;
   if (!activeProjectId) {
@@ -163,7 +169,7 @@ export async function TicketPanelContent({
       <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
         <p className="text-sm font-medium text-muted-foreground">{ticketIdentifier}</p>
         <div className="flex items-center gap-1">
-          {hasEverhourIntegration ? (
+          {hasEverhourApiKey ? (
             <TimerWithTimeEntries
               initialTaskId={ticket.everhour_task_id ?? null}
               ticketId={ticketId}
@@ -229,7 +235,7 @@ export async function TicketPanelContent({
           workingDirectory={workingDirectory}
         />
 
-        {!hasEverhourIntegration ? (
+        {!hasEverhourApiKey ? (
           <>
             <Separator className="mb-6" />
             <section className="mb-6">

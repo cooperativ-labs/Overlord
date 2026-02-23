@@ -2,8 +2,8 @@
 
 import { redirect } from 'next/navigation';
 
-import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import { createClient } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function approveDevice(userCode: string): Promise<void> {
   const supabase = await createClient();

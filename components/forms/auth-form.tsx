@@ -13,15 +13,14 @@ import {
   FieldSeparator
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  LoadingButton,
-  type ButtonLoadingState
-} from '@/components/ui/loading-button';
+import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { signIn, signUp } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
 
 const isRedirectError = (err: unknown): boolean =>
-  typeof err === 'object' && err !== null && (err as { digest?: string }).digest === 'NEXT_REDIRECT';
+  typeof err === 'object' &&
+  err !== null &&
+  (err as { digest?: string }).digest === 'NEXT_REDIRECT';
 
 type AuthMode = 'login' | 'signup';
 
@@ -34,10 +33,8 @@ type AuthFormProps = {
 
 export function AuthForm({ className, defaultMode = 'login', error, message }: AuthFormProps) {
   const [mode, setMode] = React.useState<AuthMode>(defaultMode);
-  const [signInButtonState, setSignInButtonState] =
-    React.useState<ButtonLoadingState>('default');
-  const [signUpButtonState, setSignUpButtonState] =
-    React.useState<ButtonLoadingState>('default');
+  const [signInButtonState, setSignInButtonState] = React.useState<ButtonLoadingState>('default');
+  const [signUpButtonState, setSignUpButtonState] = React.useState<ButtonLoadingState>('default');
 
   const isLogin = mode === 'login';
 

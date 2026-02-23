@@ -25,6 +25,7 @@ type ProjectSettingsSectionProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
+  hasEverhourApiKey: boolean;
 };
 
 export function ProjectSettingsSection({
@@ -32,7 +33,8 @@ export function ProjectSettingsSection({
   organizationId,
   initialName,
   initialColor,
-  initialWorkingDirectory
+  initialWorkingDirectory,
+  hasEverhourApiKey
 }: ProjectSettingsSectionProps) {
   const { api, isElectron } = useElectron();
   const router = useRouter();
@@ -173,7 +175,10 @@ export function ProjectSettingsSection({
     }
 
     // Web: File System Access API or fallback to directory input
-    const w = typeof window !== 'undefined' ? (window as Window & { showDirectoryPicker?(): Promise<{ name: string }> }) : null;
+    const w =
+      typeof window !== 'undefined'
+        ? (window as Window & { showDirectoryPicker?(): Promise<{ name: string }> })
+        : null;
     if (w?.showDirectoryPicker) {
       try {
         const handle = await w.showDirectoryPicker();
@@ -260,29 +265,30 @@ export function ProjectSettingsSection({
           {colorError ? <span className="text-xs text-destructive">{colorError}</span> : null}
         </div>
 
-        {/* Everhour sync */}
-        <div className="flex items-center gap-2">
-          <LoadingButton
-            buttonState={syncButtonState}
-            setButtonState={setSyncButtonState}
-            text="Sync Projects to Everhour"
-            loadingText="Syncing…"
-            successText="Synced"
-            errorText="Retry"
-            reset
-            size="sm"
-            variant="outline"
-            onClick={handleSyncEverhour}
-          />
-          {syncMessage ? (
-            <span
-              className="max-w-[240px] truncate text-xs text-muted-foreground"
-              title={syncMessage}
-            >
-              {syncMessage}
-            </span>
-          ) : null}
-        </div>
+        {hasEverhourApiKey ? (
+          <div className="flex items-center gap-2">
+            <LoadingButton
+              buttonState={syncButtonState}
+              setButtonState={setSyncButtonState}
+              text="Sync Projects to Everhour"
+              loadingText="Syncing…"
+              successText="Synced"
+              errorText="Retry"
+              reset
+              size="sm"
+              variant="outline"
+              onClick={handleSyncEverhour}
+            />
+            {syncMessage ? (
+              <span
+                className="max-w-[240px] truncate text-xs text-muted-foreground"
+                title={syncMessage}
+              >
+                {syncMessage}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-4 grid gap-2 md:max-w-2xl">
@@ -301,7 +307,10 @@ export function ProjectSettingsSection({
           <input
             ref={directoryInputRef}
             type="file"
-            {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+            {...({
+              webkitdirectory: '',
+              directory: ''
+            } as React.InputHTMLAttributes<HTMLInputElement>)}
             multiple
             className="hidden"
             aria-hidden

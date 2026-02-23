@@ -191,7 +191,28 @@ If you omit a `Restart session command` artifact, the deliver route auto-appends
 
 ## Examples
 
-### Minimal happy path
+### Minimal happy path (running locally via CLI)
+
+When running locally, use the `npx overlord protocol` CLI — it reads auth and `TICKET_ID` from environment variables automatically.
+
+```bash
+# 1. Attach — prints full JSON response; read session.sessionKey from it
+npx overlord protocol attach
+
+# SESSION_KEY="<value from response.session.sessionKey>"
+
+# 2. Update mid-work
+npx overlord protocol update --session-key <SESSION_KEY> \
+  --summary "Identified root cause: missing index on ticket_events.ticket_id causing full table scans." \
+  --phase execute
+
+# 3. Deliver
+npx overlord protocol deliver --session-key <SESSION_KEY> \
+  --summary "Added composite index on ticket_events (ticket_id, created_at). Query time dropped from ~400ms to ~8ms in local testing. No breaking schema changes." \
+  --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"supabase/migrations/20260218_add_ticket_events_index.sql"},{"type":"next_steps","label":"Next steps","content":"- Run supabase db reset on staging to apply migration\n- Monitor query performance after deploy"}]'
+```
+
+### Minimal happy path (remote / web context, using curl)
 
 ```bash
 # 1. Attach

@@ -20,16 +20,33 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
   }
 
   const supabase = await createClient();
-  const { data: project, error } = await supabase
-    .from('projects')
-    .select('id,name,color,organization_id,local_working_directory')
-    .eq('id', projectId)
-    .eq('organization_id', parsedOrganizationId)
-    .single();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  const [{ data: project, error }, { data: everhourIntegration }] = await Promise.all([
+    supabase
+      .from('projects')
+      .select('id,name,color,organization_id,local_working_directory')
+      .eq('id', projectId)
+      .eq('organization_id', parsedOrganizationId)
+      .single(),
+    supabase
+      .from('user_integrations')
+      .select('api_key')
+      .eq('user_id', user?.id ?? '')
+      .eq('provider', 'everhour')
+      .limit(1)
+      .maybeSingle()
+  ]);
 
   if (error || !project) {
     notFound();
   }
+
+  const everhourApiKey =
+    typeof everhourIntegration?.api_key === 'string' ? everhourIntegration.api_key.trim() : '';
+  const hasEverhourApiKey = everhourApiKey.length > 0;
 
   return (
     <div className="flex flex-col ">
@@ -39,6 +56,7 @@ export default async function ProjectTicketsPage({ params, searchParams }: PageP
         initialName={project.name}
         initialColor={project.color}
         initialWorkingDirectory={project.local_working_directory}
+        hasEverhourApiKey={hasEverhourApiKey}
       />
       <TicketsBoardContent
         view={view}

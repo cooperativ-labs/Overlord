@@ -148,23 +148,6 @@ export function SidePanel() {
     if (!isOpen) lastContentRef.current = null;
   }, [isOpen]);
 
-  // -- Click-outside-to-close (desktop only) ------------------------------
-
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen || isMobile) return;
-
-    const onMouseDown = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node) && closePath) {
-        router.push(closePath);
-      }
-    };
-
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [isOpen, isMobile, closePath, router]);
-
   // -- Mobile: Sheet ------------------------------------------------------
 
   if (isMobile) {
@@ -175,7 +158,12 @@ export function SidePanel() {
           if (!open && closePath) router.push(closePath);
         }}
       >
-        <SheetContent side="right" className="w-full p-0 sm:max-w-md" showCloseButton={false}>
+        <SheetContent
+          side="right"
+          className="w-full p-0 sm:max-w-md"
+          showCloseButton={false}
+          onPointerDownOutside={event => event.preventDefault()}
+        >
           <SheetTitle className="sr-only">Ticket details</SheetTitle>
           <SheetDescription className="sr-only">Side panel with ticket details</SheetDescription>
           {displayContent}
@@ -188,7 +176,6 @@ export function SidePanel() {
 
   return (
     <div
-      ref={panelRef}
       className={cn(
         'relative flex h-full shrink-0 border-l bg-background transition-[width] duration-200 ease-in-out',
         !isOpen && 'w-0 overflow-hidden border-l-0'
@@ -196,13 +183,11 @@ export function SidePanel() {
       style={isOpen ? { width } : undefined}
       onTransitionEnd={onTransitionEnd}
     >
-      {/* Drag handle */}
-      {/* <div
-        className="absolute inset-y-0 left-0 z-10 flex w-1.5 cursor-col-resize items-center justify-center hover:bg-accent/50 active:bg-accent"
+      {/* Invisible drag handle along the border */}
+      <div
+        className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize"
         onPointerDown={onPointerDown}
-      >
-        <div className="h-8 w-1 rounded-full bg-border" />
-      </div> */}
+      />
 
       {/* Content */}
       <div className="ml-1.5 flex min-w-0 flex-1 flex-col overflow-hidden">{displayContent}</div>

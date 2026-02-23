@@ -1,5 +1,7 @@
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 
+export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
+
 /**
  * Builds the full prompt text for attaching a ticket to an LLM (e.g. when the user
  * pastes ticket context into Claude or ChatGPT). Includes ticket details and instructions
@@ -17,7 +19,8 @@ export function buildTicketPromptMarkdown(
     status: string | null;
     priority: string | number | null;
   },
-  platformUrl: string
+  platformUrl: string,
+  context?: PromptContext
 ): string {
   const ref = getTicketIdentifier(ticket.id);
   const title = ticket.title ?? '(Untitled)';
@@ -26,6 +29,16 @@ export function buildTicketPromptMarkdown(
     body?.trim() ? `### ${heading}\n\n${body.trim()}\n` : '';
   const executionTargetLabel = ticket.execution_target === 'human' ? 'Human' : 'Agent';
   const projectLabel = ticket.project_id;
+
+  const isLocal = context
+    ? context === 'electron' || context === 'cli'
+    : platformUrl.startsWith('http://localhost') ||
+      platformUrl.startsWith('http://127.0.0.1') ||
+      platformUrl.startsWith('http://0.0.0.0');
+
+  const protocolSection = isLocal
+    ? buildLocalProtocolSection(ticket.id, platformUrl)
+    : buildRemoteProtocolSection(ticket.id, platformUrl);
 
   return `# Overlord — Agent Instructions
 
@@ -45,10 +58,99 @@ ${section('Acceptance Criteria', ticket.acceptance_criteria)}
 ${section('Available Tools / Constraints', ticket.available_tools)}
 ---
 
-## Overlord Protocol
+${protocolSection}`;
+}
+
+function buildLocalProtocolSection(ticketId: string, platformUrl: string): string {
+  return `## Overlord Protocol
 
 - **Base URL:** ${platformUrl}/api/protocol
-- **Ticket ID:** ${ticket.id}
+- **Ticket ID:** ${ticketId}
+
+The following environment variables are set for you: \`PLATFORM_URL\`, \`AGENT_TOKEN\`, \`TICKET_ID\`.
+
+> **Running locally.** Use \`npx overlord protocol\` CLI for all protocol calls — auth and \`TICKET_ID\` are read from env automatically.
+
+### 1 — Attach (always first)
+
+\`\`\`bash
+npx overlord protocol attach
+\`\`\`
+
+Prints response JSON to stdout. Store \`session.sessionKey\` — required for every subsequent call. Response also includes \`ticket\`, \`history\`, and \`sharedState\`.
+
+### 2 — Update (after each meaningful step)
+
+\`\`\`bash
+npx overlord protocol update --session-key <sessionKey> --summary "What you did and why." --phase execute
+\`\`\`
+
+Use \`--phase execute\` while working. Add \`--payload-json '{"notifications":[...]}'} \` to surface events in the UI.
+
+### 3 — Decision (meaningful implementation choices)
+
+\`\`\`bash
+npx overlord protocol decision --session-key <sessionKey> --title "..." --rationale "..." --impact "..."
+\`\`\`
+
+### 4 — Ask (blocking question — stop working after calling)
+
+\`\`\`bash
+npx overlord protocol ask --session-key <sessionKey> --question "Specific question for the PM."
+\`\`\`
+
+Ticket moves to \`review\` until a human responds. Do not guess.
+
+### 5 — Context (optional, persist across sessions)
+
+\`\`\`bash
+npx overlord protocol read-context --session-key <sessionKey>
+npx overlord protocol write-context --session-key <sessionKey> --key "descriptive-key" --value '"json-value"'
+\`\`\`
+
+### 6 — Create follow-up ticket (human-only blockers)
+
+\`\`\`bash
+curl -sS -X POST "$PLATFORM_URL/api/protocol/create-ticket" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","title":"...","objective":"...","acceptanceCriteria":"...","executionTarget":"human"}'
+\`\`\`
+
+### 7 — Deliver (always last)
+
+\`\`\`bash
+npx overlord protocol deliver --session-key <sessionKey> \\
+  --summary "Narrative: what you did, key decisions, next steps." \\
+  --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."},{"type":"next_steps","label":"Next steps","content":"..."}]'
+\`\`\`
+
+Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
+
+### 8 — Restart command
+
+Include in your deliver artifacts. If omitted, \`/api/protocol/deliver\` appends one automatically.
+
+\`\`\`bash
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
+# or for Codex:
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
+\`\`\`
+
+---
+
+## Rules
+
+- Always attach first; always deliver when done.
+- Post at least one update before delivering.
+- If blocked on human-only work, create a follow-up ticket.
+- The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
+- Use \`write-context\` for facts a future agent session should know.
+`;
+}
+
+function buildRemoteProtocolSection(ticketId: string, platformUrl: string): string {
+  return `## Overlord Protocol
+
+- **Base URL:** ${platformUrl}/api/protocol
+- **Ticket ID:** ${ticketId}
 - **Auth header:** \`Authorization: Bearer $AGENT_TOKEN\`
 
 The following environment variables are set for you: \`PLATFORM_URL\`, \`AGENT_TOKEN\`, \`TICKET_ID\`.
@@ -70,9 +172,9 @@ Content-Type: application/json
 Use this exact shell shape for the first attach call:
 
 \`\`\`bash
-curl -sS -X POST "$PLATFORM_URL/api/protocol/attach" \
-  -H "Authorization: Bearer $AGENT_TOKEN" \
-  -H "Content-Type: application/json" \
+curl -sS -X POST "$PLATFORM_URL/api/protocol/attach" \\
+  -H "Authorization: Bearer $AGENT_TOKEN" \\
+  -H "Content-Type: application/json" \\
   -d '{"ticketId":"'$TICKET_ID'","agentIdentifier":"codex","connectionMethod":"cli","metadata":{}}'
 \`\`\`
 
