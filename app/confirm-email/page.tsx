@@ -1,9 +1,6 @@
 import Link from 'next/link';
 
-import {
-  FieldDescription,
-  FieldGroup
-} from '@/components/ui/field';
+import { FieldDescription, FieldGroup } from '@/components/ui/field';
 
 type ConfirmEmailPageProps = {
   searchParams: Promise<{ email?: string }>;
@@ -43,4 +40,3 @@ export default async function ConfirmEmailPage({ searchParams }: ConfirmEmailPag
     </div>
   );
 }
-

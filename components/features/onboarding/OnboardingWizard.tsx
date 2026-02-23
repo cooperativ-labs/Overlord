@@ -3,18 +3,18 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import {
+  DEFAULT_PROJECT_COLOR,
+  ProjectColorSetter
+} from '@/components/features/projects/ProjectColorSetter';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { ProjectColorSetter, DEFAULT_PROJECT_COLOR } from '@/components/features/projects/ProjectColorSetter';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import type { OnboardingState } from '@/lib/actions/onboarding';
-import {
-  createFirstOrganization,
-  createFirstProjectWithDirectory
-} from '@/lib/actions/onboarding';
+import { createFirstOrganization, createFirstProjectWithDirectory } from '@/lib/actions/onboarding';
 
 type OnboardingWizardProps = {
   initialState: OnboardingState;
@@ -174,12 +174,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
           {projectError ? <p className="text-sm text-destructive">{projectError}</p> : null}
           <Field>
             <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setStep(1)}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => setStep(1)}>
                 Back
               </Button>
               <LoadingButton
@@ -198,4 +193,3 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
     </div>
   );
 }
-

@@ -2,8 +2,8 @@
 
 import { redirect } from 'next/navigation';
 
-import { createClient } from '@/supabase/utils/server';
 import { createProject, updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
+import { createClient } from '@/supabase/utils/server';
 
 export type OnboardingState = {
   userName: string | null;
@@ -113,4 +113,3 @@ export async function createFirstProjectWithDirectory(input: {
     organizationId: created.organizationId
   };
 }
-
