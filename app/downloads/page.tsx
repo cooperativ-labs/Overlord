@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-const CURRENT_DESKTOP_VERSION = '0.3.0';
+import packageJson from '../../package.json';
+
+const CURRENT_DESKTOP_VERSION = (packageJson as { version: string }).version;
 const PUBLIC_STORAGE_BASE =
   (process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '') ??
     'https://zitmmhvbilhjjdwgxlfm.supabase.co') +
