@@ -14,6 +14,17 @@ import { cn } from '@/lib/utils';
 
 import { useTerminal } from './terminal/TerminalProvider';
 
+// Maps the agent button identifier to possible agent_identifier values from the DB
+const agentIdentifierAliases: Record<'claude' | 'codex', string[]> = {
+  claude: ['claude-code', 'claude'],
+  codex: ['codex']
+};
+
+function isAgentActive(agent: 'claude' | 'codex', activeAgentIdentifier?: string | null): boolean {
+  if (!activeAgentIdentifier) return false;
+  return agentIdentifierAliases[agent].includes(activeAgentIdentifier.toLowerCase());
+}
+
 type Props = {
   ticketId: string;
   agentToken?: string | null;
@@ -21,6 +32,7 @@ type Props = {
   codexCommand: string;
   workingDirectory?: string | null;
   className?: string;
+  activeAgentIdentifier?: string | null;
 };
 
 function LaunchButton({
@@ -29,7 +41,8 @@ function LaunchButton({
   ticketId,
   agentToken,
   clipboardCommand,
-  workingDirectory
+  workingDirectory,
+  isActive
 }: {
   label: string;
   agent: 'claude' | 'codex';
@@ -37,6 +50,7 @@ function LaunchButton({
   agentToken?: string | null;
   clipboardCommand: string;
   workingDirectory?: string | null;
+  isActive?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const { isElectron, launchAgent } = useTerminal();
@@ -52,7 +66,16 @@ function LaunchButton({
   }
 
   return (
-    <Button className="h-6 gap-1.5 text-xs" size="sm" variant="outline" onClick={handleClick}>
+    <Button
+      className={cn(
+        'h-6 gap-1.5 text-xs transition-all',
+        isActive &&
+          'border-primary/50 shadow-[0_0_8px_2px_hsl(var(--primary)/0.25)] ring-1 ring-primary/40 animate-pulse'
+      )}
+      size="sm"
+      variant="outline"
+      onClick={handleClick}
+    >
       {isElectron ? (
         <>
           <Bot className="h-3 w-3" />
@@ -96,7 +119,7 @@ function CopyAgentCommandButton({
       <DropdownMenuTrigger asChild>
         <Button className="h-6 gap-1.5 text-xs" size="sm" variant="outline">
           <Copy className="h-3 w-3" />
-          Copy command
+          Prompts
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
@@ -120,7 +143,8 @@ export function LaunchCommandBar({
   claudeCommand,
   codexCommand,
   workingDirectory,
-  className
+  className,
+  activeAgentIdentifier
 }: Props) {
   const { isElectron } = useTerminal();
   const cursorCommand = codexCommand;
@@ -142,6 +166,7 @@ export function LaunchCommandBar({
         agentToken={agentToken}
         clipboardCommand={claudeCommand}
         workingDirectory={workingDirectory}
+        isActive={isAgentActive('claude', activeAgentIdentifier)}
       />
       <LaunchButton
         label="Codex"
@@ -150,6 +175,7 @@ export function LaunchCommandBar({
         agentToken={agentToken}
         clipboardCommand={codexCommand}
         workingDirectory={workingDirectory}
+        isActive={isAgentActive('codex', activeAgentIdentifier)}
       />
       <CopyAgentCommandButton
         claudeCommand={claudeCommand}

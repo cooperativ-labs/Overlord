@@ -5,9 +5,10 @@ import { store } from '../services/settings-store';
 
 type RegisterAppIpcOptions = {
   appUpdater: AppUpdaterService;
+  platformUrl: string;
 };
 
-export function registerAppIpc({ appUpdater }: RegisterAppIpcOptions): void {
+export function registerAppIpc({ appUpdater, platformUrl }: RegisterAppIpcOptions): void {
   ipcMain.handle('settings:get', (_event, key: string) => {
     return store.get(key);
   });
@@ -15,6 +16,8 @@ export function registerAppIpc({ appUpdater }: RegisterAppIpcOptions): void {
   ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
     store.set(key, value);
   });
+
+  ipcMain.handle('app:get-platform-url', () => platformUrl);
 
   ipcMain.handle('app:notify', (_event, payload: { title?: string; body?: string }) => {
     const title = payload.title?.trim();

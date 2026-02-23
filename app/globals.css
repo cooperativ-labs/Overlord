@@ -125,6 +125,11 @@
   }
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
 /* Electron-only styles — active when ElectronDetector sets data-electron on <html> */
 .electron-titlebar {
   display: none;

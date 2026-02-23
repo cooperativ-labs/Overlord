@@ -92,11 +92,34 @@ function getReleaseArtifacts() {
 
 async function uploadFile(supabase, filePath, storagePath) {
   const buffer = readFileSync(filePath);
+  return uploadBuffer(supabase, buffer, storagePath);
+}
+
+async function uploadBuffer(supabase, buffer, storagePath) {
   const { data, error } = await supabase.storage
     .from(BUCKET)
     .upload(storagePath, buffer, { upsert: true, contentType: 'application/octet-stream' });
   if (error) throw new Error(`Upload failed ${storagePath}: ${error.message}`);
   return data;
+}
+
+function prefixLatestYamlPaths(content, version) {
+  const rewrite = (line, key) => {
+    const regex = new RegExp(`^(\\s*(?:-\\s+)?${key}:\\s*)(['"]?)([^'"\\n]+)\\2(\\s*)$`);
+    const match = line.match(regex);
+    if (!match) return line;
+    const [, prefix, quote, value, suffix] = match;
+    const trimmed = value.trim();
+    if (!trimmed) return line;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return line;
+    if (trimmed.startsWith(`${version}/`)) return line;
+    return `${prefix}${quote}${version}/${trimmed}${quote}${suffix}`;
+  };
+
+  return content
+    .split('\n')
+    .map((line) => rewrite(rewrite(line, 'url'), 'path'))
+    .join('\n');
 }
 
 async function main() {
@@ -175,9 +198,11 @@ async function main() {
   const latestYml = artifacts.filter((a) => a.name.startsWith('latest') && a.name.endsWith('.yml'));
   for (const { path: filePath, name } of latestYml) {
     const storagePath = `${PREFIX}/${name}`;
+    const latestYml = readFileSync(filePath, 'utf8');
+    const normalizedLatestYml = prefixLatestYamlPaths(latestYml, version);
     process.stdout.write(`  ${name} -> ${storagePath} ... `);
     try {
-      await uploadFile(supabase, filePath, storagePath);
+      await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
       console.log('ok');
     } catch (e) {
       console.log('FAIL');

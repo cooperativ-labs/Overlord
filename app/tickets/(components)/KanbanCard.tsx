@@ -7,22 +7,12 @@ import Link from 'next/link';
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import type { Database } from '@/types/database.types';
 
 type SessionState = Database['public']['Enums']['session_state'];
-
-const agentActivityConfig: Record<
-  SessionState,
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; pulse?: boolean }
-> = {
-  attached: { label: 'Running', variant: 'default', pulse: true },
-  idle: { label: 'Idle', variant: 'secondary' },
-  blocked: { label: 'Blocked', variant: 'destructive' },
-  completed: { label: 'Completed', variant: 'outline' },
-  disconnected: { label: 'Disconnected', variant: 'destructive' }
-};
 
 export type Ticket = {
   id: string;
@@ -42,22 +32,6 @@ export type Ticket = {
   board_position: number;
   organization_name?: string | null;
 };
-
-function getAgentActivityStatus(sessionState: SessionState | null | undefined): {
-  label: string;
-  variant: 'default' | 'secondary' | 'destructive' | 'outline';
-  pulse?: boolean;
-} {
-  if (!sessionState) {
-    return { label: 'Idle', variant: 'secondary' };
-  }
-  return (
-    agentActivityConfig[sessionState] ?? {
-      label: sessionState,
-      variant: 'outline'
-    }
-  );
-}
 
 export default function KanbanCard({
   ticket,
@@ -86,14 +60,23 @@ export default function KanbanCard({
     transition
   };
 
+  const isAgentRunning = ticket.agent_session_state === 'attached';
+
   return (
     <Card
       ref={setNodeRef}
-      className={`cursor-grab border-border/40 shadow-sm ${isDragging ? 'opacity-40' : ''}`}
+      className={cn(
+        'relative cursor-grab border-border/40 shadow-sm overflow-hidden',
+        isDragging ? 'opacity-40' : '',
+        isAgentRunning && 'border-primary/30'
+      )}
       style={style}
       {...listeners}
       {...attributes}
     >
+      {isAgentRunning && (
+        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-gradient-to-r from-transparent via-primary/8 to-transparent" />
+      )}
       <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
     </Card>
   );
@@ -106,7 +89,7 @@ function KanbanCardBody({
   ticket: Ticket;
   showOrganizationName: boolean;
 }) {
-  const agentActivityStatus = getAgentActivityStatus(ticket.agent_session_state);
+  const isAgentRunning = ticket.agent_session_state === 'attached';
 
   return (
     <CardContent className="flex h-full flex-col p-3">
@@ -147,11 +130,6 @@ function KanbanCardBody({
         <Badge variant="outline" className="text-xs capitalize">
           {ticket.execution_target}
         </Badge>
-        {ticket.assigned_agent ? (
-          <Badge variant="secondary" className="text-xs">
-            {ticket.assigned_agent}
-          </Badge>
-        ) : null}
       </div>
       <div className="mt-auto flex items-center justify-between gap-2 pt-2">
         <div className="flex min-w-0 items-center">
@@ -162,20 +140,9 @@ function KanbanCardBody({
             />
           ) : null}
         </div>
-        <div className="flex min-w-0 items-center">
-          <Badge
-            className="h-5 rounded-full gap-1.5 px-2 text-[10px]"
-            variant={agentActivityStatus.variant}
-          >
-            {agentActivityStatus.pulse ? (
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
-              </span>
-            ) : null}
-            {agentActivityStatus.label}
-          </Badge>
-        </div>
+        {isAgentRunning && ticket.assigned_agent ? (
+          <p className="text-[10px] text-muted-foreground/70 truncate">{ticket.assigned_agent}</p>
+        ) : null}
       </div>
     </CardContent>
   );

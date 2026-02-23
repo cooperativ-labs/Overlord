@@ -65,6 +65,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     useState<ButtonLoadingState>('default');
   const [restartToUpdateButtonState, setRestartToUpdateButtonState] =
     useState<ButtonLoadingState>('default');
+  const [platformUrl, setPlatformUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!api || !open) return;
@@ -116,6 +117,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
     return unsubscribe;
   }, [api, isElectron, open]);
+
+  useEffect(() => {
+    if (!open || !isElectron) return;
+    if (typeof window !== 'undefined' && window.electronAPI?.app?.getPlatformUrl) {
+      void window.electronAPI.app.getPlatformUrl().then(url => {
+        if (url) setPlatformUrl(url);
+      });
+    }
+  }, [isElectron, open]);
 
   function handleTerminalModeChange(value: string) {
     const mode = value === 'embedded' ? 'embedded' : 'external';
@@ -304,6 +314,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   />
                 </div>
               </div>
+              {platformUrl && (
+                <div className="rounded-md border p-3">
+                  <p className="text-muted-foreground text-xs">
+                    PLATFORM_URL: {platformUrl}
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>

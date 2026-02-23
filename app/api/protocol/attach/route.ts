@@ -52,6 +52,9 @@ export async function POST(request: Request) {
 
     const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId);
 
+    // Automatically move the ticket to 'execute' status when an agent attaches
+    await supabase.from('tickets').update({ status: 'execute' }).eq('id', ticketId);
+
     await supabase.from('ticket_events').insert({
       event_type: 'system',
       payload: {

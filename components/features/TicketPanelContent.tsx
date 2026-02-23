@@ -6,7 +6,6 @@ import { CopyTicketPromptButton } from '@/components/features/CopyTicketPromptBu
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { InlineEditField } from '@/components/features/InlineEditField';
-import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
@@ -321,14 +320,7 @@ export async function TicketPanelContent({
             />
           </div>
 
-          <LaunchCommandBar
-            className="mt-3 border-primary/25 bg-background/80"
-            ticketId={ticketId}
-            agentToken={agentToken}
-            claudeCommand={claudeCode}
-            codexCommand={codex}
-            workingDirectory={workingDirectory}
-          />
+          {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
         </section>
 
         <section className="mb-6">
@@ -371,6 +363,9 @@ export async function TicketPanelContent({
           editorScheme={editorScheme}
           workspaceRoot={workspaceRoot}
           workingDirectory={workingDirectory}
+          agentToken={agentToken}
+          claudeCommand={claudeCode}
+          codexCommand={codex}
         />
       </div>
     </div>

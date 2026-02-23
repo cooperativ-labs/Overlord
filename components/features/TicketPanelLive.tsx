@@ -1,10 +1,15 @@
 'use client';
 
+import { useTransition } from 'react';
+
+import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { TicketConversationComposer } from '@/components/features/TicketConversationComposer';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { getConversationEntryType } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
@@ -51,7 +56,9 @@ export function AgentSessionBadge({ session }: { session: AgentSession | null })
 // --- LiveActivityFeed ---
 
 function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
-  if (!events.length) {
+  const visibleEvents = events.filter(event => event.event_type !== 'system');
+
+  if (!visibleEvents.length) {
     return <p className="text-sm italic text-muted-foreground">No events yet.</p>;
   }
 
@@ -66,7 +73,7 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
 
   return (
     <div className="grid gap-3">
-      {events.map(event => (
+      {visibleEvents.map(event => (
         <article className="flex gap-3" key={event.id}>
           <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30" />
           <div className="grid gap-1">
@@ -158,6 +165,9 @@ type TicketPanelLiveProps = {
   editorScheme: string;
   workspaceRoot: string;
   workingDirectory?: string | null;
+  agentToken?: string | null;
+  claudeCommand?: string;
+  codexCommand?: string;
 };
 
 export function TicketPanelLive({
@@ -169,7 +179,10 @@ export function TicketPanelLive({
   initialState,
   editorScheme,
   workspaceRoot,
-  workingDirectory
+  workingDirectory,
+  agentToken,
+  claudeCommand,
+  codexCommand
 }: TicketPanelLiveProps) {
   const { events, artifacts, session, sharedState } = useTicketRealtime({
     initialSharedState: initialState,
@@ -178,9 +191,32 @@ export function TicketPanelLive({
     initialArtifacts,
     initialSession
   });
+  const [isPending, startTransition] = useTransition();
+
+  const isRunning = session?.session_state === 'attached';
+  const activeAgentIdentifier = isRunning ? session.agent_identifier : null;
+
+  function handleForceDisconnect() {
+    if (!session) return;
+    startTransition(async () => {
+      await markSessionDisconnectedAction(session.id);
+    });
+  }
 
   return (
     <>
+      {claudeCommand && codexCommand ? (
+        <LaunchCommandBar
+          className="mb-6 border-primary/25 bg-background/80"
+          ticketId={ticketId}
+          agentToken={agentToken}
+          claudeCommand={claudeCommand}
+          codexCommand={codexCommand}
+          workingDirectory={workingDirectory}
+          activeAgentIdentifier={activeAgentIdentifier}
+        />
+      ) : null}
+
       <TicketConversationComposer
         ticketId={ticketId}
         projectId={projectId}
@@ -194,6 +230,17 @@ export function TicketPanelLive({
             Activity
           </h2>
           <AgentSessionBadge session={session} />
+          {isRunning ? (
+            <Button
+              className="h-5 px-2 text-[10px]"
+              disabled={isPending}
+              size="sm"
+              variant="ghost"
+              onClick={handleForceDisconnect}
+            >
+              Force stop
+            </Button>
+          ) : null}
         </div>
         <LiveActivityFeed events={events} />
       </section>

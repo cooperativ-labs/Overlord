@@ -667,6 +667,18 @@ export async function reorderTicketsAction(
   revalidateTicketBoards(organizationIds);
 }
 
+export async function markSessionDisconnectedAction(sessionId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('agent_sessions')
+    .update({ session_state: 'disconnected', detached_at: new Date().toISOString() })
+    .eq('id', sessionId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function deleteTicketAction(ticketId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase

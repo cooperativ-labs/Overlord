@@ -18,6 +18,7 @@ export type AppUpdateStatus = {
   progressPercent?: number;
   message?: string;
 };
+type AppUpdateStatusListener = (status: AppUpdateStatus) => void;
 
 const DEFAULT_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -31,6 +32,7 @@ export class AppUpdaterService {
   private checkInFlight = false;
   private downloadInFlight = false;
   private enabled = false;
+  private readonly statusListeners = new Set<AppUpdateStatusListener>();
 
   constructor(options: { isPackaged: boolean; currentVersion: string }) {
     this.updater = autoUpdater;
@@ -80,6 +82,14 @@ export class AppUpdaterService {
 
   getStatus(): AppUpdateStatus {
     return this.status;
+  }
+
+  onStatusChange(listener: AppUpdateStatusListener): () => void {
+    this.statusListeners.add(listener);
+    listener(this.status);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
   }
 
   async checkForUpdates(): Promise<boolean> {
@@ -199,6 +209,9 @@ export class AppUpdaterService {
 
   private emitStatus(): void {
     this.mainWindow?.webContents.send('app-update:status', this.status);
+    for (const listener of this.statusListeners) {
+      listener(this.status);
+    }
   }
 }
 

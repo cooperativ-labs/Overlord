@@ -6,6 +6,7 @@ import path from 'path';
 import { registerAppIpc } from './ipc/app';
 import { registerSupabaseIpc } from './ipc/supabase';
 import { registerTerminalIpc } from './ipc/terminal';
+import { registerAppMenu } from './services/app-menu';
 import { AppUpdaterService } from './services/app-updater';
 import { findFreePort, startNextServer, stopNextServer } from './services/next-server';
 import { SupabaseManager } from './services/supabase-manager';
@@ -24,6 +25,7 @@ try {
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
+let unsubscribeAppMenu: (() => void) | null = null;
 const supabaseManager = new SupabaseManager();
 const appUpdater = new AppUpdaterService({
   isPackaged: app.isPackaged,
@@ -116,12 +118,14 @@ app.whenReady().then(async () => {
   }
 
   // Register IPC handlers
+  const platformUrl = process.env.PLATFORM_URL ?? `http://localhost:${port}`;
   registerTerminalIpc();
   registerSupabaseIpc(supabaseManager);
-  registerAppIpc({ appUpdater });
+  registerAppIpc({ appUpdater, platformUrl });
 
   createWindow(port);
   appUpdater.initialize();
+  unsubscribeAppMenu = registerAppMenu({ appUpdater, isDev });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -137,6 +141,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async () => {
+  unsubscribeAppMenu?.();
+  unsubscribeAppMenu = null;
+
   if (isDev) {
     try {
       await supabaseManager.stop();
