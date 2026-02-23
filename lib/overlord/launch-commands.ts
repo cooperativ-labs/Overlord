@@ -17,7 +17,8 @@ export type ResumeCommands = {
 
 /**
  * Builds human-readable launch commands for clipboard / display use.
- * These use the `coop` CLI which handles context fetching internally.
+ * These use the Overlord CLI which handles context fetching internally.
+ * Primary command name is `ovld` (aliases: `overlord`).
  *
  * For Electron's embedded/external terminal, use the `terminal:launch-agent`
  * IPC instead — it fetches context server-side and avoids shell expansion issues.

@@ -6,9 +6,8 @@
   "private": true,
   "main": "dist-electron/main.js",
   "bin": {
-    "coop": "bin/coop.mjs",
-    "cooperativ": "bin/coop.mjs",
-    "overlord": "bin/coop.mjs"
+    "ovld": "bin/ovld.mjs",
+    "overlord": "bin/ovld.mjs"
   },
   "scripts": {
     "start": "supabase start",
