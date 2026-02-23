@@ -150,6 +150,7 @@ function LiveArtifacts({
 
 type TicketPanelLiveProps = {
   ticketId: string;
+  projectId: string;
   initialEvents: TicketEvent[];
   initialArtifacts: Artifact[];
   initialSession: AgentSession | null;
@@ -161,6 +162,7 @@ type TicketPanelLiveProps = {
 
 export function TicketPanelLive({
   ticketId,
+  projectId,
   initialEvents,
   initialArtifacts,
   initialSession,
@@ -181,6 +183,7 @@ export function TicketPanelLive({
     <>
       <TicketConversationComposer
         ticketId={ticketId}
+        projectId={projectId}
         events={events}
         workingDirectory={workingDirectory}
       />

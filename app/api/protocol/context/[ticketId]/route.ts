@@ -32,16 +32,12 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
-    // Look up the project's local working directory if the ticket has a project
-    let workingDirectory: string | null = null;
-    if (ticket.project_id) {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('local_working_directory')
-        .eq('id', ticket.project_id)
-        .maybeSingle();
-      workingDirectory = project?.local_working_directory ?? null;
-    }
+    const { data: project } = await supabase
+      .from('projects')
+      .select('local_working_directory')
+      .eq('id', ticket.project_id)
+      .maybeSingle();
+    const workingDirectory = project?.local_working_directory ?? null;
 
     const platformUrl = getPlatformUrl();
     const markdown = buildTicketPromptMarkdown(ticket, platformUrl);

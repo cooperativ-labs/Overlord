@@ -20,7 +20,21 @@ type Props = {
   inputClassName?: string;
   /** Render saved value as markdown in view mode */
   renderMarkdown?: boolean;
+  /** Optional list of project file paths used for @mention suggestions in multiline mode */
+  fileMentionPaths?: string[];
 };
+
+const MAX_MENTION_RESULTS = 8;
+
+function convertFileMentionsToMarkdown(value: string): string {
+  return value.replace(
+    /(^|[\s(])@([A-Za-z0-9._/\\-]+)/g,
+    (match, prefix: string, filePath: string) => {
+      if (!filePath.includes('/') && !filePath.includes('.')) return match;
+      return `${prefix}[@${filePath}](mention:${encodeURIComponent(filePath)})`;
+    }
+  );
+}
 
 export function InlineEditField({
   ticketId,
@@ -30,13 +44,25 @@ export function InlineEditField({
   placeholder = 'Click to add…',
   displayClassName,
   inputClassName,
-  renderMarkdown = false
+  renderMarkdown = false,
+  fileMentionPaths = []
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [savedValue, setSavedValue] = useState(initialValue);
   const [value, setValue] = useState(initialValue);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLTextAreaElement & HTMLInputElement>(null);
+  const [mentionStart, setMentionStart] = useState<number | null>(null);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
+
+  const canMentionFiles = multiline && field === 'objective' && fileMentionPaths.length > 0;
+  const mentionResults = canMentionFiles
+    ? fileMentionPaths
+        .filter(filePath => filePath.toLowerCase().includes(mentionQuery.toLowerCase()))
+        .slice(0, MAX_MENTION_RESULTS)
+    : [];
+  const mentionMenuOpen = mentionStart !== null && mentionResults.length > 0;
 
   const autoResize = useCallback(() => {
     if (!multiline) return;
@@ -74,6 +100,32 @@ export function InlineEditField({
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    if (mentionMenuOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex(current => (current + 1) % mentionResults.length);
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex(current => (current - 1 + mentionResults.length) % mentionResults.length);
+        return;
+      }
+
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMentionAtCursor(mentionResults[mentionIndex] ?? mentionResults[0] ?? '');
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearMentionState();
+        return;
+      }
+    }
+
     if (e.key === 'Escape') {
       e.preventDefault();
       cancel();
@@ -82,6 +134,56 @@ export function InlineEditField({
       e.preventDefault();
       save();
     }
+  }
+
+  function clearMentionState() {
+    setMentionStart(null);
+    setMentionQuery('');
+    setMentionIndex(0);
+  }
+
+  function updateMentionState(nextValue: string, cursorPosition: number) {
+    if (!canMentionFiles) {
+      clearMentionState();
+      return;
+    }
+
+    const beforeCursor = nextValue.slice(0, cursorPosition);
+    const tokenMatch = beforeCursor.match(/(^|[\s(])@([^\s@]*)$/);
+    if (!tokenMatch) {
+      clearMentionState();
+      return;
+    }
+
+    const query = tokenMatch[2] ?? '';
+    const atSymbolPosition = cursorPosition - query.length - 1;
+    setMentionStart(atSymbolPosition);
+    setMentionQuery(query);
+    setMentionIndex(0);
+  }
+
+  function insertMentionAtCursor(filePath: string) {
+    const textArea = inputRef.current as HTMLTextAreaElement | null;
+    if (!textArea || mentionStart === null || !filePath) return;
+
+    const cursor = textArea.selectionStart ?? value.length;
+    let mentionText = `@${filePath}`;
+    const suffix = value.slice(cursor);
+    if (suffix.length === 0 || (!suffix.startsWith(' ') && !suffix.startsWith('\n'))) {
+      mentionText += ' ';
+    }
+
+    const nextValue = `${value.slice(0, mentionStart)}${mentionText}${suffix}`;
+    const nextCursor = mentionStart + mentionText.length;
+
+    setValue(nextValue);
+    clearMentionState();
+
+    requestAnimationFrame(() => {
+      textArea.focus();
+      textArea.setSelectionRange(nextCursor, nextCursor);
+      autoResize();
+    });
   }
 
   const baseInputClass = cn(
@@ -94,19 +196,48 @@ export function InlineEditField({
   if (editing) {
     if (multiline) {
       return (
-        <textarea
-          ref={inputRef as React.Ref<HTMLTextAreaElement>}
-          autoFocus
-          className={cn(baseInputClass, 'resize-none text-sm leading-relaxed')}
-          disabled={pending}
-          value={value}
-          onBlur={save}
-          onChange={e => {
-            setValue(e.target.value);
-            autoResize();
-          }}
-          onKeyDown={handleKeyDown}
-        />
+        <div className="relative">
+          <textarea
+            ref={inputRef as React.Ref<HTMLTextAreaElement>}
+            autoFocus
+            className={cn(baseInputClass, 'resize-none text-sm leading-relaxed')}
+            disabled={pending}
+            value={value}
+            onBlur={save}
+            onChange={e => {
+              setValue(e.target.value);
+              updateMentionState(e.target.value, e.target.selectionStart ?? e.target.value.length);
+              autoResize();
+            }}
+            onClick={e => {
+              const target = e.target as HTMLTextAreaElement;
+              updateMentionState(value, target.selectionStart ?? value.length);
+            }}
+            onKeyDown={handleKeyDown}
+          />
+          {mentionMenuOpen ? (
+            <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+              {mentionResults.map((filePath, index) => (
+                <button
+                  key={filePath}
+                  className={cn(
+                    'block w-full rounded px-2 py-1.5 text-left text-sm',
+                    index === mentionIndex
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent/60'
+                  )}
+                  type="button"
+                  onMouseDown={event => {
+                    event.preventDefault();
+                    insertMentionAtCursor(filePath);
+                  }}
+                >
+                  @{filePath}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       );
     }
 
@@ -142,7 +273,7 @@ export function InlineEditField({
       {savedValue ? (
         renderMarkdown ? (
           <MarkdownContent compact className="pointer-events-none">
-            {savedValue}
+            {field === 'objective' ? convertFileMentionsToMarkdown(savedValue) : savedValue}
           </MarkdownContent>
         ) : (
           <span className="whitespace-pre-wrap">{savedValue}</span>

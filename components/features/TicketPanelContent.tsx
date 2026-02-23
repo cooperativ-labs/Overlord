@@ -1,8 +1,6 @@
 import { X } from 'lucide-react';
 import Link from 'next/link';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import fs from 'node:fs/promises';
 
 import { CopyTicketPromptButton } from '@/components/features/CopyTicketPromptButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
@@ -17,30 +15,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { getAgentApiToken, getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
+import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
 
 const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
-
-function resolveWorkingDirectory(value: string | null | undefined): string | null {
-  const raw = value?.trim();
-  if (!raw) return null;
-
-  let resolved = raw;
-  const home = os.homedir();
-
-  if (raw === '~') {
-    resolved = home;
-  } else if (raw.startsWith('~/')) {
-    resolved = path.join(home, raw.slice(2));
-  } else if (!path.isAbsolute(raw)) {
-    resolved = path.resolve(raw);
-  }
-
-  const normalized = path.normalize(resolved);
-  return fs.existsSync(normalized) ? normalized : null;
-}
 
 export async function TicketPanelContent({
   ticketId,
@@ -132,11 +113,42 @@ export async function TicketPanelContent({
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
   const hasEverhourIntegration = Boolean(everhourIntegration?.id);
   const projectOptions = projects ?? [];
+  const activeProjectId = ticket.project_id ?? projectOptions[0]?.id;
+  if (!activeProjectId) {
+    return (
+      <div className="flex h-full items-center justify-center p-4">
+        <p className="text-sm text-muted-foreground">Project not found for this ticket.</p>
+      </div>
+    );
+  }
+
   const projectWorkingDirectory = projectOptions.find(
-    project => project.id === ticket.project_id
+    project => project.id === activeProjectId
   )?.local_working_directory;
-  const workingDirectory =
-    resolveWorkingDirectory(projectWorkingDirectory) ?? resolveWorkingDirectory(workspaceRoot);
+  const closePath = buildProjectPath({
+    organizationId,
+    projectId: activeProjectId
+  });
+  const resolvedProjectDirectory = resolveLinkedDirectory(projectWorkingDirectory);
+  const resolvedWorkspaceDirectory = resolveLinkedDirectory(workspaceRoot);
+
+  const projectDirectoryExists = resolvedProjectDirectory
+    ? Boolean((await fs.stat(resolvedProjectDirectory).catch(() => null))?.isDirectory())
+    : false;
+  const workspaceDirectoryExists = resolvedWorkspaceDirectory
+    ? Boolean((await fs.stat(resolvedWorkspaceDirectory).catch(() => null))?.isDirectory())
+    : false;
+
+  const workingDirectory = projectDirectoryExists
+    ? resolvedProjectDirectory
+    : workspaceDirectoryExists
+      ? resolvedWorkspaceDirectory
+      : null;
+
+  const objectiveFileMentionPaths =
+    projectDirectoryExists && resolvedProjectDirectory
+      ? (await listProjectFiles(resolvedProjectDirectory)).files
+      : [];
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -153,7 +165,7 @@ export async function TicketPanelContent({
           )}
           <DeleteTicketButton ticketId={ticketId} ticketLabel={ticketIdentifier} />
           <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-            <Link href={`/${organizationId}`} aria-label="Close panel">
+            <Link href={closePath} aria-label="Close panel">
               <X className="h-4 w-4" />
             </Link>
           </Button>
@@ -196,7 +208,7 @@ export async function TicketPanelContent({
         <TicketProjectSelect
           ticketId={ticketId}
           organizationId={organizationId}
-          currentProjectId={ticket.project_id}
+          currentProjectId={activeProjectId}
           projects={projectOptions}
         />
 
@@ -231,6 +243,7 @@ export async function TicketPanelContent({
           <InlineEditField
             displayClassName="text-sm leading-relaxed"
             field="objective"
+            fileMentionPaths={objectiveFileMentionPaths}
             initialValue={ticket.objective ?? ''}
             multiline
             renderMarkdown
@@ -271,6 +284,7 @@ export async function TicketPanelContent({
 
         <TicketPanelLive
           ticketId={ticketId}
+          projectId={activeProjectId}
           initialEvents={events ?? []}
           initialArtifacts={artifacts ?? []}
           initialSession={agentSession ?? null}

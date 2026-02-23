@@ -4,6 +4,7 @@ import { CopyTicketPromptButton } from '@/components/features/CopyTicketPromptBu
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle, getTicketIdentifier } from '@/lib/helpers/tickets';
 import type { Database } from '@/types/database.types';
 
@@ -12,6 +13,7 @@ type Ticket = {
   title: string | null;
   objective: string | null;
   organization_id: number;
+  project_id: string;
   status: string;
   priority: string;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
@@ -44,7 +46,11 @@ export default function TicketListView({
               <div className="min-w-0 space-y-1">
                 <h3 className="font-medium">
                   <Link
-                    href={`/${ticket.organization_id}/${ticket.id}`}
+                    href={buildTicketPath({
+                      organizationId: ticket.organization_id,
+                      projectId: ticket.project_id,
+                      ticketId: ticket.id
+                    })}
                     className="hover:underline"
                   >
                     {getTicketIdentifier(ticket.id)} — {getDisplayTitle(ticket)}

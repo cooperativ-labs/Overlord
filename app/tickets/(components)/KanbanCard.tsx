@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import type { Database } from '@/types/database.types';
 
@@ -28,7 +29,7 @@ export type Ticket = {
   title: string | null;
   objective: string | null;
   organization_id: number;
-  project_id?: string | null;
+  project_id: string;
   project_name?: string | null;
   project_color?: string | null;
   project_everhour_project_id?: string | null;
@@ -125,7 +126,11 @@ function KanbanCardBody({
           )}
           <h4 className="text-sm leading-snug font-medium">
             <Link
-              href={`/${ticket.organization_id}/${ticket.id}`}
+              href={buildTicketPath({
+                organizationId: ticket.organization_id,
+                projectId: ticket.project_id,
+                ticketId: ticket.id
+              })}
               className="hover:underline"
               onClick={e => e.stopPropagation()}
             >

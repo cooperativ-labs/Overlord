@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 
+import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import { useProjectCreator } from '@/components/features/projects/ProjectCreatorContext';
 import { SettingsModal } from '@/components/modals/SettingsModal';
@@ -87,16 +88,21 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
 export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
   const pathname = usePathname();
   const { openProjectCreator } = useProjectCreator();
+  const { defaultProject } = useDefaultProject();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   const defaultOrganizationId = React.useMemo(() => {
+    if (defaultProject) {
+      return defaultProject.organizationId;
+    }
+
     const segments = pathname.split('/').filter(Boolean);
     const firstSegment = segments[0];
     if (typeof firstSegment === 'string' && /^\d+$/.test(firstSegment)) {
       return Number(firstSegment);
     }
     return projects[0]?.organizationId ?? null;
-  }, [pathname, projects]);
+  }, [defaultProject, pathname, projects]);
 
   const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
   const isMyTasksActive = pathname === '/u' || pathname.startsWith('/u/');

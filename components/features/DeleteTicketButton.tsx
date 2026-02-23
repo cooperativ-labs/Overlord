@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { deleteTicketAction } from '@/lib/actions/tickets';
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
 type DeleteTicketButtonProps = {
@@ -36,13 +37,16 @@ export function DeleteTicketButton({ ticketId, ticketLabel, className }: DeleteT
   async function handleConfirm() {
     setDeleteButtonState('loading');
     try {
-      const { organizationId } = await deleteTicketAction(ticketId);
+      const { organizationId, projectId } = await deleteTicketAction(ticketId);
       setDeleteButtonState('success');
       setOpen(false);
-      const primarySegment = pathname.split('/').filter(Boolean)[0];
-      const fallbackOrganizationId =
-        primarySegment && /^\d+$/.test(primarySegment) ? Number(primarySegment) : organizationId;
-      router.push(`/${fallbackOrganizationId}`);
+      const segments = pathname.split('/').filter(Boolean);
+      const isProjectTicketRoute = segments[1] === 'projects' && typeof segments[2] === 'string';
+      if (isProjectTicketRoute) {
+        router.push(buildProjectPath({ organizationId, projectId }));
+      } else {
+        router.push(`/${organizationId}`);
+      }
       router.refresh();
     } catch {
       setDeleteButtonState('error');

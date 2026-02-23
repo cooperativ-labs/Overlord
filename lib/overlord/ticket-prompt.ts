@@ -13,7 +13,7 @@ export function buildTicketPromptMarkdown(
     acceptance_criteria: string | null;
     available_tools: string | null;
     execution_target: 'agent' | 'human' | null;
-    project_id: string | null;
+    project_id: string;
     status: string | null;
     priority: string | number | null;
   },
@@ -25,7 +25,7 @@ export function buildTicketPromptMarkdown(
   const section = (heading: string, body: string | null) =>
     body?.trim() ? `### ${heading}\n\n${body.trim()}\n` : '';
   const executionTargetLabel = ticket.execution_target === 'human' ? 'Human' : 'Agent';
-  const projectLabel = ticket.project_id ?? 'none';
+  const projectLabel = ticket.project_id;
 
   return `# Overlord — Agent Instructions
 

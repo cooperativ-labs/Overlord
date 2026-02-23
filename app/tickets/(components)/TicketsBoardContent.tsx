@@ -73,7 +73,7 @@ type RawTicket = {
   updated_at: string;
   board_position: number;
   organization_id: number;
-  project_id: string | null;
+  project_id: string;
   everhour_task_id: string | null;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
@@ -144,17 +144,20 @@ export default async function TicketsBoardContent({
     }
   }
 
-  const tickets = rawTickets.map(({ organization, project, ...ticket }) => {
-    const p = getRelationItem(project);
-    return {
-      ...ticket,
-      organization_name: getOrganizationName(organization),
-      project_name: p?.name ?? null,
-      project_color: p?.color ?? null,
-      project_everhour_project_id: p?.everhour_project_id ?? null,
-      agent_session_state: latestSessionByTicket.get(ticket.id) ?? null
-    };
-  });
+  const tickets = rawTickets
+    .filter(ticket => Boolean(ticket.project_id))
+    .map(({ organization, project, ...ticket }) => {
+      const p = getRelationItem(project);
+      return {
+        ...ticket,
+        project_id: ticket.project_id,
+        organization_name: getOrganizationName(organization),
+        project_name: p?.name ?? null,
+        project_color: p?.color ?? null,
+        project_everhour_project_id: p?.everhour_project_id ?? null,
+        agent_session_state: latestSessionByTicket.get(ticket.id) ?? null
+      };
+    });
   const statuses = dedupeStatuses(statusesResult.data ?? []);
   const loadError = ticketsResult.error ?? statusesResult.error;
 

@@ -40,11 +40,9 @@ type ProjectOption = {
 type TicketProjectSelectProps = {
   ticketId: string;
   organizationId: number;
-  currentProjectId: string | null;
+  currentProjectId: string;
   projects: ProjectOption[];
 };
-
-const NO_PROJECT_VALUE = '__none__';
 
 export function TicketProjectSelect({
   ticketId,
@@ -54,8 +52,8 @@ export function TicketProjectSelect({
 }: TicketProjectSelectProps) {
   const router = useRouter();
   const [availableProjects, setAvailableProjects] = useState<ProjectOption[]>(projects);
-  const [savedProjectId, setSavedProjectId] = useState(currentProjectId ?? '');
-  const [selectedProjectId, setSelectedProjectId] = useState(currentProjectId ?? '');
+  const [savedProjectId, setSavedProjectId] = useState(currentProjectId);
+  const [selectedProjectId, setSelectedProjectId] = useState(currentProjectId);
   const [isSavingProject, startSavingProject] = useTransition();
   const [updateError, setUpdateError] = useState<string | null>(null);
 
@@ -78,7 +76,7 @@ export function TicketProjectSelect({
 
     startSavingProject(async () => {
       try {
-        await setTicketProjectAction(ticketId, nextProjectId || null);
+        await setTicketProjectAction(ticketId, nextProjectId);
         setSavedProjectId(nextProjectId);
         router.refresh();
       } catch (error) {
@@ -139,10 +137,8 @@ export function TicketProjectSelect({
         <Select
           open={isSelectOpen}
           onOpenChange={setIsSelectOpen}
-          value={selectedProjectId || NO_PROJECT_VALUE}
-          onValueChange={(value: string | undefined) =>
-            handleProjectChange(value === NO_PROJECT_VALUE ? '' : (value ?? ''))
-          }
+          value={selectedProjectId}
+          onValueChange={(value: string | undefined) => handleProjectChange(value ?? '')}
           disabled={isSavingProject}
         >
           <SelectTrigger
@@ -157,12 +153,11 @@ export function TicketProjectSelect({
                 <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
               )}
               <span className="text-sm font-medium">
-                {selectedProject?.name ?? 'No project selected'}
+                {selectedProject?.name ?? 'Select project'}
               </span>
             </span>
           </SelectTrigger>
           <SelectContent align="start">
-            <SelectItem value={NO_PROJECT_VALUE}>No project</SelectItem>
             {availableProjects.map(project => (
               <SelectItem key={project.id} value={project.id}>
                 {project.name}

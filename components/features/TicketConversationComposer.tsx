@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { findOpenBlockingQuestions } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
@@ -13,8 +14,16 @@ type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 
 type Props = {
   ticketId: string;
+  projectId: string;
   events: TicketEvent[];
   workingDirectory?: string | null;
+};
+
+type FileTreeResponse = {
+  error?: string;
+  files?: string[];
+  linkedDirectory?: string | null;
+  truncated?: boolean;
 };
 
 async function postConversationEntry(
@@ -37,15 +46,107 @@ async function postConversationEntry(
   }
 }
 
-export function TicketConversationComposer({ ticketId, events, workingDirectory }: Props) {
+export function TicketConversationComposer({
+  ticketId,
+  projectId,
+  events,
+  workingDirectory
+}: Props) {
   const { isElectron, sendCommand } = useTerminal();
   const [mirrorToTerminal, setMirrorToTerminal] = useState(true);
   const [followUpDraft, setFollowUpDraft] = useState('');
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+  const [linkedFiles, setLinkedFiles] = useState<string[]>([]);
+  const [fileTreeLoading, setFileTreeLoading] = useState(false);
+  const [fileTreeError, setFileTreeError] = useState<string | null>(null);
+  const [fileTreeTruncated, setFileTreeTruncated] = useState(false);
+  const [followUpFile, setFollowUpFile] = useState('');
+  const [answerFiles, setAnswerFiles] = useState<Record<string, string>>({});
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const openQuestions = useMemo(() => findOpenBlockingQuestions(events), [events]);
+  const hasLinkedFiles = linkedFiles.length > 0;
+  const fileOptionsListId = `ticket-file-options-${ticketId}`;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchFileTree() {
+      setFileTreeLoading(true);
+      setFileTreeError(null);
+
+      try {
+        const response = await fetch(`/api/projects/${projectId}/file-tree`, { cache: 'no-store' });
+        const payload = (await response.json()) as FileTreeResponse;
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? 'Failed to load project files.');
+        }
+
+        if (cancelled) return;
+        setLinkedFiles(payload.files ?? []);
+        setFileTreeTruncated(Boolean(payload.truncated));
+      } catch (error) {
+        if (cancelled) return;
+        setLinkedFiles([]);
+        setFileTreeTruncated(false);
+        setFileTreeError(error instanceof Error ? error.message : 'Failed to load project files.');
+      } finally {
+        if (!cancelled) {
+          setFileTreeLoading(false);
+        }
+      }
+    }
+
+    fetchFileTree();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  function appendLinkedFile(message: string, filePath: string): string {
+    const trimmedPath = filePath.trim();
+    if (!trimmedPath) return message;
+
+    const fileLine = `- \`${trimmedPath}\``;
+    const trimmedMessage = message.trimEnd();
+    if (trimmedMessage.includes(fileLine)) return trimmedMessage;
+
+    const marker = 'Linked files:';
+    if (!trimmedMessage) {
+      return `${marker}\n${fileLine}\n`;
+    }
+    if (trimmedMessage.includes(marker)) {
+      return `${trimmedMessage}\n${fileLine}\n`;
+    }
+    return `${trimmedMessage}\n\n${marker}\n${fileLine}\n`;
+  }
+
+  function ensureLinkedFileExists(filePath: string): string | null {
+    const value = filePath.trim();
+    if (!value) return null;
+    return linkedFiles.includes(value) ? value : null;
+  }
+
+  function insertFollowUpFile() {
+    const filePath = ensureLinkedFileExists(followUpFile);
+    if (!filePath) return;
+
+    setFollowUpDraft(current => appendLinkedFile(current, filePath));
+    setFollowUpFile('');
+  }
+
+  function insertAnswerFile(questionId: string) {
+    const filePath = ensureLinkedFileExists(answerFiles[questionId] ?? '');
+    if (!filePath) return;
+
+    setAnswerDrafts(prev => ({
+      ...prev,
+      [questionId]: appendLinkedFile(prev[questionId] ?? '', filePath)
+    }));
+    setAnswerFiles(prev => ({ ...prev, [questionId]: '' }));
+  }
 
   async function submitFollowUp() {
     const message = followUpDraft.trim();
@@ -62,6 +163,7 @@ export function TicketConversationComposer({ ticketId, events, workingDirectory 
         await sendCommand(message, { cwd: workingDirectory ?? undefined });
       }
       setFollowUpDraft('');
+      setFollowUpFile('');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to send follow-up.');
     } finally {
@@ -85,6 +187,7 @@ export function TicketConversationComposer({ ticketId, events, workingDirectory 
         await sendCommand(message, { cwd: workingDirectory ?? undefined });
       }
       setAnswerDrafts(prev => ({ ...prev, [questionId]: '' }));
+      setAnswerFiles(prev => ({ ...prev, [questionId]: '' }));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to send answer.');
     } finally {
@@ -124,9 +227,31 @@ export function TicketConversationComposer({ ticketId, events, workingDirectory 
                   setAnswerDrafts(prev => ({ ...prev, [question.id]: event.target.value }))
                 }
               />
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Input
+                  className="h-8 min-w-48 flex-1"
+                  disabled={!hasLinkedFiles}
+                  list={fileOptionsListId}
+                  placeholder="Insert linked project file..."
+                  value={answerFiles[question.id] ?? ''}
+                  onChange={event =>
+                    setAnswerFiles(prev => ({ ...prev, [question.id]: event.target.value }))
+                  }
+                />
+                <Button
+                  disabled={!hasLinkedFiles}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => insertAnswerFile(question.id)}
+                >
+                  Insert file
+                </Button>
+              </div>
               <Button
                 disabled={activeKey !== null}
                 size="sm"
+                type="button"
                 variant="default"
                 onClick={() => submitAnswer(question.id)}
               >
@@ -147,12 +272,58 @@ export function TicketConversationComposer({ ticketId, events, workingDirectory 
           value={followUpDraft}
           onChange={event => setFollowUpDraft(event.target.value)}
         />
-        <Button disabled={activeKey !== null} size="sm" variant="outline" onClick={submitFollowUp}>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Input
+            className="h-8 min-w-48 flex-1"
+            disabled={!hasLinkedFiles}
+            list={fileOptionsListId}
+            placeholder="Insert linked project file..."
+            value={followUpFile}
+            onChange={event => setFollowUpFile(event.target.value)}
+          />
+          <Button
+            disabled={!hasLinkedFiles}
+            size="sm"
+            type="button"
+            variant="ghost"
+            onClick={insertFollowUpFile}
+          >
+            Insert file
+          </Button>
+        </div>
+        <Button
+          disabled={activeKey !== null}
+          size="sm"
+          type="button"
+          variant="outline"
+          onClick={submitFollowUp}
+        >
           {activeKey === 'follow_up' ? 'Sending...' : 'Send follow-up'}
         </Button>
       </div>
 
       {errorMessage ? <p className="mt-3 text-xs text-destructive">{errorMessage}</p> : null}
+      {fileTreeLoading ? (
+        <p className="mt-3 text-xs text-muted-foreground">Loading linked project files...</p>
+      ) : null}
+      {fileTreeError ? <p className="mt-3 text-xs text-destructive">{fileTreeError}</p> : null}
+      {!fileTreeLoading && !fileTreeError && !hasLinkedFiles ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          No files found. Set a project linked directory to enable file linking.
+        </p>
+      ) : null}
+      {hasLinkedFiles ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Select a file and click <span className="font-medium">Insert file</span> to attach it to
+          the ticket conversation.
+          {fileTreeTruncated ? ' Showing a truncated list.' : ''}
+        </p>
+      ) : null}
+      <datalist id={fileOptionsListId}>
+        {linkedFiles.map(file => (
+          <option key={file} value={file} />
+        ))}
+      </datalist>
     </section>
   );
 }

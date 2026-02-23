@@ -1,8 +1,10 @@
 import './globals.css';
 
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 
 import { AppSidebar } from '@/components/app-sidebar';
+import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
 import { TerminalPanel } from '@/components/features/terminal/TerminalPanel';
@@ -10,6 +12,7 @@ import { TerminalProvider } from '@/components/features/terminal/TerminalProvide
 import { NavHeader } from '@/components/nav-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
+import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
@@ -28,41 +31,49 @@ export default async function RootLayout({
   } = await supabase.auth.getUser();
 
   const projects = await getProjectsForCurrentUser();
+  const cookieStore = await cookies();
+  const initialDefaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
 
   return (
     <html lang="en">
       <body>
         <ElectronDetector />
         <TerminalProvider>
-          <ProjectCreatorProvider>
-            <SidebarProvider defaultOpen>
-              {user ? (
-                <div className="flex h-dvh w-full flex-col overflow-hidden">
-                  {/* Electron title bar drag region — hidden in browser */}
-                  <div className="electron-drag-region shrink-0" />
-                  <div className="flex min-h-0 flex-1 overflow-hidden">
-                    <AppSidebar
-                      user={{
-                        name: user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User',
-                        email: user.email ?? '',
-                        avatar: user.user_metadata?.avatar_url ?? ''
-                      }}
-                      projects={projects}
-                    />
-                    <SidebarInset className="min-w-0 overflow-hidden">
-                      <NavHeader userEmail={user.email ?? ''} />
-                      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-                        {children}
-                      </main>
-                      <TerminalPanel />
-                    </SidebarInset>
+          <DefaultProjectProvider
+            projects={projects}
+            initialDefaultProjectId={initialDefaultProjectId}
+          >
+            <ProjectCreatorProvider>
+              <SidebarProvider defaultOpen>
+                {user ? (
+                  <div className="flex h-dvh w-full flex-col overflow-hidden">
+                    {/* Electron title bar drag region — hidden in browser */}
+                    <div className="electron-drag-region shrink-0" />
+                    <div className="flex min-h-0 flex-1 overflow-hidden">
+                      <AppSidebar
+                        user={{
+                          name:
+                            user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User',
+                          email: user.email ?? '',
+                          avatar: user.user_metadata?.avatar_url ?? ''
+                        }}
+                        projects={projects}
+                      />
+                      <SidebarInset className="min-w-0 overflow-hidden">
+                        <NavHeader userEmail={user.email ?? ''} />
+                        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                          {children}
+                        </main>
+                        <TerminalPanel />
+                      </SidebarInset>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <main className="min-h-dvh w-full ">{children}</main>
-              )}
-            </SidebarProvider>
-          </ProjectCreatorProvider>
+                ) : (
+                  <main className="min-h-dvh w-full ">{children}</main>
+                )}
+              </SidebarProvider>
+            </ProjectCreatorProvider>
+          </DefaultProjectProvider>
         </TerminalProvider>
       </body>
     </html>

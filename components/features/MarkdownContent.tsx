@@ -31,11 +31,14 @@ export function MarkdownContent({
         remarkPlugins={[remarkGfm]}
         components={{
           // Open links in new tab
-          a: ({ children: linkChildren, href, ...props }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
-              {linkChildren}
-            </a>
-          ),
+          a: ({ children: linkChildren, href, ...props }) =>
+            href?.startsWith('mention:') ? (
+              <span className="font-medium text-sky-500">{linkChildren}</span>
+            ) : (
+              <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                {linkChildren}
+              </a>
+            ),
           // Style code blocks
           pre: ({ children: preChildren, ...props }) => (
             <pre className="overflow-auto rounded border bg-muted p-2 text-xs" {...props}>
