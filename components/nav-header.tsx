@@ -15,7 +15,7 @@ export function NavHeader({ userEmail }: NavHeaderProps) {
       <div className="flex min-w-0 items-center gap-2">
         <SidebarTrigger className="-ml-1 electron-no-drag" />
         <Separator orientation="vertical" className="h-4" />
-        <DefaultProjectChooser />
+        <DefaultProjectChooser className="electron-no-drag" />
       </div>
       <div className="flex flex-wrap items-center gap-2 electron-no-drag">
         <span className="text-muted-foreground max-w-full truncate text-sm">{userEmail}</span>

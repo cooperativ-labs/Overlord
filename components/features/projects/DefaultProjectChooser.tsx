@@ -8,8 +8,9 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
-export function DefaultProjectChooser() {
+export function DefaultProjectChooser({ className }: { className?: string }) {
   const { defaultProjectId, projects, setDefaultProjectId } = useDefaultProject();
 
   if (!projects.length) {
@@ -18,7 +19,7 @@ export function DefaultProjectChooser() {
 
   return (
     <Select value={defaultProjectId ?? projects[0].id} onValueChange={setDefaultProjectId}>
-      <SelectTrigger aria-label="Select default project" className="h-8 min-w-56 max-w-[26rem]">
+      <SelectTrigger aria-label="Select default project" className={cn("h-8 min-w-56 max-w-[26rem]", className)}>
         <SelectValue placeholder="Select default project" />
       </SelectTrigger>
       <SelectContent align="start">
