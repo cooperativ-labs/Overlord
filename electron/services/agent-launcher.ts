@@ -6,6 +6,8 @@ const PLATFORM_URL_DEFAULT = 'http://localhost:3000';
 
 export type AgentType = 'claude' | 'codex';
 
+const agentIdentifierMap: Record<AgentType, string> = { claude: 'claude-code', codex: 'codex' };
+
 type LaunchAgentInput = {
   ticketId: string;
   agent: AgentType;
@@ -44,7 +46,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchEnv = {
     PLATFORM_URL: platformUrl,
     AGENT_TOKEN: agentToken,
-    TICKET_ID: input.ticketId
+    TICKET_ID: input.ticketId,
+    AGENT_IDENTIFIER: agentIdentifierMap[input.agent]
   };
 
   // Fetch context from the API (runs in the main process — no shell needed)

@@ -61,14 +61,21 @@ export function hasUnopenedWaitingResponse(
   waitingForResponseAt: string | null | undefined,
   openedAt: number | undefined
 ): boolean {
-  if (!waitingForResponseAt) {
+  return hasUnopenedTimestamp(waitingForResponseAt, openedAt);
+}
+
+export function hasUnopenedTimestamp(
+  timestamp: string | null | undefined,
+  openedAt: number | undefined
+): boolean {
+  if (!timestamp) {
     return false;
   }
 
-  const waitingAt = Date.parse(waitingForResponseAt);
-  if (Number.isNaN(waitingAt)) {
+  const parsedTimestamp = Date.parse(timestamp);
+  if (Number.isNaN(parsedTimestamp)) {
     return false;
   }
 
-  return openedAt === undefined || waitingAt > openedAt;
+  return openedAt === undefined || parsedTimestamp > openedAt;
 }

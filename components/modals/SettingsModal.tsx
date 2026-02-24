@@ -7,6 +7,16 @@ import { EverhourSettings } from '@/components/features/everhour/EverhourSetting
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -35,6 +45,7 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
+import { getRunningAgentSessionCountAction } from '@/lib/actions/agent-sessions';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
 
 type SettingsModalProps = {
@@ -50,8 +61,14 @@ const terminalModeOptions = [
 const externalTerminalAppOptions = [
   { value: 'default', label: 'System Default' },
   { value: 'terminal', label: 'Terminal' },
-  { value: 'iterm', label: 'iTerm' },
-  { value: 'warp', label: 'Warp' }
+  { value: 'iterm', label: 'iTerm2' },
+  { value: 'warp', label: 'Warp' },
+  { value: 'ghostty', label: 'Ghostty' },
+  { value: 'alacritty', label: 'Alacritty' },
+  { value: 'kitty', label: 'Kitty' },
+  { value: 'hyper', label: 'Hyper' },
+  { value: 'tmux', label: 'tmux (in Terminal)' },
+  { value: 'cmux', label: 'cmux (in Terminal)' }
 ] as const;
 
 const externalTerminalLaunchModeOptions = [
@@ -90,6 +107,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     useState<ButtonLoadingState>('default');
   const [restartToUpdateButtonState, setRestartToUpdateButtonState] =
     useState<ButtonLoadingState>('default');
+  const [installWarningOpen, setInstallWarningOpen] = useState(false);
+  const [runningAgentCount, setRunningAgentCount] = useState(0);
   const [platformUrl, setPlatformUrl] = useState<string | null>(null);
 
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
@@ -203,7 +222,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   }
 
-  async function handleRestartToInstallUpdate() {
+  async function restartToInstallUpdate() {
     if (!api) return;
 
     setRestartToUpdateButtonState('loading');
@@ -216,191 +235,242 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   }
 
-  const canDownloadUpdate = updateStatus?.phase === 'available';
-  const canRestartToInstallUpdate = updateStatus?.phase === 'downloaded';
+  async function handleRestartToInstallUpdate() {
+    if (!api) return;
+
+    setRestartToUpdateButtonState('loading');
+    try {
+      const runningCount = await getRunningAgentSessionCountAction();
+      if (runningCount > 0) {
+        setRunningAgentCount(runningCount);
+        setInstallWarningOpen(true);
+        setRestartToUpdateButtonState('default');
+        return;
+      }
+
+      const started = await api.appUpdate.quitAndInstall();
+      setRestartToUpdateButtonState(started ? 'success' : 'error');
+    } catch (error) {
+      console.error('Failed to restart and install update:', error);
+      setRestartToUpdateButtonState('error');
+    }
+  }
+
+  const canShowDownloadUpdate = updateStatus?.phase === 'available';
+  const canShowInstallUpdate = updateStatus?.phase === 'downloaded';
   const updateStatusMessage =
     updateStatus?.message ?? 'Use Check for updates to look for a newer release.';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden p-0 md:max-h-[560px] md:max-w-[700px] lg:max-w-[800px]">
-        <DialogTitle className="sr-only">Settings</DialogTitle>
-        <DialogDescription className="sr-only">Customize your settings here.</DialogDescription>
-        <SidebarProvider className="items-start">
-          <Sidebar collapsible="none" className="hidden md:flex">
-            <SidebarContent>
-              <SidebarGroup>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {visibleNavItems.map(item => (
-                      <SidebarMenuItem key={item.name}>
-                        <SidebarMenuButton
-                          isActive={item.name === activeNav}
-                          onClick={() => setActiveNav(item.name)}
-                        >
-                          <item.icon />
-                          <span>{item.name}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            </SidebarContent>
-          </Sidebar>
-          <main className="flex h-[540px] flex-1 flex-col overflow-hidden">
-            <header className="flex h-16 shrink-0 items-center gap-2 border-b">
-              <div className="flex items-center gap-2 px-4">
-                <Breadcrumb>
-                  <BreadcrumbList>
-                    <BreadcrumbItem className="hidden md:block">
-                      <BreadcrumbLink href="#">Settings</BreadcrumbLink>
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator className="hidden md:block" />
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>{activeNav}</BreadcrumbPage>
-                    </BreadcrumbItem>
-                  </BreadcrumbList>
-                </Breadcrumb>
-              </div>
-            </header>
-            <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
-              {activeNav === 'Integrations' && (
-                <>
-                  {everhourStatusLoaded ? (
-                    <EverhourSettings
-                      initiallyConnected={everhourConnected}
-                      lastUpdatedAt={everhourUpdatedAt}
-                      compact
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Loading…</p>
-                  )}
-                </>
-              )}
-
-              {activeNav === 'Terminal' && isElectron && (
-                <div className="grid gap-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="terminal-mode">Where to run terminal commands</Label>
-                    <Select value={terminalMode} onValueChange={handleTerminalModeChange}>
-                      <SelectTrigger id="terminal-mode">
-                        <SelectValue placeholder="Select mode" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {terminalModeOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Embedded runs inside the app; External opens your system terminal.
-                    </p>
-                  </div>
-                  {terminalMode === 'external' && (
-                    <>
-                      <div className="grid gap-2">
-                        <Label htmlFor="terminal-app">External terminal application</Label>
-                        <Select value={terminalApp} onValueChange={handleTerminalAppChange}>
-                          <SelectTrigger id="terminal-app">
-                            <SelectValue placeholder="Select terminal" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {externalTerminalAppOptions.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
-                        <Select
-                          value={terminalLaunchMode}
-                          onValueChange={handleTerminalLaunchModeChange}
-                        >
-                          <SelectTrigger id="terminal-launch-mode">
-                            <SelectValue placeholder="Select behavior" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {externalTerminalLaunchModeOptions.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Choose the app and whether launches open in a new window or tab.
-                        </p>
-                      </div>
-                    </>
-                  )}
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="overflow-hidden p-0 md:max-h-[560px] md:max-w-[700px] lg:max-w-[800px]">
+          <DialogTitle className="sr-only">Settings</DialogTitle>
+          <DialogDescription className="sr-only">Customize your settings here.</DialogDescription>
+          <SidebarProvider className="items-start">
+            <Sidebar collapsible="none" className="hidden md:flex">
+              <SidebarContent>
+                <SidebarGroup>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {visibleNavItems.map(item => (
+                        <SidebarMenuItem key={item.name}>
+                          <SidebarMenuButton
+                            isActive={item.name === activeNav}
+                            onClick={() => setActiveNav(item.name)}
+                          >
+                            <item.icon />
+                            <span>{item.name}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </SidebarContent>
+            </Sidebar>
+            <main className="flex h-[540px] flex-1 flex-col overflow-hidden">
+              <header className="flex h-16 shrink-0 items-center gap-2 border-b">
+                <div className="flex items-center gap-2 px-4">
+                  <Breadcrumb>
+                    <BreadcrumbList>
+                      <BreadcrumbItem className="hidden md:block">
+                        <BreadcrumbLink href="#">Settings</BreadcrumbLink>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator className="hidden md:block" />
+                      <BreadcrumbItem>
+                        <BreadcrumbPage>{activeNav}</BreadcrumbPage>
+                      </BreadcrumbItem>
+                    </BreadcrumbList>
+                  </Breadcrumb>
                 </div>
-              )}
+              </header>
+              <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
+                {activeNav === 'Integrations' && (
+                  <>
+                    {everhourStatusLoaded ? (
+                      <EverhourSettings
+                        initiallyConnected={everhourConnected}
+                        lastUpdatedAt={everhourUpdatedAt}
+                        compact
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Loading…</p>
+                    )}
+                  </>
+                )}
 
-              {activeNav === 'Updates' && isElectron && (
-                <div className="grid gap-4">
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium">App updates</p>
-                    <p className="text-xs text-muted-foreground">
-                      Version {updateStatus?.currentVersion ?? 'unknown'}
-                      {updateStatus?.availableVersion
-                        ? ` • Latest ${updateStatus.availableVersion}`
-                        : ''}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <LoadingButton
-                      buttonState={checkUpdateButtonState}
-                      setButtonState={setCheckUpdateButtonState}
-                      text="Check for updates"
-                      loadingText="Checking..."
-                      successText="Check started"
-                      errorText="Try again"
-                      reset
-                      variant="outline"
-                      onClick={handleCheckForUpdates}
-                    />
-                    <LoadingButton
-                      buttonState={downloadUpdateButtonState}
-                      setButtonState={setDownloadUpdateButtonState}
-                      text="Download update"
-                      loadingText="Starting download..."
-                      successText="Download started"
-                      errorText="Unavailable"
-                      reset
-                      variant="outline"
-                      disabled={!canDownloadUpdate}
-                      onClick={handleDownloadUpdate}
-                    />
-                    <LoadingButton
-                      buttonState={restartToUpdateButtonState}
-                      setButtonState={setRestartToUpdateButtonState}
-                      text="Restart to install"
-                      loadingText="Restarting..."
-                      successText="Restarting..."
-                      errorText="Unavailable"
-                      variant="default"
-                      disabled={!canRestartToInstallUpdate}
-                      onClick={handleRestartToInstallUpdate}
-                    />
-                  </div>
-                  {platformUrl && (
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">PLATFORM_URL: {platformUrl}</p>
+                {activeNav === 'Terminal' && isElectron && (
+                  <div className="grid gap-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="terminal-mode">Where to run terminal commands</Label>
+                      <Select value={terminalMode} onValueChange={handleTerminalModeChange}>
+                        <SelectTrigger id="terminal-mode">
+                          <SelectValue placeholder="Select mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {terminalModeOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Embedded runs inside the app; External opens your system terminal.
+                      </p>
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </main>
-        </SidebarProvider>
-      </DialogContent>
-    </Dialog>
+                    {terminalMode === 'external' && (
+                      <>
+                        <div className="grid gap-2">
+                          <Label htmlFor="terminal-app">External terminal application</Label>
+                          <Select value={terminalApp} onValueChange={handleTerminalAppChange}>
+                            <SelectTrigger id="terminal-app">
+                              <SelectValue placeholder="Select terminal" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {externalTerminalAppOptions.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
+                          <Select
+                            value={terminalLaunchMode}
+                            onValueChange={handleTerminalLaunchModeChange}
+                          >
+                            <SelectTrigger id="terminal-launch-mode">
+                              <SelectValue placeholder="Select behavior" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {externalTerminalLaunchModeOptions.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Choose the app and whether launches open in a new window or tab.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {activeNav === 'Updates' && isElectron && (
+                  <div className="grid gap-4">
+                    <div className="grid gap-1">
+                      <p className="text-sm font-medium">App updates</p>
+                      <p className="text-xs text-muted-foreground">
+                        Version {updateStatus?.currentVersion ?? 'unknown'}
+                        {updateStatus?.availableVersion
+                          ? ` • Latest ${updateStatus.availableVersion}`
+                          : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <LoadingButton
+                        buttonState={checkUpdateButtonState}
+                        setButtonState={setCheckUpdateButtonState}
+                        text="Check for updates"
+                        loadingText="Checking..."
+                        successText="Check started"
+                        errorText="Try again"
+                        reset
+                        variant="outline"
+                        onClick={handleCheckForUpdates}
+                      />
+                      {canShowDownloadUpdate && (
+                        <LoadingButton
+                          buttonState={downloadUpdateButtonState}
+                          setButtonState={setDownloadUpdateButtonState}
+                          text="Download update"
+                          loadingText="Starting download..."
+                          successText="Download started"
+                          errorText="Unavailable"
+                          reset
+                          variant="outline"
+                          onClick={handleDownloadUpdate}
+                        />
+                      )}
+                      {canShowInstallUpdate && (
+                        <LoadingButton
+                          buttonState={restartToUpdateButtonState}
+                          setButtonState={setRestartToUpdateButtonState}
+                          text="Install update"
+                          loadingText="Installing..."
+                          successText="Installing..."
+                          errorText="Unavailable"
+                          variant="default"
+                          onClick={handleRestartToInstallUpdate}
+                        />
+                      )}
+                    </div>
+                    {platformUrl && (
+                      <div className="rounded-md border p-3">
+                        <p className="text-xs text-muted-foreground">PLATFORM_URL: {platformUrl}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </main>
+          </SidebarProvider>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={installWarningOpen} onOpenChange={setInstallWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Install update now?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {runningAgentCount === 1
+                ? '1 agent is currently running.'
+                : `${runningAgentCount} agents are currently running.`}{' '}
+              Any currently running agents may become detached from Overlord. Please wait until all
+              agents are finished before installing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>I'll wait</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={event => {
+                event.preventDefault();
+                setInstallWarningOpen(false);
+                void restartToInstallUpdate();
+              }}
+            >
+              Continue anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

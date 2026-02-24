@@ -34,7 +34,27 @@ export type Ticket = {
   organization_name?: string | null;
   waiting_for_response_at?: string | null;
   has_unopened_waiting_response?: boolean;
+  review_entered_at?: string | null;
+  has_unopened_review?: boolean;
 };
+
+function StatusDot({
+  colorClassName,
+  label,
+  title
+}: {
+  colorClassName: string;
+  label: string;
+  title: string;
+}) {
+  return (
+    <span
+      className={cn('h-2.5 w-2.5 rounded-full ring-2 ring-background', colorClassName)}
+      aria-label={label}
+      title={title}
+    />
+  );
+}
 
 export default function KanbanCard({
   ticket,
@@ -65,6 +85,7 @@ export default function KanbanCard({
 
   const isAgentRunning = ticket.agent_session_state === 'attached';
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
+  const hasUnopenedReview = ticket.has_unopened_review === true;
 
   return (
     <Card
@@ -72,18 +93,29 @@ export default function KanbanCard({
       className={cn(
         'relative cursor-grab border-border/40 shadow-sm overflow-hidden',
         isDragging ? 'opacity-40' : '',
-        isAgentRunning && 'border-primary/30'
+        isAgentRunning && 'border-emerald-500/60'
       )}
       style={style}
       {...listeners}
       {...attributes}
     >
-      {hasUnopenedWaitingResponse ? (
-        <span
-          className="absolute right-2 top-2 z-10 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background"
-          aria-label="Agent waiting for response"
-          title="Agent is waiting for your response"
-        />
+      {hasUnopenedWaitingResponse || hasUnopenedReview ? (
+        <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1">
+          {hasUnopenedWaitingResponse ? (
+            <StatusDot
+              colorClassName="bg-red-500"
+              label="Agent waiting for response"
+              title="Agent is waiting for your response"
+            />
+          ) : null}
+          {hasUnopenedReview ? (
+            <StatusDot
+              colorClassName="bg-sky-500"
+              label="Moved to review and unopened"
+              title="This ticket moved to review and has not been opened yet"
+            />
+          ) : null}
+        </span>
       ) : null}
       {isAgentRunning && (
         <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />

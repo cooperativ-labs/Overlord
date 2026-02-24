@@ -28,6 +28,7 @@ import {
 import { createTicketInColumnAction, reorderTicketsAction } from '@/lib/actions/tickets';
 import {
   getOpenedTicketTimestamps,
+  hasUnopenedTimestamp,
   hasUnopenedWaitingResponse,
   markTicketOpened,
   type TicketOpenedTimestamps
@@ -39,7 +40,8 @@ import KanbanCard, { type Ticket } from './KanbanCard';
 import KanbanColumn from './KanbanColumn';
 
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
-const WAITING_SOUND_PATH = '/sounds/notification-question.wav';
+const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
+const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
 
 type StatusColumn = {
   id: string;
@@ -91,6 +93,15 @@ function toWaitingByTicket(tickets: Ticket[]): Record<string, string> {
   }, {});
 }
 
+function toReviewByTicket(tickets: Ticket[]): Record<string, string> {
+  return tickets.reduce<Record<string, string>>((acc, ticket) => {
+    if (ticket.review_entered_at) {
+      acc[ticket.id] = ticket.review_entered_at;
+    }
+    return acc;
+  }, {});
+}
+
 export default function KanbanBoard({
   tickets: initialTickets,
   statuses,
@@ -111,11 +122,15 @@ export default function KanbanBoard({
   const [waitingByTicket, setWaitingByTicket] = useState<Record<string, string>>(() =>
     toWaitingByTicket(initialTickets)
   );
+  const [reviewByTicket, setReviewByTicket] = useState<Record<string, string>>(() =>
+    toReviewByTicket(initialTickets)
+  );
   const [openedTicketTimestamps, setOpenedTicketTimestamps] = useState<TicketOpenedTimestamps>(() =>
     getOpenedTicketTimestamps()
   );
 
-  const soundRef = useRef<HTMLAudioElement | null>(null);
+  const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
+  const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
   const openedTicketTimestampsRef = useRef(openedTicketTimestamps);
 
   useEffect(() => {
@@ -127,17 +142,26 @@ export default function KanbanBoard({
   }, [initialTickets]);
 
   useEffect(() => {
+    setReviewByTicket(toReviewByTicket(initialTickets));
+  }, [initialTickets]);
+
+  useEffect(() => {
     const timeoutId = window.setTimeout(() => setToastState(null), 3_000);
     return () => window.clearTimeout(timeoutId);
   }, [toastState]);
 
   useEffect(() => {
-    const audio = new Audio(WAITING_SOUND_PATH);
-    audio.preload = 'auto';
-    soundRef.current = audio;
+    const waitingAudio = new Audio(WAITING_SOUND_PATH);
+    waitingAudio.preload = 'auto';
+    waitingSoundRef.current = waitingAudio;
+
+    const reviewAudio = new Audio(REVIEW_SOUND_PATH);
+    reviewAudio.preload = 'auto';
+    reviewSoundRef.current = reviewAudio;
 
     return () => {
-      soundRef.current = null;
+      waitingSoundRef.current = null;
+      reviewSoundRef.current = null;
     };
   }, []);
 
@@ -158,13 +182,16 @@ export default function KanbanBoard({
   const ticketsWithIndicators = optimisticTickets.map(ticket => {
     const waitingForResponseAt =
       waitingByTicket[ticket.id] ?? ticket.waiting_for_response_at ?? null;
+    const reviewEnteredAt = reviewByTicket[ticket.id] ?? ticket.review_entered_at ?? null;
     return {
       ...ticket,
       waiting_for_response_at: waitingForResponseAt,
+      review_entered_at: reviewEnteredAt,
       has_unopened_waiting_response: hasUnopenedWaitingResponse(
         waitingForResponseAt,
         openedTicketTimestamps[ticket.id]
-      )
+      ),
+      has_unopened_review: hasUnopenedTimestamp(reviewEnteredAt, openedTicketTimestamps[ticket.id])
     };
   });
 
@@ -268,10 +295,48 @@ export default function KanbanBoard({
             message: getEventMessage(event)
           });
 
-          const waitingSound = soundRef.current;
+          const waitingSound = waitingSoundRef.current;
           if (waitingSound) {
             waitingSound.currentTime = 0;
             void waitingSound.play().catch(() => undefined);
+          }
+        }
+      )
+      .on<TicketEvent>(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ticket_events',
+          filter: 'event_type=eq.status_change'
+        },
+        payload => {
+          const event = payload.new;
+          if (event.phase !== 'review') {
+            return;
+          }
+
+          if (!ticketIdsRef.current.has(event.ticket_id)) {
+            return;
+          }
+
+          setReviewByTicket(previous => {
+            const existing = previous[event.ticket_id];
+            if (existing && Date.parse(existing) >= Date.parse(event.created_at)) {
+              return previous;
+            }
+            return { ...previous, [event.ticket_id]: event.created_at };
+          });
+
+          const openedAt = openedTicketTimestampsRef.current[event.ticket_id];
+          if (!hasUnopenedTimestamp(event.created_at, openedAt)) {
+            return;
+          }
+
+          const reviewSound = reviewSoundRef.current;
+          if (reviewSound) {
+            reviewSound.currentTime = 0;
+            void reviewSound.play().catch(() => undefined);
           }
         }
       )
@@ -407,7 +472,9 @@ export default function KanbanBoard({
       board_position: positionInColumn,
       organization_name: referenceTicket?.organization_name ?? null,
       waiting_for_response_at: null,
-      has_unopened_waiting_response: false
+      has_unopened_waiting_response: false,
+      review_entered_at: null,
+      has_unopened_review: false
     };
 
     const optimisticNext = [...previous, optimisticTicket];

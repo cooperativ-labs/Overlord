@@ -23,6 +23,8 @@ async function fetchContext(platformUrl, agentToken, ticketId) {
   return response.text();
 }
 
+const agentIdentifierMap = { claude: 'claude-code', codex: 'codex' };
+
 async function runAgent(agent, mode = 'run') {
   if (!agent || !['claude', 'codex'].includes(agent)) {
     console.error(
@@ -40,6 +42,8 @@ async function runAgent(agent, mode = 'run') {
   const { platformUrl, agentToken } = resolveAuth();
   const context = await fetchContext(platformUrl, agentToken, ticketId);
 
+  const childEnv = { ...process.env, AGENT_IDENTIFIER: agentIdentifierMap[agent] };
+
   try {
     if (agent === 'claude') {
       if (mode === 'resume') {
@@ -47,7 +51,7 @@ async function runAgent(agent, mode = 'run') {
         const args = claudeSessionId
           ? ['--resume', claudeSessionId, context]
           : ['--continue', context];
-        execFileSync('claude', args, { stdio: 'inherit', env: process.env });
+        execFileSync('claude', args, { stdio: 'inherit', env: childEnv });
       } else {
         execFileSync(
           'claude',
@@ -56,7 +60,7 @@ async function runAgent(agent, mode = 'run') {
             context,
             'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.'
           ],
-          { stdio: 'inherit', env: process.env }
+          { stdio: 'inherit', env: childEnv }
         );
       }
     } else {
@@ -65,9 +69,9 @@ async function runAgent(agent, mode = 'run') {
         const args = codexSessionId
           ? ['resume', codexSessionId, context]
           : ['resume', '--last', context];
-        execFileSync('codex', args, { stdio: 'inherit', env: process.env });
+        execFileSync('codex', args, { stdio: 'inherit', env: childEnv });
       } else {
-        execFileSync('codex', [context], { stdio: 'inherit', env: process.env });
+        execFileSync('codex', [context], { stdio: 'inherit', env: childEnv });
       }
     }
   } catch (error) {

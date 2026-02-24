@@ -95,6 +95,10 @@ type WaitingQuestionForBoard = Pick<
   Database['public']['Tables']['ticket_events']['Row'],
   'ticket_id' | 'created_at'
 >;
+type ReviewStatusChangeForBoard = Pick<
+  Database['public']['Tables']['ticket_events']['Row'],
+  'ticket_id' | 'created_at'
+>;
 
 export default async function TicketsBoardContent({
   view = 'board',
@@ -156,22 +160,31 @@ export default async function TicketsBoardContent({
     { session_state: SessionState; agent_identifier: string }
   >();
   const waitingQuestionByTicket = new Map<string, string>();
+  const reviewStatusByTicket = new Map<string, string>();
 
   if (ticketIds.length > 0) {
-    const [{ data: sessions }, { data: waitingQuestions }] = await Promise.all([
-      supabase
-        .from('agent_sessions')
-        .select('ticket_id,session_state,agent_identifier')
-        .in('ticket_id', ticketIds)
-        .order('attached_at', { ascending: false }),
-      supabase
-        .from('ticket_events')
-        .select('ticket_id,created_at')
-        .in('ticket_id', ticketIds)
-        .eq('event_type', 'question')
-        .eq('is_blocking', true)
-        .order('created_at', { ascending: false })
-    ]);
+    const [{ data: sessions }, { data: waitingQuestions }, { data: reviewStatusChanges }] =
+      await Promise.all([
+        supabase
+          .from('agent_sessions')
+          .select('ticket_id,session_state,agent_identifier')
+          .in('ticket_id', ticketIds)
+          .order('attached_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('ticket_id,created_at')
+          .in('ticket_id', ticketIds)
+          .eq('event_type', 'question')
+          .eq('is_blocking', true)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('ticket_id,created_at')
+          .in('ticket_id', ticketIds)
+          .eq('event_type', 'status_change')
+          .eq('phase', 'review')
+          .order('created_at', { ascending: false })
+      ]);
 
     for (const session of (sessions ?? []) as AgentSessionForBoard[]) {
       if (!latestSessionByTicket.has(session.ticket_id)) {
@@ -185,6 +198,12 @@ export default async function TicketsBoardContent({
     for (const waitingQuestion of (waitingQuestions ?? []) as WaitingQuestionForBoard[]) {
       if (!waitingQuestionByTicket.has(waitingQuestion.ticket_id)) {
         waitingQuestionByTicket.set(waitingQuestion.ticket_id, waitingQuestion.created_at);
+      }
+    }
+
+    for (const reviewStatusChange of (reviewStatusChanges ?? []) as ReviewStatusChangeForBoard[]) {
+      if (!reviewStatusByTicket.has(reviewStatusChange.ticket_id)) {
+        reviewStatusByTicket.set(reviewStatusChange.ticket_id, reviewStatusChange.created_at);
       }
     }
   }
@@ -204,7 +223,8 @@ export default async function TicketsBoardContent({
         project_everhour_project_id: hasEverhourApiKey ? (p?.everhour_project_id ?? null) : null,
         agent_session_state: session?.session_state ?? null,
         running_agent: isAttached ? session.agent_identifier : null,
-        waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null
+        waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
+        review_entered_at: reviewStatusByTicket.get(ticket.id) ?? null
       };
     });
   const statuses = dedupeStatuses(statusesResult.data ?? []);

@@ -3,7 +3,17 @@ import fs from 'fs';
 import path from 'path';
 
 export type TerminalMode = 'embedded' | 'external';
-export type ExternalTerminalApp = 'default' | 'terminal' | 'iterm' | 'warp';
+export type ExternalTerminalApp =
+  | 'default'
+  | 'terminal'
+  | 'iterm'
+  | 'warp'
+  | 'ghostty'
+  | 'alacritty'
+  | 'kitty'
+  | 'hyper'
+  | 'tmux'
+  | 'cmux';
 export type ExternalTerminalLaunchMode = 'window' | 'tab';
 
 interface StoreData {

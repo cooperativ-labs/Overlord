@@ -105,7 +105,7 @@ async function protocolAttach(args) {
 
   const body = {
     ticketId,
-    agentIdentifier: String(flags.agent ?? 'claude-code'),
+    agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
     connectionMethod: String(flags.method ?? 'cli'),
     metadata: {}
   };

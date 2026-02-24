@@ -110,7 +110,7 @@ function getUpdateLabel(status: AppUpdateStatus): string {
     return `Restart to Install Version ${version}`;
   }
   if (status.phase === 'checking') return 'Checking for Updates...';
-  if (status.phase === 'downloading') return 'Downloading Update...';
+  if (status.phase === 'downloading') return 'downloading...';
   if (status.phase === 'unsupported') return 'Check for Updates (Unavailable)';
   return 'Check for Updates';
 }

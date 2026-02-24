@@ -85,7 +85,7 @@ Prints response JSON to stdout. Store \`session.sessionKey\` — required for ev
 npx overlord protocol update --session-key <sessionKey> --summary "What you did and why." --phase execute
 \`\`\`
 
-Use \`--phase execute\` while working. Add \`--payload-json '{"notifications":[...]}'} \` to surface events in the UI.
+Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI.
 
 ### 3 — Decision (meaningful implementation choices)
 
@@ -121,6 +121,8 @@ npx overlord protocol deliver --session-key <sessionKey> \\
   --summary "Narrative: what you did, key decisions, next steps." \\
   --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."},{"type":"next_steps","label":"Next steps","content":"..."}]'
 \`\`\`
+
+Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`decision\`, \`note\`, \`url\`.
 
 Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
 
@@ -207,7 +209,7 @@ POST $PLATFORM_URL/api/protocol/update
 }
 \`\`\`
 
-Setting \`phase\` changes the ticket's visible status. Use \`"execute"\` while actively working.
+Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while actively working.
 When \`payload.notifications\` is provided, Overlord will fan these out into app-visible notification events.
 
 ### 3 — Record important decisions
@@ -283,6 +285,8 @@ POST $PLATFORM_URL/api/protocol/deliver
   ]
 }
 \`\`\`
+
+Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`decision\`, \`note\`, \`url\`.
 
 Deliver moves the ticket to \`review\` and ends your session. Do not call deliver if you used ask and have not received an answer.
 
