@@ -50,6 +50,10 @@ type StatusColumn = {
 };
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
+type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
+type RealtimeTicketPatch = Partial<
+  Pick<Ticket, 'status' | 'title' | 'agent_session_state' | 'running_agent'>
+>;
 type ToastState = {
   ticketId: string;
   message: string;
@@ -129,6 +133,11 @@ export default function KanbanBoard({
     getOpenedTicketTimestamps()
   );
 
+  const [realtimeOverrides, setRealtimeOverrides] = useState<Map<string, RealtimeTicketPatch>>(
+    () => new Map()
+  );
+  const latestSessionAttachedAtRef = useRef<Map<string, string>>(new Map());
+
   const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
   const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
   const openedTicketTimestampsRef = useRef(openedTicketTimestamps);
@@ -195,18 +204,20 @@ export default function KanbanBoard({
   );
 
   const ticketsWithIndicators = optimisticTickets.map(ticket => {
+    const override = realtimeOverrides.get(ticket.id);
+    const merged = override ? { ...ticket, ...override } : ticket;
     const waitingForResponseAt =
-      waitingByTicket[ticket.id] ?? ticket.waiting_for_response_at ?? null;
-    const reviewEnteredAt = reviewByTicket[ticket.id] ?? ticket.review_entered_at ?? null;
+      waitingByTicket[merged.id] ?? merged.waiting_for_response_at ?? null;
+    const reviewEnteredAt = reviewByTicket[merged.id] ?? merged.review_entered_at ?? null;
     return {
-      ...ticket,
+      ...merged,
       waiting_for_response_at: waitingForResponseAt,
       review_entered_at: reviewEnteredAt,
       has_unopened_waiting_response: hasUnopenedWaitingResponse(
         waitingForResponseAt,
-        openedTicketTimestamps[ticket.id]
+        openedTicketTimestamps[merged.id]
       ),
-      has_unopened_review: hasUnopenedTimestamp(reviewEnteredAt, openedTicketTimestamps[ticket.id])
+      has_unopened_review: hasUnopenedTimestamp(reviewEnteredAt, openedTicketTimestamps[merged.id])
     };
   });
 
@@ -365,6 +376,79 @@ export default function KanbanBoard({
             reviewSound.currentTime = 0;
             void reviewSound.play().catch(() => undefined);
           }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [organizationId, projectId]);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel(`kanban-ticket-updates:${organizationId ?? 'all'}:${projectId ?? 'all'}`)
+      .on<Database['public']['Tables']['tickets']['Row']>(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tickets',
+          ...(organizationId ? { filter: `organization_id=eq.${organizationId}` } : {})
+        },
+        payload => {
+          const updated = payload.new;
+          if (!ticketIdsRef.current.has(updated.id)) return;
+          setRealtimeOverrides(prev => {
+            const next = new Map(prev);
+            next.set(updated.id, {
+              ...next.get(updated.id),
+              status: updated.status ?? undefined,
+              title: updated.title
+            });
+            return next;
+          });
+        }
+      )
+      .on<AgentSession>(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'agent_sessions' },
+        payload => {
+          const session = payload.new;
+          if (!ticketIdsRef.current.has(session.ticket_id)) return;
+          latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
+          const isAttached = session.session_state === 'attached';
+          setRealtimeOverrides(prev => {
+            const next = new Map(prev);
+            next.set(session.ticket_id, {
+              ...next.get(session.ticket_id),
+              agent_session_state: session.session_state,
+              running_agent: isAttached ? session.agent_identifier : null
+            });
+            return next;
+          });
+        }
+      )
+      .on<AgentSession>(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'agent_sessions' },
+        payload => {
+          const session = payload.new;
+          if (!ticketIdsRef.current.has(session.ticket_id)) return;
+          const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
+          if (session.attached_at < latestAt) return;
+          const isAttached = session.session_state === 'attached';
+          setRealtimeOverrides(prev => {
+            const next = new Map(prev);
+            next.set(session.ticket_id, {
+              ...next.get(session.ticket_id),
+              agent_session_state: session.session_state,
+              running_agent: isAttached ? session.agent_identifier : null
+            });
+            return next;
+          });
         }
       )
       .subscribe();
@@ -585,6 +669,7 @@ export default function KanbanBoard({
                   column={col}
                   tickets={columnTickets.get(col.id) ?? []}
                   showOrganizationName={showOrganizationName}
+                  projectId={projectId}
                   onCreateTicket={handleCreateTicket}
                 />
               ))}
@@ -593,6 +678,7 @@ export default function KanbanBoard({
                   column={uncategorizedColumn}
                   tickets={uncategorized}
                   showOrganizationName={showOrganizationName}
+                  projectId={projectId}
                   onCreateTicket={handleCreateTicket}
                 />
               )}

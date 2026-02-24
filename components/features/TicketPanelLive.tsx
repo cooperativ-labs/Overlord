@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useTransition } from 'react';
 
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
@@ -12,6 +13,7 @@ import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
 import { markTicketOpened } from '@/lib/helpers/ticket-waiting-response';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { getConversationEntryType } from '@/lib/overlord/conversation';
+import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
@@ -184,6 +186,7 @@ export function TicketPanelLive({
   claudeCommand,
   codexCommand
 }: TicketPanelLiveProps) {
+  const router = useRouter();
   const { events, artifacts, session, sharedState } = useTicketRealtime({
     initialSharedState: initialState,
     ticketId,
@@ -192,6 +195,24 @@ export function TicketPanelLive({
     initialSession
   });
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`ticket-status-refresh:${ticketId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'tickets', filter: `id=eq.${ticketId}` },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [ticketId, router]);
+
   useEffect(() => {
     markTicketOpened(ticketId);
   }, [ticketId]);

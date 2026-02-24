@@ -9,8 +9,25 @@ type DraftObjective = Pick<
   'id' | 'objective' | 'is_executed'
 >;
 
+type ObjectiveTimelineItem = Pick<Database['public']['Tables']['objectives']['Row'], 'created_at'>;
+
 function normalizeObjectiveText(value: string | null | undefined): string {
   return (value ?? '').trim();
+}
+
+function toTimestamp(value: string | null): number {
+  if (!value) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
+}
+
+export function sortObjectivesByCreatedAtAscending<T extends ObjectiveTimelineItem>(
+  objectives: readonly T[]
+): T[] {
+  return [...objectives].sort((a, b) => toTimestamp(a.created_at) - toTimestamp(b.created_at));
 }
 
 export async function upsertDraftObjective(

@@ -6,12 +6,10 @@ import TicketsBoardContent from '../tickets/(components)/TicketsBoardContent';
 
 type PageProps = {
   params: Promise<{ organizationId: string }>;
-  searchParams: Promise<{ view?: string }>;
 };
 
-export default async function OrganizationTicketsPage({ params, searchParams }: PageProps) {
+export default async function OrganizationTicketsPage({ params }: PageProps) {
   const { organizationId } = await params;
-  const { view = 'board' } = await searchParams;
   const parsedOrganizationId = Number(organizationId);
 
   if (!Number.isInteger(parsedOrganizationId) || parsedOrganizationId <= 0) {
@@ -31,7 +29,6 @@ export default async function OrganizationTicketsPage({ params, searchParams }: 
 
   return (
     <TicketsBoardContent
-      view={view}
       organizationId={parsedOrganizationId}
       title={`${organization.name} Tickets`}
       description={`Showing tickets for ${organization.name}.`}

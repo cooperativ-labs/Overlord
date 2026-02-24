@@ -19,7 +19,10 @@ export function DefaultProjectChooser({ className }: { className?: string }) {
 
   return (
     <Select value={defaultProjectId ?? projects[0].id} onValueChange={setDefaultProjectId}>
-      <SelectTrigger aria-label="Select default project" className={cn("h-8 min-w-56 max-w-[26rem]", className)}>
+      <SelectTrigger
+        aria-label="Select default project"
+        className={cn('h-8 min-w-56 max-w-[26rem]', className)}
+      >
         <SelectValue placeholder="Select default project" />
       </SelectTrigger>
       <SelectContent align="start">

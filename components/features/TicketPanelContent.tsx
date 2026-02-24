@@ -20,6 +20,7 @@ import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
 
@@ -175,6 +176,7 @@ export async function TicketPanelContent({
   const executedObjectives = objectiveThreadItems.filter(
     objective => objective.is_executed && objective.objective.trim().length > 0
   );
+  const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
   const draftObjectiveValue = draftObjective?.objective ?? ticket.objective ?? '';
 
   return (
@@ -259,9 +261,9 @@ export async function TicketPanelContent({
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary/90">
             Objective
           </h2>
-          {executedObjectives.length > 0 ? (
+          {orderedExecutedObjectives.length > 0 ? (
             <div className="mb-3 space-y-2">
-              {executedObjectives.map((objective, index) => (
+              {orderedExecutedObjectives.map((objective, index) => (
                 <Collapsible key={objective.id}>
                   <div className="flex items-start gap-1">
                     <CollapsibleTrigger asChild>
@@ -270,9 +272,7 @@ export async function TicketPanelContent({
                         type="button"
                       >
                         <div>
-                          <p className="text-sm font-medium">
-                            Previous Objective {executedObjectives.length - index}
-                          </p>
+                          <p className="text-sm font-medium">Previous Objective {index + 1}</p>
                           <p className="text-xs text-muted-foreground">
                             Executed {new Date(objective.created_at).toLocaleString()}
                           </p>

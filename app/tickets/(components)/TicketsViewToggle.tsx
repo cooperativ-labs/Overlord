@@ -1,24 +1,27 @@
 'use client';
 
 import { LayoutGrid, List } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useOptimistic, useTransition } from 'react';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { setViewPreferenceAction } from '@/lib/actions/view-preference';
 
-export default function TicketsViewToggle() {
+export default function TicketsViewToggle({ initialView }: { initialView: string }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const view = searchParams.get('view') ?? 'board';
+  const [, startTransition] = useTransition();
+  const [optimisticView, setOptimisticView] = useOptimistic(initialView);
 
   function onValueChange(nextView: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('view', nextView);
-    router.replace(`${pathname}?${params.toString()}`);
+    startTransition(async () => {
+      setOptimisticView(nextView);
+      await setViewPreferenceAction(nextView);
+      router.refresh();
+    });
   }
 
   return (
-    <Tabs value={view} onValueChange={onValueChange}>
+    <Tabs value={optimisticView} onValueChange={onValueChange}>
       <TabsList>
         <TabsTrigger value="board" title="Board view">
           <LayoutGrid className="size-4" />

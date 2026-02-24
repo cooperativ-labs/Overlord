@@ -67,7 +67,7 @@ function LaunchButton({
       className={cn(
         'h-6 gap-1.5 text-xs transition-all',
         isActive &&
-          'border-emerald-500/80 shadow-[0_0_10px_3px_hsl(var(--emerald-500)/0.4)] ring-1 ring-emerald-500/70 animate-pulse'
+          'border-emerald-600/80 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)] ring-1 ring-emerald-600/70 animate-pulse'
       )}
       size="sm"
       variant="outline"
@@ -80,7 +80,7 @@ function LaunchButton({
         height={12}
         className="h-3 w-3"
       />
-      <span className={cn('transition-colors', isActive && 'text-emerald-400 animate-pulse')}>
+      <span className={cn('transition-colors', isActive && 'text-emerald-600 animate-pulse')}>
         {!isElectron && copied ? `${agentDetails.label} ✓` : agentDetails.label}
       </span>
     </Button>

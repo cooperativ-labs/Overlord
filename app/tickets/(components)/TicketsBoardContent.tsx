@@ -1,5 +1,6 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { getViewPreference } from '@/lib/actions/view-preference';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -54,7 +55,6 @@ function dedupeStatuses(statuses: Array<{ name: string; position: number }>) {
 }
 
 type TicketsBoardContentProps = {
-  view?: string;
   organizationId?: number;
   showOrganizationName?: boolean;
   title?: string;
@@ -101,13 +101,13 @@ type ReviewStatusChangeForBoard = Pick<
 >;
 
 export default async function TicketsBoardContent({
-  view = 'board',
   organizationId,
   showOrganizationName = false,
   title,
   description,
   projectId
 }: TicketsBoardContentProps) {
+  const view = await getViewPreference();
   const supabase = await createClient();
   const {
     data: { user }
@@ -241,7 +241,7 @@ export default async function TicketsBoardContent({
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
-        <TicketsViewToggle />
+        <TicketsViewToggle initialView={view} />
       </nav>
 
       {loadError ? (

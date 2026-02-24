@@ -109,10 +109,10 @@ function getUpdateLabel(status: AppUpdateStatus): string {
     const version = status.availableVersion ?? 'latest';
     return `Restart to Install Version ${version}`;
   }
-  if (status.phase === 'checking') return 'Checking for Updates...';
-  if (status.phase === 'downloading') return 'downloading...';
-  if (status.phase === 'unsupported') return 'Check for Updates (Unavailable)';
-  return 'Check for Updates';
+  if (status.phase === 'checking') return 'Checking for updates...';
+  if (status.phase === 'downloading') return 'Downloading update...';
+  if (status.phase === 'unsupported') return 'Check for updates (unavailable)';
+  return 'Check for updates';
 }
 
 function getUpdateAction(status: AppUpdateStatus): UpdateAction {

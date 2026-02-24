@@ -3,12 +3,11 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
@@ -22,11 +21,13 @@ export default function KanbanColumn({
   column,
   tickets,
   showOrganizationName = false,
+  projectId,
   onCreateTicket
 }: {
   column: KanbanColumnModel;
   tickets: Ticket[];
   showOrganizationName?: boolean;
+  projectId?: string;
   onCreateTicket: (status: string, objective: string) => Promise<void> | void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
@@ -34,6 +35,21 @@ export default function KanbanColumn({
 
   const [isAdding, setIsAdding] = useState(false);
   const [value, setValue] = useState('');
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollKey = `kanban-col-scroll:${projectId ?? 'all'}:${column.id}`;
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const saved = sessionStorage.getItem(scrollKey);
+    if (saved) el.scrollTop = parseInt(saved, 10);
+  }, [scrollKey]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) sessionStorage.setItem(scrollKey, String(el.scrollTop));
+  }, [scrollKey]);
 
   const handleStartAdding = () => {
     setValue('');
@@ -86,8 +102,12 @@ export default function KanbanColumn({
       </div>
       <div className="flex-1 px-3 pb-3">
         <SortableContext items={ticketIds} strategy={verticalListSortingStrategy}>
-          <ScrollArea className="h-[calc(100vh-16rem)]">
-            <div className="flex flex-col gap-2 pr-2">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="h-[calc(100vh-16rem)] overflow-y-auto pr-2"
+          >
+            <div className="flex flex-col gap-2">
               {tickets.length === 0 && !isAdding && (
                 <div className="text-muted-foreground rounded-md bg-background/50 p-4 text-center text-xs">
                   No tickets
@@ -125,7 +145,7 @@ export default function KanbanColumn({
                 </button>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </SortableContext>
       </div>
     </div>

@@ -112,10 +112,11 @@ const buildEnv = {
 run('yarn next build', buildEnv);
 
 // ---------------------------------------------------------------------------
-// Step 4 — Copy Next.js static assets into standalone output
+// Step 4 — Copy Next.js assets into standalone output
 // ---------------------------------------------------------------------------
 
 run('cp -r .next/static .next/standalone/.next/static');
+run('cp -r public .next/standalone/public');
 
 // ---------------------------------------------------------------------------
 // Step 5 — Compile Electron main-process TypeScript

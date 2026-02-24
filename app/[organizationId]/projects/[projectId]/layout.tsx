@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
 import { createClient } from '@/supabase/utils/server';
 
+import TicketsBoardContent from '../../../tickets/(components)/TicketsBoardContent';
+
 type LayoutProps = {
   children: React.ReactNode;
   params: Promise<{ organizationId: string; projectId: string }>;
@@ -67,6 +69,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         }))}
         hasEverhourApiKey={hasEverhourApiKey}
       />
+      <TicketsBoardContent organizationId={parsedOrganizationId} projectId={projectId} />
       {children}
     </div>
   );

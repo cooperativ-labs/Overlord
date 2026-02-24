@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-02-24
+
+### Added
+- Add realtime Kanban overrides for ticket title/status and agent session state updates so cards reflect active work without a full reload.
+- Add persistent ticket view preference storage via cookie-backed server actions so board/list mode follows the user across pages.
+
+### Fixed
+- Fix default project chooser selection behavior to avoid incorrect project targeting from the navigation flow.
+- Refresh ticket detail panels when the underlying ticket row updates so status and metadata stay in sync while viewing a ticket.
+- Include `public` assets in Electron standalone build output so packaged app runtime assets resolve correctly.
+
+### Changed
+- Move project board rendering into the project layout and remove duplicate page-level board mounts for project routes.
+- Preserve per-column Kanban scroll position and refine running-agent visual emphasis on active cards.
+- Standardize Electron app-menu update labels for clearer title casing and status copy.
+- Present executed objectives in chronological order with consistent numbering.
+
+### Security
+- None.
+
+### Removed
+- None.
+
+### Deprecated
+- None.
+
+### Performance
+- None.
+
+### Refactor
+- Extract shared objective timeline sorting helpers for cleaner objective rendering logic.
+
+### Test
+- None.
+
+### Documentation
+- None.
+
+### Chore
+- Bump package version to `0.9.0`.
+
 ## [0.8.0] - 2026-02-24
 
 ### Added
