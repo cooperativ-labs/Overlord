@@ -32,6 +32,39 @@ const appUpdater = new AppUpdaterService({
   currentVersion: app.getVersion()
 });
 
+function getRendererCsp(port: number): string {
+  const connectSources = isDev
+    ? ["'self'", `http://localhost:${port}`, `ws://localhost:${port}`, 'https:', 'wss:'].join(' ')
+    : ["'self'", 'https:'].join(' ');
+
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    `connect-src ${connectSources}`
+  ].join('; ');
+}
+
+function applyRendererCsp(window: BrowserWindow, port: number): void {
+  const csp = getRendererCsp(port);
+  const session = window.webContents.session;
+
+  session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp]
+      }
+    });
+  });
+}
+
 function loadLocalEnvForPackagedRuns() {
   if (isDev) return;
 
@@ -79,6 +112,7 @@ function createWindow(port: number) {
     }
   });
 
+  applyRendererCsp(mainWindow, port);
   mainWindow.loadURL(`http://localhost:${port}`);
 
   if (isDev) {

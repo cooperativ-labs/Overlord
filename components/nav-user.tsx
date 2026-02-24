@@ -3,6 +3,7 @@
 import { BadgeCheck, Bell, ChevronsUpDown, CreditCard, Download, LogOut } from 'lucide-react';
 import Link from 'next/link';
 
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -30,6 +31,7 @@ export function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
+  const { isElectron } = useElectron();
 
   return (
     <SidebarMenu>
@@ -70,15 +72,19 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href="/downloads">
-                  <Download />
-                  Downloads
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
+            {!isElectron && (
+              <>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild>
+                    <Link href="/downloads">
+                      <Download />
+                      Downloads
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <BadgeCheck />

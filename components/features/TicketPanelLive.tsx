@@ -1,15 +1,15 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
-import { TicketConversationComposer } from '@/components/features/TicketConversationComposer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
+import { markTicketOpened } from '@/lib/helpers/ticket-waiting-response';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { getConversationEntryType } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
@@ -172,7 +172,7 @@ type TicketPanelLiveProps = {
 
 export function TicketPanelLive({
   ticketId,
-  projectId,
+  projectId: _projectId,
   initialEvents,
   initialArtifacts,
   initialSession,
@@ -192,6 +192,9 @@ export function TicketPanelLive({
     initialSession
   });
   const [isPending, startTransition] = useTransition();
+  useEffect(() => {
+    markTicketOpened(ticketId);
+  }, [ticketId]);
 
   const isRunning = session?.session_state === 'attached';
   const activeAgentIdentifier = isRunning ? session.agent_identifier : null;
@@ -217,7 +220,7 @@ export function TicketPanelLive({
         />
       ) : null}
 
-      <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} />
+      {/* <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} /> */}
 
       <section className="mb-6">
         <div className="mb-4 flex items-center gap-2">

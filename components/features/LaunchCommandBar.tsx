@@ -70,7 +70,7 @@ function LaunchButton({
       className={cn(
         'h-6 gap-1.5 text-xs transition-all',
         isActive &&
-          'border-primary/50 shadow-[0_0_8px_2px_hsl(var(--primary)/0.25)] ring-1 ring-primary/40 animate-pulse'
+          'border-emerald-500/80 shadow-[0_0_10px_3px_hsl(var(--emerald-500)/0.4)] ring-1 ring-emerald-500/70 animate-pulse'
       )}
       size="sm"
       variant="outline"
@@ -157,7 +157,7 @@ export function LaunchCommandBar({
       )}
     >
       <span className="text-xs font-medium text-muted-foreground">
-        {isElectron ? 'Run agent' : 'Launch agent'}
+        {isElectron ? 'Run agent' : 'Copy prompts'}
       </span>
       <LaunchButton
         label="Claude Code"
@@ -188,7 +188,7 @@ export function LaunchCommandBar({
           <RunAgentButton ticketId={ticketId} agentToken={agentToken} workingDirectory={workingDirectory} />
         </>
       )} */}
-      <div className="h-4 w-px bg-border" />
+      {/* <div className="h-4 w-px bg-border" /> */}
       {/* <Button asChild className="h-6 text-xs" size="sm" variant="outline">
         <a href={chatGptLink} rel="noreferrer" target="_blank">
           ChatGPT ↗

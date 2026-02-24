@@ -7,9 +7,9 @@ import Link from 'next/link';
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
+import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 type SessionState = Database['public']['Enums']['session_state'];
@@ -25,12 +25,15 @@ export type Ticket = {
   project_everhour_project_id?: string | null;
   everhour_task_id?: string | null;
   agent_session_state?: SessionState | null;
+  running_agent?: string | null;
   status: string;
   priority: string;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   assigned_agent: string | null;
   board_position: number;
   organization_name?: string | null;
+  waiting_for_response_at?: string | null;
+  has_unopened_waiting_response?: boolean;
 };
 
 export default function KanbanCard({
@@ -61,6 +64,7 @@ export default function KanbanCard({
   };
 
   const isAgentRunning = ticket.agent_session_state === 'attached';
+  const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
 
   return (
     <Card
@@ -74,8 +78,15 @@ export default function KanbanCard({
       {...listeners}
       {...attributes}
     >
+      {hasUnopenedWaitingResponse ? (
+        <span
+          className="absolute right-2 top-2 z-10 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background"
+          aria-label="Agent waiting for response"
+          title="Agent is waiting for your response"
+        />
+      ) : null}
       {isAgentRunning && (
-        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-gradient-to-r from-transparent via-primary/8 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
       )}
       <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
     </Card>
@@ -140,8 +151,10 @@ function KanbanCardBody({
             />
           ) : null}
         </div>
-        {isAgentRunning && ticket.assigned_agent ? (
-          <p className="text-[10px] text-muted-foreground/70 truncate">{ticket.assigned_agent}</p>
+        {isAgentRunning && (ticket.running_agent ?? ticket.assigned_agent) ? (
+          <p className="text-[10px] text-muted-foreground/70 truncate">
+            {ticket.running_agent ?? ticket.assigned_agent}
+          </p>
         ) : null}
       </div>
     </CardContent>

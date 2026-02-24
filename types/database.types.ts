@@ -278,27 +278,6 @@ export type Database = {
           }
         ];
       };
-      organizations: {
-        Row: {
-          created_at: string;
-          id: number;
-          name: string;
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          id?: number;
-          name: string;
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          id?: number;
-          name?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       objectives: {
         Row: {
           created_at: string;
@@ -333,6 +312,27 @@ export type Database = {
             referencedColumns: ['id'];
           }
         ];
+      };
+      organizations: {
+        Row: {
+          created_at: string;
+          id: number;
+          name: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: number;
+          name: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: number;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       projects: {
         Row: {

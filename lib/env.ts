@@ -21,7 +21,7 @@ export function getSupabasePublishableKey(): string {
 }
 
 export function getPlatformUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? LOCAL_PLATFORM_URL;
+  return process.env.PLATFORM_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? LOCAL_PLATFORM_URL;
 }
 
 export function getSupabaseSecretKey(): string {
