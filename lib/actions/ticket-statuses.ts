@@ -267,13 +267,16 @@ export async function reorderTicketStatusesAction(input: {
     throw new Error('Status order contains unknown statuses.');
   }
 
-  for (const [position, name] of normalizedNames.entries()) {
-    const { error: updateError } = await supabase
-      .from('ticket_statuses')
-      .update({ position })
-      .eq('organization_id', organizationId)
-      .eq('name', name);
-
+  const updateResults = await Promise.all(
+    normalizedNames.map((name, position) =>
+      supabase
+        .from('ticket_statuses')
+        .update({ position })
+        .eq('organization_id', organizationId)
+        .eq('name', name)
+    )
+  );
+  for (const { error: updateError } of updateResults) {
     if (updateError) {
       throw new Error(updateError.message ?? 'Failed to reorder statuses.');
     }

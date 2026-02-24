@@ -18,3 +18,13 @@ export function getTicketIdentifier(ticketId: string): string {
   if (!ticketId) return '';
   return ticketId.slice(-8);
 }
+
+/**
+ * Derives a short title from an objective string.
+ * Truncates to 60 characters with an ellipsis if needed.
+ */
+export function deriveTitleFromObjective(objective: string): string {
+  const trimmed = objective.trim();
+  if (trimmed.length <= 60) return trimmed;
+  return trimmed.slice(0, 60) + '…';
+}

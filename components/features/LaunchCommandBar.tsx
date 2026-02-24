@@ -1,6 +1,7 @@
 'use client';
 
-import { Bot, Copy, Terminal } from 'lucide-react';
+import { Copy } from 'lucide-react';
+import Image from 'next/image';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -10,20 +11,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import {
+  COPY_PROMPT_AGENT_VALUES,
+  type CopyPromptAgentTypeValue,
+  getAgentTypeByValue,
+  isAgentIdentifierMatch,
+  LAUNCH_AGENT_VALUES,
+  type LaunchAgentTypeValue
+} from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
 import { useTerminal } from './terminal/TerminalProvider';
-
-// Maps the agent button identifier to possible agent_identifier values from the DB
-const agentIdentifierAliases: Record<'claude' | 'codex', string[]> = {
-  claude: ['claude-code', 'claude'],
-  codex: ['codex']
-};
-
-function isAgentActive(agent: 'claude' | 'codex', activeAgentIdentifier?: string | null): boolean {
-  if (!activeAgentIdentifier) return false;
-  return agentIdentifierAliases[agent].includes(activeAgentIdentifier.toLowerCase());
-}
 
 type Props = {
   ticketId: string;
@@ -36,7 +34,6 @@ type Props = {
 };
 
 function LaunchButton({
-  label,
   agent,
   ticketId,
   agentToken,
@@ -44,8 +41,7 @@ function LaunchButton({
   workingDirectory,
   isActive
 }: {
-  label: string;
-  agent: 'claude' | 'codex';
+  agent: LaunchAgentTypeValue;
   ticketId: string;
   agentToken?: string | null;
   clipboardCommand: string;
@@ -54,6 +50,7 @@ function LaunchButton({
 }) {
   const [copied, setCopied] = useState(false);
   const { isElectron, launchAgent } = useTerminal();
+  const agentDetails = getAgentTypeByValue(agent);
 
   async function handleClick() {
     if (isElectron) {
@@ -76,24 +73,19 @@ function LaunchButton({
       variant="outline"
       onClick={handleClick}
     >
-      {isElectron ? (
-        <>
-          <Bot className="h-3 w-3" />
-          {label}
-        </>
-      ) : copied ? (
-        `${label} ✓`
-      ) : (
-        <>
-          <Terminal className="h-3 w-3" />
-          {label}
-        </>
-      )}
+      <Image
+        src={agentDetails.icon}
+        alt={`${agentDetails.label} icon`}
+        width={12}
+        height={12}
+        className="h-3 w-3"
+      />
+      <span className={cn('transition-colors', isActive && 'text-emerald-400 animate-pulse')}>
+        {!isElectron && copied ? `${agentDetails.label} ✓` : agentDetails.label}
+      </span>
     </Button>
   );
 }
-
-type CopyAgent = 'claude' | 'codex' | 'cursor';
 
 function CopyAgentCommandButton({
   claudeCommand,
@@ -104,8 +96,8 @@ function CopyAgentCommandButton({
   codexCommand: string;
   cursorCommand: string;
 }) {
-  async function handleCopy({ agent }: { agent: CopyAgent }) {
-    const commandsByAgent: Record<CopyAgent, string> = {
+  async function handleCopy({ agent }: { agent: CopyPromptAgentTypeValue }) {
+    const commandsByAgent: Record<CopyPromptAgentTypeValue, string> = {
       claude: claudeCommand,
       codex: codexCommand,
       cursor: cursorCommand
@@ -123,15 +115,18 @@ function CopyAgentCommandButton({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuItem className="text-xs" onClick={() => handleCopy({ agent: 'claude' })}>
-          Claude
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-xs" onClick={() => handleCopy({ agent: 'codex' })}>
-          Codex
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-xs" onClick={() => handleCopy({ agent: 'cursor' })}>
-          Cursor
-        </DropdownMenuItem>
+        {COPY_PROMPT_AGENT_VALUES.map(agentValue => {
+          const agent = getAgentTypeByValue(agentValue);
+          return (
+            <DropdownMenuItem
+              key={agent.value}
+              className="text-xs"
+              onClick={() => handleCopy({ agent: agentValue })}
+            >
+              {agent.label}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -148,6 +143,10 @@ export function LaunchCommandBar({
 }: Props) {
   const { isElectron } = useTerminal();
   const cursorCommand = codexCommand;
+  const commandsByAgent: Record<LaunchAgentTypeValue, string> = {
+    claude: claudeCommand,
+    codex: codexCommand
+  };
 
   return (
     <div
@@ -159,24 +158,17 @@ export function LaunchCommandBar({
       <span className="text-xs font-medium text-muted-foreground">
         {isElectron ? 'Run agent' : 'Copy prompts'}
       </span>
-      <LaunchButton
-        label="Claude Code"
-        agent="claude"
-        ticketId={ticketId}
-        agentToken={agentToken}
-        clipboardCommand={claudeCommand}
-        workingDirectory={workingDirectory}
-        isActive={isAgentActive('claude', activeAgentIdentifier)}
-      />
-      <LaunchButton
-        label="Codex"
-        agent="codex"
-        ticketId={ticketId}
-        agentToken={agentToken}
-        clipboardCommand={codexCommand}
-        workingDirectory={workingDirectory}
-        isActive={isAgentActive('codex', activeAgentIdentifier)}
-      />
+      {LAUNCH_AGENT_VALUES.map(agent => (
+        <LaunchButton
+          key={agent}
+          agent={agent}
+          ticketId={ticketId}
+          agentToken={agentToken}
+          clipboardCommand={commandsByAgent[agent]}
+          workingDirectory={workingDirectory}
+          isActive={isAgentIdentifierMatch(agent, activeAgentIdentifier)}
+        />
+      ))}
       <CopyAgentCommandButton
         claudeCommand={claudeCommand}
         codexCommand={codexCommand}

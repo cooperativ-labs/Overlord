@@ -5,28 +5,14 @@ import { cookies } from 'next/headers';
 
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getPlatformUrl } from '@/lib/env';
+import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
+import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { buildTicketPromptMarkdown } from '@/lib/overlord/ticket-prompt';
 import { createTicketSchema } from '@/lib/overlord/validation';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
-
-function deriveTitleFromObjective(objective: string): string {
-  const trimmed = objective.trim();
-  if (trimmed.length <= 60) return trimmed;
-  return trimmed.slice(0, 60) + '…';
-}
-
-const hexColorPattern = /^#([0-9a-fA-F]{6})$/;
-
-function normalizeHexColor(value: string) {
-  const trimmed = value.trim();
-  if (!hexColorPattern.test(trimmed)) {
-    throw new Error('Color must be a valid hex value like #d4d4d8.');
-  }
-  return trimmed.toLowerCase();
-}
 
 function revalidateTicketBoards(organizationIds: Iterable<number>) {
   revalidatePath('/u');
@@ -343,7 +329,7 @@ export async function updateTicketFieldAction(
   ticketId: string,
   field: EditableField,
   value: string
-) {
+): Promise<void> {
   if (!editableFields.includes(field)) {
     throw new Error('Invalid field.');
   }
@@ -353,7 +339,9 @@ export async function updateTicketFieldAction(
   const ticketUpdatePayload =
     field === 'objective'
       ? { objective: normalizedValue || null }
-      : { [field]: normalizedValue || null };
+      : field === 'available_tools'
+        ? { available_tools: normalizedValue }
+        : { [field]: normalizedValue || null };
   const { data, error } = await supabase
     .from('tickets')
     .update(ticketUpdatePayload)
@@ -384,11 +372,16 @@ export async function updateTicketFieldAction(
   ]);
 }
 
-export async function updateTicketStatusAction(ticketId: string, status: string) {
+export async function updateTicketStatusAction(ticketId: string, status: string): Promise<void> {
+  const trimmedStatus = status.trim();
+  if (!trimmedStatus) {
+    throw new Error('Status is required.');
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tickets')
-    .update({ status })
+    .update({ status: trimmedStatus })
     .eq('id', ticketId)
     .select('organization_id,project_id')
     .single();
@@ -447,7 +440,7 @@ export async function updateTicketExecutionTargetAction(
   ]);
 }
 
-export async function setTicketProjectAction(ticketId: string, projectId: string) {
+export async function setTicketProjectAction(ticketId: string, projectId: string): Promise<void> {
   const supabase = await createClient();
   const nextProjectId = projectId.trim();
   if (!nextProjectId) {
@@ -498,7 +491,10 @@ export async function setTicketProjectAction(ticketId: string, projectId: string
   ]);
 }
 
-export async function markObjectiveExecutedAction(ticketId: string, objectiveId: string) {
+export async function markObjectiveExecutedAction(
+  ticketId: string,
+  objectiveId: string
+): Promise<void> {
   const supabase = await createClient();
   const { data: objective, error: objectiveError } = await supabase
     .from('objectives')
@@ -621,12 +617,11 @@ export async function reorderTicketsAction(
     }
   }
 
-  // Update positions for all tickets in the list
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase
-      .from('tickets')
-      .update({ board_position: i })
-      .eq('id', orderedIds[i]);
+  // Update positions for all tickets in the list in parallel
+  const updateResults = await Promise.all(
+    orderedIds.map((id, i) => supabase.from('tickets').update({ board_position: i }).eq('id', id))
+  );
+  for (const { error } of updateResults) {
     if (error) {
       throw new Error(error.message);
     }
@@ -667,7 +662,7 @@ export async function reorderTicketsAction(
   revalidateTicketBoards(organizationIds);
 }
 
-export async function markSessionDisconnectedAction(sessionId: string) {
+export async function markSessionDisconnectedAction(sessionId: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase
     .from('agent_sessions')
@@ -679,7 +674,9 @@ export async function markSessionDisconnectedAction(sessionId: string) {
   }
 }
 
-export async function deleteTicketAction(ticketId: string) {
+export async function deleteTicketAction(
+  ticketId: string
+): Promise<{ organizationId: number; projectId: string }> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('tickets')

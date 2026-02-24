@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { ZodType } from 'zod';
 
@@ -43,6 +44,7 @@ export async function parseProtocolBody<T>(
 }
 
 export function internalErrorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : 'Unexpected error.';
-  return NextResponse.json({ error: message }, { status: 500 });
+  console.error('[protocol] internal error:', error);
+  Sentry.captureException(error);
+  return NextResponse.json({ error: 'An internal server error occurred.' }, { status: 500 });
 }

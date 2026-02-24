@@ -73,7 +73,7 @@ function parseEverhourErrorMessage(error: unknown): string {
 
 function parseEverhourStatus(error: unknown): number | null {
   if (!(error instanceof Error)) return null;
-  const match = error.message.match(/Everhour request failed \\((\\d{3})\\):/);
+  const match = error.message.match(/Everhour request failed \((\d{3})\):/);
   if (!match) return null;
   const parsed = Number.parseInt(match[1], 10);
   return Number.isFinite(parsed) ? parsed : null;

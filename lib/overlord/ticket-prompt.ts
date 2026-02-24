@@ -77,7 +77,7 @@ The following environment variables are set for you: \`PLATFORM_URL\`, \`AGENT_T
 npx overlord protocol attach
 \`\`\`
 
-Prints response JSON to stdout. Store \`session.sessionKey\` — required for every subsequent call. Response also includes \`ticket\`, \`history\`, and \`sharedState\`.
+Prints response JSON to stdout. Store \`session.sessionKey\` — required for every subsequent call. Response also includes \`ticket\`, \`history\` (deliver events), \`artifacts\`, and \`sharedState\`.
 
 ### 2 — Update (after each meaningful step)
 
@@ -186,7 +186,8 @@ Do not build the JSON body with \`jq\` unless absolutely necessary.
 The response includes:
 - \`session.sessionKey\` — store this, required for every subsequent call
 - \`ticket\` — full ticket record
-- \`history\` — prior agent events on this ticket
+- \`history\` — prior \`deliver\` events on this ticket
+- \`artifacts\` — saved ticket artifacts from previous deliveries/sessions
 - \`sharedState\` — persisted key/value context from previous sessions
 
 ### 2 — Post updates during work

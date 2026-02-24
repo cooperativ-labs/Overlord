@@ -14,7 +14,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { Columns3, Eye, EyeOff } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -132,6 +132,8 @@ export default function KanbanBoard({
   const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
   const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
   const openedTicketTimestampsRef = useRef(openedTicketTimestamps);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollKey = `kanban-scroll:${projectId ?? organizationId ?? 'default'}`;
 
   useEffect(() => {
     openedTicketTimestampsRef.current = openedTicketTimestamps;
@@ -149,6 +151,19 @@ export default function KanbanBoard({
     const timeoutId = window.setTimeout(() => setToastState(null), 3_000);
     return () => window.clearTimeout(timeoutId);
   }, [toastState]);
+
+  // Restore x-scroll position after remount (e.g. when opening a ticket reloads the board)
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const saved = sessionStorage.getItem(scrollKey);
+    if (saved) container.scrollLeft = parseInt(saved, 10);
+  }, [scrollKey]);
+
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (container) sessionStorage.setItem(scrollKey, String(container.scrollLeft));
+  }, [scrollKey]);
 
   useEffect(() => {
     const waitingAudio = new Audio(WAITING_SOUND_PATH);
@@ -214,9 +229,11 @@ export default function KanbanBoard({
   function groupTickets(tickets: Ticket[]) {
     const groups = new Map<string, Ticket[]>();
     const uncategorized: Ticket[] = [];
+
     for (const col of sortedColumns) {
       groups.set(col.id, []);
     }
+
     for (const ticket of tickets) {
       if (groups.has(ticket.status)) {
         groups.get(ticket.status)!.push(ticket);
@@ -224,6 +241,16 @@ export default function KanbanBoard({
         uncategorized.push(ticket);
       }
     }
+
+    for (const [slug, columnTickets] of groups) {
+      if (!visibleSlugs.has(slug)) {
+        continue;
+      }
+      columnTickets.sort((a, b) => a.board_position - b.board_position);
+    }
+
+    uncategorized.sort((a, b) => a.board_position - b.board_position);
+
     return { groups, uncategorized };
   }
 
@@ -546,7 +573,11 @@ export default function KanbanBoard({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <div className="min-h-0 min-w-0 flex-1 overflow-x-auto">
+          <div
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="min-h-0 min-w-0 flex-1 overflow-x-auto"
+          >
             <div className="inline-flex flex-nowrap gap-3 px-4 pb-4 md:px-6">
               {visibleSortedColumns.map(col => (
                 <KanbanColumn

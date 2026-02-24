@@ -35,7 +35,10 @@ export async function POST(request: Request) {
       .select('id')
       .single();
     if (eventError || !event) {
-      return NextResponse.json({ error: eventError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: eventError?.message ?? 'Failed to create event.' },
+        { status: 500 }
+      );
     }
 
     const notifications = extractAgentNotifications(payload);

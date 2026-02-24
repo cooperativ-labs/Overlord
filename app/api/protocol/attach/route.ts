@@ -16,38 +16,34 @@ export async function POST(request: Request) {
     const { organizationId } = parsed.tokenContext;
     const sessionKey = randomUUID();
 
-    const [{ data: ticket, error: ticketError }, { data: session, error: sessionError }] =
-      await Promise.all([
-        supabase
-          .from('tickets')
-          .select('*')
-          .eq('id', ticketId)
-          .eq('organization_id', organizationId)
-          .single(),
-        supabase
-          .from('agent_sessions')
-          .insert({
-            agent_identifier: agentIdentifier,
-            connection_method: connectionMethod,
-            metadata,
-            session_key: sessionKey,
-            ticket_id: ticketId
-          })
-          .select('*')
-          .single()
-      ]);
+    const { data: ticket, error: ticketError } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('id', ticketId)
+      .eq('organization_id', organizationId)
+      .single();
 
     if (ticketError || !ticket) {
       return NextResponse.json(
-        { error: ticketError?.message ?? 'Ticket not found.' },
+        { error: 'Ticket not found.' },
         { status: ticketError?.code === 'PGRST116' ? 404 : 500 }
       );
     }
+
+    const { data: session, error: sessionError } = await supabase
+      .from('agent_sessions')
+      .insert({
+        agent_identifier: agentIdentifier,
+        connection_method: connectionMethod,
+        metadata,
+        session_key: sessionKey,
+        ticket_id: ticketId
+      })
+      .select('*')
+      .single();
+
     if (sessionError || !session) {
-      return NextResponse.json(
-        { error: sessionError?.message ?? 'Failed to create session.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Failed to create session.' }, { status: 500 });
     }
 
     const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId);
@@ -67,9 +63,16 @@ export async function POST(request: Request) {
       ticket_id: ticketId
     });
 
-    const [{ data: history }, { data: sharedState }] = await Promise.all([
+    const [{ data: history }, { data: artifacts }, { data: sharedState }] = await Promise.all([
       supabase
         .from('ticket_events')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .eq('event_type', 'deliver')
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase
+        .from('artifacts')
         .select('*')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false })
@@ -84,6 +87,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       history: history ?? [],
+      artifacts: artifacts ?? [],
       session: {
         id: session.id,
         sessionKey: session.session_key,

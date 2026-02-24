@@ -2,11 +2,14 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { PanelRightIcon } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
@@ -118,7 +121,7 @@ export default function KanbanCard({
         </span>
       ) : null}
       {isAgentRunning && (
-        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
       )}
       <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
     </Card>
@@ -133,36 +136,49 @@ function KanbanCardBody({
   showOrganizationName: boolean;
 }) {
   const isAgentRunning = ticket.agent_session_state === 'attached';
+  const ticketPath = buildTicketPath({
+    organizationId: ticket.organization_id,
+    projectId: ticket.project_id,
+    ticketId: ticket.id
+  });
+  const activeAgentIdentifier = ticket.running_agent ?? ticket.assigned_agent;
+  const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
 
   return (
     <CardContent className="flex h-full flex-col p-3">
       <div className="min-w-0 space-y-1">
         <div className="flex items-start gap-2">
-          {ticket.project_color ? (
-            <span
-              className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border"
-              style={{ backgroundColor: ticket.project_color, borderColor: ticket.project_color }}
-              title={ticket.project_name ?? 'Project'}
-            />
-          ) : (
-            <span
-              className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border border-muted-foreground/50"
-              title="No project"
-            />
-          )}
-          <h4 className="text-sm leading-snug font-medium">
-            <Link
-              href={buildTicketPath({
-                organizationId: ticket.organization_id,
-                projectId: ticket.project_id,
-                ticketId: ticket.id
-              })}
-              className="hover:underline"
-              onClick={e => e.stopPropagation()}
-            >
-              {getDisplayTitle(ticket)}
-            </Link>
-          </h4>
+          <div className="flex min-w-0 flex-1 items-start gap-2">
+            {ticket.project_color ? (
+              <span
+                className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border"
+                style={{ backgroundColor: ticket.project_color, borderColor: ticket.project_color }}
+                title={ticket.project_name ?? 'Project'}
+              />
+            ) : (
+              <span
+                className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border border-muted-foreground/50"
+                title="No project"
+              />
+            )}
+            <h4 className="text-sm leading-snug font-medium">
+              <Link
+                href={ticketPath}
+                className="hover:underline"
+                onClick={e => e.stopPropagation()}
+              >
+                {getDisplayTitle(ticket)}
+              </Link>
+            </h4>
+          </div>
+          <Link
+            href={ticketPath}
+            aria-label="Open ticket details"
+            className="mt-0.5 text-muted-foreground hover:text-foreground"
+            onClick={e => e.stopPropagation()}
+          >
+            <PanelRightIcon className="h-3.5 w-3.5" />
+          </Link>
         </div>
         {showOrganizationName && ticket.organization_name ? (
           <p className="text-muted-foreground text-xs">{ticket.organization_name}</p>
@@ -183,10 +199,25 @@ function KanbanCardBody({
             />
           ) : null}
         </div>
-        {isAgentRunning && (ticket.running_agent ?? ticket.assigned_agent) ? (
-          <p className="text-[10px] text-muted-foreground/70 truncate">
-            {ticket.running_agent ?? ticket.assigned_agent}
-          </p>
+        {isAgentRunning && activeAgentIdentifier ? (
+          <div className="min-w-0">
+            {activeAgentType ? (
+              <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                <Image
+                  src={activeAgentType.icon}
+                  alt={`${activeAgentType.label} icon`}
+                  width={12}
+                  height={12}
+                  className="h-3 w-3 shrink-0"
+                />
+                <span className="truncate">{activeAgentType.label}</span>
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/70 truncate">
+                {activeAgentIdentifier}
+              </p>
+            )}
+          </div>
         ) : null}
       </div>
     </CardContent>

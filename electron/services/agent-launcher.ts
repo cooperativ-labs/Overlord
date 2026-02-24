@@ -78,19 +78,23 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   const contextMarkdown = await response.text();
 
+  const tag = `overlord-${input.ticketId.slice(-8)}-${Date.now()}`;
+
   // Write context to a temp file (avoids shell expansion / quoting issues)
-  const contextFile = path.join(
-    os.tmpdir(),
-    `overlord-ctx-${input.ticketId.slice(-8)}-${Date.now()}.md`
-  );
+  const contextFile = path.join(os.tmpdir(), `${tag}-ctx.md`);
   fs.writeFileSync(contextFile, contextMarkdown, 'utf-8');
+
+  // Write PermissionRequest hook script so Claude notifies Overlord when awaiting tool permission
+  const { hookScript, settingsFile } = writePermissionRequestHookFiles(tag);
 
   // Schedule cleanup after 30 minutes
   setTimeout(() => {
-    try {
-      fs.unlinkSync(contextFile);
-    } catch {
-      // Already deleted — ignore
+    for (const file of [contextFile, hookScript, settingsFile]) {
+      try {
+        fs.unlinkSync(file);
+      } catch {
+        // Already deleted — ignore
+      }
     }
   }, 30 * 60_000);
 
@@ -100,7 +104,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   let command: string;
 
   if (input.agent === 'claude') {
-    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})" ${shellQuote(startPrompt)}`;
+    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})" --settings ${shellQuote(settingsFile)} ${shellQuote(startPrompt)}`;
   } else {
     command = `codex "$(cat ${shellQuote(contextFile)})"`;
   }
@@ -110,6 +114,61 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     cwd: resolvedCwd,
     env: launchEnv
   };
+}
+
+/**
+ * Writes a PermissionRequest hook script and a Claude settings JSON file that
+ * registers the hook. When Claude requests tool permission, the hook calls the
+ * Overlord API so the UI can show a notification (badge, sound, Kanban dot).
+ *
+ * The hook exits 0 without printing anything, so Claude still shows its normal
+ * permission prompt — Overlord only adds an extra UI notification on top.
+ */
+function writePermissionRequestHookFiles(tag: string): {
+  hookScript: string;
+  settingsFile: string;
+} {
+  const hookScript = path.join(os.tmpdir(), `${tag}-perm-hook.sh`);
+  const settingsFile = path.join(os.tmpdir(), `${tag}-settings.json`);
+
+  // The script reads Claude's JSON permission request from stdin, then calls
+  // the Overlord API in the background and exits 0 immediately so Claude can
+  // continue showing its permission prompt without waiting for the HTTP request.
+  const scriptLines = [
+    '#!/bin/bash',
+    '# Overlord PermissionRequest notification hook',
+    'BODY=$(cat -)',
+    'if [ -n "$PLATFORM_URL" ] && [ -n "$AGENT_TOKEN" ] && [ -n "$TICKET_ID" ]; then',
+    '  curl -sf -m 5 \\',
+    '    -X POST "$PLATFORM_URL/api/protocol/permission-request?ticketId=$TICKET_ID" \\',
+    '    -H "Authorization: Bearer $AGENT_TOKEN" \\',
+    '    -H "Content-Type: application/json" \\',
+    '    -d "$BODY" \\',
+    '    >/dev/null 2>&1 &',
+    '  disown',
+    'fi',
+    'exit 0',
+    ''
+  ];
+
+  fs.writeFileSync(hookScript, scriptLines.join('\n'), { encoding: 'utf-8', mode: 0o755 });
+
+  // Claude settings format: hooks → event name → array of matcher objects,
+  // each with a nested hooks array. ".*" matches all tool names.
+  const settings = {
+    hooks: {
+      PermissionRequest: [
+        {
+          matcher: '.*',
+          hooks: [{ type: 'command', command: hookScript }]
+        }
+      ]
+    }
+  };
+
+  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf-8');
+
+  return { hookScript, settingsFile };
 }
 
 function shellQuote(value: string): string {

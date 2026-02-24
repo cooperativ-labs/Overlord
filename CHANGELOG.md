@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-02-24
+
+### Added
+- Add a `permission-request` protocol endpoint and Claude launch hook support so tool-permission requests show up as blocking ticket notifications in Overlord.
+- Add prior `deliver` history and saved `artifacts` to protocol attach responses so resumed sessions load richer context.
+- Add a projects index page at `/:organizationId/projects` with project cards for faster navigation.
+
+### Fixed
+- Validate ticket ownership before creating agent sessions during protocol attach to prevent invalid session creation for missing tickets.
+- Improve protocol update route error fallback messaging when event creation fails.
+- Set `created_by` for protocol-created follow-up tickets to preserve ticket authorship metadata.
+- Correct Everhour error status parsing so HTTP codes are extracted reliably.
+
+### Changed
+- Move project settings into the project layout so settings stay consistent across project views while ticket pages stay focused on board/list content.
+- Keep Kanban horizontal scroll position across remounts and sort tickets by `board_position` in visible columns.
+- Refresh Kanban and launch UI agent display with branded icons, active-state matching, and a quick ticket details link from cards.
+
+### Security
+- Stop returning raw internal error details from protocol APIs; log server-side and capture exceptions in Sentry instead.
+
+### Removed
+- None.
+
+### Deprecated
+- None.
+
+### Performance
+- Parallelize ticket-status and ticket reorder position updates to reduce board and status reorder latency.
+
+### Refactor
+- Centralize shared helper logic for agent type mapping, objective-title derivation, and hex color normalization.
+
+### Test
+- None.
+
+### Documentation
+- Update protocol prompt documentation to describe attach responses with `deliver` history and `artifacts`.
+
+### Chore
+- Bump package version to `0.8.0`.
+
 ## [0.7.0] - 2026-02-24
 
 ### Added

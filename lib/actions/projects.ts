@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { normalizeHexColor } from '@/lib/helpers/color';
 import { createClient } from '@/supabase/utils/server';
 
 export type SidebarProject = {
@@ -30,16 +31,6 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
     color: project.color,
     organizationId: project.organization_id
   }));
-}
-
-const hexColorPattern = /^#([0-9a-fA-F]{6})$/;
-
-function normalizeHexColor(value: string) {
-  const trimmed = value.trim();
-  if (!hexColorPattern.test(trimmed)) {
-    throw new Error('Color must be a valid hex value like #d4d4d8.');
-  }
-  return trimmed.toLowerCase();
 }
 
 export async function updateProjectColorAction(input: {

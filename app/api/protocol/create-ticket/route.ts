@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveSession } from '@/lib/overlord/protocol-db';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
-
-function deriveTitleFromObjective(objective: string): string {
-  const trimmed = objective.trim();
-  if (trimmed.length <= 60) return trimmed;
-  return `${trimmed.slice(0, 60)}…`;
-}
 
 export async function POST(request: Request) {
   const parsed = await parseProtocolBody(request, createFollowUpTicketSchema);
@@ -28,7 +22,7 @@ export async function POST(request: Request) {
       ticketId,
       title
     } = parsed.data;
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
 
     const supabase = createServiceRoleClient();
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
@@ -57,6 +51,7 @@ export async function POST(request: Request) {
       .insert({
         acceptance_criteria: acceptanceCriteria || null,
         available_tools: availableTools,
+        created_by: userId,
         execution_target: executionTarget,
         objective,
         organization_id: sourceTicket.organization_id,
