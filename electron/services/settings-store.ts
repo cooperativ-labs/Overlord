@@ -11,9 +11,7 @@ export type ExternalTerminalApp =
   | 'ghostty'
   | 'alacritty'
   | 'kitty'
-  | 'hyper'
-  | 'tmux'
-  | 'cmux';
+  | 'hyper';
 export type ExternalTerminalLaunchMode = 'window' | 'tab';
 
 interface StoreData {

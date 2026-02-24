@@ -183,44 +183,6 @@ export function registerTerminalIpc(): void {
             ).finally(() => resolve());
           }, 1000);
         });
-      case 'tmux':
-        script = openInTab
-          ? `
-              tell application "Terminal"
-                activate
-                if (count of windows) = 0 then
-                  do script "tmux new-session -- ${escapedLaunchCmd}"
-                else
-                  do script "tmux new-session -- ${escapedLaunchCmd}" in front window
-                end if
-              end tell
-            `
-          : `
-              tell application "Terminal"
-                activate
-                do script "tmux new-session -- ${escapedLaunchCmd}"
-              end tell
-            `;
-        break;
-      case 'cmux':
-        script = openInTab
-          ? `
-              tell application "Terminal"
-                activate
-                if (count of windows) = 0 then
-                  do script "cmux new-session -- ${escapedLaunchCmd}"
-                else
-                  do script "cmux new-session -- ${escapedLaunchCmd}" in front window
-                end if
-              end tell
-            `
-          : `
-              tell application "Terminal"
-                activate
-                do script "cmux new-session -- ${escapedLaunchCmd}"
-              end tell
-            `;
-        break;
       default: // 'terminal' or 'default'
         script = openInTab
           ? `
@@ -352,44 +314,6 @@ export function registerTerminalIpc(): void {
                 ).finally(() => resolve());
               }, 1000);
             });
-          case 'tmux':
-            script = openInTab
-              ? `
-                  tell application "Terminal"
-                    activate
-                    if (count of windows) = 0 then
-                      do script "tmux new-session -- ${escapedLaunchCmd}"
-                    else
-                      do script "tmux new-session -- ${escapedLaunchCmd}" in front window
-                    end if
-                  end tell
-                `
-              : `
-                  tell application "Terminal"
-                    activate
-                    do script "tmux new-session -- ${escapedLaunchCmd}"
-                  end tell
-                `;
-            break;
-          case 'cmux':
-            script = openInTab
-              ? `
-                  tell application "Terminal"
-                    activate
-                    if (count of windows) = 0 then
-                      do script "cmux new-session -- ${escapedLaunchCmd}"
-                    else
-                      do script "cmux new-session -- ${escapedLaunchCmd}" in front window
-                    end if
-                  end tell
-                `
-              : `
-                  tell application "Terminal"
-                    activate
-                    do script "cmux new-session -- ${escapedLaunchCmd}"
-                  end tell
-                `;
-            break;
           default:
             script = openInTab
               ? `

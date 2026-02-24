@@ -29,7 +29,6 @@ import { createTicketInColumnAction, reorderTicketsAction } from '@/lib/actions/
 import {
   getOpenedTicketTimestamps,
   hasUnopenedTimestamp,
-  hasUnopenedWaitingResponse,
   markTicketOpened,
   type TicketOpenedTimestamps
 } from '@/lib/helpers/ticket-waiting-response';
@@ -213,7 +212,7 @@ export default function KanbanBoard({
       ...merged,
       waiting_for_response_at: waitingForResponseAt,
       review_entered_at: reviewEnteredAt,
-      has_unopened_waiting_response: hasUnopenedWaitingResponse(
+      has_unopened_waiting_response: hasUnopenedTimestamp(
         waitingForResponseAt,
         openedTicketTimestamps[merged.id]
       ),
@@ -287,10 +286,117 @@ export default function KanbanBoard({
   }, [pathname]);
 
   useEffect(() => {
+    let cancelled = false;
     const supabase = createClient();
 
+    const applySessionOverride = (
+      session: Pick<AgentSession, 'ticket_id' | 'session_state' | 'agent_identifier'>
+    ) => {
+      const isAttached = session.session_state === 'attached';
+      setRealtimeOverrides(prev => {
+        const next = new Map(prev);
+        next.set(session.ticket_id, {
+          ...next.get(session.ticket_id),
+          agent_session_state: session.session_state,
+          running_agent: isAttached ? session.agent_identifier : null
+        });
+        return next;
+      });
+    };
+
+    const syncBoardData = async () => {
+      const ticketIds = [...ticketIdsRef.current];
+      if (ticketIds.length === 0) return;
+
+      const [
+        { data: sessions },
+        { data: waitingQuestions },
+        { data: reviewChanges },
+        { data: ticketUpdates }
+      ] = await Promise.all([
+        supabase
+          .from('agent_sessions')
+          .select('ticket_id,session_state,agent_identifier,attached_at')
+          .in('ticket_id', ticketIds)
+          .order('attached_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('ticket_id,created_at')
+          .in('ticket_id', ticketIds)
+          .eq('event_type', 'question')
+          .eq('is_blocking', true)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('ticket_id,created_at')
+          .in('ticket_id', ticketIds)
+          .eq('event_type', 'status_change')
+          .eq('phase', 'review')
+          .order('created_at', { ascending: false }),
+        supabase.from('tickets').select('id,status,title').in('id', ticketIds)
+      ]);
+
+      if (cancelled) return;
+
+      const sessionByTicket = new Map<
+        string,
+        Pick<AgentSession, 'session_state' | 'agent_identifier'>
+      >();
+      for (const s of (sessions ?? []) as Pick<
+        AgentSession,
+        'ticket_id' | 'session_state' | 'agent_identifier'
+      >[]) {
+        if (!sessionByTicket.has(s.ticket_id)) {
+          sessionByTicket.set(s.ticket_id, s);
+        }
+      }
+
+      setRealtimeOverrides(prev => {
+        const next = new Map(prev);
+        for (const t of ticketUpdates ?? []) {
+          const patch: RealtimeTicketPatch = {
+            ...next.get(t.id),
+            status: t.status ?? undefined,
+            title: t.title
+          };
+          const session = sessionByTicket.get(t.id);
+          if (session) {
+            patch.agent_session_state = session.session_state;
+            patch.running_agent =
+              session.session_state === 'attached' ? session.agent_identifier : null;
+          }
+          next.set(t.id, patch);
+        }
+        return next;
+      });
+
+      setWaitingByTicket(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const q of (waitingQuestions ?? []) as { ticket_id: string; created_at: string }[]) {
+          if (!next[q.ticket_id] || Date.parse(q.created_at) > Date.parse(next[q.ticket_id])) {
+            next[q.ticket_id] = q.created_at;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+
+      setReviewByTicket(prev => {
+        let changed = false;
+        const next = { ...prev };
+        for (const r of (reviewChanges ?? []) as { ticket_id: string; created_at: string }[]) {
+          if (!next[r.ticket_id] || Date.parse(r.created_at) > Date.parse(next[r.ticket_id])) {
+            next[r.ticket_id] = r.created_at;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    };
+
     const channel = supabase
-      .channel(`kanban-agent-notifications:${organizationId ?? 'all'}:${projectId ?? 'all'}`)
+      .channel(`kanban-realtime:${organizationId ?? 'all'}:${projectId ?? 'all'}`)
       .on<TicketEvent>(
         'postgres_changes',
         {
@@ -301,13 +407,8 @@ export default function KanbanBoard({
         },
         payload => {
           const event = payload.new;
-          if (!event.is_blocking) {
-            return;
-          }
-
-          if (!ticketIdsRef.current.has(event.ticket_id)) {
-            return;
-          }
+          if (!event.is_blocking) return;
+          if (!ticketIdsRef.current.has(event.ticket_id)) return;
 
           setWaitingByTicket(previous => {
             const existing = previous[event.ticket_id];
@@ -318,9 +419,7 @@ export default function KanbanBoard({
           });
 
           const openedAt = openedTicketTimestampsRef.current[event.ticket_id];
-          if (!hasUnopenedWaitingResponse(event.created_at, openedAt)) {
-            return;
-          }
+          if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;
 
           const ticket = ticketsByIdRef.current.get(event.ticket_id);
           const title = ticket?.title?.trim()
@@ -350,13 +449,8 @@ export default function KanbanBoard({
         },
         payload => {
           const event = payload.new;
-          if (event.phase !== 'review') {
-            return;
-          }
-
-          if (!ticketIdsRef.current.has(event.ticket_id)) {
-            return;
-          }
+          if (event.phase !== 'review') return;
+          if (!ticketIdsRef.current.has(event.ticket_id)) return;
 
           setReviewByTicket(previous => {
             const existing = previous[event.ticket_id];
@@ -367,9 +461,7 @@ export default function KanbanBoard({
           });
 
           const openedAt = openedTicketTimestampsRef.current[event.ticket_id];
-          if (!hasUnopenedTimestamp(event.created_at, openedAt)) {
-            return;
-          }
+          if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;
 
           const reviewSound = reviewSoundRef.current;
           if (reviewSound) {
@@ -378,18 +470,6 @@ export default function KanbanBoard({
           }
         }
       )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [organizationId, projectId]);
-
-  useEffect(() => {
-    const supabase = createClient();
-
-    const channel = supabase
-      .channel(`kanban-ticket-updates:${organizationId ?? 'all'}:${projectId ?? 'all'}`)
       .on<Database['public']['Tables']['tickets']['Row']>(
         'postgres_changes',
         {
@@ -419,16 +499,7 @@ export default function KanbanBoard({
           const session = payload.new;
           if (!ticketIdsRef.current.has(session.ticket_id)) return;
           latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
-          const isAttached = session.session_state === 'attached';
-          setRealtimeOverrides(prev => {
-            const next = new Map(prev);
-            next.set(session.ticket_id, {
-              ...next.get(session.ticket_id),
-              agent_session_state: session.session_state,
-              running_agent: isAttached ? session.agent_identifier : null
-            });
-            return next;
-          });
+          applySessionOverride(session);
         }
       )
       .on<AgentSession>(
@@ -439,21 +510,22 @@ export default function KanbanBoard({
           if (!ticketIdsRef.current.has(session.ticket_id)) return;
           const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
           if (session.attached_at < latestAt) return;
-          const isAttached = session.session_state === 'attached';
-          setRealtimeOverrides(prev => {
-            const next = new Map(prev);
-            next.set(session.ticket_id, {
-              ...next.get(session.ticket_id),
-              agent_session_state: session.session_state,
-              running_agent: isAttached ? session.agent_identifier : null
-            });
-            return next;
-          });
+          applySessionOverride(session);
         }
       )
-      .subscribe();
+      .subscribe(status => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          void syncBoardData();
+        }
+      });
+
+    const pollId = window.setInterval(() => {
+      void syncBoardData();
+    }, 20_000);
 
     return () => {
+      cancelled = true;
+      window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
   }, [organizationId, projectId]);

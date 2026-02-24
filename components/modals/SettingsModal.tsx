@@ -1,6 +1,7 @@
 'use client';
 
-import { Link2, Monitor, RefreshCcw } from 'lucide-react';
+import { Bot, Link2, Monitor, RefreshCcw } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { EverhourSettings } from '@/components/features/everhour/EverhourSettings';
@@ -45,8 +46,14 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
-import { getRunningAgentSessionCountAction } from '@/lib/actions/agent-sessions';
+import {
+  getRunningAgentSessionCountAction,
+  getRunningAgentSessionsAction,
+  type RunningAgentSession,
+  stopRunningAgentSessionAction
+} from '@/lib/actions/agent-sessions';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
+import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
 type SettingsModalProps = {
   open: boolean;
@@ -66,9 +73,7 @@ const externalTerminalAppOptions = [
   { value: 'ghostty', label: 'Ghostty' },
   { value: 'alacritty', label: 'Alacritty' },
   { value: 'kitty', label: 'Kitty' },
-  { value: 'hyper', label: 'Hyper' },
-  { value: 'tmux', label: 'tmux (in Terminal)' },
-  { value: 'cmux', label: 'cmux (in Terminal)' }
+  { value: 'hyper', label: 'Hyper' }
 ] as const;
 
 const externalTerminalLaunchModeOptions = [
@@ -88,6 +93,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { name: 'Integrations', icon: Link2 },
+  { name: 'Agents', icon: Bot },
   { name: 'Terminal', icon: Monitor, electronOnly: true },
   { name: 'Updates', icon: RefreshCcw, electronOnly: true }
 ];
@@ -107,6 +113,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     useState<ButtonLoadingState>('default');
   const [restartToUpdateButtonState, setRestartToUpdateButtonState] =
     useState<ButtonLoadingState>('default');
+  const [refreshAgentsButtonState, setRefreshAgentsButtonState] =
+    useState<ButtonLoadingState>('default');
+  const [runningAgents, setRunningAgents] = useState<RunningAgentSession[]>([]);
+  const [agentsLoaded, setAgentsLoaded] = useState(false);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [stopAgentButtonStates, setStopAgentButtonStates] = useState<
+    Record<string, ButtonLoadingState>
+  >({});
   const [installWarningOpen, setInstallWarningOpen] = useState(false);
   const [runningAgentCount, setRunningAgentCount] = useState(0);
   const [platformUrl, setPlatformUrl] = useState<string | null>(null);
@@ -145,6 +159,27 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         setEverhourUpdatedAt(null);
       })
       .finally(() => setEverhourStatusLoaded(true));
+  }, [open]);
+
+  async function loadRunningAgents(): Promise<boolean> {
+    setAgentsError(null);
+    try {
+      const sessions = await getRunningAgentSessionsAction();
+      setRunningAgents(sessions);
+      return true;
+    } catch (error) {
+      console.error('Failed to load running agents:', error);
+      setAgentsError('Failed to load running agents.');
+      return false;
+    } finally {
+      setAgentsLoaded(true);
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    setAgentsLoaded(false);
+    void loadRunningAgents();
   }, [open]);
 
   useEffect(() => {
@@ -256,10 +291,32 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   }
 
+  async function handleRefreshAgents() {
+    setRefreshAgentsButtonState('loading');
+    const refreshed = await loadRunningAgents();
+    setRefreshAgentsButtonState(refreshed ? 'success' : 'error');
+  }
+
+  async function handleStopAgent(sessionId: string) {
+    setStopAgentButtonStates(previous => ({ ...previous, [sessionId]: 'loading' }));
+    try {
+      await stopRunningAgentSessionAction(sessionId);
+      setStopAgentButtonStates(previous => ({ ...previous, [sessionId]: 'success' }));
+      await loadRunningAgents();
+    } catch (error) {
+      console.error('Failed to stop running agent:', error);
+      setStopAgentButtonStates(previous => ({ ...previous, [sessionId]: 'error' }));
+    }
+  }
+
   const canShowDownloadUpdate = updateStatus?.phase === 'available';
   const canShowInstallUpdate = updateStatus?.phase === 'downloaded';
   const updateStatusMessage =
     updateStatus?.message ?? 'Use Check for updates to look for a newer release.';
+  const sessionCountLabel =
+    runningAgents.length === 1
+      ? '1 running agent session'
+      : `${runningAgents.length} running agent sessions`;
 
   return (
     <>
@@ -318,6 +375,79 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       <p className="text-sm text-muted-foreground">Loading…</p>
                     )}
                   </>
+                )}
+
+                {activeNav === 'Agents' && (
+                  <div className="grid gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="grid gap-1">
+                        <p className="text-sm font-medium">Running agents</p>
+                        <p className="text-xs text-muted-foreground">{sessionCountLabel}</p>
+                      </div>
+                      <LoadingButton
+                        buttonState={refreshAgentsButtonState}
+                        setButtonState={setRefreshAgentsButtonState}
+                        text="Refresh"
+                        loadingText="Refreshing..."
+                        successText="Refreshed"
+                        errorText="Try again"
+                        reset
+                        variant="outline"
+                        onClick={handleRefreshAgents}
+                      />
+                    </div>
+                    {!agentsLoaded ? (
+                      <p className="text-sm text-muted-foreground">Loading running agents…</p>
+                    ) : null}
+                    {agentsError ? <p className="text-sm text-destructive">{agentsError}</p> : null}
+                    {agentsLoaded && !agentsError && runningAgents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No agents are currently running.
+                      </p>
+                    ) : null}
+                    {runningAgents.map(session => (
+                      <div
+                        key={session.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <Link
+                            className="block truncate text-sm font-medium hover:underline"
+                            href={buildTicketPath({
+                              organizationId: session.organizationId,
+                              projectId: session.projectId,
+                              ticketId: session.ticketId
+                            })}
+                          >
+                            {session.ticketTitle ?? 'Untitled ticket'}
+                          </Link>
+                          <p className="text-xs text-muted-foreground">
+                            Agent: {session.agentIdentifier}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Attached {new Date(session.attachedAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <LoadingButton
+                          buttonState={stopAgentButtonStates[session.id] ?? 'default'}
+                          setButtonState={state =>
+                            setStopAgentButtonStates(previous => ({
+                              ...previous,
+                              [session.id]: state
+                            }))
+                          }
+                          text="Stop agent"
+                          loadingText="Stopping..."
+                          successText="Stopped"
+                          errorText="Retry"
+                          reset
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleStopAgent(session.id)}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 )}
 
                 {activeNav === 'Terminal' && isElectron && (

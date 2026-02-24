@@ -24,7 +24,7 @@ user-invocable: true
 
 - **Never edit `CHANGELOG.md` directly** outside of this skill’s instructions.
 - **Always read the latest `CHANGELOG.md`** before making changes so you understand the existing structure and most recent version.
-- New entries should follow the pattern: `## [x.y.z] - YYYY-MM-DD` (for example: `## [0.7.0] - 2026-02-24`).
+- New entries should follow the pattern: `## [x.y.z] - YYYY-MM-DD:hh:mm` (for example: `## [0.7.0] - 2026-02-24:12:44`) The time is in UTC.
 - Use clear, user-facing language that describes **what changed and why it matters**, not low-level implementation details.
 - Prefer present/imperative phrasing in bullets (e.g. `Add agent waiting-response notifications` instead of `Added…`), unless matching an established style in the file.
 
@@ -79,12 +79,12 @@ If you are using a conventional commit style, you can map types to sections:
 
 1. **Read the current changelog**
    - Use `Read` on `CHANGELOG.md`.
-   - Identify the most recent version heading (for example `## [0.6.0] - 2026-02-24`) and review its structure.
+   - Identify the most recent version heading (for example `## [0.6.0] - 2026-02-24:12:00`) and review its structure.
 
 2. **Determine the target version**
    - If the user provides an explicit version, use that.
    - Otherwise, read `package.json` and use its `version` field as the version number for the new entry.
-   - Use today’s date in `YYYY-MM-DD` format.
+   - Use today’s UTC date and time in `YYYY-MM-DD:hh:mm` format.
 
 3. **Gather changes to document**
    - Use git history, pull request descriptions, and recent edits in the workspace to understand what changed since the last documented version.

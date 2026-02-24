@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-02-24:13:25
+
+### Added
+- Add Supabase Realtime-backed Kanban subscriptions for tickets, ticket events, and agent sessions so blocking questions, review transitions, and agent activity appear in near real-time with audio and toast notifications.
+- Add Agents settings view to list, refresh, and stop running agent sessions from the app, with direct links back to ticket details.
+- Add terminal preferences for embedded vs external mode, preferred external terminal app (Terminal, iTerm2, Warp, Ghostty, Alacritty, Kitty, Hyper), and whether launches open in a new window or tab.
+- Add database publication migration enabling realtime notifications for tickets, ticket events, agent sessions, artifacts, and shared_state updates.
+
+### Fixed
+- Fix Kanban board state getting stale when realtime channels error or time out by resyncing ticket, waiting-response, review, and agent-session state from Supabase.
+
+### Changed
+- Update waiting-response and review indicators to rely on the latest ticket-event timestamps plus local open history so unread dots and sounds only fire for genuinely new events.
+- Refine Kanban card visuals for running agents and unread indicators to better highlight active work and tickets needing attention.
+
+### Security
+- None.
+
+### Removed
+- None.
+
+### Deprecated
+- None.
+
+### Performance
+- Reduce full-board reloads by combining realtime subscriptions with lightweight background polling for ticket and agent state.
+
+### Refactor
+- Refactor Electron terminal IPC and settings storage into a JSON-backed settings store for terminal mode and external terminal preferences.
+- Restructure Kanban board state management around maps and refs to isolate realtime overrides from the base ticket list.
+
+### Test
+- None.
+
+### Documentation
+- None.
+
+### Chore
+- Bump package version to `0.10.0`.
+
 ## [0.9.0] - 2026-02-24
 
 ### Added

@@ -57,13 +57,6 @@ export function markTicketOpened(
   return next;
 }
 
-export function hasUnopenedWaitingResponse(
-  waitingForResponseAt: string | null | undefined,
-  openedAt: number | undefined
-): boolean {
-  return hasUnopenedTimestamp(waitingForResponseAt, openedAt);
-}
-
 export function hasUnopenedTimestamp(
   timestamp: string | null | undefined,
   openedAt: number | undefined

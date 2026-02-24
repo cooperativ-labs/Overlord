@@ -87,7 +87,6 @@ export default function KanbanCard({
   };
 
   const isAgentRunning = ticket.agent_session_state === 'attached';
-  // const isAgentRunning = true;
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
   const hasUnopenedReview = ticket.has_unopened_review === true;
 
@@ -97,7 +96,8 @@ export default function KanbanCard({
       className={cn(
         'relative cursor-grab border-border/40 shadow-sm overflow-hidden',
         isDragging ? 'opacity-40' : '',
-        isAgentRunning && 'animate-pulse border-emerald-500/40'
+        isAgentRunning && 'animate-pulse border-emerald-500/40',
+        hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
       )}
       style={style}
       {...listeners}
