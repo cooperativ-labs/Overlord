@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2026-02-24:13:40
+
+### Added
+- Add support for `cmux` and custom external terminal apps, including a configurable app name or path used when launching ticket terminals from Electron.
+- Add a custom external terminal app setting stored in the Electron settings store and surfaced in the Settings modal when the "Custom…" option is selected.
+
+### Fixed
+- Restrict onboarding and project “Local directory” pickers to Electron so browser sessions no longer show an unusable OS-specific directory chooser.
+
+### Changed
+- Tweak project settings header layout, typography, and Everhour sync button copy for a more compact, consistent appearance.
+- Clarify project working directory help text to emphasize that agent terminal sessions open in the configured path.
+
+### Security
+- None.
+
+### Removed
+- None.
+
+### Deprecated
+- None.
+
+### Performance
+- None.
+
+### Refactor
+- Extend Electron terminal IPC routing and settings schema to handle additional external terminal app variants while preserving default behavior.
+
+### Test
+- None.
+
+### Documentation
+- None.
+
+### Chore
+- Bump package version to `0.11.0`.
+
 ## [0.10.0] - 2026-02-24:13:25
 
 ### Added

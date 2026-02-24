@@ -220,17 +220,32 @@ export function ProjectSettingsSection({
   }
 
   return (
-    <section className="px-5 pt-5">
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Project name: click to reveal input */}
-        <div className="min-w-0 flex-1 ">
+    <section className="space-y-4 px-5 pt-5">
+      {/* Name + color + optional sync */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="h-5 w-5 shrink-0 rounded border transition hover:ring-2 hover:ring-primary hover:ring-offset-2 disabled:opacity-50"
+              style={{ backgroundColor: savedColor, borderColor: savedColor }}
+              aria-label="Change project color"
+              disabled={colorSaveState === 'loading'}
+            />
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-2" align="start">
+            <ProjectColorSetter value={savedColor} onSelect={handleSelectColor} />
+          </PopoverContent>
+        </Popover>
+
+        <div className="min-w-0 flex-1">
           {nameEditing ? (
             <Input
               ref={nameInputRef}
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. Mobile App"
-              className="h-8 max-w-xs font-semibold"
+              className="h-7 max-w-xs font-semibold"
               onBlur={handleSaveName}
               onKeyDown={e => {
                 if (e.key === 'Enter') handleSaveName();
@@ -242,121 +257,96 @@ export function ProjectSettingsSection({
             <button
               type="button"
               className={cn(
-                'rounded px-1.5 py-0.5 text-left text-lg font-semibold',
-                'hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                'min-h-8 -ml-1.5'
+                'rounded px-1.5 py-0.5 text-left text-base font-semibold',
+                'hover:bg-muted/60',
+                '-ml-1.5'
               )}
               onClick={() => setNameEditing(true)}
             >
               {savedName || 'Untitled project'}
             </button>
           )}
-          {nameError ? <p className="mt-1 text-xs text-destructive">{nameError}</p> : null}
-        </div>
-
-        {/* Color picker */}
-        <div className="flex items-center gap-2">
-          <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="h-8 w-8 shrink-0 rounded-[4px] border transition hover:ring-2 hover:ring-primary hover:ring-offset-2 disabled:opacity-50"
-                style={{ backgroundColor: savedColor, borderColor: savedColor }}
-                aria-label="Change project color"
-                disabled={colorSaveState === 'loading'}
-              />
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-2" align="start">
-              <ProjectColorSetter value={savedColor} onSelect={handleSelectColor} />
-            </PopoverContent>
-          </Popover>
-          {colorSaveState === 'loading' ? (
-            <span className="text-xs text-muted-foreground">Saving…</span>
-          ) : null}
-          {colorError ? <span className="text-xs text-destructive">{colorError}</span> : null}
         </div>
 
         {hasEverhourApiKey ? (
-          <div className="flex items-center gap-2">
-            <LoadingButton
-              buttonState={syncButtonState}
-              setButtonState={setSyncButtonState}
-              text="Sync Projects to Everhour"
-              loadingText="Syncing…"
-              successText="Synced"
-              errorText="Retry"
-              reset
-              size="sm"
-              variant="outline"
-              onClick={handleSyncEverhour}
-            />
-            {syncMessage ? (
-              <span
-                className="max-w-[240px] truncate text-xs text-muted-foreground"
-                title={syncMessage}
-              >
-                {syncMessage}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-4 grid gap-2 md:max-w-2xl">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Local Working Directory
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={workingDirectory}
-            onBlur={() => handleSaveWorkingDirectory()}
-            onChange={e => setWorkingDirectory(e.target.value)}
-            placeholder="/absolute/path/to/your/project"
-            className="h-8 min-w-[320px] flex-1"
-            disabled={workingDirectorySaveState === 'loading'}
-          />
-          <input
-            ref={directoryInputRef}
-            type="file"
-            {...({
-              webkitdirectory: '',
-              directory: ''
-            } as React.InputHTMLAttributes<HTMLInputElement>)}
-            multiple
-            className="hidden"
-            aria-hidden
-            tabIndex={-1}
-            onChange={handleWebDirectoryInputChange}
-          />
-          <Button
-            className="h-8"
-            size="sm"
-            variant="outline"
-            disabled={workingDirectorySaveState === 'loading'}
-            onClick={handleChooseDirectory}
-          >
-            Choose folder
-          </Button>
           <LoadingButton
-            buttonState={workingDirectorySaveState}
-            setButtonState={setWorkingDirectorySaveState}
-            text="Save path"
-            loadingText="Saving…"
-            successText="Saved"
+            buttonState={syncButtonState}
+            setButtonState={setSyncButtonState}
+            text="Sync Everhour"
+            loadingText="Syncing…"
+            successText="Synced"
             errorText="Retry"
             reset
             size="sm"
             variant="outline"
-            onClick={() => handleSaveWorkingDirectory()}
+            onClick={handleSyncEverhour}
           />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          `Run Agent` will open terminal sessions in this directory for tickets in this project.
-        </p>
-        {workingDirectoryError ? (
-          <p className="text-xs text-destructive">{workingDirectoryError}</p>
         ) : null}
       </div>
+
+      {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
+      {colorError ? <p className="text-xs text-destructive">{colorError}</p> : null}
+      {syncMessage ? (
+        <p className="text-xs text-muted-foreground" title={syncMessage}>
+          {syncMessage}
+        </p>
+      ) : null}
+
+      {isElectron ? (
+        <div className="grid gap-1.5 md:max-w-2xl">
+          <p className="text-xs font-medium text-muted-foreground">Working Directory</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={workingDirectory}
+              onBlur={() => handleSaveWorkingDirectory()}
+              onChange={e => setWorkingDirectory(e.target.value)}
+              placeholder="/absolute/path/to/project"
+              className="h-8 min-w-0 flex-1"
+              disabled={workingDirectorySaveState === 'loading'}
+            />
+            <input
+              ref={directoryInputRef}
+              type="file"
+              {...({
+                webkitdirectory: '',
+                directory: ''
+              } as React.InputHTMLAttributes<HTMLInputElement>)}
+              multiple
+              className="hidden"
+              aria-hidden
+              tabIndex={-1}
+              onChange={handleWebDirectoryInputChange}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0"
+              disabled={workingDirectorySaveState === 'loading'}
+              onClick={handleChooseDirectory}
+            >
+              Browse
+            </Button>
+            <LoadingButton
+              buttonState={workingDirectorySaveState}
+              setButtonState={setWorkingDirectorySaveState}
+              text="Save"
+              loadingText="Saving…"
+              successText="Saved"
+              errorText="Retry"
+              reset
+              size="sm"
+              variant="outline"
+              onClick={() => handleSaveWorkingDirectory()}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Terminal sessions will open here when running agents on tickets in this project.
+          </p>
+          {workingDirectoryError ? (
+            <p className="text-xs text-destructive">{workingDirectoryError}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <ProjectStatusSettings
         organizationId={organizationId}

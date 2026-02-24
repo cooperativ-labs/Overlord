@@ -214,37 +214,39 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
               }}
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="onboarding-working-directory">Local directory</FieldLabel>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                id="onboarding-working-directory"
-                value={workingDirectory}
-                onChange={event => setWorkingDirectory(event.target.value)}
-                placeholder="/absolute/path/to/your/project"
-                className="min-w-[260px] flex-1"
-              />
-              <input
-                ref={directoryInputRef}
-                type="file"
-                {...({
-                  webkitdirectory: '',
-                  directory: ''
-                } as React.InputHTMLAttributes<HTMLInputElement>)}
-                multiple
-                className="hidden"
-                aria-hidden
-                tabIndex={-1}
-                onChange={handleWebDirectoryInputChange}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={handleChooseDirectory}>
-                Choose folder
-              </Button>
-            </div>
-            <FieldDescription>
-              When you run agents for this project, terminals will open in this directory.
-            </FieldDescription>
-          </Field>
+          {isElectron ? (
+            <Field>
+              <FieldLabel htmlFor="onboarding-working-directory">Local directory</FieldLabel>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  id="onboarding-working-directory"
+                  value={workingDirectory}
+                  onChange={event => setWorkingDirectory(event.target.value)}
+                  placeholder="/absolute/path/to/your/project"
+                  className="min-w-[260px] flex-1"
+                />
+                <input
+                  ref={directoryInputRef}
+                  type="file"
+                  {...({
+                    webkitdirectory: '',
+                    directory: ''
+                  } as React.InputHTMLAttributes<HTMLInputElement>)}
+                  multiple
+                  className="hidden"
+                  aria-hidden
+                  tabIndex={-1}
+                  onChange={handleWebDirectoryInputChange}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={handleChooseDirectory}>
+                  Choose folder
+                </Button>
+              </div>
+              <FieldDescription>
+                When you run agents for this project, terminals will open in this directory.
+              </FieldDescription>
+            </Field>
+          ) : null}
           {projectError ? (
             <Alert id="onboarding-project-error" variant="destructive" role="alert">
               <AlertDescription>{projectError}</AlertDescription>

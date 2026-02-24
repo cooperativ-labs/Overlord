@@ -183,6 +183,47 @@ export function registerTerminalIpc(): void {
             ).finally(() => resolve());
           }, 1000);
         });
+      case 'cmux':
+        exec(`open -a cmux`);
+        return new Promise<void>(resolve => {
+          setTimeout(() => {
+            runAppleScript(
+              `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
+            ).finally(() => resolve());
+          }, 1000);
+        });
+      case 'custom': {
+        const customApp = store.get('customExternalTerminalApp', '') as string;
+        if (!customApp) {
+          script = openInTab
+            ? `
+                tell application "Terminal"
+                  activate
+                  if (count of windows) = 0 then
+                    do script "${escapedLaunchCmd}"
+                  else
+                    do script "${escapedLaunchCmd}" in front window
+                  end if
+                end tell
+              `
+            : `
+                tell application "Terminal"
+                  activate
+                  do script "${escapedLaunchCmd}"
+                end tell
+              `;
+          break;
+        }
+
+        exec(`open -a ${shellQuote(customApp)}`);
+        return new Promise<void>(resolve => {
+          setTimeout(() => {
+            runAppleScript(
+              `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
+            ).finally(() => resolve());
+          }, 1000);
+        });
+      }
       default: // 'terminal' or 'default'
         script = openInTab
           ? `
@@ -314,6 +355,47 @@ export function registerTerminalIpc(): void {
                 ).finally(() => resolve());
               }, 1000);
             });
+          case 'cmux':
+            exec(`open -a cmux`);
+            return new Promise<void>(resolve => {
+              setTimeout(() => {
+                runAppleScript(
+                  `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
+                ).finally(() => resolve());
+              }, 1000);
+            });
+          case 'custom': {
+            const customApp = store.get('customExternalTerminalApp', '') as string;
+            if (!customApp) {
+              script = openInTab
+                ? `
+                    tell application "Terminal"
+                      activate
+                      if (count of windows) = 0 then
+                        do script "${escapedLaunchCmd}"
+                      else
+                        do script "${escapedLaunchCmd}" in front window
+                      end if
+                    end tell
+                  `
+                : `
+                    tell application "Terminal"
+                      activate
+                      do script "${escapedLaunchCmd}"
+                    end tell
+                  `;
+              break;
+            }
+
+            exec(`open -a ${shellQuote(customApp)}`);
+            return new Promise<void>(resolve => {
+              setTimeout(() => {
+                runAppleScript(
+                  `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
+                ).finally(() => resolve());
+              }, 1000);
+            });
+          }
           default:
             script = openInTab
               ? `

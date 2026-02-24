@@ -26,6 +26,7 @@ import {
   BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -73,7 +74,9 @@ const externalTerminalAppOptions = [
   { value: 'ghostty', label: 'Ghostty' },
   { value: 'alacritty', label: 'Alacritty' },
   { value: 'kitty', label: 'Kitty' },
-  { value: 'hyper', label: 'Hyper' }
+  { value: 'hyper', label: 'Hyper' },
+  { value: 'cmux', label: 'cmux' },
+  { value: 'custom', label: 'Custom…' }
 ] as const;
 
 const externalTerminalLaunchModeOptions = [
@@ -103,6 +106,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { terminalMode, setTerminalMode } = useTerminal();
   const [terminalApp, setTerminalApp] = useState('default');
   const [terminalLaunchMode, setTerminalLaunchMode] = useState('window');
+  const [customTerminalApp, setCustomTerminalApp] = useState('');
   const [everhourConnected, setEverhourConnected] = useState(false);
   const [everhourUpdatedAt, setEverhourUpdatedAt] = useState<string | null>(null);
   const [everhourStatusLoaded, setEverhourStatusLoaded] = useState(false);
@@ -139,10 +143,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     if (!api || !open) return;
     Promise.all([
       api.settings.get<string>('externalTerminalApp'),
-      api.settings.get<string>('externalTerminalLaunchMode')
-    ]).then(([appValue, launchModeValue]) => {
+      api.settings.get<string>('externalTerminalLaunchMode'),
+      api.settings.get<string>('customExternalTerminalApp')
+    ]).then(([appValue, launchModeValue, customAppValue]) => {
       if (appValue) setTerminalApp(appValue);
       if (launchModeValue) setTerminalLaunchMode(launchModeValue);
+      if (typeof customAppValue === 'string') setCustomTerminalApp(customAppValue);
     });
   }, [api, open]);
 
@@ -229,6 +235,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   async function handleTerminalLaunchModeChange(value: string) {
     setTerminalLaunchMode(value);
     await api?.settings.set('externalTerminalLaunchMode', value);
+  }
+
+  async function handleCustomTerminalAppChange(value: string) {
+    setCustomTerminalApp(value);
+    await api?.settings.set('customExternalTerminalApp', value);
   }
 
   async function handleCheckForUpdates() {
@@ -486,6 +497,25 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               ))}
                             </SelectContent>
                           </Select>
+                          {terminalApp === 'custom' && (
+                            <div className="grid gap-2">
+                              <Label htmlFor="custom-terminal-app">
+                                Custom terminal name or path
+                              </Label>
+                              <Input
+                                id="custom-terminal-app"
+                                placeholder="Example: cmux or /Applications/cmux.app"
+                                value={customTerminalApp}
+                                onChange={event =>
+                                  void handleCustomTerminalAppChange(event.target.value)
+                                }
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Overlord will open this app and type the launch command into the
+                                active terminal session.
+                              </p>
+                            </div>
+                          )}
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>

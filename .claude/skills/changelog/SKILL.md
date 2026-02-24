@@ -115,7 +115,7 @@ If you are using a conventional commit style, you can map types to sections:
 Assume the current `CHANGELOG.md` begins like this:
 
 ```markdown
-## [0.6.0] - 2026-02-24
+## [0.6.0] - 2026-02-24:12:44
 
 ### Added
 - Agent waiting-response notifications on the Kanban board.
@@ -127,42 +127,43 @@ Assume the current `CHANGELOG.md` begins like this:
 You want to add a new release `0.7.0` on `2026-02-24` that introduces a new analytics dashboard, fixes a Kanban drag-and-drop bug, and adds a performance optimization. The updated top of the file should look like:
 
 ```markdown
-## [0.7.0] - 2026-02-24
 
-### Added
+## [0.7.0] - 2026-02-24:12:44
+
+### Added (Always include this section)
 - New analytics dashboard for ticket throughput and agent load.
 
-### Fixed
+### Fixed (Always include this section)
 - Resolve occasional Kanban drag-and-drop failures when rapidly reordering tickets.
 
-### Changed
+### Changed (Always include this section)
 - None.
 
-### Security
+### Security (Always include this section)
 - None.
 
-### Removed
+### Removed (IF ANY)
 - None.
 
-### Deprecated
+### Deprecated (IF ANY)
 - None.
 
-### Performance
+### Performance (IF ANY)
 - Improve Kanban board rendering performance for large projects.
 
-### Refactor
+### Refactor (IF ANY)
 - None.
 
-### Test
+### Test (IF ANY)
 - None.
 
-### Documentation
+### Documentation (IF ANY)
 - None.
 
-### Chore
+### Chore (IF ANY)
 - None.
 
-## [0.6.0] - 2026-02-24
+## [0.6.0] - 2026-02-24:10:44
 ```
 
 Use this pattern for all future changelog updates so that the file remains consistent and easy to scan.

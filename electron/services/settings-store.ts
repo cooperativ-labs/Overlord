@@ -11,13 +11,16 @@ export type ExternalTerminalApp =
   | 'ghostty'
   | 'alacritty'
   | 'kitty'
-  | 'hyper';
+  | 'hyper'
+  | 'cmux'
+  | 'custom';
 export type ExternalTerminalLaunchMode = 'window' | 'tab';
 
 interface StoreData {
   terminalMode: TerminalMode;
   externalTerminalApp: ExternalTerminalApp;
   externalTerminalLaunchMode: ExternalTerminalLaunchMode;
+  customExternalTerminalApp: string;
   windowBounds: { width: number; height: number; x?: number; y?: number };
   [key: string]: unknown;
 }
@@ -26,6 +29,7 @@ const defaults: StoreData = {
   terminalMode: 'embedded',
   externalTerminalApp: 'default',
   externalTerminalLaunchMode: 'window',
+  customExternalTerminalApp: '',
   windowBounds: { width: 1400, height: 900 }
 };
 
