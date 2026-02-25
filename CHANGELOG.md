@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [0.14.0] - 2026-02-25:13:30
+
+### Added
+- Add `/u` “My Tasks” board that shows tickets for the selected workspace or all workspaces, powered by the new workspace selector at the top of the sidebar.
+- Add organization-aware workspace switcher to the sidebar via a selected-organization cookie so navigation and project lists stay scoped to the active team.
+- Add organization-agnostic project and ticket routes (`/projects/:projectId` and `/projects/:projectId/:ticketId`) plus `/u/:ticketId` overlays that share the same side-panel ticket detail UI.
+- Add `user_follow_up` ticket event type and emit follow-up events when resuming tickets from `review` or `complete` so the UI can distinguish fresh follow-up work from the initial delivery.
+
+### Fixed
+- Clear review indicators when tickets move back to `execute` so review dots and borders disappear once follow-up work begins.
+
+### Changed
+- Redirect legacy organization-scoped project and ticket routes to the new organization-agnostic `/projects/:projectId` URLs while keeping existing deep links working.
+- Redirect organization root ticket pages to `/u` so each workspace opens directly into the My Tasks board.
+- Update ticket list views and helper path builders to generate project-scoped ticket URLs (`/projects/:projectId/:ticketId`) instead of organization-prefixed paths.
+
+### Security
+- None.
+
+### Refactor
+- Refactor project layouts to centralize ticket boards and settings under a shared `ProjectLayoutClient` that loads project, status, and Everhour data from a single place.
+- Tighten ticket board data loading by deduplicating ticket statuses and reusing `TicketsBoardContent` across user, organization, and project views.
+
+### Documentation
+- Document the planned web OAuth login flow in `feature-plans/web-oauth-login-flow-engineering-plan.md` to guide future implementation.
+
+### Chore
+- Bump package version to `0.14.0`.
+
 ## [0.13.0] - 2026-02-25:12:50
 
 ### Added

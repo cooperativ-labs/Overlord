@@ -39,18 +39,20 @@ function getRelationItem<T>(relation: T | T[] | null | undefined): T | null {
   return relation;
 }
 
-function dedupeStatuses(statuses: Array<{ name: string; position: number }>) {
-  const byName = new Map<string, number>();
+function dedupeStatuses(
+  statuses: Array<{ name: string; position: number; status_type?: string }>
+): Array<{ name: string; position: number; status_type?: string }> {
+  const byName = new Map<string, { position: number; status_type?: string }>();
 
   for (const status of statuses) {
-    const existingPosition = byName.get(status.name);
-    if (existingPosition === undefined || status.position < existingPosition) {
-      byName.set(status.name, status.position);
+    const existing = byName.get(status.name);
+    if (existing === undefined || status.position < existing.position) {
+      byName.set(status.name, { position: status.position, status_type: status.status_type });
     }
   }
 
   return [...byName.entries()]
-    .map(([name, position]) => ({ name, position }))
+    .map(([name, { position, status_type }]) => ({ name, position, status_type }))
     .sort((left, right) => left.position - right.position);
 }
 
@@ -124,7 +126,7 @@ export default async function TicketsBoardContent({
 
   let statusesQuery = supabase
     .from('ticket_statuses')
-    .select('name,position')
+    .select('name,position,status_type')
     .order('position', { ascending: true });
 
   if (organizationId !== undefined) {
@@ -269,7 +271,11 @@ export default async function TicketsBoardContent({
       ) : (
         <Card>
           <CardContent className="pt-6">
-            <TicketListView tickets={sorted} showOrganizationName={showOrganizationName} />
+            <TicketListView
+              tickets={sorted}
+              showOrganizationName={showOrganizationName}
+              ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
+            />
           </CardContent>
         </Card>
       )}

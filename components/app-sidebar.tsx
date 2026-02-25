@@ -31,6 +31,7 @@ import {
   SidebarMenuItem,
   SidebarRail
 } from '@/components/ui/sidebar';
+import type { UserOrganization } from '@/lib/actions/organizations';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { updateProjectColorAction } from '@/lib/actions/projects';
 
@@ -43,6 +44,8 @@ type AppSidebarUser = {
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   user: AppSidebarUser;
   projects: SidebarProject[];
+  organizations: UserOrganization[];
+  selectedOrgId: number | null;
 };
 
 type ProjectColorMenuProps = {
@@ -85,50 +88,46 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
   );
 }
 
-export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
+export function AppSidebar({
+  user,
+  projects,
+  organizations,
+  selectedOrgId,
+  ...props
+}: AppSidebarProps) {
   const pathname = usePathname();
   const { openProjectCreator } = useProjectCreator();
   const { defaultProject } = useDefaultProject();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   const defaultOrganizationId = React.useMemo(() => {
-    if (defaultProject) {
-      return defaultProject.organizationId;
-    }
-
-    const segments = pathname.split('/').filter(Boolean);
-    const firstSegment = segments[0];
-    if (typeof firstSegment === 'string' && /^\d+$/.test(firstSegment)) {
-      return Number(firstSegment);
-    }
+    if (selectedOrgId !== null) return selectedOrgId;
+    if (defaultProject) return defaultProject.organizationId;
     return projects[0]?.organizationId ?? null;
-  }, [defaultProject, pathname, projects]);
+  }, [selectedOrgId, defaultProject, projects]);
+
+  const displayedProjects = React.useMemo(
+    () =>
+      selectedOrgId !== null ? projects.filter(p => p.organizationId === selectedOrgId) : projects,
+    [selectedOrgId, projects]
+  );
 
   const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
   const isMyTasksActive = pathname === '/u' || pathname.startsWith('/u/');
 
   function isProjectActive(project: SidebarProject) {
     const segments = pathname.split('/').filter(Boolean);
-    if (segments.length < 3) {
+    if (segments.length < 2) {
       return false;
     }
-
-    const [, segment, projectId] = segments;
+    const [segment, projectId] = segments;
     return segment === 'projects' && projectId === project.id;
   }
-
-  const teams = [
-    {
-      name: 'Default Workspace',
-      logo: Inbox,
-      plan: 'Agent orchestration'
-    }
-  ];
 
   return (
     <Sidebar collapsible="icon" variant="floating" {...props}>
       <SidebarHeader className="electron-sidebar-offset">
-        <TeamSwitcher teams={teams} />
+        <TeamSwitcher organizations={organizations} selectedOrgId={selectedOrgId} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -176,14 +175,14 @@ export function AppSidebar({ user, projects, ...props }: AppSidebarProps) {
           </SidebarGroupAction>
           <SidebarGroupContent>
             <SidebarMenu>
-              {projects.map(project => (
+              {displayedProjects.map(project => (
                 <SidebarMenuItem key={project.id}>
                   <SidebarMenuButton
                     asChild
                     isActive={isProjectActive(project)}
                     tooltip={project.name}
                   >
-                    <Link href={`/${project.organizationId}/projects/${project.id}`}>
+                    <Link href={`/projects/${project.id}`}>
                       <span
                         className="h-3 w-3 rounded-[6px] border group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:border-0"
                         style={{

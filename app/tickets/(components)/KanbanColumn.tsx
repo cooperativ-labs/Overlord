@@ -2,7 +2,7 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -22,13 +22,21 @@ export default function KanbanColumn({
   tickets,
   showOrganizationName = false,
   projectId,
-  onCreateTicket
+  onCreateTicket,
+  olderTicketsCount = 0,
+  isCompleteColumn = false,
+  showOlder = false,
+  onToggleShowOlder
 }: {
   column: KanbanColumnModel;
   tickets: Ticket[];
   showOrganizationName?: boolean;
   projectId?: string;
   onCreateTicket: (status: string, objective: string) => Promise<void> | void;
+  olderTicketsCount?: number;
+  isCompleteColumn?: boolean;
+  showOlder?: boolean;
+  onToggleShowOlder?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const ticketIds = tickets.map(t => t.id);
@@ -144,6 +152,26 @@ export default function KanbanColumn({
                   Add ticket
                 </button>
               )}
+              {isCompleteColumn && (olderTicketsCount > 0 || showOlder) && onToggleShowOlder ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1 w-full justify-center gap-1 text-xs text-muted-foreground"
+                  onClick={onToggleShowOlder}
+                >
+                  {showOlder ? (
+                    <>
+                      <ChevronUp className="h-3 w-3" />
+                      Hide older tickets
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-3 w-3" />
+                      See older tickets ({olderTicketsCount})
+                    </>
+                  )}
+                </Button>
+              ) : null}
             </div>
           </div>
         </SortableContext>

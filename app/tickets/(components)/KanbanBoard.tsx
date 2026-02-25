@@ -12,9 +12,17 @@ import {
   useSensors
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Columns3, Eye, EyeOff, Settings } from 'lucide-react';
+import { Check, Columns3, Eye, EyeOff, Settings } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useRef,
+  useState,
+  useTransition
+} from 'react';
 
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { Button } from '@/components/ui/button';
@@ -46,10 +54,13 @@ const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
 const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
 
+const COMPLETE_RECENT_DAYS = 14;
+
 type StatusColumn = {
   id: string;
   title: string;
   position: number;
+  statusType?: string;
 };
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
@@ -118,7 +129,7 @@ export default function KanbanBoard({
   initialView
 }: {
   tickets: Ticket[];
-  statuses: Array<{ name: string; position: number }>;
+  statuses: Array<{ name: string; position: number; status_type?: string }>;
   showOrganizationName?: boolean;
   organizationId?: number;
   projectId?: string;
@@ -129,6 +140,7 @@ export default function KanbanBoard({
   const projectSettings = useProjectSettings();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [toastState, setToastState] = useState<ToastState | null>(null);
+  const [filteredProjectId, setFilteredProjectId] = useState<string | null>(null);
   const [waitingByTicket, setWaitingByTicket] = useState<Record<string, string>>(() =>
     toWaitingByTicket(initialTickets)
   );
@@ -206,11 +218,21 @@ export default function KanbanBoard({
   const columns: StatusColumn[] = statuses.map(status => ({
     id: status.name,
     title: toColumnTitle(status.name),
-    position: status.position
+    position: status.position,
+    statusType: status.status_type
   }));
 
   const allColumnSlugs = columns.map(c => c.id);
   const [visibleSlugs, setVisibleSlugs] = useState<Set<string>>(() => new Set(allColumnSlugs));
+  const [expandedCompleteColumns, setExpandedCompleteColumns] = useState<Set<string>>(
+    () => new Set()
+  );
+
+  const twoWeeksAgo = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - COMPLETE_RECENT_DAYS);
+    return d.toISOString();
+  }, []);
 
   const [optimisticTickets, applyOptimistic] = useOptimistic(
     initialTickets,
@@ -244,6 +266,30 @@ export default function KanbanBoard({
 
   const ticketsByIdRef = useRef<Map<string, Ticket>>(new Map());
   ticketsByIdRef.current = new Map(ticketsWithIndicators.map(ticket => [ticket.id, ticket]));
+
+  // Derive unique projects for the project filter (only relevant on all-tasks views)
+  const projectOptions = useMemo(() => {
+    if (projectId) return [];
+    const seen = new Map<string, { id: string; name: string; color: string | null }>();
+    for (const ticket of initialTickets) {
+      if (!seen.has(ticket.project_id)) {
+        seen.set(ticket.project_id, {
+          id: ticket.project_id,
+          name: ticket.project_name ?? ticket.project_id,
+          color: ticket.project_color ?? null
+        });
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [initialTickets, projectId]);
+
+  const displayedTickets = useMemo(
+    () =>
+      filteredProjectId
+        ? ticketsWithIndicators.filter(t => t.project_id === filteredProjectId)
+        : ticketsWithIndicators,
+    [ticketsWithIndicators, filteredProjectId]
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -279,7 +325,26 @@ export default function KanbanBoard({
     return { groups, uncategorized };
   }
 
-  const { groups: columnTickets, uncategorized } = groupTickets(ticketsWithIndicators);
+  const { groups: columnTickets, uncategorized } = groupTickets(displayedTickets);
+
+  function getDisplayedTicketsForColumn({
+    column,
+    tickets
+  }: {
+    column: StatusColumn;
+    tickets: Ticket[];
+  }): { displayed: Ticket[]; olderCount: number } {
+    const isComplete = column.statusType === 'complete';
+    if (!isComplete) return { displayed: tickets, olderCount: 0 };
+
+    const recent = tickets.filter(t => !t.updated_at || t.updated_at >= twoWeeksAgo);
+    const older = tickets.filter(t => t.updated_at && t.updated_at < twoWeeksAgo);
+    const showOlder = expandedCompleteColumns.has(column.id);
+    return {
+      displayed: showOlder ? tickets : recent,
+      olderCount: older.length
+    };
+  }
 
   useEffect(() => {
     if (uncategorized.length > 0) {
@@ -405,10 +470,21 @@ export default function KanbanBoard({
         return changed ? next : prev;
       });
 
+      const executeTicketIds = new Set(
+        (ticketUpdates ?? []).filter(t => t.status === 'execute').map(t => t.id)
+      );
       setReviewByTicket(prev => {
         let changed = false;
         const next = { ...prev };
+        // Clear review indicator for tickets that have since moved back to execute
+        for (const id of executeTicketIds) {
+          if (next[id]) {
+            delete next[id];
+            changed = true;
+          }
+        }
         for (const r of (reviewChanges ?? []) as { ticket_id: string; created_at: string }[]) {
+          if (executeTicketIds.has(r.ticket_id)) continue;
           if (!next[r.ticket_id] || Date.parse(r.created_at) > Date.parse(next[r.ticket_id])) {
             next[r.ticket_id] = r.created_at;
             changed = true;
@@ -523,6 +599,16 @@ export default function KanbanBoard({
             });
             return next;
           });
+          // When a ticket moves back to execute (e.g. user followed up after delivery),
+          // clear its review indicator so the sky-blue dot/border is dismissed.
+          if (updated.status === 'execute') {
+            setReviewByTicket(prev => {
+              if (!prev[updated.id]) return prev;
+              const next = { ...prev };
+              delete next[updated.id];
+              return next;
+            });
+          }
         }
       )
       .on<AgentSession>(
@@ -732,7 +818,45 @@ export default function KanbanBoard({
       >
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
-            <TicketsViewToggle initialView={initialView} />
+            <div className="flex items-center gap-2">
+              <TicketsViewToggle initialView={initialView} />
+              {projectOptions.length > 1 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Eye className="h-4 w-4" />
+                      {filteredProjectId
+                        ? (projectOptions.find(p => p.id === filteredProjectId)?.name ?? 'Project')
+                        : 'All Projects'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-52">
+                    <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setFilteredProjectId(null)} className="gap-2">
+                      All Projects
+                      {filteredProjectId === null && <Check className="ml-auto h-4 w-4" />}
+                    </DropdownMenuItem>
+                    {projectOptions.map(p => (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onClick={() => setFilteredProjectId(p.id)}
+                        className="gap-2"
+                      >
+                        {p.color && (
+                          <span
+                            className="h-2.5 w-2.5 rounded-[2px] border shrink-0"
+                            style={{ backgroundColor: p.color, borderColor: p.color }}
+                          />
+                        )}
+                        <span className="truncate">{p.name}</span>
+                        {filteredProjectId === p.id && <Check className="ml-auto h-4 w-4" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -790,16 +914,34 @@ export default function KanbanBoard({
             className="min-h-0 min-w-0 flex-1 overflow-x-auto"
           >
             <div className="inline-flex flex-nowrap gap-3 px-4 pb-4 md:px-6">
-              {visibleSortedColumns.map(col => (
-                <KanbanColumn
-                  key={col.id}
-                  column={col}
-                  tickets={columnTickets.get(col.id) ?? []}
-                  showOrganizationName={showOrganizationName}
-                  projectId={projectId}
-                  onCreateTicket={handleCreateTicket}
-                />
-              ))}
+              {visibleSortedColumns.map(col => {
+                const rawTickets = columnTickets.get(col.id) ?? [];
+                const { displayed, olderCount } = getDisplayedTicketsForColumn({
+                  column: col,
+                  tickets: rawTickets
+                });
+                return (
+                  <KanbanColumn
+                    key={col.id}
+                    column={col}
+                    tickets={displayed}
+                    showOrganizationName={showOrganizationName}
+                    projectId={projectId}
+                    onCreateTicket={handleCreateTicket}
+                    olderTicketsCount={olderCount}
+                    isCompleteColumn={col.statusType === 'complete'}
+                    showOlder={expandedCompleteColumns.has(col.id)}
+                    onToggleShowOlder={() =>
+                      setExpandedCompleteColumns(prev => {
+                        const next = new Set(prev);
+                        if (next.has(col.id)) next.delete(col.id);
+                        else next.add(col.id);
+                        return next;
+                      })
+                    }
+                  />
+                );
+              })}
               {showUncategorized && (
                 <KanbanColumn
                   column={uncategorizedColumn}
@@ -807,6 +949,10 @@ export default function KanbanBoard({
                   showOrganizationName={showOrganizationName}
                   projectId={projectId}
                   onCreateTicket={handleCreateTicket}
+                  olderTicketsCount={0}
+                  isCompleteColumn={false}
+                  showOlder={false}
+                  onToggleShowOlder={() => {}}
                 />
               )}
             </div>

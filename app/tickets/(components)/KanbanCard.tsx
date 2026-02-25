@@ -41,6 +41,7 @@ export type Ticket = {
   has_unopened_waiting_response?: boolean;
   review_entered_at?: string | null;
   has_unopened_review?: boolean;
+  updated_at?: string;
 };
 
 function StatusDot({
@@ -79,7 +80,11 @@ export default function KanbanCard({
   if (isDragOverlay) {
     return (
       <div className="w-full rounded-md border border-dashed border-primary/40 bg-card shadow-lg">
-        <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
+        <KanbanCardBody
+          ticket={ticket}
+          showOrganizationName={showOrganizationName}
+          ticketPath={buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id })}
+        />
       </div>
     );
   }
@@ -93,11 +98,10 @@ export default function KanbanCard({
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
   const hasUnopenedReview = ticket.has_unopened_review === true;
 
-  const ticketPath = buildTicketPath({
-    organizationId: ticket.organization_id,
-    projectId: ticket.project_id,
-    ticketId: ticket.id
-  });
+  const isOnUserPage = pathname === '/u' || pathname.startsWith('/u/');
+  const ticketPath = isOnUserPage
+    ? `/u/${ticket.id}`
+    : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
   const isSelected = pathname === ticketPath;
 
   return (
@@ -135,24 +139,27 @@ export default function KanbanCard({
       {isAgentRunning && (
         <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
       )}
-      <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
+      <KanbanCardBody
+        ticket={ticket}
+        showOrganizationName={showOrganizationName}
+        ticketPath={ticketPath}
+      />
     </Card>
   );
 }
 
 function KanbanCardBody({
   ticket,
-  showOrganizationName
+  showOrganizationName,
+  ticketPath
 }: {
   ticket: Ticket;
   showOrganizationName: boolean;
+  ticketPath?: string;
 }) {
   const isAgentRunning = ticket.agent_session_state === 'attached';
-  const ticketPath = buildTicketPath({
-    organizationId: ticket.organization_id,
-    projectId: ticket.project_id,
-    ticketId: ticket.id
-  });
+  const resolvedTicketPath =
+    ticketPath ?? buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
   const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
@@ -176,7 +183,7 @@ function KanbanCardBody({
             )}
             <h4 className="text-sm leading-snug font-medium">
               <Link
-                href={ticketPath}
+                href={resolvedTicketPath}
                 className="hover:underline"
                 onClick={e => e.stopPropagation()}
               >
@@ -185,7 +192,7 @@ function KanbanCardBody({
             </h4>
           </div>
           <Link
-            href={ticketPath}
+            href={resolvedTicketPath}
             aria-label="Open ticket details"
             className="mt-0.5 text-muted-foreground hover:text-foreground"
             onClick={e => e.stopPropagation()}

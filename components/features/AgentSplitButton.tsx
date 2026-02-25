@@ -100,7 +100,11 @@ export function AgentSplitButton({
   const [isLaunching, setIsLaunching] = useState(false);
   const { isElectron, launchAgent } = useTerminal();
   const agentDetails = getAgentTypeByValue(selectedAgent);
-  const isActive = isAgentIdentifierMatch(selectedAgent, activeAgentIdentifier);
+  const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
+  const isActive =
+    isAgentIdentifierMatch(selectedAgent, activeAgentIdentifier) &&
+    agentSessionState != null &&
+    ACTIVE_SESSION_STATES.includes(agentSessionState);
   const canRunAgent = hasProjectWorkingDirectory ?? true;
   const isDisabled = !canRunAgent;
   const styles = sizeStyles[size];

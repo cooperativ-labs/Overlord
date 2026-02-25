@@ -48,6 +48,9 @@ export async function POST(request: Request) {
 
     const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId);
 
+    const previousStatus = ticket.status;
+    const isResumeAfterDelivery = previousStatus === 'review' || previousStatus === 'complete';
+
     // Automatically move the ticket to 'execute' status when an agent attaches
     await supabase.from('tickets').update({ status: 'execute' }).eq('id', ticketId);
 
@@ -57,11 +60,23 @@ export async function POST(request: Request) {
         agent_identifier: agentIdentifier,
         connection_method: connectionMethod
       },
-      phase: ticket.status,
+      phase: previousStatus,
       session_id: session.id,
       summary: `${agentIdentifier} attached via ${connectionMethod}.`,
       ticket_id: ticketId
     });
+
+    // If the ticket was previously delivered/reviewed and is now being resumed,
+    // emit a user_follow_up event so the UI reflects the transition back to execution state.
+    if (isResumeAfterDelivery) {
+      await supabase.from('ticket_events').insert({
+        event_type: 'user_follow_up',
+        phase: 'execute',
+        session_id: session.id,
+        summary: 'User followed up — ticket resumed from delivered state.',
+        ticket_id: ticketId
+      });
+    }
 
     const [{ data: history }, { data: artifacts }, { data: sharedState }] = await Promise.all([
       supabase

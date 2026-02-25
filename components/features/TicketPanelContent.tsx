@@ -33,10 +33,12 @@ const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', '
 
 export async function TicketPanelContent({
   ticketId,
-  organizationId
+  organizationId,
+  closePath: closePathProp
 }: {
   ticketId: string;
   organizationId: number;
+  closePath?: string;
 }) {
   const supabase = await createClient();
   const {
@@ -150,10 +152,7 @@ export async function TicketPanelContent({
   const projectWorkingDirectory = projectOptions.find(
     project => project.id === activeProjectId
   )?.local_working_directory;
-  const closePath = buildProjectPath({
-    organizationId,
-    projectId: activeProjectId
-  });
+  const closePath = closePathProp ?? buildProjectPath({ projectId: activeProjectId });
   const resolvedProjectDirectory = resolveLinkedDirectory(projectWorkingDirectory);
   const resolvedWorkspaceDirectory = resolveLinkedDirectory(workspaceRoot);
 

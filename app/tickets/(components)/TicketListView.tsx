@@ -24,10 +24,12 @@ type Ticket = {
 
 export default function TicketListView({
   tickets,
-  showOrganizationName = false
+  showOrganizationName = false,
+  ticketUrlBase
 }: {
   tickets: Ticket[];
   showOrganizationName?: boolean;
+  ticketUrlBase?: string;
 }) {
   if (!tickets.length) {
     return (
@@ -46,11 +48,11 @@ export default function TicketListView({
               <div className="min-w-0 space-y-1">
                 <h3 className="font-medium">
                   <Link
-                    href={buildTicketPath({
-                      organizationId: ticket.organization_id,
-                      projectId: ticket.project_id,
-                      ticketId: ticket.id
-                    })}
+                    href={
+                      ticketUrlBase
+                        ? `${ticketUrlBase}/${ticket.id}`
+                        : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id })
+                    }
                     className="hover:underline"
                   >
                     {getTicketIdentifier(ticket.id)} — {getDisplayTitle(ticket)}

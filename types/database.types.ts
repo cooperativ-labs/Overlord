@@ -685,7 +685,8 @@ export type Database = {
         | 'artifact'
         | 'deliver'
         | 'status_change'
-        | 'alert';
+        | 'alert'
+        | 'user_follow_up';
       ticket_execution_target: 'agent' | 'human';
       ticket_priority: 'low' | 'medium' | 'high' | 'urgent';
       ticket_status_type: 'draft' | 'execute' | 'review' | 'complete';
@@ -830,7 +831,8 @@ export const Constants = {
         'artifact',
         'deliver',
         'status_change',
-        'alert'
+        'alert',
+        'user_follow_up'
       ],
       ticket_execution_target: ['agent', 'human'],
       ticket_priority: ['low', 'medium', 'high', 'urgent'],

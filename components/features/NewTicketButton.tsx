@@ -16,25 +16,17 @@ export function NewTicketButton() {
   const [buttonState, setButtonState] = useState<ButtonLoadingState>('default');
 
   const segments = pathname.split('/').filter(Boolean);
-  const primarySegment = segments[0];
-  const organizationId =
-    primarySegment && /^\d+$/.test(primarySegment) ? Number(primarySegment) : undefined;
+  // Route format: /projects/[projectId]/... or /u/...
   const projectId =
     defaultProject?.id ??
-    (segments[1] === 'projects' && typeof segments[2] === 'string' ? segments[2] : undefined);
+    (segments[0] === 'projects' && typeof segments[1] === 'string' ? segments[1] : undefined);
 
   async function handleClick() {
     setButtonState('loading');
     try {
-      const { organizationId: createdOrganizationId, projectId: createdProjectId } =
-        await createBlankTicketAction(organizationId, projectId);
+      const { projectId: createdProjectId } = await createBlankTicketAction(undefined, projectId);
       setButtonState('success');
-      router.push(
-        `${buildProjectPath({
-          organizationId: createdOrganizationId,
-          projectId: createdProjectId
-        })}?view=board`
-      );
+      router.push(`${buildProjectPath({ projectId: createdProjectId })}?view=board`);
       router.refresh();
     } catch {
       setButtonState('error');

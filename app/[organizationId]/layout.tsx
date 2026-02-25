@@ -1,5 +1,4 @@
-import { OrganizationShell } from './OrganizationShell';
-
 export default function OrganizationLayout({ children }: { children: React.ReactNode }) {
-  return <OrganizationShell>{children}</OrganizationShell>;
+  // This layout is kept for backward-compatibility redirects in sub-pages.
+  return <>{children}</>;
 }

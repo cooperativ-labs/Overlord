@@ -10,9 +10,12 @@ import { ElectronDetector } from '@/components/features/terminal/ElectronDetecto
 import { TerminalPanel } from '@/components/features/terminal/TerminalPanel';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { NavHeader } from '@/components/nav-header';
+import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { getUserOrganizations } from '@/lib/actions/organizations';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
+import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
@@ -30,9 +33,15 @@ export default async function RootLayout({
     data: { user }
   } = await supabase.auth.getUser();
 
-  const projects = await getProjectsForCurrentUser();
+  const [projects, organizations] = await Promise.all([
+    getProjectsForCurrentUser(),
+    user ? getUserOrganizations() : Promise.resolve([])
+  ]);
+
   const cookieStore = await cookies();
   const initialDefaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
+  const selectedOrgIdStr = cookieStore.get(SELECTED_ORG_COOKIE)?.value ?? null;
+  const selectedOrgId = selectedOrgIdStr ? Number(selectedOrgIdStr) : null;
 
   return (
     <html lang="en">
@@ -58,12 +67,19 @@ export default async function RootLayout({
                           avatar: user.user_metadata?.avatar_url ?? ''
                         }}
                         projects={projects}
+                        organizations={organizations}
+                        selectedOrgId={selectedOrgId}
                       />
                       <SidebarInset className="min-w-0 overflow-hidden">
                         <NavHeader userEmail={user.email ?? ''} />
-                        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-                          {children}
-                        </main>
+                        <SidePanelProvider>
+                          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                              {children}
+                            </main>
+                            <SidePanel />
+                          </div>
+                        </SidePanelProvider>
                         <TerminalPanel />
                       </SidebarInset>
                     </div>

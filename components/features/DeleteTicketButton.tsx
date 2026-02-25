@@ -37,15 +37,14 @@ export function DeleteTicketButton({ ticketId, ticketLabel, className }: DeleteT
   async function handleConfirm() {
     setDeleteButtonState('loading');
     try {
-      const { organizationId, projectId } = await deleteTicketAction(ticketId);
+      const { projectId } = await deleteTicketAction(ticketId);
       setDeleteButtonState('success');
       setOpen(false);
       const segments = pathname.split('/').filter(Boolean);
-      const isProjectTicketRoute = segments[1] === 'projects' && typeof segments[2] === 'string';
-      if (isProjectTicketRoute) {
-        router.push(buildProjectPath({ organizationId, projectId }));
+      if (segments[0] === 'u') {
+        router.push('/u');
       } else {
-        router.push(`/${organizationId}`);
+        router.push(buildProjectPath({ projectId }));
       }
       router.refresh();
     } catch {
