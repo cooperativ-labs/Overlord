@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 
 
+## [0.15.0] - 2026-02-25:13:45
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Redirect `/projects` index route to `/u` so project navigation lands on the My Tasks board instead of a separate project list.
+- Refine `/u` My Tasks layout to label views as "Team Tasks" or "All Tasks" and adjust copy based on the selected workspace cookie.
+
+### Security
+- None.
+
+### Removed
+- Remove legacy organization-scoped root routes now that `/u` and `/projects/:projectId` are the primary entry points for tickets and projects.
+
+### Chore
+- Bump package version to `0.15.0`.
+
 ## [0.14.0] - 2026-02-25:13:30
 
 ### Added
