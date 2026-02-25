@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 
 import { TicketPanelContent } from '@/components/features/TicketPanelContent';
 import { TicketPanelSkeleton } from '@/components/features/TicketPanelSkeleton';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { SidePanelSlot } from '@/components/ui/side-panel';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 
@@ -26,11 +27,13 @@ export default async function TicketDetailLayout({ children, params }: LayoutPro
         closePath={buildProjectPath({ organizationId: parsedOrganizationId, projectId })}
       >
         <Suspense fallback={<TicketPanelSkeleton />}>
-          <TicketPanelContent
-            key={ticketId}
-            ticketId={ticketId}
-            organizationId={parsedOrganizationId}
-          />
+          <ErrorBoundary>
+            <TicketPanelContent
+              key={ticketId}
+              ticketId={ticketId}
+              organizationId={parsedOrganizationId}
+            />
+          </ErrorBoundary>
         </Suspense>
       </SidePanelSlot>
     </>

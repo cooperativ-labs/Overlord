@@ -70,6 +70,7 @@ type RawTicket = {
   status: string;
   priority: string;
   assigned_agent: string | null;
+  recent_agent: string | null;
   updated_at: string;
   board_position: number;
   organization_id: number;
@@ -116,7 +117,7 @@ export default async function TicketsBoardContent({
   let ticketsQuery = supabase
     .from('tickets')
     .select(
-      'id,title,objective,execution_target,status,priority,assigned_agent,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+      'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
     )
     .order('board_position', { ascending: true })
     .order('created_at', { ascending: true });
@@ -236,13 +237,19 @@ export default async function TicketsBoardContent({
 
   return (
     <div className="flex flex-col gap-4 ">
-      <nav className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 p-4 md:p-6">
+      <nav className="flex flex-wrap items-center justify-between gap-3 border-b p-4 md:px-6 md:pb-6">
         <div>
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
-        <TicketsViewToggle initialView={view} />
       </nav>
+
+      {!showBoard ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
+          <TicketsViewToggle initialView={view} />
+          <div />
+        </div>
+      ) : null}
 
       {loadError ? (
         <Alert variant="destructive">
@@ -257,6 +264,7 @@ export default async function TicketsBoardContent({
           showOrganizationName={showOrganizationName}
           organizationId={organizationId}
           projectId={projectId}
+          initialView={view}
         />
       ) : (
         <Card>

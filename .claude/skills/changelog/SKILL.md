@@ -36,6 +36,9 @@ Every changelog update must include all of the following section headings, in th
 - `### Fixed`
 - `### Changed`
 - `### Security`
+
+Only include the following sections if they have changes:
+
 - `### Removed`
 - `### Deprecated`
 - `### Performance`

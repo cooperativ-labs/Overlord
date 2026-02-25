@@ -54,17 +54,19 @@ type ProjectStatusSettingsProps = {
   organizationId: number;
   projectId: string;
   initialStatuses: StatusRow[];
+  defaultExpanded?: boolean;
 };
 
 export function ProjectStatusSettings({
   organizationId,
   projectId,
-  initialStatuses
+  initialStatuses,
+  defaultExpanded = false
 }: ProjectStatusSettingsProps) {
   const router = useRouter();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [statuses, setStatuses] = useState<StatusRow[]>(initialStatuses);
-  const [statusesOpen, setStatusesOpen] = useState(false);
+  const [statusesOpen, setStatusesOpen] = useState(defaultExpanded);
   const [statusName, setStatusName] = useState('');
   const [statusType, setStatusType] = useState<TicketStatusType>('execute');
   const [addButtonState, setAddButtonState] = useState<ButtonLoadingState>('default');

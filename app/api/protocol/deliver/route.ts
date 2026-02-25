@@ -87,7 +87,10 @@ export async function POST(request: Request) {
     }
 
     const [{ error: ticketError }, { error: sessionError }] = await Promise.all([
-      supabase.from('tickets').update({ status: 'review' }).eq('id', ticketId),
+      supabase
+        .from('tickets')
+        .update({ recent_agent: resolved.session.agent_identifier, status: 'review' })
+        .eq('id', ticketId),
       supabase
         .from('agent_sessions')
         .update({
@@ -102,6 +105,16 @@ export async function POST(request: Request) {
     if (sessionError) {
       return NextResponse.json({ error: sessionError.message }, { status: 500 });
     }
+
+    // Emit a status_change event so the KanbanBoard realtime listener can trigger
+    // the review sound and highlight (has_unopened_review) for agent deliveries.
+    await supabase.from('ticket_events').insert({
+      event_type: 'status_change',
+      phase: 'review',
+      summary: 'Ticket delivered and moved to review.',
+      session_id: resolved.session.id,
+      ticket_id: ticketId
+    });
 
     return NextResponse.json({
       artifacts: artifactsToPersist.length,

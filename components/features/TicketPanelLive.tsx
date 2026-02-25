@@ -6,12 +6,11 @@ import { useEffect, useTransition } from 'react';
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
-import { markTicketOpened } from '@/lib/helpers/ticket-waiting-response';
-import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { getConversationEntryType } from '@/lib/overlord/conversation';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
@@ -160,13 +159,10 @@ function LiveArtifacts({
 type TicketPanelLiveProps = {
   ticketId: string;
   projectId: string;
-  initialEvents: TicketEvent[];
-  initialArtifacts: Artifact[];
-  initialSession: AgentSession | null;
-  initialState: Database['public']['Tables']['shared_state']['Row'][];
   editorScheme: string;
   workspaceRoot: string;
   workingDirectory?: string | null;
+  hasProjectWorkingDirectory?: boolean;
   agentToken?: string | null;
   claudeCommand?: string;
   codexCommand?: string;
@@ -177,13 +173,10 @@ type TicketPanelLiveProps = {
 export function TicketPanelLive({
   ticketId,
   projectId: _projectId,
-  initialEvents,
-  initialArtifacts,
-  initialSession,
-  initialState,
   editorScheme,
   workspaceRoot,
   workingDirectory,
+  hasProjectWorkingDirectory,
   agentToken,
   claudeCommand,
   codexCommand,
@@ -191,13 +184,7 @@ export function TicketPanelLive({
   geminiCommand
 }: TicketPanelLiveProps) {
   const router = useRouter();
-  const { events, artifacts, session, sharedState } = useTicketRealtime({
-    initialSharedState: initialState,
-    ticketId,
-    initialEvents,
-    initialArtifacts,
-    initialSession
-  });
+  const { events, artifacts, session, sharedState } = useTicketLive();
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -216,10 +203,6 @@ export function TicketPanelLive({
       void supabase.removeChannel(channel);
     };
   }, [ticketId, router]);
-
-  useEffect(() => {
-    markTicketOpened(ticketId);
-  }, [ticketId]);
 
   const isRunning = session?.session_state === 'attached';
   const activeAgentIdentifier = isRunning ? session.agent_identifier : null;
@@ -244,6 +227,8 @@ export function TicketPanelLive({
           geminiCommand={geminiCommand}
           workingDirectory={workingDirectory}
           activeAgentIdentifier={activeAgentIdentifier}
+          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+          agentSessionState={session?.session_state ?? null}
         />
       ) : null}
 

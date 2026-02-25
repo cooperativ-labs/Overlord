@@ -160,7 +160,7 @@ export function SidePanel() {
       >
         <SheetContent
           side="right"
-          className="w-full p-0 sm:max-w-md"
+          className="w-full p-0 sm:max-w-lg "
           showCloseButton={false}
           onPointerDownOutside={event => event.preventDefault()}
         >
@@ -177,7 +177,7 @@ export function SidePanel() {
   return (
     <div
       className={cn(
-        'relative flex h-full shrink-0 border-l bg-background transition-[width] duration-200 ease-in-out',
+        'relative flex h-full shrink-0 border-l bg-transparent transition-[width] duration-200 ease-in-out',
         !isOpen && 'w-0 overflow-hidden border-l-0'
       )}
       style={isOpen ? { width } : undefined}
@@ -185,12 +185,12 @@ export function SidePanel() {
     >
       {/* Invisible drag handle along the border */}
       <div
-        className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize"
+        className="absolute inset-y-0 left-0 z-20 w-1.5 cursor-col-resize"
         onPointerDown={onPointerDown}
       />
 
       {/* Content */}
-      <div className="ml-1.5 flex min-w-0 flex-1 flex-col overflow-hidden">{displayContent}</div>
+      <div className=" flex min-w-0 flex-1 flex-col overflow-hidden">{displayContent}</div>
     </div>
   );
 }

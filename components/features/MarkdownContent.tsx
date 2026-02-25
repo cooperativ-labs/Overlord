@@ -31,14 +31,24 @@ export function MarkdownContent({
         remarkPlugins={[remarkGfm]}
         components={{
           // Open links in new tab
-          a: ({ children: linkChildren, href, ...props }) =>
-            href?.startsWith('mention:') ? (
-              <span className="font-medium text-sky-500">{linkChildren}</span>
-            ) : (
+          a: ({ children: linkChildren, href, ...props }) => {
+            if (href?.startsWith('mention:')) {
+              return <span className="font-medium text-sky-500">{linkChildren}</span>;
+            }
+            if (href?.startsWith('artifact:')) {
+              const artifactPath = href.slice('artifact:'.length);
+              return (
+                <span className="font-semibold text-orange-600 dark:text-orange-500">
+                  [{linkChildren}]({artifactPath})
+                </span>
+              );
+            }
+            return (
               <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
                 {linkChildren}
               </a>
-            ),
+            );
+          },
           // Style code blocks
           pre: ({ children: preChildren, ...props }) => (
             <pre className="overflow-auto rounded border bg-muted p-2 text-xs" {...props}>

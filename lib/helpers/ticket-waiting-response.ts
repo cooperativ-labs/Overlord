@@ -1,4 +1,5 @@
-const OPENED_TICKETS_STORAGE_KEY = 'overlord.ticket.lastOpenedAt';
+const OPENED_WAITING_KEY = 'overlord.ticket.lastOpenedAt.waiting';
+const OPENED_REVIEW_KEY = 'overlord.ticket.lastOpenedAt.review';
 
 export type TicketOpenedTimestamps = Record<string, number>;
 
@@ -21,13 +22,13 @@ function parseOpenedTimestampMap(value: unknown): TicketOpenedTimestamps {
   return parsed;
 }
 
-export function getOpenedTicketTimestamps(): TicketOpenedTimestamps {
+function readTimestampMap(key: string): TicketOpenedTimestamps {
   if (typeof window === 'undefined') {
     return {};
   }
 
   try {
-    const raw = window.localStorage.getItem(OPENED_TICKETS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) {
       return {};
     }
@@ -37,24 +38,47 @@ export function getOpenedTicketTimestamps(): TicketOpenedTimestamps {
   }
 }
 
-export function markTicketOpened(
+function writeTimestampMap(
+  key: string,
   ticketId: string,
-  openedAt: number = Date.now()
+  openedAt: number
 ): TicketOpenedTimestamps {
   if (typeof window === 'undefined' || !ticketId.trim()) {
     return {};
   }
 
-  const existing = getOpenedTicketTimestamps();
+  const existing = readTimestampMap(key);
   const next = { ...existing, [ticketId]: openedAt };
 
   try {
-    window.localStorage.setItem(OPENED_TICKETS_STORAGE_KEY, JSON.stringify(next));
+    window.localStorage.setItem(key, JSON.stringify(next));
   } catch {
-    // Ignore storage write errors (for example in private mode with denied storage).
+    // Ignore storage write errors (e.g. private mode with denied storage).
   }
 
   return next;
+}
+
+export function getOpenedWaitingTimestamps(): TicketOpenedTimestamps {
+  return readTimestampMap(OPENED_WAITING_KEY);
+}
+
+export function getOpenedReviewTimestamps(): TicketOpenedTimestamps {
+  return readTimestampMap(OPENED_REVIEW_KEY);
+}
+
+export function markTicketWaitingOpened(
+  ticketId: string,
+  openedAt: number = Date.now()
+): TicketOpenedTimestamps {
+  return writeTimestampMap(OPENED_WAITING_KEY, ticketId, openedAt);
+}
+
+export function markTicketReviewOpened(
+  ticketId: string,
+  openedAt: number = Date.now()
+): TicketOpenedTimestamps {
+  return writeTimestampMap(OPENED_REVIEW_KEY, ticketId, openedAt);
 }
 
 export function hasUnopenedTimestamp(

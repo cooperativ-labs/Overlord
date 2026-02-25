@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { uploadImageArtifactAction } from '@/lib/actions/artifacts';
 import { updateTicketFieldAction } from '@/lib/actions/tickets';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +11,7 @@ type EditableField = 'title' | 'objective' | 'available_tools' | 'acceptance_cri
 
 type Props = {
   ticketId: string;
+  organizationId?: number;
   field: EditableField;
   initialValue: string;
   multiline?: boolean;
@@ -38,6 +40,7 @@ function convertFileMentionsToMarkdown(value: string): string {
 
 export function InlineEditField({
   ticketId,
+  organizationId,
   field,
   initialValue,
   multiline = false,
@@ -97,6 +100,47 @@ export function InlineEditField({
   function cancel() {
     setValue(savedValue);
     setEditing(false);
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    if (field !== 'objective') return;
+
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+
+    if (imageFiles.length === 0) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    for (const file of imageFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const result = await uploadImageArtifactAction(ticketId, organizationId ?? 0, formData);
+        const markdown = `[${result.label}](artifact:${result.uri})`;
+
+        const textArea = inputRef.current as HTMLTextAreaElement | null;
+        if (textArea) {
+          const start = textArea.selectionStart;
+          const end = textArea.selectionEnd;
+          const newValue = value.substring(0, start) + markdown + value.substring(end);
+          setValue(newValue);
+
+          // Need to wait for React to update the state before setting cursor position
+          setTimeout(() => {
+            textArea.selectionStart = textArea.selectionEnd = start + markdown.length;
+            textArea.focus();
+            autoResize();
+          }, 0);
+        } else {
+          setValue(prev => (prev ? `${prev}\n${markdown}` : markdown));
+        }
+      } catch (error) {
+        console.error('Failed to upload image artifact:', error);
+      }
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -214,6 +258,13 @@ export function InlineEditField({
               updateMentionState(value, target.selectionStart ?? value.length);
             }}
             onKeyDown={handleKeyDown}
+            onDragOver={e => {
+              if (field === 'objective') {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
+            onDrop={handleDrop}
           />
           {mentionMenuOpen ? (
             <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">

@@ -57,11 +57,11 @@ export function DeleteTicketButton({ ticketId, ticketLabel, className }: DeleteT
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
         <Button
-          variant={'outline'}
-          size="sm"
+          variant={'ghost'}
+          size="icon"
           className={cn(
             className,
-            'text-red-600 border-red-600/30 hover:text-white hover:bg-red-600'
+            'text-red-600 border-red-600/30 hover:text-white hover:bg-red-600 w-8 h-8'
           )}
           aria-label="Delete ticket"
           onClick={e => e.stopPropagation()}

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
-import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
+import { ProjectLayoutClient } from '@/components/features/projects/ProjectLayoutClient';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { createClient } from '@/supabase/utils/server';
 
 import TicketsBoardContent from '../../../tickets/(components)/TicketsBoardContent';
@@ -54,23 +55,19 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
   const hasEverhourApiKey = everhourApiKey.length > 0;
 
   return (
-    <div className="flex flex-col">
-      <ProjectSettingsSection
+    <ErrorBoundary>
+      <ProjectLayoutClient
         projectId={project.id}
         organizationId={parsedOrganizationId}
-        initialName={project.name}
-        initialColor={project.color}
-        initialWorkingDirectory={project.local_working_directory}
-        initialStatuses={(statuses ?? []).map(status => ({
-          name: status.name,
-          position: status.position,
-          statusType: status.status_type,
-          isDefault: status.is_default
-        }))}
+        projectName={project.name}
+        projectColor={project.color}
+        projectWorkingDirectory={project.local_working_directory}
+        statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}
-      />
-      <TicketsBoardContent organizationId={parsedOrganizationId} projectId={projectId} />
-      {children}
-    </div>
+      >
+        <TicketsBoardContent organizationId={parsedOrganizationId} projectId={projectId} />
+        {children}
+      </ProjectLayoutClient>
+    </ErrorBoundary>
   );
 }

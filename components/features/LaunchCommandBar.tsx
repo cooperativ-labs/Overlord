@@ -1,8 +1,7 @@
 'use client';
 
 import { Copy } from 'lucide-react';
-import Image from 'next/image';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,8 +19,12 @@ import {
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
+import type { Database } from '@/types/database.types';
 
 import { useTerminal } from './terminal/TerminalProvider';
+import { AgentSplitButton } from './AgentSplitButton';
+
+type SessionState = Database['public']['Enums']['session_state'];
 
 type Props = {
   ticketId: string;
@@ -33,60 +36,28 @@ type Props = {
   workingDirectory?: string | null;
   className?: string;
   activeAgentIdentifier?: string | null;
+  hasProjectWorkingDirectory?: boolean;
+  agentSessionState?: SessionState | null;
 };
 
-function LaunchButton({
-  agent,
-  ticketId,
-  agentToken,
-  clipboardCommand,
-  workingDirectory,
-  isActive
-}: {
-  agent: LaunchAgentTypeValue;
-  ticketId: string;
-  agentToken?: string | null;
-  clipboardCommand: string;
-  workingDirectory?: string | null;
-  isActive?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const { isElectron, launchAgent } = useTerminal();
-  const agentDetails = getAgentTypeByValue(agent);
+const LAST_AGENT_KEY = 'overlord-last-agent';
 
-  async function handleClick() {
-    if (isElectron) {
-      await launchAgent(ticketId, agent, workingDirectory ?? undefined, agentToken ?? undefined);
-    } else {
-      await navigator.clipboard.writeText(clipboardCommand);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+function useLastAgent(): [LaunchAgentTypeValue, (agent: LaunchAgentTypeValue) => void] {
+  const [agent, setAgent] = useState<LaunchAgentTypeValue>('claude');
+
+  useEffect(() => {
+    const stored = localStorage.getItem(LAST_AGENT_KEY);
+    if (stored && LAUNCH_AGENT_VALUES.includes(stored as LaunchAgentTypeValue)) {
+      setAgent(stored as LaunchAgentTypeValue);
     }
-  }
+  }, []);
 
-  return (
-    <Button
-      className={cn(
-        'h-6 gap-1.5 text-xs transition-all',
-        isActive &&
-          'border-emerald-600/80 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)] ring-1 ring-emerald-600/70 animate-pulse'
-      )}
-      size="sm"
-      variant="outline"
-      onClick={handleClick}
-    >
-      <Image
-        src={agentDetails.icon}
-        alt={`${agentDetails.label} icon`}
-        width={12}
-        height={12}
-        className="h-3 w-3"
-      />
-      <span className={cn('transition-colors', isActive && 'text-emerald-600 animate-pulse')}>
-        {!isElectron && copied ? `${agentDetails.label} ✓` : agentDetails.label}
-      </span>
-    </Button>
-  );
+  const persist = useCallback((next: LaunchAgentTypeValue) => {
+    setAgent(next);
+    localStorage.setItem(LAST_AGENT_KEY, next);
+  }, []);
+
+  return [agent, persist];
 }
 
 function CopyAgentCommandButton({
@@ -114,7 +85,7 @@ function CopyAgentCommandButton({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="h-6 gap-1.5 text-xs" size="sm" variant="outline">
+        <Button className="h-7 gap-1.5 text-xs" size="sm" variant="outline">
           <Copy className="h-3 w-3" />
           Prompts
         </Button>
@@ -146,10 +117,13 @@ export function LaunchCommandBar({
   geminiCommand,
   workingDirectory,
   className,
-  activeAgentIdentifier
+  activeAgentIdentifier,
+  hasProjectWorkingDirectory,
+  agentSessionState
 }: Props) {
   const { isElectron } = useTerminal();
-  const commandsByAgent: Record<LaunchAgentTypeValue, string> = {
+  const [selectedAgent, setSelectedAgent] = useLastAgent();
+  const commands: Record<LaunchAgentTypeValue, string> = {
     claude: claudeCommand,
     codex: codexCommand,
     cursor: cursorCommand,
@@ -164,37 +138,26 @@ export function LaunchCommandBar({
       )}
     >
       <span className="text-xs font-medium text-muted-foreground">
-        {isElectron ? 'Run agent' : 'Copy prompts'}
+        {isElectron ? 'Run agent' : 'Copy prompt'}
       </span>
-      {LAUNCH_AGENT_VALUES.map(agent => (
-        <LaunchButton
-          key={agent}
-          agent={agent}
-          ticketId={ticketId}
-          agentToken={agentToken}
-          clipboardCommand={commandsByAgent[agent]}
-          workingDirectory={workingDirectory}
-          isActive={isAgentIdentifierMatch(agent, activeAgentIdentifier)}
-        />
-      ))}
+      <AgentSplitButton
+        selectedAgent={selectedAgent}
+        onSelectAgent={setSelectedAgent}
+        ticketId={ticketId}
+        agentToken={agentToken}
+        commands={commands}
+        workingDirectory={workingDirectory}
+        activeAgentIdentifier={activeAgentIdentifier}
+        hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+        agentSessionState={agentSessionState}
+        size="xs"
+      />
       <CopyAgentCommandButton
         claudeCommand={claudeCommand}
         codexCommand={codexCommand}
         cursorCommand={cursorCommand}
         geminiCommand={geminiCommand}
       />
-      {/* {isElectron && (
-        <>
-          <div className="h-4 w-px bg-border" />
-          <RunAgentButton ticketId={ticketId} agentToken={agentToken} workingDirectory={workingDirectory} />
-        </>
-      )} */}
-      {/* <div className="h-4 w-px bg-border" /> */}
-      {/* <Button asChild className="h-6 text-xs" size="sm" variant="outline">
-        <a href={chatGptLink} rel="noreferrer" target="_blank">
-          ChatGPT ↗
-        </a>
-      </Button> */}
     </div>
   );
 }

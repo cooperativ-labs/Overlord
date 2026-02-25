@@ -12,10 +12,11 @@ import {
   useSensors
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Columns3, Eye, EyeOff } from 'lucide-react';
+import { Columns3, Eye, EyeOff, Settings } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react';
 
+import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -27,9 +28,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createTicketInColumnAction, reorderTicketsAction } from '@/lib/actions/tickets';
 import {
-  getOpenedTicketTimestamps,
+  getOpenedReviewTimestamps,
+  getOpenedWaitingTimestamps,
   hasUnopenedTimestamp,
-  markTicketOpened,
+  markTicketReviewOpened,
+  markTicketWaitingOpened,
   type TicketOpenedTimestamps
 } from '@/lib/helpers/ticket-waiting-response';
 import { createClient } from '@/supabase/utils/client';
@@ -37,6 +40,7 @@ import type { Database } from '@/types/database.types';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
 import KanbanColumn from './KanbanColumn';
+import TicketsViewToggle from './TicketsViewToggle';
 
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
@@ -51,7 +55,7 @@ type StatusColumn = {
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type RealtimeTicketPatch = Partial<
-  Pick<Ticket, 'status' | 'title' | 'agent_session_state' | 'running_agent'>
+  Pick<Ticket, 'status' | 'title' | 'agent_session_state' | 'running_agent' | 'recent_agent'>
 >;
 type ToastState = {
   ticketId: string;
@@ -110,16 +114,19 @@ export default function KanbanBoard({
   statuses,
   showOrganizationName = false,
   organizationId,
-  projectId
+  projectId,
+  initialView
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number }>;
   showOrganizationName?: boolean;
   organizationId?: number;
   projectId?: string;
+  initialView: string;
 }) {
   const pathname = usePathname();
   const [, startTransition] = useTransition();
+  const projectSettings = useProjectSettings();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [toastState, setToastState] = useState<ToastState | null>(null);
   const [waitingByTicket, setWaitingByTicket] = useState<Record<string, string>>(() =>
@@ -128,8 +135,11 @@ export default function KanbanBoard({
   const [reviewByTicket, setReviewByTicket] = useState<Record<string, string>>(() =>
     toReviewByTicket(initialTickets)
   );
-  const [openedTicketTimestamps, setOpenedTicketTimestamps] = useState<TicketOpenedTimestamps>(() =>
-    getOpenedTicketTimestamps()
+  const [openedWaitingTimestamps, setOpenedWaitingTimestamps] = useState<TicketOpenedTimestamps>(
+    () => getOpenedWaitingTimestamps()
+  );
+  const [openedReviewTimestamps, setOpenedReviewTimestamps] = useState<TicketOpenedTimestamps>(() =>
+    getOpenedReviewTimestamps()
   );
 
   const [realtimeOverrides, setRealtimeOverrides] = useState<Map<string, RealtimeTicketPatch>>(
@@ -139,13 +149,18 @@ export default function KanbanBoard({
 
   const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
   const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
-  const openedTicketTimestampsRef = useRef(openedTicketTimestamps);
+  const openedWaitingTimestampsRef = useRef(openedWaitingTimestamps);
+  const openedReviewTimestampsRef = useRef(openedReviewTimestamps);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollKey = `kanban-scroll:${projectId ?? organizationId ?? 'default'}`;
 
   useEffect(() => {
-    openedTicketTimestampsRef.current = openedTicketTimestamps;
-  }, [openedTicketTimestamps]);
+    openedWaitingTimestampsRef.current = openedWaitingTimestamps;
+  }, [openedWaitingTimestamps]);
+
+  useEffect(() => {
+    openedReviewTimestampsRef.current = openedReviewTimestamps;
+  }, [openedReviewTimestamps]);
 
   useEffect(() => {
     setWaitingByTicket(toWaitingByTicket(initialTickets));
@@ -214,9 +229,9 @@ export default function KanbanBoard({
       review_entered_at: reviewEnteredAt,
       has_unopened_waiting_response: hasUnopenedTimestamp(
         waitingForResponseAt,
-        openedTicketTimestamps[merged.id]
+        openedWaitingTimestamps[merged.id]
       ),
-      has_unopened_review: hasUnopenedTimestamp(reviewEnteredAt, openedTicketTimestamps[merged.id])
+      has_unopened_review: hasUnopenedTimestamp(reviewEnteredAt, openedReviewTimestamps[merged.id])
     };
   });
 
@@ -281,8 +296,8 @@ export default function KanbanBoard({
       return;
     }
 
-    const next = markTicketOpened(pathTicketId);
-    setOpenedTicketTimestamps(next);
+    setOpenedWaitingTimestamps(markTicketWaitingOpened(pathTicketId));
+    setOpenedReviewTimestamps(markTicketReviewOpened(pathTicketId));
   }, [pathname]);
 
   useEffect(() => {
@@ -295,11 +310,15 @@ export default function KanbanBoard({
       const isAttached = session.session_state === 'attached';
       setRealtimeOverrides(prev => {
         const next = new Map(prev);
-        next.set(session.ticket_id, {
+        const patch: RealtimeTicketPatch = {
           ...next.get(session.ticket_id),
           agent_session_state: session.session_state,
           running_agent: isAttached ? session.agent_identifier : null
-        });
+        };
+        if (!isAttached) {
+          patch.recent_agent = session.agent_identifier;
+        }
+        next.set(session.ticket_id, patch);
         return next;
       });
     };
@@ -333,7 +352,7 @@ export default function KanbanBoard({
           .eq('event_type', 'status_change')
           .eq('phase', 'review')
           .order('created_at', { ascending: false }),
-        supabase.from('tickets').select('id,status,title').in('id', ticketIds)
+        supabase.from('tickets').select('id,status,title,recent_agent').in('id', ticketIds)
       ]);
 
       if (cancelled) return;
@@ -357,13 +376,17 @@ export default function KanbanBoard({
           const patch: RealtimeTicketPatch = {
             ...next.get(t.id),
             status: t.status ?? undefined,
-            title: t.title
+            title: t.title,
+            recent_agent: (t as { recent_agent?: string | null }).recent_agent ?? undefined
           };
           const session = sessionByTicket.get(t.id);
           if (session) {
+            const isAttached = session.session_state === 'attached';
             patch.agent_session_state = session.session_state;
-            patch.running_agent =
-              session.session_state === 'attached' ? session.agent_identifier : null;
+            patch.running_agent = isAttached ? session.agent_identifier : null;
+            if (!isAttached) {
+              patch.recent_agent = session.agent_identifier;
+            }
           }
           next.set(t.id, patch);
         }
@@ -418,7 +441,7 @@ export default function KanbanBoard({
             return { ...previous, [event.ticket_id]: event.created_at };
           });
 
-          const openedAt = openedTicketTimestampsRef.current[event.ticket_id];
+          const openedAt = openedWaitingTimestampsRef.current[event.ticket_id];
           if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;
 
           const ticket = ticketsByIdRef.current.get(event.ticket_id);
@@ -460,7 +483,7 @@ export default function KanbanBoard({
             return { ...previous, [event.ticket_id]: event.created_at };
           });
 
-          const openedAt = openedTicketTimestampsRef.current[event.ticket_id];
+          const openedAt = openedReviewTimestampsRef.current[event.ticket_id];
           if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;
 
           const reviewSound = reviewSoundRef.current;
@@ -468,6 +491,16 @@ export default function KanbanBoard({
             reviewSound.currentTime = 0;
             void reviewSound.play().catch(() => undefined);
           }
+
+          const reviewTicket = ticketsByIdRef.current.get(event.ticket_id);
+          const reviewTitle = reviewTicket?.title?.trim()
+            ? `Ready for review: ${reviewTicket.title.trim()}`
+            : 'Ticket moved to review';
+          setToastState({
+            ticketId: event.ticket_id,
+            title: reviewTitle,
+            message: 'The agent has delivered this ticket.'
+          });
         }
       )
       .on<Database['public']['Tables']['tickets']['Row']>(
@@ -589,10 +622,18 @@ export default function KanbanBoard({
     const columnSlug = resolveOverColumn(overId) ?? findColumnSlug(activeId);
     if (!columnSlug) return;
 
-    const ticket = workingTickets.current.find(t => t.id === activeId);
-    if (!ticket) return;
+    const originalSlug = initialTickets.find(t => t.id === activeId)?.status;
+    const statusChanged = originalSlug !== undefined && originalSlug !== columnSlug;
 
-    const { groups } = groupTickets(workingTickets.current);
+    // Override the moved ticket's status so groupTickets places it in the right column,
+    // regardless of whether the DragOver transition already reverted workingTickets.current.
+    const effectiveTickets = statusChanged
+      ? workingTickets.current.map(t => (t.id === activeId ? { ...t, status: columnSlug } : t))
+      : workingTickets.current;
+
+    if (!effectiveTickets.find(t => t.id === activeId)) return;
+
+    const { groups } = groupTickets(effectiveTickets);
     const colTickets = groups.get(columnSlug) ?? [];
 
     const oldIndex = colTickets.findIndex(t => t.id === activeId);
@@ -605,14 +646,15 @@ export default function KanbanBoard({
 
     const orderedIds = reordered.map(t => t.id);
     const col = columnById.get(columnSlug);
-    const originalSlug = initialTickets.find(t => t.id === activeId)?.status;
-    const statusChanged = originalSlug !== columnSlug;
 
     startTransition(async () => {
       const positionMap = new Map(orderedIds.map((id, i) => [id, i]));
-      const updated = workingTickets.current.map(t =>
-        positionMap.has(t.id) ? { ...t, board_position: positionMap.get(t.id)! } : t
-      );
+      const updated = effectiveTickets.map(t => {
+        let next = t;
+        if (positionMap.has(t.id)) next = { ...next, board_position: positionMap.get(t.id)! };
+        if (statusChanged && t.id === activeId && col) next = { ...next, status: col.id };
+        return next;
+      });
       applyOptimistic(updated);
 
       await reorderTicketsAction(
@@ -689,7 +731,8 @@ export default function KanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="mb-2 flex justify-end px-4 md:px-6">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
+            <TicketsViewToggle initialView={initialView} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -726,6 +769,18 @@ export default function KanbanBoard({
                     Uncategorized
                   </DropdownMenuItem>
                 )}
+                {projectId && projectSettings ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={projectSettings.openProjectSettings}
+                      className="gap-2"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Column order
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

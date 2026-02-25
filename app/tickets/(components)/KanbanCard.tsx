@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { PanelRightIcon } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,7 @@ export type Ticket = {
   everhour_task_id?: string | null;
   agent_session_state?: SessionState | null;
   running_agent?: string | null;
+  recent_agent?: string | null;
   status: string;
   priority: string;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
@@ -68,6 +70,7 @@ export default function KanbanCard({
   isDragOverlay?: boolean;
   showOrganizationName?: boolean;
 }) {
+  const pathname = usePathname();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: ticket.id,
     disabled: isDragOverlay
@@ -90,13 +93,21 @@ export default function KanbanCard({
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
   const hasUnopenedReview = ticket.has_unopened_review === true;
 
+  const ticketPath = buildTicketPath({
+    organizationId: ticket.organization_id,
+    projectId: ticket.project_id,
+    ticketId: ticket.id
+  });
+  const isSelected = pathname === ticketPath;
+
   return (
     <Card
       ref={setNodeRef}
       className={cn(
-        'relative cursor-grab border-border/40 shadow-sm overflow-hidden',
+        'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-colors',
         isDragging ? 'opacity-40' : '',
         isAgentRunning && 'animate-pulse border-emerald-500/40',
+        isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
         hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
       )}
       style={style}
@@ -142,7 +153,8 @@ function KanbanCardBody({
     projectId: ticket.project_id,
     ticketId: ticket.id
   });
-  const activeAgentIdentifier = ticket.running_agent ?? ticket.assigned_agent;
+  const activeAgentIdentifier =
+    ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
   const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
 
   return (
@@ -200,7 +212,7 @@ function KanbanCardBody({
             />
           ) : null}
         </div>
-        {isAgentRunning && activeAgentIdentifier ? (
+        {activeAgentIdentifier ? (
           <div className="min-w-0">
             {activeAgentType ? (
               <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">

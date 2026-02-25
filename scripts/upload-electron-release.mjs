@@ -17,6 +17,7 @@ import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
+import semver from 'semver';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -159,15 +160,45 @@ async function removeStoragePaths(supabase, paths) {
   }
 }
 
-async function cleanRemoteElectronPrefix(supabase) {
+async function pruneOldVersions(supabase) {
   const rootPath = PREFIX;
-  const existingPaths = await listFilePathsRecursively(supabase, rootPath);
-  if (existingPaths.length === 0) {
-    console.log(`[upload] No previous files found in ${BUCKET}/${rootPath}/`);
+  const entries = await listStorageEntries(supabase, rootPath);
+  
+  // Filter for directories that are valid semver
+  const versionDirs = entries
+    .filter(isDirectoryEntry)
+    .map(e => e.name)
+    .filter(name => semver.valid(name));
+
+  if (versionDirs.length === 0) {
+    console.log(`[upload] No existing versions found in ${BUCKET}/${rootPath}/`);
     return;
   }
-  console.log(`[upload] Deleting ${existingPaths.length} previous file(s) in ${BUCKET}/${rootPath}/...`);
-  await removeStoragePaths(supabase, existingPaths);
+
+  // Sort versions descending (newest first)
+  const sortedVersions = versionDirs.sort(semver.rcompare);
+  console.log(`[upload] All versions: ${sortedVersions.join(', ')}`);
+
+  // Keep top 3 (current + 2 previous)
+  const versionsToKeep = sortedVersions.slice(0, 3);
+  const versionsToDelete = sortedVersions.slice(3);
+
+  if (versionsToDelete.length === 0) {
+    console.log('[upload] No old versions to prune.');
+    return;
+  }
+
+  console.log(`[upload] Keeping: ${versionsToKeep.join(', ')}`);
+  console.log(`[upload] Pruning ${versionsToDelete.length} old version(s): ${versionsToDelete.join(', ')}`);
+
+  for (const v of versionsToDelete) {
+    const versionPath = `${PREFIX}/${v}`;
+    const filePaths = await listFilePathsRecursively(supabase, versionPath);
+    if (filePaths.length > 0) {
+      console.log(`[upload] Deleting ${filePaths.length} file(s) from version ${v}...`);
+      await removeStoragePaths(supabase, filePaths);
+    }
+  }
 }
 
 function prefixLatestYamlPaths(content, version) {
@@ -248,8 +279,6 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  await cleanRemoteElectronPrefix(supabase);
-
   const versionPrefix = `${PREFIX}/${version}`;
   console.log(`[upload] Uploading ${artifacts.length} file(s) to ${BUCKET}/${versionPrefix}/...`);
 
@@ -282,6 +311,8 @@ async function main() {
       process.exit(1);
     }
   }
+
+  await pruneOldVersions(supabase);
 
   console.log(`[upload] Done. Version ${version} is available at ${supabaseUrl}/storage/v1/object/public/${BUCKET}/${PREFIX}/`);
 }

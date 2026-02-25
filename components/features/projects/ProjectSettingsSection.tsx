@@ -1,8 +1,11 @@
 'use client';
 
+import { Folder, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
+import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,12 +19,6 @@ import {
   updateProjectWorkingDirectoryAction
 } from '@/lib/actions/projects';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
-
-import { ProjectColorSetter } from './ProjectColorSetter';
-import { ProjectStatusSettings } from './ProjectStatusSettings';
-
-type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
 type ProjectSettingsSectionProps = {
   projectId: string;
@@ -29,12 +26,6 @@ type ProjectSettingsSectionProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
-  initialStatuses: Array<{
-    name: string;
-    position: number;
-    statusType: TicketStatusType;
-    isDefault: boolean;
-  }>;
   hasEverhourApiKey: boolean;
 };
 
@@ -44,11 +35,11 @@ export function ProjectSettingsSection({
   initialName,
   initialColor,
   initialWorkingDirectory,
-  initialStatuses,
   hasEverhourApiKey
 }: ProjectSettingsSectionProps) {
   const { api, isElectron } = useElectron();
   const router = useRouter();
+  const projectSettings = useProjectSettings();
   const [name, setName] = useState(initialName);
   const [savedName, setSavedName] = useState(initialName);
   const [nameEditing, setNameEditing] = useState(false);
@@ -62,11 +53,10 @@ export function ProjectSettingsSection({
   const [syncButtonState, setSyncButtonState] = useState<ButtonLoadingState>('default');
   const [nameError, setNameError] = useState<string | null>(null);
   const [colorError, setColorError] = useState<string | null>(null);
-  const [workingDirectoryError, setWorkingDirectoryError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const directoryInputRef = useRef<HTMLInputElement>(null);
+  const hasSavedWorkingDirectory = savedWorkingDirectory.trim().length > 0;
 
   useEffect(() => {
     setSavedColor(initialColor);
@@ -156,7 +146,6 @@ export function ProjectSettingsSection({
     }
 
     setWorkingDirectorySaveState('loading');
-    setWorkingDirectoryError(null);
     try {
       await updateProjectWorkingDirectoryAction({
         projectId,
@@ -166,61 +155,21 @@ export function ProjectSettingsSection({
       setWorkingDirectory(normalized);
       setWorkingDirectorySaveState('success');
       router.refresh();
-    } catch (error) {
+    } catch {
       setWorkingDirectorySaveState('error');
-      setWorkingDirectoryError(
-        error instanceof Error ? error.message : 'Failed to update working directory.'
-      );
     }
   }
 
   async function handleChooseDirectory() {
-    setWorkingDirectoryError(null);
-
-    if (isElectron && api) {
-      const chosenPath = await api.terminal.chooseDirectory();
-      if (!chosenPath) return;
-      setWorkingDirectory(chosenPath);
-      await handleSaveWorkingDirectory(chosenPath);
-      return;
-    }
-
-    // Web: File System Access API or fallback to directory input
-    const w =
-      typeof window !== 'undefined'
-        ? (window as Window & { showDirectoryPicker?(): Promise<{ name: string }> })
-        : null;
-    if (w?.showDirectoryPicker) {
-      try {
-        const handle = await w.showDirectoryPicker();
-        const folderName = handle.name;
-        setWorkingDirectory(folderName);
-        await handleSaveWorkingDirectory(folderName);
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          setWorkingDirectoryError('Could not access the selected folder.');
-        }
-      }
-      return;
-    }
-
-    directoryInputRef.current?.click();
-  }
-
-  async function handleWebDirectoryInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files?.length) return;
-    const firstPath = (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
-    const folderName = firstPath ? firstPath.split('/')[0] : '';
-    e.target.value = '';
-    if (folderName) {
-      setWorkingDirectory(folderName);
-      await handleSaveWorkingDirectory(folderName);
-    }
+    if (!isElectron || !api) return;
+    const chosenPath = await api.terminal.chooseDirectory();
+    if (!chosenPath) return;
+    setWorkingDirectory(chosenPath);
+    await handleSaveWorkingDirectory(chosenPath);
   }
 
   return (
-    <section className="space-y-4 px-5 pt-5">
+    <section className="px-5 pt-5">
       {/* Name + color + optional sync */}
       <div className="flex flex-wrap items-center gap-2">
         <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
@@ -238,7 +187,7 @@ export function ProjectSettingsSection({
           </PopoverContent>
         </Popover>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 items-center gap-3 md:flex">
           {nameEditing ? (
             <Input
               ref={nameInputRef}
@@ -266,6 +215,39 @@ export function ProjectSettingsSection({
               {savedName || 'Untitled project'}
             </button>
           )}
+
+          {isElectron ? (
+            <button
+              type="button"
+              className={cn(
+                'mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
+                hasSavedWorkingDirectory
+                  ? 'border-border'
+                  : 'border-dashed border-muted-foreground/60 italic'
+              )}
+              onClick={handleChooseDirectory}
+              disabled={workingDirectorySaveState === 'loading'}
+              title={hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
+            >
+              <Folder className="h-3 w-3" />
+              <span className="truncate">
+                {hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
+              </span>
+            </button>
+          ) : null}
+
+          {projectSettings ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={projectSettings.openProjectSettings}
+              aria-label="Project settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </div>
 
         {hasEverhourApiKey ? (
@@ -291,68 +273,6 @@ export function ProjectSettingsSection({
           {syncMessage}
         </p>
       ) : null}
-
-      {isElectron ? (
-        <div className="grid gap-1.5 md:max-w-2xl">
-          <p className="text-xs font-medium text-muted-foreground">Working Directory</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={workingDirectory}
-              onBlur={() => handleSaveWorkingDirectory()}
-              onChange={e => setWorkingDirectory(e.target.value)}
-              placeholder="/absolute/path/to/project"
-              className="h-8 min-w-0 flex-1"
-              disabled={workingDirectorySaveState === 'loading'}
-            />
-            <input
-              ref={directoryInputRef}
-              type="file"
-              {...({
-                webkitdirectory: '',
-                directory: ''
-              } as React.InputHTMLAttributes<HTMLInputElement>)}
-              multiple
-              className="hidden"
-              aria-hidden
-              tabIndex={-1}
-              onChange={handleWebDirectoryInputChange}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 shrink-0"
-              disabled={workingDirectorySaveState === 'loading'}
-              onClick={handleChooseDirectory}
-            >
-              Browse
-            </Button>
-            <LoadingButton
-              buttonState={workingDirectorySaveState}
-              setButtonState={setWorkingDirectorySaveState}
-              text="Save"
-              loadingText="Saving…"
-              successText="Saved"
-              errorText="Retry"
-              reset
-              size="sm"
-              variant="outline"
-              onClick={() => handleSaveWorkingDirectory()}
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Terminal sessions will open here when running agents on tickets in this project.
-          </p>
-          {workingDirectoryError ? (
-            <p className="text-xs text-destructive">{workingDirectoryError}</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      <ProjectStatusSettings
-        organizationId={organizationId}
-        projectId={projectId}
-        initialStatuses={initialStatuses}
-      />
     </section>
   );
 }
