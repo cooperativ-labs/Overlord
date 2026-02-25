@@ -2,6 +2,13 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 
+export type PromptOptions = {
+  /** Agent token value to embed in MCP config (when available). Falls back to $AGENT_TOKEN placeholder. */
+  token?: string;
+  /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */
+  mcpUrl?: string;
+};
+
 /**
  * Builds the full prompt text for attaching a ticket to an LLM (e.g. when the user
  * pastes ticket context into Claude or ChatGPT). Includes ticket details and instructions
@@ -20,7 +27,8 @@ export function buildTicketPromptMarkdown(
     priority: string | number | null;
   },
   platformUrl: string,
-  context?: PromptContext
+  context?: PromptContext,
+  options?: PromptOptions
 ): string {
   const ref = getTicketIdentifier(ticket.id);
   const title = ticket.title ?? '(Untitled)';
@@ -38,7 +46,7 @@ export function buildTicketPromptMarkdown(
 
   const protocolSection = isLocal
     ? buildLocalProtocolSection(ticket.id, platformUrl)
-    : buildRemoteProtocolSection(ticket.id, platformUrl);
+    : buildRemoteProtocolSection(ticket.id, platformUrl, options);
 
   return `# Overlord — Agent Instructions
 
@@ -87,12 +95,6 @@ npx overlord protocol update --session-key <sessionKey> --summary "What you did 
 
 Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI.
 
-### 3 — Decision (meaningful implementation choices)
-
-\`\`\`bash
-npx overlord protocol decision --session-key <sessionKey> --title "..." --rationale "..." --impact "..."
-\`\`\`
-
 ### 4 — Ask (blocking question — stop working after calling)
 
 \`\`\`bash
@@ -118,11 +120,11 @@ curl -sS -X POST "$PLATFORM_URL/api/protocol/create-ticket" -H "Authorization: B
 
 \`\`\`bash
 npx overlord protocol deliver --session-key <sessionKey> \\
-  --summary "Narrative: what you did, key decisions, next steps." \\
+  --summary "Narrative: what you did, next steps." \\
   --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."},{"type":"next_steps","label":"Next steps","content":"..."}]'
 \`\`\`
 
-Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`decision\`, \`note\`, \`url\`.
+Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`.
 
 Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
 
@@ -148,7 +150,59 @@ PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx ove
 `;
 }
 
-function buildRemoteProtocolSection(ticketId: string, platformUrl: string): string {
+/**
+ * Builds an MCP server configuration block to include in the remote prompt.
+ * Agents that support MCP (Claude Code, etc.) can configure this server to get
+ * native tool access to Overlord instead of using raw curl/REST calls.
+ */
+function buildMcpConfigSection(mcpUrl: string, tokenValue: string, ticketId: string): string {
+  const settingsJson = JSON.stringify(
+    {
+      mcpServers: {
+        overlord: {
+          type: 'url',
+          url: mcpUrl,
+          headers: { authorization: `Bearer ${tokenValue}` }
+        }
+      }
+    },
+    null,
+    2
+  );
+
+  return `
+### MCP Server (Recommended for Claude Code and compatible agents)
+
+If your agent supports MCP, configure the Overlord MCP server for native tool access.
+This is the preferred method — use the MCP tools instead of the curl/REST instructions below.
+
+**Step 1** — Add to your project's \`.claude/settings.json\` (or global \`~/.claude/settings.json\`):
+
+\`\`\`json
+${settingsJson}
+\`\`\`
+
+**Step 2** — Available MCP tools (use these instead of curl):
+- \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
+- \`update\` — post progress updates
+- \`ask\` — ask a blocking question
+- \`read_context\` / \`write_context\` — persist findings across sessions
+- \`deliver\` — deliver completed work
+- \`create_ticket\` — create a follow-up ticket for human work
+
+> If you configure the MCP server, use MCP tools exclusively — do not mix MCP and REST calls in the same session.
+
+---
+
+### REST API (fallback if MCP is not available)
+`;
+}
+
+function buildRemoteProtocolSection(ticketId: string, platformUrl: string, options?: PromptOptions): string {
+  const tokenValue = options?.token ?? '$AGENT_TOKEN';
+  const mcpUrl = options?.mcpUrl;
+  const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, tokenValue, ticketId) : '';
+
   return `## Overlord Protocol
 
 - **Base URL:** ${platformUrl}/api/protocol
@@ -156,6 +210,7 @@ function buildRemoteProtocolSection(ticketId: string, platformUrl: string): stri
 - **Auth header:** \`Authorization: Bearer $AGENT_TOKEN\`
 
 The following environment variables are set for you: \`PLATFORM_URL\`, \`AGENT_TOKEN\`, \`TICKET_ID\`.
+${mcpSection}
 
 ### 1 — Attach (always first, before any other work)
 
@@ -213,22 +268,7 @@ POST $PLATFORM_URL/api/protocol/update
 Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while actively working.
 When \`payload.notifications\` is provided, Overlord will fan these out into app-visible notification events.
 
-### 3 — Record important decisions
-
-Call this when you make a meaningful implementation decision that future sessions should inherit.
-
-\`\`\`
-POST $PLATFORM_URL/api/protocol/decision
-{
-  "sessionKey": "<from attach>",
-  "ticketId": "$TICKET_ID",
-  "title": "Short decision summary",
-  "rationale": "Why this choice was made.",
-  "impact": "Tradeoffs or follow-up implications."
-}
-\`\`\`
-
-### 4 — Ask a blocking question (when you cannot proceed)
+### 3 — Ask a blocking question (when you cannot proceed)
 
 \`\`\`
 POST $PLATFORM_URL/api/protocol/ask
@@ -279,7 +319,7 @@ POST $PLATFORM_URL/api/protocol/deliver
 {
   "sessionKey": "<from attach>",
   "ticketId": "$TICKET_ID",
-  "summary": "Narrative: what you did, what you considered, key decisions, and next steps for the PM.",
+  "summary": "Narrative: what you did, what you considered, and next steps for the PM.",
   "artifacts": [
     { "type": "file_changes", "label": "Files modified", "content": "git diff --stat output or file list" },
     { "type": "next_steps", "label": "Recommended next steps", "content": "Bulleted list." }
@@ -287,7 +327,7 @@ POST $PLATFORM_URL/api/protocol/deliver
 }
 \`\`\`
 
-Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`decision\`, \`note\`, \`url\`.
+Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`.
 
 Deliver moves the ticket to \`review\` and ends your session. Do not call deliver if you used ask and have not received an answer.
 
@@ -322,7 +362,7 @@ To target a specific native agent session ID, optionally set one of:
 - If blocked on human-only work, create a follow-up ticket in the same project using \`/api/protocol/create-ticket\`.
 - Include a \`Restart session command\` artifact when delivering when possible. The deliver endpoint auto-appends one if missing.
 - The \`summary\` in deliver is what the PM reads first — write it as a clear narrative, not a list of commands.
-- Use \`write-context\` for decisions, constraints, or facts a future agent session should know.
+- Use \`write-context\` for constraints, or facts a future agent session should know.
 - Prefer direct \`curl\` JSON payloads for protocol calls; avoid brittle shell quoting and \`jq\` payload wrappers.
 `;
 }

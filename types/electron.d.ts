@@ -45,6 +45,13 @@ interface ElectronAPI {
     getPlatformUrl: () => Promise<string>;
     notify: (title: string, body: string) => Promise<boolean>;
   };
+  cli?: {
+    getInstallStatus: () => Promise<{ installed: boolean; installPath?: string }>;
+    install: () => Promise<
+      | { ok: true; installPath: string; pathInstruction: string }
+      | { ok: false; error: string }
+    >;
+  };
   appUpdate: {
     getStatus: () => Promise<AppUpdateStatus>;
     checkForUpdates: () => Promise<boolean>;

@@ -3,6 +3,31 @@
 All notable changes to this project will be documented in this file.
 
 
+## [0.16.0] - 2026-02-25:17:00
+
+### Added
+- Add ticket search in the nav header with full-text search over ticket title and identifier, backed by a new `search_vector` column and API route.
+- Add MCP (Model Context Protocol) Supabase Edge Function so cloud-based agents (e.g. Claude Code, Codex) can interact with Overlord tickets via JSON-RPC.
+- Add CLI installer in Electron: Settings "Install CLI" installs `ovld` to `~/.local/bin` from the app bundle so desktop users can run the agent CLI without a separate install.
+
+### Fixed
+- None.
+
+### Changed
+- Make the entire Kanban card clickable to open the ticket in the side panel, with a hover shadow; Everhour timer button remains independently clickable and no longer uses nested links.
+
+### Security
+- None.
+
+### Removed
+- Remove protocol decision API route; decision flow is no longer exposed as a separate endpoint.
+
+### Documentation
+- Document CLI installation approach (Electron bundle and `npx overlord` for web) and update MVP local setup and terminal task submission docs.
+
+### Chore
+- Bump package version to `0.16.0`.
+
 ## [0.15.0] - 2026-02-25:13:45
 
 ### Added

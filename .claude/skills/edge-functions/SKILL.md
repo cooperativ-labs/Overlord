@@ -1,6 +1,6 @@
 ---
 name: edge-functions
-description: Ensures Supabase Edge Functions are invoked using the SDK client pattern instead of raw fetch. Apply when creating or modifying code that calls Supabase Edge Functions.
+description: Ensures Supabase Edge Functions are invoked using the SDK client pattern and that newly authored functions follow the Deno entrypoint + Supabase client setup instead of handwritten fetch/HTTP plumbing. Apply when creating or modifying code that calls or implements Supabase Edge Functions.
 allowed-tools: Read, Edit, Write, Grep, Glob
 ---
 
@@ -329,6 +329,26 @@ When implementing or reviewing edge function calls:
 - [ ] Appropriate error message provided to user
 - [ ] Sentry error reporting for production debugging
 - [ ] Loading states managed correctly (if UI involved)
+
+## Authoring a Supabase Edge Function
+
+Edge functions live under `supabase/functions/<name>` and execute on Deno, so the source file boots via `Deno.serve`. Follow the `mcp` function pattern:
+
+1. Initialize the Supabase client from environment values at module scope:
+   ```ts
+   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+     auth: { persistSession: false }
+   });
+   ```
+2. Respond to `OPTIONS` preflights immediately with a `204` and shared CORS headers, and reject non-POST methods before any heavy work.
+3. Parse the incoming body inside a try/catch (`await req.json()`), return a structured error response (use helpers like `rpcError`/`rpcResult` when available) when JSON is invalid.
+4. Resolve and validate bearer tokens early (see `resolveToken(req, supabase)`), send `401`/`-32600` errors when the token is missing/invalid, then hand the sanitized token context to downstream handlers.
+5. Wrap each logical branch in `try/catch`, log the error, and return a JSON payload with the right status + CORS headers so Supabase and clients can surface failures cleanly.
+6. Keep shared helpers for CORS headers, RPC serialization, and tool dispatching so each handler stays focused on business logic.
+
+Always prefer the Supabase SDK over manual HTTP calls inside the edge function as well: once the Supabase client is available, call `supabase.functions.invoke` for any outbound edge function requests rather than `fetch`, and reuse the same auth/configuration so tokens, regions, and headers stay consistent.
 
 ## Reference
 

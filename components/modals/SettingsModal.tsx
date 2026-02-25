@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Link2, Monitor, RefreshCcw } from 'lucide-react';
+import { Bot, Link2, Monitor, RefreshCcw, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -97,6 +97,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { name: 'Integrations', icon: Link2 },
   { name: 'Agents', icon: Bot },
+  { name: 'CLI', icon: Terminal },
   { name: 'Terminal', icon: Monitor, electronOnly: true },
   { name: 'Updates', icon: RefreshCcw, electronOnly: true }
 ];
@@ -128,6 +129,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [installWarningOpen, setInstallWarningOpen] = useState(false);
   const [runningAgentCount, setRunningAgentCount] = useState(0);
   const [platformUrl, setPlatformUrl] = useState<string | null>(null);
+  const [cliInstallButtonState, setCliInstallButtonState] =
+    useState<ButtonLoadingState>('default');
+  const [cliInstalled, setCliInstalled] = useState(false);
+  const [cliInstallPath, setCliInstallPath] = useState<string | null>(null);
+  const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
 
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const [activeNav, setActiveNav] = useState<string>('Integrations');
@@ -221,6 +227,36 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       });
     }
   }, [isElectron, open]);
+
+  useEffect(() => {
+    if (!open || !isElectron || !api?.cli) return;
+    void api.cli.getInstallStatus().then(({ installed, installPath }) => {
+      setCliInstalled(installed);
+      setCliInstallPath(installPath ?? null);
+    });
+  }, [api, isElectron, open]);
+
+  async function handleInstallCli() {
+    if (!api?.cli) return;
+
+    setCliInstallButtonState('loading');
+    setCliInstallMessage(null);
+    try {
+      const result = await api.cli.install();
+      if (result.ok) {
+        setCliInstallButtonState('success');
+        setCliInstalled(true);
+        setCliInstallPath(result.installPath);
+        setCliInstallMessage(result.pathInstruction);
+      } else {
+        setCliInstallButtonState('error');
+        setCliInstallMessage(result.error);
+      }
+    } catch (error) {
+      setCliInstallButtonState('error');
+      setCliInstallMessage(error instanceof Error ? error.message : 'Install failed');
+    }
+  }
 
   function handleTerminalModeChange(value: string) {
     const mode = value === 'embedded' ? 'embedded' : 'external';
@@ -458,6 +494,101 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         />
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {activeNav === 'CLI' && (
+                  <div className="grid gap-4">
+                    <div className="grid gap-1">
+                      <p className="text-sm font-medium">Overlord CLI (ovld)</p>
+                      <p className="text-xs text-muted-foreground">
+                        The CLI lets agents in Claude Code, Codex, and Cursor work with Overlord
+                        tickets. Available commands:
+                      </p>
+                    </div>
+                    <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs">
+                      <p className="mb-2 font-sans font-medium text-foreground">Top-level</p>
+                      <ul className="grid gap-1 text-muted-foreground">
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld auth</code> login, status,
+                          logout
+                        </li>
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld tickets</code> create, list
+                        </li>
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld ticket</code> context
+                        </li>
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld protocol</code> attach,
+                          update, ask, read-context, write-context, deliver
+                        </li>
+                      </ul>
+                      <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
+                      <ul className="grid gap-1 text-muted-foreground">
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld protocol attach --ticket-id &lt;id&gt;</code>
+                        </li>
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld protocol update --session-key &lt;key&gt; --ticket-id &lt;id&gt; --summary "..."</code>
+                        </li>
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld protocol deliver --session-key &lt;key&gt; --ticket-id &lt;id&gt; --summary "..."</code>
+                        </li>
+                        <li>
+                          <code className="rounded bg-muted px-1">ovld tickets create --objective "..." --execution-target agent</code>
+                        </li>
+                      </ul>
+                      <p className="mt-2 text-muted-foreground">
+                        Run <code className="rounded bg-muted px-1">ovld &lt;command&gt; help</code>{' '}
+                        for more detail.
+                      </p>
+                    </div>
+                    {isElectron && api?.cli ? (
+                      <>
+                        {cliInstalled ? (
+                          <div className="rounded-md border p-3">
+                            <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                              CLI installed at {cliInstallPath}
+                            </p>
+                            {cliInstallMessage ? (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {cliInstallMessage}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <LoadingButton
+                              buttonState={cliInstallButtonState}
+                              setButtonState={setCliInstallButtonState}
+                              text="Install CLI"
+                              loadingText="Installing..."
+                              successText="Installed"
+                              errorText="Retry"
+                              reset
+                              variant="default"
+                              onClick={handleInstallCli}
+                            />
+                            {cliInstallMessage ? (
+                              <p className="text-sm text-destructive">{cliInstallMessage}</p>
+                            ) : null}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="rounded-md border p-3">
+                        <p className="text-sm text-muted-foreground">
+                          Install the{' '}
+                          <Link href="/downloads" className="text-foreground underline underline-offset-4">
+                            desktop app
+                          </Link>{' '}
+                          to install the CLI with one click. Or run{' '}
+                          <code className="rounded bg-muted px-1">npx overlord</code> from the
+                          project directory.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 

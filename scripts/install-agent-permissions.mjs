@@ -28,7 +28,6 @@ import os from "node:os";
 const PROTOCOL_ENDPOINTS = [
   "attach",
   "update",
-  "decision",
   "ask",
   "read-context",
   "write-context",

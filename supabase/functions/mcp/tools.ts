@@ -1,0 +1,170 @@
+// ---------------------------------------------------------------------------
+// MCP tool definitions
+// ---------------------------------------------------------------------------
+
+export const TOOLS = [
+  {
+    name: 'attach',
+    description:
+      'Attach to an Overlord ticket session. Call this FIRST before any other tool. Returns session.sessionKey (required for all subsequent calls), the full ticket record, prior delivery history, artifacts, and shared state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'Ticket UUID — use the TICKET_ID from your instructions.'
+        },
+        agentIdentifier: {
+          type: 'string',
+          description: 'Your agent identifier, e.g. "claude-code" or "codex".'
+        },
+        connectionMethod: {
+          type: 'string',
+          enum: ['mcp', 'cli', 'rest', 'chatgpt', 'claude_app', 'claude_code', 'other'],
+          description: 'How you are connecting. Use "mcp" for this endpoint.',
+          default: 'mcp'
+        },
+        metadata: { type: 'object', description: 'Optional extra metadata about this session.' }
+      },
+      required: ['ticketId', 'agentIdentifier']
+    }
+  },
+  {
+    name: 'update',
+    description:
+      'Post a progress update to the ticket. Call after each meaningful step. Use phase "execute" while working.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string', description: 'Session key from attach.' },
+        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        summary: { type: 'string', description: 'What you did and why.' },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'],
+          description: 'Current phase. Use "execute" while actively working.'
+        },
+        payload: {
+          type: 'object',
+          description: 'Optional payload. Include notifications array to surface events in the UI.'
+        }
+      },
+      required: ['sessionKey', 'ticketId', 'summary']
+    }
+  },
+  {
+    name: 'ask',
+    description:
+      'Ask a blocking question. Ticket moves to review until a human responds. Stop working after calling this.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string' },
+        ticketId: { type: 'string' },
+        question: { type: 'string', description: 'Specific question for the PM.' },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
+        payload: { type: 'object' }
+      },
+      required: ['sessionKey', 'ticketId', 'question']
+    }
+  },
+  {
+    name: 'read_context',
+    description: 'Read shared context / state from previous sessions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string' },
+        ticketId: { type: 'string' },
+        query: { type: 'string', description: 'Optional key filter.' },
+        limit: { type: 'number', description: 'Max entries to return (default 20).' }
+      },
+      required: ['sessionKey', 'ticketId']
+    }
+  },
+  {
+    name: 'write_context',
+    description: 'Write a key/value entry to shared context that future agent sessions can read.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string' },
+        ticketId: { type: 'string' },
+        key: { type: 'string', description: 'Descriptive key.' },
+        value: { description: 'Any JSON-serializable value.' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags.' }
+      },
+      required: ['sessionKey', 'ticketId', 'key', 'value']
+    }
+  },
+  {
+    name: 'deliver',
+    description:
+      'Deliver your completed work. Always call last. Moves ticket to review. Do not call if you used ask and have not received an answer.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string' },
+        ticketId: { type: 'string' },
+        summary: {
+          type: 'string',
+          description:
+            'Narrative summary: what you did, key decisions, and next steps. The PM reads this first.'
+        },
+        artifacts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: {
+                type: 'string',
+                enum: [
+                  'file_changes',
+                  'next_steps',
+                  'test_results',
+                  'migration',
+                  'decision',
+                  'note',
+                  'url'
+                ]
+              },
+              label: { type: 'string' },
+              content: { type: 'string' },
+              uri: { type: 'string' },
+              metadata: { type: 'object' }
+            },
+            required: ['type', 'label']
+          },
+          description:
+            'Artifact types: file_changes, next_steps, test_results, migration, decision, note, url.'
+        }
+      },
+      required: ['sessionKey', 'ticketId', 'summary']
+    }
+  },
+  {
+    name: 'create_ticket',
+    description:
+      'Create a follow-up ticket in the same project. Use when blocked by a human-only action.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string' },
+        ticketId: {
+          type: 'string',
+          description: 'Current ticket UUID (follow-up will be linked to this).'
+        },
+        title: { type: 'string', description: 'Short title for the new ticket.' },
+        objective: { type: 'string', description: 'What needs to be done.' },
+        acceptanceCriteria: { type: 'string' },
+        availableTools: { type: 'string' },
+        executionTarget: { type: 'string', enum: ['agent', 'human'], default: 'human' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' }
+      },
+      required: ['sessionKey', 'ticketId', 'objective']
+    }
+  }
+];

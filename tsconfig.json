@@ -41,6 +41,7 @@
     "dist-electron",
     "seed.config.ts",
     "seed.ts",
-    "scripts/**"
+    "scripts/**",
+    "supabase/functions/**"
   ]
 }

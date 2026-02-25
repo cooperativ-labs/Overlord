@@ -33,9 +33,16 @@ const appUpdater = new AppUpdaterService({
 });
 
 function getRendererCsp(port: number): string {
+  // Dev: allow ws: broadly so the local Supabase realtime endpoint
+  //      (ws://localhost:54321 / ws://127.0.0.1:54321) can connect alongside the
+  //      Next.js HMR WebSocket on the app port.
+  // Prod: add wss: so Supabase Cloud realtime (wss://…supabase.co) can connect.
+  //      Without wss: the Supabase realtime subscription is silently blocked,
+  //      preventing cross-column drag-and-drop updates from appearing without
+  //      a full page refresh.
   const connectSources = isDev
-    ? ["'self'", `http://localhost:${port}`, `ws://localhost:${port}`, 'https:', 'wss:'].join(' ')
-    : ["'self'", 'https:'].join(' ');
+    ? ["'self'", `http://localhost:${port}`, `ws://localhost:${port}`, 'https:', 'wss:', 'ws:'].join(' ')
+    : ["'self'", 'https:', 'wss:'].join(' ');
 
   return [
     "default-src 'self'",

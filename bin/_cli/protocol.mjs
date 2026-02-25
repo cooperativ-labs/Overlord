@@ -148,35 +148,6 @@ async function protocolUpdate(args) {
 }
 
 // ---------------------------------------------------------------------------
-// decision
-// ---------------------------------------------------------------------------
-
-async function protocolDecision(args) {
-  const flags = parseFlags(args);
-  const { sessionKey, ticketId } = resolveSessionFlags(flags);
-  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
-  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
-  const title = requireFlag(flags, 'title', undefined);
-  const rationale = String(flags.rationale ?? '');
-  const impact = String(flags.impact ?? '');
-
-  const { platformUrl, agentToken } = resolveAuth();
-
-  const body = {
-    sessionKey,
-    ticketId,
-    title,
-    rationale,
-    impact,
-    ...(flags.phase ? { phase: String(flags.phase) } : {}),
-    ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {})
-  };
-
-  const data = await apiPost(platformUrl, agentToken, '/api/protocol/decision', body);
-  console.log(JSON.stringify(data, null, 2));
-}
-
-// ---------------------------------------------------------------------------
 // ask
 // ---------------------------------------------------------------------------
 
@@ -299,7 +270,6 @@ export async function runProtocolCommand(subcommand, args) {
 Subcommands:
   attach          Start a session on a ticket
   update          Post a progress update
-  decision        Record an architectural decision
   ask             Post a blocking question
   read-context    Retrieve shared context
   write-context   Store a key/value in shared context
@@ -311,7 +281,6 @@ Flags read from env vars when not provided:
 Examples:
   ovld protocol attach --ticket-id abc-123
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X"
-  ovld protocol decision --session-key <key> --ticket-id <id> --title "Use Postgres" --rationale "..."
   ovld protocol ask --session-key <key> --ticket-id <id> --question "Which approach?"
   ovld protocol read-context --session-key <key> --ticket-id <id>
   ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"'
@@ -322,7 +291,6 @@ Examples:
 
   if (subcommand === 'attach') { await protocolAttach(args); return; }
   if (subcommand === 'update') { await protocolUpdate(args); return; }
-  if (subcommand === 'decision') { await protocolDecision(args); return; }
   if (subcommand === 'ask') { await protocolAsk(args); return; }
   if (subcommand === 'read-context') { await protocolReadContext(args); return; }
   if (subcommand === 'write-context') { await protocolWriteContext(args); return; }

@@ -9,6 +9,7 @@ afterSign: scripts/notarize.cjs
 files:
   - "dist-electron/**/*"
   - ".next/standalone/**/*"
+  - "bin/**/*"
 
 mac:
   target:
@@ -27,5 +28,6 @@ linux:
 asarUnpack:
   - "node_modules/node-pty/**/*"
   - ".next/standalone/**/*"
+  - "bin/**/*"
 
 npmRebuild: true

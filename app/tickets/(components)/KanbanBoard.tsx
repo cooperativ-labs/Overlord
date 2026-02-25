@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { Check, Columns3, Eye, EyeOff, Settings } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   useCallback,
   useEffect,
@@ -136,6 +136,7 @@ export default function KanbanBoard({
   initialView: string;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [, startTransition] = useTransition();
   const projectSettings = useProjectSettings();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
@@ -747,6 +748,11 @@ export default function KanbanBoard({
         orderedIds,
         statusChanged && col ? { ticketId: activeId, newStatus: col.id } : undefined
       );
+
+      // Ensure the router fetches fresh server-state after the action so the
+      // board reflects the new position/status even when the Supabase realtime
+      // subscription is unavailable (e.g. Electron with a restrictive CSP).
+      router.refresh();
     });
   }
 

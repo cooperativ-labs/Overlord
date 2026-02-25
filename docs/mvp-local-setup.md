@@ -72,7 +72,6 @@ cp .claude/settings.local.json.backup-<timestamp> .claude/settings.local.json
 - `POST /api/protocol/attach`
 - `POST /api/protocol/ask`
 - `POST /api/protocol/update`
-- `POST /api/protocol/decision`
 - `POST /api/protocol/read-context`
 - `POST /api/protocol/write-context`
 - `POST /api/protocol/deliver`

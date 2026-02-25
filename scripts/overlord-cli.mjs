@@ -29,7 +29,6 @@ Usage:
   yarn overlord list
   yarn overlord attach <ticketId> "<agentIdentifier>" [connectionMethod]
   yarn overlord update <sessionKey> <ticketId> "<summary>" [phase]
-  yarn overlord decision <sessionKey> <ticketId> "<title>" ["<rationale>"] ["<impact>"] [phase]
   yarn overlord ask <sessionKey> <ticketId> "<question>" [phase]
 `);
 }
@@ -75,25 +74,6 @@ async function main() {
       sessionKey,
       ticketId,
       summary,
-      ...(phase ? { phase } : {})
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (command === 'decision') {
-    const [sessionKey, ticketId, title, rationale, impact, phase] = args;
-    if (!sessionKey || !ticketId || !title) {
-      printUsage();
-      process.exitCode = 1;
-      return;
-    }
-    const result = await request('/api/protocol/decision', {
-      sessionKey,
-      ticketId,
-      title,
-      ...(rationale ? { rationale } : {}),
-      ...(impact ? { impact } : {}),
       ...(phase ? { phase } : {})
     });
     console.log(JSON.stringify(result, null, 2));

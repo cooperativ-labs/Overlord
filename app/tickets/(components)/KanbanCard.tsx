@@ -4,8 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PanelRightIcon } from 'lucide-react';
 import Image from 'next/image';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
@@ -72,6 +71,7 @@ export default function KanbanCard({
   showOrganizationName?: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: ticket.id,
     disabled: isDragOverlay
@@ -80,11 +80,7 @@ export default function KanbanCard({
   if (isDragOverlay) {
     return (
       <div className="w-full rounded-md border border-dashed border-primary/40 bg-card shadow-lg">
-        <KanbanCardBody
-          ticket={ticket}
-          showOrganizationName={showOrganizationName}
-          ticketPath={buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id })}
-        />
+        <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
       </div>
     );
   }
@@ -104,17 +100,23 @@ export default function KanbanCard({
     : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
   const isSelected = pathname === ticketPath;
 
+  function handleCardClick() {
+    router.push(ticketPath);
+  }
+
   return (
     <Card
       ref={setNodeRef}
+      aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
       className={cn(
-        'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-colors',
+        'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-all hover:shadow-md',
         isDragging ? 'opacity-40' : '',
         isAgentRunning && 'animate-pulse border-emerald-500/40',
         isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
         hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
       )}
       style={style}
+      onClick={handleCardClick}
       {...listeners}
       {...attributes}
     >
@@ -139,27 +141,19 @@ export default function KanbanCard({
       {isAgentRunning && (
         <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
       )}
-      <KanbanCardBody
-        ticket={ticket}
-        showOrganizationName={showOrganizationName}
-        ticketPath={ticketPath}
-      />
+      <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
     </Card>
   );
 }
 
 function KanbanCardBody({
   ticket,
-  showOrganizationName,
-  ticketPath
+  showOrganizationName
 }: {
   ticket: Ticket;
   showOrganizationName: boolean;
-  ticketPath?: string;
 }) {
   const isAgentRunning = ticket.agent_session_state === 'attached';
-  const resolvedTicketPath =
-    ticketPath ?? buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
   const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
@@ -181,24 +175,9 @@ function KanbanCardBody({
                 title="No project"
               />
             )}
-            <h4 className="text-sm leading-snug font-medium">
-              <Link
-                href={resolvedTicketPath}
-                className="hover:underline"
-                onClick={e => e.stopPropagation()}
-              >
-                {getDisplayTitle(ticket)}
-              </Link>
-            </h4>
+            <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
           </div>
-          <Link
-            href={resolvedTicketPath}
-            aria-label="Open ticket details"
-            className="mt-0.5 text-muted-foreground hover:text-foreground"
-            onClick={e => e.stopPropagation()}
-          >
-            <PanelRightIcon className="h-3.5 w-3.5" />
-          </Link>
+
         </div>
         {showOrganizationName && ticket.organization_name ? (
           <p className="text-muted-foreground text-xs">{ticket.organization_name}</p>

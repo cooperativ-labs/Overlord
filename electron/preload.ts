@@ -46,6 +46,10 @@ const electronAPI = {
     getPlatformUrl: () => ipcRenderer.invoke('app:get-platform-url'),
     notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body })
   },
+  cli: {
+    getInstallStatus: () => ipcRenderer.invoke('cli:get-install-status'),
+    install: () => ipcRenderer.invoke('cli:install')
+  },
   appUpdate: {
     getStatus: () => ipcRenderer.invoke('app-update:get-status'),
     checkForUpdates: () => ipcRenderer.invoke('app-update:check'),

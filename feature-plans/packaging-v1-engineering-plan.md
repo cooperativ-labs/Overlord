@@ -9,8 +9,8 @@
 ## Context
 
 The current codebase has:
-- All `/api/protocol/*` routes fully implemented (`attach`, `update`, `decision`, `ask`, `deliver`, `read-context`, `write-context`, `list-tickets`, `create-ticket`, `context/:ticketId`)
-- A dev-only CLI at `scripts/overlord-cli.mjs` (invoked via `yarn overlord`) covering `list`, `attach`, `update`, `decision`, `ask` — no `deliver`, `read-context`, `write-context`, or `auth`
+- All \`/api/protocol/*\` routes fully implemented (\`attach\`, \`update\`, \`ask\`, \`deliver\`, \`read-context\`, \`write-context\`, \`list-tickets\`, \`create-ticket\`, \`context/:ticketId\`)
+- A dev-only CLI at \`scripts/overlord-cli.mjs\` (invoked via \`yarn overlord\`) covering \`list\`, \`attach\`, \`update\`, \`ask\` — no \`deliver\`, \`read-context\`, \`write-context\`, or \`auth\`
 - Local Supabase dev setup only; no cloud deployment
 
 This plan converts those pieces into a shippable V1 with three deliverables:
@@ -37,7 +37,7 @@ cli/
 │   │   ├── auth.ts       # ovld auth login / logout / status
 │   │   ├── tickets.ts    # ovld tickets list / create
 │   │   ├── ticket.ts     # ovld ticket context <ticketId>
-│   │   └── protocol.ts   # ovld protocol attach/update/decision/ask/deliver/read-context/write-context
+│   │   └── protocol.ts   # ovld protocol attach/update/ask/deliver/read-context/write-context
 │   ├── lib/
 │   │   ├── client.ts     # HTTP client (base URL + auth header)
 │   │   ├── config.ts     # read/write ~/.ovld/config.json
@@ -59,7 +59,6 @@ ovld ticket context <ticketId>          # print full ticket prompt for agent con
 
 ovld protocol attach   <ticketId> <agentIdentifier> [--method cli]
 ovld protocol update   <sessionKey> <ticketId> "<summary>" [--phase <phase>]
-ovld protocol decision <sessionKey> <ticketId> "<title>" [--rationale "..."] [--impact "..."]
 ovld protocol ask      <sessionKey> <ticketId> "<question>"
 ovld protocol deliver  <sessionKey> <ticketId> "<summary>" [--artifacts '[]']
 ovld protocol read-context  <ticketId>
@@ -267,7 +266,7 @@ Phase 4 (Docs)            ← last; depends on Phase 1 and 2
 | Deliverable | Done when |
 |---|---|
 | `ovld` CLI | `npm install -g ovld && ovld auth login && ovld tickets list` works against production |
-| Protocol commands | All 8 protocol commands (`attach`, `update`, `decision`, `ask`, `deliver`, `read-context`, `write-context`, `ticket context`) work via `ovld` |
+| Protocol commands | All 7 protocol commands (`attach`, `update`, `ask`, `deliver`, `read-context`, `write-context`, `ticket context`) work via `ovld` |
 | Supabase Cloud | Migrations applied, auth working, realtime working in web UI |
 | Vercel deploy | Production web UI live at custom domain |
 | Agent token | User can generate a token in `/account/tokens` and use it via `OVLD_TOKEN` |

@@ -42,16 +42,6 @@ export const updateSchema = z.object({
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
 
-export const decisionSchema = z.object({
-  sessionKey: z.string().uuid(),
-  ticketId: z.string().uuid(),
-  title: z.string().trim().min(1).max(240),
-  rationale: z.string().trim().max(20_000).optional().default(''),
-  impact: z.string().trim().max(20_000).optional().default(''),
-  phase: ticketStatusSchema.optional(),
-  payload: z.record(z.string(), z.unknown()).optional().default({})
-});
-
 export const readContextSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: z.string().uuid(),

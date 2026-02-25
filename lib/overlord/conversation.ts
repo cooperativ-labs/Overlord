@@ -2,7 +2,7 @@ import type { Database } from '@/types/database.types';
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 
-export type ConversationEntryType = 'question' | 'answer' | 'follow_up' | 'decision' | 'event';
+export type ConversationEntryType = 'question' | 'answer' | 'follow_up' | 'event';
 
 type EventPayload = Record<string, unknown>;
 
@@ -25,7 +25,6 @@ export function getConversationEntryType(event: TicketEvent): ConversationEntryT
   const entryType = payload.entry_type;
   if (entryType === 'answer') return 'answer';
   if (entryType === 'follow_up') return 'follow_up';
-  if (entryType === 'decision') return 'decision';
 
   if (event.event_type === 'question') return 'question';
   if (event.event_type === 'answer') return 'answer';

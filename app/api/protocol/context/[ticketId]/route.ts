@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
-import { getPlatformUrl } from '@/lib/env';
+import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { buildTicketPromptMarkdown, type PromptContext } from '@/lib/overlord/ticket-prompt';
@@ -50,13 +50,27 @@ export async function GET(request: Request, { params }: RouteContext) {
     const { searchParams } = new URL(request.url);
     const context = (searchParams.get('context') ?? undefined) as PromptContext | undefined;
     const platformUrl = getPlatformUrl();
+
+    // Build MCP URL from Supabase project URL (edge function endpoint)
+    let mcpUrl: string | undefined;
+    try {
+      const supabaseUrl = getSupabaseUrl();
+      // Only expose MCP URL for remote (non-local) deployments
+      if (!supabaseUrl.includes('127.0.0.1') && !supabaseUrl.includes('localhost')) {
+        mcpUrl = `${supabaseUrl}/functions/v1/mcp`;
+      }
+    } catch {
+      // Supabase URL not configured — skip MCP section
+    }
+
     const markdown = buildTicketPromptMarkdown(
       {
         ...ticket,
         objective: draftObjective?.objective ?? ticket.objective
       },
       platformUrl,
-      context
+      context,
+      { token: authResult.context.tokenValue, mcpUrl }
     );
 
     const headers: Record<string, string> = {
@@ -100,11 +114,23 @@ export async function POST(request: Request, { params }: RouteContext) {
     token: tokenValue
   });
 
+  // Include MCP URL for cloud/remote Supabase deployments
+  let mcpUrl: string | undefined;
+  try {
+    const supabaseUrl = getSupabaseUrl();
+    if (!supabaseUrl.includes('127.0.0.1') && !supabaseUrl.includes('localhost')) {
+      mcpUrl = `${supabaseUrl}/functions/v1/mcp`;
+    }
+  } catch {
+    // Supabase URL not configured
+  }
+
   return NextResponse.json({
     claudeCode,
     codex,
     cursor,
     gemini,
-    contextUrl
+    contextUrl,
+    ...(mcpUrl ? { mcpUrl } : {})
   });
 }

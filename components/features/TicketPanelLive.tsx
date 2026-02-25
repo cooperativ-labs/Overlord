@@ -65,7 +65,6 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
 
   function getEventLabel(event: TicketEvent): string {
     const entryType = getConversationEntryType(event);
-    if (entryType === 'decision') return 'decision';
     if (entryType === 'follow_up') return 'follow_up';
     if (entryType === 'answer') return 'answer';
     if (event.event_type === 'alert') return 'notification';

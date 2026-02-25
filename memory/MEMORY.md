@@ -13,7 +13,7 @@
 - Entry: `bin/ovld.mjs` → `bin/_cli/index.mjs`
 - Credentials stored at `~/.ovld/credentials.json`
 - Auth: device-code flow via `/api/auth/device/request` + `/api/auth/device/poll`
-- Protocol commands: `ovld protocol attach|update|decision|ask|read-context|write-context|deliver`
+- Protocol commands: `ovld protocol attach|update|ask|read-context|write-context|deliver`
 - Ticket commands: `ovld tickets create|list`, `ovld ticket context <id>`
 - Legacy: `ovld run|resume|context` (still work)
 

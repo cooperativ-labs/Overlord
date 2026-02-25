@@ -29,7 +29,6 @@ import path from "node:path";
 const PROTOCOL_ENDPOINTS = [
   "attach",
   "update",
-  "decision",
   "ask",
   "read-context",
   "write-context",

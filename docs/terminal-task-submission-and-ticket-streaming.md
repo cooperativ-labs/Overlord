@@ -122,7 +122,6 @@ Primary write behavior:
 
 - `attach`: inserts `agent_sessions` + `ticket_events(system)`, returns history/state
 - `update`: inserts `ticket_events(update)`; optionally updates `tickets.status`
-- `decision`: inserts `shared_state` decision record + `ticket_events(update)` with `entry_type=decision`; optionally updates `tickets.status`
 - `ask`: inserts blocking `ticket_events(question)`; updates status to `review` (or provided phase)
 - `write-context`: inserts `shared_state` + `ticket_events(context_write)`
 - `read-context`: reads `shared_state` + logs `ticket_events(context_read)`
@@ -132,7 +131,6 @@ Code:
 
 - `app/api/protocol/attach/route.ts`
 - `app/api/protocol/update/route.ts`
-- `app/api/protocol/decision/route.ts`
 - `app/api/protocol/ask/route.ts`
 - `app/api/protocol/read-context/route.ts`
 - `app/api/protocol/write-context/route.ts`
@@ -221,10 +219,6 @@ sequenceDiagram
   API->>DB: insert ticket_events(update), optional status update
   DB-->>RT: change event
   RT-->>UI: new activity row
-  AG->>API: POST /decision (when major choice is made)
-  API->>DB: insert shared_state + decision event
-  DB-->>RT: shared_state/event updates
-  RT-->>UI: decision appears in panel
   AG->>API: POST /ask (blocking)
   API->>DB: insert question event, set ticket review
   DB-->>RT: question event
