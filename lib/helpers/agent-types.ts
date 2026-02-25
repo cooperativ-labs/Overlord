@@ -1,6 +1,6 @@
 export type AgentTypeValue = 'claude' | 'codex' | 'cursor' | 'gemini';
-export type LaunchAgentTypeValue = 'claude' | 'codex';
-export type CopyPromptAgentTypeValue = 'claude' | 'codex' | 'cursor';
+export type LaunchAgentTypeValue = AgentTypeValue;
+export type CopyPromptAgentTypeValue = AgentTypeValue;
 
 export type AgentType = {
   value: AgentTypeValue;
@@ -43,11 +43,17 @@ const agentTypesByValue: Record<AgentTypeValue, AgentType> = {
   gemini: AGENT_TYPES[3]
 };
 
-export const LAUNCH_AGENT_VALUES: readonly LaunchAgentTypeValue[] = ['claude', 'codex'];
+export const LAUNCH_AGENT_VALUES: readonly LaunchAgentTypeValue[] = [
+  'claude',
+  'codex',
+  'cursor',
+  'gemini'
+];
 export const COPY_PROMPT_AGENT_VALUES: readonly CopyPromptAgentTypeValue[] = [
   'claude',
   'codex',
-  'cursor'
+  'cursor',
+  'gemini'
 ];
 
 export function getAgentTypeByValue(value: AgentTypeValue): AgentType {

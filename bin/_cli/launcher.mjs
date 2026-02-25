@@ -23,12 +23,19 @@ async function fetchContext(platformUrl, agentToken, ticketId) {
   return response.text();
 }
 
-const agentIdentifierMap = { claude: 'claude-code', codex: 'codex' };
+const agentIdentifierMap = {
+  claude: 'claude-code',
+  codex: 'codex',
+  cursor: 'cursor',
+  gemini: 'gemini'
+};
+
+const supportedAgents = ['claude', 'codex', 'cursor', 'gemini'];
 
 async function runAgent(agent, mode = 'run') {
-  if (!agent || !['claude', 'codex'].includes(agent)) {
+  if (!agent || !supportedAgents.includes(agent)) {
     console.error(
-      `Usage: ovld run <agent> | ovld resume <agent>  (agent must be "claude" or "codex")`
+      `Usage: ovld run <agent> | ovld resume <agent>  (agent must be one of: ${supportedAgents.join(', ')})`
     );
     process.exit(1);
   }
@@ -63,7 +70,7 @@ async function runAgent(agent, mode = 'run') {
           { stdio: 'inherit', env: childEnv }
         );
       }
-    } else {
+    } else if (agent === 'codex') {
       if (mode === 'resume') {
         const codexSessionId = process.env.CODEX_SESSION_ID?.trim();
         const args = codexSessionId
@@ -73,16 +80,22 @@ async function runAgent(agent, mode = 'run') {
       } else {
         execFileSync('codex', [context], { stdio: 'inherit', env: childEnv });
       }
+    } else if (agent === 'cursor') {
+      execFileSync('agent', [context], { stdio: 'inherit', env: childEnv });
+    } else {
+      execFileSync('gemini', [context], { stdio: 'inherit', env: childEnv });
     }
   } catch (error) {
     const isResume = mode === 'resume';
     const noSessionHint =
       agent === 'claude'
         ? `No prior Claude session was found. Start one with \`ovld run claude\` first.`
-        : `No prior Codex session was found. Start one with \`ovld run codex\` first.`;
+        : agent === 'codex'
+          ? `No prior Codex session was found. Start one with \`ovld run codex\` first.`
+          : '';
     const message = error instanceof Error ? error.message : String(error);
 
-    if (isResume) {
+    if (isResume && noSessionHint) {
       console.error(`${message}\n${noSessionHint}`);
     } else {
       console.error(message);

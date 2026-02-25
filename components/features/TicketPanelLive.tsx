@@ -170,6 +170,8 @@ type TicketPanelLiveProps = {
   agentToken?: string | null;
   claudeCommand?: string;
   codexCommand?: string;
+  cursorCommand?: string;
+  geminiCommand?: string;
 };
 
 export function TicketPanelLive({
@@ -184,7 +186,9 @@ export function TicketPanelLive({
   workingDirectory,
   agentToken,
   claudeCommand,
-  codexCommand
+  codexCommand,
+  cursorCommand,
+  geminiCommand
 }: TicketPanelLiveProps) {
   const router = useRouter();
   const { events, artifacts, session, sharedState } = useTicketRealtime({
@@ -229,13 +233,15 @@ export function TicketPanelLive({
 
   return (
     <>
-      {claudeCommand && codexCommand ? (
+      {claudeCommand && codexCommand && cursorCommand && geminiCommand ? (
         <LaunchCommandBar
           className="mb-6 border-primary/25 bg-background/80"
           ticketId={ticketId}
           agentToken={agentToken}
           claudeCommand={claudeCommand}
           codexCommand={codexCommand}
+          cursorCommand={cursorCommand}
+          geminiCommand={geminiCommand}
           workingDirectory={workingDirectory}
           activeAgentIdentifier={activeAgentIdentifier}
         />

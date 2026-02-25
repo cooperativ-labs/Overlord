@@ -13,7 +13,7 @@ type TerminalContextValue = {
   sendCommand: (command: string, options?: { cwd?: string }) => Promise<void>;
   launchAgent: (
     ticketId: string,
-    agent: 'claude' | 'codex',
+    agent: 'claude' | 'codex' | 'cursor' | 'gemini',
     cwd?: string,
     agentToken?: string
   ) => Promise<void>;
@@ -82,7 +82,12 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   );
 
   const launchAgent = useCallback(
-    async (ticketId: string, agent: 'claude' | 'codex', cwd?: string, agentToken?: string) => {
+    async (
+      ticketId: string,
+      agent: 'claude' | 'codex' | 'cursor' | 'gemini',
+      cwd?: string,
+      agentToken?: string
+    ) => {
       if (!api) return;
       const result = await api.terminal.launchAgent(ticketId, agent, cwd, agentToken);
       // If we got a terminal ID back (embedded mode), track it

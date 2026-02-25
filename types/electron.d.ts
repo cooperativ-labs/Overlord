@@ -27,7 +27,7 @@ interface ElectronAPI {
     openExternal: (command: string, cwd?: string) => Promise<void>;
     launchAgent: (
       ticketId: string,
-      agent: 'claude' | 'codex',
+      agent: 'claude' | 'codex' | 'cursor' | 'gemini',
       cwd?: string,
       agentToken?: string
     ) => Promise<string | void>;

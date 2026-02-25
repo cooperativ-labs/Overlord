@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2026-02-25:00:00
+
+### Added
+- Persist a "Restart session command" artifact from the deliver protocol endpoint when one is not provided so users can easily resume sessions from the Live panel.
+
+### Fixed
+- None.
+
+### Changed
+- Update deliver protocol handling to move tickets into `review` and mark agent sessions as `completed` when a deliver event is stored.
+- Route Electron agent launches through the protocol context endpoint, using the ticket’s project working directory when available and surfacing per-agent launch commands and prompts in the ticket Live panel.
+
+### Security
+- None.
+
+### Refactor
+- Drop the unused `ticket_number` column from the `tickets` table.
+
+### Chore
+- Bump package version to `0.12.0`.
+
 ## [0.11.0] - 2026-02-24:13:40
 
 ### Added

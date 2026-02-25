@@ -94,7 +94,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const platformUrl = getPlatformUrl();
-  const { claudeCode, codex, contextUrl } = buildLaunchCommands({
+  const { claudeCode, codex, cursor, gemini, contextUrl } = buildLaunchCommands({
     platformUrl,
     ticketId,
     token: tokenValue
@@ -103,6 +103,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   return NextResponse.json({
     claudeCode,
     codex,
+    cursor,
+    gemini,
     contextUrl
   });
 }

@@ -4,9 +4,14 @@ import path from 'path';
 
 const PLATFORM_URL_DEFAULT = 'http://localhost:3000';
 
-export type AgentType = 'claude' | 'codex';
+export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini';
 
-const agentIdentifierMap: Record<AgentType, string> = { claude: 'claude-code', codex: 'codex' };
+const agentIdentifierMap: Record<AgentType, string> = {
+  claude: 'claude-code',
+  codex: 'codex',
+  cursor: 'cursor',
+  gemini: 'gemini'
+};
 
 type LaunchAgentInput = {
   ticketId: string;
@@ -25,6 +30,8 @@ type LaunchAgentResult = {
 type ContextCommandsResponse = {
   claudeCode: string;
   codex: string;
+  cursor: string;
+  gemini: string;
 };
 
 function getPlatformUrl(): string {
@@ -105,8 +112,12 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   if (input.agent === 'claude') {
     command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})" --settings ${shellQuote(settingsFile)} ${shellQuote(startPrompt)}`;
-  } else {
+  } else if (input.agent === 'codex') {
     command = `codex "$(cat ${shellQuote(contextFile)})"`;
+  } else if (input.agent === 'cursor') {
+    command = `agent "$(cat ${shellQuote(contextFile)})"`;
+  } else {
+    command = `gemini "$(cat ${shellQuote(contextFile)})"`;
   }
 
   return {
@@ -211,9 +222,19 @@ async function fetchContextCommandFallback(
         ? payload.claudeCode
         : null;
     }
+    if (agent === 'codex') {
+      return typeof payload.codex === 'string' && payload.codex.trim().length > 0
+        ? payload.codex
+        : null;
+    }
+    if (agent === 'cursor') {
+      return typeof payload.cursor === 'string' && payload.cursor.trim().length > 0
+        ? payload.cursor
+        : null;
+    }
 
-    return typeof payload.codex === 'string' && payload.codex.trim().length > 0
-      ? payload.codex
+    return typeof payload.gemini === 'string' && payload.gemini.trim().length > 0
+      ? payload.gemini
       : null;
   } catch {
     return null;

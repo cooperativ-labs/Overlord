@@ -7,12 +7,16 @@ type BuildLaunchCommandsInput = {
 export type LaunchCommands = {
   claudeCode: string;
   codex: string;
+  cursor: string;
+  gemini: string;
   contextUrl: string;
 };
 
 export type ResumeCommands = {
   claudeCode: string;
   codex: string;
+  cursor: string;
+  gemini: string;
 };
 
 /**
@@ -34,6 +38,8 @@ export function buildLaunchCommands({
   return {
     claudeCode: `${envBlock} npx overlord run claude`,
     codex: `${envBlock} npx overlord run codex`,
+    cursor: `${envBlock} npx overlord run cursor`,
+    gemini: `${envBlock} npx overlord run gemini`,
     contextUrl
   };
 }
@@ -52,7 +58,9 @@ export function buildResumeCommands({
 
   return {
     claudeCode: `${envBlock} npx overlord resume claude`,
-    codex: `${envBlock} npx overlord resume codex`
+    codex: `${envBlock} npx overlord resume codex`,
+    cursor: `${envBlock} npx overlord resume cursor`,
+    gemini: `${envBlock} npx overlord resume gemini`
   };
 }
 
@@ -61,7 +69,7 @@ export function buildResumeCommands({
  * Uses $(curl ...) to fetch context inline — works in standard shells.
  */
 export function buildRawLaunchCommand(
-  agent: 'claude' | 'codex',
+  agent: 'claude' | 'codex' | 'cursor' | 'gemini',
   { ticketId, platformUrl, token }: BuildLaunchCommandsInput
 ): string {
   const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
@@ -71,16 +79,28 @@ export function buildRawLaunchCommand(
   if (agent === 'claude') {
     return `${envPrefix} claude --append-system-prompt ${curlFragment} "Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt."`;
   }
-  return `${envPrefix} codex ${curlFragment}`;
+  if (agent === 'codex') {
+    return `${envPrefix} codex ${curlFragment}`;
+  }
+  if (agent === 'cursor') {
+    return `${envPrefix} agent ${curlFragment}`;
+  }
+  return `${envPrefix} gemini ${curlFragment}`;
 }
 
 export function selectRestartSessionCommand(
   agentIdentifier: string | null | undefined,
-  commands: Pick<LaunchCommands, 'claudeCode' | 'codex'>
+  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini'>
 ): string {
   const normalized = agentIdentifier?.trim().toLowerCase() ?? '';
   if (normalized.includes('claude')) {
     return commands.claudeCode;
+  }
+  if (normalized.includes('cursor')) {
+    return commands.cursor;
+  }
+  if (normalized.includes('gemini')) {
+    return commands.gemini;
   }
   return commands.codex;
 }

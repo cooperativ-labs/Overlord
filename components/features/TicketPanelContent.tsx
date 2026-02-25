@@ -124,7 +124,7 @@ export async function TicketPanelContent({
   const agentToken = agentTokenRow?.token ?? null;
   const workspaceRoot = getWorkspaceRoot();
   const editorScheme = getEditorScheme();
-  const { claudeCode, codex } = buildLaunchCommands({
+  const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
     platformUrl,
     ticketId,
     token: agentToken ?? ''
@@ -366,6 +366,8 @@ export async function TicketPanelContent({
           agentToken={agentToken}
           claudeCommand={claudeCode}
           codexCommand={codex}
+          cursorCommand={cursor}
+          geminiCommand={gemini}
         />
       </div>
     </div>
