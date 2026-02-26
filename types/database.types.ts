@@ -344,6 +344,7 @@ export type Database = {
         Row: {
           created_at: string
           custom_agent_instructions: string
+          default_project_id: string | null
           email: string
           id: string
           image_url: string
@@ -353,6 +354,7 @@ export type Database = {
         Insert: {
           created_at?: string
           custom_agent_instructions?: string
+          default_project_id?: string | null
           email?: string
           id: string
           image_url?: string
@@ -362,13 +364,22 @@ export type Database = {
         Update: {
           created_at?: string
           custom_agent_instructions?: string
+          default_project_id?: string | null
           email?: string
           id?: string
           image_url?: string
           name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_default_project_id_fkey"
+            columns: ["default_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {

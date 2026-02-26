@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0] - 2026-02-26:21:15
+
+### Added
+- Add `ovld attach [ticketId] [agent]` CLI subcommand for interactive ticket search and agent launching, making it easy to start a session without knowing the ticket ID upfront.
+- Add per-agent slash command setup cards in Settings → CLI so users can install a `switch-ticket` slash command or rule for Claude Code, Codex CLI, Cursor, and Gemini CLI with a one-click copy of the install command.
+- Persist the user's default project selection in the `profiles` table so the chosen default project survives browser sessions and is shared across devices.
+
+### Fixed
+- None.
+
+### Changed
+- Show project color dot alongside project name in the Default Project chooser dropdown for quicker visual identification.
+- Display the installed `ovld` version number in the CLI settings section (e.g., `ovld v0.19.0 installed at …`).
+- Add "Automatically updated when the desktop app updates." note under a current CLI install to set expectations.
+
+### Security
+- None.
+
+### Refactor
+- Extend `getCliInstallStatus` to detect stale CLI wrappers (pointing to an old app bundle path) and surface an "outdated" warning with a "Reinstall CLI" prompt instead of silently showing the wrong version.
+
+### Chore
+- Add `default_project_id` foreign-key column to `profiles` table migration.
+- Bump package version to `0.19.0`.
+
 ## [0.18.0] - 2026-02-26:20:10
 
 ### Added

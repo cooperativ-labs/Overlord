@@ -11,7 +11,8 @@ import {
 import { cn } from '@/lib/utils';
 
 export function DefaultProjectChooser({ className }: { className?: string }) {
-  const { defaultProjectId, projects, setDefaultProjectId, isPending } = useDefaultProject();
+  const { defaultProject, defaultProjectId, projects, setDefaultProjectId, isPending } =
+    useDefaultProject();
 
   if (!projects.length) {
     return <p className="text-muted-foreground text-sm">No projects</p>;
@@ -27,12 +28,23 @@ export function DefaultProjectChooser({ className }: { className?: string }) {
         aria-label="Select default project"
         className={cn('h-8 min-w-56 max-w-[26rem]', className)}
       >
-        <SelectValue placeholder="Select default project" />
+        <div className="flex w-full items-center gap-2">
+          <SelectValue placeholder="Select default project" />
+        </div>
       </SelectTrigger>
       <SelectContent align="start">
         {projects.map(project => (
           <SelectItem key={project.id} value={project.id}>
-            {project.name}
+            <div className="flex items-center gap-2">
+              <span
+                className="h-3 w-3 rounded-full border"
+                style={{
+                  backgroundColor: project.color,
+                  borderColor: project.color
+                }}
+              />
+              <span>{project.name}</span>
+            </div>
           </SelectItem>
         ))}
       </SelectContent>

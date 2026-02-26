@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Edit3, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
+import { Bot, Check, Copy, Edit3, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
@@ -117,6 +117,63 @@ const themeOptions = [
   { value: 'system', label: 'System' }
 ] as const;
 
+type SlashCommandConfig = {
+  label: string;
+  filePath: string;
+  description: string;
+  fileContent: string;
+  installCmd: string;
+};
+
+const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
+  claude: {
+    label: 'Claude Code',
+    filePath: '.claude/commands/switch-ticket.md',
+    description:
+      'Creates a /switch-ticket slash command for Claude Code in your project directory.',
+    fileContent: `The user wants to switch to a different Overlord ticket.
+
+Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once the user picks a ticket, run \`ovld attach <ticketId> claude\` to launch a new agent session on that ticket.`,
+    installCmd: `mkdir -p .claude/commands && cat > .claude/commands/switch-ticket.md << 'EOF'\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once the user picks a ticket, run \`ovld attach <ticketId> claude\` to launch a new agent session on that ticket.\nEOF`,
+  },
+  codex: {
+    label: 'Codex CLI',
+    filePath: 'AGENTS.md',
+    description:
+      'Appends switch-ticket instructions to your AGENTS.md so Codex knows how to switch tickets.',
+    fileContent: `## Switching Overlord tickets
+
+To switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> codex\` to go directly to a specific ticket.`,
+    installCmd: `cat >> AGENTS.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> codex\` to go directly to a specific ticket.\nEOF`,
+  },
+  cursor: {
+    label: 'Cursor',
+    filePath: '.cursor/rules/switch-ticket.mdc',
+    description:
+      'Creates a Cursor rule that teaches the agent how to switch Overlord tickets on request.',
+    fileContent: `---
+description: Switch to a different Overlord ticket
+globs:
+alwaysApply: false
+---
+
+The user wants to switch to a different Overlord ticket.
+
+Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once confirmed, run \`ovld attach <ticketId> cursor\` to start a new session on that ticket.`,
+    installCmd: `mkdir -p .cursor/rules && cat > .cursor/rules/switch-ticket.mdc << 'EOF'\n---\ndescription: Switch to a different Overlord ticket\nglobs:\nalwaysApply: false\n---\n\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once confirmed, run \`ovld attach <ticketId> cursor\` to start a new session on that ticket.\nEOF`,
+  },
+  gemini: {
+    label: 'Gemini CLI',
+    filePath: 'GEMINI.md',
+    description:
+      'Appends switch-ticket instructions to your GEMINI.md so Gemini knows how to switch tickets.',
+    fileContent: `## Switching Overlord tickets
+
+To switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> gemini\` to go directly to a specific ticket.`,
+    installCmd: `cat >> GEMINI.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> gemini\` to go directly to a specific ticket.\nEOF`,
+  },
+};
+
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { isElectron, api } = useElectron();
   const { terminalMode, setTerminalMode } = useTerminal();
@@ -149,6 +206,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [cliInstalled, setCliInstalled] = useState(false);
   const [cliInstallPath, setCliInstallPath] = useState<string | null>(null);
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
+  const [cliVersion, setCliVersion] = useState<string | null>(null);
+  const [cliIsStale, setCliIsStale] = useState(false);
+  const [selectedSlashAgent, setSelectedSlashAgent] = useState('claude');
+  const [slashCommandCopied, setSlashCommandCopied] = useState(false);
   const [customInstructions, setCustomInstructions] = useState('');
   const [customInstructionsLoading, setCustomInstructionsLoading] = useState(false);
   const [customInstructionsError, setCustomInstructionsError] = useState<string | null>(null);
@@ -301,9 +362,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   useEffect(() => {
     if (!open || !isElectron || !api?.cli) return;
-    void api.cli.getInstallStatus().then(({ installed, installPath }) => {
+    void api.cli.getInstallStatus().then(({ installed, installPath, isStale, version }) => {
       setCliInstalled(installed);
       setCliInstallPath(installPath ?? null);
+      setCliIsStale(isStale ?? false);
+      setCliVersion(version);
     });
   }, [api, isElectron, open]);
 
@@ -319,6 +382,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         setCliInstalled(true);
         setCliInstallPath(result.installPath);
         setCliInstallMessage(result.pathInstruction);
+        setCliIsStale(false);
       } else {
         setCliInstallButtonState('error');
         setCliInstallMessage(result.error);
@@ -327,6 +391,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       setCliInstallButtonState('error');
       setCliInstallMessage(error instanceof Error ? error.message : 'Install failed');
     }
+  }
+
+  async function handleCopySlashInstall() {
+    const config = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
+    if (!config) return;
+    await navigator.clipboard.writeText(config.installCmd);
+    setSlashCommandCopied(true);
+    setTimeout(() => setSlashCommandCopied(false), 2000);
   }
 
   function handleTerminalModeChange(value: string) {
@@ -626,64 +698,156 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     <div className="grid gap-1">
                       <p className="text-sm font-medium">Overlord CLI (ovld)</p>
                       <p className="text-xs text-muted-foreground">
-                        The CLI lets agents in Claude Code, Codex, and Cursor work with Overlord
-                        tickets. Available commands:
+                        The CLI lets agents in Claude Code, Codex, Cursor, and Gemini work with
+                        Overlord tickets. Available commands:
                       </p>
                     </div>
                     <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs">
                       <p className="mb-2 font-sans font-medium text-foreground">Top-level</p>
                       <ul className="grid gap-1 text-muted-foreground">
-                        <li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld attach [ticketId] [agent]
+                          </code>{' '}
+                          interactive ticket picker + agent launcher
+                        </li>
+                        <li className="break-words">
                           <code className="rounded bg-muted px-1">ovld auth</code> login, status,
                           logout
                         </li>
-                        <li>
+                        <li className="break-words">
                           <code className="rounded bg-muted px-1">ovld tickets</code> create, list
                         </li>
-                        <li>
+                        <li className="break-words">
                           <code className="rounded bg-muted px-1">ovld ticket</code> context
                         </li>
-                        <li>
+                        <li className="break-words">
                           <code className="rounded bg-muted px-1">ovld protocol</code> attach,
                           update, ask, read-context, write-context, deliver
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">ovld run &lt;agent&gt;</code>{' '}
+                          launch agent (requires TICKET_ID)
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">ovld resume &lt;agent&gt;</code>{' '}
+                          resume an agent session
                         </li>
                       </ul>
                       <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
                       <ul className="grid gap-1 text-muted-foreground">
-                        <li>
-                          <code className="rounded bg-muted px-1">
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1">ovld attach</code> — interactive:
+                          search tickets, pick agent
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld attach &lt;ticketId&gt;
+                          </code>{' '}
+                          — skip search, pick agent
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld attach &lt;ticketId&gt; claude
+                          </code>{' '}
+                          — fully non-interactive
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
                             ovld protocol attach --ticket-id &lt;id&gt;
                           </code>
                         </li>
-                        <li>
-                          <code className="rounded bg-muted px-1">
-                            ovld protocol update --session-key &lt;key&gt; --ticket-id &lt;id&gt;
-                            --summary "..."
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld protocol update --session-key &lt;key&gt; --summary "..."
                           </code>
                         </li>
-                        <li>
-                          <code className="rounded bg-muted px-1">
-                            ovld protocol deliver --session-key &lt;key&gt; --ticket-id &lt;id&gt;
-                            --summary "..."
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld protocol deliver --session-key &lt;key&gt; --summary "..."
                           </code>
                         </li>
-                        <li>
-                          <code className="rounded bg-muted px-1">
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
                             ovld tickets create --objective "..." --execution-target agent
                           </code>
                         </li>
                       </ul>
                       <p className="mt-2 text-muted-foreground">
-                        Run <code className="rounded bg-muted px-1">ovld &lt;command&gt; help</code>{' '}
+                        Run{' '}
+                        <code className="rounded bg-muted px-1 break-all">
+                          ovld &lt;command&gt; --help
+                        </code>{' '}
                         for more detail.
                       </p>
                     </div>
+                    <div className="grid gap-2">
+                      <p className="text-sm font-medium">Agent slash commands</p>
+                      <p className="text-xs text-muted-foreground">
+                        Install a <code className="rounded bg-muted px-1">/switch-ticket</code>{' '}
+                        command so your agent can switch Overlord tickets without leaving its
+                        session. Select your agent for setup instructions.
+                      </p>
+                      <Select value={selectedSlashAgent} onValueChange={setSelectedSlashAgent}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(SLASH_COMMAND_CONFIGS).map(([key, cfg]) => (
+                            <SelectItem key={key} value={key}>
+                              {cfg.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(() => {
+                        const cfg = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
+                        if (!cfg) return null;
+                        return (
+                          <div className="rounded-md border bg-muted/30 p-3 text-xs">
+                            <p className="mb-1 font-sans text-muted-foreground">
+                              {cfg.description}
+                            </p>
+                            <p className="mb-2 break-all font-sans text-muted-foreground">
+                              File:{' '}
+                              <code className="rounded bg-muted px-1">{cfg.filePath}</code>
+                            </p>
+                            <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
+                              {cfg.fileContent}
+                            </pre>
+                            <div className="flex items-center gap-2">
+                              <p className="shrink-0 font-sans text-muted-foreground">
+                                Install command:
+                              </p>
+                              <code className="min-w-0 flex-1 break-all rounded bg-muted px-1">
+                                {cfg.installCmd}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => void handleCopySlashInstall()}
+                                className="shrink-0 rounded p-1 hover:bg-muted"
+                                title="Copy install command"
+                              >
+                                {slashCommandCopied ? (
+                                  <Check className="h-3.5 w-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                     {isElectron && api?.cli ? (
                       <>
-                        {cliInstalled ? (
+                        {cliInstalled && !cliIsStale ? (
                           <div className="rounded-md border p-3">
                             <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                              CLI installed at {cliInstallPath}
+                              ovld {cliVersion ? `v${cliVersion}` : ''} installed at {cliInstallPath}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Automatically updated when the desktop app updates.
                             </p>
                             {cliInstallMessage ? (
                               <p className="mt-1 text-xs text-muted-foreground">
@@ -692,21 +856,34 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             ) : null}
                           </div>
                         ) : (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <LoadingButton
-                              buttonState={cliInstallButtonState}
-                              setButtonState={setCliInstallButtonState}
-                              text="Install CLI"
-                              loadingText="Installing..."
-                              successText="Installed"
-                              errorText="Retry"
-                              reset
-                              variant="default"
-                              onClick={handleInstallCli}
-                            />
-                            {cliInstallMessage ? (
-                              <p className="text-sm text-destructive">{cliInstallMessage}</p>
+                          <div className="grid gap-2">
+                            {cliIsStale ? (
+                              <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-3 dark:bg-yellow-900/10">
+                                <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                                  CLI wrapper is outdated
+                                </p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  The installed wrapper points to an old app location. Reinstall to
+                                  link it to the current version{cliVersion ? ` (v${cliVersion})` : ''}.
+                                </p>
+                              </div>
                             ) : null}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <LoadingButton
+                                buttonState={cliInstallButtonState}
+                                setButtonState={setCliInstallButtonState}
+                                text={cliIsStale ? 'Reinstall CLI' : 'Install CLI'}
+                                loadingText={cliIsStale ? 'Reinstalling...' : 'Installing...'}
+                                successText={cliIsStale ? 'Reinstalled' : 'Installed'}
+                                errorText="Retry"
+                                reset
+                                variant="default"
+                                onClick={handleInstallCli}
+                              />
+                              {cliInstallMessage ? (
+                                <p className="text-sm text-destructive">{cliInstallMessage}</p>
+                              ) : null}
+                            </div>
                           </div>
                         )}
                       </>

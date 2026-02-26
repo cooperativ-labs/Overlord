@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { runAttachCommand } from './attach.mjs';
 import { runAuthCommand } from './auth.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 import { runProtocolCommand } from './protocol.mjs';
@@ -12,14 +13,15 @@ function printHelp(primaryCommand) {
 Primary command: ${primaryCommand}
 
 Usage:
-  ${primaryCommand} auth <subcommand>        Login, logout, or check auth status
-  ${primaryCommand} tickets <subcommand>     Create or list tickets
-  ${primaryCommand} ticket <subcommand>      Work with a single ticket
-  ${primaryCommand} protocol <subcommand>    Post protocol events (attach, update, deliver, …)
-  ${primaryCommand} run <agent>              Launch an agent on a ticket (requires TICKET_ID)
-  ${primaryCommand} resume <agent>           Resume an agent session
-  ${primaryCommand} context                  Print ticket context (requires TICKET_ID)
-  ${primaryCommand} help                     Show this help message
+  ${primaryCommand} attach [ticketId] [agent]  Search tickets and launch an agent (interactive)
+  ${primaryCommand} auth <subcommand>          Login, logout, or check auth status
+  ${primaryCommand} tickets <subcommand>       Create or list tickets
+  ${primaryCommand} ticket <subcommand>        Work with a single ticket
+  ${primaryCommand} protocol <subcommand>      Post protocol events (attach, update, deliver, …)
+  ${primaryCommand} run <agent>                Launch an agent on a ticket (requires TICKET_ID)
+  ${primaryCommand} resume <agent>             Resume an agent session
+  ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
+  ${primaryCommand} help                       Show this help message
 
 Auth:
   ${primaryCommand} auth login               Authorize CLI via browser
@@ -51,6 +53,12 @@ export async function runCli({ primaryCommand }) {
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     printHelp(primaryCommand);
+    return;
+  }
+
+  // Attach command (interactive ticket search + agent launcher)
+  if (command === 'attach') {
+    await runAttachCommand(rest);
     return;
   }
 

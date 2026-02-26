@@ -71,15 +71,32 @@ function isPathConfiguredFor(dir: string): boolean {
   return getPathEntries().includes(dir);
 }
 
-export function getCliInstallStatus(): { installed: boolean; installPath?: string } {
+export function getCliInstallStatus(): {
+  installed: boolean;
+  installPath?: string;
+  isStale?: boolean;
+  version: string;
+} {
+  const version = app.getVersion();
+  const bundledPath = getBundledCliPath();
+
   for (const installDir of getInstallDirCandidates()) {
     const wrapperPath = path.join(installDir, 'ovld');
     if (fs.existsSync(wrapperPath)) {
-      return { installed: true, installPath: wrapperPath };
+      let isStale = false;
+      if (bundledPath) {
+        try {
+          const content = fs.readFileSync(wrapperPath, 'utf8');
+          isStale = !content.includes(bundledPath);
+        } catch {
+          isStale = true;
+        }
+      }
+      return { installed: true, installPath: wrapperPath, isStale, version };
     }
   }
 
-  return { installed: false };
+  return { installed: false, version };
 }
 
 export async function installCli(): Promise<CliInstallResult> {
