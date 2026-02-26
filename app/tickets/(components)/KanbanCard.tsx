@@ -177,7 +177,6 @@ function KanbanCardBody({
             )}
             <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
           </div>
-
         </div>
         {showOrganizationName && ticket.organization_name ? (
           <p className="text-muted-foreground text-xs">{ticket.organization_name}</p>

@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { getViewPreference } from '@/lib/actions/view-preference';
+import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -232,6 +233,22 @@ export default async function TicketsBoardContent({
     });
   const statuses = dedupeStatuses(statusesResult.data ?? []);
   const loadError = ticketsResult.error ?? statusesResult.error;
+  let objectiveFileMentionPaths: string[] = [];
+
+  if (projectId) {
+    const { data: projectForMentions } = await supabase
+      .from('projects')
+      .select('local_working_directory')
+      .eq('id', projectId)
+      .limit(1)
+      .maybeSingle();
+    const resolvedProjectDirectory = resolveLinkedDirectory(
+      projectForMentions?.local_working_directory
+    );
+    if (resolvedProjectDirectory) {
+      objectiveFileMentionPaths = (await listProjectFiles(resolvedProjectDirectory)).files;
+    }
+  }
 
   const sorted = sortByStatus(tickets);
 
@@ -266,6 +283,7 @@ export default async function TicketsBoardContent({
           showOrganizationName={showOrganizationName}
           organizationId={organizationId}
           projectId={projectId}
+          fileMentionPaths={objectiveFileMentionPaths}
           initialView={view}
         />
       ) : (

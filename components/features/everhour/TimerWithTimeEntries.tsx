@@ -28,7 +28,7 @@ export function TimerWithTimeEntries({
   }
 
   return (
-    <div className="bg-slate-50">
+    <div className="bg-muted/30 border-b border-muted/70">
       <section className="flex items-center justify-between gap-2 px-4 py-2">
         <div>
           <h2 className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">

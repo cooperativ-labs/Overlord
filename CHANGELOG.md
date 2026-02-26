@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0] - 2026-02-26:10:13
+
+### Added
+- Add file mention autocomplete (`@path`) when creating tickets from Kanban columns, powered by each project's local file tree.
+- Add an Appearance settings section with Light, Dark, and System theme selection across the app.
+- Add a dedicated `ticket_reopened` event type for resumed tickets so reopen actions are explicit in ticket history.
+
+### Fixed
+- Fix Kanban cross-column drag behavior so insertion previews and dropped ticket placement stay stable without waiting for a full refresh.
+- Fix ticket search fallback behavior when full-text search returns no results by retrying against ticket titles.
+- Fix Everhour time-entry loading against multiple API response and query variants to reduce missing-record failures.
+
+### Changed
+- Change follow-up conversation entries to persist as `user_follow_up` events and store verbatim user message text.
+- Improve Electron CLI installation to choose writable global bin paths when available and return clearer PATH guidance.
+- Update modal and sheet surfaces to use the popover palette for improved contrast in dark mode.
+
+### Security
+- None.
+
+### Documentation
+- Document that follow-up conversation submissions map to `ticket_events(event_type='user_follow_up')`.
+
+### Chore
+- Bump package version to `0.17.0`.
+- Rename the `build-dev` package script to `build`.
 
 ## [0.16.0] - 2026-02-25:17:00
 

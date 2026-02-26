@@ -10,6 +10,7 @@ import { ElectronDetector } from '@/components/features/terminal/ElectronDetecto
 import { TerminalPanel } from '@/components/features/terminal/TerminalPanel';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { NavHeader } from '@/components/nav-header';
+import { ThemeProvider } from '@/components/theme-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { getUserOrganizations } from '@/lib/actions/organizations';
@@ -46,51 +47,58 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body>
-        <ElectronDetector />
-        <TerminalProvider>
-          <DefaultProjectProvider
-            projects={projects}
-            initialDefaultProjectId={initialDefaultProjectId}
-          >
-            <ProjectCreatorProvider>
-              <SidebarProvider defaultOpen>
-                {user ? (
-                  <div className="flex h-dvh w-full flex-col overflow-hidden">
-                    {/* Electron title bar drag region — hidden in browser */}
-                    <div className="electron-drag-region shrink-0" />
-                    <div className="flex min-h-0 flex-1 overflow-hidden">
-                      <AppSidebar
-                        user={{
-                          name:
-                            user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User',
-                          email: user.email ?? '',
-                          avatar: user.user_metadata?.avatar_url ?? ''
-                        }}
-                        projects={projects}
-                        organizations={organizations}
-                        selectedOrgId={selectedOrgId}
-                      />
-                      <SidebarInset className="min-w-0 overflow-hidden">
-                        <NavHeader userEmail={user.email ?? ''} />
-                        <SidePanelProvider>
-                          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-                              {children}
-                            </main>
-                            <SidePanel />
-                          </div>
-                        </SidePanelProvider>
-                        <TerminalPanel />
-                      </SidebarInset>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ElectronDetector />
+          <TerminalProvider>
+            <DefaultProjectProvider
+              projects={projects}
+              initialDefaultProjectId={initialDefaultProjectId}
+            >
+              <ProjectCreatorProvider>
+                <SidebarProvider defaultOpen>
+                  {user ? (
+                    <div className="flex h-dvh w-full flex-col overflow-hidden">
+                      {/* Electron title bar drag region — hidden in browser */}
+                      <div className="electron-drag-region shrink-0" />
+                      <div className="flex min-h-0 flex-1 overflow-hidden">
+                        <AppSidebar
+                          user={{
+                            name:
+                              user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User',
+                            email: user.email ?? '',
+                            avatar: user.user_metadata?.avatar_url ?? ''
+                          }}
+                          projects={projects}
+                          organizations={organizations}
+                          selectedOrgId={selectedOrgId}
+                        />
+                        <SidebarInset className="min-w-0 overflow-hidden">
+                          <NavHeader userEmail={user.email ?? ''} />
+                          <SidePanelProvider>
+                            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                              <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                                {children}
+                              </main>
+                              <SidePanel />
+                            </div>
+                          </SidePanelProvider>
+                          <TerminalPanel />
+                        </SidebarInset>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <main className="min-h-dvh w-full ">{children}</main>
-                )}
-              </SidebarProvider>
-            </ProjectCreatorProvider>
-          </DefaultProjectProvider>
-        </TerminalProvider>
+                  ) : (
+                    <main className="min-h-dvh w-full ">{children}</main>
+                  )}
+                </SidebarProvider>
+              </ProjectCreatorProvider>
+            </DefaultProjectProvider>
+          </TerminalProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

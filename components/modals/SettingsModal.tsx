@@ -1,7 +1,8 @@
 'use client';
 
-import { Bot, Link2, Monitor, RefreshCcw, Terminal } from 'lucide-react';
+import { Bot, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
 import Link from 'next/link';
+import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
 import { EverhourSettings } from '@/components/features/everhour/EverhourSettings';
@@ -98,13 +99,21 @@ const navItems: NavItem[] = [
   { name: 'Integrations', icon: Link2 },
   { name: 'Agents', icon: Bot },
   { name: 'CLI', icon: Terminal },
+  { name: 'Appearance', icon: Palette },
   { name: 'Terminal', icon: Monitor, electronOnly: true },
   { name: 'Updates', icon: RefreshCcw, electronOnly: true }
 ];
 
+const themeOptions = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' }
+] as const;
+
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { isElectron, api } = useElectron();
   const { terminalMode, setTerminalMode } = useTerminal();
+  const { theme, setTheme } = useTheme();
   const [terminalApp, setTerminalApp] = useState('default');
   const [terminalLaunchMode, setTerminalLaunchMode] = useState('window');
   const [customTerminalApp, setCustomTerminalApp] = useState('');
@@ -129,8 +138,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [installWarningOpen, setInstallWarningOpen] = useState(false);
   const [runningAgentCount, setRunningAgentCount] = useState(0);
   const [platformUrl, setPlatformUrl] = useState<string | null>(null);
-  const [cliInstallButtonState, setCliInstallButtonState] =
-    useState<ButtonLoadingState>('default');
+  const [cliInstallButtonState, setCliInstallButtonState] = useState<ButtonLoadingState>('default');
   const [cliInstalled, setCliInstalled] = useState(false);
   const [cliInstallPath, setCliInstallPath] = useState<string | null>(null);
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
@@ -527,16 +535,26 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
                       <ul className="grid gap-1 text-muted-foreground">
                         <li>
-                          <code className="rounded bg-muted px-1">ovld protocol attach --ticket-id &lt;id&gt;</code>
+                          <code className="rounded bg-muted px-1">
+                            ovld protocol attach --ticket-id &lt;id&gt;
+                          </code>
                         </li>
                         <li>
-                          <code className="rounded bg-muted px-1">ovld protocol update --session-key &lt;key&gt; --ticket-id &lt;id&gt; --summary "..."</code>
+                          <code className="rounded bg-muted px-1">
+                            ovld protocol update --session-key &lt;key&gt; --ticket-id &lt;id&gt;
+                            --summary "..."
+                          </code>
                         </li>
                         <li>
-                          <code className="rounded bg-muted px-1">ovld protocol deliver --session-key &lt;key&gt; --ticket-id &lt;id&gt; --summary "..."</code>
+                          <code className="rounded bg-muted px-1">
+                            ovld protocol deliver --session-key &lt;key&gt; --ticket-id &lt;id&gt;
+                            --summary "..."
+                          </code>
                         </li>
                         <li>
-                          <code className="rounded bg-muted px-1">ovld tickets create --objective "..." --execution-target agent</code>
+                          <code className="rounded bg-muted px-1">
+                            ovld tickets create --objective "..." --execution-target agent
+                          </code>
                         </li>
                       </ul>
                       <p className="mt-2 text-muted-foreground">
@@ -580,7 +598,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       <div className="rounded-md border p-3">
                         <p className="text-sm text-muted-foreground">
                           Install the{' '}
-                          <Link href="/downloads" className="text-foreground underline underline-offset-4">
+                          <Link
+                            href="/downloads"
+                            className="text-foreground underline underline-offset-4"
+                          >
                             desktop app
                           </Link>{' '}
                           to install the CLI with one click. Or run{' '}
@@ -589,6 +610,29 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {activeNav === 'Appearance' && (
+                  <div className="grid gap-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="theme-select">Theme</Label>
+                      <Select value={theme ?? 'system'} onValueChange={setTheme}>
+                        <SelectTrigger id="theme-select">
+                          <SelectValue placeholder="Select theme" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {themeOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        System follows your OS appearance setting.
+                      </p>
+                    </div>
                   </div>
                 )}
 

@@ -1,4 +1,3 @@
-<!-- version: 1.0.0 -->
 ---
 Name: seed-data-changes
 Description: Use this skill to make changes to the seed data.

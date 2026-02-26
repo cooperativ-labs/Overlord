@@ -198,7 +198,11 @@ ${settingsJson}
 `;
 }
 
-function buildRemoteProtocolSection(ticketId: string, platformUrl: string, options?: PromptOptions): string {
+function buildRemoteProtocolSection(
+  ticketId: string,
+  platformUrl: string,
+  options?: PromptOptions
+): string {
   const tokenValue = options?.token ?? '$AGENT_TOKEN';
   const mcpUrl = options?.mcpUrl;
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, tokenValue, ticketId) : '';

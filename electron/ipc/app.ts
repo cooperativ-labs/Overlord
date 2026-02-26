@@ -1,11 +1,7 @@
 import { ipcMain, Notification } from 'electron';
 
 import { AppUpdaterService } from '../services/app-updater';
-import {
-  getCliInstallStatus,
-  installCli,
-  type CliInstallResult
-} from '../services/cli-installer';
+import { type CliInstallResult, getCliInstallStatus, installCli } from '../services/cli-installer';
 import { store } from '../services/settings-store';
 
 type RegisterAppIpcOptions = {

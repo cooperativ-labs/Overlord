@@ -63,10 +63,10 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
   if (isResumeAfterDelivery) {
     await supabase.from('ticket_events').insert({
-      event_type: 'user_follow_up',
+      event_type: 'ticket_reopened',
       phase: 'execute',
       session_id: session.id,
-      summary: 'User followed up — ticket resumed from delivered state.',
+      summary: 'Ticket reopened — resumed from delivered state.',
       ticket_id: ticketId
     });
   }

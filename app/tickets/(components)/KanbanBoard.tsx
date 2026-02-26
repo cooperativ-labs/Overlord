@@ -126,6 +126,7 @@ export default function KanbanBoard({
   showOrganizationName = false,
   organizationId,
   projectId,
+  fileMentionPaths = [],
   initialView
 }: {
   tickets: Ticket[];
@@ -133,6 +134,7 @@ export default function KanbanBoard({
   showOrganizationName?: boolean;
   organizationId?: number;
   projectId?: string;
+  fileMentionPaths?: string[];
   initialView: string;
 }) {
   const pathname = usePathname();
@@ -158,6 +160,12 @@ export default function KanbanBoard({
   const [realtimeOverrides, setRealtimeOverrides] = useState<Map<string, RealtimeTicketPatch>>(
     () => new Map()
   );
+  // Tracks the column a card is being dragged into, for immediate synchronous
+  // re-render of SortableContext items (shows the insertion gap in the target column).
+  const [activeDragStatus, setActiveDragStatus] = useState<{
+    ticketId: string;
+    status: string;
+  } | null>(null);
   const latestSessionAttachedAtRef = useRef<Map<string, string>>(new Map());
 
   const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
@@ -240,7 +248,15 @@ export default function KanbanBoard({
     (_current: Ticket[], next: Ticket[]) => next
   );
 
-  const ticketsWithIndicators = optimisticTickets.map(ticket => {
+  // Apply the in-flight drag column override so the target column's SortableContext
+  // includes the dragged card immediately (no startTransition deferral).
+  const dragAdjustedTickets = activeDragStatus
+    ? optimisticTickets.map(t =>
+        t.id === activeDragStatus.ticketId ? { ...t, status: activeDragStatus.status } : t
+      )
+    : optimisticTickets;
+
+  const ticketsWithIndicators = dragAdjustedTickets.map(ticket => {
     const override = realtimeOverrides.get(ticket.id);
     const merged = override ? { ...ticket, ...override } : ticket;
     const waitingForResponseAt =
@@ -259,8 +275,8 @@ export default function KanbanBoard({
   });
 
   // Keep a mutable ref for the working ticket list during drag
-  const workingTickets = useRef(optimisticTickets);
-  workingTickets.current = optimisticTickets;
+  const workingTickets = useRef(dragAdjustedTickets);
+  workingTickets.current = dragAdjustedTickets;
 
   const ticketIdsRef = useRef<Set<string>>(new Set());
   ticketIdsRef.current = new Set(optimisticTickets.map(ticket => ticket.id));
@@ -676,6 +692,7 @@ export default function KanbanBoard({
   function handleDragStart(event: DragStartEvent) {
     const ticket = ticketsByIdRef.current.get(event.active.id as string) ?? null;
     setActiveTicket(ticket);
+    if (ticket) setActiveDragStatus({ ticketId: ticket.id, status: ticket.status });
   }
 
   function handleDragOver(event: DragOverEvent) {
@@ -688,19 +705,26 @@ export default function KanbanBoard({
 
     const targetColumn = columnById.get(overSlug);
     if (!targetColumn) return;
-    const newStatus = targetColumn.id;
 
-    const updated = workingTickets.current.map(t =>
-      t.id === active.id ? { ...t, status: newStatus } : t
-    );
-    workingTickets.current = updated;
-    startTransition(() => applyOptimistic(updated));
+    // Synchronous state update (no startTransition) so the target column's
+    // SortableContext items include the dragged card on the very next render,
+    // giving the user the drop-position preview gap.
+    setActiveDragStatus({ ticketId: active.id as string, status: targetColumn.id });
   }
 
   function handleDragEnd(event: DragEndEvent) {
     setActiveTicket(null);
 
     const { active, over } = event;
+
+    // Capture the last drag position from the ref BEFORE clearing activeDragStatus.
+    // React batches state updates so workingTickets.current still holds the
+    // drag-adjusted value (from the last render) for the rest of this handler.
+    const snapshot = workingTickets.current;
+
+    // Clear drag-over state regardless of whether the drop is valid.
+    setActiveDragStatus(null);
+
     if (!over) return;
 
     const activeId = active.id as string;
@@ -712,11 +736,12 @@ export default function KanbanBoard({
     const originalSlug = initialTickets.find(t => t.id === activeId)?.status;
     const statusChanged = originalSlug !== undefined && originalSlug !== columnSlug;
 
-    // Override the moved ticket's status so groupTickets places it in the right column,
-    // regardless of whether the DragOver transition already reverted workingTickets.current.
+    // Use the captured snapshot (which includes the drag-adjusted status) so that
+    // groupTickets places the card in the correct column even if activeDragStatus
+    // has just been cleared above (the re-render hasn't happened yet).
     const effectiveTickets = statusChanged
-      ? workingTickets.current.map(t => (t.id === activeId ? { ...t, status: columnSlug } : t))
-      : workingTickets.current;
+      ? snapshot.map(t => (t.id === activeId ? { ...t, status: columnSlug } : t))
+      : snapshot;
 
     if (!effectiveTickets.find(t => t.id === activeId)) return;
 
@@ -733,6 +758,19 @@ export default function KanbanBoard({
 
     const orderedIds = reordered.map(t => t.id);
     const col = columnById.get(columnSlug);
+
+    // Pre-commit the new status into realtimeOverrides BEFORE starting the transition.
+    // This persists the column assignment beyond the useOptimistic lifetime — when the
+    // transition ends, useOptimistic reverts to initialTickets (old status), but the
+    // realtimeOverrides entry keeps the card in the correct column until router.refresh()
+    // delivers fresh initialTickets from the server.
+    if (statusChanged && col) {
+      setRealtimeOverrides(prev => {
+        const next = new Map(prev);
+        next.set(activeId, { ...next.get(activeId), status: col.id });
+        return next;
+      });
+    }
 
     startTransition(async () => {
       const positionMap = new Map(orderedIds.map((id, i) => [id, i]));
@@ -933,6 +971,7 @@ export default function KanbanBoard({
                     tickets={displayed}
                     showOrganizationName={showOrganizationName}
                     projectId={projectId}
+                    fileMentionPaths={fileMentionPaths}
                     onCreateTicket={handleCreateTicket}
                     olderTicketsCount={olderCount}
                     isCompleteColumn={col.statusType === 'complete'}
@@ -954,6 +993,7 @@ export default function KanbanBoard({
                   tickets={uncategorized}
                   showOrganizationName={showOrganizationName}
                   projectId={projectId}
+                  fileMentionPaths={fileMentionPaths}
                   onCreateTicket={handleCreateTicket}
                   olderTicketsCount={0}
                   isCompleteColumn={false}

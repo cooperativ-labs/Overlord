@@ -142,15 +142,14 @@ export function TicketConversationComposer({ ticketId, projectId, events }: Prop
   }
 
   async function submitFollowUp() {
-    const message = followUpDraft.trim();
-    if (!message) return;
+    if (!followUpDraft.trim()) return;
 
     setErrorMessage(null);
     setActiveKey('follow_up');
     try {
       await postConversationEntry(ticketId, {
         entryType: 'follow_up',
-        message
+        message: followUpDraft
       });
       setFollowUpDraft('');
       setFollowUpFile('');
@@ -162,8 +161,8 @@ export function TicketConversationComposer({ ticketId, projectId, events }: Prop
   }
 
   async function submitAnswer(questionId: string) {
-    const message = (answerDrafts[questionId] ?? '').trim();
-    if (!message) return;
+    const message = answerDrafts[questionId] ?? '';
+    if (!message.trim()) return;
 
     setErrorMessage(null);
     setActiveKey(questionId);

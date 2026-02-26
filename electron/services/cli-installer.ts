@@ -12,6 +12,49 @@ export type CliInstallResult =
   | { ok: true; installPath: string; pathInstruction: string }
   | { ok: false; error: string };
 
+const USER_LOCAL_BIN = path.join(os.homedir(), '.local', 'bin');
+
+function getPathEntries(): string[] {
+  const value = process.env.PATH ?? '';
+  return value
+    .split(path.delimiter)
+    .map(entry => entry.trim())
+    .filter(Boolean);
+}
+
+function isWritableDirectory(dir: string): boolean {
+  try {
+    if (!fs.existsSync(dir)) return false;
+    if (!fs.statSync(dir).isDirectory()) return false;
+    fs.accessSync(dir, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isGlobalBinCandidate(dir: string): boolean {
+  if (!path.isAbsolute(dir)) return false;
+  if (dir.includes('node_modules')) return false;
+  if (dir.startsWith('/tmp')) return false;
+  if (dir.startsWith('/private/tmp')) return false;
+  return path.basename(dir) === 'bin';
+}
+
+function getInstallDirCandidates(): string[] {
+  const primaryCandidates =
+    process.platform === 'darwin' ? ['/opt/homebrew/bin', '/usr/local/bin'] : ['/usr/local/bin'];
+  const pathCandidates = getPathEntries().filter(isGlobalBinCandidate);
+  const fallbackCandidates = [USER_LOCAL_BIN, path.join(os.homedir(), 'bin')];
+  return [...new Set([...primaryCandidates, ...pathCandidates, ...fallbackCandidates])];
+}
+
+function resolveInstallDir(): string {
+  const writableCandidate = getInstallDirCandidates().find(isWritableDirectory);
+  if (writableCandidate) return writableCandidate;
+  return USER_LOCAL_BIN;
+}
+
 function getBundledCliPath(): string | null {
   const isPackaged = app.isPackaged;
   if (!isPackaged) {
@@ -24,17 +67,19 @@ function getBundledCliPath(): string | null {
   return fs.existsSync(cliPath) ? cliPath : null;
 }
 
-function getInstallDir(): string {
-  const home = os.homedir();
-  // ~/.local/bin is common on Linux and macOS for user-local binaries
-  return path.join(home, '.local', 'bin');
+function isPathConfiguredFor(dir: string): boolean {
+  return getPathEntries().includes(dir);
 }
 
 export function getCliInstallStatus(): { installed: boolean; installPath?: string } {
-  const installDir = getInstallDir();
-  const wrapperPath = path.join(installDir, 'ovld');
-  const installed = fs.existsSync(wrapperPath);
-  return { installed, installPath: installed ? wrapperPath : undefined };
+  for (const installDir of getInstallDirCandidates()) {
+    const wrapperPath = path.join(installDir, 'ovld');
+    if (fs.existsSync(wrapperPath)) {
+      return { installed: true, installPath: wrapperPath };
+    }
+  }
+
+  return { installed: false };
 }
 
 export async function installCli(): Promise<CliInstallResult> {
@@ -43,7 +88,7 @@ export async function installCli(): Promise<CliInstallResult> {
     return { ok: false, error: 'CLI not found in app bundle.' };
   }
 
-  const installDir = getInstallDir();
+  const installDir = resolveInstallDir();
   const wrapperPath = path.join(installDir, 'ovld');
 
   try {
@@ -58,10 +103,11 @@ export async function installCli(): Promise<CliInstallResult> {
     return { ok: false, error: `Failed to install: ${message}` };
   }
 
-  const pathInstruction =
-    installDir === path.join(os.homedir(), '.local', 'bin')
-      ? 'Add ~/.local/bin to your PATH if needed (e.g. in ~/.zshrc: export PATH="$HOME/.local/bin:$PATH")'
-      : `Ensure ${installDir} is in your PATH`;
+  const pathInstruction = isPathConfiguredFor(installDir)
+    ? `Installed globally at ${installDir}. You can now run ovld from any repository.`
+    : installDir === USER_LOCAL_BIN
+      ? 'Installed to ~/.local/bin. Add it to PATH if needed (e.g. in ~/.zshrc: export PATH="$HOME/.local/bin:$PATH").'
+      : `Installed to ${installDir}. Ensure it is included in your PATH.`;
 
   return {
     ok: true,

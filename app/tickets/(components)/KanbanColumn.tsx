@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
 
@@ -17,11 +18,14 @@ type KanbanColumnModel = {
   title: string;
 };
 
+const MAX_MENTION_RESULTS = 8;
+
 export default function KanbanColumn({
   column,
   tickets,
   showOrganizationName = false,
   projectId,
+  fileMentionPaths = [],
   onCreateTicket,
   olderTicketsCount = 0,
   isCompleteColumn = false,
@@ -32,6 +36,7 @@ export default function KanbanColumn({
   tickets: Ticket[];
   showOrganizationName?: boolean;
   projectId?: string;
+  fileMentionPaths?: string[];
   onCreateTicket: (status: string, objective: string) => Promise<void> | void;
   olderTicketsCount?: number;
   isCompleteColumn?: boolean;
@@ -43,9 +48,15 @@ export default function KanbanColumn({
 
   const [isAdding, setIsAdding] = useState(false);
   const [value, setValue] = useState('');
+  const [mentionStart, setMentionStart] = useState<number | null>(null);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [focusEditorCount, setFocusEditorCount] = useState(0);
+  const [isCreating, setIsCreating] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollKey = `kanban-col-scroll:${projectId ?? 'all'}:${column.id}`;
+  const inputId = `kanban-column-input-${column.id}`;
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -59,28 +70,146 @@ export default function KanbanColumn({
     if (el) sessionStorage.setItem(scrollKey, String(el.scrollTop));
   }, [scrollKey]);
 
+  const mentionResults = fileMentionPaths
+    .filter(filePath => filePath.toLowerCase().includes(mentionQuery.toLowerCase()))
+    .slice(0, MAX_MENTION_RESULTS);
+  const mentionMenuOpen = mentionStart !== null && mentionResults.length > 0;
+
+  function clearMentionState() {
+    setMentionStart(null);
+    setMentionQuery('');
+    setMentionIndex(0);
+  }
+
+  function updateMentionState(nextValue: string, cursorPosition: number) {
+    if (fileMentionPaths.length === 0) {
+      clearMentionState();
+      return;
+    }
+
+    const beforeCursor = nextValue.slice(0, cursorPosition);
+    const tokenMatch = beforeCursor.match(/(^|[\s(])@([^\s@]*)$/);
+    if (!tokenMatch) {
+      clearMentionState();
+      return;
+    }
+
+    const query = tokenMatch[2] ?? '';
+    const atSymbolPosition = cursorPosition - query.length - 1;
+    setMentionStart(atSymbolPosition);
+    setMentionQuery(query);
+    setMentionIndex(0);
+  }
+
+  function insertMentionAtCursor(filePath: string) {
+    const textArea = document.getElementById(inputId) as HTMLTextAreaElement | null;
+    if (!textArea || mentionStart === null || !filePath) return;
+
+    const cursor = textArea.selectionStart ?? value.length;
+    let mentionText = `@${filePath}`;
+    const suffix = value.slice(cursor);
+    if (suffix.length === 0 || (!suffix.startsWith(' ') && !suffix.startsWith('\n'))) {
+      mentionText += ' ';
+    }
+
+    const nextValue = `${value.slice(0, mentionStart)}${mentionText}${suffix}`;
+    const nextCursor = mentionStart + mentionText.length;
+
+    setValue(nextValue);
+    clearMentionState();
+
+    requestAnimationFrame(() => {
+      textArea.focus();
+      textArea.setSelectionRange(nextCursor, nextCursor);
+    });
+  }
+
+  useEffect(() => {
+    if (!isAdding || focusEditorCount === 0) return;
+    const textArea = document.getElementById(inputId) as HTMLTextAreaElement | null;
+    if (!textArea) return;
+    textArea.focus();
+    const cursor = textArea.value.length;
+    textArea.setSelectionRange(cursor, cursor);
+  }, [focusEditorCount, inputId, isAdding]);
+
   const handleStartAdding = () => {
     setValue('');
+    clearMentionState();
     setIsAdding(true);
   };
 
-  const handleBlur = () => {
-    const trimmed = value.trim();
+  const handleBlur = async (currentValue: string) => {
+    if (isCreating) return;
+    const trimmed = currentValue.trim();
     if (trimmed) {
-      void onCreateTicket(column.id, trimmed);
+      setIsCreating(true);
+      try {
+        await onCreateTicket(column.id, trimmed);
+      } finally {
+        setIsCreating(false);
+      }
     }
+    clearMentionState();
     setIsAdding(false);
     setValue('');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionMenuOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex(current => (current + 1) % mentionResults.length);
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex(current => (current - 1 + mentionResults.length) % mentionResults.length);
+        return;
+      }
+
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMentionAtCursor(mentionResults[mentionIndex] ?? mentionResults[0] ?? '');
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearMentionState();
+        return;
+      }
+    }
+
     if (e.key === 'Escape') {
+      e.preventDefault();
+      clearMentionState();
       setIsAdding(false);
       setValue('');
+      return;
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      (e.target as HTMLTextAreaElement).blur();
+      if (isCreating) return;
+      const trimmed = e.currentTarget.value.trim();
+      if (!trimmed) {
+        setIsAdding(false);
+        setValue('');
+        clearMentionState();
+        return;
+      }
+      setIsCreating(true);
+      try {
+        await onCreateTicket(column.id, trimmed);
+      } finally {
+        setIsCreating(false);
+      }
+      setValue('');
+      clearMentionState();
+      setIsAdding(true);
+      setFocusEditorCount(current => current + 1);
     }
   };
 
@@ -130,17 +259,59 @@ export default function KanbanColumn({
               ))}
               {isAdding ? (
                 <Card className="border-border/40 shadow-sm">
-                  <CardContent className="p-2">
+                  <CardContent className="relative p-2">
                     <Textarea
+                      id={inputId}
                       autoFocus
+                      disabled={isCreating}
                       placeholder="Write an objective…"
                       value={value}
-                      onChange={e => setValue(e.target.value)}
-                      onBlur={handleBlur}
-                      onKeyDown={handleKeyDown}
+                      onChange={e => {
+                        setValue(e.target.value);
+                        updateMentionState(
+                          e.target.value,
+                          e.target.selectionStart ?? e.target.value.length
+                        );
+                      }}
+                      onClick={e => {
+                        const target = e.target as HTMLTextAreaElement;
+                        updateMentionState(value, target.selectionStart ?? value.length);
+                      }}
+                      onSelect={e => {
+                        const target = e.target as HTMLTextAreaElement;
+                        updateMentionState(value, target.selectionStart ?? value.length);
+                      }}
+                      onBlur={e => {
+                        void handleBlur(e.target.value);
+                      }}
+                      onKeyDown={e => {
+                        void handleKeyDown(e);
+                      }}
                       className="min-h-[72px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0"
                       rows={3}
                     />
+                    {mentionMenuOpen ? (
+                      <div className="absolute left-2 right-2 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                        {mentionResults.map((filePath, index) => (
+                          <button
+                            key={filePath}
+                            className={cn(
+                              'block w-full rounded px-2 py-1.5 text-left text-sm',
+                              index === mentionIndex
+                                ? 'bg-accent text-accent-foreground'
+                                : 'hover:bg-accent/60'
+                            )}
+                            type="button"
+                            onMouseDown={event => {
+                              event.preventDefault();
+                              insertMentionAtCursor(filePath);
+                            }}
+                          >
+                            @{filePath}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </CardContent>
                 </Card>
               ) : (

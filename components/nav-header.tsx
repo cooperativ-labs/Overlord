@@ -1,10 +1,10 @@
 import { NewTicketButton } from '@/components/features/NewTicketButton';
 import { DefaultProjectChooser } from '@/components/features/projects/DefaultProjectChooser';
+import { TicketSearch } from '@/components/nav-header/TicketSearch';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { signOut } from '@/lib/actions/auth';
-import { TicketSearch } from '@/components/nav-header/TicketSearch';
 
 type NavHeaderProps = {
   userEmail: string;
@@ -18,8 +18,8 @@ export function NavHeader({ userEmail }: NavHeaderProps) {
         <Separator orientation="vertical" className="h-4" />
         <DefaultProjectChooser className="electron-no-drag" />
       </div>
-      <div className="flex flex-1 justify-center electron-no-drag px-2">
-        <div className="w-full max-w-xl">
+      <div className="flex flex-1 justify-center  px-2">
+        <div className="electron-no-drag w-full max-w-xl">
           <TicketSearch />
         </div>
       </div>

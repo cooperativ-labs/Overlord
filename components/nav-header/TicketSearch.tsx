@@ -1,15 +1,16 @@
 'use client';
 
-import { Input } from '@/components/ui/input';
-import { buildProjectPath } from '@/lib/helpers/ticket-path';
-import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
+
+import { Input } from '@/components/ui/input';
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { cn } from '@/lib/utils';
 
 type TicketSearchResult = {
   id: string;
   title: string | null;
-  ticket_number: string | null;
   project_id: string | null;
   project: {
     name: string | null;
@@ -48,10 +49,9 @@ export function TicketSearch({ className }: TicketSearchProps) {
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const response = await fetch(
-          `/api/tickets/search?q=${encodeURIComponent(query.trim())}`,
-          { signal: controller.signal }
-        );
+        const response = await fetch(`/api/tickets/search?q=${encodeURIComponent(query.trim())}`, {
+          signal: controller.signal
+        });
         if (!response.ok) {
           throw new Error('Ticket search failed.');
         }
@@ -162,7 +162,8 @@ export function TicketSearch({ className }: TicketSearchProps) {
                   {ticket.title || 'Untitled ticket'}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {ticket.ticket_number ?? 'TICKET'} • {ticket.project?.name ?? 'Unknown project'}
+                  {getTicketIdentifier(ticket.id) || 'TICKET'} •{' '}
+                  {ticket.project?.name ?? 'Unknown project'}
                 </p>
               </li>
             );

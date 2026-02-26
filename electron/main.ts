@@ -41,7 +41,16 @@ function getRendererCsp(port: number): string {
   //      preventing cross-column drag-and-drop updates from appearing without
   //      a full page refresh.
   const connectSources = isDev
-    ? ["'self'", `http://localhost:${port}`, `ws://localhost:${port}`, 'https:', 'wss:', 'ws:'].join(' ')
+    ? [
+        "'self'",
+        `http://localhost:${port}`,
+        `ws://localhost:${port}`,
+        'http://localhost:54321',
+        'http://127.0.0.1:54321',
+        'https:',
+        'wss:',
+        'ws:'
+      ].join(' ')
     : ["'self'", 'https:', 'wss:'].join(' ');
 
   return [

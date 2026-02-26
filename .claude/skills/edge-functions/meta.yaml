@@ -5,4 +5,4 @@ description: Ensures Supabase Edge Functions are invoked using the SDK client
   Supabase Edge Functions.
 tags: []
 compat: []
-sha256: 154aeff750c4be7324ec9efc7ec7c223734421276490c91613450eb03ed0e5c6
+sha256: b4ba9df0a23deeb79dbf913855258b1268db8401dcd3a75cf9559f9edf51dda0

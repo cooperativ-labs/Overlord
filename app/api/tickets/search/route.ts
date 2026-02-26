@@ -1,20 +1,8 @@
-import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 
-import { createClient } from '@/supabase/utils/server';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
-
-type SearchTicket = {
-  id: string;
-  title: string | null;
-  ticket_number: string | null;
-  project_id: string | null;
-  organization_id: number;
-  status: string;
-  project: {
-    name: string | null;
-  } | null;
-};
+import { createClient } from '@/supabase/utils/server';
 
 function sanitizeQuery(value: string): string {
   return value
@@ -30,6 +18,10 @@ function buildWebSearchQuery(value: string): string {
     .filter(Boolean)
     .map(term => (term.endsWith('*') ? term : `${term}*`));
   return terms.join(' ');
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_]/g, match => `\\${match}`);
 }
 
 export async function GET(request: Request) {
@@ -65,7 +57,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('tickets')
-    .select('id,title,ticket_number,project_id,organization_id,status,project:projects(name)')
+    .select('id,title,project_id,organization_id,status,project:projects(name)')
     .order('updated_at', { ascending: false })
     .limit(6);
 
@@ -82,5 +74,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ tickets: data ?? [] });
+  if ((data?.length ?? 0) > 0) {
+    return NextResponse.json({ tickets: data ?? [] });
+  }
+
+  const escapedPattern = escapeLikePattern(sanitized);
+  let fallbackQuery = supabase
+    .from('tickets')
+    .select('id,title,project_id,organization_id,status,project:projects(name)')
+    .ilike('title', `%${escapedPattern}%`)
+    .order('updated_at', { ascending: false })
+    .limit(6);
+
+  if (organizationId) {
+    fallbackQuery = fallbackQuery.eq('organization_id', organizationId);
+  }
+
+  const { data: fallbackData, error: fallbackError } = await fallbackQuery;
+  if (fallbackError) {
+    return NextResponse.json({ error: fallbackError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ tickets: fallbackData ?? [] });
 }

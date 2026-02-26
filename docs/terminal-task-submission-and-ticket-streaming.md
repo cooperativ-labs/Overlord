@@ -149,7 +149,7 @@ This route stores:
 - `entryType=follow_up` for additional prompts
 
 `answer` entries are persisted as `ticket_events(event_type='answer')`.
-`follow_up` entries are persisted as `ticket_events(event_type='update')`.
+`follow_up` entries are persisted as `ticket_events(event_type='user_follow_up')`.
 Both include `payload.entry_type` and are streamed in realtime.
 
 Code:

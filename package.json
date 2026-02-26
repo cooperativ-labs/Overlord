@@ -2,7 +2,7 @@
   "name": "overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
   "main": "dist-electron/main.js",
   "bin": {
@@ -16,7 +16,7 @@
     "new": "rm -rf node_modules && yarn cache clean && yarn install && yarn generate",
     "nuke": "yarn install && supabase db reset && supabase start && supabase status && yarn generate",
     "dev": "next dev",
-    "build-dev": "yarn next build",
+    "build": "yarn next build",
     "build-branch": "yarn next build",
     "build-staging": "yarn next build",
     "build-prod": "yarn next build",

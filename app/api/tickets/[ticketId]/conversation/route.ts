@@ -6,7 +6,7 @@ import { createClient } from '@/supabase/utils/server';
 const createConversationEntrySchema = z
   .object({
     entryType: z.enum(['answer', 'follow_up']).default('follow_up'),
-    message: z.string().trim().min(1).max(20_000),
+    message: z.string().min(1).max(20_000),
     parentEventId: z.string().uuid().optional(),
     phase: z.string().trim().max(120).optional()
   })
@@ -78,9 +78,10 @@ export async function POST(request: Request, { params }: RouteContext) {
     const payload = {
       entry_type: entryType,
       parent_event_id: parentEventId ?? null,
-      source: 'user'
+      source: 'user',
+      message_verbatim: message
     };
-    const eventType = entryType === 'follow_up' ? 'update' : 'answer';
+    const eventType = entryType === 'follow_up' ? 'user_follow_up' : 'answer';
 
     const { data: event, error: insertError } = await supabase
       .from('ticket_events')

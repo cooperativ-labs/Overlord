@@ -103,8 +103,8 @@ export function AgentSplitButton({
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const isActive =
     isAgentIdentifierMatch(selectedAgent, activeAgentIdentifier) &&
-    agentSessionState != null &&
-    ACTIVE_SESSION_STATES.includes(agentSessionState);
+    agentSessionState !== null &&
+    ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const canRunAgent = hasProjectWorkingDirectory ?? true;
   const isDisabled = !canRunAgent;
   const styles = sizeStyles[size];
@@ -196,7 +196,7 @@ export function AgentSplitButton({
       className={cn(
         'inline-flex items-stretch rounded-md border bg-background text-sm transition-all border-input shadow-sm hover:bg-accent hover:text-accent-foreground',
         isActive &&
-          'border-emerald-600/80 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)] ring-1 ring-emerald-600/70 animate-pulse'
+        'border-emerald-600/80 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)] ring-1 ring-emerald-600/70 animate-pulse'
       )}
     >
       {runButtonWithTooltip}

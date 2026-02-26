@@ -144,12 +144,43 @@ function normalizeTimeRecords(payload: unknown): EverhourTimeRecord[] {
     ? payload
     : isRecord(payload) && Array.isArray(payload.records)
       ? payload.records
-      : [];
+      : isRecord(payload) && Array.isArray(payload.data)
+        ? payload.data
+        : isRecord(payload) && Array.isArray(payload.time)
+          ? payload.time
+          : [];
 
   return records
-    .filter((record): record is EverhourTimeRecord => {
-      return isRecord(record) && typeof record.id === 'number' && typeof record.time === 'number';
+    .map(record => {
+      if (!isRecord(record)) return null;
+
+      const id =
+        typeof record.id === 'number'
+          ? record.id
+          : typeof record.id === 'string' && /^\d+$/.test(record.id)
+            ? Number.parseInt(record.id, 10)
+            : null;
+
+      const time =
+        typeof record.time === 'number'
+          ? record.time
+          : typeof record.duration === 'number'
+            ? record.duration
+            : null;
+
+      const date = typeof record.date === 'string' ? record.date : null;
+      if (id === null || time === null || !date) {
+        return null;
+      }
+
+      return {
+        ...record,
+        date,
+        id,
+        time
+      } as EverhourTimeRecord;
     })
+    .filter((record): record is EverhourTimeRecord => record !== null)
     .sort((a, b) => {
       if (a.date === b.date) {
         return b.id - a.id;
@@ -645,16 +676,16 @@ export async function listTimeRecordsForTicket(ticketId: string): Promise<Everho
   const from = new Date();
   from.setFullYear(to.getFullYear() - 1);
 
-  const params = new URLSearchParams({
+  const baseParams = {
     from: parseISODate(from),
-    tasks: ticket.everhour_task_id,
     to: parseISODate(to)
-  });
-
+  };
+  const taskId = ticket.everhour_task_id;
   const candidatePaths = [
-    `/time?${params.toString()}`,
-    `/reports/time?${params.toString()}`,
-    `/time/records?${params.toString()}`
+    `/time?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
+    `/time?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`,
+    `/reports/time?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
+    `/time/records?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`
   ];
 
   let lastError: unknown = null;

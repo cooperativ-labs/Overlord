@@ -6,6 +6,8 @@ type EventInsert = {
     | 'question'
     | 'answer'
     | 'update'
+    | 'user_follow_up'
+    | 'ticket_reopened'
     | 'context_write'
     | 'context_read'
     | 'artifact'
