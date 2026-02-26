@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
+
+const LOCAL_SECRET_HEADER = 'x-overlord-local-secret';
 
 export type AgentTokenContext = {
   userId: string;
@@ -15,6 +18,24 @@ function extractBearerToken(request: Request): string | null {
   return authHeader.replace('Bearer ', '').trim();
 }
 
+function resolveLocalSecretError(request: Request): NextResponse | null {
+  const expectedSecret = process.env.OVERLORD_LOCAL_SECRET?.trim();
+  if (!expectedSecret) return null;
+
+  const providedSecret = request.headers.get(LOCAL_SECRET_HEADER)?.trim() ?? '';
+  const providedBytes = Buffer.from(providedSecret, 'utf8');
+  const expectedBytes = Buffer.from(expectedSecret, 'utf8');
+  const isMatch =
+    providedBytes.length === expectedBytes.length &&
+    crypto.timingSafeEqual(providedBytes, expectedBytes);
+
+  if (!providedSecret || !isMatch) {
+    return NextResponse.json({ error: 'Missing or invalid local secret.' }, { status: 401 });
+  }
+
+  return null;
+}
+
 /**
  * Resolves an agent token from the Authorization header.
  * Returns a context object with user/org info on success, or a 401 NextResponse on failure.
@@ -22,6 +43,14 @@ function extractBearerToken(request: Request): string | null {
 export async function resolveAgentToken(
   request: Request
 ): Promise<{ context: AgentTokenContext; error: null } | { context: null; error: NextResponse }> {
+  const localSecretError = resolveLocalSecretError(request);
+  if (localSecretError) {
+    return {
+      context: null,
+      error: localSecretError
+    };
+  }
+
   const providedToken = extractBearerToken(request);
   if (!providedToken) {
     return {

@@ -54,7 +54,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     PLATFORM_URL: platformUrl,
     AGENT_TOKEN: agentToken,
     TICKET_ID: input.ticketId,
-    AGENT_IDENTIFIER: agentIdentifierMap[input.agent]
+    AGENT_IDENTIFIER: agentIdentifierMap[input.agent],
+    OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET ?? ''
   };
 
   // Fetch context from the API (runs in the main process — no shell needed)
@@ -153,6 +154,7 @@ function writePermissionRequestHookFiles(tag: string): {
     '  curl -sf -m 5 \\',
     '    -X POST "$PLATFORM_URL/api/protocol/permission-request?ticketId=$TICKET_ID" \\',
     '    -H "Authorization: Bearer $AGENT_TOKEN" \\',
+    '    -H "X-Overlord-Local-Secret: $OVERLORD_LOCAL_SECRET" \\',
     '    -H "Content-Type: application/json" \\',
     '    -d "$BODY" \\',
     '    >/dev/null 2>&1 &',

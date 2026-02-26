@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.0] - 2026-02-26:22:45
+
+### Added
+- Add skeleton loading states for My Tasks (`/u`) and project tickets routes so boards feel responsive while data loads.
+- Add a local runtime metadata file and per-instance shared secret so the Electron app and CLI can mutually authenticate local protocol traffic.
+- Add a standalone `overlord-cli` npm package plus sync/publish scripts so the CLI can be installed via npm or used outside the desktop bundle.
+
+### Fixed
+- None.
+
+### Changed
+- Change CLI protocol and ticket commands to derive their platform URL and auth headers from the local runtime metadata when available, reducing misconfiguration between the desktop app and CLI.
+
+### Security
+- Require a `X-Overlord-Local-Secret` header on protocol and device-code auth endpoints when running locally, rejecting requests that do not present the per-instance secret.
+- Store the local runtime secret and platform URL in a locked-down `~/.ovld/runtime.json` file and only honor it when file permissions and ownership are secure.
+
+### Refactor
+- Centralize CLI auth header construction and local runtime resolution through shared helpers in the credentials and Electron local-runtime services.
+
+### Chore
+- Bump package version to `0.20.0`.
+- Add `cli:sync` and `cli:publish` scripts for keeping the published CLI package in sync with the bundled binary.
+
 ## [0.19.0] - 2026-02-26:21:15
 
 ### Added

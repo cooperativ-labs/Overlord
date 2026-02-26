@@ -8,6 +8,12 @@ import { registerSupabaseIpc } from './ipc/supabase';
 import { registerTerminalIpc } from './ipc/terminal';
 import { registerAppMenu } from './services/app-menu';
 import { AppUpdaterService } from './services/app-updater';
+import {
+  clearLocalRuntime,
+  generateLocalSecret,
+  getDefaultLocalPlatformUrl,
+  writeLocalRuntime
+} from './services/local-runtime';
 import { findFreePort, startNextServer, stopNextServer } from './services/next-server';
 import { SupabaseManager } from './services/supabase-manager';
 
@@ -160,15 +166,20 @@ app.whenReady().then(async () => {
   // In production we start the standalone server on a free port to avoid conflicts
   // with anything else the user has running on their machine.
   const port = isDev ? 3000 : await findFreePort();
+  const defaultPlatformUrl = getDefaultLocalPlatformUrl(port);
+  const platformUrl = isDev ? (process.env.PLATFORM_URL ?? defaultPlatformUrl) : defaultPlatformUrl;
+  const localSecret = generateLocalSecret();
+
+  process.env.OVERLORD_LOCAL_SECRET = localSecret;
+  process.env.PLATFORM_URL = platformUrl;
 
   if (!isDev) {
-    // Expose the chosen port so agent-launcher and any other code reads it correctly.
-    process.env.PLATFORM_URL = `http://localhost:${port}`;
     await startNextServer(port);
   }
 
+  writeLocalRuntime(platformUrl, localSecret);
+
   // Register IPC handlers
-  const platformUrl = process.env.PLATFORM_URL ?? `http://localhost:${port}`;
   registerTerminalIpc();
   registerSupabaseIpc(supabaseManager);
   registerAppIpc({ appUpdater, platformUrl });
@@ -193,6 +204,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   unsubscribeAppMenu?.();
   unsubscribeAppMenu = null;
+  clearLocalRuntime();
 
   if (isDev) {
     try {
