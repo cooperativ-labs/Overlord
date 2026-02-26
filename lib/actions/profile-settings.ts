@@ -121,7 +121,9 @@ export async function getDefaultProjectAction(): Promise<string | null> {
   return settings?.default_project_id ?? null;
 }
 
-export async function saveDefaultProjectAction(defaultProjectId: string | null): Promise<string | null> {
+export async function saveDefaultProjectAction(
+  defaultProjectId: string | null
+): Promise<string | null> {
   const supabase = await createClient();
   const {
     data: { user }

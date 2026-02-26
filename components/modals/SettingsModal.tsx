@@ -1,6 +1,16 @@
 'use client';
 
-import { Bot, Check, Copy, Edit3, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
+import {
+  Bot,
+  Check,
+  Copy,
+  Edit3,
+  Link2,
+  Monitor,
+  Palette,
+  RefreshCcw,
+  Terminal
+} from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
@@ -134,7 +144,7 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
     fileContent: `The user wants to switch to a different Overlord ticket.
 
 Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once the user picks a ticket, run \`ovld attach <ticketId> claude\` to launch a new agent session on that ticket.`,
-    installCmd: `mkdir -p .claude/commands && cat > .claude/commands/switch-ticket.md << 'EOF'\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once the user picks a ticket, run \`ovld attach <ticketId> claude\` to launch a new agent session on that ticket.\nEOF`,
+    installCmd: `mkdir -p .claude/commands && cat > .claude/commands/switch-ticket.md << 'EOF'\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once the user picks a ticket, run \`ovld attach <ticketId> claude\` to launch a new agent session on that ticket.\nEOF`
   },
   codex: {
     label: 'Codex CLI',
@@ -144,7 +154,7 @@ Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an i
     fileContent: `## Switching Overlord tickets
 
 To switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> codex\` to go directly to a specific ticket.`,
-    installCmd: `cat >> AGENTS.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> codex\` to go directly to a specific ticket.\nEOF`,
+    installCmd: `cat >> AGENTS.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> codex\` to go directly to a specific ticket.\nEOF`
   },
   cursor: {
     label: 'Cursor',
@@ -160,7 +170,7 @@ alwaysApply: false
 The user wants to switch to a different Overlord ticket.
 
 Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once confirmed, run \`ovld attach <ticketId> cursor\` to start a new session on that ticket.`,
-    installCmd: `mkdir -p .cursor/rules && cat > .cursor/rules/switch-ticket.mdc << 'EOF'\n---\ndescription: Switch to a different Overlord ticket\nglobs:\nalwaysApply: false\n---\n\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once confirmed, run \`ovld attach <ticketId> cursor\` to start a new session on that ticket.\nEOF`,
+    installCmd: `mkdir -p .cursor/rules && cat > .cursor/rules/switch-ticket.mdc << 'EOF'\n---\ndescription: Switch to a different Overlord ticket\nglobs:\nalwaysApply: false\n---\n\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once confirmed, run \`ovld attach <ticketId> cursor\` to start a new session on that ticket.\nEOF`
   },
   gemini: {
     label: 'Gemini CLI',
@@ -170,8 +180,8 @@ Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an i
     fileContent: `## Switching Overlord tickets
 
 To switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> gemini\` to go directly to a specific ticket.`,
-    installCmd: `cat >> GEMINI.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> gemini\` to go directly to a specific ticket.\nEOF`,
-  },
+    installCmd: `cat >> GEMINI.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> gemini\` to go directly to a specific ticket.\nEOF`
+  }
 };
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
@@ -726,11 +736,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           update, ask, read-context, write-context, deliver
                         </li>
                         <li className="break-words">
-                          <code className="rounded bg-muted px-1 break-all">ovld run &lt;agent&gt;</code>{' '}
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld run &lt;agent&gt;
+                          </code>{' '}
                           launch agent (requires TICKET_ID)
                         </li>
                         <li className="break-words">
-                          <code className="rounded bg-muted px-1 break-all">ovld resume &lt;agent&gt;</code>{' '}
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld resume &lt;agent&gt;
+                          </code>{' '}
                           resume an agent session
                         </li>
                       </ul>
@@ -809,8 +823,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               {cfg.description}
                             </p>
                             <p className="mb-2 break-all font-sans text-muted-foreground">
-                              File:{' '}
-                              <code className="rounded bg-muted px-1">{cfg.filePath}</code>
+                              File: <code className="rounded bg-muted px-1">{cfg.filePath}</code>
                             </p>
                             <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
                               {cfg.fileContent}
@@ -844,7 +857,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         {cliInstalled && !cliIsStale ? (
                           <div className="rounded-md border p-3">
                             <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                              ovld {cliVersion ? `v${cliVersion}` : ''} installed at {cliInstallPath}
+                              ovld {cliVersion ? `v${cliVersion}` : ''} installed at{' '}
+                              {cliInstallPath}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               Automatically updated when the desktop app updates.
@@ -864,7 +878,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                                 </p>
                                 <p className="mt-0.5 text-xs text-muted-foreground">
                                   The installed wrapper points to an old app location. Reinstall to
-                                  link it to the current version{cliVersion ? ` (v${cliVersion})` : ''}.
+                                  link it to the current version
+                                  {cliVersion ? ` (v${cliVersion})` : ''}.
                                 </p>
                               </div>
                             ) : null}

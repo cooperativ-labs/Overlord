@@ -13,8 +13,8 @@ import { NavHeader } from '@/components/nav-header';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getUserOrganizations } from '@/lib/actions/organizations';
+import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
@@ -43,9 +43,7 @@ export default async function RootLayout({
 
   const cookieStore = await cookies();
   const initialDefaultProjectId =
-    profileSettings?.default_project_id ??
-    cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ??
-    null;
+    profileSettings?.default_project_id ?? cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
   const selectedOrgIdStr = cookieStore.get(SELECTED_ORG_COOKIE)?.value ?? null;
   const selectedOrgId = selectedOrgIdStr ? Number(selectedOrgIdStr) : null;
 
