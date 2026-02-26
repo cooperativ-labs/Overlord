@@ -34,6 +34,17 @@ type ContextCommandsResponse = {
   gemini: string;
 };
 
+function buildProtocolHeaders(agentToken: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${agentToken}`
+  };
+  const localSecret = process.env.OVERLORD_LOCAL_SECRET?.trim();
+  if (localSecret) {
+    headers['X-Overlord-Local-Secret'] = localSecret;
+  }
+  return headers;
+}
+
 function getPlatformUrl(): string {
   // Electron should target the locally running Overlord app by default.
   // NEXT_PUBLIC_SITE_URL may point to a deployed web instance and break local launches.
@@ -60,7 +71,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // Fetch context from the API (runs in the main process — no shell needed)
   const response = await fetch(contextUrl, {
-    headers: { Authorization: `Bearer ${agentToken}` }
+    headers: buildProtocolHeaders(agentToken)
   });
 
   if (!response.ok) {
@@ -214,7 +225,7 @@ async function fetchContextCommandFallback(
   try {
     const response = await fetch(contextUrl, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${agentToken}` }
+      headers: buildProtocolHeaders(agentToken)
     });
     if (!response.ok) return null;
 

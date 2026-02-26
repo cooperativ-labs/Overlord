@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.0] - 2026-02-26:23:15
+
+### Added
+- Add Claude PermissionRequest hook integration for Electron agent launches so tool permission prompts also surface as Overlord notifications.
+
+### Fixed
+- Fix Electron agent launches that previously failed when the ticket context markdown endpoint returns an error by falling back to agent-specific context commands from the protocol API.
+
+### Changed
+- Change Electron agent launcher to always use a per-launch Claude settings file that registers the PermissionRequest hook alongside the ticket context markdown file.
+
+### Security
+- Ensure PermissionRequest hook HTTP calls include the local runtime secret header when available so notifications respect the tightened local protocol security model.
+
+### Refactor
+- Refactor Electron agent launcher around shared protocol header helpers and context-command fallback handling to improve resilience and error reporting.
+
+### Chore
+- Bump package version to `0.21.0`.
+
 ## [0.20.0] - 2026-02-26:22:45
 
 ### Added
