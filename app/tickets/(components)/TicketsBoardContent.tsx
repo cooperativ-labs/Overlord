@@ -213,7 +213,13 @@ export default async function TicketsBoardContent({
   }
 
   const tickets = rawTickets
-    .filter(ticket => Boolean(ticket.project_id))
+    .filter(ticket => {
+      if (!ticket.project_id) {
+        console.warn('[TicketsBoardContent] Dropping ticket without project_id:', ticket.id);
+        return false;
+      }
+      return true;
+    })
     .map(({ organization, project, ...ticket }) => {
       const p = getRelationItem(project);
       const session = latestSessionByTicket.get(ticket.id);
@@ -235,7 +241,7 @@ export default async function TicketsBoardContent({
   const loadError = ticketsResult.error ?? statusesResult.error;
   let objectiveFileMentionPaths: string[] = [];
 
-  if (projectId) {
+  if (projectId && view === 'board') {
     const { data: projectForMentions } = await supabase
       .from('projects')
       .select('local_working_directory')
@@ -246,7 +252,17 @@ export default async function TicketsBoardContent({
       projectForMentions?.local_working_directory
     );
     if (resolvedProjectDirectory) {
-      objectiveFileMentionPaths = (await listProjectFiles(resolvedProjectDirectory)).files;
+      try {
+        const result = await Promise.race([
+          listProjectFiles(resolvedProjectDirectory),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('File listing timed out')), 3000)
+          )
+        ]);
+        objectiveFileMentionPaths = result.files;
+      } catch {
+        // Non-fatal: file mentions will be unavailable
+      }
     }
   }
 

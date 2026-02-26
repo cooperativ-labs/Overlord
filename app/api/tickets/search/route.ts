@@ -49,15 +49,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const cookieStore = cookies();
-  const selectedOrgValue = (await cookieStore).get(SELECTED_ORG_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const selectedOrgValue = cookieStore.get(SELECTED_ORG_COOKIE)?.value;
   const parsedOrgId = selectedOrgValue ? Number(selectedOrgValue) : undefined;
   const organizationId =
     Number.isFinite(parsedOrgId ?? 0) && (parsedOrgId ?? 0) > 0 ? parsedOrgId : undefined;
 
   let query = supabase
     .from('tickets')
-    .select('id,title,project_id,organization_id,status,project:projects(name)')
+    .select('id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)')
     .order('updated_at', { ascending: false })
     .limit(6);
 
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
   const escapedPattern = escapeLikePattern(sanitized);
   let fallbackQuery = supabase
     .from('tickets')
-    .select('id,title,project_id,organization_id,status,project:projects(name)')
+    .select('id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)')
     .ilike('title', `%${escapedPattern}%`)
     .order('updated_at', { ascending: false })
     .limit(6);

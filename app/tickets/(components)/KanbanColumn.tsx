@@ -3,7 +3,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,9 +70,13 @@ export default function KanbanColumn({
     if (el) sessionStorage.setItem(scrollKey, String(el.scrollTop));
   }, [scrollKey]);
 
-  const mentionResults = fileMentionPaths
-    .filter(filePath => filePath.toLowerCase().includes(mentionQuery.toLowerCase()))
-    .slice(0, MAX_MENTION_RESULTS);
+  const mentionResults = useMemo(
+    () =>
+      fileMentionPaths
+        .filter(filePath => filePath.toLowerCase().includes(mentionQuery.toLowerCase()))
+        .slice(0, MAX_MENTION_RESULTS),
+    [fileMentionPaths, mentionQuery]
+  );
   const mentionMenuOpen = mentionStart !== null && mentionResults.length > 0;
 
   function clearMentionState() {

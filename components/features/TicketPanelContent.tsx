@@ -1,4 +1,4 @@
-import { ChevronDown, X } from 'lucide-react';
+import { ArrowRightToLine, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import fs from 'node:fs/promises';
@@ -212,9 +212,9 @@ export async function TicketPanelContent({
               size="sm"
             />
 
-            <Button asChild size="icon" variant="ghost" className="h-8 w-8">
+            <Button asChild size="icon" variant="ghost" className="h-8 w-10 ml-2">
               <Link href={closePath} aria-label="Close panel">
-                <X className="h-4 w-4" />
+                <ArrowRightToLine className="h-4 w-4" />
               </Link>
             </Button>
           </div>

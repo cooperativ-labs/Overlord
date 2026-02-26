@@ -334,6 +334,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      profiles: {
+        Row: {
+          created_at: string;
+          custom_agent_instructions: string;
+          email: string;
+          id: string;
+          image_url: string;
+          name: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          custom_agent_instructions?: string;
+          email?: string;
+          id: string;
+          image_url?: string;
+          name?: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          custom_agent_instructions?: string;
+          email?: string;
+          id?: string;
+          image_url?: string;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       projects: {
         Row: {
           color: string;

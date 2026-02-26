@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
+import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getPlatformUrl } from '@/lib/env';
 import { normalizeHexColor } from '@/lib/helpers/color';
@@ -565,6 +566,92 @@ export async function markObjectiveExecutedAction(
   ]);
 }
 
+export async function markObjectiveUnexecutedAction(
+  ticketId: string,
+  objectiveId: string
+): Promise<void> {
+  const supabase = await createClient();
+
+  // 1. Get all objectives for this ticket to check conditions
+  const { data: objectives, error: objectivesError } = await supabase
+    .from('objectives')
+    .select('id,is_executed,objective')
+    .eq('ticket_id', ticketId);
+
+  if (objectivesError || !objectives) {
+    throw new Error(objectivesError?.message ?? 'Objectives not found.');
+  }
+
+  const targetObjective = objectives.find(o => o.id === objectiveId);
+  if (!targetObjective) {
+    throw new Error('Target objective not found.');
+  }
+
+  if (!targetObjective.is_executed) {
+    return;
+  }
+
+  // 2. Check if all OTHER objectives are either executed or empty
+  const otherObjectives = objectives.filter(o => o.id !== objectiveId);
+  const hasActiveNonEmptyObjective = otherObjectives.some(
+    o => !o.is_executed && o.objective.trim().length > 0
+  );
+
+  if (hasActiveNonEmptyObjective) {
+    throw new Error('Cannot unexecute objective while another objective is active.');
+  }
+
+  // 3. Mark any empty unexecuted objectives as executed to keep things clean
+  const emptyUnexecutedIds = otherObjectives
+    .filter(o => !o.is_executed && o.objective.trim().length === 0)
+    .map(o => o.id);
+
+  if (emptyUnexecutedIds.length > 0) {
+    const { error: updateError } = await supabase
+      .from('objectives')
+      .update({ is_executed: true })
+      .in('id', emptyUnexecutedIds);
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  }
+
+  // 4. Mark the target objective as unexecuted
+  const { error: unexecuteError } = await supabase
+    .from('objectives')
+    .update({ is_executed: false })
+    .eq('id', objectiveId);
+
+  if (unexecuteError) {
+    throw new Error(unexecuteError.message);
+  }
+
+  // 5. Log the event and revalidate
+  const { data: ticket, error: ticketError } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+
+  if (ticketError || !ticket) {
+    throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: 'Objective marked unexecuted.',
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards([ticket.organization_id]);
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
 export async function createProjectAction(input: {
   organizationId: number;
   name: string;
@@ -723,13 +810,20 @@ export async function getTicketPromptForCopy(
     .limit(1)
     .maybeSingle();
 
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
   const platformUrl = getPlatformUrl();
+  const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
   const prompt = buildTicketPromptMarkdown(
     {
       ...ticket,
       objective: draftObjective?.objective ?? ticket.objective
     },
-    platformUrl
+    platformUrl,
+    undefined,
+    { customInstructions }
   );
   return { prompt };
 }

@@ -30,8 +30,16 @@ function parseFlags(args) {
   return result;
 }
 
-async function apiPost(platformUrl, token, path, body) {
+/**
+ * Default request timeout in milliseconds. Overridable via --timeout flag or
+ * OVERLORD_TIMEOUT env var. A bounded timeout prevents indefinite spinner hangs
+ * in sandboxed runtimes where deliver requests can stall without a connection error.
+ */
+const DEFAULT_TIMEOUT_MS = 30000;
+
+async function apiPost(platformUrl, token, path, body, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const requestUrl = `${platformUrl}${path}`;
+  const requestStart = Date.now();
   let res;
   try {
     res = await fetch(requestUrl, {
@@ -40,10 +48,21 @@ async function apiPost(platformUrl, token, path, body) {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs)
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
+    // AbortSignal.timeout() throws a DOMException with name 'TimeoutError'
+    if (error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      throw new Error(
+        `Request timed out after ${timeoutMs}ms calling ${requestUrl}.\n` +
+        `Tip: Ensure Overlord is running and reachable from this environment. ` +
+        `Increase the limit with --timeout <ms> or OVERLORD_TIMEOUT=<ms>.`
+      );
+    }
+
     const causeCode = (
       typeof error === 'object' &&
       error !== null &&
@@ -69,6 +88,9 @@ async function apiPost(platformUrl, token, path, body) {
     );
   }
 
+  const durationMs = Date.now() - requestStart;
+  process.stderr.write(`[protocol] ${path} → ${res.status} (${durationMs}ms)\n`);
+
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
@@ -84,6 +106,16 @@ function resolveSessionFlags(flags) {
     sessionKey: String(flags['session-key'] ?? process.env.SESSION_KEY ?? ''),
     ticketId: String(flags['ticket-id'] ?? process.env.TICKET_ID ?? '')
   };
+}
+
+/** Resolve request timeout from --timeout flag or OVERLORD_TIMEOUT env var. */
+function resolveTimeout(flags) {
+  const raw = flags['timeout'] ?? process.env.OVERLORD_TIMEOUT;
+  if (raw) {
+    const ms = parseInt(String(raw), 10);
+    if (!isNaN(ms) && ms > 0) return ms;
+  }
+  return DEFAULT_TIMEOUT_MS;
 }
 
 function requireFlag(flags, name, envAlias) {
@@ -102,6 +134,7 @@ async function protocolAttach(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
   const { platformUrl, agentToken } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
 
   const body = {
     ticketId,
@@ -110,7 +143,7 @@ async function protocolAttach(args) {
     metadata: {}
   };
 
-  const data = await apiPost(platformUrl, agentToken, '/api/protocol/attach', body);
+  const data = await apiPost(platformUrl, agentToken, '/api/protocol/attach', body, timeoutMs);
 
   const sessionKey = data.session?.sessionKey;
   console.log(JSON.stringify(data, null, 2));
@@ -134,6 +167,7 @@ async function protocolUpdate(args) {
   const summary = requireFlag(flags, 'summary', undefined);
 
   const { platformUrl, agentToken } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
 
   const body = {
     sessionKey,
@@ -143,7 +177,7 @@ async function protocolUpdate(args) {
     ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {})
   };
 
-  const data = await apiPost(platformUrl, agentToken, '/api/protocol/update', body);
+  const data = await apiPost(platformUrl, agentToken, '/api/protocol/update', body, timeoutMs);
   console.log(JSON.stringify(data, null, 2));
 }
 
@@ -159,6 +193,7 @@ async function protocolAsk(args) {
   const question = requireFlag(flags, 'question', undefined);
 
   const { platformUrl, agentToken } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
 
   const body = {
     sessionKey,
@@ -168,7 +203,7 @@ async function protocolAsk(args) {
     ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {})
   };
 
-  const data = await apiPost(platformUrl, agentToken, '/api/protocol/ask', body);
+  const data = await apiPost(platformUrl, agentToken, '/api/protocol/ask', body, timeoutMs);
   console.log(JSON.stringify(data, null, 2));
 }
 
@@ -183,6 +218,7 @@ async function protocolReadContext(args) {
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
 
   const { platformUrl, agentToken } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
 
   const body = {
     sessionKey,
@@ -191,7 +227,7 @@ async function protocolReadContext(args) {
     ...(flags.limit ? { limit: parseInt(String(flags.limit), 10) } : {})
   };
 
-  const data = await apiPost(platformUrl, agentToken, '/api/protocol/read-context', body);
+  const data = await apiPost(platformUrl, agentToken, '/api/protocol/read-context', body, timeoutMs);
   console.log(JSON.stringify(data, null, 2));
 }
 
@@ -218,6 +254,7 @@ async function protocolWriteContext(args) {
   }
 
   const { platformUrl, agentToken } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
 
   const body = {
     sessionKey,
@@ -227,7 +264,7 @@ async function protocolWriteContext(args) {
     ...(flags.tags ? { tags: String(flags.tags).split(',').map(t => t.trim()) } : {})
   };
 
-  const data = await apiPost(platformUrl, agentToken, '/api/protocol/write-context', body);
+  const data = await apiPost(platformUrl, agentToken, '/api/protocol/write-context', body, timeoutMs);
   console.log(JSON.stringify(data, null, 2));
 }
 
@@ -243,9 +280,20 @@ async function protocolDeliver(args) {
   const summary = requireFlag(flags, 'summary', undefined);
 
   const { platformUrl, agentToken } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
 
   let artifacts = [];
-  if (flags['artifacts-json']) {
+  if (flags['artifacts-file']) {
+    // Load artifacts from a file — avoids shell-escaping issues with large inline JSON bodies
+    const { readFileSync } = await import('node:fs');
+    try {
+      artifacts = JSON.parse(readFileSync(String(flags['artifacts-file']), 'utf8'));
+    } catch (err) {
+      throw new Error(
+        `--artifacts-file: could not read or parse "${flags['artifacts-file']}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  } else if (flags['artifacts-json']) {
     try {
       artifacts = JSON.parse(String(flags['artifacts-json']));
     } catch {
@@ -255,7 +303,7 @@ async function protocolDeliver(args) {
 
   const body = { sessionKey, ticketId, summary, artifacts };
 
-  const data = await apiPost(platformUrl, agentToken, '/api/protocol/deliver', body);
+  const data = await apiPost(platformUrl, agentToken, '/api/protocol/deliver', body, timeoutMs);
   console.log(JSON.stringify(data, null, 2));
 }
 
@@ -278,6 +326,15 @@ Subcommands:
 Flags read from env vars when not provided:
   SESSION_KEY, TICKET_ID, PLATFORM_URL, AGENT_TOKEN
 
+Common flags (all subcommands):
+  --timeout <ms>          Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS}).
+                          Also: OVERLORD_TIMEOUT env var.
+
+Deliver-specific flags:
+  --artifacts-json <json> Inline JSON array of artifact objects.
+  --artifacts-file <path> Path to a JSON file containing artifacts (avoids shell-escaping issues
+                          with large payloads).
+
 Examples:
   ovld protocol attach --ticket-id abc-123
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X"
@@ -285,6 +342,8 @@ Examples:
   ovld protocol read-context --session-key <key> --ticket-id <id>
   ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"'
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"
+  ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --artifacts-file ./artifacts.json
+  ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --timeout 60000
 `);
     return;
   }

@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 2026-02-26:20:10
+
+### Added
+- Add user-level profile custom agent instructions stored in a `profiles` table with per-user row-level security and surfaced in a new Settings “Customization” tab.
+- Add support for injecting saved custom instructions into ticket prompts for protocol context and “Copy prompt” flows so agents automatically honor team conventions and priorities.
+- Add a shared `--timeout` flag (and `OVERLORD_TIMEOUT` env var) across protocol CLI subcommands so request timeouts are configurable instead of hanging indefinitely in constrained runtimes.
+- Add a `--artifacts-file` flag to `ovld protocol deliver` to load artifacts from a JSON file, avoiding brittle shell-escaping for large inline JSON payloads.
+
+### Fixed
+- Fix ticket search organization scoping in the API route by awaiting `cookies()` correctly before reading the selected-organization cookie.
+- Guard Kanban board ticket hydration against rows missing a `project_id` so malformed tickets no longer crash or silently corrupt board views.
+- Enforce valid ticket phases for conversation follow-ups by validating the `phase` field against the known `ticketStatuses` enum.
+
+### Changed
+- Change the protocol attach REST endpoint to delegate to shared `runAttachProtocol` logic and emit structured logs with ticket ID, content length, status, and duration.
+- Change the deliver protocol API to fast-ack after persisting the deliver event, moving artifact inserts, ticket status updates, and session completion into an `after()` background task with Sentry instrumentation.
+- Update agent ticket prompts to include an optional “Custom instructions” section and explicitly require agents to post updates echoing user messages before doing new work.
+- Update nav ticket search results to show human-friendly ticket sequence numbers (for example `#123`) when available before falling back to the legacy ticket identifier.
+- Improve the ticket conversation composer send actions to use `LoadingButton` with explicit loading and disabled states for answers and follow-ups.
+- Restrict project file mention discovery to Kanban board view and add a short timeout when listing workspace files so stalled filesystem calls do not block ticket boards.
+
+### Security
+- None.
+
+### Removed
+- None.
+
+### Deprecated
+- None.
+
+### Performance
+- Reduce perceived latency for protocol deliver in sandboxed or slow environments by decoupling artifact persistence and ticket status updates into a background task while returning a fast 200 response.
+- Reduce recomputation on large Kanban boards by memoizing column sorting, column lookup maps, and file-mention search results.
+
+### Refactor
+- Refactor `resolveSession` to verify organization membership and update heartbeats in a single joined query instead of separate ticket and session lookups.
+- Extract attach protocol behavior into `runAttachProtocol` so the REST route and Supabase MCP handler share consistent logic and ticket payload fields.
+- Add `supabase/functions/tsconfig.json` and include Supabase edge functions in the main ESLint project configuration for consistent type-checking and linting.
+
+### Test
+- Add `protocol-deliver.test.mjs` regression tests covering request timeouts, large artifact payload delivery, `--artifacts-file` handling, non-2xx responses, and unreachable servers.
+
+### Documentation
+- Capture an in-depth analysis of deliver stalling in sandbox environments and recommended timeout and fast-ack patterns in `ai/history/2026-02-26-deliver-sandbox-reachability-analysis.md`.
+
+### Chore
+- Add a `profiles` table migration with auth-triggered profile seeding and row-level security policies.
+- Bump package version to `0.18.0`.
+
 ## [0.17.0] - 2026-02-26:10:13
 
 ### Added

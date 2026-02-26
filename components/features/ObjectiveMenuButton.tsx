@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { markObjectiveExecutedAction } from '@/lib/actions/tickets';
+import { markObjectiveExecutedAction, markObjectiveUnexecutedAction } from '@/lib/actions/tickets';
 
 type ObjectiveMenuButtonProps = {
   ticketId: string;
@@ -33,6 +33,12 @@ export function ObjectiveMenuButton({
     });
   }
 
+  function handleMarkUnexecuted() {
+    startTransition(async () => {
+      await markObjectiveUnexecutedAction(ticketId, objectiveId);
+    });
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -47,15 +53,27 @@ export function ObjectiveMenuButton({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          disabled={pending || isExecuted || !canMarkExecuted}
-          onSelect={event => {
-            event.preventDefault();
-            handleMarkExecuted();
-          }}
-        >
-          Mark executed
-        </DropdownMenuItem>
+        {!isExecuted ? (
+          <DropdownMenuItem
+            disabled={pending || !canMarkExecuted}
+            onSelect={event => {
+              event.preventDefault();
+              handleMarkExecuted();
+            }}
+          >
+            Mark executed
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            disabled={pending}
+            onSelect={event => {
+              event.preventDefault();
+              handleMarkUnexecuted();
+            }}
+          >
+            Mark unexecuted
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

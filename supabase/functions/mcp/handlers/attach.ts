@@ -1,7 +1,15 @@
 // deno-lint-ignore-file no-explicit-any
 import { type SupabaseClient } from '@supabase/supabase-js';
+
 import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
+
+/**
+ * Explicit ticket columns returned to agents — excludes internal fields like search_vector.
+ * IMPORTANT: Keep this in sync with lib/overlord/protocol-attach.ts (TICKET_AGENT_FIELDS).
+ */
+const TICKET_AGENT_FIELDS =
+  'id,title,objective,status,priority,assigned_agent,recent_agent,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,everhour_project_id,created_by';
 
 export async function handleAttach(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const { ticketId, agentIdentifier, connectionMethod = 'mcp', metadata = {} } = args;
@@ -9,7 +17,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
   const { data: ticket, error: ticketErr } = await supabase
     .from('tickets')
-    .select('*')
+    .select(TICKET_AGENT_FIELDS)
     .eq('id', ticketId)
     .eq('organization_id', organizationId)
     .single();
@@ -50,9 +58,14 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   const previousStatus = ticket.status;
   const isResumeAfterDelivery = previousStatus === 'review' || previousStatus === 'complete';
 
-  await supabase.from('tickets').update({ status: 'execute' }).eq('id', ticketId);
+  const { error: ticketUpdateError } = await supabase
+    .from('tickets')
+    .update({ status: 'execute' })
+    .eq('id', ticketId);
 
-  await supabase.from('ticket_events').insert({
+  if (ticketUpdateError) return toolErr('Failed to update ticket status.');
+
+  const { error: attachEventError } = await supabase.from('ticket_events').insert({
     event_type: 'system',
     payload: { agent_identifier: agentIdentifier, connection_method: connectionMethod },
     phase: previousStatus,
@@ -61,14 +74,18 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     ticket_id: ticketId
   });
 
+  if (attachEventError) return toolErr('Failed to record attach event.');
+
   if (isResumeAfterDelivery) {
-    await supabase.from('ticket_events').insert({
+    const { error: reopenEventError } = await supabase.from('ticket_events').insert({
       event_type: 'ticket_reopened',
       phase: 'execute',
       session_id: session.id,
       summary: 'Ticket reopened — resumed from delivered state.',
       ticket_id: ticketId
     });
+
+    if (reopenEventError) return toolErr('Failed to record reopen event.');
   }
 
   const [{ data: history }, { data: artifacts }, { data: sharedState }] = await Promise.all([

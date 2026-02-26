@@ -310,9 +310,12 @@ export default function KanbanBoard({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const sortedColumns = [...columns].sort((a, b) => a.position - b.position);
+  const sortedColumns = useMemo(
+    () => [...columns].sort((a, b) => a.position - b.position),
+    [columns]
+  );
 
-  const columnById = new Map(columns.map(c => [c.id, c]));
+  const columnById = useMemo(() => new Map(columns.map(c => [c.id, c])), [columns]);
 
   function groupTickets(tickets: Ticket[]) {
     const groups = new Map<string, Ticket[]>();
@@ -342,7 +345,11 @@ export default function KanbanBoard({
     return { groups, uncategorized };
   }
 
-  const { groups: columnTickets, uncategorized } = groupTickets(displayedTickets);
+  const { groups: columnTickets, uncategorized } = useMemo(
+    () => groupTickets(displayedTickets),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [displayedTickets, sortedColumns, visibleSlugs]
+  );
 
   function getDisplayedTicketsForColumn({
     column,
@@ -810,7 +817,7 @@ export default function KanbanBoard({
       previous.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? previous[0];
 
     const optimisticTicket: Ticket = {
-      id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `optimistic-${crypto.randomUUID()}`,
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
       organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,

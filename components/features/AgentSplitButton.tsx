@@ -196,7 +196,7 @@ export function AgentSplitButton({
       className={cn(
         'inline-flex items-stretch rounded-md border bg-background text-sm transition-all border-input shadow-sm hover:bg-accent hover:text-accent-foreground',
         isActive &&
-        'border-emerald-600/80 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)] ring-1 ring-emerald-600/70 animate-pulse'
+          'border-emerald-600/80 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)] ring-1 ring-emerald-600/70 animate-pulse'
       )}
     >
       {runButtonWithTooltip}

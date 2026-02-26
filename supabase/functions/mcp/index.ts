@@ -13,14 +13,14 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from '@supabase/supabase-js';
 
-import { resolveToken } from './auth.ts';
-import { handleAttach } from './handlers/attach.ts';
 import { handleAsk } from './handlers/ask.ts';
+import { handleAttach } from './handlers/attach.ts';
 import { handleCreateTicket } from './handlers/create-ticket.ts';
 import { handleDeliver } from './handlers/deliver.ts';
 import { handleReadContext } from './handlers/read-context.ts';
 import { handleUpdate } from './handlers/update.ts';
 import { handleWriteContext } from './handlers/write-context.ts';
+import { resolveToken } from './auth.ts';
 import { CORS_HEADERS, rpcError, rpcResult } from './rpc.ts';
 import { TOOLS } from './tools.ts';
 
@@ -111,7 +111,10 @@ Deno.serve(async (req: Request) => {
     } catch (err) {
       console.error(`[mcp] tool error (${toolName}):`, err);
       const msg = err instanceof Error ? err.message : String(err);
-      return rpcResult(id, { content: [{ type: 'text', text: `Internal error: ${msg}` }], isError: true });
+      return rpcResult(id, {
+        content: [{ type: 'text', text: `Internal error: ${msg}` }],
+        isError: true
+      });
     }
   }
 

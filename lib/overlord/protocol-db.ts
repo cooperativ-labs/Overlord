@@ -24,8 +24,8 @@ type EventInsert = {
 
 /**
  * Resolves an agent session by sessionKey + ticketId.
- * When organizationId is provided, it first verifies the ticket belongs to that org
- * to prevent cross-org session access.
+ * When organizationId is provided, the session query uses a joined tickets filter
+ * to verify org membership in a single round-trip instead of two sequential queries.
  */
 export async function resolveSession(
   sessionKey: string,
@@ -34,18 +34,35 @@ export async function resolveSession(
 ) {
   const supabase = createServiceRoleClient();
 
-  // If org-scoped, verify the ticket belongs to this org before touching the session
   if (organizationId !== undefined) {
-    const { data: ticket, error: ticketError } = await supabase
-      .from('tickets')
-      .select('id')
-      .eq('id', ticketId)
-      .eq('organization_id', organizationId)
+    // Single query: join session → ticket and filter by org in one round-trip.
+    const { data: session, error } = await supabase
+      .from('agent_sessions')
+      .select('*, ticket:tickets!inner(organization_id)')
+      .eq('session_key', sessionKey)
+      .eq('ticket_id', ticketId)
+      .eq('ticket.organization_id', organizationId)
       .single();
 
-    if (ticketError || !ticket) {
-      return { error: 'Ticket not found or access denied.', session: null };
+    if (error || !session) {
+      return {
+        error: 'Session not found for ticket.',
+        session: null
+      };
     }
+
+    // Strip the joined ticket data before returning the session row.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { ticket: _ticket, ...sessionRow } = session as typeof session & {
+      ticket: unknown;
+    };
+
+    await supabase
+      .from('agent_sessions')
+      .update({ heartbeat_at: new Date().toISOString() })
+      .eq('id', sessionRow.id);
+
+    return { error: null, session: sessionRow };
   }
 
   const { data: session, error } = await supabase

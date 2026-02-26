@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { ticketStatuses } from '@/lib/overlord/types';
 import { createClient } from '@/supabase/utils/server';
 
 const createConversationEntrySchema = z
@@ -8,7 +9,7 @@ const createConversationEntrySchema = z
     entryType: z.enum(['answer', 'follow_up']).default('follow_up'),
     message: z.string().min(1).max(20_000),
     parentEventId: z.string().uuid().optional(),
-    phase: z.string().trim().max(120).optional()
+    phase: z.enum(ticketStatuses).optional()
   })
   .superRefine((value, ctx) => {
     if (value.entryType === 'follow_up' && value.parentEventId) {

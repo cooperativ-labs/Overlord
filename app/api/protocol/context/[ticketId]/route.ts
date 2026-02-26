@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
+import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
@@ -63,6 +64,16 @@ export async function GET(request: Request, { params }: RouteContext) {
       // Supabase URL not configured — skip MCP section
     }
 
+    let customInstructions: string | null = null;
+    try {
+      customInstructions = await fetchProfileCustomInstructions(
+        supabase,
+        authResult.context.userId
+      );
+    } catch (error) {
+      console.error('Failed to load custom instructions for context prompt:', error);
+    }
+
     const markdown = buildTicketPromptMarkdown(
       {
         ...ticket,
@@ -70,7 +81,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      { token: authResult.context.tokenValue, mcpUrl }
+      { token: authResult.context.tokenValue, mcpUrl, customInstructions }
     );
 
     const headers: Record<string, string> = {

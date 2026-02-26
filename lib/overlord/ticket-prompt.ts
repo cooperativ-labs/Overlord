@@ -7,6 +7,8 @@ export type PromptOptions = {
   token?: string;
   /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */
   mcpUrl?: string;
+  /** Optional user-level custom instructions to prepend to the prompt */
+  customInstructions?: string | null;
 };
 
 /**
@@ -48,6 +50,14 @@ export function buildTicketPromptMarkdown(
     ? buildLocalProtocolSection(ticket.id, platformUrl)
     : buildRemoteProtocolSection(ticket.id, platformUrl, options);
 
+  const customInstructions = options?.customInstructions?.trim();
+  const customInstructionsSection = customInstructions
+    ? `### Custom instructions
+
+${customInstructions}
+`
+    : '';
+
   return `# Overlord — Agent Instructions
 
 You are an AI coding agent working on ticket **${ref}: ${title}** via Overlord.
@@ -64,6 +74,7 @@ Complete the work described below, then deliver a summary back to the platform.
 ${section('Objective', ticket.objective)}
 ${section('Acceptance Criteria', ticket.acceptance_criteria)}
 ${section('Available Tools / Constraints', ticket.available_tools)}
+${customInstructionsSection}
 ---
 
 ${protocolSection}`;
@@ -147,6 +158,7 @@ PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx ove
 - If blocked on human-only work, create a follow-up ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
+- **If the user sends you a message during your session, immediately post an update with the user's message recorded verbatim in the summary before doing anything else.**
 `;
 }
 
@@ -368,5 +380,6 @@ To target a specific native agent session ID, optionally set one of:
 - The \`summary\` in deliver is what the PM reads first — write it as a clear narrative, not a list of commands.
 - Use \`write-context\` for constraints, or facts a future agent session should know.
 - Prefer direct \`curl\` JSON payloads for protocol calls; avoid brittle shell quoting and \`jq\` payload wrappers.
+- **If the user sends you a message during your session, immediately post an update with the user's message recorded verbatim in the summary before doing anything else.**
 `;
 }

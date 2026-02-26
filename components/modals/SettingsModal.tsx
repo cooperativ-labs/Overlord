@@ -1,11 +1,12 @@
 'use client';
 
-import { Bot, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
+import { Bot, Edit3, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { EverhourSettings } from '@/components/features/everhour/EverhourSettings';
+import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {
@@ -48,6 +49,7 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
+import { Textarea } from '@/components/ui/textarea';
 import {
   getRunningAgentSessionCountAction,
   getRunningAgentSessionsAction,
@@ -55,6 +57,10 @@ import {
   stopRunningAgentSessionAction
 } from '@/lib/actions/agent-sessions';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
+import {
+  getCustomInstructionsAction,
+  saveCustomInstructionsAction
+} from '@/lib/actions/profile-settings';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
 type SettingsModalProps = {
@@ -98,6 +104,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { name: 'Integrations', icon: Link2 },
   { name: 'Agents', icon: Bot },
+  { name: 'Customization', icon: Edit3 },
   { name: 'CLI', icon: Terminal },
   { name: 'Appearance', icon: Palette },
   { name: 'Terminal', icon: Monitor, electronOnly: true },
@@ -142,6 +149,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [cliInstalled, setCliInstalled] = useState(false);
   const [cliInstallPath, setCliInstallPath] = useState<string | null>(null);
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [customInstructionsLoading, setCustomInstructionsLoading] = useState(false);
+  const [customInstructionsError, setCustomInstructionsError] = useState<string | null>(null);
+  const [customInstructionsSaveState, setCustomInstructionsSaveState] =
+    useState<ButtonLoadingState>('default');
+  const [customInstructionsLastLoadedAt, setCustomInstructionsLastLoadedAt] = useState<
+    string | null
+  >(null);
 
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const [activeNav, setActiveNav] = useState<string>('Integrations');
@@ -181,6 +196,35 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       .finally(() => setEverhourStatusLoaded(true));
   }, [open]);
 
+  const loadCustomInstructions = useCallback(async () => {
+    setCustomInstructionsLoading(true);
+    setCustomInstructionsError(null);
+    try {
+      const loadedInstructions = await getCustomInstructionsAction();
+      setCustomInstructions(loadedInstructions);
+      setCustomInstructionsLastLoadedAt(new Date().toISOString());
+    } catch (error) {
+      console.error('Failed to load custom instructions:', error);
+      setCustomInstructionsError(
+        error instanceof Error ? error.message : 'Failed to load custom instructions.'
+      );
+    } finally {
+      setCustomInstructionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadCustomInstructions();
+  }, [open, loadCustomInstructions]);
+
+  useEffect(() => {
+    if (!open) {
+      setCustomInstructionsSaveState('default');
+      setCustomInstructionsError(null);
+    }
+  }, [open]);
+
   async function loadRunningAgents(): Promise<boolean> {
     setAgentsError(null);
     try {
@@ -193,6 +237,25 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       return false;
     } finally {
       setAgentsLoaded(true);
+    }
+  }
+
+  async function handleSaveCustomInstructions() {
+    if (customInstructionsLoading) return;
+
+    setCustomInstructionsSaveState('loading');
+    setCustomInstructionsError(null);
+    try {
+      const savedInstructions = await saveCustomInstructionsAction(customInstructions);
+      setCustomInstructions(savedInstructions);
+      setCustomInstructionsLastLoadedAt(new Date().toISOString());
+      setCustomInstructionsSaveState('success');
+    } catch (error) {
+      console.error('Failed to save custom instructions:', error);
+      setCustomInstructionsSaveState('error');
+      setCustomInstructionsError(
+        error instanceof Error ? error.message : 'Failed to save custom instructions.'
+      );
     }
   }
 
@@ -372,6 +435,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     runningAgents.length === 1
       ? '1 running agent session'
       : `${runningAgents.length} running agent sessions`;
+  const customInstructionsPreviewText =
+    customInstructions.trim() || '_No custom instructions have been saved yet._';
 
   return (
     <>
@@ -502,6 +567,57 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         />
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {activeNav === 'Customization' && (
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="custom-instructions">Custom instructions</Label>
+                      <Textarea
+                        id="custom-instructions"
+                        placeholder="Example: Always prioritize security fixes, ask for missing context, and avoid pushing changes without tests."
+                        rows={8}
+                        value={customInstructions}
+                        onChange={event => setCustomInstructions(event.target.value)}
+                        disabled={customInstructionsLoading}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        These instructions support Markdown and are inserted at the beginning of
+                        every agent prompt whenever someone attaches to a ticket. Use them to share
+                        team conventions or priorities.
+                      </p>
+                      {customInstructionsLoading ? (
+                        <p className="text-xs text-muted-foreground">
+                          Loading current instructions…
+                        </p>
+                      ) : null}
+                      {customInstructionsLastLoadedAt ? (
+                        <p className="text-xs text-muted-foreground">
+                          Last refreshed {new Date(customInstructionsLastLoadedAt).toLocaleString()}
+                        </p>
+                      ) : null}
+                      {customInstructionsError ? (
+                        <p className="text-sm text-destructive">{customInstructionsError}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium">Preview</p>
+                      <LoadingButton
+                        buttonState={customInstructionsSaveState}
+                        setButtonState={setCustomInstructionsSaveState}
+                        text="Save instructions"
+                        loadingText="Saving..."
+                        successText="Saved"
+                        errorText="Retry"
+                        reset
+                        variant="outline"
+                        onClick={handleSaveCustomInstructions}
+                      />
+                    </div>
+                    <div className="rounded-md border bg-muted/30 p-3">
+                      <MarkdownContent compact>{customInstructionsPreviewText}</MarkdownContent>
+                    </div>
                   </div>
                 )}
 

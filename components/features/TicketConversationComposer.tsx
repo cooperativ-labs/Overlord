@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { findOpenBlockingQuestions } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
@@ -229,15 +230,21 @@ export function TicketConversationComposer({ ticketId, projectId, events }: Prop
                   Insert file
                 </Button>
               </div>
-              <Button
-                disabled={activeKey !== null}
+              <LoadingButton
+                buttonState={
+                  activeKey === question.id
+                    ? 'loading'
+                    : activeKey !== null
+                      ? 'disabled'
+                      : 'default'
+                }
                 size="sm"
                 type="button"
                 variant="default"
+                text="Send answer"
+                loadingText="Sending..."
                 onClick={() => submitAnswer(question.id)}
-              >
-                {activeKey === question.id ? 'Sending...' : 'Send answer'}
-              </Button>
+              />
             </article>
           ))}
         </div>
@@ -272,15 +279,17 @@ export function TicketConversationComposer({ ticketId, projectId, events }: Prop
             Insert file
           </Button>
         </div>
-        <Button
-          disabled={activeKey !== null}
+        <LoadingButton
+          buttonState={
+            activeKey === 'follow_up' ? 'loading' : activeKey !== null ? 'disabled' : 'default'
+          }
           size="sm"
           type="button"
           variant="outline"
+          text="Send follow-up"
+          loadingText="Sending..."
           onClick={submitFollowUp}
-        >
-          {activeKey === 'follow_up' ? 'Sending...' : 'Send follow-up'}
-        </Button>
+        />
       </div>
 
       {errorMessage ? <p className="mt-3 text-xs text-destructive">{errorMessage}</p> : null}
