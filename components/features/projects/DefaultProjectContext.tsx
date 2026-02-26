@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, useTransition } from 'react';
 
+import { saveDefaultProjectAction } from '@/lib/actions/profile-settings';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 
@@ -10,6 +11,7 @@ type DefaultProjectContextValue = {
   defaultProjectId: string | null;
   projects: SidebarProject[];
   setDefaultProjectId: (projectId: string) => void;
+  isPending: boolean;
 };
 
 const DefaultProjectContext = createContext<DefaultProjectContextValue | null>(null);
@@ -59,6 +61,18 @@ export function DefaultProjectProvider({
   const [defaultProjectId, setDefaultProjectIdState] = useState<string | null>(() =>
     resolveInitialDefaultProjectId(projects, initialDefaultProjectId)
   );
+  const [isPending, startTransition] = useTransition();
+
+  const setDefaultProjectId = (projectId: string) => {
+    setDefaultProjectIdState(projectId);
+    startTransition(async () => {
+      try {
+        await saveDefaultProjectAction(projectId);
+      } catch (error) {
+        console.error('Failed to save default project:', error);
+      }
+    });
+  };
 
   useEffect(() => {
     const resolved = resolveInitialDefaultProjectId(projects, defaultProjectId);
@@ -82,7 +96,8 @@ export function DefaultProjectProvider({
         defaultProject,
         defaultProjectId,
         projects,
-        setDefaultProjectId: setDefaultProjectIdState
+        setDefaultProjectId,
+        isPending
       }}
     >
       {children}

@@ -13,6 +13,7 @@ import { NavHeader } from '@/components/nav-header';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
@@ -34,13 +35,17 @@ export default async function RootLayout({
     data: { user }
   } = await supabase.auth.getUser();
 
-  const [projects, organizations] = await Promise.all([
+  const [projects, organizations, profileSettings] = await Promise.all([
     getProjectsForCurrentUser(),
-    user ? getUserOrganizations() : Promise.resolve([])
+    user ? getUserOrganizations() : Promise.resolve([]),
+    user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null)
   ]);
 
   const cookieStore = await cookies();
-  const initialDefaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
+  const initialDefaultProjectId =
+    profileSettings?.default_project_id ??
+    cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ??
+    null;
   const selectedOrgIdStr = cookieStore.get(SELECTED_ORG_COOKIE)?.value ?? null;
   const selectedOrgId = selectedOrgIdStr ? Number(selectedOrgIdStr) : null;
 

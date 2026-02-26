@@ -11,14 +11,18 @@ import {
 import { cn } from '@/lib/utils';
 
 export function DefaultProjectChooser({ className }: { className?: string }) {
-  const { defaultProjectId, projects, setDefaultProjectId } = useDefaultProject();
+  const { defaultProjectId, projects, setDefaultProjectId, isPending } = useDefaultProject();
 
   if (!projects.length) {
     return <p className="text-muted-foreground text-sm">No projects</p>;
   }
 
   return (
-    <Select value={defaultProjectId ?? projects[0].id} onValueChange={setDefaultProjectId}>
+    <Select
+      value={defaultProjectId ?? projects[0].id}
+      onValueChange={setDefaultProjectId}
+      disabled={isPending}
+    >
       <SelectTrigger
         aria-label="Select default project"
         className={cn('h-8 min-w-56 max-w-[26rem]', className)}
