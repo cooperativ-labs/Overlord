@@ -73,4 +73,3 @@ export async function rotateAgentTokenAction(): Promise<string> {
 
   return tokenRow.token;
 }
-

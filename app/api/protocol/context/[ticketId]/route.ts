@@ -88,7 +88,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { mcpUrl, customInstructions }
+      options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions }
     });
 
     const headers: Record<string, string> = {

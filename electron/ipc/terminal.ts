@@ -85,9 +85,7 @@ function buildHotkeyAppleScript(hotkey: string): string | null {
     control: 'control down'
   };
 
-  const applescriptModifiers = modifiers
-    .map(mod => modifierMap[mod])
-    .filter(Boolean);
+  const applescriptModifiers = modifiers.map(mod => modifierMap[mod]).filter(Boolean);
 
   const keyLiteral = key.length === 1 ? key : '';
   if (!keyLiteral) return null;

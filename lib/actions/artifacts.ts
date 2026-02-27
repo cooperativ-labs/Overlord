@@ -231,8 +231,8 @@ export async function listTicketDocumentsAction(ticketId: string): Promise<Ticke
     id: a.id,
     label: a.label,
     storagePath: a.storage_path!,
-    fileType: (a.metadata as Record<string, unknown>)?.type as string ?? '',
-    fileSize: (a.metadata as Record<string, unknown>)?.size as number ?? 0,
+    fileType: ((a.metadata as Record<string, unknown>)?.type as string) ?? '',
+    fileSize: ((a.metadata as Record<string, unknown>)?.size as number) ?? 0,
     createdAt: a.created_at
   }));
 }
@@ -259,10 +259,7 @@ export async function deleteTicketDocumentAction(
     await supabase.storage.from('artifacts').remove([artifact.storage_path]);
   }
 
-  const { error: deleteError } = await supabase
-    .from('artifacts')
-    .delete()
-    .eq('id', artifactId);
+  const { error: deleteError } = await supabase.from('artifacts').delete().eq('id', artifactId);
 
   if (deleteError) {
     throw new Error(deleteError.message ?? 'Failed to delete document.');
@@ -285,9 +282,7 @@ export async function deleteTicketDocumentAction(
   }
 }
 
-export async function getDocumentSignedUrlAction(
-  storagePath: string
-): Promise<string> {
+export async function getDocumentSignedUrlAction(storagePath: string): Promise<string> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.storage

@@ -53,6 +53,63 @@ export const TOOLS = [
     }
   },
   {
+    name: 'artifact_prepare_upload',
+    description:
+      'Create a signed upload URL for a ticket artifact in Supabase Storage. Requires AGENT+ org role.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string', description: 'Session key from attach.' },
+        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        fileName: { type: 'string', description: 'Original filename (e.g. design-spec.pdf).' },
+        label: { type: 'string', description: 'Optional display label for the artifact row.' },
+        artifactType: { type: 'string', description: 'Artifact type (default: document).' },
+        contentType: { type: 'string', description: 'MIME type of upload.' },
+        fileSize: { type: 'number', description: 'Optional file size in bytes.' },
+        metadata: { type: 'object', description: 'Optional metadata for finalize step.' }
+      },
+      required: ['sessionKey', 'ticketId', 'fileName']
+    }
+  },
+  {
+    name: 'artifact_finalize_upload',
+    description:
+      'Create the public.artifacts row after the storage upload succeeds, associating storage_path to ticket_id.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string', description: 'Session key from attach.' },
+        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        storagePath: { type: 'string', description: 'Path returned from artifact_prepare_upload.' },
+        label: { type: 'string', description: 'Artifact label shown in UI.' },
+        artifactType: { type: 'string', description: 'Artifact type (default: document).' },
+        contentType: { type: 'string', description: 'MIME type.' },
+        fileSize: { type: 'number', description: 'Optional file size in bytes.' },
+        metadata: { type: 'object', description: 'Optional metadata to persist on artifact row.' }
+      },
+      required: ['sessionKey', 'ticketId', 'storagePath', 'label']
+    }
+  },
+  {
+    name: 'artifact_get_download_url',
+    description:
+      'Create a signed download URL for an existing ticket artifact storage object. Org member access required.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string', description: 'Session key from attach.' },
+        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        artifactId: { type: 'string', description: 'Artifact UUID (preferred).' },
+        storagePath: {
+          type: 'string',
+          description: 'Direct storage path fallback if artifactId is unavailable.'
+        },
+        expiresIn: { type: 'number', description: 'Expiry in seconds (default 3600, max 86400).' }
+      },
+      required: ['sessionKey', 'ticketId']
+    }
+  },
+  {
     name: 'ask',
     description:
       'Ask a blocking question. Ticket moves to review until a human responds. Stop working after calling this.',

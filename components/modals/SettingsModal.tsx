@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { useCallback, useEffect, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 
 import { EverhourSettings } from '@/components/features/everhour/EverhourSettings';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
@@ -502,6 +502,56 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   async function handleTerminalCustomHotkeyChange(value: string) {
     setTerminalCustomHotkey(value);
     await api?.settings.set('externalTerminalCustomHotkey', value);
+  }
+
+  function handleTerminalCustomHotkeyKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.key === 'Tab') {
+      return;
+    }
+
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      void handleTerminalCustomHotkeyChange('');
+      return;
+    }
+
+    const isMac =
+      typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('mac');
+
+    const parts: string[] = [];
+
+    if (event.metaKey) {
+      parts.push(isMac ? 'Cmd' : 'Meta');
+    }
+    if (event.ctrlKey) {
+      parts.push('Ctrl');
+    }
+    if (event.altKey) {
+      parts.push(isMac ? 'Option' : 'Alt');
+    }
+    if (event.shiftKey) {
+      parts.push('Shift');
+    }
+
+    const modifierKeys = ['Meta', 'Control', 'Alt', 'Shift'];
+    let key = event.key;
+
+    if (!modifierKeys.includes(key)) {
+      if (key.length === 1) {
+        key = key.toUpperCase();
+      } else if (key === ' ') {
+        key = 'Space';
+      }
+      parts.push(key);
+    }
+
+    if (parts.length === 0) {
+      return;
+    }
+
+    void handleTerminalCustomHotkeyChange(parts.join(' + '));
   }
 
   async function handleCustomTerminalAppChange(value: string) {
@@ -1303,11 +1353,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               <Label htmlFor="terminal-custom-hotkey">Custom hotkey</Label>
                               <Input
                                 id="terminal-custom-hotkey"
-                                placeholder={`hotkey ${selectedTerminalLabel} uses for preferred behavior`}
+                                placeholder="Press the key combination to use (e.g. Cmd + D)"
                                 value={terminalCustomHotkey}
-                                onChange={event =>
-                                  void handleTerminalCustomHotkeyChange(event.target.value)
-                                }
+                                onKeyDown={handleTerminalCustomHotkeyKeyDown}
+                                readOnly
                               />
                               <p className="text-xs text-muted-foreground">
                                 Overlord will activate {selectedTerminalLabel}, send this hotkey to

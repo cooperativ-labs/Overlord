@@ -100,6 +100,32 @@ async function apiPost(platformUrl, token, localSecret, path, body, timeoutMs = 
   return data;
 }
 
+async function uploadToSignedUrl(uploadUrl, bytes, contentType, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  let res;
+  try {
+    res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': contentType,
+        'x-upsert': 'false'
+      },
+      body: bytes,
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      throw new Error(`Upload timed out after ${timeoutMs}ms.`);
+    }
+    throw new Error(`Upload failed: ${message}`);
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Upload failed (${res.status}): ${text || 'Unknown storage error.'}`);
+  }
+}
+
 /** Read SESSION_KEY and TICKET_ID from env if flags not provided */
 function resolveSessionFlags(flags) {
   return {
@@ -343,6 +369,172 @@ async function protocolDeliver(args) {
 }
 
 // ---------------------------------------------------------------------------
+// artifacts
+// ---------------------------------------------------------------------------
+
+async function protocolArtifactPrepareUpload(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  const fileName = requireFlag(flags, 'file-name', undefined);
+
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    fileName,
+    ...(flags.label ? { label: String(flags.label) } : {}),
+    ...(flags['artifact-type'] ? { artifactType: String(flags['artifact-type']) } : {}),
+    ...(flags['content-type'] ? { contentType: String(flags['content-type']) } : {}),
+    ...(flags['file-size'] ? { fileSize: parseInt(String(flags['file-size']), 10) } : {}),
+    ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/artifacts/prepare-upload',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+async function protocolArtifactFinalizeUpload(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  const storagePath = requireFlag(flags, 'storage-path', undefined);
+  const label = requireFlag(flags, 'label', undefined);
+
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    storagePath,
+    label,
+    ...(flags['artifact-type'] ? { artifactType: String(flags['artifact-type']) } : {}),
+    ...(flags['content-type'] ? { contentType: String(flags['content-type']) } : {}),
+    ...(flags['file-size'] ? { fileSize: parseInt(String(flags['file-size']), 10) } : {}),
+    ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/artifacts/finalize-upload',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+async function protocolArtifactGetDownloadUrl(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  if (!flags['artifact-id'] && !flags['storage-path']) {
+    throw new Error('--artifact-id or --storage-path is required');
+  }
+
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    ...(flags['artifact-id'] ? { artifactId: String(flags['artifact-id']) } : {}),
+    ...(flags['storage-path'] ? { storagePath: String(flags['storage-path']) } : {}),
+    ...(flags['expires-in'] ? { expiresIn: parseInt(String(flags['expires-in']), 10) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/artifacts/get-download-url',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+async function protocolArtifactUploadFile(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  const filePath = requireFlag(flags, 'file', undefined);
+
+  const { readFile, stat } = await import('node:fs/promises');
+  const path = await import('node:path');
+  const fileName = String(flags['file-name'] ?? path.basename(filePath));
+  const contentType = String(flags['content-type'] ?? 'application/octet-stream');
+  const label = String(flags.label ?? fileName);
+
+  const fileStats = await stat(filePath);
+  const fileBytes = await readFile(filePath);
+
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const prepared = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/artifacts/prepare-upload',
+    {
+      sessionKey,
+      ticketId,
+      fileName,
+      label,
+      artifactType: String(flags['artifact-type'] ?? 'document'),
+      contentType,
+      fileSize: fileStats.size,
+      ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+    },
+    timeoutMs
+  );
+
+  const uploadUrl = prepared?.upload?.url;
+  const storagePath = prepared?.draft?.storagePath;
+  if (!uploadUrl || !storagePath) {
+    throw new Error('Prepare upload response missing upload URL or storagePath.');
+  }
+
+  await uploadToSignedUrl(uploadUrl, fileBytes, contentType, timeoutMs);
+
+  const finalized = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/artifacts/finalize-upload',
+    {
+      sessionKey,
+      ticketId,
+      storagePath,
+      label,
+      artifactType: String(flags['artifact-type'] ?? 'document'),
+      contentType,
+      fileSize: fileStats.size,
+      ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+    },
+    timeoutMs
+  );
+
+  console.log(JSON.stringify(finalized, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -352,6 +544,10 @@ export async function runProtocolCommand(subcommand, args) {
 
 Subcommands:
   attach          Start a session on a ticket
+  artifact-prepare-upload   Get a signed upload URL for a ticket artifact
+  artifact-finalize-upload  Create artifact row after upload
+  artifact-download-url     Get a signed download URL for an artifact
+  artifact-upload-file      Upload local file and finalize in one command
   update          Post a progress update
   ask             Post a blocking question
   read-context    Retrieve shared context
@@ -376,6 +572,8 @@ Examples:
   ovld protocol ask --session-key <key> --ticket-id <id> --question "Which approach?"
   ovld protocol read-context --session-key <key> --ticket-id <id>
   ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"'
+  ovld protocol artifact-upload-file --session-key <key> --ticket-id <id> --file ./spec.pdf --content-type application/pdf
+  ovld protocol artifact-download-url --session-key <key> --ticket-id <id> --artifact-id <artifact-id>
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --timeout 60000
@@ -384,6 +582,10 @@ Examples:
   }
 
   if (subcommand === 'attach') { await protocolAttach(args); return; }
+  if (subcommand === 'artifact-prepare-upload') { await protocolArtifactPrepareUpload(args); return; }
+  if (subcommand === 'artifact-finalize-upload') { await protocolArtifactFinalizeUpload(args); return; }
+  if (subcommand === 'artifact-download-url') { await protocolArtifactGetDownloadUrl(args); return; }
+  if (subcommand === 'artifact-upload-file') { await protocolArtifactUploadFile(args); return; }
   if (subcommand === 'update') { await protocolUpdate(args); return; }
   if (subcommand === 'ask') { await protocolAsk(args); return; }
   if (subcommand === 'read-context') { await protocolReadContext(args); return; }

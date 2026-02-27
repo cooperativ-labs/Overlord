@@ -13,6 +13,9 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from '@supabase/supabase-js';
 
+import { handleArtifactFinalizeUpload } from './handlers/artifact-finalize-upload.ts';
+import { handleArtifactGetDownloadUrl } from './handlers/artifact-get-download-url.ts';
+import { handleArtifactPrepareUpload } from './handlers/artifact-prepare-upload.ts';
 import { handleAsk } from './handlers/ask.ts';
 import { handleAttach } from './handlers/attach.ts';
 import { handleCreateTicket } from './handlers/create-ticket.ts';
@@ -91,6 +94,12 @@ Deno.serve(async (req: Request) => {
 
       if (toolName === 'attach') {
         result = await handleAttach(supabase, toolArgs, tokenCtx);
+      } else if (toolName === 'artifact_prepare_upload') {
+        result = await handleArtifactPrepareUpload(supabase, toolArgs, tokenCtx);
+      } else if (toolName === 'artifact_finalize_upload') {
+        result = await handleArtifactFinalizeUpload(supabase, toolArgs, tokenCtx);
+      } else if (toolName === 'artifact_get_download_url') {
+        result = await handleArtifactGetDownloadUrl(supabase, toolArgs, tokenCtx);
       } else if (toolName === 'update') {
         result = await handleUpdate(supabase, toolArgs, tokenCtx);
       } else if (toolName === 'ask') {

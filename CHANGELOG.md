@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.0] - 2026-02-27:09:00
+
+### Added
+- Add Supabase Storage-backed ticket document uploads with a drag-and-drop section in ticket details, including listing, download, and delete for per-ticket documents.
+- Add protocol artifact upload endpoints for prepare-upload, finalize-upload, and get-download-url that issue signed Supabase Storage URLs and create artifact records tied to tickets and sessions.
+- Add MCP `artifact_prepare_upload`, `artifact_finalize_upload`, and `artifact_get_download_url` tools to the Overlord MCP server so cloud agents can manage storage-backed artifacts without calling REST directly.
+
+### Fixed
+- None.
+
+### Changed
+- Update ticket protocol prompt instructions to highlight MCP-based artifact tools and recommend MCP over raw REST when available.
+- Align ticket detail panel layout around a dedicated Documents section co-located with objectives and acceptance criteria so humans can see uploaded files alongside agent activity.
+
+### Security
+- Sanitize artifact filenames and enforce ticket-scoped storage prefixes before issuing signed upload or download URLs to protect against path traversal and cross-ticket access.
+- Require organization membership and AGENT/MANAGER/ADMIN roles for artifact write operations and validate membership for read operations across protocol and MCP artifact flows.
+
+### Refactor
+- Share artifact access, storage-path helpers, and signed upload URL builders between protocol API routes and Supabase MCP handlers to keep authorization and storage semantics consistent.
+
+### Chore
+- Bump package version to `0.22.0`.
+
 ## [0.21.0] - 2026-02-26:23:15
 
 ### Added

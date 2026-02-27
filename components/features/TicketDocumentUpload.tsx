@@ -3,13 +3,13 @@
 import { Loader2, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import {
   deleteTicketDocumentAction,
   getDocumentSignedUrlAction,
   type TicketDocument,
   uploadTicketDocumentAction
 } from '@/lib/actions/artifacts';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 function formatFileSize(bytes: number): string {
@@ -71,9 +71,7 @@ export function TicketDocumentUpload({
           } catch (err) {
             setUploading(prev =>
               prev.map(u =>
-                u.id === uploadId
-                  ? { ...u, progress: 'error', error: (err as Error).message }
-                  : u
+                u.id === uploadId ? { ...u, progress: 'error', error: (err as Error).message } : u
               )
             );
           }

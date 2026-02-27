@@ -135,7 +135,21 @@ npx overlord protocol write-context --session-key <sessionKey> --key "descriptiv
 curl -sS -X POST "$PLATFORM_URL/api/protocol/create-ticket" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","title":"...","objective":"...","acceptanceCriteria":"...","executionTarget":"human"}'
 \`\`\`
 
-### 7 — Deliver (always last)
+### 7 — Storage artifacts (optional upload/download)
+
+\`\`\`bash
+# 1) Get signed upload URL
+curl -sS -X POST "$PLATFORM_URL/api/protocol/artifacts/prepare-upload" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","fileName":"spec.pdf","contentType":"application/pdf"}'
+
+# 2) PUT file bytes to upload.url
+# 3) Finalize artifact row linked to ticket_id
+curl -sS -X POST "$PLATFORM_URL/api/protocol/artifacts/finalize-upload" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","storagePath":"<from prepare>","label":"spec.pdf","artifactType":"document","contentType":"application/pdf"}'
+
+# 4) Get signed download URL later
+curl -sS -X POST "$PLATFORM_URL/api/protocol/artifacts/get-download-url" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","artifactId":"<artifact-id>"}'
+\`\`\`
+
+### 8 — Deliver (always last)
 
 \`\`\`bash
 npx overlord protocol deliver --session-key <sessionKey> \\
@@ -147,7 +161,7 @@ Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\
 
 Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
 
-### 8 — Restart command
+### 9 — Restart command
 
 Include in your deliver artifacts. If omitted, \`/api/protocol/deliver\` appends one automatically.
 
@@ -181,7 +195,8 @@ PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx ove
 function buildMcpConfigSection(
   mcpUrl: string,
   ticketId: string,
-  includeRestFallbackHeading = true
+  includeRestFallbackHeading = true,
+  includeSetupStep = true
 ): string {
   const settingsJson = JSON.stringify(
     {
@@ -206,20 +221,32 @@ function buildMcpConfigSection(
 `
     : '';
 
-  return `
-### MCP Server (Recommended for Claude Code and compatible agents)
-
-If your agent supports MCP, configure the Overlord MCP server for native tool access.
-This is the preferred method — use the MCP tools instead of the curl/REST instructions below.
-
-**Step 1** — Add to your project's \`.claude/settings.json\` (or global \`~/.claude/settings.json\`):
+  const setupStep = includeSetupStep
+    ? `**Step 1** — Add to your project's \`.claude/settings.json\` (or global \`~/.claude/settings.json\`):
 
 \`\`\`json
 ${settingsJson}
 \`\`\`
+`
+    : `Use this MCP endpoint in your runtime's MCP configuration:
+
+\`\`\`
+${mcpUrl}
+\`\`\`
+`;
+
+  return `
+### MCP Server (Preferred for MCP-compatible agents)
+
+If your agent supports MCP, configure the Overlord MCP server for native tool access.
+This is the preferred method — use the MCP tools instead of the curl/REST instructions below.
+
+${setupStep}
 
 **Step 2** — Available MCP tools (use these instead of curl):
 - \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
+- \`artifact_prepare_upload\` / \`artifact_finalize_upload\` — upload and associate storage artifacts
+- \`artifact_get_download_url\` — signed read URL for storage artifacts
 - \`update\` — post progress updates
 - \`ask\` — ask a blocking question
 - \`read_context\` / \`write_context\` — persist findings across sessions
@@ -248,7 +275,7 @@ function buildRemoteProtocolSection(
 The following environment variables are set in your agent environment:
 - \`AGENT_TOKEN\` — bearer token for MCP auth
 - \`TICKET_ID\` — this ticket's id: \`${ticketId}\`
-${buildMcpConfigSection(mcpUrl, ticketId, false)}
+${buildMcpConfigSection(mcpUrl, ticketId, false, false)}
 
 ### 1 — Attach (always first, before any other work)
 
@@ -280,11 +307,15 @@ Use MCP tool: \`ask\`
 
 Use MCP tools: \`read_context\`, \`write_context\`
 
-### 5 — Create follow-up ticket for human help (optional)
+### 5 — Storage artifacts (optional)
+
+Use MCP tools: \`artifact_prepare_upload\`, \`artifact_finalize_upload\`, \`artifact_get_download_url\`
+
+### 6 — Create follow-up ticket for human help (optional)
 
 Use MCP tool: \`create_ticket\`
 
-### 6 — Deliver (always last)
+### 7 — Deliver (always last)
 
 Use MCP tool: \`deliver\`
 
