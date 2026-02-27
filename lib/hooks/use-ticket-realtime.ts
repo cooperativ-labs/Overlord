@@ -64,9 +64,17 @@ function isAgentNotificationEvent(event: TicketEvent): boolean {
   return payload.entry_type === 'agent_notification';
 }
 
+function shouldShowDesktopNotification(event: TicketEvent): boolean {
+  if (event.event_type === 'deliver' || event.event_type === 'question') return true;
+  return isAgentNotificationEvent(event);
+}
+
 function getNotificationTitle(ticketId: string, event: TicketEvent): string {
   if (event.event_type === 'question') {
     return `Agent Question (${ticketId.slice(-8)})`;
+  }
+  if (event.event_type === 'deliver') {
+    return `Agent Delivered (${ticketId.slice(-8)})`;
   }
   return `Agent Notification (${ticketId.slice(-8)})`;
 }
@@ -77,6 +85,7 @@ function getNotificationBody(event: TicketEvent): string {
   const summary = event.summary?.trim() ?? '';
   if (summary) return summary;
   if (message) return message;
+  if (event.event_type === 'deliver') return 'The agent delivered this ticket for review.';
   return 'New agent event received.';
 }
 
@@ -182,7 +191,7 @@ export function useTicketRealtime({
           setEvents(previous => mergeNewestById([incomingEvent], previous, row => row.created_at));
 
           if (
-            isAgentNotificationEvent(incomingEvent) &&
+            shouldShowDesktopNotification(incomingEvent) &&
             !notifiedEventIdsRef.current.has(incomingEvent.id)
           ) {
             notifiedEventIdsRef.current.add(incomingEvent.id);

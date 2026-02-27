@@ -74,15 +74,12 @@ export async function GET(request: Request, { params }: RouteContext) {
       console.error('Failed to load custom instructions for context prompt:', error);
     }
 
-    const markdown = buildTicketPromptMarkdown(
-      {
-        ...ticket,
-        objective: draftObjective?.objective ?? ticket.objective
-      },
+    const markdown = buildTicketPromptMarkdown({
+      ticket,
       platformUrl,
       context,
-      { token: authResult.context.tokenValue, mcpUrl, customInstructions }
-    );
+      options: { token: authResult.context.tokenValue, mcpUrl, customInstructions }
+    });
 
     const headers: Record<string, string> = {
       'Content-Type': 'text/plain; charset=utf-8'

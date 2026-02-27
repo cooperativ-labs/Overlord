@@ -2,13 +2,11 @@
 
 import { type ComponentProps, createContext, useContext, useState } from 'react';
 
-import { useElectron } from '@/components/features/terminal/useElectron';
-import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import { type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import type { Database } from '@/types/database.types';
 
 import { AgentSplitButton } from './AgentSplitButton';
-import { CopyTicketPromptButton } from './CopyTicketPromptButton';
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
@@ -72,14 +70,8 @@ export function AgentSplitButtonLive({
   ...props
 }: AgentSplitButtonLiveProps) {
   const { session } = useTicketLive();
-  const { isElectron } = useElectron();
-  const [selectedAgent, setSelectedAgent] = useState<LaunchAgentTypeValue>(defaultAgent);
 
-  if (!isElectron) {
-    return (
-      <CopyTicketPromptButton ticketId={props.ticketId} runInTerminal={false} variant="default" />
-    );
-  }
+  const [selectedAgent, setSelectedAgent] = useState<LaunchAgentTypeValue>(defaultAgent);
 
   return (
     <AgentSplitButton

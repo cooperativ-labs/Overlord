@@ -28,6 +28,7 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
+import { useTerminal } from './terminal/TerminalProvider';
 
 const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
 
@@ -130,6 +131,7 @@ export async function TicketPanelContent({
   const platformUrl = getPlatformUrl();
   const agentToken = agentTokenRow?.token ?? null;
   const workspaceRoot = getWorkspaceRoot();
+  const { isElectron } = useTerminal();
   const editorScheme = getEditorScheme();
   const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
     platformUrl,
@@ -199,18 +201,20 @@ export async function TicketPanelContent({
           <div className="flex items-center gap-1">
             <DeleteTicketButton ticketId={ticketId} ticketLabel={ticketIdentifier} />
             <Separator orientation="vertical" className="h-4 w-px mr-2 bg-border" />
+            {isElectron ? (
+              <AgentSplitButtonLive
+                defaultAgent={
+                  getAgentTypeByIdentifier(agentSession?.agent_identifier)?.value ?? 'claude'
+                }
+                ticketId={ticketId}
+                agentToken={agentToken}
+                commands={{ claude: claudeCode, codex, cursor, gemini }}
+                workingDirectory={workingDirectory}
+                hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+                size="sm"
+              />
+            ) : <CopyTicketPromptButton ticketId={ticketId} runInTerminal={false} variant="default" />}
 
-            <AgentSplitButtonLive
-              defaultAgent={
-                getAgentTypeByIdentifier(agentSession?.agent_identifier)?.value ?? 'claude'
-              }
-              ticketId={ticketId}
-              agentToken={agentToken}
-              commands={{ claude: claudeCode, codex, cursor, gemini }}
-              workingDirectory={workingDirectory}
-              hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-              size="sm"
-            />
 
             <Button asChild size="icon" variant="ghost" className="h-8 w-10 ml-2">
               <Link href={closePath} aria-label="Close panel">

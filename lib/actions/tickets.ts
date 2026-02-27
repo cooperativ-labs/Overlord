@@ -792,7 +792,7 @@ export async function getTicketPromptForCopy(
   const { data: ticket, error } = await supabase
     .from('tickets')
     .select(
-      'id, title, objective, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
+      'id, organization_id, title, objective, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
     )
     .eq('id', ticketId)
     .single();
@@ -800,6 +800,14 @@ export async function getTicketPromptForCopy(
   if (error || !ticket) {
     return { error: error?.message ?? 'Ticket not found.' };
   }
+
+  const { data: agentTokenRow } = await supabase
+    .from('agent_tokens')
+    .select('token')
+    .eq('organization_id', ticket.organization_id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
   const { data: draftObjective } = await supabase
     .from('objectives')
@@ -816,14 +824,11 @@ export async function getTicketPromptForCopy(
 
   const platformUrl = getPlatformUrl();
   const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
-  const prompt = buildTicketPromptMarkdown(
-    {
-      ...ticket,
-      objective: draftObjective?.objective ?? ticket.objective
-    },
+  const agentToken = agentTokenRow?.token ?? undefined;
+  const prompt = buildTicketPromptMarkdown({
+    ticket,
     platformUrl,
-    undefined,
-    { customInstructions }
-  );
+    options: { customInstructions, token: agentToken }
+  });
   return { prompt };
 }

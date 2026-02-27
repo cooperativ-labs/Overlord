@@ -38,10 +38,15 @@ import { createTicketInColumnAction, reorderTicketsAction } from '@/lib/actions/
 import {
   getOpenedReviewTimestamps,
   getOpenedWaitingTimestamps,
+  getReviewRaisedWhileOpenMap,
+  getWaitingRaisedWhileOpenMap,
   hasUnopenedTimestamp,
   markTicketReviewOpened,
+  markTicketReviewRaised,
   markTicketWaitingOpened,
-  type TicketOpenedTimestamps
+  markTicketWaitingRaised,
+  type TicketOpenedTimestamps,
+  type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
@@ -120,6 +125,12 @@ function toReviewByTicket(tickets: Ticket[]): Record<string, string> {
   }, {});
 }
 
+function getPathTicketId(pathname: string): string | null {
+  const pathSegments = pathname.split('/').filter(Boolean);
+  if (pathSegments.length === 0) return null;
+  return pathSegments[pathSegments.length - 1] ?? null;
+}
+
 export default function KanbanBoard({
   tickets: initialTickets,
   statuses,
@@ -156,6 +167,12 @@ export default function KanbanBoard({
   const [openedReviewTimestamps, setOpenedReviewTimestamps] = useState<TicketOpenedTimestamps>(() =>
     getOpenedReviewTimestamps()
   );
+  const [waitingRaisedWhileOpen, setWaitingRaisedWhileOpen] = useState<TicketRaisedWhileOpenMap>(
+    () => getWaitingRaisedWhileOpenMap()
+  );
+  const [reviewRaisedWhileOpen, setReviewRaisedWhileOpen] = useState<TicketRaisedWhileOpenMap>(() =>
+    getReviewRaisedWhileOpenMap()
+  );
 
   const [realtimeOverrides, setRealtimeOverrides] = useState<Map<string, RealtimeTicketPatch>>(
     () => new Map()
@@ -172,6 +189,9 @@ export default function KanbanBoard({
   const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
   const openedWaitingTimestampsRef = useRef(openedWaitingTimestamps);
   const openedReviewTimestampsRef = useRef(openedReviewTimestamps);
+  const waitingByTicketRef = useRef(waitingByTicket);
+  const reviewByTicketRef = useRef(reviewByTicket);
+  const openTicketIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollKey = `kanban-scroll:${projectId ?? organizationId ?? 'default'}`;
 
@@ -182,6 +202,14 @@ export default function KanbanBoard({
   useEffect(() => {
     openedReviewTimestampsRef.current = openedReviewTimestamps;
   }, [openedReviewTimestamps]);
+
+  useEffect(() => {
+    waitingByTicketRef.current = waitingByTicket;
+  }, [waitingByTicket]);
+
+  useEffect(() => {
+    reviewByTicketRef.current = reviewByTicket;
+  }, [reviewByTicket]);
 
   useEffect(() => {
     setWaitingByTicket(toWaitingByTicket(initialTickets));
@@ -266,11 +294,12 @@ export default function KanbanBoard({
       ...merged,
       waiting_for_response_at: waitingForResponseAt,
       review_entered_at: reviewEnteredAt,
-      has_unopened_waiting_response: hasUnopenedTimestamp(
-        waitingForResponseAt,
-        openedWaitingTimestamps[merged.id]
-      ),
-      has_unopened_review: hasUnopenedTimestamp(reviewEnteredAt, openedReviewTimestamps[merged.id])
+      has_unopened_waiting_response:
+        waitingRaisedWhileOpen[merged.id] === true ||
+        hasUnopenedTimestamp(waitingForResponseAt, openedWaitingTimestamps[merged.id]),
+      has_unopened_review:
+        reviewRaisedWhileOpen[merged.id] === true ||
+        hasUnopenedTimestamp(reviewEnteredAt, openedReviewTimestamps[merged.id])
     };
   });
 
@@ -379,14 +408,21 @@ export default function KanbanBoard({
   }, [uncategorized.length]);
 
   useEffect(() => {
-    const pathSegments = pathname.split('/').filter(Boolean);
-    const pathTicketId = pathSegments[pathSegments.length - 1];
+    const pathTicketId = getPathTicketId(pathname);
+    if (pathTicketId && ticketIdsRef.current.has(pathTicketId)) {
+      openTicketIdRef.current = pathTicketId;
+    } else {
+      openTicketIdRef.current = null;
+    }
+
     if (!pathTicketId || !ticketIdsRef.current.has(pathTicketId)) {
       return;
     }
 
     setOpenedWaitingTimestamps(markTicketWaitingOpened(pathTicketId));
     setOpenedReviewTimestamps(markTicketReviewOpened(pathTicketId));
+    setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
+    setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
   }, [pathname]);
 
   useEffect(() => {
@@ -482,40 +518,62 @@ export default function KanbanBoard({
         return next;
       });
 
-      setWaitingByTicket(prev => {
-        let changed = false;
-        const next = { ...prev };
-        for (const q of (waitingQuestions ?? []) as { ticket_id: string; created_at: string }[]) {
-          if (!next[q.ticket_id] || Date.parse(q.created_at) > Date.parse(next[q.ticket_id])) {
-            next[q.ticket_id] = q.created_at;
-            changed = true;
-          }
+      const nextWaitingByTicket = { ...waitingByTicketRef.current };
+      const raisedWaitingTicketIds: string[] = [];
+      let waitingChanged = false;
+      for (const q of (waitingQuestions ?? []) as { ticket_id: string; created_at: string }[]) {
+        if (
+          !nextWaitingByTicket[q.ticket_id] ||
+          Date.parse(q.created_at) > Date.parse(nextWaitingByTicket[q.ticket_id])
+        ) {
+          nextWaitingByTicket[q.ticket_id] = q.created_at;
+          raisedWaitingTicketIds.push(q.ticket_id);
+          waitingChanged = true;
         }
-        return changed ? next : prev;
-      });
+      }
+      if (waitingChanged) {
+        setWaitingByTicket(nextWaitingByTicket);
+        for (const ticketId of raisedWaitingTicketIds) {
+          const isTicketOpen = openTicketIdRef.current === ticketId;
+          markTicketWaitingRaised(ticketId, isTicketOpen);
+        }
+        setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
+        setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
+      }
 
       const executeTicketIds = new Set(
         (ticketUpdates ?? []).filter(t => t.status === 'execute').map(t => t.id)
       );
-      setReviewByTicket(prev => {
-        let changed = false;
-        const next = { ...prev };
-        // Clear review indicator for tickets that have since moved back to execute
-        for (const id of executeTicketIds) {
-          if (next[id]) {
-            delete next[id];
-            changed = true;
-          }
+      const nextReviewByTicket = { ...reviewByTicketRef.current };
+      let reviewChanged = false;
+      const raisedReviewTicketIds: string[] = [];
+      // Clear review indicator for tickets that have since moved back to execute
+      for (const id of executeTicketIds) {
+        if (nextReviewByTicket[id]) {
+          delete nextReviewByTicket[id];
+          reviewChanged = true;
         }
-        for (const r of (reviewChanges ?? []) as { ticket_id: string; created_at: string }[]) {
-          if (executeTicketIds.has(r.ticket_id)) continue;
-          if (!next[r.ticket_id] || Date.parse(r.created_at) > Date.parse(next[r.ticket_id])) {
-            next[r.ticket_id] = r.created_at;
-            changed = true;
-          }
+      }
+      for (const r of (reviewChanges ?? []) as { ticket_id: string; created_at: string }[]) {
+        if (executeTicketIds.has(r.ticket_id)) continue;
+        if (
+          !nextReviewByTicket[r.ticket_id] ||
+          Date.parse(r.created_at) > Date.parse(nextReviewByTicket[r.ticket_id])
+        ) {
+          nextReviewByTicket[r.ticket_id] = r.created_at;
+          raisedReviewTicketIds.push(r.ticket_id);
+          reviewChanged = true;
         }
-        return changed ? next : prev;
-      });
+      }
+      if (reviewChanged) {
+        setReviewByTicket(nextReviewByTicket);
+        for (const ticketId of raisedReviewTicketIds) {
+          const isTicketOpen = openTicketIdRef.current === ticketId;
+          markTicketReviewRaised(ticketId, isTicketOpen);
+        }
+        setOpenedReviewTimestamps(getOpenedReviewTimestamps());
+        setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
+      }
     };
 
     const channel = supabase
@@ -540,6 +598,9 @@ export default function KanbanBoard({
             }
             return { ...previous, [event.ticket_id]: event.created_at };
           });
+          markTicketWaitingRaised(event.ticket_id, openTicketIdRef.current === event.ticket_id);
+          setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
+          setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
 
           const openedAt = openedWaitingTimestampsRef.current[event.ticket_id];
           if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;
@@ -582,6 +643,9 @@ export default function KanbanBoard({
             }
             return { ...previous, [event.ticket_id]: event.created_at };
           });
+          markTicketReviewRaised(event.ticket_id, openTicketIdRef.current === event.ticket_id);
+          setOpenedReviewTimestamps(getOpenedReviewTimestamps());
+          setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
 
           const openedAt = openedReviewTimestampsRef.current[event.ticket_id];
           if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;

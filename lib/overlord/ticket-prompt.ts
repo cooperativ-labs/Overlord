@@ -16,7 +16,18 @@ export type PromptOptions = {
  * pastes ticket context into Claude or ChatGPT). Includes ticket details and instructions
  * for the LLM to pass information back via the overlord protocol.
  */
-export function buildTicketPromptMarkdown(
+type Ticket = {
+  id: string;
+  title: string | null;
+  objective: string | null;
+  acceptance_criteria: string | null;
+  available_tools: string | null;
+  execution_target: 'agent' | 'human' | null;
+  project_id: string;
+  status: string | null;
+  priority: string | number | null;
+};
+type BuildTicketPromptMarkdownInput = {
   ticket: {
     id: string;
     title: string | null;
@@ -27,11 +38,18 @@ export function buildTicketPromptMarkdown(
     project_id: string;
     status: string | null;
     priority: string | number | null;
-  },
-  platformUrl: string,
-  context?: PromptContext,
-  options?: PromptOptions
-): string {
+  };
+  platformUrl: string;
+  context?: PromptContext;
+  options?: PromptOptions;
+};
+
+export function buildTicketPromptMarkdown({
+  ticket,
+  platformUrl,
+  context,
+  options
+}: BuildTicketPromptMarkdownInput): string {
   const ref = getTicketIdentifier(ticket.id);
   const title = ticket.title ?? '(Untitled)';
 
