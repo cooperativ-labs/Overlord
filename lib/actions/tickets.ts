@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
-import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
+import { getOverlordUrl, getSupabaseUrl } from '@/lib/env';
 import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
@@ -814,7 +814,7 @@ export async function getTicketPromptForCopy(
     data: { user }
   } = await supabase.auth.getUser();
 
-  const platformUrl = getPlatformUrl();
+  const platformUrl = getOverlordUrl();
   const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
   let mcpUrl: string | undefined;
   try {
