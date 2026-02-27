@@ -749,7 +749,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       {!agentsLoaded ? (
                         <p className="text-sm text-muted-foreground">Loading running agents…</p>
                       ) : null}
-                      {agentsError ? <p className="text-sm text-destructive">{agentsError}</p> : null}
+                      {agentsError ? (
+                        <p className="text-sm text-destructive">{agentsError}</p>
+                      ) : null}
                       {agentsLoaded && !agentsError && runningAgents.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
                           No agents are currently running.
@@ -808,15 +810,17 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       </div>
                       <div className="space-y-2 rounded-md border bg-muted/30 p-3">
                         <p className="text-xs text-muted-foreground">
-                          Cloud agents run in a secure cloud environment and connect back to Overlord
-                          using your agent token and allowed domains configuration.
+                          Cloud agents run in a secure cloud environment and connect back to
+                          Overlord using your agent token and allowed domains configuration.
                         </p>
                         <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
                           <li>
                             Open your cloud environment settings in Claude Code, Codex, or another
                             MCP-based agent.
                           </li>
-                          <li>Paste the environment variables snippet below into your env config.</li>
+                          <li>
+                            Paste the environment variables snippet below into your env config.
+                          </li>
                           <li>
                             Add the domain snippet below to the allowed domains list, and keep the
                             default domain list enabled if your tool provides that option.
@@ -871,9 +875,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             {domainSnippet}
                           </pre>
                           <p className="text-xs text-muted-foreground">
-                            Add these domains to the allowed domains list for your cloud environment.
-                            Include your Overlord domain and your Supabase MCP host. We recommend also
-                            keeping the option checked to include the default domain list.
+                            Add these domains to the allowed domains list for your cloud
+                            environment. Include your Overlord domain and your Supabase MCP host. We
+                            recommend also keeping the option checked to include the default domain
+                            list.
                           </p>
                         </div>
                       </div>
@@ -1081,483 +1086,475 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     </div>
                   </div>
                 )}
-                {
-                  activeNav === 'CLI' && (
-                    <div className="grid gap-4">
-                      <div className="grid gap-1">
-                        <p className="text-sm font-medium">Overlord CLI (ovld)</p>
-                        <p className="text-xs text-muted-foreground">
-                          The CLI lets agents in Claude Code, Codex, Cursor, and Gemini work with
-                          Overlord tickets. Available commands:
-                        </p>
-                      </div>
-                      <div className="grid gap-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="grid gap-1">
-                            <p className="text-sm font-medium">Agent token</p>
-                            <p className="text-xs text-muted-foreground">
-                              Each user has a personal agent token used when Overlord talks to your
-                              cloud IDE agents. Rotate it if it is ever exposed.
-                            </p>
-                          </div>
-                          <LoadingButton
-                            buttonState={rotateTokenButtonState}
-                            setButtonState={setRotateTokenButtonState}
-                            text={agentToken ? 'Rotate token' : 'Create token'}
-                            loadingText={agentToken ? 'Rotating...' : 'Creating...'}
-                            successText={agentToken ? 'Rotated' : 'Created'}
-                            errorText="Retry"
-                            reset
-                            size="sm"
-                            variant="outline"
-                            onClick={handleRotateAgentToken}
-                          />
+                {activeNav === 'CLI' && (
+                  <div className="grid gap-4">
+                    <div className="grid gap-1">
+                      <p className="text-sm font-medium">Overlord CLI (ovld)</p>
+                      <p className="text-xs text-muted-foreground">
+                        The CLI lets agents in Claude Code, Codex, Cursor, and Gemini work with
+                        Overlord tickets. Available commands:
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="grid gap-1">
+                          <p className="text-sm font-medium">Agent token</p>
+                          <p className="text-xs text-muted-foreground">
+                            Each user has a personal agent token used when Overlord talks to your
+                            cloud IDE agents. Rotate it if it is ever exposed.
+                          </p>
                         </div>
-                        {agentTokenError ? (
-                          <p className="text-xs text-destructive">{agentTokenError}</p>
-                        ) : null}
-                        {agentTokenLoading ? (
-                          <p className="text-xs text-muted-foreground">Loading agent token…</p>
-                        ) : null}
-                        {agentToken && !agentTokenLoading ? (
-                          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                        <LoadingButton
+                          buttonState={rotateTokenButtonState}
+                          setButtonState={setRotateTokenButtonState}
+                          text={agentToken ? 'Rotate token' : 'Create token'}
+                          loadingText={agentToken ? 'Rotating...' : 'Creating...'}
+                          successText={agentToken ? 'Rotated' : 'Created'}
+                          errorText="Retry"
+                          reset
+                          size="sm"
+                          variant="outline"
+                          onClick={handleRotateAgentToken}
+                        />
+                      </div>
+                      {agentTokenError ? (
+                        <p className="text-xs text-destructive">{agentTokenError}</p>
+                      ) : null}
+                      {agentTokenLoading ? (
+                        <p className="text-xs text-muted-foreground">Loading agent token…</p>
+                      ) : null}
+                      {agentToken && !agentTokenLoading ? (
+                        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                          <div className="flex items-center gap-2">
+                            <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                              {`OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken}`}
+                            </pre>
+                            <button
+                              type="button"
+                              onClick={() => void handleCopyAgentEnvSnippet()}
+                              className="shrink-0 rounded p-1 hover:bg-muted"
+                              title="Copy environment snippet"
+                            >
+                              {agentEnvSnippetCopied ? (
+                                <Check className="h-3.5 w-3.5 text-green-500" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                              )}
+                            </button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Add this snippet to your custom cloud environment in Claude Code or
+                            Codex. Also add the domains from the Cloud agents &amp; MCP domain
+                            snippet to the allow-list, and we recommend keeping the option checked
+                            to also include the default domain list.
+                          </p>
+                        </div>
+                      ) : null}
+                      {!agentToken && !agentTokenLoading && !agentTokenError ? (
+                        <p className="text-xs text-muted-foreground">
+                          No agent token found yet. Use &quot;Create token&quot; to generate one.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs">
+                      <p className="mb-2 font-sans font-medium text-foreground">Top-level</p>
+                      <ul className="grid gap-1 text-muted-foreground">
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld attach [ticketId] [agent]
+                          </code>{' '}
+                          interactive ticket picker + agent launcher
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1">ovld auth</code> login, status,
+                          logout
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1">ovld tickets</code> create, list
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1">ovld ticket</code> context
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1">ovld protocol</code> attach,
+                          update, ask, read-context, write-context, deliver
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld run &lt;agent&gt;
+                          </code>{' '}
+                          launch agent (requires TICKET_ID)
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld resume &lt;agent&gt;
+                          </code>{' '}
+                          resume an agent session
+                        </li>
+                      </ul>
+                      <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
+                      <ul className="grid gap-1 text-muted-foreground">
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1">ovld attach</code> — interactive:
+                          search tickets, pick agent
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld attach &lt;ticketId&gt;
+                          </code>{' '}
+                          — skip search, pick agent
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld attach &lt;ticketId&gt; claude
+                          </code>{' '}
+                          — fully non-interactive
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld protocol attach --ticket-id &lt;id&gt;
+                          </code>
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld protocol update --session-key &lt;key&gt; --summary "..."
+                          </code>
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld protocol deliver --session-key &lt;key&gt; --summary "..."
+                          </code>
+                        </li>
+                        <li className="break-words">
+                          <code className="rounded bg-muted px-1 break-all">
+                            ovld tickets create --objective "..." --execution-target agent
+                          </code>
+                        </li>
+                      </ul>
+                      <p className="mt-2 text-muted-foreground">
+                        Run{' '}
+                        <code className="rounded bg-muted px-1 break-all">
+                          ovld &lt;command&gt; --help
+                        </code>{' '}
+                        for more detail.
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      <p className="text-sm font-medium">Agent slash commands</p>
+                      <p className="text-xs text-muted-foreground">
+                        Install a <code className="rounded bg-muted px-1">/switch-ticket</code>{' '}
+                        command so your agent can switch Overlord tickets without leaving its
+                        session. Select your agent for setup instructions.
+                      </p>
+                      <Select value={selectedSlashAgent} onValueChange={setSelectedSlashAgent}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(SLASH_COMMAND_CONFIGS).map(([key, cfg]) => (
+                            <SelectItem key={key} value={key}>
+                              {cfg.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(() => {
+                        const cfg = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
+                        if (!cfg) return null;
+                        return (
+                          <div className="rounded-md border bg-muted/30 p-3 text-xs">
+                            <p className="mb-1 font-sans text-muted-foreground">
+                              {cfg.description}
+                            </p>
+                            <p className="mb-2 break-all font-sans text-muted-foreground">
+                              File: <code className="rounded bg-muted px-1">{cfg.filePath}</code>
+                            </p>
+                            <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
+                              {cfg.fileContent}
+                            </pre>
                             <div className="flex items-center gap-2">
-                              <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                                {`OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken}`}
-                              </pre>
+                              <p className="shrink-0 font-sans text-muted-foreground">
+                                Install command:
+                              </p>
+                              <code className="min-w-0 flex-1 break-all rounded bg-muted px-1">
+                                {cfg.installCmd}
+                              </code>
                               <button
                                 type="button"
-                                onClick={() => void handleCopyAgentEnvSnippet()}
+                                onClick={() => void handleCopySlashInstall()}
                                 className="shrink-0 rounded p-1 hover:bg-muted"
-                                title="Copy environment snippet"
+                                title="Copy install command"
                               >
-                                {agentEnvSnippetCopied ? (
+                                {slashCommandCopied ? (
                                   <Check className="h-3.5 w-3.5 text-green-500" />
                                 ) : (
                                   <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                                 )}
                               </button>
                             </div>
-                            <p className="text-xs text-muted-foreground">
-                              Add this snippet to your custom cloud environment in Claude Code or
-                              Codex. Also add the domains from the Cloud agents &amp; MCP domain
-                              snippet to the allow-list, and we recommend keeping the option checked
-                              to also include the default domain list.
-                            </p>
                           </div>
-                        ) : null}
-                        {!agentToken && !agentTokenLoading && !agentTokenError ? (
-                          <p className="text-xs text-muted-foreground">
-                            No agent token found yet. Use &quot;Create token&quot; to generate one.
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs">
-                        <p className="mb-2 font-sans font-medium text-foreground">Top-level</p>
-                        <ul className="grid gap-1 text-muted-foreground">
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld attach [ticketId] [agent]
-                            </code>{' '}
-                            interactive ticket picker + agent launcher
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1">ovld auth</code> login, status,
-                            logout
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1">ovld tickets</code> create, list
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1">ovld ticket</code> context
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1">ovld protocol</code> attach,
-                            update, ask, read-context, write-context, deliver
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld run &lt;agent&gt;
-                            </code>{' '}
-                            launch agent (requires TICKET_ID)
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld resume &lt;agent&gt;
-                            </code>{' '}
-                            resume an agent session
-                          </li>
-                        </ul>
-                        <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
-                        <ul className="grid gap-1 text-muted-foreground">
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1">ovld attach</code> — interactive:
-                            search tickets, pick agent
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld attach &lt;ticketId&gt;
-                            </code>{' '}
-                            — skip search, pick agent
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld attach &lt;ticketId&gt; claude
-                            </code>{' '}
-                            — fully non-interactive
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld protocol attach --ticket-id &lt;id&gt;
-                            </code>
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld protocol update --session-key &lt;key&gt; --summary "..."
-                            </code>
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld protocol deliver --session-key &lt;key&gt; --summary "..."
-                            </code>
-                          </li>
-                          <li className="break-words">
-                            <code className="rounded bg-muted px-1 break-all">
-                              ovld tickets create --objective "..." --execution-target agent
-                            </code>
-                          </li>
-                        </ul>
-                        <p className="mt-2 text-muted-foreground">
-                          Run{' '}
-                          <code className="rounded bg-muted px-1 break-all">
-                            ovld &lt;command&gt; --help
-                          </code>{' '}
-                          for more detail.
-                        </p>
-                      </div>
-                      <div className="grid gap-2">
-                        <p className="text-sm font-medium">Agent slash commands</p>
-                        <p className="text-xs text-muted-foreground">
-                          Install a <code className="rounded bg-muted px-1">/switch-ticket</code>{' '}
-                          command so your agent can switch Overlord tickets without leaving its
-                          session. Select your agent for setup instructions.
-                        </p>
-                        <Select value={selectedSlashAgent} onValueChange={setSelectedSlashAgent}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select agent" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(SLASH_COMMAND_CONFIGS).map(([key, cfg]) => (
-                              <SelectItem key={key} value={key}>
-                                {cfg.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {(() => {
-                          const cfg = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
-                          if (!cfg) return null;
-                          return (
-                            <div className="rounded-md border bg-muted/30 p-3 text-xs">
-                              <p className="mb-1 font-sans text-muted-foreground">
-                                {cfg.description}
-                              </p>
-                              <p className="mb-2 break-all font-sans text-muted-foreground">
-                                File: <code className="rounded bg-muted px-1">{cfg.filePath}</code>
-                              </p>
-                              <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
-                                {cfg.fileContent}
-                              </pre>
-                              <div className="flex items-center gap-2">
-                                <p className="shrink-0 font-sans text-muted-foreground">
-                                  Install command:
-                                </p>
-                                <code className="min-w-0 flex-1 break-all rounded bg-muted px-1">
-                                  {cfg.installCmd}
-                                </code>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleCopySlashInstall()}
-                                  className="shrink-0 rounded p-1 hover:bg-muted"
-                                  title="Copy install command"
-                                >
-                                  {slashCommandCopied ? (
-                                    <Check className="h-3.5 w-3.5 text-green-500" />
-                                  ) : (
-                                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      {isElectron && api?.cli ? (
-                        <>
-                          {cliInstalled && !cliIsStale ? (
-                            <div className="rounded-md border p-3">
-                              <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                                ovld {cliVersion ? `v${cliVersion}` : ''} installed at{' '}
-                                {cliInstallPath}
-                              </p>
+                        );
+                      })()}
+                    </div>
+                    {isElectron && api?.cli ? (
+                      <>
+                        {cliInstalled && !cliIsStale ? (
+                          <div className="rounded-md border p-3">
+                            <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                              ovld {cliVersion ? `v${cliVersion}` : ''} installed at{' '}
+                              {cliInstallPath}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Automatically updated when the desktop app updates.
+                            </p>
+                            {cliInstallMessage ? (
                               <p className="mt-1 text-xs text-muted-foreground">
-                                Automatically updated when the desktop app updates.
+                                {cliInstallMessage}
                               </p>
-                              {cliInstallMessage ? (
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {cliInstallMessage}
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="grid gap-2">
+                            {cliIsStale ? (
+                              <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-3 dark:bg-yellow-900/10">
+                                <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                                  CLI wrapper is outdated
                                 </p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  The installed wrapper points to an old app location. Reinstall to
+                                  link it to the current version
+                                  {cliVersion ? ` (v${cliVersion})` : ''}.
+                                </p>
+                              </div>
+                            ) : null}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <LoadingButton
+                                buttonState={cliInstallButtonState}
+                                setButtonState={setCliInstallButtonState}
+                                text={cliIsStale ? 'Reinstall CLI' : 'Install CLI'}
+                                loadingText={cliIsStale ? 'Reinstalling...' : 'Installing...'}
+                                successText={cliIsStale ? 'Reinstalled' : 'Installed'}
+                                errorText="Retry"
+                                reset
+                                variant="default"
+                                onClick={handleInstallCli}
+                              />
+                              {cliInstallMessage ? (
+                                <p className="text-sm text-destructive">{cliInstallMessage}</p>
                               ) : null}
                             </div>
-                          ) : (
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="rounded-md border p-3">
+                        <p className="text-sm text-muted-foreground">
+                          Install the{' '}
+                          <Link
+                            href="/downloads"
+                            className="text-foreground underline underline-offset-4"
+                          >
+                            desktop app
+                          </Link>{' '}
+                          to install the CLI with one click. Or run{' '}
+                          <code className="rounded bg-muted px-1">npx overlord</code> from the
+                          project directory.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeNav === 'Appearance' && (
+                  <div className="grid gap-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="theme-select">Theme</Label>
+                      <Select value={theme ?? 'system'} onValueChange={setTheme}>
+                        <SelectTrigger id="theme-select">
+                          <SelectValue placeholder="Select theme" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {themeOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        System follows your OS appearance setting.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {activeNav === 'Terminal' && isElectron && (
+                  <div className="grid gap-6">
+                    <div className="grid gap-2">
+                      <Label htmlFor="terminal-mode">Where to run terminal commands</Label>
+                      <Select value={terminalMode} onValueChange={handleTerminalModeChange}>
+                        <SelectTrigger id="terminal-mode">
+                          <SelectValue placeholder="Select mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {terminalModeOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Embedded runs inside the app; External opens your system terminal.
+                      </p>
+                    </div>
+                    {terminalMode === 'external' && (
+                      <>
+                        <div className="grid gap-2">
+                          <Label htmlFor="terminal-app">External terminal application</Label>
+                          <Select value={terminalApp} onValueChange={handleTerminalAppChange}>
+                            <SelectTrigger id="terminal-app">
+                              <SelectValue placeholder="Select terminal" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {externalTerminalAppOptions.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {terminalApp === 'custom' && (
                             <div className="grid gap-2">
-                              {cliIsStale ? (
-                                <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-3 dark:bg-yellow-900/10">
-                                  <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
-                                    CLI wrapper is outdated
-                                  </p>
-                                  <p className="mt-0.5 text-xs text-muted-foreground">
-                                    The installed wrapper points to an old app location. Reinstall to
-                                    link it to the current version
-                                    {cliVersion ? ` (v${cliVersion})` : ''}.
-                                  </p>
-                                </div>
-                              ) : null}
-                              <div className="flex flex-wrap items-center gap-2">
-                                <LoadingButton
-                                  buttonState={cliInstallButtonState}
-                                  setButtonState={setCliInstallButtonState}
-                                  text={cliIsStale ? 'Reinstall CLI' : 'Install CLI'}
-                                  loadingText={cliIsStale ? 'Reinstalling...' : 'Installing...'}
-                                  successText={cliIsStale ? 'Reinstalled' : 'Installed'}
-                                  errorText="Retry"
-                                  reset
-                                  variant="default"
-                                  onClick={handleInstallCli}
-                                />
-                                {cliInstallMessage ? (
-                                  <p className="text-sm text-destructive">{cliInstallMessage}</p>
-                                ) : null}
-                              </div>
+                              <Label htmlFor="custom-terminal-app">
+                                Custom terminal name or path
+                              </Label>
+                              <Input
+                                id="custom-terminal-app"
+                                placeholder="Example: cmux or /Applications/cmux.app"
+                                value={customTerminalApp}
+                                onChange={event =>
+                                  void handleCustomTerminalAppChange(event.target.value)
+                                }
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Overlord will open this app and type the launch command into the
+                                active terminal session.
+                              </p>
                             </div>
                           )}
-                        </>
-                      ) : (
-                        <div className="rounded-md border p-3">
-                          <p className="text-sm text-muted-foreground">
-                            Install the{' '}
-                            <Link
-                              href="/downloads"
-                              className="text-foreground underline underline-offset-4"
-                            >
-                              desktop app
-                            </Link>{' '}
-                            to install the CLI with one click. Or run{' '}
-                            <code className="rounded bg-muted px-1">npx overlord</code> from the
-                            project directory.
-                          </p>
                         </div>
-                      )}
-                    </div>
-                  )
-                }
-
-                {
-                  activeNav === 'Appearance' && (
-                    <div className="grid gap-6">
-                      <div className="grid gap-2">
-                        <Label htmlFor="theme-select">Theme</Label>
-                        <Select value={theme ?? 'system'} onValueChange={setTheme}>
-                          <SelectTrigger id="theme-select">
-                            <SelectValue placeholder="Select theme" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {themeOptions.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          System follows your OS appearance setting.
-                        </p>
-                      </div>
-                    </div>
-                  )
-                }
-
-                {
-                  activeNav === 'Terminal' && isElectron && (
-                    <div className="grid gap-6">
-                      <div className="grid gap-2">
-                        <Label htmlFor="terminal-mode">Where to run terminal commands</Label>
-                        <Select value={terminalMode} onValueChange={handleTerminalModeChange}>
-                          <SelectTrigger id="terminal-mode">
-                            <SelectValue placeholder="Select mode" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {terminalModeOptions.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Embedded runs inside the app; External opens your system terminal.
-                        </p>
-                      </div>
-                      {terminalMode === 'external' && (
-                        <>
-                          <div className="grid gap-2">
-                            <Label htmlFor="terminal-app">External terminal application</Label>
-                            <Select value={terminalApp} onValueChange={handleTerminalAppChange}>
-                              <SelectTrigger id="terminal-app">
-                                <SelectValue placeholder="Select terminal" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {externalTerminalAppOptions.map(opt => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {terminalApp === 'custom' && (
-                              <div className="grid gap-2">
-                                <Label htmlFor="custom-terminal-app">
-                                  Custom terminal name or path
-                                </Label>
-                                <Input
-                                  id="custom-terminal-app"
-                                  placeholder="Example: cmux or /Applications/cmux.app"
-                                  value={customTerminalApp}
-                                  onChange={event =>
-                                    void handleCustomTerminalAppChange(event.target.value)
-                                  }
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  Overlord will open this app and type the launch command into the
-                                  active terminal session.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                          <div className="grid gap-2">
-                            {supportsLaunchModeSelection && (
-                              <>
-                                <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
-                                <Select
-                                  value={terminalLaunchMode}
-                                  onValueChange={handleTerminalLaunchModeChange}
-                                >
-                                  <SelectTrigger id="terminal-launch-mode">
-                                    <SelectValue placeholder="Select behavior" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {externalTerminalLaunchModeOptions.map(opt => (
-                                      <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </>
-                            )}
-                            {supportsLaunchModeSelection && terminalLaunchMode === 'custom' && (
-                              <div className="mt-2 grid gap-2">
-                                <Label htmlFor="terminal-custom-hotkey">Custom hotkey</Label>
-                                <Input
-                                  id="terminal-custom-hotkey"
-                                  placeholder="Press the key combination to use (e.g. Cmd + D)"
-                                  value={terminalCustomHotkey}
-                                  onKeyDown={handleTerminalCustomHotkeyKeyDown}
-                                  readOnly
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  Overlord will activate {selectedTerminalLabel}, send this hotkey to
-                                  trigger your preferred split or focus behavior, then type the launch
-                                  command.
-                                </p>
-                              </div>
-                            )}
-                            {supportsLaunchModeSelection && terminalLaunchMode !== 'custom' && (
+                        <div className="grid gap-2">
+                          {supportsLaunchModeSelection && (
+                            <>
+                              <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
+                              <Select
+                                value={terminalLaunchMode}
+                                onValueChange={handleTerminalLaunchModeChange}
+                              >
+                                <SelectTrigger id="terminal-launch-mode">
+                                  <SelectValue placeholder="Select behavior" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {externalTerminalLaunchModeOptions.map(opt => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </>
+                          )}
+                          {supportsLaunchModeSelection && terminalLaunchMode === 'custom' && (
+                            <div className="mt-2 grid gap-2">
+                              <Label htmlFor="terminal-custom-hotkey">Custom hotkey</Label>
+                              <Input
+                                id="terminal-custom-hotkey"
+                                placeholder="Press the key combination to use (e.g. Cmd + D)"
+                                value={terminalCustomHotkey}
+                                onKeyDown={handleTerminalCustomHotkeyKeyDown}
+                                readOnly
+                              />
                               <p className="text-xs text-muted-foreground">
-                                Choose the app and whether launches open in a new window or tab.
+                                Overlord will activate {selectedTerminalLabel}, send this hotkey to
+                                trigger your preferred split or focus behavior, then type the launch
+                                command.
                               </p>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                }
+                            </div>
+                          )}
+                          {supportsLaunchModeSelection && terminalLaunchMode !== 'custom' && (
+                            <p className="text-xs text-muted-foreground">
+                              Choose the app and whether launches open in a new window or tab.
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
-                {
-                  activeNav === 'Updates' && isElectron && (
-                    <div className="grid gap-4">
-                      <div className="grid gap-1">
-                        <p className="text-sm font-medium">App updates</p>
-                        <p className="text-xs text-muted-foreground">
-                          Version {updateStatus?.currentVersion ?? 'unknown'}
-                          {updateStatus?.availableVersion
-                            ? ` • Latest ${updateStatus.availableVersion}`
-                            : ''}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
+                {activeNav === 'Updates' && isElectron && (
+                  <div className="grid gap-4">
+                    <div className="grid gap-1">
+                      <p className="text-sm font-medium">App updates</p>
+                      <p className="text-xs text-muted-foreground">
+                        Version {updateStatus?.currentVersion ?? 'unknown'}
+                        {updateStatus?.availableVersion
+                          ? ` • Latest ${updateStatus.availableVersion}`
+                          : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <LoadingButton
+                        buttonState={checkUpdateButtonState}
+                        setButtonState={setCheckUpdateButtonState}
+                        text="Check for updates"
+                        loadingText="Checking..."
+                        successText="Check started"
+                        errorText="Try again"
+                        reset
+                        variant="outline"
+                        onClick={handleCheckForUpdates}
+                      />
+                      {canShowDownloadUpdate && (
                         <LoadingButton
-                          buttonState={checkUpdateButtonState}
-                          setButtonState={setCheckUpdateButtonState}
-                          text="Check for updates"
-                          loadingText="Checking..."
-                          successText="Check started"
-                          errorText="Try again"
+                          buttonState={downloadUpdateButtonState}
+                          setButtonState={setDownloadUpdateButtonState}
+                          text="Download update"
+                          loadingText="Starting download..."
+                          successText="Download started"
+                          errorText="Unavailable"
                           reset
                           variant="outline"
-                          onClick={handleCheckForUpdates}
+                          onClick={handleDownloadUpdate}
                         />
-                        {canShowDownloadUpdate && (
-                          <LoadingButton
-                            buttonState={downloadUpdateButtonState}
-                            setButtonState={setDownloadUpdateButtonState}
-                            text="Download update"
-                            loadingText="Starting download..."
-                            successText="Download started"
-                            errorText="Unavailable"
-                            reset
-                            variant="outline"
-                            onClick={handleDownloadUpdate}
-                          />
-                        )}
-                        {canShowInstallUpdate && (
-                          <LoadingButton
-                            buttonState={restartToUpdateButtonState}
-                            setButtonState={setRestartToUpdateButtonState}
-                            text="Install update"
-                            loadingText="Installing..."
-                            successText="Installing..."
-                            errorText="Unavailable"
-                            variant="default"
-                            onClick={handleRestartToInstallUpdate}
-                          />
-                        )}
-                      </div>
-                      {platformUrl && (
-                        <div className="rounded-md border p-3">
-                          <p className="text-xs text-muted-foreground">OVERLORD_URL: {platformUrl}</p>
-                        </div>
+                      )}
+                      {canShowInstallUpdate && (
+                        <LoadingButton
+                          buttonState={restartToUpdateButtonState}
+                          setButtonState={setRestartToUpdateButtonState}
+                          text="Install update"
+                          loadingText="Installing..."
+                          successText="Installing..."
+                          errorText="Unavailable"
+                          variant="default"
+                          onClick={handleRestartToInstallUpdate}
+                        />
                       )}
                     </div>
-                  )
-                }
-              </div >
-            </main >
-          </SidebarProvider >
-        </DialogContent >
-      </Dialog >
+                    {platformUrl && (
+                      <div className="rounded-md border p-3">
+                        <p className="text-xs text-muted-foreground">OVERLORD_URL: {platformUrl}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </main>
+          </SidebarProvider>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={installWarningOpen} onOpenChange={setInstallWarningOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

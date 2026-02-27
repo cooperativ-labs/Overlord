@@ -20,7 +20,7 @@ export function getSupabasePublishableKey(): string {
   return value;
 }
 
-export function getOverlordUrl(): string {
+export function getPlatformUrl(): string {
   return process.env.OVERLORD_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? LOCAL_OVERLORD_URL;
 }
 

@@ -717,6 +717,8 @@ export type Database = {
         Args: { target_organization_id: number };
         Returns: undefined;
       };
+      storage_org_id: { Args: { object_name: string }; Returns: number };
+      storage_ticket_id: { Args: { object_name: string }; Returns: string };
     };
     Enums: {
       connection_method:

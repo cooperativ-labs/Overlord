@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.23.0] - 2026-02-27:10:00
+
+### Added
+- Add Agents & MCP, Cloud agents & MCP, and CLI sections in Settings with a running-agents overview, stop controls, and guided setup for cloud IDE agents.
+- Add per-user agent token management backed by database tables so Claude Code, Codex, Cursor, and Gemini can authenticate to Overlord via environment and domain snippets.
+- Add a ticket prompt copy action that builds a full Overlord protocol prompt using the latest ticket state, saved custom instructions, and an MCP endpoint derived from Supabase.
+
+### Fixed
+- None.
+
+### Changed
+- Change ticket creation, update, and board reorder actions to share helpers for resolving projects/organizations, placing new tickets at the end of Kanban columns, and revalidating board and detail routes so `/u` and project views stay in sync.
+- Standardize environment helpers and ticket prompt generation to derive platform and MCP URLs from `OVERLORD_URL`, `NEXT_PUBLIC_SITE_URL`, and Supabase configuration so agents copy prompts that work across deployments.
+
+### Security
+- Store personal agent tokens in a dedicated table scoped to organizations and expose rotation from Settings so leaked tokens can be revoked while keeping access tied to Overlord membership and roles.
+
+### Refactor
+- Refactor ticket actions around shared helpers for board revalidation, status-change event logging, and objective execution so Kanban behavior stays consistent across create, update, reorder, and delete flows.
+
+### Chore
+- Bump package version to `0.23.0`.
+- Regenerate Supabase `database.types.ts` typings and environment helpers to match the latest schema and configuration.
+
 ## [0.22.0] - 2026-02-27:09:00
 
 ### Added
