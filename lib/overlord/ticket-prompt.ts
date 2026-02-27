@@ -5,6 +5,8 @@ export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 export type PromptOptions = {
   /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */
   mcpUrl?: string;
+  /** When true, remote protocol instructions are MCP-only (no REST fallback section). */
+  mcpOnly?: boolean;
   /** Optional user-level custom instructions to prepend to the prompt */
   customInstructions?: string | null;
 };
@@ -176,7 +178,11 @@ PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx ove
  * Note: This section intentionally avoids embedding concrete token values. Agents
  * should read `AGENT_TOKEN` from their environment when configuring auth.
  */
-function buildMcpConfigSection(mcpUrl: string, ticketId: string): string {
+function buildMcpConfigSection(
+  mcpUrl: string,
+  ticketId: string,
+  includeRestFallbackHeading = true
+): string {
   const settingsJson = JSON.stringify(
     {
       mcpServers: {
@@ -190,6 +196,15 @@ function buildMcpConfigSection(mcpUrl: string, ticketId: string): string {
     null,
     2
   );
+
+  const restFallbackHeading = includeRestFallbackHeading
+    ? `
+
+---
+
+### REST API (fallback if MCP is not available)
+`
+    : '';
 
   return `
 ### MCP Server (Recommended for Claude Code and compatible agents)
@@ -212,11 +227,7 @@ ${settingsJson}
 - \`create_ticket\` — create a follow-up ticket for human work
 
 > If you configure the MCP server, use MCP tools exclusively — do not mix MCP and REST calls in the same session.
-
----
-
-### REST API (fallback if MCP is not available)
-`;
+${restFallbackHeading}`;
 }
 
 function buildRemoteProtocolSection(
@@ -225,7 +236,79 @@ function buildRemoteProtocolSection(
   options?: PromptOptions
 ): string {
   const mcpUrl = options?.mcpUrl;
+  const mcpOnly = options?.mcpOnly ?? false;
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, ticketId) : '';
+
+  if (mcpUrl && mcpOnly) {
+    return `## Overlord Protocol (MCP Only)
+
+- **Ticket ID:** ${ticketId}
+- **MCP URL:** ${mcpUrl}
+
+The following environment variables are set in your agent environment:
+- \`AGENT_TOKEN\` — bearer token for MCP auth
+- \`TICKET_ID\` — this ticket's id: \`${ticketId}\`
+${buildMcpConfigSection(mcpUrl, ticketId, false)}
+
+### 1 — Attach (always first, before any other work)
+
+Use MCP tool: \`attach\`
+
+\`\`\`json
+{ "ticketId": "${ticketId}", "agentIdentifier": "<your-agent-id>", "connectionMethod": "mcp", "metadata": {} }
+\`\`\`
+
+Store \`session.sessionKey\` from the response. It is required for all later tools.
+
+### 2 — Post updates during work
+
+Use MCP tool: \`update\`
+
+\`\`\`json
+{ "sessionKey": "<from attach>", "ticketId": "${ticketId}", "summary": "What you did and why.", "phase": "execute" }
+\`\`\`
+
+### 3 — Ask a blocking question (when you cannot proceed)
+
+Use MCP tool: \`ask\`
+
+\`\`\`json
+{ "sessionKey": "<from attach>", "ticketId": "${ticketId}", "question": "Specific question for the PM.", "phase": "review" }
+\`\`\`
+
+### 4 — Read / write shared context (optional)
+
+Use MCP tools: \`read_context\`, \`write_context\`
+
+### 5 — Create follow-up ticket for human help (optional)
+
+Use MCP tool: \`create_ticket\`
+
+### 6 — Deliver (always last)
+
+Use MCP tool: \`deliver\`
+
+\`\`\`json
+{
+  "sessionKey": "<from attach>",
+  "ticketId": "${ticketId}",
+  "summary": "Narrative: what you did, what you considered, and next steps for the PM.",
+  "artifacts": [
+    { "type": "file_changes", "label": "Files modified", "content": "git diff --stat output or file list" },
+    { "type": "next_steps", "label": "Recommended next steps", "content": "Bulleted list." }
+  ]
+}
+\`\`\`
+
+### Rules
+
+- Use MCP tools only for this session.
+- Always attach first; always deliver when done.
+- Post at least one update before delivering.
+- If blocked on human-only work, create a follow-up ticket.
+- **If the user sends you a message during your session, immediately post an update with the user's message recorded verbatim in the summary before doing anything else.**
+`;
+  }
 
   return `## Overlord Protocol
 

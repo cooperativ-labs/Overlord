@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
-import { getPlatformUrl } from '@/lib/env';
+import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
 import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
@@ -801,14 +801,6 @@ export async function getTicketPromptForCopy(
     return { error: error?.message ?? 'Ticket not found.' };
   }
 
-  const { data: agentTokenRow } = await supabase
-    .from('agent_tokens')
-    .select('token')
-    .eq('organization_id', ticket.organization_id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
   const { data: draftObjective } = await supabase
     .from('objectives')
     .select('objective')
@@ -824,10 +816,18 @@ export async function getTicketPromptForCopy(
 
   const platformUrl = getPlatformUrl();
   const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
+  let mcpUrl: string | undefined;
+  try {
+    const supabaseUrl = getSupabaseUrl();
+    mcpUrl = `${supabaseUrl}/functions/v1/mcp`;
+  } catch {
+    mcpUrl = undefined;
+  }
+
   const prompt = buildTicketPromptMarkdown({
     ticket: { ...ticket, objective: draftObjective?.objective ?? ticket.objective },
     platformUrl,
-    options: { customInstructions }
+    options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions }
   });
   return { prompt };
 }

@@ -1,6 +1,16 @@
 'use client';
 
-import { Bot, Check, Copy, Edit3, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
+import {
+  Bot,
+  Check,
+  Copy,
+  Edit3,
+  Link2,
+  Monitor,
+  Palette,
+  RefreshCcw,
+  Terminal
+} from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { useCallback, useEffect, useState } from 'react';
@@ -56,12 +66,12 @@ import {
   type RunningAgentSession,
   stopRunningAgentSessionAction
 } from '@/lib/actions/agent-sessions';
+import { getAgentTokenAction, rotateAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
 import {
   getCustomInstructionsAction,
   saveCustomInstructionsAction
 } from '@/lib/actions/profile-settings';
-import { getAgentTokenAction, rotateAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
 type SettingsModalProps = {
@@ -233,6 +243,33 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const [activeNav, setActiveNav] = useState<string>('Integrations');
 
+  const resolvedPlatformUrl =
+    platformUrl ??
+    (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : null) ??
+    'https://overlord.cooperativ.io';
+  const resolvedPlatformDomain = (() => {
+    try {
+      return new URL(resolvedPlatformUrl).hostname;
+    } catch {
+      return 'overlord.cooperativ.io';
+    }
+  })();
+  const supabaseDomain = (() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl) return null;
+    try {
+      return new URL(supabaseUrl).hostname;
+    } catch {
+      return null;
+    }
+  })();
+  const allowedDomainLines = Array.from(
+    new Set(
+      [resolvedPlatformDomain, supabaseDomain].filter((value): value is string => Boolean(value))
+    )
+  );
+  const domainSnippet = allowedDomainLines.join('\n');
+
   // Reset to first visible item when electron state changes
   useEffect(() => {
     if (visibleNavItems.length > 0 && !visibleNavItems.find(i => i.name === activeNav)) {
@@ -307,9 +344,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       setAgentToken(token);
     } catch (error) {
       console.error('Failed to load agent token:', error);
-      setAgentTokenError(
-        error instanceof Error ? error.message : 'Failed to load agent token.'
-      );
+      setAgentTokenError(error instanceof Error ? error.message : 'Failed to load agent token.');
     } finally {
       setAgentTokenLoading(false);
     }
@@ -437,15 +472,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   async function handleCopyAgentEnvSnippet() {
     const snippetToken = agentToken ?? '<AGENT_TOKEN>';
-    const snippet = `PLATFORM_URL=HTTPS://overlord.cooperativ.io\nAGENT_TOKEN=${snippetToken}`;
+    const snippet = `PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${snippetToken}`;
     await navigator.clipboard.writeText(snippet);
     setAgentEnvSnippetCopied(true);
     setTimeout(() => setAgentEnvSnippetCopied(false), 2000);
   }
 
   async function handleCopyAgentDomainSnippet() {
-    const snippet = 'overlord.cooperativ.io';
-    await navigator.clipboard.writeText(snippet);
+    await navigator.clipboard.writeText(domainSnippet);
     setAgentDomainSnippetCopied(true);
     setTimeout(() => setAgentDomainSnippetCopied(false), 2000);
   }
@@ -563,9 +597,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     } catch (error) {
       console.error('Failed to rotate agent token:', error);
       setRotateTokenButtonState('error');
-      setAgentTokenError(
-        error instanceof Error ? error.message : 'Failed to rotate agent token.'
-      );
+      setAgentTokenError(error instanceof Error ? error.message : 'Failed to rotate agent token.');
     }
   }
 
@@ -815,7 +847,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </button>
                         </div>
                         <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                          {`PLATFORM_URL=HTTPS://overlord.cooperativ.io\nAGENT_TOKEN=${
+                          {`PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${
                             agentToken ?? '<AGENT_TOKEN>'
                           }`}
                         </pre>
@@ -841,12 +873,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </button>
                         </div>
                         <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                          overlord.cooperativ.io
+                          {domainSnippet}
                         </pre>
                         <p className="text-xs text-muted-foreground">
-                          Add this to the allowed domains list for your cloud environment. We
-                          recommend also keeping the option checked to include the default domain
-                          list.
+                          Add these domains to the allowed domains list for your cloud environment.
+                          Include your Overlord domain and your Supabase MCP host. We recommend also
+                          keeping the option checked to include the default domain list.
                         </p>
                       </div>
                     </div>
@@ -928,7 +960,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <div className="space-y-2 rounded-md border bg-muted/30 p-3">
                           <div className="flex items-center gap-2">
                             <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                              {`PLATFORM_URL=HTTPS://overlord.cooperativ.io\nAGENT_TOKEN=${agentToken}`}
+                              {`PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken}`}
                             </pre>
                             <button
                               type="button"
@@ -945,10 +977,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </div>
                           <p className="text-xs text-muted-foreground">
                             Add this snippet to your custom cloud environment in Claude Code or
-                            Codex. Also add{' '}
-                            <code className="rounded bg-muted px-1">overlord.cooperativ.io</code> to
-                            the allowed domains, and we recommend keeping the option checked to also
-                            include the default domain list.
+                            Codex. Also add the domains from the Cloud agents &amp; MCP domain
+                            snippet to the allow-list, and we recommend keeping the option checked
+                            to also include the default domain list.
                           </p>
                         </div>
                       ) : null}
