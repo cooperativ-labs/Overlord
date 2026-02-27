@@ -3,8 +3,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import fs from 'node:fs/promises';
 
+import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
+import { TicketDocumentUpload } from '@/components/features/TicketDocumentUpload';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { InlineEditField } from '@/components/features/InlineEditField';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
@@ -181,6 +183,7 @@ export async function TicketPanelContent({
   );
   const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
   const draftObjectiveValue = draftObjective?.objective ?? ticket.objective ?? '';
+  const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
 
   return (
     <TicketLiveProvider
@@ -382,6 +385,10 @@ export async function TicketPanelContent({
               placeholder="None specified — click to add."
               ticketId={ticketId}
             />
+          </section>
+
+          <section className="mb-6">
+            <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
           </section>
 
           <Separator className="mb-6" />
