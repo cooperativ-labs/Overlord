@@ -167,11 +167,11 @@ app.whenReady().then(async () => {
   // with anything else the user has running on their machine.
   const port = isDev ? 3000 : await findFreePort();
   const defaultPlatformUrl = getDefaultLocalPlatformUrl(port);
-  const platformUrl = isDev ? (process.env.PLATFORM_URL ?? defaultPlatformUrl) : defaultPlatformUrl;
+  const platformUrl = isDev ? (process.env.OVERLORD_URL ?? defaultPlatformUrl) : defaultPlatformUrl;
   const localSecret = generateLocalSecret();
 
   process.env.OVERLORD_LOCAL_SECRET = localSecret;
-  process.env.PLATFORM_URL = platformUrl;
+  process.env.OVERLORD_URL = platformUrl;
 
   if (!isDev) {
     await startNextServer(port);

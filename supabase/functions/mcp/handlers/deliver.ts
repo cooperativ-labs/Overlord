@@ -28,7 +28,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
   if (eventErr || !event) return toolErr(eventErr?.message ?? 'Failed to write delivery event.');
 
   const mcpFunctionsUrl = `${SUPABASE_URL}/functions/v1/mcp`;
-  const restartCommand = `PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude`;
+  const restartCommand = `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude`;
   const hasRestartArtifact = artifacts.some(
     (a: any) => a.label?.trim().toLowerCase() === 'restart session command'
   );

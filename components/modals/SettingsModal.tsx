@@ -472,7 +472,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   async function handleCopyAgentEnvSnippet() {
     const snippetToken = agentToken ?? '<AGENT_TOKEN>';
-    const snippet = `PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${snippetToken}`;
+    const snippet = `OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${snippetToken}`;
     await navigator.clipboard.writeText(snippet);
     setAgentEnvSnippetCopied(true);
     setTimeout(() => setAgentEnvSnippetCopied(false), 2000);
@@ -897,7 +897,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </button>
                         </div>
                         <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                          {`PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${
+                          {`OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${
                             agentToken ?? '<AGENT_TOKEN>'
                           }`}
                         </pre>
@@ -1010,7 +1010,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <div className="space-y-2 rounded-md border bg-muted/30 p-3">
                           <div className="flex items-center gap-2">
                             <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                              {`PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken}`}
+                              {`OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken}`}
                             </pre>
                             <button
                               type="button"
@@ -1428,7 +1428,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     </div>
                     {platformUrl && (
                       <div className="rounded-md border p-3">
-                        <p className="text-xs text-muted-foreground">PLATFORM_URL: {platformUrl}</p>
+                        <p className="text-xs text-muted-foreground">OVERLORD_URL: {platformUrl}</p>
                       </div>
                     )}
                   </div>

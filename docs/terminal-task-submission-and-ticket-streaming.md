@@ -32,7 +32,7 @@ flowchart LR
 
 `TicketPanelContent` builds launch commands that inject:
 
-- `PLATFORM_URL`
+- `OVERLORD_URL`
 - `AGENT_TOKEN`
 - `TICKET_ID`
 - A `curl` call to fetch `/api/protocol/context/<ticketId>` and pass it to agent CLI.
