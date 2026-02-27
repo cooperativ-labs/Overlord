@@ -41,8 +41,10 @@ import {
   getReviewRaisedWhileOpenMap,
   getWaitingRaisedWhileOpenMap,
   hasUnopenedTimestamp,
+  markTicketReviewUnread,
   markTicketReviewOpened,
   markTicketReviewRaised,
+  markTicketWaitingUnread,
   markTicketWaitingOpened,
   markTicketWaitingRaised,
   type TicketOpenedTimestamps,
@@ -379,6 +381,28 @@ export default function KanbanBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [displayedTickets, sortedColumns, visibleSlugs]
   );
+
+  function handleMarkUnread(ticketId: string) {
+    const ticket = ticketsByIdRef.current.get(ticketId);
+    if (!ticket) return;
+
+    let didUpdate = false;
+
+    if (ticket.waiting_for_response_at) {
+      setOpenedWaitingTimestamps(markTicketWaitingUnread(ticketId));
+      didUpdate = true;
+    }
+
+    if (ticket.review_entered_at) {
+      setOpenedReviewTimestamps(markTicketReviewUnread(ticketId));
+      didUpdate = true;
+    }
+
+    if (didUpdate) {
+      setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
+      setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
+    }
+  }
 
   function getDisplayedTicketsForColumn({
     column,
@@ -1044,6 +1068,7 @@ export default function KanbanBoard({
                     projectId={projectId}
                     fileMentionPaths={fileMentionPaths}
                     onCreateTicket={handleCreateTicket}
+                    onMarkUnread={handleMarkUnread}
                     olderTicketsCount={olderCount}
                     isCompleteColumn={col.statusType === 'complete'}
                     showOlder={expandedCompleteColumns.has(col.id)}
@@ -1066,6 +1091,7 @@ export default function KanbanBoard({
                   projectId={projectId}
                   fileMentionPaths={fileMentionPaths}
                   onCreateTicket={handleCreateTicket}
+                  onMarkUnread={handleMarkUnread}
                   olderTicketsCount={0}
                   isCompleteColumn={false}
                   showOlder={false}

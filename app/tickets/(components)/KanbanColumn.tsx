@@ -27,6 +27,7 @@ export default function KanbanColumn({
   projectId,
   fileMentionPaths = [],
   onCreateTicket,
+  onMarkUnread,
   olderTicketsCount = 0,
   isCompleteColumn = false,
   showOlder = false,
@@ -38,6 +39,7 @@ export default function KanbanColumn({
   projectId?: string;
   fileMentionPaths?: string[];
   onCreateTicket: (status: string, objective: string) => Promise<void> | void;
+  onMarkUnread?: (ticketId: string) => void;
   olderTicketsCount?: number;
   isCompleteColumn?: boolean;
   showOlder?: boolean;
@@ -259,6 +261,7 @@ export default function KanbanColumn({
                   key={ticket.id}
                   ticket={ticket}
                   showOrganizationName={showOrganizationName}
+                  onMarkUnread={onMarkUnread}
                 />
               ))}
               {isAdding ? (

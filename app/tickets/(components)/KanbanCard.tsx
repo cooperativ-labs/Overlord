@@ -2,13 +2,18 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { PanelRightIcon } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
@@ -64,11 +69,13 @@ function StatusDot({
 export default function KanbanCard({
   ticket,
   isDragOverlay,
-  showOrganizationName = false
+  showOrganizationName = false,
+  onMarkUnread
 }: {
   ticket: Ticket;
   isDragOverlay?: boolean;
   showOrganizationName?: boolean;
+  onMarkUnread?: (ticketId: string) => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -104,45 +111,64 @@ export default function KanbanCard({
     router.push(ticketPath);
   }
 
+  function handleMarkUnreadClick() {
+    if (!onMarkUnread) return;
+    onMarkUnread(ticket.id);
+  }
+
   return (
-    <Card
-      ref={setNodeRef}
-      aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
-      className={cn(
-        'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-all hover:shadow-md',
-        isDragging ? 'opacity-40' : '',
-        isAgentRunning && 'animate-pulse border-emerald-500/40',
-        isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
-        hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
-      )}
-      style={style}
-      onClick={handleCardClick}
-      {...listeners}
-      {...attributes}
-    >
-      {hasUnopenedWaitingResponse || hasUnopenedReview ? (
-        <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1">
-          {hasUnopenedWaitingResponse ? (
-            <StatusDot
-              colorClassName="bg-red-500"
-              label="Agent waiting for response"
-              title="Agent is waiting for your response"
-            />
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <Card
+          ref={setNodeRef}
+          aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
+          className={cn(
+            'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-all hover:shadow-md',
+            isDragging ? 'opacity-40' : '',
+            isAgentRunning && 'animate-pulse border-emerald-500/40',
+            isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
+            hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
+          )}
+          style={style}
+          onClick={handleCardClick}
+          {...listeners}
+          {...attributes}
+        >
+          {hasUnopenedWaitingResponse || hasUnopenedReview ? (
+            <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1">
+              {hasUnopenedWaitingResponse ? (
+                <StatusDot
+                  colorClassName="bg-red-500"
+                  label="Agent waiting for response"
+                  title="Agent is waiting for your response"
+                />
+              ) : null}
+              {hasUnopenedReview ? (
+                <StatusDot
+                  colorClassName="bg-sky-500"
+                  label="Moved to review and unopened"
+                  title="This ticket moved to review and has not been opened yet"
+                />
+              ) : null}
+            </span>
           ) : null}
-          {hasUnopenedReview ? (
-            <StatusDot
-              colorClassName="bg-sky-500"
-              label="Moved to review and unopened"
-              title="This ticket moved to review and has not been opened yet"
-            />
-          ) : null}
-        </span>
-      ) : null}
-      {isAgentRunning && (
-        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
-      )}
-      <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
-    </Card>
+          {isAgentRunning && (
+            <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
+          )}
+          <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
+        </Card>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem
+          onSelect={() => {
+            handleMarkUnreadClick();
+          }}
+          disabled={!onMarkUnread}
+        >
+          Mark card unread
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

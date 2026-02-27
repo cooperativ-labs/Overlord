@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.24.0] - 2026-02-27:15:00
+
+### Added
+- Add Kanban card context menu with "Mark unread" so users can reset waiting-response and review indicators and get notified again for that ticket.
+- Add shadcn-style context menu UI component for card and future right-click actions.
+
+### Fixed
+- None.
+
+### Changed
+- Rename `PLATFORM_URL` to `OVERLORD_URL` throughout the system (env, CLI, protocol, Electron, docs) so configuration and agent prompts use a single, consistent variable name.
+- Refactor SettingsModal and ticket prompt layout and copy for improved clarity and functionality.
+
+### Security
+- None.
+
+### Refactor
+- Refactor ticket prompt building and SettingsModal structure; extend ticket-waiting-response helpers with `markTicketReviewUnread` and `markTicketWaitingUnread` for context-menu-driven unread state.
+- Align CLI auth and protocol modules to use `OVERLORD_URL` for platform URL resolution.
+
+### Test
+- Expand ticket-waiting-response tests to cover mark-unread behavior and timestamp helpers.
+
+### Chore
+- Bump package version to `0.24.0`.
+
 ## [0.23.0] - 2026-02-27:10:00
 
 ### Added

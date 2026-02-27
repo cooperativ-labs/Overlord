@@ -159,6 +159,27 @@ function markTicketIndicatorRaised(
   return toOpenedTimestampMap(writeIndicatorStateMap(key, next));
 }
 
+function markTicketIndicatorUnread(
+  kind: 'waiting' | 'review',
+  ticketId: string
+): TicketOpenedTimestamps {
+  if (!ticketId.trim()) {
+    return toOpenedTimestampMap(readIndicatorStateMap(getIndicatorStorageKey(kind)));
+  }
+
+  const key = getIndicatorStorageKey(kind);
+  const existing = readIndicatorStateMap(key);
+
+  if (!existing[ticketId]) {
+    return toOpenedTimestampMap(existing);
+  }
+
+  const next: TicketIndicatorStateMap = { ...existing };
+  delete next[ticketId];
+
+  return toOpenedTimestampMap(writeIndicatorStateMap(key, next));
+}
+
 export function getOpenedWaitingTimestamps(): TicketOpenedTimestamps {
   return toOpenedTimestampMap(readIndicatorStateMap(OPENED_WAITING_KEY));
 }
@@ -187,6 +208,14 @@ export function markTicketReviewOpened(
   openedAt: number = Date.now()
 ): TicketOpenedTimestamps {
   return markTicketIndicatorOpened('review', ticketId, openedAt);
+}
+
+export function markTicketWaitingUnread(ticketId: string): TicketOpenedTimestamps {
+  return markTicketIndicatorUnread('waiting', ticketId);
+}
+
+export function markTicketReviewUnread(ticketId: string): TicketOpenedTimestamps {
+  return markTicketIndicatorUnread('review', ticketId);
 }
 
 export function markTicketWaitingRaised(

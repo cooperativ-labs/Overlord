@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { buildAuthHeaders, clearCredentials, loadCredentials, saveCredentials } from './credentials.mjs';
+import { buildAuthHeaders, clearCredentials, loadCredentials, loadRuntime, saveCredentials } from './credentials.mjs';
 
 const DEFAULT_OVERLORD_URL =
   process.env.OVERLORD_URL ?? 'http://localhost:3000';
@@ -63,8 +63,9 @@ async function sleep(ms) {
 }
 
 export async function authLogin() {
-  const platformUrl = DEFAULT_OVERLORD_URL;
-  const localSecret = process.env.OVERLORD_LOCAL_SECRET ?? '';
+  const runtime = loadRuntime();
+  const platformUrl = process.env.OVERLORD_URL ?? runtime?.platform_url ?? DEFAULT_OVERLORD_URL;
+  const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
 
   console.log('Starting Overlord CLI authorization...\n');
 
