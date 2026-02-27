@@ -74,13 +74,13 @@ async function apiPost(platformUrl, token, localSecret, path, body, timeoutMs = 
 
     let hint = 'Check your network and Overlord server settings.';
     if (causeCode === 'ECONNREFUSED') {
-      hint = 'Connection refused. Verify Overlord is running and PLATFORM_URL points to the correct port.';
+      hint = 'Connection refused. Verify Overlord is running and OVERLORD_URL points to the correct port.';
     } else if (causeCode === 'ENOTFOUND') {
-      hint = 'Host not found. Verify PLATFORM_URL uses a valid hostname.';
+      hint = 'Host not found. Verify OVERLORD_URL uses a valid hostname.';
     } else if (causeCode === 'ETIMEDOUT') {
       hint = 'Connection timed out. Verify server availability and local firewall/VPN settings.';
     } else if (requestUrl.includes('localhost') || requestUrl.includes('127.0.0.1')) {
-      hint = 'Local server unreachable. Start Overlord (usually http://localhost:3000) or update PLATFORM_URL.';
+      hint = 'Local server unreachable. Start Overlord (usually http://localhost:3000) or update OVERLORD_URL.';
     }
 
     throw new Error(
@@ -555,7 +555,7 @@ Subcommands:
   deliver         Mark the ticket complete and deliver artifacts
 
 Flags read from env vars when not provided:
-  SESSION_KEY, TICKET_ID, PLATFORM_URL, AGENT_TOKEN
+  SESSION_KEY, TICKET_ID, OVERLORD_URL, AGENT_TOKEN
 
 Common flags (all subcommands):
   --timeout <ms>          Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS}).

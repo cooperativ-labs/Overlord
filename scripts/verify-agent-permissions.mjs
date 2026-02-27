@@ -80,7 +80,7 @@ function buildExpectedClaudePermissions(platformUrl) {
   }
   entries.push(`Bash(curl -s -H 'Authorization::*)`);
   for (const endpoint of PROTOCOL_ENDPOINTS) {
-    entries.push(`Bash(curl -s -X POST "$PLATFORM_URL/api/protocol/${endpoint}":*)`);
+    entries.push(`Bash(curl -s -X POST "$OVERLORD_URL/api/protocol/${endpoint}":*)`);
   }
   entries.push(`Bash(curl -s -H "Authorization::*)`);
   return entries;

@@ -7,7 +7,7 @@ import path from 'node:path';
 const CREDENTIALS_DIR = path.join(os.homedir(), '.ovld');
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
 const RUNTIME_FILE = path.join(CREDENTIALS_DIR, 'runtime.json');
-const DEFAULT_PLATFORM_URL = 'http://localhost:3000';
+const DEFAULT_OVERLORD_URL = 'http://localhost:3000';
 const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
 
 /**
@@ -128,25 +128,25 @@ export function buildAuthHeaders(token, localSecret) {
 }
 
 /**
- * Resolve the platform URL and agent token from credentials file or env vars.
+ * Resolve the overlord URL and agent token from credentials file or env vars.
  * @returns {{ platformUrl: string, agentToken: string }}
  */
 export function resolveAuth() {
   const creds = loadCredentials();
   const runtime = loadRuntime();
-  const platformUrlFromEnv = process.env.PLATFORM_URL;
-  const platformUrlFromCreds = creds?.platform_url;
-  const runtimePlatformUrl = runtime?.platform_url;
+  const overlordUrlFromEnv = process.env.OVERLORD_URL;
+  const overlordUrlFromCreds = creds?.platform_url;
+  const runtimeOverlordUrl = runtime?.platform_url;
   const platformUrl =
-    platformUrlFromEnv ??
-    runtimePlatformUrl ??
-    platformUrlFromCreds ??
-    DEFAULT_PLATFORM_URL;
+    overlordUrlFromEnv ??
+    runtimeOverlordUrl ??
+    overlordUrlFromCreds ??
+    DEFAULT_OVERLORD_URL;
   const localSecret =
     runtime &&
     runtime.local_secret &&
-    runtimePlatformUrl &&
-    runtimePlatformUrl === platformUrl &&
+    runtimeOverlordUrl &&
+    runtimeOverlordUrl === platformUrl &&
     isLocalhostUrl(platformUrl)
       ? runtime.local_secret
       : '';

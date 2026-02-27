@@ -1,4 +1,4 @@
-const LOCAL_PLATFORM_URL = 'http://localhost:3000';
+const LOCAL_OVERLORD_URL = 'http://localhost:3000';
 
 export function getSupabaseUrl(): string {
   const value = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
@@ -20,8 +20,8 @@ export function getSupabasePublishableKey(): string {
   return value;
 }
 
-export function getPlatformUrl(): string {
-  return process.env.PLATFORM_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? LOCAL_PLATFORM_URL;
+export function getOverlordUrl(): string {
+  return process.env.OVERLORD_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? LOCAL_OVERLORD_URL;
 }
 
 export function getSupabaseSecretKey(): string {
