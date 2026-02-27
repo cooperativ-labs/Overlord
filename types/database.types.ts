@@ -129,7 +129,9 @@ export type Database = {
           label: string;
           metadata: Json;
           session_id: string | null;
+          storage_path: string | null;
           ticket_id: string;
+          uploaded_by: string | null;
           uri: string | null;
         };
         Insert: {
@@ -141,7 +143,9 @@ export type Database = {
           label: string;
           metadata?: Json;
           session_id?: string | null;
+          storage_path?: string | null;
           ticket_id: string;
+          uploaded_by?: string | null;
           uri?: string | null;
         };
         Update: {
@@ -153,7 +157,9 @@ export type Database = {
           label?: string;
           metadata?: Json;
           session_id?: string | null;
+          storage_path?: string | null;
           ticket_id?: string;
+          uploaded_by?: string | null;
           uri?: string | null;
         };
         Relationships: [
