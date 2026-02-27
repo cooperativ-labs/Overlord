@@ -204,7 +204,7 @@ function buildMcpConfigSection(
         overlord: {
           type: 'url',
           url: mcpUrl,
-          headers: { authorization: 'Bearer <AGENT_TOKEN_FROM_ENV>' }
+          headers: { authorization: 'Bearer <AGENT_TOKEN>' }
         }
       }
     },
@@ -236,10 +236,6 @@ ${mcpUrl}
 `;
 
   return `
-### MCP Server (Preferred for MCP-compatible agents)
-
-If your agent supports MCP, configure the Overlord MCP server for native tool access.
-This is the preferred method — use the MCP tools instead of the curl/REST instructions below.
 
 ${setupStep}
 
@@ -277,7 +273,7 @@ The following environment variables are set in your agent environment:
 - \`TICKET_ID\` — this ticket's id: \`${ticketId}\`
 ${buildMcpConfigSection(mcpUrl, ticketId, false, false)}
 
-### 1 — Attach (always first, before any other work)
+### 1 — Attach (**always first**, before any other work)
 
 Use MCP tool: \`attach\`
 
