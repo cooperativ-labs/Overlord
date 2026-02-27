@@ -509,7 +509,7 @@ All notable changes to this project will be documented in this file.
 - Ticket board data loading now includes the active agent identifier and latest blocking question timestamp, improving card-level agent and waiting-state visibility.
 - Kanban card and launch UI visuals were refined (updated active-agent highlighting, waiting dot indicator, and launch bar copy adjustments).
 - Settings modal was redesigned into sectioned navigation (`Integrations`, `Terminal`, `Updates`) with improved Electron-specific settings grouping.
-- `getPlatformUrl()` now prefers `PLATFORM_URL` before `NEXT_PUBLIC_SITE_URL` and local fallback.
+- `getPlatformUrl()` now prefers `OVERLORD_URL` before `NEXT_PUBLIC_SITE_URL` and local fallback.
 
 ### Security
 - Electron renderer responses now receive an explicit Content Security Policy header with stricter source controls and environment-aware `connect-src`.

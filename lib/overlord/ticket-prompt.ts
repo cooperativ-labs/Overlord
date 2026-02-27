@@ -94,7 +94,7 @@ function buildLocalProtocolSection(ticketId: string, platformUrl: string): strin
 - **Base URL:** ${platformUrl}/api/protocol
 - **Ticket ID:** ${ticketId}
 
-The following environment variables are set for you: \`PLATFORM_URL\`, \`AGENT_TOKEN\`, \`TICKET_ID\`.
+The following environment variables are set for you: \`OVERLORD_URL\`, \`AGENT_TOKEN\`, \`TICKET_ID\`.
 
 > **Running locally.** Use \`npx overlord protocol\` CLI for all protocol calls — auth and \`TICKET_ID\` are read from env automatically.
 
@@ -132,21 +132,21 @@ npx overlord protocol write-context --session-key <sessionKey> --key "descriptiv
 ### 6 — Create follow-up ticket (human-only blockers)
 
 \`\`\`bash
-curl -sS -X POST "$PLATFORM_URL/api/protocol/create-ticket" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","title":"...","objective":"...","acceptanceCriteria":"...","executionTarget":"human"}'
+curl -sS -X POST "$OVERLORD_URL/api/protocol/create-ticket" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","title":"...","objective":"...","acceptanceCriteria":"...","executionTarget":"human"}'
 \`\`\`
 
 ### 7 — Storage artifacts (optional upload/download)
 
 \`\`\`bash
 # 1) Get signed upload URL
-curl -sS -X POST "$PLATFORM_URL/api/protocol/artifacts/prepare-upload" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","fileName":"spec.pdf","contentType":"application/pdf"}'
+curl -sS -X POST "$OVERLORD_URL/api/protocol/artifacts/prepare-upload" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","fileName":"spec.pdf","contentType":"application/pdf"}'
 
 # 2) PUT file bytes to upload.url
 # 3) Finalize artifact row linked to ticket_id
-curl -sS -X POST "$PLATFORM_URL/api/protocol/artifacts/finalize-upload" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","storagePath":"<from prepare>","label":"spec.pdf","artifactType":"document","contentType":"application/pdf"}'
+curl -sS -X POST "$OVERLORD_URL/api/protocol/artifacts/finalize-upload" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","storagePath":"<from prepare>","label":"spec.pdf","artifactType":"document","contentType":"application/pdf"}'
 
 # 4) Get signed download URL later
-curl -sS -X POST "$PLATFORM_URL/api/protocol/artifacts/get-download-url" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","artifactId":"<artifact-id>"}'
+curl -sS -X POST "$OVERLORD_URL/api/protocol/artifacts/get-download-url" -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" -d '{"sessionKey":"<sessionKey>","ticketId":"'$TICKET_ID'","artifactId":"<artifact-id>"}'
 \`\`\`
 
 ### 8 — Deliver (always last)
@@ -166,9 +166,9 @@ Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and have
 Include in your deliver artifacts. If omitted, \`/api/protocol/deliver\` appends one automatically.
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
+OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
 # or for Codex:
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
+OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
 \`\`\`
 
 ---
@@ -342,7 +342,7 @@ Use MCP tool: \`deliver\`
 - **Ticket ID:** ${ticketId}
 
 The following environment variables are set in your agent environment:
-- \`PLATFORM_URL\` — base URL for Overlord
+- \`OVERLORD_URL\` — base URL for Overlord
 - \`AGENT_TOKEN\` — bearer token for protocol auth
 - \`TICKET_ID\` — this ticket's id: \`${ticketId}\`
 ${mcpSection}
@@ -350,7 +350,7 @@ ${mcpSection}
 ### 1 — Attach (always first, before any other work)
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/attach
+POST $OVERLORD_URL/api/protocol/attach
 Content-Type: application/json
 
 {
@@ -364,7 +364,7 @@ Content-Type: application/json
 Use this exact shell shape for the first attach call:
 
 \`\`\`bash
-curl -sS -X POST "$PLATFORM_URL/api/protocol/attach" \\
+curl -sS -X POST "$OVERLORD_URL/api/protocol/attach" \\
   -H "Authorization: Bearer $AGENT_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"ticketId":"${ticketId}","agentIdentifier":"codex","connectionMethod":"cli","metadata":{}}'
@@ -385,7 +385,7 @@ The response includes:
 Call after completing meaningful logical steps (not after every file change).
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/update
+POST $OVERLORD_URL/api/protocol/update
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -406,7 +406,7 @@ When \`payload.notifications\` is provided, Overlord will fan these out into app
 ### 3 — Ask a blocking question (when you cannot proceed)
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/ask
+POST $OVERLORD_URL/api/protocol/ask
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -422,10 +422,10 @@ Stop working after calling ask. The ticket moves to \`review\` until a human res
 Persist findings or decisions that future agent sessions should know about.
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/read-context
+POST $OVERLORD_URL/api/protocol/read-context
 { "sessionKey": "...", "ticketId": "${ticketId}", "query": "optional key filter", "limit": 20 }
 
-POST $PLATFORM_URL/api/protocol/write-context
+POST $OVERLORD_URL/api/protocol/write-context
 { "sessionKey": "...", "ticketId": "${ticketId}", "key": "descriptive-key", "value": <any JSON>, "tags": [] }
 \`\`\`
 
@@ -434,7 +434,7 @@ POST $PLATFORM_URL/api/protocol/write-context
 When you are blocked by a human-only action (for example local configuration, credentials, or access), create a new ticket in the same project.
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/create-ticket
+POST $OVERLORD_URL/api/protocol/create-ticket
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -450,7 +450,7 @@ This endpoint creates the follow-up ticket in the same organization/project as t
 ### 7 — Deliver (always last, when work is fully complete)
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/deliver
+POST $OVERLORD_URL/api/protocol/deliver
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -474,13 +474,13 @@ If you omit it, \`/api/protocol/deliver\` will append one automatically based on
 For Claude Code sessions, use this format:
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
+OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
 \`\`\`
 
 For Codex sessions:
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
+OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
 \`\`\`
 
 To target a specific native agent session ID, optionally set one of:

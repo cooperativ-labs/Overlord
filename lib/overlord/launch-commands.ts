@@ -33,7 +33,7 @@ export function buildLaunchCommands({
   token
 }: BuildLaunchCommandsInput): LaunchCommands {
   const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
-  const envBlock = `PLATFORM_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
+  const envBlock = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
 
   return {
     claudeCode: `${envBlock} npx overlord run claude`,
@@ -54,7 +54,7 @@ export function buildResumeCommands({
   platformUrl,
   token
 }: BuildLaunchCommandsInput): ResumeCommands {
-  const envBlock = `PLATFORM_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
+  const envBlock = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
 
   return {
     claudeCode: `${envBlock} npx overlord resume claude`,
@@ -74,7 +74,7 @@ export function buildRawLaunchCommand(
 ): string {
   const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
   const curlFragment = `"$(curl -s -H 'Authorization: Bearer ${token}' ${contextUrl})"`;
-  const envPrefix = `PLATFORM_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
+  const envPrefix = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
 
   if (agent === 'claude') {
     return `${envPrefix} claude --append-system-prompt ${curlFragment} "Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt."`;

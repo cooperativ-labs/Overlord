@@ -58,7 +58,7 @@ function readBody(req) {
 // Import the CLI apiPost logic under test.
 //
 // We test the protocol.mjs module's apiPost indirectly by exercising the
-// exported runProtocolCommand with a controlled PLATFORM_URL that points to
+// exported runProtocolCommand with a controlled OVERLORD_URL that points to
 // our local test server. The function uses process.env for auth resolution so
 // we set lightweight stubs.
 // ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ function readBody(req) {
 /**
  * Call apiPost directly by monkey-patching the fetch global with an
  * AbortSignal-aware implementation that delegates to the actual node fetch.
- * We keep the real fetch but override the PLATFORM_URL env to point to our
+ * We keep the real fetch but override the OVERLORD_URL env to point to our
  * test server so the CLI's resolveAuth() returns the right base URL.
  */
 

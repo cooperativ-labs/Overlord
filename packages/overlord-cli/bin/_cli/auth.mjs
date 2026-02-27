@@ -3,8 +3,8 @@
 import { execFileSync } from 'node:child_process';
 import { buildAuthHeaders, clearCredentials, loadCredentials, saveCredentials } from './credentials.mjs';
 
-const DEFAULT_PLATFORM_URL =
-  process.env.PLATFORM_URL ?? 'http://localhost:3000';
+const DEFAULT_OVERLORD_URL =
+  process.env.OVERLORD_URL ?? 'http://localhost:3000';
 
 const POLL_INTERVAL_MS = 3_000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1_000; // 10 minutes
@@ -63,7 +63,7 @@ async function sleep(ms) {
 }
 
 export async function authLogin() {
-  const platformUrl = DEFAULT_PLATFORM_URL;
+  const platformUrl = DEFAULT_OVERLORD_URL;
   const localSecret = process.env.OVERLORD_LOCAL_SECRET ?? '';
 
   console.log('Starting Overlord CLI authorization...\n');

@@ -106,7 +106,7 @@ function buildClaudePermissions(platformUrl) {
 
   // Also allow the env-var form so the launch command works unmodified.
   for (const endpoint of PROTOCOL_ENDPOINTS) {
-    entries.push(`Bash(curl -s -X POST "$PLATFORM_URL/api/protocol/${endpoint}":*)`);
+    entries.push(`Bash(curl -s -X POST "$OVERLORD_URL/api/protocol/${endpoint}":*)`);
   }
   entries.push(`Bash(curl -s -H "Authorization::*)`);
 

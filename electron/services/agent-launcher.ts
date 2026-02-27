@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const PLATFORM_URL_DEFAULT = 'http://localhost:3000';
+const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
 
 export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini';
 
@@ -48,7 +48,7 @@ function buildProtocolHeaders(agentToken: string): Record<string, string> {
 function getPlatformUrl(): string {
   // Electron should target the locally running Overlord app by default.
   // NEXT_PUBLIC_SITE_URL may point to a deployed web instance and break local launches.
-  return process.env.PLATFORM_URL ?? PLATFORM_URL_DEFAULT;
+  return process.env.OVERLORD_URL ?? OVERLORD_URL_DEFAULT;
 }
 
 /**
@@ -62,7 +62,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const agentToken = input.agentToken ?? process.env.AGENT_TOKEN ?? '';
   const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}?context=electron`;
   const launchEnv = {
-    PLATFORM_URL: platformUrl,
+    OVERLORD_URL: platformUrl,
     AGENT_TOKEN: agentToken,
     TICKET_ID: input.ticketId,
     AGENT_IDENTIFIER: agentIdentifierMap[input.agent],
@@ -161,9 +161,9 @@ function writePermissionRequestHookFiles(tag: string): {
     '#!/bin/bash',
     '# Overlord PermissionRequest notification hook',
     'BODY=$(cat -)',
-    'if [ -n "$PLATFORM_URL" ] && [ -n "$AGENT_TOKEN" ] && [ -n "$TICKET_ID" ]; then',
+    'if [ -n "$OVERLORD_URL" ] && [ -n "$AGENT_TOKEN" ] && [ -n "$TICKET_ID" ]; then',
     '  curl -sf -m 5 \\',
-    '    -X POST "$PLATFORM_URL/api/protocol/permission-request?ticketId=$TICKET_ID" \\',
+    '    -X POST "$OVERLORD_URL/api/protocol/permission-request?ticketId=$TICKET_ID" \\',
     '    -H "Authorization: Bearer $AGENT_TOKEN" \\',
     '    -H "X-Overlord-Local-Secret: $OVERLORD_LOCAL_SECRET" \\',
     '    -H "Content-Type: application/json" \\',
