@@ -4,14 +4,14 @@ import Link from 'next/link';
 import fs from 'node:fs/promises';
 
 import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
-import { CopyTicketPromptButton } from '@/components/features/CopyTicketPromptButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { InlineEditField } from '@/components/features/InlineEditField';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
-import { AgentSplitButtonLive, TicketLiveProvider } from '@/components/features/TicketLiveProvider';
+import { TicketHeaderAction } from '@/components/features/TicketHeaderAction';
+import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
@@ -28,7 +28,6 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
-import { useTerminal } from './terminal/TerminalProvider';
 
 const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
 
@@ -131,7 +130,6 @@ export async function TicketPanelContent({
   const platformUrl = getPlatformUrl();
   const agentToken = agentTokenRow?.token ?? null;
   const workspaceRoot = getWorkspaceRoot();
-  const { isElectron } = useTerminal();
   const editorScheme = getEditorScheme();
   const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
     platformUrl,
@@ -201,20 +199,17 @@ export async function TicketPanelContent({
           <div className="flex items-center gap-1">
             <DeleteTicketButton ticketId={ticketId} ticketLabel={ticketIdentifier} />
             <Separator orientation="vertical" className="h-4 w-px mr-2 bg-border" />
-            {isElectron ? (
-              <AgentSplitButtonLive
-                defaultAgent={
-                  getAgentTypeByIdentifier(agentSession?.agent_identifier)?.value ?? 'claude'
-                }
-                ticketId={ticketId}
-                agentToken={agentToken}
-                commands={{ claude: claudeCode, codex, cursor, gemini }}
-                workingDirectory={workingDirectory}
-                hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-                size="sm"
-              />
-            ) : <CopyTicketPromptButton ticketId={ticketId} runInTerminal={false} variant="default" />}
-
+            <TicketHeaderAction
+              ticketId={ticketId}
+              agentToken={agentToken}
+              agentIdentifier={agentSession?.agent_identifier ?? null}
+              claudeCommand={claudeCode}
+              codexCommand={codex}
+              cursorCommand={cursor}
+              geminiCommand={gemini}
+              workingDirectory={workingDirectory}
+              hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+            />
 
             <Button asChild size="icon" variant="ghost" className="h-8 w-10 ml-2">
               <Link href={closePath} aria-label="Close panel">

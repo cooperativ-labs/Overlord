@@ -75,7 +75,17 @@ export async function GET(request: Request, { params }: RouteContext) {
     }
 
     const markdown = buildTicketPromptMarkdown({
-      ticket,
+      ticket: {
+        id: ticket.id,
+        title: ticket.title,
+        objective: draftObjective?.objective ?? ticket.objective,
+        acceptance_criteria: ticket.acceptance_criteria,
+        available_tools: ticket.available_tools,
+        execution_target: ticket.execution_target,
+        project_id: ticket.project_id,
+        status: ticket.status,
+        priority: ticket.priority
+      },
       platformUrl,
       context,
       options: { token: authResult.context.tokenValue, mcpUrl, customInstructions }

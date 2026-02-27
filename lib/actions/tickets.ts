@@ -826,7 +826,7 @@ export async function getTicketPromptForCopy(
   const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
   const agentToken = agentTokenRow?.token ?? undefined;
   const prompt = buildTicketPromptMarkdown({
-    ticket,
+    ticket: { ...ticket, objective: draftObjective?.objective ?? ticket.objective },
     platformUrl,
     options: { customInstructions, token: agentToken }
   });
