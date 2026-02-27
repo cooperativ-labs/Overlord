@@ -824,11 +824,10 @@ export async function getTicketPromptForCopy(
 
   const platformUrl = getPlatformUrl();
   const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
-  const agentToken = agentTokenRow?.token ?? undefined;
   const prompt = buildTicketPromptMarkdown({
     ticket: { ...ticket, objective: draftObjective?.objective ?? ticket.objective },
     platformUrl,
-    options: { customInstructions, token: agentToken }
+    options: { customInstructions }
   });
   return { prompt };
 }

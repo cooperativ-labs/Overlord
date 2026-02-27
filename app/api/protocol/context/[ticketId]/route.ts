@@ -88,7 +88,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { token: authResult.context.tokenValue, mcpUrl, customInstructions }
+      options: { mcpUrl, customInstructions }
     });
 
     const headers: Record<string, string> = {

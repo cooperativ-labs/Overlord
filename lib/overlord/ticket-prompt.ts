@@ -3,8 +3,6 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 
 export type PromptOptions = {
-  /** Agent token value to embed in MCP config (when available). Falls back to $AGENT_TOKEN placeholder. */
-  token?: string;
   /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */
   mcpUrl?: string;
   /** Optional user-level custom instructions to prepend to the prompt */
@@ -174,15 +172,18 @@ PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx ove
  * Builds an MCP server configuration block to include in the remote prompt.
  * Agents that support MCP (Claude Code, etc.) can configure this server to get
  * native tool access to Overlord instead of using raw curl/REST calls.
+ *
+ * Note: This section intentionally avoids embedding concrete token values. Agents
+ * should read `AGENT_TOKEN` from their environment when configuring auth.
  */
-function buildMcpConfigSection(mcpUrl: string, tokenValue: string, ticketId: string): string {
+function buildMcpConfigSection(mcpUrl: string, ticketId: string): string {
   const settingsJson = JSON.stringify(
     {
       mcpServers: {
         overlord: {
           type: 'url',
           url: mcpUrl,
-          headers: { authorization: `Bearer ${tokenValue}` }
+          headers: { authorization: 'Bearer <AGENT_TOKEN_FROM_ENV>' }
         }
       }
     },
@@ -220,29 +221,26 @@ ${settingsJson}
 
 function buildRemoteProtocolSection(
   ticketId: string,
-  platformUrl: string,
+  _platformUrl: string,
   options?: PromptOptions
 ): string {
-  const tokenValue = options?.token ?? '<AGENT_TOKEN_NOT_PROVIDED>';
   const mcpUrl = options?.mcpUrl;
-  const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, tokenValue, ticketId) : '';
+  const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, ticketId) : '';
 
   return `## Overlord Protocol
 
-- **Base URL:** ${platformUrl}/api/protocol
 - **Ticket ID:** ${ticketId}
-- **Auth header:** \`Authorization: Bearer ${tokenValue}\`
 
-The following concrete values are provided for you (environment variables are **not** pre-set):
-- \`PLATFORM_URL\`: \`${platformUrl}\`
-- \`AGENT_TOKEN\`: \`${tokenValue}\`
-- \`TICKET_ID\`: \`${ticketId}\`
+The following environment variables are set in your agent environment:
+- \`PLATFORM_URL\` — base URL for Overlord
+- \`AGENT_TOKEN\` — bearer token for protocol auth
+- \`TICKET_ID\` — this ticket's id: \`${ticketId}\`
 ${mcpSection}
 
 ### 1 — Attach (always first, before any other work)
 
 \`\`\`
-POST ${platformUrl}/api/protocol/attach
+POST $PLATFORM_URL/api/protocol/attach
 Content-Type: application/json
 
 {
@@ -256,8 +254,8 @@ Content-Type: application/json
 Use this exact shell shape for the first attach call:
 
 \`\`\`bash
-curl -sS -X POST "${platformUrl}/api/protocol/attach" \\
-  -H "Authorization: Bearer ${tokenValue}" \\
+curl -sS -X POST "$PLATFORM_URL/api/protocol/attach" \\
+  -H "Authorization: Bearer $AGENT_TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{"ticketId":"${ticketId}","agentIdentifier":"codex","connectionMethod":"cli","metadata":{}}'
 \`\`\`
@@ -277,7 +275,7 @@ The response includes:
 Call after completing meaningful logical steps (not after every file change).
 
 \`\`\`
-POST ${platformUrl}/api/protocol/update
+POST $PLATFORM_URL/api/protocol/update
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -298,7 +296,7 @@ When \`payload.notifications\` is provided, Overlord will fan these out into app
 ### 3 — Ask a blocking question (when you cannot proceed)
 
 \`\`\`
-POST ${platformUrl}/api/protocol/ask
+POST $PLATFORM_URL/api/protocol/ask
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -314,10 +312,10 @@ Stop working after calling ask. The ticket moves to \`review\` until a human res
 Persist findings or decisions that future agent sessions should know about.
 
 \`\`\`
-POST ${platformUrl}/api/protocol/read-context
+POST $PLATFORM_URL/api/protocol/read-context
 { "sessionKey": "...", "ticketId": "${ticketId}", "query": "optional key filter", "limit": 20 }
 
-POST ${platformUrl}/api/protocol/write-context
+POST $PLATFORM_URL/api/protocol/write-context
 { "sessionKey": "...", "ticketId": "${ticketId}", "key": "descriptive-key", "value": <any JSON>, "tags": [] }
 \`\`\`
 
@@ -326,7 +324,7 @@ POST ${platformUrl}/api/protocol/write-context
 When you are blocked by a human-only action (for example local configuration, credentials, or access), create a new ticket in the same project.
 
 \`\`\`
-POST ${platformUrl}/api/protocol/create-ticket
+POST $PLATFORM_URL/api/protocol/create-ticket
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -342,7 +340,7 @@ This endpoint creates the follow-up ticket in the same organization/project as t
 ### 7 — Deliver (always last, when work is fully complete)
 
 \`\`\`
-POST ${platformUrl}/api/protocol/deliver
+POST $PLATFORM_URL/api/protocol/deliver
 {
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
@@ -366,13 +364,13 @@ If you omit it, \`/api/protocol/deliver\` will append one automatically based on
 For Claude Code sessions, use this format:
 
 \`\`\`bash
-PLATFORM_URL=${platformUrl} AGENT_TOKEN=${tokenValue} TICKET_ID=${ticketId} npx overlord resume claude
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
 \`\`\`
 
 For Codex sessions:
 
 \`\`\`bash
-PLATFORM_URL=${platformUrl} AGENT_TOKEN=${tokenValue} TICKET_ID=${ticketId} npx overlord resume codex
+PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
 \`\`\`
 
 To target a specific native agent session ID, optionally set one of:
