@@ -137,6 +137,82 @@ type SlashCommandConfig = {
   installCmd: string;
 };
 
+type McpAgentConfig = {
+  label: string;
+  filePath: string;
+  description: string;
+  getConfig: (mcpUrl: string, token: string) => string;
+};
+
+const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
+  claude: {
+    label: 'Claude Code',
+    filePath: '~/.claude/settings.json',
+    description:
+      'Merge into ~/.claude/settings.json (user-wide) or .claude/settings.json (project-level).',
+    getConfig: (mcpUrl, token) =>
+      JSON.stringify(
+        {
+          mcpServers: {
+            overlord: {
+              type: 'http',
+              url: mcpUrl,
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          }
+        },
+        null,
+        2
+      )
+  },
+  cursor: {
+    label: 'Cursor',
+    filePath: '~/.cursor/mcp.json',
+    description:
+      'Merge into ~/.cursor/mcp.json (global) or .cursor/mcp.json (project-level).',
+    getConfig: (mcpUrl, token) =>
+      JSON.stringify(
+        {
+          mcpServers: {
+            overlord: {
+              url: mcpUrl,
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          }
+        },
+        null,
+        2
+      )
+  },
+  codex: {
+    label: 'Codex CLI',
+    filePath: '~/.codex/config.toml',
+    description: 'Add this block to ~/.codex/config.toml.',
+    getConfig: (mcpUrl, token) =>
+      `[[mcp_servers]]\nname = "overlord"\ntype = "http"\nurl = "${mcpUrl}"\n\n[mcp_servers.headers]\nAuthorization = "Bearer ${token}"`
+  },
+  chatgpt: {
+    label: 'ChatGPT',
+    filePath: '~/Library/Application Support/ChatGPT/mcp.json',
+    description:
+      'Merge into the ChatGPT desktop app MCP config (macOS: ~/Library/Application Support/ChatGPT/mcp.json, Windows: %APPDATA%\\ChatGPT\\mcp.json).',
+    getConfig: (mcpUrl, token) =>
+      JSON.stringify(
+        {
+          mcpServers: {
+            overlord: {
+              type: 'http',
+              url: mcpUrl,
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          }
+        },
+        null,
+        2
+      )
+  }
+};
+
 const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
   claude: {
     label: 'Claude Code',
@@ -228,6 +304,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [agentTokenError, setAgentTokenError] = useState<string | null>(null);
   const [agentEnvSnippetCopied, setAgentEnvSnippetCopied] = useState(false);
   const [agentDomainSnippetCopied, setAgentDomainSnippetCopied] = useState(false);
+  const [selectedMcpAgent, setSelectedMcpAgent] = useState('claude');
+  const [mcpConfigCopied, setMcpConfigCopied] = useState(false);
   const [rotateTokenButtonState, setRotateTokenButtonState] =
     useState<ButtonLoadingState>('default');
   const [customInstructions, setCustomInstructions] = useState('');
@@ -268,6 +346,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     )
   );
   const domainSnippet = allowedDomainLines.join('\n');
+
+  const mcpUrl = (() => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!supabaseUrl) return null;
+    return `${supabaseUrl}/functions/v1/mcp`;
+  })();
 
   // Reset to first visible item when electron state changes
   useEffect(() => {
@@ -481,6 +565,16 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     await navigator.clipboard.writeText(domainSnippet);
     setAgentDomainSnippetCopied(true);
     setTimeout(() => setAgentDomainSnippetCopied(false), 2000);
+  }
+
+  async function handleCopyMcpConfig() {
+    const cfg = MCP_AGENT_CONFIGS[selectedMcpAgent];
+    if (!cfg) return;
+    const url = mcpUrl ?? '<SUPABASE_URL>/functions/v1/mcp';
+    const token = agentToken ?? '<AGENT_TOKEN>';
+    await navigator.clipboard.writeText(cfg.getConfig(url, token));
+    setMcpConfigCopied(true);
+    setTimeout(() => setMcpConfigCopied(false), 2000);
   }
 
   function handleTerminalModeChange(value: string) {
@@ -916,6 +1010,62 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </p>
                         ) : null}
                       </div>
+                    </div>
+                    <div className="grid gap-4">
+                      <div className="grid gap-1">
+                        <p className="text-sm font-medium">MCP configuration</p>
+                        <p className="text-xs text-muted-foreground">
+                          Copy the MCP server config snippet to connect your AI coding agent to
+                          Overlord. Select your agent to see the right format.
+                        </p>
+                      </div>
+                      <Select value={selectedMcpAgent} onValueChange={setSelectedMcpAgent}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(MCP_AGENT_CONFIGS).map(([key, cfg]) => (
+                            <SelectItem key={key} value={key}>
+                              {cfg.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {(() => {
+                        const cfg = MCP_AGENT_CONFIGS[selectedMcpAgent];
+                        if (!cfg) return null;
+                        const url = mcpUrl ?? '<SUPABASE_URL>/functions/v1/mcp';
+                        const token = agentToken ?? '<AGENT_TOKEN>';
+                        return (
+                          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-foreground">
+                                {cfg.label} MCP config
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void handleCopyMcpConfig()}
+                                className="shrink-0 rounded p-1 hover:bg-muted"
+                                title="Copy MCP config"
+                              >
+                                {mcpConfigCopied ? (
+                                  <Check className="h-3.5 w-3.5 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                                )}
+                              </button>
+                            </div>
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                              {cfg.getConfig(url, token)}
+                            </pre>
+                            <p className="text-xs text-muted-foreground">{cfg.description}</p>
+                            <p className="break-all text-xs text-muted-foreground">
+                              File:{' '}
+                              <code className="rounded bg-muted px-1">{cfg.filePath}</code>
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
