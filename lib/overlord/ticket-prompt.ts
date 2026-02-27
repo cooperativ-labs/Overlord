@@ -28,17 +28,7 @@ type Ticket = {
   priority: string | number | null;
 };
 type BuildTicketPromptMarkdownInput = {
-  ticket: {
-    id: string;
-    title: string | null;
-    objective: string | null;
-    acceptance_criteria: string | null;
-    available_tools: string | null;
-    execution_target: 'agent' | 'human' | null;
-    project_id: string;
-    status: string | null;
-    priority: string | number | null;
-  };
+  ticket: Ticket;
   platformUrl: string;
   context?: PromptContext;
   options?: PromptOptions;
@@ -233,7 +223,7 @@ function buildRemoteProtocolSection(
   platformUrl: string,
   options?: PromptOptions
 ): string {
-  const tokenValue = options?.token ?? '$AGENT_TOKEN';
+  const tokenValue = options?.token ?? '<AGENT_TOKEN_NOT_PROVIDED>';
   const mcpUrl = options?.mcpUrl;
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, tokenValue, ticketId) : '';
 
@@ -241,19 +231,22 @@ function buildRemoteProtocolSection(
 
 - **Base URL:** ${platformUrl}/api/protocol
 - **Ticket ID:** ${ticketId}
-- **Auth header:** \`Authorization: Bearer $AGENT_TOKEN\`
+- **Auth header:** \`Authorization: Bearer ${tokenValue}\`
 
-The following environment variables are set for you: \`PLATFORM_URL\`, \`AGENT_TOKEN\`, \`TICKET_ID\`.
+The following concrete values are provided for you (environment variables are **not** pre-set):
+- \`PLATFORM_URL\`: \`${platformUrl}\`
+- \`AGENT_TOKEN\`: \`${tokenValue}\`
+- \`TICKET_ID\`: \`${ticketId}\`
 ${mcpSection}
 
 ### 1 — Attach (always first, before any other work)
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/attach
+POST ${platformUrl}/api/protocol/attach
 Content-Type: application/json
 
 {
-  "ticketId": "$TICKET_ID",
+  "ticketId": "${ticketId}",
   "agentIdentifier": "<your-agent-id, e.g. codex or claude-code>",
   "connectionMethod": "<mcp|cli|rest|chatgpt|claude_app|claude_code|other>",
   "metadata": {}
@@ -263,10 +256,10 @@ Content-Type: application/json
 Use this exact shell shape for the first attach call:
 
 \`\`\`bash
-curl -sS -X POST "$PLATFORM_URL/api/protocol/attach" \\
-  -H "Authorization: Bearer $AGENT_TOKEN" \\
+curl -sS -X POST "${platformUrl}/api/protocol/attach" \\
+  -H "Authorization: Bearer ${tokenValue}" \\
   -H "Content-Type: application/json" \\
-  -d '{"ticketId":"'$TICKET_ID'","agentIdentifier":"codex","connectionMethod":"cli","metadata":{}}'
+  -d '{"ticketId":"${ticketId}","agentIdentifier":"codex","connectionMethod":"cli","metadata":{}}'
 \`\`\`
 
 Replace \`agentIdentifier\` and \`connectionMethod\` when needed for your runtime.
@@ -284,10 +277,10 @@ The response includes:
 Call after completing meaningful logical steps (not after every file change).
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/update
+POST ${platformUrl}/api/protocol/update
 {
   "sessionKey": "<from attach>",
-  "ticketId": "$TICKET_ID",
+  "ticketId": "${ticketId}",
   "summary": "What you did and why.",
   "phase": "execute",
   "payload": {
@@ -305,10 +298,10 @@ When \`payload.notifications\` is provided, Overlord will fan these out into app
 ### 3 — Ask a blocking question (when you cannot proceed)
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/ask
+POST ${platformUrl}/api/protocol/ask
 {
   "sessionKey": "<from attach>",
-  "ticketId": "$TICKET_ID",
+  "ticketId": "${ticketId}",
   "question": "Specific question for the PM.",
   "phase": "review"
 }
@@ -321,11 +314,11 @@ Stop working after calling ask. The ticket moves to \`review\` until a human res
 Persist findings or decisions that future agent sessions should know about.
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/read-context
-{ "sessionKey": "...", "ticketId": "$TICKET_ID", "query": "optional key filter", "limit": 20 }
+POST ${platformUrl}/api/protocol/read-context
+{ "sessionKey": "...", "ticketId": "${ticketId}", "query": "optional key filter", "limit": 20 }
 
-POST $PLATFORM_URL/api/protocol/write-context
-{ "sessionKey": "...", "ticketId": "$TICKET_ID", "key": "descriptive-key", "value": <any JSON>, "tags": [] }
+POST ${platformUrl}/api/protocol/write-context
+{ "sessionKey": "...", "ticketId": "${ticketId}", "key": "descriptive-key", "value": <any JSON>, "tags": [] }
 \`\`\`
 
 ### 6 — Create a follow-up ticket for human help (optional)
@@ -333,10 +326,10 @@ POST $PLATFORM_URL/api/protocol/write-context
 When you are blocked by a human-only action (for example local configuration, credentials, or access), create a new ticket in the same project.
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/create-ticket
+POST ${platformUrl}/api/protocol/create-ticket
 {
   "sessionKey": "<from attach>",
-  "ticketId": "$TICKET_ID",
+  "ticketId": "${ticketId}",
   "title": "Short follow-up title",
   "objective": "What a human needs to do.",
   "acceptanceCriteria": "How to verify the human task is complete.",
@@ -349,10 +342,10 @@ This endpoint creates the follow-up ticket in the same organization/project as t
 ### 7 — Deliver (always last, when work is fully complete)
 
 \`\`\`
-POST $PLATFORM_URL/api/protocol/deliver
+POST ${platformUrl}/api/protocol/deliver
 {
   "sessionKey": "<from attach>",
-  "ticketId": "$TICKET_ID",
+  "ticketId": "${ticketId}",
   "summary": "Narrative: what you did, what you considered, and next steps for the PM.",
   "artifacts": [
     { "type": "file_changes", "label": "Files modified", "content": "git diff --stat output or file list" },
@@ -373,13 +366,13 @@ If you omit it, \`/api/protocol/deliver\` will append one automatically based on
 For Claude Code sessions, use this format:
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume claude
+PLATFORM_URL=${platformUrl} AGENT_TOKEN=${tokenValue} TICKET_ID=${ticketId} npx overlord resume claude
 \`\`\`
 
 For Codex sessions:
 
 \`\`\`bash
-PLATFORM_URL=$PLATFORM_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=$TICKET_ID npx overlord resume codex
+PLATFORM_URL=${platformUrl} AGENT_TOKEN=${tokenValue} TICKET_ID=${ticketId} npx overlord resume codex
 \`\`\`
 
 To target a specific native agent session ID, optionally set one of:
