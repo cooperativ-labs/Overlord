@@ -89,7 +89,8 @@ const externalTerminalAppOptions = [
 
 const externalTerminalLaunchModeOptions = [
   { value: 'window', label: 'New window' },
-  { value: 'tab', label: 'New tab' }
+  { value: 'tab', label: 'New tab' },
+  { value: 'custom', label: 'Custom' }
 ] as const;
 
 type ElectronAppUpdateStatus = Awaited<
@@ -182,6 +183,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { theme, setTheme } = useTheme();
   const [terminalApp, setTerminalApp] = useState('default');
   const [terminalLaunchMode, setTerminalLaunchMode] = useState('window');
+  const [terminalCustomHotkey, setTerminalCustomHotkey] = useState('');
   const [customTerminalApp, setCustomTerminalApp] = useState('');
   const [everhourConnected, setEverhourConnected] = useState(false);
   const [everhourUpdatedAt, setEverhourUpdatedAt] = useState<string | null>(null);
@@ -243,11 +245,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     Promise.all([
       api.settings.get<string>('externalTerminalApp'),
       api.settings.get<string>('externalTerminalLaunchMode'),
-      api.settings.get<string>('customExternalTerminalApp')
-    ]).then(([appValue, launchModeValue, customAppValue]) => {
+      api.settings.get<string>('customExternalTerminalApp'),
+      api.settings.get<string>('externalTerminalCustomHotkey')
+    ]).then(([appValue, launchModeValue, customAppValue, customHotkeyValue]) => {
       if (appValue) setTerminalApp(appValue);
       if (launchModeValue) setTerminalLaunchMode(launchModeValue);
       if (typeof customAppValue === 'string') setCustomTerminalApp(customAppValue);
+      if (typeof customHotkeyValue === 'string') setTerminalCustomHotkey(customHotkeyValue);
     });
   }, [api, open]);
 
@@ -461,6 +465,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     await api?.settings.set('externalTerminalLaunchMode', value);
   }
 
+  async function handleTerminalCustomHotkeyChange(value: string) {
+    setTerminalCustomHotkey(value);
+    await api?.settings.set('externalTerminalCustomHotkey', value);
+  }
+
   async function handleCustomTerminalAppChange(value: string) {
     setCustomTerminalApp(value);
     await api?.settings.set('customExternalTerminalApp', value);
@@ -570,6 +579,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       : `${runningAgents.length} running agent sessions`;
   const customInstructionsPreviewText =
     customInstructions.trim() || '_No custom instructions have been saved yet._';
+
+  const supportsLaunchModeSelection =
+    terminalApp !== 'ghostty' && terminalApp !== 'alacritty' && terminalApp !== 'kitty';
+
+  const selectedTerminalLabel =
+    externalTerminalAppOptions.find(opt => opt.value === terminalApp)?.label ?? 'your terminal';
 
   return (
     <>
@@ -1232,25 +1247,49 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           )}
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
-                          <Select
-                            value={terminalLaunchMode}
-                            onValueChange={handleTerminalLaunchModeChange}
-                          >
-                            <SelectTrigger id="terminal-launch-mode">
-                              <SelectValue placeholder="Select behavior" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {externalTerminalLaunchModeOptions.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Choose the app and whether launches open in a new window or tab.
-                          </p>
+                          {supportsLaunchModeSelection && (
+                            <>
+                              <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
+                              <Select
+                                value={terminalLaunchMode}
+                                onValueChange={handleTerminalLaunchModeChange}
+                              >
+                                <SelectTrigger id="terminal-launch-mode">
+                                  <SelectValue placeholder="Select behavior" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {externalTerminalLaunchModeOptions.map(opt => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </>
+                          )}
+                          {supportsLaunchModeSelection && terminalLaunchMode === 'custom' && (
+                            <div className="mt-2 grid gap-2">
+                              <Label htmlFor="terminal-custom-hotkey">Custom hotkey</Label>
+                              <Input
+                                id="terminal-custom-hotkey"
+                                placeholder={`hotkey ${selectedTerminalLabel} uses for preferred behavior`}
+                                value={terminalCustomHotkey}
+                                onChange={event =>
+                                  void handleTerminalCustomHotkeyChange(event.target.value)
+                                }
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Overlord will activate {selectedTerminalLabel}, send this hotkey to
+                                trigger your preferred split or focus behavior, then type the launch
+                                command.
+                              </p>
+                            </div>
+                          )}
+                          {supportsLaunchModeSelection && terminalLaunchMode !== 'custom' && (
+                            <p className="text-xs text-muted-foreground">
+                              Choose the app and whether launches open in a new window or tab.
+                            </p>
+                          )}
                         </div>
                       </>
                     )}

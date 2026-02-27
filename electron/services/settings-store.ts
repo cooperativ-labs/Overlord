@@ -14,12 +14,13 @@ export type ExternalTerminalApp =
   | 'hyper'
   | 'cmux'
   | 'custom';
-export type ExternalTerminalLaunchMode = 'window' | 'tab';
+export type ExternalTerminalLaunchMode = 'window' | 'tab' | 'custom';
 
 interface StoreData {
   terminalMode: TerminalMode;
   externalTerminalApp: ExternalTerminalApp;
   externalTerminalLaunchMode: ExternalTerminalLaunchMode;
+  externalTerminalCustomHotkey: string;
   customExternalTerminalApp: string;
   windowBounds: { width: number; height: number; x?: number; y?: number };
   [key: string]: unknown;
@@ -29,6 +30,7 @@ const defaults: StoreData = {
   terminalMode: 'embedded',
   externalTerminalApp: 'default',
   externalTerminalLaunchMode: 'window',
+  externalTerminalCustomHotkey: '',
   customExternalTerminalApp: '',
   windowBounds: { width: 1400, height: 900 }
 };

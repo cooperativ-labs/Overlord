@@ -58,6 +58,48 @@ function applyCwd(command: string, cwd?: string): string {
   return `cd ${shellQuote(cwd)} && ${command}`;
 }
 
+function buildHotkeyAppleScript(hotkey: string): string | null {
+  const trimmed = hotkey.trim();
+  if (!trimmed) return null;
+
+  const parts = trimmed
+    .toLowerCase()
+    .split('+')
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) return null;
+
+  const key = parts[parts.length - 1] ?? '';
+  if (!key) return null;
+
+  const modifiers = parts.slice(0, -1);
+  const modifierMap: Record<string, string> = {
+    cmd: 'command down',
+    command: 'command down',
+    meta: 'command down',
+    shift: 'shift down',
+    option: 'option down',
+    alt: 'option down',
+    ctrl: 'control down',
+    control: 'control down'
+  };
+
+  const applescriptModifiers = modifiers
+    .map(mod => modifierMap[mod])
+    .filter(Boolean);
+
+  const keyLiteral = key.length === 1 ? key : '';
+  if (!keyLiteral) return null;
+
+  if (applescriptModifiers.length === 0) {
+    return `keystroke "${keyLiteral}"`;
+  }
+
+  const modifierList = applescriptModifiers.join(', ');
+  return `keystroke "${keyLiteral}" using {${modifierList}}`;
+}
+
 export function registerTerminalIpc(): void {
   ipcMain.handle('terminal:spawn', (event, payload?: TerminalLaunchPayload) => {
     const win = BrowserWindow.fromWebContents(event.sender);
@@ -113,6 +155,9 @@ export function registerTerminalIpc(): void {
     const termApp = store.get('externalTerminalApp', 'default') as string;
     const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
     const openInTab = launchMode === 'tab';
+    const isCustomLaunchMode = launchMode === 'custom';
+    const customHotkeyValue = store.get('externalTerminalCustomHotkey', '') as string;
+    const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);
     const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
     // Best-effort cleanup after a reasonable grace period.
@@ -128,31 +173,46 @@ export function registerTerminalIpc(): void {
 
     switch (termApp) {
       case 'iterm':
-        script = openInTab
-          ? `
+        if (isCustomLaunchMode && hotkeyScript) {
+          script = `
               tell application "iTerm"
                 activate
                 if (count of windows) = 0 then
                   create window with default profile
-                else
-                  tell current window
-                    create tab with default profile
-                  end tell
                 end if
-                tell current session of current window
-                  write text "${escapedLaunchCmd}"
-                end tell
               end tell
-            `
-          : `
-              tell application "iTerm"
-                activate
-                create window with default profile
-                tell current session of current window
-                  write text "${escapedLaunchCmd}"
-                end tell
+              tell application "System Events"
+                ${hotkeyScript}
+                keystroke "${escapedLaunchCmd}" & return
               end tell
             `;
+        } else {
+          script = openInTab
+            ? `
+                tell application "iTerm"
+                  activate
+                  if (count of windows) = 0 then
+                    create window with default profile
+                  else
+                    tell current window
+                      create tab with default profile
+                    end tell
+                  end if
+                  tell current session of current window
+                    write text "${escapedLaunchCmd}"
+                  end tell
+                end tell
+              `
+            : `
+                tell application "iTerm"
+                  activate
+                  create window with default profile
+                  tell current session of current window
+                    write text "${escapedLaunchCmd}"
+                  end tell
+                end tell
+              `;
+        }
         break;
       case 'warp':
         // Warp supports direct CLI invocation
@@ -160,9 +220,15 @@ export function registerTerminalIpc(): void {
         // Give Warp time to open, then use AppleScript to type command
         return new Promise<void>(resolve => {
           setTimeout(() => {
-            runAppleScript(
-              `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-            ).finally(() => resolve());
+            const baseScript = hotkeyScript
+              ? `
+                  tell application "System Events"
+                    ${hotkeyScript}
+                    keystroke "${escapedLaunchCmd}" & return
+                  end tell
+                `
+              : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+            runAppleScript(baseScript).finally(() => resolve());
           }, 1000);
         });
       case 'ghostty':
@@ -178,13 +244,71 @@ export function registerTerminalIpc(): void {
         exec(`open -a Hyper`);
         return new Promise<void>(resolve => {
           setTimeout(() => {
-            runAppleScript(
-              `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-            ).finally(() => resolve());
+            const baseScript = hotkeyScript
+              ? `
+                  tell application "System Events"
+                    ${hotkeyScript}
+                    keystroke "${escapedLaunchCmd}" & return
+                  end tell
+                `
+              : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+            runAppleScript(baseScript).finally(() => resolve());
           }, 1000);
         });
       case 'cmux':
         exec(`open -a cmux`);
+        return new Promise<void>(resolve => {
+          setTimeout(() => {
+            const baseScript = hotkeyScript
+              ? `
+                  tell application "System Events"
+                    ${hotkeyScript}
+                    keystroke "${escapedLaunchCmd}" & return
+                  end tell
+                `
+              : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+            runAppleScript(baseScript).finally(() => resolve());
+          }, 1000);
+        });
+      case 'custom': {
+        const customApp = store.get('customExternalTerminalApp', '') as string;
+        if (!customApp) {
+          if (isCustomLaunchMode && hotkeyScript) {
+            script = `
+                tell application "Terminal"
+                  activate
+                  if (count of windows) = 0 then
+                    do script ""
+                  end if
+                end tell
+                tell application "System Events"
+                  ${hotkeyScript}
+                  keystroke "${escapedLaunchCmd}" & return
+                end tell
+              `;
+          } else {
+            script = openInTab
+              ? `
+                  tell application "Terminal"
+                    activate
+                    if (count of windows) = 0 then
+                      do script "${escapedLaunchCmd}"
+                    else
+                      do script "${escapedLaunchCmd}" in front window
+                    end if
+                  end tell
+                `
+              : `
+                  tell application "Terminal"
+                    activate
+                    do script "${escapedLaunchCmd}"
+                  end tell
+                `;
+          }
+          break;
+        }
+
+        exec(`open -a ${shellQuote(customApp)}`);
         return new Promise<void>(resolve => {
           setTimeout(() => {
             runAppleScript(
@@ -192,9 +316,22 @@ export function registerTerminalIpc(): void {
             ).finally(() => resolve());
           }, 1000);
         });
-      case 'custom': {
-        const customApp = store.get('customExternalTerminalApp', '') as string;
-        if (!customApp) {
+      }
+      default: // 'terminal' or 'default'
+        if (isCustomLaunchMode && hotkeyScript) {
+          script = `
+              tell application "Terminal"
+                activate
+                if (count of windows) = 0 then
+                  do script ""
+                end if
+              end tell
+              tell application "System Events"
+                ${hotkeyScript}
+                keystroke "${escapedLaunchCmd}" & return
+              end tell
+            `;
+        } else {
           script = openInTab
             ? `
                 tell application "Terminal"
@@ -212,36 +349,7 @@ export function registerTerminalIpc(): void {
                   do script "${escapedLaunchCmd}"
                 end tell
               `;
-          break;
         }
-
-        exec(`open -a ${shellQuote(customApp)}`);
-        return new Promise<void>(resolve => {
-          setTimeout(() => {
-            runAppleScript(
-              `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-            ).finally(() => resolve());
-          }, 1000);
-        });
-      }
-      default: // 'terminal' or 'default'
-        script = openInTab
-          ? `
-              tell application "Terminal"
-                activate
-                if (count of windows) = 0 then
-                  do script "${escapedLaunchCmd}"
-                else
-                  do script "${escapedLaunchCmd}" in front window
-                end if
-              end tell
-            `
-          : `
-              tell application "Terminal"
-                activate
-                do script "${escapedLaunchCmd}"
-              end tell
-            `;
     }
 
     return runAppleScript(script);
@@ -297,44 +405,68 @@ export function registerTerminalIpc(): void {
         const termApp = store.get('externalTerminalApp', 'default') as string;
         const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
         const openInTab = launchMode === 'tab';
+        const isCustomLaunchMode = launchMode === 'custom';
+        const customHotkeyValue = store.get('externalTerminalCustomHotkey', '') as string;
+        const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);
         const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
         let script: string;
         switch (termApp) {
           case 'iterm':
-            script = openInTab
-              ? `
+            if (isCustomLaunchMode && hotkeyScript) {
+              script = `
                   tell application "iTerm"
                     activate
                     if (count of windows) = 0 then
                       create window with default profile
-                    else
-                      tell current window
-                        create tab with default profile
-                      end tell
                     end if
-                    tell current session of current window
-                      write text "${escapedLaunchCmd}"
-                    end tell
                   end tell
-                `
-              : `
-                  tell application "iTerm"
-                    activate
-                    create window with default profile
-                    tell current session of current window
-                      write text "${escapedLaunchCmd}"
-                    end tell
+                  tell application "System Events"
+                    ${hotkeyScript}
+                    keystroke "${escapedLaunchCmd}" & return
                   end tell
                 `;
+            } else {
+              script = openInTab
+                ? `
+                    tell application "iTerm"
+                      activate
+                      if (count of windows) = 0 then
+                        create window with default profile
+                      else
+                        tell current window
+                          create tab with default profile
+                        end tell
+                      end if
+                      tell current session of current window
+                        write text "${escapedLaunchCmd}"
+                      end tell
+                    end tell
+                  `
+                : `
+                    tell application "iTerm"
+                      activate
+                      create window with default profile
+                      tell current session of current window
+                        write text "${escapedLaunchCmd}"
+                      end tell
+                    end tell
+                  `;
+            }
             break;
           case 'warp':
             exec(`open -a Warp`);
             return new Promise<void>(resolve => {
               setTimeout(() => {
-                runAppleScript(
-                  `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-                ).finally(() => resolve());
+                const baseScript = hotkeyScript
+                  ? `
+                      tell application "System Events"
+                        ${hotkeyScript}
+                        keystroke "${escapedLaunchCmd}" & return
+                      end tell
+                    `
+                  : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+                runAppleScript(baseScript).finally(() => resolve());
               }, 1000);
             });
           case 'ghostty':
@@ -350,13 +482,71 @@ export function registerTerminalIpc(): void {
             exec(`open -a Hyper`);
             return new Promise<void>(resolve => {
               setTimeout(() => {
-                runAppleScript(
-                  `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-                ).finally(() => resolve());
+                const baseScript = hotkeyScript
+                  ? `
+                      tell application "System Events"
+                        ${hotkeyScript}
+                        keystroke "${escapedLaunchCmd}" & return
+                      end tell
+                    `
+                  : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+                runAppleScript(baseScript).finally(() => resolve());
               }, 1000);
             });
           case 'cmux':
             exec(`open -a cmux`);
+            return new Promise<void>(resolve => {
+              setTimeout(() => {
+                const baseScript = hotkeyScript
+                  ? `
+                      tell application "System Events"
+                        ${hotkeyScript}
+                        keystroke "${escapedLaunchCmd}" & return
+                      end tell
+                    `
+                  : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+                runAppleScript(baseScript).finally(() => resolve());
+              }, 1000);
+            });
+          case 'custom': {
+            const customApp = store.get('customExternalTerminalApp', '') as string;
+            if (!customApp) {
+              if (isCustomLaunchMode && hotkeyScript) {
+                script = `
+                    tell application "Terminal"
+                      activate
+                      if (count of windows) = 0 then
+                        do script ""
+                      end if
+                    end tell
+                    tell application "System Events"
+                      ${hotkeyScript}
+                      keystroke "${escapedLaunchCmd}" & return
+                    end tell
+                  `;
+              } else {
+                script = openInTab
+                  ? `
+                      tell application "Terminal"
+                        activate
+                        if (count of windows) = 0 then
+                          do script "${escapedLaunchCmd}"
+                        else
+                          do script "${escapedLaunchCmd}" in front window
+                        end if
+                      end tell
+                    `
+                  : `
+                      tell application "Terminal"
+                        activate
+                        do script "${escapedLaunchCmd}"
+                      end tell
+                    `;
+              }
+              break;
+            }
+
+            exec(`open -a ${shellQuote(customApp)}`);
             return new Promise<void>(resolve => {
               setTimeout(() => {
                 runAppleScript(
@@ -364,9 +554,22 @@ export function registerTerminalIpc(): void {
                 ).finally(() => resolve());
               }, 1000);
             });
-          case 'custom': {
-            const customApp = store.get('customExternalTerminalApp', '') as string;
-            if (!customApp) {
+          }
+          default:
+            if (isCustomLaunchMode && hotkeyScript) {
+              script = `
+                  tell application "Terminal"
+                    activate
+                    if (count of windows) = 0 then
+                      do script ""
+                    end if
+                  end tell
+                  tell application "System Events"
+                    ${hotkeyScript}
+                    keystroke "${escapedLaunchCmd}" & return
+                  end tell
+                `;
+            } else {
               script = openInTab
                 ? `
                     tell application "Terminal"
@@ -384,36 +587,7 @@ export function registerTerminalIpc(): void {
                       do script "${escapedLaunchCmd}"
                     end tell
                   `;
-              break;
             }
-
-            exec(`open -a ${shellQuote(customApp)}`);
-            return new Promise<void>(resolve => {
-              setTimeout(() => {
-                runAppleScript(
-                  `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-                ).finally(() => resolve());
-              }, 1000);
-            });
-          }
-          default:
-            script = openInTab
-              ? `
-                  tell application "Terminal"
-                    activate
-                    if (count of windows) = 0 then
-                      do script "${escapedLaunchCmd}"
-                    else
-                      do script "${escapedLaunchCmd}" in front window
-                    end if
-                  end tell
-                `
-              : `
-                  tell application "Terminal"
-                    activate
-                    do script "${escapedLaunchCmd}"
-                  end tell
-                `;
         }
 
         return runAppleScript(script);
