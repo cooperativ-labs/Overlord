@@ -15,7 +15,8 @@ type TerminalContextValue = {
     ticketId: string,
     agent: 'claude' | 'codex' | 'cursor' | 'gemini',
     cwd?: string,
-    agentToken?: string
+    agentToken?: string,
+    launchMode?: 'run' | 'ask'
   ) => Promise<void>;
   isTerminalOpen: boolean;
   activeTerminalId: string | null;
@@ -86,10 +87,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini',
       cwd?: string,
-      agentToken?: string
+      agentToken?: string,
+      launchMode: 'run' | 'ask' = 'run'
     ) => {
       if (!api) return;
-      const result = await api.terminal.launchAgent(ticketId, agent, cwd, agentToken);
+      const result = await api.terminal.launchAgent(ticketId, agent, cwd, agentToken, launchMode);
       // If we got a terminal ID back (embedded mode), track it
       if (typeof result === 'string') {
         setActiveTerminalId(result);

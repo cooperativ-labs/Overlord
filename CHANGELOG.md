@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.25.0] - 2026-03-02:15:15
+
+### Added
+- Add MCP server configuration snippets for Claude Code, Cursor, Codex CLI, and ChatGPT in Settings to simplify agent integration.
+
+### Fixed
+- Improve CLI `ovld auth login` to handle non-JSON or malformed responses with clearer error messages and snippets of the received content.
+- Fixed copybutton on web
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Refactor
+- None.
+
+### Chore
+- Bump package version to `0.25.0`.
+
 ## [0.24.0] - 2026-02-27:15:00
 
 ### Added

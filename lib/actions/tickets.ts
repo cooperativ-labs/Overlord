@@ -10,7 +10,7 @@ import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
-import { buildTicketPromptMarkdown } from '@/lib/overlord/ticket-prompt';
+import { buildTicketPromptMarkdown, type PromptLaunchMode } from '@/lib/overlord/ticket-prompt';
 import { createTicketSchema } from '@/lib/overlord/validation';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
@@ -786,7 +786,8 @@ export async function deleteTicketAction(
 
 /** Returns the full LLM prompt for a ticket (for copy-to-clipboard). RLS applies. */
 export async function getTicketPromptForCopy(
-  ticketId: string
+  ticketId: string,
+  launchMode: PromptLaunchMode = 'run'
 ): Promise<{ error?: string; prompt?: string }> {
   const supabase = await createClient();
   const { data: ticket, error } = await supabase
@@ -827,7 +828,7 @@ export async function getTicketPromptForCopy(
   const prompt = buildTicketPromptMarkdown({
     ticket: { ...ticket, objective: draftObjective?.objective ?? ticket.objective },
     platformUrl,
-    options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions }
+    options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions, launchMode }
   });
   return { prompt };
 }

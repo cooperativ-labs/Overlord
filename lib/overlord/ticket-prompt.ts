@@ -1,6 +1,7 @@
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
+export type PromptLaunchMode = 'run' | 'ask';
 
 export type PromptOptions = {
   /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */
@@ -9,6 +10,8 @@ export type PromptOptions = {
   mcpOnly?: boolean;
   /** Optional user-level custom instructions to prepend to the prompt */
   customInstructions?: string | null;
+  /** Launch mode for this prompt. Ask mode guides the agent to ask and stop. */
+  launchMode?: PromptLaunchMode;
 };
 
 /**
@@ -47,6 +50,7 @@ export function buildTicketPromptMarkdown({
     body?.trim() ? `### ${heading}\n\n${body.trim()}\n` : '';
   const executionTargetLabel = ticket.execution_target === 'human' ? 'Human' : 'Agent';
   const projectLabel = ticket.project_id;
+  const launchMode = options?.launchMode ?? 'run';
 
   const isLocal = context
     ? context === 'electron' || context === 'cli'
@@ -65,6 +69,16 @@ export function buildTicketPromptMarkdown({
 ${customInstructions}
 `
     : '';
+  const launchModeSection =
+    launchMode === 'ask'
+      ? `### Ask mode
+
+This session is **Ask-only**:
+- Attach first and read the ticket context.
+- Ask a focused blocking question with the protocol \`ask\` call.
+- Stop after calling \`ask\`. Do not implement code, apply patches, or deliver.
+`
+      : '';
 
   return `# Overlord — Agent Instructions
 
@@ -83,6 +97,7 @@ ${section('Objective', ticket.objective)}
 ${section('Acceptance Criteria', ticket.acceptance_criteria)}
 ${section('Available Tools / Constraints', ticket.available_tools)}
 ${customInstructionsSection}
+${launchModeSection}
 ---
 
 ${protocolSection}`;

@@ -5,6 +5,7 @@ import path from 'path';
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
 
 export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini';
+type AgentLaunchMode = 'run' | 'ask';
 
 const agentIdentifierMap: Record<AgentType, string> = {
   claude: 'claude-code',
@@ -19,6 +20,7 @@ type LaunchAgentInput = {
   cwd?: string;
   /** Per-user agent token from the agent_tokens table. Falls back to AGENT_TOKEN env var. */
   agentToken?: string;
+  launchMode?: AgentLaunchMode;
 };
 
 type LaunchAgentResult = {
@@ -60,7 +62,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const platformUrl = getPlatformUrl();
   // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
   const agentToken = input.agentToken ?? process.env.AGENT_TOKEN ?? '';
-  const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}?context=electron`;
+  const launchMode = input.launchMode ?? 'run';
+  const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
   const launchEnv = {
     OVERLORD_URL: platformUrl,
     AGENT_TOKEN: agentToken,

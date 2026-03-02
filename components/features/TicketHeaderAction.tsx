@@ -3,6 +3,7 @@
 import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
+import { AskTicketButton } from './AskTicketButton';
 import { CopyTicketPromptButton } from './CopyTicketPromptButton';
 import { AgentSplitButtonLive } from './TicketLiveProvider';
 
@@ -32,25 +33,45 @@ export function TicketHeaderAction({
   const { isElectron } = useTerminal();
 
   if (!isElectron) {
-    return <CopyTicketPromptButton ticketId={ticketId} runInTerminal={false} variant="default" />;
+    return (
+      <div className="flex items-center gap-2">
+        <AskTicketButton
+          ticketId={ticketId}
+          agentIdentifier={agentIdentifier}
+          agentToken={agentToken}
+          workingDirectory={workingDirectory}
+          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+        />
+        <CopyTicketPromptButton ticketId={ticketId} runInTerminal={false} variant="default" />
+      </div>
+    );
   }
 
   return (
-    <AgentSplitButtonLive
-      defaultAgent={
-        (getAgentTypeByIdentifier(agentIdentifier)?.value ?? 'claude') as LaunchAgentTypeValue
-      }
-      ticketId={ticketId}
-      agentToken={agentToken}
-      commands={{
-        claude: claudeCommand,
-        codex: codexCommand,
-        cursor: cursorCommand,
-        gemini: geminiCommand
-      }}
-      workingDirectory={workingDirectory}
-      hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-      size="sm"
-    />
+    <div className="flex items-center gap-2">
+      <AskTicketButton
+        ticketId={ticketId}
+        agentIdentifier={agentIdentifier}
+        agentToken={agentToken}
+        workingDirectory={workingDirectory}
+        hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+      />
+      <AgentSplitButtonLive
+        defaultAgent={
+          (getAgentTypeByIdentifier(agentIdentifier)?.value ?? 'claude') as LaunchAgentTypeValue
+        }
+        ticketId={ticketId}
+        agentToken={agentToken}
+        commands={{
+          claude: claudeCommand,
+          codex: codexCommand,
+          cursor: cursorCommand,
+          gemini: geminiCommand
+        }}
+        workingDirectory={workingDirectory}
+        hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+        size="sm"
+      />
+    </div>
   );
 }

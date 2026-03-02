@@ -168,8 +168,7 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
   cursor: {
     label: 'Cursor',
     filePath: '~/.cursor/mcp.json',
-    description:
-      'Merge into ~/.cursor/mcp.json (global) or .cursor/mcp.json (project-level).',
+    description: 'Merge into ~/.cursor/mcp.json (global) or .cursor/mcp.json (project-level).',
     getConfig: (mcpUrl, token) =>
       JSON.stringify(
         {
@@ -941,8 +940,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             </button>
                           </div>
                           <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                            {`PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken ?? '<AGENT_TOKEN>'
-                              }`}
+                            {`PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${
+                              agentToken ?? '<AGENT_TOKEN>'
+                            }`}
                           </pre>
                           <p className="text-xs text-muted-foreground">
                             Paste this into your custom cloud environment so the agent can call
@@ -1060,8 +1060,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             </pre>
                             <p className="text-xs text-muted-foreground">{cfg.description}</p>
                             <p className="break-all text-xs text-muted-foreground">
-                              File:{' '}
-                              <code className="rounded bg-muted px-1">{cfg.filePath}</code>
+                              File: <code className="rounded bg-muted px-1">{cfg.filePath}</code>
                             </p>
                           </div>
                         );

@@ -29,7 +29,8 @@ interface ElectronAPI {
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini',
       cwd?: string,
-      agentToken?: string
+      agentToken?: string,
+      launchMode?: 'run' | 'ask'
     ) => Promise<string | void>;
     chooseDirectory: () => Promise<string | null>;
   };

@@ -29,9 +29,7 @@ export function CopyTicketPromptButton({
   const [copied, setCopied] = useState(false);
   const { isElectron, sendCommand } = useTerminal();
 
-  async function handleClick(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
+  async function handleAction() {
     const { error, prompt } = await getTicketPromptForCopy(ticketId);
     if (error || !prompt) {
       return;
@@ -46,6 +44,18 @@ export function CopyTicketPromptButton({
     }
   }
 
+  function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleAction();
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleAction();
+  }
+
   if (variant === 'icon') {
     return (
       <Button
@@ -58,6 +68,7 @@ export function CopyTicketPromptButton({
         size="icon"
         variant="ghost"
         onClick={handleClick}
+        onTouchEnd={handleTouchEnd}
       >
         {copied ? (
           <Check className="h-4 w-4 text-green-600" />
@@ -71,7 +82,13 @@ export function CopyTicketPromptButton({
   }
 
   return (
-    <Button className={className} size="sm" variant="outline" onClick={handleClick}>
+    <Button
+      className={className}
+      size="sm"
+      variant="outline"
+      onClick={handleClick}
+      onTouchEnd={handleTouchEnd}
+    >
       {copied ? (
         <>
           <Check className="h-4 w-4" />

@@ -30,8 +30,16 @@ const electronAPI = {
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini',
       cwd?: string,
-      agentToken?: string
-    ) => ipcRenderer.invoke('terminal:launch-agent', { ticketId, agent, cwd, agentToken }),
+      agentToken?: string,
+      launchMode?: 'run' | 'ask'
+    ) =>
+      ipcRenderer.invoke('terminal:launch-agent', {
+        ticketId,
+        agent,
+        cwd,
+        agentToken,
+        launchMode
+      }),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },
   supabase: {

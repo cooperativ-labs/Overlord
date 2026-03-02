@@ -41,12 +41,12 @@ import {
   getReviewRaisedWhileOpenMap,
   getWaitingRaisedWhileOpenMap,
   hasUnopenedTimestamp,
-  markTicketReviewUnread,
   markTicketReviewOpened,
   markTicketReviewRaised,
-  markTicketWaitingUnread,
+  markTicketReviewUnread,
   markTicketWaitingOpened,
   markTicketWaitingRaised,
+  markTicketWaitingUnread,
   type TicketOpenedTimestamps,
   type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';

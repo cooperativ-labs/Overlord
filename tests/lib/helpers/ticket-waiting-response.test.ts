@@ -1,14 +1,14 @@
 /** @jest-environment jsdom */
 
 import {
-  getOpenedWaitingTimestamps,
   getOpenedReviewTimestamps,
+  getOpenedWaitingTimestamps,
   getReviewRaisedWhileOpenMap,
   getWaitingRaisedWhileOpenMap,
   hasUnopenedTimestamp,
-  markTicketReviewUnread,
   markTicketReviewOpened,
   markTicketReviewRaised,
+  markTicketReviewUnread,
   markTicketWaitingOpened,
   markTicketWaitingRaised,
   markTicketWaitingUnread
@@ -54,14 +54,14 @@ describe('ticket waiting/review indicator state', () => {
     markTicketReviewOpened(reviewTicketId, 1_000);
     markTicketReviewRaised(reviewTicketId, true);
     const reviewRaisedAt = new Date(2_000).toISOString();
-    expect(
-      hasUnopenedTimestamp(reviewRaisedAt, getOpenedReviewTimestamps()[reviewTicketId])
-    ).toBe(true);
+    expect(hasUnopenedTimestamp(reviewRaisedAt, getOpenedReviewTimestamps()[reviewTicketId])).toBe(
+      true
+    );
     markTicketReviewOpened(reviewTicketId, 4_000);
     expect(getReviewRaisedWhileOpenMap()[reviewTicketId]).toBeUndefined();
-    expect(
-      hasUnopenedTimestamp(reviewRaisedAt, getOpenedReviewTimestamps()[reviewTicketId])
-    ).toBe(false);
+    expect(hasUnopenedTimestamp(reviewRaisedAt, getOpenedReviewTimestamps()[reviewTicketId])).toBe(
+      false
+    );
 
     // Mark both as unread: highlights should be treated as unseen again.
     markTicketWaitingUnread(waitingTicketId);
@@ -70,9 +70,9 @@ describe('ticket waiting/review indicator state', () => {
     expect(
       hasUnopenedTimestamp(waitingRaisedAt, getOpenedWaitingTimestamps()[waitingTicketId])
     ).toBe(true);
-    expect(
-      hasUnopenedTimestamp(reviewRaisedAt, getOpenedReviewTimestamps()[reviewTicketId])
-    ).toBe(true);
+    expect(hasUnopenedTimestamp(reviewRaisedAt, getOpenedReviewTimestamps()[reviewTicketId])).toBe(
+      true
+    );
   });
 
   it('tracks raised-while-open and clears it on reopen for review highlights', () => {

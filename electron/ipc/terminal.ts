@@ -53,11 +53,6 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function applyCwd(command: string, cwd?: string): string {
-  if (!cwd) return command;
-  return `cd ${shellQuote(cwd)} && ${command}`;
-}
-
 function buildHotkeyAppleScript(hotkey: string): string | null {
   const trimmed = hotkey.trim();
   if (!trimmed) return null;
@@ -357,7 +352,13 @@ export function registerTerminalIpc(): void {
     'terminal:launch-agent',
     async (
       event,
-      payload: { ticketId: string; agent: AgentType; cwd?: string; agentToken?: string }
+      payload: {
+        ticketId: string;
+        agent: AgentType;
+        cwd?: string;
+        agentToken?: string;
+        launchMode?: 'run' | 'ask';
+      }
     ) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error('No window found');
@@ -366,7 +367,8 @@ export function registerTerminalIpc(): void {
         ticketId: payload.ticketId,
         agent: payload.agent,
         cwd: payload.cwd,
-        agentToken: payload.agentToken
+        agentToken: payload.agentToken,
+        launchMode: payload.launchMode
       });
 
       const terminalMode = store.get('terminalMode', 'embedded') as string;

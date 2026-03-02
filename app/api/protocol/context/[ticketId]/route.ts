@@ -5,7 +5,11 @@ import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
-import { buildTicketPromptMarkdown, type PromptContext } from '@/lib/overlord/ticket-prompt';
+import {
+  buildTicketPromptMarkdown,
+  type PromptContext,
+  type PromptLaunchMode
+} from '@/lib/overlord/ticket-prompt';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
@@ -50,6 +54,10 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const { searchParams } = new URL(request.url);
     const context = (searchParams.get('context') ?? undefined) as PromptContext | undefined;
+    const launchMode =
+      searchParams.get('mode') === 'ask'
+        ? ('ask' as PromptLaunchMode)
+        : ('run' as PromptLaunchMode);
     const platformUrl = getPlatformUrl();
 
     // Build MCP URL from Supabase project URL (edge function endpoint)
@@ -88,7 +96,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions }
+      options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions, launchMode }
     });
 
     const headers: Record<string, string> = {

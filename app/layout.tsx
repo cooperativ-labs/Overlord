@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 
 import { AppSidebar } from '@/components/app-sidebar';
+import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
@@ -66,6 +67,7 @@ export default async function RootLayout({
                 <SidebarProvider defaultOpen>
                   {user ? (
                     <div className="flex h-dvh w-full flex-col overflow-hidden">
+                      <AnnouncementBar />
                       {/* Electron title bar drag region — hidden in browser */}
                       <div className="electron-drag-region shrink-0" />
                       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -95,7 +97,10 @@ export default async function RootLayout({
                       </div>
                     </div>
                   ) : (
-                    <main className="min-h-dvh w-full ">{children}</main>
+                    <div className="flex h-dvh w-full flex-col overflow-hidden">
+                      <AnnouncementBar />
+                      <main className="min-h-0 w-full flex-1 overflow-y-auto">{children}</main>
+                    </div>
                   )}
                 </SidebarProvider>
               </ProjectCreatorProvider>
