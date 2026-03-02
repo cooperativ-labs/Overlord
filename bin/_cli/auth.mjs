@@ -9,6 +9,34 @@ const DEFAULT_OVERLORD_URL =
 const POLL_INTERVAL_MS = 3_000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1_000; // 10 minutes
 
+function snippet(value, max = 180) {
+  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max)}...`;
+}
+
+async function readJsonOrThrow(res, context, platformUrl) {
+  const contentType = res.headers.get('content-type') ?? '';
+  const bodyText = await res.text();
+
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new Error(
+      `${context} returned non-JSON content (${res.status}, ${contentType || 'unknown content type'}). ` +
+        `Response: ${snippet(bodyText)}\n` +
+        `Check OVERLORD_URL and ensure Overlord is running at ${platformUrl}.`
+    );
+  }
+
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    throw new Error(
+      `${context} returned invalid JSON (${res.status}). Response: ${snippet(bodyText)}\n` +
+        `Check OVERLORD_URL and ensure Overlord is running at ${platformUrl}.`
+    );
+  }
+}
+
 function openBrowser(url) {
   try {
     const platform = process.platform;
@@ -32,7 +60,7 @@ async function requestDeviceCode(platformUrl, localSecret) {
     const text = await res.text();
     throw new Error(`Failed to start login (${res.status}): ${text}`);
   }
-  return res.json();
+  return readJsonOrThrow(res, 'Device code request', platformUrl);
 }
 
 async function pollDeviceCode(platformUrl, deviceCode, localSecret) {
@@ -46,7 +74,7 @@ async function pollDeviceCode(platformUrl, deviceCode, localSecret) {
   });
 
   if (res.status === 400) {
-    const data = await res.json();
+    const data = await readJsonOrThrow(res, 'Device code poll', platformUrl);
     if (data.status === 'expired') return { status: 'expired' };
     throw new Error(`Poll error (${res.status}): ${JSON.stringify(data)}`);
   }
@@ -55,7 +83,7 @@ async function pollDeviceCode(platformUrl, deviceCode, localSecret) {
     throw new Error(`Poll error (${res.status}): ${await res.text()}`);
   }
 
-  return res.json();
+  return readJsonOrThrow(res, 'Device code poll', platformUrl);
 }
 
 async function sleep(ms) {
