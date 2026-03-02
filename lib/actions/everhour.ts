@@ -681,15 +681,46 @@ export async function listTimeRecordsForTicket(ticketId: string): Promise<Everho
     to: parseISODate(to)
   };
   const taskId = ticket.everhour_task_id;
-  const candidatePaths = [
+  const primaryPaths = [
     `/time?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
-    `/time?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`,
-    `/reports/time?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
-    `/time/records?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`
+    `/time?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`
   ];
 
   let lastError: unknown = null;
-  for (const path of candidatePaths) {
+  let sawPrimarySuccess = false;
+  let emptyPrimaryResult: EverhourTimeRecord[] = [];
+
+  // Probe both `task` and `tasks` filters before deciding there are no records.
+  for (const path of primaryPaths) {
+    try {
+      const response = await everhourFetch<unknown>(apiKey, path);
+      sawPrimarySuccess = true;
+      const normalized = normalizeTimeRecords(response);
+      if (normalized.length > 0) {
+        return normalized;
+      }
+      emptyPrimaryResult = normalized;
+    } catch (error) {
+      lastError = error;
+      const status = parseEverhourStatus(error);
+      if (status !== 404 && status !== 405) {
+        break;
+      }
+    }
+  }
+
+  if (sawPrimarySuccess) {
+    return emptyPrimaryResult;
+  }
+
+  const fallbackPaths = [
+    `/reports/time?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
+    `/time/records?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
+    `/reports/time?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`,
+    `/time/records?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`
+  ];
+
+  for (const path of fallbackPaths) {
     try {
       const response = await everhourFetch<unknown>(apiKey, path);
       return normalizeTimeRecords(response);
