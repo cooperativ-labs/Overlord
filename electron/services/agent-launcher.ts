@@ -131,8 +131,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     command = `codex "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'cursor') {
     command = `agent "$(cat ${shellQuote(contextFile)})"`;
-  } else {
+  } else if (input.agent === 'gemini') {
     command = `gemini "$(cat ${shellQuote(contextFile)})"`;
+  } else {
+    throw new Error(`Unknown agent type: ${input.agent}`);
   }
 
   return {
@@ -233,11 +235,7 @@ async function fetchContextCommandFallback(
     if (!response.ok) return null;
 
     const payload = (await response.json()) as Partial<ContextCommandsResponse>;
-    if (agent === 'claude') {
-      return typeof payload.claudeCode === 'string' && payload.claudeCode.trim().length > 0
-        ? payload.claudeCode
-        : null;
-    }
+
     if (agent === 'codex') {
       return typeof payload.codex === 'string' && payload.codex.trim().length > 0
         ? payload.codex
@@ -248,9 +246,13 @@ async function fetchContextCommandFallback(
         ? payload.cursor
         : null;
     }
-
-    return typeof payload.gemini === 'string' && payload.gemini.trim().length > 0
-      ? payload.gemini
+    if (agent === 'gemini') {
+      return typeof payload.gemini === 'string' && payload.gemini.trim().length > 0
+        ? payload.gemini
+        : null;
+    }
+    return typeof payload.claudeCode === 'string' && payload.claudeCode.trim().length > 0
+      ? payload.claudeCode
       : null;
   } catch {
     return null;

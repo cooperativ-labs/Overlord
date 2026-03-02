@@ -45,7 +45,6 @@ export function buildTicketPromptMarkdown({
 }: BuildTicketPromptMarkdownInput): string {
   const ref = getTicketIdentifier(ticket.id);
   const title = ticket.title ?? '(Untitled)';
-
   const section = (heading: string, body: string | null) =>
     body?.trim() ? `### ${heading}\n\n${body.trim()}\n` : '';
   const executionTargetLabel = ticket.execution_target === 'human' ? 'Human' : 'Agent';
@@ -82,11 +81,12 @@ This session is **Ask-only**:
 
   return `# Overlord — Agent Instructions
 
-You are an AI coding agent working on ticket **${ref}: ${title}** via Overlord.
+You are an AI coding agent working on ticket **${ref}** via Overlord.
 Complete the work described below, then deliver a summary back to the platform.
 
 ## Your Ticket
 
+- **Title:** ${title}
 - **Reference:** ${ref}
 - **Status:** ${ticket.status ?? 'unknown'}
 - **Priority:** ${ticket.priority ?? 'unset'}

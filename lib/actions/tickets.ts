@@ -793,7 +793,7 @@ export async function getTicketPromptForCopy(
   const { data: ticket, error } = await supabase
     .from('tickets')
     .select(
-      'id, organization_id, title, objective, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
+      'id, organization_id, title, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
     )
     .eq('id', ticketId)
     .single();
@@ -811,6 +811,11 @@ export async function getTicketPromptForCopy(
     .limit(1)
     .maybeSingle();
 
+  if (!draftObjective) {
+    return { error: 'No objective found for ticket.' };
+  }
+  const latestObjective = draftObjective.objective;
+
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -826,7 +831,11 @@ export async function getTicketPromptForCopy(
   }
 
   const prompt = buildTicketPromptMarkdown({
-    ticket: { ...ticket, objective: draftObjective?.objective ?? ticket.objective },
+    ticket: {
+      ...ticket,
+      title: ticket.title?.trim(),
+      objective: latestObjective
+    },
     platformUrl,
     options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions, launchMode }
   });

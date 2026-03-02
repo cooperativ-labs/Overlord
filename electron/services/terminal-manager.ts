@@ -4,7 +4,14 @@ import * as pty from 'node-pty';
 import os from 'os';
 import path from 'path';
 
+import {
+  createTerminalConnectorRuntime,
+  getConnectorEvents,
+  type TerminalConnectorRuntime
+} from './terminal-connectors';
+
 const terminals = new Map<string, pty.IPty>();
+const terminalConnectorRuntimes = new Map<string, TerminalConnectorRuntime>();
 let counter = 0;
 const homeDirectory = process.env.HOME || os.homedir();
 
@@ -43,7 +50,20 @@ export function spawnTerminal(
     env: { ...process.env, ...extraEnv } as Record<string, string>
   });
 
+  const connectorRuntime = createTerminalConnectorRuntime(extraEnv);
+  if (connectorRuntime) {
+    terminalConnectorRuntimes.set(id, connectorRuntime);
+  }
+
   term.onData(data => {
+    const runtime = terminalConnectorRuntimes.get(id);
+    if (runtime) {
+      const events = getConnectorEvents(runtime, data);
+      if (events.length > 0) {
+        void postConnectorEvents(events, extraEnv);
+      }
+    }
+
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send('terminal:data', id, data);
     }
@@ -54,6 +74,7 @@ export function spawnTerminal(
       mainWindow.webContents.send('terminal:exit', id, exitCode);
     }
     terminals.delete(id);
+    terminalConnectorRuntimes.delete(id);
   });
 
   terminals.set(id, term);
@@ -99,6 +120,7 @@ export function killTerminal(id: string): void {
   if (term) {
     term.kill();
     terminals.delete(id);
+    terminalConnectorRuntimes.delete(id);
   }
 }
 
@@ -106,5 +128,44 @@ export function killAllTerminals(): void {
   for (const [id, term] of terminals) {
     term.kill();
     terminals.delete(id);
+    terminalConnectorRuntimes.delete(id);
+  }
+}
+
+async function postConnectorEvents(
+  events: ReturnType<typeof getConnectorEvents>,
+  extraEnv?: Record<string, string>
+): Promise<void> {
+  const overlordUrl = extraEnv?.OVERLORD_URL?.trim();
+  const agentToken = extraEnv?.AGENT_TOKEN?.trim();
+  const ticketId = extraEnv?.TICKET_ID?.trim();
+
+  if (!overlordUrl || !agentToken || !ticketId) return;
+
+  const localSecret = extraEnv?.OVERLORD_LOCAL_SECRET?.trim();
+
+  for (const event of events) {
+    if (event.type !== 'permission-requested') continue;
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${agentToken}`,
+      'Content-Type': 'application/json'
+    };
+    if (localSecret) {
+      headers['X-Overlord-Local-Secret'] = localSecret;
+    }
+
+    try {
+      await fetch(
+        `${overlordUrl}/api/protocol/permission-request?ticketId=${encodeURIComponent(ticketId)}`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(event.payload)
+        }
+      );
+    } catch {
+      // Best effort only. Terminal output should not fail if notification fails.
+    }
   }
 }

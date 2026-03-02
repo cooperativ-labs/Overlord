@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Copy, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
@@ -11,10 +11,12 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getTicketPromptForCopy } from '@/lib/actions/tickets';
 import {
+  AGENT_SELECTOR_VALUES,
+  type AgentSelectorValue,
   getAgentTypeByValue,
   isAgentIdentifierMatch,
-  LAUNCH_AGENT_VALUES,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
@@ -27,8 +29,8 @@ type SessionState = Database['public']['Enums']['session_state'];
 type AgentSplitButtonSize = 'default' | 'xs' | 'sm' | 'lg';
 
 type AgentSplitButtonProps = {
-  selectedAgent: LaunchAgentTypeValue;
-  onSelectAgent: (agent: LaunchAgentTypeValue) => void;
+  selectedAgent: AgentSelectorValue;
+  onSelectAgent: (agent: AgentSelectorValue) => void;
   ticketId: string;
   agentToken?: string | null;
   commands: Record<LaunchAgentTypeValue, string>;
@@ -99,14 +101,16 @@ export function AgentSplitButton({
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const { isElectron, launchAgent } = useTerminal();
-  const agentDetails = getAgentTypeByValue(selectedAgent);
+  const agentDetails = selectedAgent === 'prompt' ? null : getAgentTypeByValue(selectedAgent);
+  const isPromptSelected = selectedAgent === 'prompt';
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const isActive =
+    !isPromptSelected &&
     isAgentIdentifierMatch(selectedAgent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const canRunAgent = hasProjectWorkingDirectory ?? true;
-  const isDisabled = !canRunAgent;
+  const isDisabled = !isPromptSelected && !canRunAgent;
   const styles = sizeStyles[size];
 
   const isLaunchingRef = useRef(false);
@@ -126,7 +130,16 @@ export function AgentSplitButton({
   }, [agentSessionState]);
 
   async function handleLaunch() {
-    if (!canRunAgent) return;
+    if (!isPromptSelected && !canRunAgent) return;
+
+    if (isPromptSelected) {
+      const { error, prompt } = await getTicketPromptForCopy(ticketId);
+      if (error || !prompt) return;
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      return;
+    }
 
     if (isElectron) {
       isLaunchingRef.current = true;
@@ -159,10 +172,12 @@ export function AgentSplitButton({
     >
       {isLaunching ? (
         <Loader2 className={cn(styles.loader, 'animate-spin')} />
+      ) : isPromptSelected ? (
+        <Copy className={styles.icon} />
       ) : (
         <Image
-          src={agentDetails.icon}
-          alt={`${agentDetails.label} icon`}
+          src={agentDetails!.icon}
+          alt={`${agentDetails!.label} icon`}
           width={16}
           height={16}
           className={styles.icon}
@@ -175,7 +190,11 @@ export function AgentSplitButton({
           isActive && 'text-emerald-600 animate-pulse'
         )}
       >
-        {!isElectron && copied ? `${agentDetails.label} ✓` : agentDetails.label}
+        {copied
+          ? `${isPromptSelected ? 'Prompt' : agentDetails!.label} ✓`
+          : isPromptSelected
+            ? 'Prompt'
+            : agentDetails!.label}
       </span>
     </button>
   );
@@ -216,23 +235,30 @@ export function AgentSplitButton({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[140px]">
-          {LAUNCH_AGENT_VALUES.map(agentValue => {
-            const agent = getAgentTypeByValue(agentValue);
-            const agentIsActive = isAgentIdentifierMatch(agentValue, activeAgentIdentifier);
+          {AGENT_SELECTOR_VALUES.map(agentValue => {
+            const agent = agentValue === 'prompt' ? null : getAgentTypeByValue(agentValue);
+            const agentIsActive =
+              agentValue !== 'prompt' && isAgentIdentifierMatch(agentValue, activeAgentIdentifier);
             return (
               <DropdownMenuItem
-                key={agent.value}
+                key={agentValue}
                 className="gap-2 text-xs"
                 onClick={() => onSelectAgent(agentValue)}
               >
-                <Image
-                  src={agent.icon}
-                  alt={`${agent.label} icon`}
-                  width={14}
-                  height={14}
-                  className="h-3.5 w-3.5"
-                />
-                <span className={cn(agentIsActive && 'text-emerald-600')}>{agent.label}</span>
+                {agent ? (
+                  <Image
+                    src={agent.icon}
+                    alt={`${agent.label} icon`}
+                    width={14}
+                    height={14}
+                    className="h-3.5 w-3.5"
+                  />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                <span className={cn(agentIsActive && 'text-emerald-600')}>
+                  {agent ? agent.label : 'Prompt'}
+                </span>
                 {agentValue === selectedAgent && (
                   <Check className="ml-auto h-3 w-3 text-muted-foreground" />
                 )}

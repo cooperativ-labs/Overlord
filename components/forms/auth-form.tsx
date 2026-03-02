@@ -5,13 +5,7 @@ import Link from 'next/link';
 import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldSeparator
-} from '@/components/ui/field';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { signIn, signUp } from '@/lib/actions/auth';
@@ -20,7 +14,8 @@ import { cn } from '@/lib/utils';
 const isRedirectError = (err: unknown): boolean =>
   typeof err === 'object' &&
   err !== null &&
-  (err as { digest?: string }).digest === 'NEXT_REDIRECT';
+  typeof (err as { digest?: unknown }).digest === 'string' &&
+  (err as { digest: string }).digest.startsWith('NEXT_REDIRECT');
 
 type AuthMode = 'login' | 'signup';
 
@@ -197,7 +192,7 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
                 errorText="Sign up failed"
               />
             </Field>
-            <FieldSeparator>Or</FieldSeparator>
+            {/* <FieldSeparator>Or</FieldSeparator>
             <Field className="grid gap-4 sm:grid-cols-2">
               <Button variant="outline" type="button" className="gap-2">
                 <svg
@@ -227,7 +222,7 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
                 </svg>
                 Continue with Google
               </Button>
-            </Field>
+            </Field> */}
           </FieldGroup>
         </form>
       )}

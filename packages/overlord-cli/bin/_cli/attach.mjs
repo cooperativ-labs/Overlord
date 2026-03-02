@@ -25,13 +25,13 @@ function clearLines(n) {
   return n > 0 ? `\x1b[${n}A\x1b[J` : '';
 }
 
-const dim    = (s) => `\x1b[2m${s}\x1b[0m`;
-const bold   = (s) => `\x1b[1m${s}\x1b[0m`;
-const cyan   = (s) => `\x1b[36m${s}\x1b[0m`;
-const green  = (s) => `\x1b[32m${s}\x1b[0m`;
-const gray   = (s) => `\x1b[90m${s}\x1b[0m`;
-const yellow = (s) => `\x1b[33m${s}\x1b[0m`;
-const red    = (s) => `\x1b[31m${s}\x1b[0m`;
+const dim = s => `\x1b[2m${s}\x1b[0m`;
+const bold = s => `\x1b[1m${s}\x1b[0m`;
+const cyan = s => `\x1b[36m${s}\x1b[0m`;
+const green = s => `\x1b[32m${s}\x1b[0m`;
+const gray = s => `\x1b[90m${s}\x1b[0m`;
+const yellow = s => `\x1b[33m${s}\x1b[0m`;
+const red = s => `\x1b[31m${s}\x1b[0m`;
 
 function truncate(str, max) {
   if (!str) return '';
@@ -40,12 +40,18 @@ function truncate(str, max) {
 
 function statusColor(status) {
   switch (status) {
-    case 'draft':    return dim(status);
-    case 'execute':  return cyan(status);
-    case 'review':   return yellow(status);
-    case 'complete': return green(status);
-    case 'blocked':  return red(status);
-    default:         return gray(status ?? '?');
+    case 'draft':
+      return dim(status);
+    case 'execute':
+      return cyan(status);
+    case 'review':
+      return yellow(status);
+    case 'complete':
+      return green(status);
+    case 'blocked':
+      return red(status);
+    default:
+      return gray(status ?? '?');
   }
 }
 
@@ -85,7 +91,7 @@ async function fetchTickets(platformUrl, agentToken, localSecret) {
  * @returns {Promise<string|null>} - Selected id/value, or null if cancelled
  */
 function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const isTicketMode = Boolean(tickets);
     let query = '';
     let selectedIdx = 0;
@@ -95,17 +101,17 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
       if (!isTicketMode) return items;
       if (!query.trim()) return tickets.slice(0, MAX_VISIBLE * 3);
       const q = query.toLowerCase();
-      return tickets.filter((t) => {
+      return tickets.filter(t => {
         const title = (t.title || t.objective || '').toLowerCase();
-        const ref   = (t.id || '').toLowerCase();
+        const ref = (t.id || '').toLowerCase();
         return title.includes(q) || ref.includes(q);
       });
     }
 
     function renderTicketRow(t, active) {
-      const seq    = String(t.ticket_sequence ?? '?').padStart(3, ' ');
+      const seq = String(t.ticket_sequence ?? '?').padStart(3, ' ');
       const status = t.status ?? '?';
-      const title  = truncate(t.title || t.objective || '(no title)', 55);
+      const title = truncate(t.title || t.objective || '(no title)', 55);
       const marker = active ? cyan('▶') : ' ';
       return `  ${marker} ${gray('#' + seq)} ${gray('[')}${statusColor(status)}${gray(']')} ${active ? bold(title) : title}`;
     }
@@ -117,7 +123,7 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
 
     function render() {
       const filtered = getFiltered();
-      const count    = Math.min(filtered.length, MAX_VISIBLE);
+      const count = Math.min(filtered.length, MAX_VISIBLE);
       // Clamp selected within visible range
       if (selectedIdx >= count) selectedIdx = Math.max(0, count - 1);
 
@@ -171,9 +177,9 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
     process.stdout.write(hide);
     render();
 
-    process.stdin.on('data', (key) => {
+    process.stdin.on('data', key => {
       const filtered = getFiltered();
-      const count    = Math.min(filtered.length, MAX_VISIBLE);
+      const count = Math.min(filtered.length, MAX_VISIBLE);
 
       // Ctrl-C / Ctrl-D → exit
       if (key === '\x03' || key === '\x04') {
@@ -240,7 +246,7 @@ export async function runAttachCommand(args) {
 
   // ── Phase 1: Ticket selection ──────────────────────────────────────────────
 
-  let ticketId    = ticketIdArg;
+  let ticketId = ticketIdArg;
   let ticketTitle = '';
 
   if (!ticketId) {
@@ -256,7 +262,9 @@ export async function runAttachCommand(args) {
     }
 
     if (tickets.length === 0) {
-      console.error('  No tickets found. Create one with:\n    ovld tickets create --objective "..."');
+      console.error(
+        '  No tickets found. Create one with:\n    ovld tickets create --objective "..."'
+      );
       process.exit(1);
     }
 
@@ -271,7 +279,7 @@ export async function runAttachCommand(args) {
       process.exit(0);
     }
 
-    const found = tickets.find((t) => t.id === ticketId);
+    const found = tickets.find(t => t.id === ticketId);
     ticketTitle = found?.title || found?.objective || '';
   }
 
@@ -290,8 +298,8 @@ export async function runAttachCommand(args) {
     process.stdout.write('\n');
 
     agent = await runInteractivePrompt({
-      label:  'Agent',
-      items:  AGENTS,
+      label: 'Agent',
+      items: AGENTS,
       prefix: `ovld attach ${shortId} `
     });
 

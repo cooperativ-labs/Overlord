@@ -19,8 +19,14 @@ function getRuntimeDir(): string {
   return path.join(os.homedir(), '.ovld');
 }
 
-function getRuntimeFilePath(): string {
-  return path.join(getRuntimeDir(), 'runtime.json');
+function getRuntimeFilePath(platformUrl: string): string {
+  let port: string;
+  try {
+    port = new URL(platformUrl).port || '80';
+  } catch {
+    port = 'unknown';
+  }
+  return path.join(getRuntimeDir(), `runtime.${port}.json`);
 }
 
 export function generateLocalSecret(): string {
@@ -29,7 +35,7 @@ export function generateLocalSecret(): string {
 
 export function writeLocalRuntime(platformUrl: string, localSecret: string): void {
   const runtimeDir = getRuntimeDir();
-  const runtimeFile = getRuntimeFilePath();
+  const runtimeFile = getRuntimeFilePath(platformUrl);
   const tempFile = `${runtimeFile}.tmp-${process.pid}-${Date.now()}`;
 
   const payload: RuntimeMetadata = {
@@ -46,8 +52,8 @@ export function writeLocalRuntime(platformUrl: string, localSecret: string): voi
   fs.chmodSync(runtimeFile, RUNTIME_FILE_MODE);
 }
 
-export function clearLocalRuntime(): void {
-  const runtimeFile = getRuntimeFilePath();
+export function clearLocalRuntime(platformUrl: string): void {
+  const runtimeFile = getRuntimeFilePath(platformUrl);
 
   try {
     const raw = fs.readFileSync(runtimeFile, 'utf8');

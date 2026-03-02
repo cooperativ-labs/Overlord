@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
-import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
 
@@ -36,8 +36,7 @@ export function AskTicketButton({
     setAskButtonState('loading');
 
     try {
-      const preferredAgent = (getAgentTypeByIdentifier(agentIdentifier)?.value ??
-        'claude') as LaunchAgentTypeValue;
+      const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
 
       if (isElectron) {
         await launchAgent(

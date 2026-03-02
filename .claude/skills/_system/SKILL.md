@@ -1,4 +1,3 @@
-
 ---
 name: Overskill skills manager — Agent Instructions
 description: This file explains how to use the Overskill skills manager to create, version, and sync skills to your projects.

@@ -1,6 +1,7 @@
 export type AgentTypeValue = 'claude' | 'codex' | 'cursor' | 'gemini';
 export type LaunchAgentTypeValue = AgentTypeValue;
 export type CopyPromptAgentTypeValue = AgentTypeValue;
+export type AgentSelectorValue = LaunchAgentTypeValue | 'prompt';
 
 export type AgentType = {
   value: AgentTypeValue;
@@ -55,6 +56,10 @@ export const COPY_PROMPT_AGENT_VALUES: readonly CopyPromptAgentTypeValue[] = [
   'cursor',
   'gemini'
 ];
+export const AGENT_SELECTOR_VALUES: readonly AgentSelectorValue[] = [
+  ...LAUNCH_AGENT_VALUES,
+  'prompt'
+];
 
 export function getAgentTypeByValue(value: AgentTypeValue): AgentType {
   return agentTypesByValue[value];
@@ -77,4 +82,13 @@ export function isAgentIdentifierMatch(
   if (!normalizedIdentifier) return false;
 
   return getAgentTypeByValue(agentValue).identifiers.includes(normalizedIdentifier);
+}
+
+export function getLaunchAgentTypeByIdentifier(identifier?: string | null): LaunchAgentTypeValue {
+  const agent = getAgentTypeByIdentifier(identifier);
+  if (!agent) return 'claude';
+  if (LAUNCH_AGENT_VALUES.includes(agent.value as LaunchAgentTypeValue)) {
+    return agent.value as LaunchAgentTypeValue;
+  }
+  return 'claude';
 }

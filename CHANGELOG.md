@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.0] - 2026-03-02:16:30
+
+### Added
+- Add `AnnouncementBar` component to the root layout for app-wide user notifications and announcements.
+- Add `AskTicketButton` to the ticket header, enabling agents to be launched in "ask" mode (Electron) or copying an ask-mode prompt to the clipboard (web) without starting a full run.
+- Add `launchMode` parameter (`'ask'` or `'run'`) to agent launch and terminal provider flows so callers can control whether the agent is prompted to ask clarifying questions or execute immediately.
+- Add `TicketPanelLive` composite component with a live activity feed (`LiveActivityFeed`), storage artifact viewer (`LiveArtifacts`), shared-state inspector, and `AgentSessionBadge` with animated pulse indicator for running sessions; includes a "Force stop" control that marks an attached session as disconnected.
+
+### Fixed
+- Namespaced the localSecret to prevent collisions with other instances of Overlord running on the same machine.
+
+### Changed
+- Ticket prompt generation now requires a saved draft objective; if none exists an error is returned rather than falling back to the ticket's stored objective or title, ensuring agents always receive a deliberate, up-to-date objective.
+- Remove the ticket title from the agent instructions header — the prompt now identifies the ticket by reference ID only (`**ref**`) to avoid stale or misleading title text in long-running sessions.
+- Update `CopyTicketPromptButton` to handle touch events alongside click events for improved mobile and hybrid-input device support.
+- Show the "Run agent" bar in `LaunchCommandBar` only when running inside Electron so web users are not presented with controls that require the desktop app.
+
+### Security
+- None.
+
+### Chore
+- Bump package version to `0.26.0`.
+
 ## [0.25.0] - 2026-03-02:15:15
 
 ### Added

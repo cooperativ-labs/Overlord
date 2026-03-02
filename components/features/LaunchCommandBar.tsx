@@ -11,11 +11,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
+  AGENT_SELECTOR_VALUES,
+  type AgentSelectorValue,
   COPY_PROMPT_AGENT_VALUES,
   type CopyPromptAgentTypeValue,
   getAgentTypeByValue,
-  isAgentIdentifierMatch,
-  LAUNCH_AGENT_VALUES,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
@@ -42,17 +42,17 @@ type Props = {
 
 const LAST_AGENT_KEY = 'overlord-last-agent';
 
-function useLastAgent(): [LaunchAgentTypeValue, (agent: LaunchAgentTypeValue) => void] {
-  const [agent, setAgent] = useState<LaunchAgentTypeValue>('claude');
+function useLastAgent(): [AgentSelectorValue, (agent: AgentSelectorValue) => void] {
+  const [agent, setAgent] = useState<AgentSelectorValue>('claude');
 
   useEffect(() => {
     const stored = localStorage.getItem(LAST_AGENT_KEY);
-    if (stored && LAUNCH_AGENT_VALUES.includes(stored as LaunchAgentTypeValue)) {
-      setAgent(stored as LaunchAgentTypeValue);
+    if (stored && AGENT_SELECTOR_VALUES.includes(stored as AgentSelectorValue)) {
+      setAgent(stored as AgentSelectorValue);
     }
   }, []);
 
-  const persist = useCallback((next: LaunchAgentTypeValue) => {
+  const persist = useCallback((next: AgentSelectorValue) => {
     setAgent(next);
     localStorage.setItem(LAST_AGENT_KEY, next);
   }, []);
@@ -123,6 +123,8 @@ export function LaunchCommandBar({
 }: Props) {
   const { isElectron } = useTerminal();
   const [selectedAgent, setSelectedAgent] = useLastAgent();
+
+  if (!isElectron) return null;
   const commands: Record<LaunchAgentTypeValue, string> = {
     claude: claudeCommand,
     codex: codexCommand,

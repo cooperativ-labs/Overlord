@@ -6,7 +6,7 @@ import path from 'node:path';
 
 const CREDENTIALS_DIR = path.join(os.homedir(), '.ovld');
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
-const RUNTIME_FILE = path.join(CREDENTIALS_DIR, 'runtime.json');
+const RUNTIME_FILE_PATTERN = /^runtime\.\d+\.json$/;
 const DEFAULT_OVERLORD_URL = 'http://localhost:3000';
 const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
 
@@ -38,9 +38,29 @@ export function clearCredentials() {
   }
 }
 
-function getRuntimeStatIfSecure() {
+function getRuntimeFilePath(targetUrl) {
   try {
-    const stat = fs.statSync(RUNTIME_FILE);
+    const port = new URL(targetUrl).port || '80';
+    return path.join(CREDENTIALS_DIR, `runtime.${port}.json`);
+  } catch {
+    return null;
+  }
+}
+
+function getAllRuntimeFiles() {
+  try {
+    return fs
+      .readdirSync(CREDENTIALS_DIR)
+      .filter(f => RUNTIME_FILE_PATTERN.test(f))
+      .map(f => path.join(CREDENTIALS_DIR, f));
+  } catch {
+    return [];
+  }
+}
+
+function getRuntimeStatIfSecure(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
     if (!stat.isFile()) return null;
 
     const mode = stat.mode & 0o777;
@@ -51,6 +71,37 @@ function getRuntimeStatIfSecure() {
     }
 
     return stat;
+  } catch {
+    return null;
+  }
+}
+
+function loadRuntimeFromFile(filePath) {
+  if (!getRuntimeStatIfSecure(filePath)) return null;
+
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      typeof parsed.platform_url !== 'string' ||
+      typeof parsed.pid !== 'number' ||
+      !isRunningPid(parsed.pid) ||
+      !isLocalhostUrl(parsed.platform_url)
+    ) {
+      return null;
+    }
+
+    if (parsed.local_secret !== undefined && typeof parsed.local_secret !== 'string') {
+      return null;
+    }
+
+    return {
+      platform_url: parsed.platform_url,
+      local_secret: parsed.local_secret
+    };
   } catch {
     return null;
   }
@@ -77,35 +128,19 @@ function isRunningPid(pid) {
 }
 
 /** @returns {{ platform_url?: string, local_secret?: string } | null} */
-export function loadRuntime() {
-  if (!getRuntimeStatIfSecure()) return null;
-
-  try {
-    const raw = fs.readFileSync(RUNTIME_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-
-    if (
-      !parsed ||
-      typeof parsed !== 'object' ||
-      typeof parsed.platform_url !== 'string' ||
-      typeof parsed.pid !== 'number' ||
-      !isRunningPid(parsed.pid) ||
-      !isLocalhostUrl(parsed.platform_url)
-    ) {
-      return null;
-    }
-
-    if (parsed.local_secret !== undefined && typeof parsed.local_secret !== 'string') {
-      return null;
-    }
-
-    return {
-      platform_url: parsed.platform_url,
-      local_secret: parsed.local_secret
-    };
-  } catch {
-    return null;
+export function loadRuntime(targetUrl) {
+  if (targetUrl) {
+    const filePath = getRuntimeFilePath(targetUrl);
+    if (!filePath) return null;
+    return loadRuntimeFromFile(filePath);
   }
+
+  for (const filePath of getAllRuntimeFiles()) {
+    const result = loadRuntimeFromFile(filePath);
+    if (result) return result;
+  }
+
+  return null;
 }
 
 /**
@@ -133,15 +168,16 @@ export function buildAuthHeaders(token, localSecret) {
  */
 export function resolveAuth() {
   const creds = loadCredentials();
-  const runtime = loadRuntime();
   const overlordUrlFromEnv = process.env.OVERLORD_URL;
   const overlordUrlFromCreds = creds?.platform_url;
+
+  // If OVERLORD_URL is set, look only at the runtime file for that specific port.
+  // Otherwise scan all runtime.*.json files and pick the first valid running instance.
+  const runtime = loadRuntime(overlordUrlFromEnv ?? null);
   const runtimeOverlordUrl = runtime?.platform_url;
+
   const platformUrl =
-    overlordUrlFromEnv ??
-    runtimeOverlordUrl ??
-    overlordUrlFromCreds ??
-    DEFAULT_OVERLORD_URL;
+    overlordUrlFromEnv ?? runtimeOverlordUrl ?? overlordUrlFromCreds ?? DEFAULT_OVERLORD_URL;
   const localSecret =
     runtime &&
     runtime.local_secret &&
@@ -153,8 +189,7 @@ export function resolveAuth() {
 
   return {
     platformUrl,
-    agentToken:
-      creds?.access_token ?? process.env.AGENT_TOKEN ?? 'overlord-local-dev-token',
+    agentToken: creds?.access_token ?? process.env.AGENT_TOKEN ?? 'overlord-local-dev-token',
     localSecret
   };
 }

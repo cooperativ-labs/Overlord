@@ -1,6 +1,6 @@
 'use client';
 
-import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import { AskTicketButton } from './AskTicketButton';
@@ -42,7 +42,7 @@ export function TicketHeaderAction({
           workingDirectory={workingDirectory}
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         />
-        <CopyTicketPromptButton ticketId={ticketId} runInTerminal={false} variant="default" />
+        <CopyTicketPromptButton ticketId={ticketId} variant="default" />
       </div>
     );
   }
@@ -57,9 +57,7 @@ export function TicketHeaderAction({
         hasProjectWorkingDirectory={hasProjectWorkingDirectory}
       />
       <AgentSplitButtonLive
-        defaultAgent={
-          (getAgentTypeByIdentifier(agentIdentifier)?.value ?? 'claude') as LaunchAgentTypeValue
-        }
+        defaultAgent={getLaunchAgentTypeByIdentifier(agentIdentifier)}
         ticketId={ticketId}
         agentToken={agentToken}
         commands={{

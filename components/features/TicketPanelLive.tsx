@@ -215,7 +215,7 @@ export function TicketPanelLive({
 
   return (
     <>
-      {claudeCommand && codexCommand && cursorCommand && geminiCommand ? (
+      {/* {claudeCommand && codexCommand && cursorCommand && geminiCommand ? (
         <LaunchCommandBar
           className="mb-6 border-primary/25 bg-background/80"
           ticketId={ticketId}
@@ -229,7 +229,7 @@ export function TicketPanelLive({
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
           agentSessionState={session?.session_state ?? null}
         />
-      ) : null}
+      ) : null} */}
 
       {/* <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} /> */}
 
