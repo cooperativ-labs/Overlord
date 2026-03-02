@@ -124,6 +124,7 @@ async function assignTicketToColumnEnd(
 export async function createTicketInColumnAction(
   status: string,
   objective: string,
+  ticketId: string,
   organizationId?: number,
   projectId?: string
 ) {
@@ -135,12 +136,14 @@ export async function createTicketInColumnAction(
   const trimmedObjective = objective.trim() || null;
 
   const insertPayload: {
+    id: string;
     status: string;
     objective: string | null;
     title: string | null;
     organization_id: number;
     project_id: string;
   } = {
+    id: ticketId,
     status,
     objective: trimmedObjective,
     title: trimmedObjective ? deriveTitleFromObjective(trimmedObjective) : null,
@@ -811,7 +814,7 @@ export async function getTicketPromptForCopy(
     .limit(1)
     .maybeSingle();
 
-  if (!draftObjective) {
+  if (!draftObjective || !draftObjective.objective || draftObjective.objective.trim() === '') {
     return { error: 'No objective found for ticket.' };
   }
   const latestObjective = draftObjective.objective;

@@ -30,8 +30,15 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
+import type { Database } from '@/types/database.types';
 
 const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
+const CREATED_TICKET_WAIT_RETRIES = 12;
+const CREATED_TICKET_WAIT_MS = 250;
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export async function TicketPanelContent({
   ticketId,
@@ -47,8 +54,41 @@ export async function TicketPanelContent({
     data: { user }
   } = await supabase.auth.getUser();
 
+  let ticket: Database['public']['Tables']['tickets']['Row'] | null = null;
+  let ticketError: Error | null = null;
+
+  for (let attempt = 0; attempt <= CREATED_TICKET_WAIT_RETRIES; attempt += 1) {
+    const { data, error } = await supabase
+      .from('tickets')
+      .select('*')
+      .eq('id', ticketId)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+
+    if (error) {
+      ticketError = new Error(error.message);
+      break;
+    }
+
+    if (data) {
+      ticket = data;
+      break;
+    }
+
+    if (attempt < CREATED_TICKET_WAIT_RETRIES) {
+      await sleep(CREATED_TICKET_WAIT_MS);
+    }
+  }
+
+  if (ticketError || !ticket) {
+    return (
+      <div className="flex h-full items-center justify-center p-4">
+        <p className="text-sm text-muted-foreground">Ticket not found.</p>
+      </div>
+    );
+  }
+
   const [
-    { data: ticket, error: ticketError },
     { data: events },
     { data: state },
     { data: artifacts },
@@ -59,12 +99,6 @@ export async function TicketPanelContent({
     { data: agentTokenRow },
     { data: objectives }
   ] = await Promise.all([
-    supabase
-      .from('tickets')
-      .select('*')
-      .eq('id', ticketId)
-      .eq('organization_id', organizationId)
-      .single(),
     supabase
       .from('ticket_events')
       .select('*')
@@ -120,14 +154,6 @@ export async function TicketPanelContent({
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
   ]);
-
-  if (ticketError || !ticket) {
-    return (
-      <div className="flex h-full items-center justify-center p-4">
-        <p className="text-sm text-muted-foreground">Ticket not found.</p>
-      </div>
-    );
-  }
 
   const platformUrl = getPlatformUrl();
   const agentToken = agentTokenRow?.token ?? null;

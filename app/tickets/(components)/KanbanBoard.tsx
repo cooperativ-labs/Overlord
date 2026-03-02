@@ -894,6 +894,7 @@ export default function KanbanBoard({
     if (!trimmedObjective) {
       return;
     }
+    const clientTicketId = crypto.randomUUID();
 
     const previous = workingTickets.current;
     const positionInColumn =
@@ -905,7 +906,7 @@ export default function KanbanBoard({
       previous.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? previous[0];
 
     const optimisticTicket: Ticket = {
-      id: `optimistic-${crypto.randomUUID()}`,
+      id: clientTicketId,
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
       organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
@@ -932,7 +933,13 @@ export default function KanbanBoard({
     startTransition(() => applyOptimistic(optimisticNext));
 
     try {
-      await createTicketInColumnAction(status, trimmedObjective, organizationId, projectId);
+      await createTicketInColumnAction(
+        status,
+        trimmedObjective,
+        clientTicketId,
+        organizationId,
+        projectId
+      );
     } catch {
       workingTickets.current = previous;
       startTransition(() => applyOptimistic(previous));

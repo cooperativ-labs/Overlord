@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.27.0] - 2026-03-02:19:05
+
+### Added
+- Add stable `clientTicketId` generation for optimistic ticket creation on the Kanban board, ensuring ID consistency across client and server.
+- Add wait-and-retry logic in `TicketPanelContent` when loading newly created tickets to handle database propagation delays in optimistic flows.
+
+### Fixed
+- Fixed Everhour time-entry resolution and error parsing stability.
+- Fixed missing draft-objective handling in agent launch (protocol context) and prompt copy actions, providing clearer error feedback.
+
+### Changed
+- Refactored `createTicketInColumnAction` to accept an optional pre-assigned `ticketId` from the client.
+
+### Security
+- None.
+
+### Chore
+- Bump package version to `0.27.0`.
+
 ## [0.26.0] - 2026-03-02:16:30
 
 ### Added

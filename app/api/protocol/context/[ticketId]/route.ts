@@ -60,6 +60,10 @@ export async function GET(request: Request, { params }: RouteContext) {
         : ('run' as PromptLaunchMode);
     const platformUrl = getPlatformUrl();
 
+    if (!draftObjective || !draftObjective.objective || draftObjective.objective.trim() === '') {
+      return NextResponse.json({ error: 'No objective found for this ticket.' }, { status: 404 });
+    }
+
     // Build MCP URL from Supabase project URL (edge function endpoint)
     let mcpUrl: string | undefined;
     try {
@@ -86,7 +90,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       ticket: {
         id: ticket.id,
         title: ticket.title,
-        objective: draftObjective?.objective ?? ticket.objective,
+        objective: draftObjective?.objective,
         acceptance_criteria: ticket.acceptance_criteria,
         available_tools: ticket.available_tools,
         execution_target: ticket.execution_target,
