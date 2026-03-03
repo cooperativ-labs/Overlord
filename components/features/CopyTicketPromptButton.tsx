@@ -22,6 +22,7 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
   async function handleAction() {
     const { error, prompt } = await getTicketPromptForCopy(ticketId);
     if (error || !prompt) {
+      console.error('Failed to copy ticket prompt:', error, prompt);
       return;
     }
     await navigator.clipboard.writeText(prompt);
@@ -30,13 +31,11 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
   }
 
   function handleClick(e: React.MouseEvent) {
-    e.preventDefault();
     e.stopPropagation();
     handleAction();
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
-    e.preventDefault();
     e.stopPropagation();
     handleAction();
   }
