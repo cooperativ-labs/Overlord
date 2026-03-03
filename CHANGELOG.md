@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.28.0] - 2026-03-03:09:24
+
+### Added
+- Add browser-based OAuth consent flow at `/auth/authorize`, showing requesting client details, scopes, and approve/deny actions for CLI/Electron sign-ins.
+- Add OAuth PKCE login for the CLI: `ovld auth login` now opens a loopback browser flow, discovers config via `/api/auth/config`, exchanges Supabase tokens for an organization-scoped `agent_token` via `/api/auth/token`, and persists credentials.
+
+### Fixed
+- None.
+
+### Changed
+- Enable the Supabase OAuth server and point its consent UI to the new Next.js authorize page.
+- Ticket prompt copy actions now pass context so local vs cloud prompts include the appropriate protocol instructions.
+
+### Security
+- Enforce agent token lifecycle with `revoked_at`/`expires_at` columns and validation, rejecting revoked or expired tokens and recording `last_used_at` on protocol requests.
+- Require organization membership before issuing CLI agent tokens during the OAuth exchange flow.
+
+### Documentation
+- Serve a full MCP usage guide on GET to the MCP edge function base route, including workflow steps, artifact handling, and the tool reference; CORS now permits GET for this endpoint.
+
+### Chore
+- Bump package version to `0.28.0`.
+
 ## [0.27.0] - 2026-03-02:19:05
 
 ### Added
