@@ -22,11 +22,11 @@ export function getPlatformUrl(providedURL?: string | null): string {
   const value =
     providedURL ??
     process.env.OVERLORD_URL ??
-    process.env.OVERLORD_BASE_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
     (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : undefined);
 
   if (!value) {
-    throw new Error('Missing platform URL. Set OVERLORD_URL (or OVERLORD_BASE_URL).');
+    throw new Error('Missing platform URL. Set OVERLORD_URL or NEXT_PUBLIC_SITE_URL.');
   }
   return value;
 }
