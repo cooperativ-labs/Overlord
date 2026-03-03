@@ -101,16 +101,19 @@ export function AgentSplitButton({
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const { isElectron, launchAgent } = useTerminal();
-  const agentDetails = selectedAgent === 'prompt' ? null : getAgentTypeByValue(selectedAgent);
-  const isPromptSelected = selectedAgent === 'prompt';
+  const isCopyLocalSelected = selectedAgent === 'copy-local';
+  const isCopyCloudSelected = selectedAgent === 'copy-cloud';
+  const isCopySelected = isCopyLocalSelected || isCopyCloudSelected;
+  const agentDetails = isCopySelected ? null : getAgentTypeByValue(selectedAgent);
+  const copyLabel = isCopyLocalSelected ? 'Copy Local' : 'Copy Cloud';
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const isActive =
-    !isPromptSelected &&
+    !isCopySelected &&
     isAgentIdentifierMatch(selectedAgent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const canRunAgent = hasProjectWorkingDirectory ?? true;
-  const isDisabled = !isPromptSelected && !canRunAgent;
+  const isDisabled = !isCopySelected && !canRunAgent;
   const styles = sizeStyles[size];
 
   const isLaunchingRef = useRef(false);
@@ -130,10 +133,14 @@ export function AgentSplitButton({
   }, [agentSessionState]);
 
   async function handleLaunch() {
-    if (!isPromptSelected && !canRunAgent) return;
+    if (!isCopySelected && !canRunAgent) return;
 
-    if (isPromptSelected) {
-      const { error, prompt } = await getTicketPromptForCopy(ticketId);
+    if (isCopySelected) {
+      const { error, prompt } = await getTicketPromptForCopy(
+        ticketId,
+        'run',
+        isCopyLocalSelected ? 'cli' : 'web'
+      );
       if (error || !prompt) return;
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
@@ -172,7 +179,7 @@ export function AgentSplitButton({
     >
       {isLaunching ? (
         <Loader2 className={cn(styles.loader, 'animate-spin')} />
-      ) : isPromptSelected ? (
+      ) : isCopySelected ? (
         <Copy className={styles.icon} />
       ) : (
         <Image
@@ -191,9 +198,9 @@ export function AgentSplitButton({
         )}
       >
         {copied
-          ? `${isPromptSelected ? 'Prompt' : agentDetails!.label} ✓`
-          : isPromptSelected
-            ? 'Prompt'
+          ? `${isCopySelected ? copyLabel : agentDetails!.label} ✓`
+          : isCopySelected
+            ? copyLabel
             : agentDetails!.label}
       </span>
     </button>
@@ -236,9 +243,10 @@ export function AgentSplitButton({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[140px]">
           {AGENT_SELECTOR_VALUES.map(agentValue => {
-            const agent = agentValue === 'prompt' ? null : getAgentTypeByValue(agentValue);
+            const isCopyValue = agentValue === 'copy-local' || agentValue === 'copy-cloud';
+            const agent = isCopyValue ? null : getAgentTypeByValue(agentValue);
             const agentIsActive =
-              agentValue !== 'prompt' && isAgentIdentifierMatch(agentValue, activeAgentIdentifier);
+              !isCopyValue && isAgentIdentifierMatch(agentValue, activeAgentIdentifier);
             return (
               <DropdownMenuItem
                 key={agentValue}
@@ -257,7 +265,7 @@ export function AgentSplitButton({
                   <Copy className="h-3.5 w-3.5" />
                 )}
                 <span className={cn(agentIsActive && 'text-emerald-600')}>
-                  {agent ? agent.label : 'Prompt'}
+                  {agent ? agent.label : agentValue === 'copy-local' ? 'Copy Local' : 'Copy Cloud'}
                 </span>
                 {agentValue === selectedAgent && (
                   <Check className="ml-auto h-3 w-3 text-muted-foreground" />

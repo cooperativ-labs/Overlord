@@ -62,7 +62,7 @@ export async function resolveAgentToken(
   const supabase = createServiceRoleClient();
   const { data } = await supabase
     .from('agent_tokens')
-    .select('id, user_id, organization_id, token')
+    .select('id, user_id, organization_id, token, revoked_at, expires_at')
     .eq('token', providedToken)
     .single();
 
@@ -70,6 +70,20 @@ export async function resolveAgentToken(
     return {
       context: null,
       error: NextResponse.json({ error: 'Invalid bearer token.' }, { status: 401 })
+    };
+  }
+
+  if (data.revoked_at) {
+    return {
+      context: null,
+      error: NextResponse.json({ error: 'Token has been revoked.' }, { status: 401 })
+    };
+  }
+
+  if (data.expires_at && new Date(data.expires_at) < new Date()) {
+    return {
+      context: null,
+      error: NextResponse.json({ error: 'Token has expired.' }, { status: 401 })
     };
   }
 

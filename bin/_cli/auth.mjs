@@ -1,29 +1,106 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import http from 'node:http';
+import net from 'node:net';
+
 import { buildAuthHeaders, clearCredentials, loadCredentials, loadRuntime, saveCredentials } from './credentials.mjs';
 
-const DEFAULT_OVERLORD_URL =
-  process.env.OVERLORD_URL ?? 'http://localhost:3000';
+const DEFAULT_OVERLORD_URL = process.env.OVERLORD_URL ?? 'http://localhost:3000';
 
-const POLL_INTERVAL_MS = 3_000;
-const POLL_TIMEOUT_MS = 10 * 60 * 1_000; // 10 minutes
+// ---------------------------------------------------------------------------
+// PKCE helpers
+// ---------------------------------------------------------------------------
+
+function generateCodeVerifier() {
+  return crypto.randomBytes(96).toString('base64url');
+}
+
+function generateCodeChallenge(verifier) {
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
+
+function generateState() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+// ---------------------------------------------------------------------------
+// Local loopback listener
+// ---------------------------------------------------------------------------
+
+async function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
+}
+
+function waitForOAuthCallback(port, expectedState) {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url, `http://127.0.0.1:${port}`);
+      const code = url.searchParams.get('code');
+      const returnedState = url.searchParams.get('state');
+      const errorParam = url.searchParams.get('error');
+
+      const html = (title, body) =>
+        `<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>${title}</h2><p>${body}</p></body></html>`;
+
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+
+      if (errorParam) {
+        res.end(html('Authorization Denied', 'You can close this window and return to the terminal.'));
+        server.close();
+        reject(new Error(`Authorization denied: ${errorParam}`));
+        return;
+      }
+
+      if (returnedState !== expectedState) {
+        res.end(html('Error', 'State mismatch. Please try again.'));
+        server.close();
+        reject(new Error('State mismatch — possible CSRF. Please try again.'));
+        return;
+      }
+
+      if (!code) {
+        res.end(html('Error', 'No authorization code received.'));
+        server.close();
+        reject(new Error('No authorization code in callback.'));
+        return;
+      }
+
+      res.end(html('Authorization Complete', 'You can close this window and return to the terminal.'));
+      server.close();
+      resolve(code);
+    });
+
+    server.listen(port, '127.0.0.1');
+    server.on('error', reject);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Network helpers
+// ---------------------------------------------------------------------------
 
 function snippet(value, max = 180) {
   const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
-  if (normalized.length <= max) return normalized;
-  return `${normalized.slice(0, max)}...`;
+  return normalized.length <= max ? normalized : `${normalized.slice(0, max)}...`;
 }
 
-async function readJsonOrThrow(res, context, platformUrl) {
+async function readJsonOrThrow(res, context, baseUrl) {
   const contentType = res.headers.get('content-type') ?? '';
   const bodyText = await res.text();
 
   if (!contentType.toLowerCase().includes('application/json')) {
     throw new Error(
-      `${context} returned non-JSON content (${res.status}, ${contentType || 'unknown content type'}). ` +
-        `Response: ${snippet(bodyText)}\n` +
-        `Check OVERLORD_URL and ensure Overlord is running at ${platformUrl}.`
+      `${context} returned non-JSON content (${res.status}, ${contentType || 'unknown'}). ` +
+        `Response: ${snippet(bodyText)}\nCheck that Overlord is running at ${baseUrl}.`
     );
   }
 
@@ -31,10 +108,59 @@ async function readJsonOrThrow(res, context, platformUrl) {
     return JSON.parse(bodyText);
   } catch {
     throw new Error(
-      `${context} returned invalid JSON (${res.status}). Response: ${snippet(bodyText)}\n` +
-        `Check OVERLORD_URL and ensure Overlord is running at ${platformUrl}.`
+      `${context} returned invalid JSON (${res.status}). Response: ${snippet(bodyText)}`
     );
   }
+}
+
+async function fetchAuthConfig(platformUrl, localSecret) {
+  const res = await fetch(`${platformUrl}/api/auth/config`, {
+    headers: buildAuthHeaders('', localSecret)
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch auth config (${res.status}). Check that Overlord is running at ${platformUrl}.`
+    );
+  }
+  return readJsonOrThrow(res, 'Auth config', platformUrl);
+}
+
+async function exchangeCodeForSupabaseTokens(supabaseUrl, clientId, code, codeVerifier, redirectUri) {
+  const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      code_verifier: codeVerifier
+    })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Token exchange failed (${res.status}): ${snippet(text)}`);
+  }
+
+  return readJsonOrThrow(res, 'Token exchange', supabaseUrl);
+}
+
+async function exchangeForAgentToken(platformUrl, supabaseAccessToken, localSecret) {
+  const res = await fetch(`${platformUrl}/api/auth/token`, {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders('', localSecret),
+      Authorization: `Bearer ${supabaseAccessToken}`
+    }
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Agent token exchange failed (${res.status}): ${snippet(text)}`);
+  }
+
+  return readJsonOrThrow(res, 'Agent token exchange', platformUrl);
 }
 
 function openBrowser(url) {
@@ -44,51 +170,13 @@ function openBrowser(url) {
     else if (platform === 'win32') execFileSync('cmd', ['/c', 'start', '', url]);
     else execFileSync('xdg-open', [url]);
   } catch {
-    // Best-effort; user will see the URL in stdout anyway
+    // Best-effort; user sees the URL in stdout anyway
   }
 }
 
-async function requestDeviceCode(platformUrl, localSecret) {
-  const res = await fetch(`${platformUrl}/api/auth/device/request`, {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders('', localSecret),
-      'Content-Type': 'application/json'
-    }
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to start login (${res.status}): ${text}`);
-  }
-  return readJsonOrThrow(res, 'Device code request', platformUrl);
-}
-
-async function pollDeviceCode(platformUrl, deviceCode, localSecret) {
-  const res = await fetch(`${platformUrl}/api/auth/device/poll`, {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders('', localSecret),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ device_code: deviceCode })
-  });
-
-  if (res.status === 400) {
-    const data = await readJsonOrThrow(res, 'Device code poll', platformUrl);
-    if (data.status === 'expired') return { status: 'expired' };
-    throw new Error(`Poll error (${res.status}): ${JSON.stringify(data)}`);
-  }
-
-  if (!res.ok) {
-    throw new Error(`Poll error (${res.status}): ${await res.text()}`);
-  }
-
-  return readJsonOrThrow(res, 'Device code poll', platformUrl);
-}
-
-async function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+// ---------------------------------------------------------------------------
+// Public auth commands
+// ---------------------------------------------------------------------------
 
 export async function authLogin() {
   const runtime = loadRuntime();
@@ -97,43 +185,92 @@ export async function authLogin() {
 
   console.log('Starting Overlord CLI authorization...\n');
 
-  const { device_code, user_code, verification_uri, expires_in } =
-    await requestDeviceCode(platformUrl, localSecret);
-
-  console.log(`  Authorization URL: ${verification_uri}`);
-  console.log(`  Authorization code: ${user_code}`);
-  console.log(`\nOpening browser... (expires in ${Math.round(expires_in / 60)} minutes)\n`);
-
-  openBrowser(verification_uri);
-
-  console.log('Waiting for approval');
-  const deadline = Date.now() + POLL_TIMEOUT_MS;
-
-  while (Date.now() < deadline) {
-    await sleep(POLL_INTERVAL_MS);
-    process.stdout.write('.');
-
-    const result = await pollDeviceCode(platformUrl, device_code, localSecret);
-
-    if (result.status === 'expired') {
-      console.log('\nAuthorization code expired. Please run ovld auth login again.');
-      process.exit(1);
-    }
-
-    if (result.status === 'authorized') {
-      console.log('\n\nLogged in successfully!');
-      saveCredentials({
-        access_token: result.access_token,
-        platform_url: result.platform_url ?? platformUrl
-      });
-      return;
-    }
-
-    // status === 'pending' → keep polling
+  // 1. Discover OAuth config from the platform
+  let supabaseUrl, cliClientId;
+  try {
+    const config = await fetchAuthConfig(platformUrl, localSecret);
+    supabaseUrl = config.supabase_url;
+    cliClientId = config.cli_client_id;
+  } catch (err) {
+    console.error(`\nError: ${err.message}`);
+    process.exit(1);
   }
 
-  console.log('\nTimed out waiting for approval. Please run ovld auth login again.');
-  process.exit(1);
+  // 2. PKCE parameters + state
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = generateState();
+
+  // 3. Find a free port for the loopback listener
+  let port;
+  try {
+    port = await findFreePort();
+  } catch {
+    console.error('\nError: Could not find a free port for the callback listener.');
+    process.exit(1);
+  }
+
+  const redirectUri = `http://127.0.0.1:${port}/callback`;
+
+  // 4. Build the Supabase OAuth authorization URL
+  const authorizeUrl = new URL(`${supabaseUrl}/auth/v1/oauth/authorize`);
+  authorizeUrl.searchParams.set('response_type', 'code');
+  authorizeUrl.searchParams.set('client_id', cliClientId);
+  authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+  authorizeUrl.searchParams.set('code_challenge', codeChallenge);
+  authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+  authorizeUrl.searchParams.set('state', state);
+  authorizeUrl.searchParams.set('scope', 'openid email');
+
+  console.log(`  Authorization URL: ${authorizeUrl.toString()}`);
+  console.log('\nOpening browser...\n');
+
+  // 5. Start listener before opening browser so we don't miss the redirect
+  const callbackPromise = waitForOAuthCallback(port, state);
+  openBrowser(authorizeUrl.toString());
+
+  // 6. Wait for the auth code
+  let authCode;
+  try {
+    process.stdout.write('Waiting for browser authorization');
+    authCode = await callbackPromise;
+    console.log('\n');
+  } catch (err) {
+    console.error(`\n\nAuthorization failed: ${err.message}`);
+    process.exit(1);
+  }
+
+  // 7. Exchange auth code → Supabase tokens
+  let supabaseTokens;
+  try {
+    supabaseTokens = await exchangeCodeForSupabaseTokens(
+      supabaseUrl,
+      cliClientId,
+      authCode,
+      codeVerifier,
+      redirectUri
+    );
+  } catch (err) {
+    console.error(`\nError exchanging code for tokens: ${err.message}`);
+    process.exit(1);
+  }
+
+  // 8. Exchange Supabase access token → Overlord agent_token
+  let agentTokenData;
+  try {
+    agentTokenData = await exchangeForAgentToken(platformUrl, supabaseTokens.access_token, localSecret);
+  } catch (err) {
+    console.error(`\nError obtaining agent token: ${err.message}`);
+    process.exit(1);
+  }
+
+  // 9. Persist credentials (same format — backward-compatible)
+  saveCredentials({
+    access_token: agentTokenData.access_token,
+    platform_url: agentTokenData.platform_url ?? platformUrl
+  });
+
+  console.log('Logged in successfully!');
 }
 
 export function authStatus() {
@@ -142,7 +279,7 @@ export function authStatus() {
     console.log('Not logged in. Run: ovld auth login');
     return;
   }
-  console.log(`Logged in`);
+  console.log('Logged in');
   console.log(`  Platform URL: ${creds.platform_url}`);
   if (creds.user_email) {
     console.log(`  Email: ${creds.user_email}`);
@@ -159,7 +296,7 @@ export async function runAuthCommand(subcommand) {
     console.log(`ovld auth <subcommand>
 
 Subcommands:
-  login    Authorize the CLI via browser (device-code flow)
+  login    Authorize the CLI via browser (OAuth PKCE flow)
   status   Show current login status
   logout   Remove stored credentials
 `);
