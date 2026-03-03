@@ -4,4 +4,4 @@ description: Protocol and connector patterns for integrating terminal-based
   agents with Overlord, including permission-request notification handling.
 tags: []
 compat: []
-sha256: 909a38a34940b393b9476c7532a0e5e796a73defefc428eae7f04544aa3dfc20
+sha256: a88941612bbfe54ea56d3d073b5197759eff28deb2ba556d87bf51c594f5bcab

@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { registerAppIpc } from './ipc/app';
+import { registerAuthIpc } from './ipc/auth';
 import { registerSupabaseIpc } from './ipc/supabase';
 import { registerTerminalIpc } from './ipc/terminal';
 import { registerAppMenu } from './services/app-menu';
@@ -11,7 +12,6 @@ import { AppUpdaterService } from './services/app-updater';
 import {
   clearLocalRuntime,
   generateLocalSecret,
-  getDefaultLocalPlatformUrl,
   writeLocalRuntime
 } from './services/local-runtime';
 import {
@@ -201,8 +201,7 @@ app.whenReady().then(async () => {
     }
   }
 
-  const defaultPlatformUrl = getDefaultLocalPlatformUrl(port);
-  platformUrl = isDev ? (process.env.OVERLORD_URL ?? defaultPlatformUrl) : defaultPlatformUrl;
+  platformUrl = `http://localhost:${port}`;
   const localSecret = generateLocalSecret();
 
   process.env.OVERLORD_LOCAL_SECRET = localSecret;
@@ -214,6 +213,7 @@ app.whenReady().then(async () => {
   registerTerminalIpc();
   registerSupabaseIpc(supabaseManager);
   registerAppIpc({ appUpdater, platformUrl });
+  registerAuthIpc({ getPlatformUrl: () => platformUrl });
 
   createWindow(port);
   appUpdater.initialize();

@@ -24,9 +24,16 @@ type AuthFormProps = {
   defaultMode?: AuthMode;
   error?: string;
   message?: string;
+  next?: string;
 };
 
-export function AuthForm({ className, defaultMode = 'login', error, message }: AuthFormProps) {
+export function AuthForm({
+  className,
+  defaultMode = 'login',
+  error,
+  message,
+  next
+}: AuthFormProps) {
   const [mode, setMode] = React.useState<AuthMode>(defaultMode);
   const [signInButtonState, setSignInButtonState] = React.useState<ButtonLoadingState>('default');
   const [signUpButtonState, setSignUpButtonState] = React.useState<ButtonLoadingState>('default');
@@ -95,6 +102,7 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
 
       {isLogin ? (
         <form onSubmit={handleSignIn}>
+          {next ? <input type="hidden" name="next" value={next} /> : null}
           <FieldGroup>
             <div className="flex flex-col items-center gap-2 text-center">
               <Link href="/" className="flex flex-col items-center gap-2 font-medium">
@@ -143,6 +151,7 @@ export function AuthForm({ className, defaultMode = 'login', error, message }: A
         </form>
       ) : (
         <form onSubmit={handleSignUp}>
+          {next ? <input type="hidden" name="next" value={next} /> : null}
           <FieldGroup>
             <div className="flex flex-col items-center gap-2 text-center">
               <Link href="/" className="flex flex-col items-center gap-2 font-medium">

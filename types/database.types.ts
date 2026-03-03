@@ -84,32 +84,48 @@ export type Database = {
       agent_tokens: {
         Row: {
           created_at: string;
+          created_by_grant_id: string | null;
+          expires_at: string | null;
           id: string;
           last_used_at: string | null;
           name: string;
           organization_id: number;
+          revoked_at: string | null;
           token: string;
           user_id: string;
         };
         Insert: {
           created_at?: string;
+          created_by_grant_id?: string | null;
+          expires_at?: string | null;
           id?: string;
           last_used_at?: string | null;
           name?: string;
           organization_id: number;
+          revoked_at?: string | null;
           token?: string;
           user_id: string;
         };
         Update: {
           created_at?: string;
+          created_by_grant_id?: string | null;
+          expires_at?: string | null;
           id?: string;
           last_used_at?: string | null;
           name?: string;
           organization_id?: number;
+          revoked_at?: string | null;
           token?: string;
           user_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'agent_tokens_created_by_grant_id_fkey';
+            columns: ['created_by_grant_id'];
+            isOneToOne: false;
+            referencedRelation: 'auth_grants';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'agent_tokens_organization_id_fkey';
             columns: ['organization_id'];
@@ -182,6 +198,56 @@ export type Database = {
             columns: ['ticket_id'];
             isOneToOne: false;
             referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      auth_grants: {
+        Row: {
+          agent_token_id: string | null;
+          approved_at: string | null;
+          client_name: string | null;
+          client_type: string;
+          consumed_at: string | null;
+          created_at: string;
+          expires_at: string;
+          grant_code: string;
+          id: string;
+          user_code: string;
+          user_id: string | null;
+        };
+        Insert: {
+          agent_token_id?: string | null;
+          approved_at?: string | null;
+          client_name?: string | null;
+          client_type?: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          grant_code?: string;
+          id?: string;
+          user_code: string;
+          user_id?: string | null;
+        };
+        Update: {
+          agent_token_id?: string | null;
+          approved_at?: string | null;
+          client_name?: string | null;
+          client_type?: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          grant_code?: string;
+          id?: string;
+          user_code?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'auth_grants_agent_token_id_fkey';
+            columns: ['agent_token_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_tokens';
             referencedColumns: ['id'];
           }
         ];

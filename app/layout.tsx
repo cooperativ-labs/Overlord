@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
+import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
@@ -58,6 +59,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <ElectronDetector />
+          <ElectronAuthGate />
           <TerminalProvider>
             <DefaultProjectProvider
               projects={projects}

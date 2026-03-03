@@ -64,6 +64,11 @@ interface ElectronAPI {
     quitAndInstall: () => Promise<boolean>;
     onStatus: (callback: (status: AppUpdateStatus) => void) => () => void;
   };
+  auth: {
+    login: () => Promise<{ ok: true; session: { access_token: string; refresh_token: string } }>;
+    logout: () => Promise<{ ok: true }>;
+    getStatus: () => Promise<{ isAuthenticated: boolean; platformUrl: string | null }>;
+  };
   isElectron: true;
 }
 

@@ -14,3 +14,4 @@ skills:
   - slug: "changelog"
   - slug: "everhour-api"
   - slug: "agent-terminal-connectors"
+  - slug: "supabase-oauth"

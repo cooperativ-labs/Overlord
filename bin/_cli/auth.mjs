@@ -3,11 +3,11 @@
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import http from 'node:http';
-import net from 'node:net';
 
 import { buildAuthHeaders, clearCredentials, loadCredentials, loadRuntime, saveCredentials } from './credentials.mjs';
 
 const DEFAULT_OVERLORD_URL = process.env.OVERLORD_URL ?? 'http://localhost:3000';
+const DEFAULT_CLI_REDIRECT_URI = 'http://127.0.0.1:45619/callback';
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
@@ -26,24 +26,54 @@ function generateState() {
 }
 
 // ---------------------------------------------------------------------------
-// Local loopback listener
+// Redirect + callback listener
 // ---------------------------------------------------------------------------
 
-async function findFreePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address();
-      server.close(() => resolve(port));
-    });
-    server.on('error', reject);
-  });
+function parseLoopbackRedirectUri(rawValue) {
+  const value = String(rawValue ?? '').trim();
+  if (!value) {
+    throw new Error('OAuth redirect URI is missing.');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`Invalid OAuth redirect URI: ${value}`);
+  }
+
+  if (parsed.protocol !== 'http:') {
+    throw new Error('OAuth redirect URI must use http:// for loopback callbacks.');
+  }
+
+  if (parsed.hostname !== '127.0.0.1' && parsed.hostname !== 'localhost') {
+    throw new Error('OAuth redirect URI host must be 127.0.0.1 or localhost.');
+  }
+
+  const port = Number(parsed.port);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`OAuth redirect URI must include a valid port: ${value}`);
+  }
+
+  const callbackPath = parsed.pathname || '/';
+  return {
+    callbackPath,
+    host: parsed.hostname,
+    port,
+    redirectUri: `${parsed.origin}${callbackPath}`
+  };
 }
 
-function waitForOAuthCallback(port, expectedState) {
+function waitForOAuthCallback(host, port, callbackPath, expectedState) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
-      const url = new URL(req.url, `http://127.0.0.1:${port}`);
+      const url = new URL(req.url, `http://${host}:${port}`);
+      if (url.pathname !== callbackPath) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not found');
+        return;
+      }
+
       const code = url.searchParams.get('code');
       const returnedState = url.searchParams.get('state');
       const errorParam = url.searchParams.get('error');
@@ -79,7 +109,7 @@ function waitForOAuthCallback(port, expectedState) {
       resolve(code);
     });
 
-    server.listen(port, '127.0.0.1');
+    server.listen(port, host);
     server.on('error', reject);
   });
 }
@@ -186,13 +216,21 @@ export async function authLogin() {
   console.log('Starting Overlord CLI authorization...\n');
 
   // 1. Discover OAuth config from the platform
-  let supabaseUrl, cliClientId;
+  let supabaseUrl, cliClientId, cliRedirectUri;
   try {
     const config = await fetchAuthConfig(platformUrl, localSecret);
     supabaseUrl = config.supabase_url;
     cliClientId = config.cli_client_id;
+    cliRedirectUri = config.cli_redirect_uri;
   } catch (err) {
     console.error(`\nError: ${err.message}`);
+    process.exit(1);
+  }
+
+  if (!supabaseUrl || !cliClientId) {
+    console.error(
+      '\nError: OAuth is not configured for CLI login. Set SUPABASE_OAUTH_CLI_CLIENT_ID on the Overlord server.'
+    );
     process.exit(1);
   }
 
@@ -201,16 +239,16 @@ export async function authLogin() {
   const codeChallenge = generateCodeChallenge(codeVerifier);
   const state = generateState();
 
-  // 3. Find a free port for the loopback listener
-  let port;
+  // 3. Use exact loopback redirect URI (Supabase does not support wildcard callback URLs)
+  let redirectTarget;
   try {
-    port = await findFreePort();
-  } catch {
-    console.error('\nError: Could not find a free port for the callback listener.');
+    redirectTarget = parseLoopbackRedirectUri(cliRedirectUri ?? DEFAULT_CLI_REDIRECT_URI);
+  } catch (err) {
+    console.error(`\nError: ${err.message}`);
     process.exit(1);
   }
 
-  const redirectUri = `http://127.0.0.1:${port}/callback`;
+  const { host, port, callbackPath, redirectUri } = redirectTarget;
 
   // 4. Build the Supabase OAuth authorization URL
   const authorizeUrl = new URL(`${supabaseUrl}/auth/v1/oauth/authorize`);
@@ -226,7 +264,7 @@ export async function authLogin() {
   console.log('\nOpening browser...\n');
 
   // 5. Start listener before opening browser so we don't miss the redirect
-  const callbackPromise = waitForOAuthCallback(port, state);
+  const callbackPromise = waitForOAuthCallback(host, port, callbackPath, state);
   openBrowser(authorizeUrl.toString());
 
   // 6. Wait for the auth code

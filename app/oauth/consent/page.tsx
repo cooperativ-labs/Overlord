@@ -4,7 +4,7 @@ import { createClient } from '@/supabase/utils/server';
 
 import { approveAuthorization, denyAuthorization } from './actions';
 
-export default async function AuthorizePage({
+export default async function OAuthConsentPage({
   searchParams
 }: {
   searchParams: Promise<{ authorization_id?: string; error?: string }>;
@@ -45,7 +45,7 @@ export default async function AuthorizePage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const next = `/auth/authorize?authorization_id=${encodeURIComponent(authorization_id)}`;
+    const next = `/oauth/consent?authorization_id=${encodeURIComponent(authorization_id)}`;
     redirect(`/login?next=${encodeURIComponent(next)}`);
   }
 

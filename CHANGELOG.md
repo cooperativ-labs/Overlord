@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.30.0] - 2026-03-03:18:00
+
+### Added
+- Add account settings area with a profile overview and an `Agent tokens` tab that lists active CLI and desktop tokens with revoke controls.
+- Add Electron desktop login flow powered by Supabase OAuth PKCE, including an `/electron-login` screen, loopback callback handler, and encrypted `agent_token` storage for the desktop app.
+- Add `/oauth/consent` Supabase OAuth consent page that shows the requesting client, requested scopes, and approve/deny actions for browser-mediated logins.
+- Add device-code login endpoints (`/api/auth/device/request` and `/api/auth/device/poll`) so CLIs and agents can initiate browser-based authorization using short user codes.
+
+### Fixed
+- None.
+
+### Changed
+- Route web login through an updated `AuthForm` that carries an optional `next` path through sign-in and sign-up, improving redirects back to OAuth consent and other guarded pages.
+- Require authenticated desktop sessions in Electron by wiring `ElectronAuthGate` into the root layout so unauthenticated users are redirected to the new login screen before accessing the dashboard.
+- Use per-user, organization-scoped `agent_tokens` with expiry when generating ticket launch commands in the ticket panel, instead of loosely scoped tokens.
+
+### Security
+- Harden `/api/auth/token` to only accept Supabase OAuth access tokens that contain a non-empty `client_id` claim from the configured allowlist and belong to a user who is a member of an organization before issuing or reusing an `agent_token`.
+- Enforce device-code poll throttling by adding a `next_poll_at` column and returning HTTP 429 `slow_down` responses when clients poll faster than the allowed interval.
+- Store Electron desktop `agent_token` credentials encrypted via `safeStorage` in a locked-down `~/.ovld/electron-credentials.json` file instead of plaintext.
+- Enforce revocation/expiry checks and best-effort `last_used_at` updates when resolving `agent_tokens` in the MCP edge function so cloud agents only authenticate with active tokens.
+
+### Documentation
+- Document the Overlord auth contract and supported credential types/flows in `docs/agent-authorization.md`, covering web, Electron, CLI, MCP, and local secret boundaries.
+
+### Chore
+- Bump package version to `0.30.0`.
+
 ## [0.29.0] - 2026-03-03:17:05
 
 ### Added

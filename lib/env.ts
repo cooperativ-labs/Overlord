@@ -22,8 +22,10 @@ export function getPlatformUrl(providedURL?: string | null): string {
   const value =
     providedURL ??
     process.env.OVERLORD_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : undefined);
+    (typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : undefined) ??
+    process.env.NEXT_PUBLIC_SITE_URL;
 
   if (!value) {
     throw new Error('Missing platform URL. Set OVERLORD_URL or NEXT_PUBLIC_SITE_URL.');

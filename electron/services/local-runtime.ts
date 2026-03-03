@@ -71,7 +71,3 @@ export function clearLocalRuntime(platformUrl: string): void {
     // Best-effort cleanup only.
   }
 }
-
-export function getDefaultLocalPlatformUrl(port: number): string {
-  return `http://localhost:${port}`;
-}

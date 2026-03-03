@@ -5,8 +5,23 @@ import { redirect } from 'next/navigation';
 import { getPlatformUrl } from '@/lib/env';
 import { createClient } from '@/supabase/utils/server';
 
+function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return fallback;
+
+  try {
+    const parsed = new URL(trimmed, 'http://localhost');
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function signIn(formData: FormData) {
   const supabase = await createClient();
+  const nextPath = sanitizeNextPath(formData.get('next'), '/onboarding');
 
   const { error } = await supabase.auth.signInWithPassword({
     email: formData.get('email') as string,
@@ -17,11 +32,12 @@ export async function signIn(formData: FormData) {
     redirect('/login?error=' + encodeURIComponent(error.message));
   }
 
-  redirect('/onboarding');
+  redirect(nextPath);
 }
 
 export async function signUp(formData: FormData) {
   const supabase = await createClient();
+  const nextPath = sanitizeNextPath(formData.get('next'), '/onboarding');
 
   const email = (formData.get('email') as string | null) ?? '';
   const password = (formData.get('password') as string | null) ?? '';
@@ -40,7 +56,7 @@ export async function signUp(formData: FormData) {
         name,
         full_name: name
       },
-      emailRedirectTo: `${getPlatformUrl()}/auth/callback?next=/onboarding`
+      emailRedirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent(nextPath)}`
     }
   });
 

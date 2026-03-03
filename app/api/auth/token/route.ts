@@ -3,6 +3,26 @@ import { NextResponse } from 'next/server';
 import { getPlatformUrl } from '@/lib/env';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
+type JwtPayload = {
+  client_id?: unknown;
+};
+
+function getJwtClientId(jwt: string): string | null {
+  const parts = jwt.split('.');
+  if (parts.length !== 3) return null;
+
+  try {
+    const payload = JSON.parse(
+      Buffer.from(parts[1] ?? '', 'base64url').toString('utf8')
+    ) as JwtPayload;
+    if (typeof payload.client_id !== 'string') return null;
+    const normalized = payload.client_id.trim();
+    return normalized.length > 0 ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Exchanges a valid Supabase JWT (obtained via OAuth PKCE flow) for a long-lived agent_token
  * that can be used with the Overlord protocol API.
@@ -19,6 +39,36 @@ export async function POST(request: Request) {
   }
 
   const supabaseJwt = authHeader.replace('Bearer ', '').trim();
+  const clientId = getJwtClientId(supabaseJwt);
+  if (!clientId) {
+    return NextResponse.json(
+      { error: 'OAuth token required (missing client_id claim).' },
+      { status: 401 }
+    );
+  }
+
+  const allowedClientIds = [
+    process.env.SUPABASE_OAUTH_CLI_CLIENT_ID,
+    process.env.SUPABASE_OAUTH_ELECTRON_CLIENT_ID
+  ].filter((value): value is string => Boolean(value && value.trim()));
+
+  if (allowedClientIds.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          'OAuth token exchange is not configured. Set SUPABASE_OAUTH_CLI_CLIENT_ID and/or SUPABASE_OAUTH_ELECTRON_CLIENT_ID.'
+      },
+      { status: 503 }
+    );
+  }
+
+  if (!allowedClientIds.includes(clientId)) {
+    return NextResponse.json(
+      { error: 'OAuth client is not allowed to exchange for an Overlord agent token.' },
+      { status: 403 }
+    );
+  }
+
   const supabase = createServiceRoleClient();
 
   // Verify the Supabase JWT by fetching the associated user

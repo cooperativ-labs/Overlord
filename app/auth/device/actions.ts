@@ -36,11 +36,12 @@ export async function approveDevice(userCode: string): Promise<void> {
     redirect('/auth/device?error=already_approved');
   }
 
-  // Look up user's first organization
-  const { data: orgData } = await supabase
-    .from('organizations')
-    .select('id')
-    .order('id', { ascending: true })
+  // Look up user's first organization via members (service client to bypass RLS)
+  const { data: orgData } = await service
+    .from('members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .order('organization_id', { ascending: true })
     .limit(1)
     .single();
 
@@ -53,7 +54,7 @@ export async function approveDevice(userCode: string): Promise<void> {
     .from('agent_tokens')
     .insert({
       user_id: user.id,
-      organization_id: orgData.id,
+      organization_id: orgData.organization_id,
       name: 'CLI Token'
     })
     .select('token')

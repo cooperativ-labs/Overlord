@@ -22,11 +22,13 @@ export async function resolveToken(
 
   const { data } = await supabase
     .from('agent_tokens')
-    .select('id, user_id, organization_id, token')
+    .select('id, user_id, organization_id, token, revoked_at, expires_at')
     .eq('token', token)
     .single();
 
   if (!data) return null;
+  if (data.revoked_at) return null;
+  if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
 
   // Fire-and-forget last_used_at
   supabase

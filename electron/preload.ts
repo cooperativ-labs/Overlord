@@ -71,6 +71,19 @@ const electronAPI = {
       };
     }
   },
+  auth: {
+    login: () =>
+      ipcRenderer.invoke('auth:login') as Promise<{
+        ok: true;
+        session: { access_token: string; refresh_token: string };
+      }>,
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    getStatus: () =>
+      ipcRenderer.invoke('auth:getStatus') as Promise<{
+        isAuthenticated: boolean;
+        platformUrl: string | null;
+      }>
+  },
   isElectron: true as const
 };
 

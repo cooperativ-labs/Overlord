@@ -31,6 +31,7 @@ export async function POST() {
     device_code: deviceCode,
     user_code: userCode,
     verification_uri: `${platformUrl}/auth/device?code=${userCode}`,
-    expires_in: 900
+    expires_in: 900,
+    interval: 5
   });
 }

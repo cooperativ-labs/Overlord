@@ -143,9 +143,11 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('agent_tokens')
-      .select('token')
+      .select('token, expires_at')
+      .eq('user_id', user?.id ?? '')
       .eq('organization_id', organizationId)
-      .order('created_at', { ascending: true })
+      .is('revoked_at', null)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
     supabase
@@ -156,7 +158,11 @@ export async function TicketPanelContent({
   ]);
 
   const platformUrl = getPlatformUrl();
-  const agentToken = agentTokenRow?.token ?? null;
+  const agentToken =
+    agentTokenRow &&
+    (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
+      ? agentTokenRow.token
+      : null;
   const workspaceRoot = getWorkspaceRoot();
   const editorScheme = getEditorScheme();
   const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
