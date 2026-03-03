@@ -132,14 +132,18 @@ export function AgentSplitButton({
     }
   }, [agentSessionState]);
 
-  async function handleLaunch() {
-    if (!isCopySelected && !canRunAgent) return;
+  async function handleLaunch(agentValue: AgentSelectorValue = selectedAgent): Promise<void> {
+    const isCopyLocalValue = agentValue === 'copy-local';
+    const isCopyCloudValue = agentValue === 'copy-cloud';
+    const isCopyValue = isCopyLocalValue || isCopyCloudValue;
 
-    if (isCopySelected) {
+    if (!isCopyValue && !canRunAgent) return;
+
+    if (isCopyValue) {
       const { error, prompt } = await getTicketPromptForCopy(
         ticketId,
         'run',
-        isCopyLocalSelected ? 'cli' : 'web'
+        isCopyLocalValue ? 'cli' : 'web'
       );
       if (error || !prompt) return;
       await navigator.clipboard.writeText(prompt);
@@ -154,12 +158,12 @@ export function AgentSplitButton({
       setIsLaunching(true);
       await launchAgent(
         ticketId,
-        selectedAgent,
+        agentValue,
         workingDirectory ?? undefined,
         agentToken ?? undefined
       );
     } else {
-      await navigator.clipboard.writeText(commands[selectedAgent]);
+      await navigator.clipboard.writeText(commands[agentValue]);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -174,7 +178,7 @@ export function AgentSplitButton({
         styles.runButton,
         isDisabled && 'cursor-not-allowed opacity-60'
       )}
-      onClick={handleLaunch}
+      onClick={() => void handleLaunch()}
       disabled={isDisabled}
     >
       {isLaunching ? (
@@ -251,7 +255,10 @@ export function AgentSplitButton({
               <DropdownMenuItem
                 key={agentValue}
                 className="gap-2 text-xs"
-                onClick={() => onSelectAgent(agentValue)}
+                onClick={() => {
+                  onSelectAgent(agentValue);
+                  void handleLaunch(agentValue);
+                }}
               >
                 {agent ? (
                   <Image

@@ -72,6 +72,7 @@ import {
   getCustomInstructionsAction,
   saveCustomInstructionsAction
 } from '@/lib/actions/profile-settings';
+import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
 type SettingsModalProps = {
@@ -319,10 +320,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const [activeNav, setActiveNav] = useState<string>('Integrations');
 
-  const resolvedPlatformUrl =
-    platformUrl ??
-    (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : null) ??
-    'https://overlord.cooperativ.io';
+  const resolvedPlatformUrl = getPlatformUrl(platformUrl);
   const resolvedPlatformDomain = (() => {
     try {
       return new URL(resolvedPlatformUrl).hostname;
@@ -346,11 +344,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   );
   const domainSnippet = allowedDomainLines.join('\n');
 
-  const mcpUrl = (() => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!supabaseUrl) return null;
-    return `${supabaseUrl}/functions/v1/mcp`;
-  })();
+  const mcpUrl = getOverlordMcpUrl();
 
   // Reset to first visible item when electron state changes
   useEffect(() => {
@@ -554,7 +548,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   async function handleCopyAgentEnvSnippet() {
     const snippetToken = agentToken ?? '<AGENT_TOKEN>';
-    const snippet = `OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${snippetToken}`;
+    const snippet = `OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${snippetToken}`;
     await navigator.clipboard.writeText(snippet);
     setAgentEnvSnippetCopied(true);
     setTimeout(() => setAgentEnvSnippetCopied(false), 2000);
@@ -569,7 +563,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   async function handleCopyMcpConfig() {
     const cfg = MCP_AGENT_CONFIGS[selectedMcpAgent];
     if (!cfg) return;
-    const url = mcpUrl ?? '<SUPABASE_URL>/functions/v1/mcp';
+    const url = mcpUrl;
     const token = agentToken ?? '<AGENT_TOKEN>';
     await navigator.clipboard.writeText(cfg.getConfig(url, token));
     setMcpConfigCopied(true);
@@ -940,7 +934,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             </button>
                           </div>
                           <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                            {`PLATFORM_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${
+                            {`OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${
                               agentToken ?? '<AGENT_TOKEN>'
                             }`}
                           </pre>
@@ -1034,7 +1028,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       {(() => {
                         const cfg = MCP_AGENT_CONFIGS[selectedMcpAgent];
                         if (!cfg) return null;
-                        const url = mcpUrl ?? '<SUPABASE_URL>/functions/v1/mcp';
+                        const url = mcpUrl;
                         const token = agentToken ?? '<AGENT_TOKEN>';
                         return (
                           <div className="space-y-2 rounded-md border bg-muted/30 p-3">
@@ -1166,7 +1160,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           </button>
                         </div>
                         <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                          {`OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken ?? '<AGENT_TOKEN>'}`}
+                          {`OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${agentToken ?? '<AGENT_TOKEN>'}`}
                         </pre>
                         <p className="text-xs text-muted-foreground">
                           Paste this into your custom cloud environment so the agent can call
@@ -1276,7 +1270,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <div className="space-y-2 rounded-md border bg-muted/30 p-3">
                           <div className="flex items-center gap-2">
                             <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                              {`OVERLORD_URL=${resolvedPlatformUrl}\nAGENT_TOKEN=${agentToken}`}
+                              {`OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${agentToken}`}
                             </pre>
                             <button
                               type="button"

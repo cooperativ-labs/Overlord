@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
-import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
+import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import {
@@ -64,16 +64,12 @@ export async function GET(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'No objective found for this ticket.' }, { status: 404 });
     }
 
-    // Build MCP URL from Supabase project URL (edge function endpoint)
+    // Use the configured MCP URL when available.
     let mcpUrl: string | undefined;
     try {
-      const supabaseUrl = getSupabaseUrl();
-      // Only expose MCP URL for remote (non-local) deployments
-      if (!supabaseUrl.includes('127.0.0.1') && !supabaseUrl.includes('localhost')) {
-        mcpUrl = `${supabaseUrl}/functions/v1/mcp`;
-      }
+      mcpUrl = getOverlordMcpUrl();
     } catch {
-      // Supabase URL not configured — skip MCP section
+      // MCP URL not configured — skip MCP section
     }
 
     let customInstructions: string | null = null;
@@ -144,15 +140,12 @@ export async function POST(request: Request, { params }: RouteContext) {
     token: tokenValue
   });
 
-  // Include MCP URL for cloud/remote Supabase deployments
+  // Include the configured MCP URL for agent setup snippets.
   let mcpUrl: string | undefined;
   try {
-    const supabaseUrl = getSupabaseUrl();
-    if (!supabaseUrl.includes('127.0.0.1') && !supabaseUrl.includes('localhost')) {
-      mcpUrl = `${supabaseUrl}/functions/v1/mcp`;
-    }
+    mcpUrl = getOverlordMcpUrl();
   } catch {
-    // Supabase URL not configured
+    // MCP URL not configured
   }
 
   return NextResponse.json({

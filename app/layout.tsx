@@ -8,8 +8,8 @@ import { AnnouncementBar } from '@/components/features/announcement-bar/Announce
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
-import { TerminalPanel } from '@/components/features/terminal/TerminalPanel';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
+import { TerminalWorkspace } from '@/components/features/terminal/TerminalWorkspace';
 import { NavHeader } from '@/components/nav-header';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
@@ -84,15 +84,16 @@ export default async function RootLayout({
                         />
                         <SidebarInset className="min-w-0 overflow-hidden">
                           <NavHeader userEmail={user.email ?? ''} />
-                          <SidePanelProvider>
-                            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                              <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-                                {children}
-                              </main>
-                              <SidePanel />
-                            </div>
-                          </SidePanelProvider>
-                          <TerminalPanel />
+                          <TerminalWorkspace>
+                            <SidePanelProvider>
+                              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+                                  {children}
+                                </main>
+                                <SidePanel />
+                              </div>
+                            </SidePanelProvider>
+                          </TerminalWorkspace>
                         </SidebarInset>
                       </div>
                     </div>

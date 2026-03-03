@@ -81,7 +81,6 @@ export default async function AuthorizePage({
       <div className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
           {client.logo_uri && (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={client.logo_uri}
               alt={`${client.name} logo`}

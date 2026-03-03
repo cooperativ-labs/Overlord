@@ -2,8 +2,7 @@
 
 import process from 'node:process';
 
-const baseUrl = process.env.OVERLORD_BASE_URL ?? 'http://localhost:3000';
-const token = process.env.OVERLORD_AGENT_TOKEN ?? 'overlord-local-dev-token';
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
 async function request(path, body) {
   const response = await fetch(`${baseUrl}${path}`, {

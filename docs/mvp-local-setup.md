@@ -19,8 +19,6 @@ Supabase API: `http://127.0.0.1:54321`
 ## Agent protocol auth
 Set a local token in `.env.local`:
 
-`OVERLORD_AGENT_TOKEN=overlord-local-dev-token`
-
 All protocol calls require:
 
 `Authorization: Bearer <token>`

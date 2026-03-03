@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.29.0] - 2026-03-03:17:05
+
+### Added
+- Add a resizable, embedded terminal workspace to the Electron app root layout, allowing users to run agents and commands directly inside the dashboard with a persistent terminal area.
+- Add `TerminalWorkspace` layout component with `ResizablePanelGroup` integration for splitting the main view between dashboard content and the embedded terminal.
+- Add support for "Embedded" vs "External" terminal modes in Electron, configurable via Settings and automatically persisted.
+
+### Fixed
+- Fixed a button type error in `AgentSplitButton.tsx` by providing correctly typed event handlers for standard button actions.
+- Improve CLI environment resolution by making `OVERLORD_BASE_URL` optional and deriving defaults based on the active runtime context.
+
+### Changed
+- Update `TerminalProvider` to manage multiple terminal sessions, active session tracking, and seamless switching between embedded and external launch modes.
+- Refactor `AppLayout` to wrap main content in the new `TerminalWorkspace` so the terminal area is shared across all dashboard views.
+- Update agent launch instructions and prompts to include explicit directives for agents running in the context of the Overlord protocol.
+
+### Chore
+- Bump package version to `0.29.0`.
+
 ## [0.28.0] - 2026-03-03:09:24
 
 ### Added

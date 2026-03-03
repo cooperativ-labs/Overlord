@@ -1,5 +1,3 @@
-const LOCAL_OVERLORD_URL = 'http://localhost:3000';
-
 export function getSupabaseUrl(): string {
   const value = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   if (!value) {
@@ -20,8 +18,25 @@ export function getSupabasePublishableKey(): string {
   return value;
 }
 
-export function getPlatformUrl(): string {
-  return process.env.OVERLORD_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? LOCAL_OVERLORD_URL;
+export function getPlatformUrl(providedURL?: string | null): string {
+  const value =
+    providedURL ??
+    process.env.OVERLORD_URL ??
+    process.env.OVERLORD_BASE_URL ??
+    (typeof window !== 'undefined' && window.location?.origin ? window.location.origin : undefined);
+
+  if (!value) {
+    throw new Error('Missing platform URL. Set OVERLORD_URL (or OVERLORD_BASE_URL).');
+  }
+  return value;
+}
+
+export function getOverlordMcpUrl(): string {
+  const value = process.env.NEXT_PUBLIC_OVERLORD_MCP_URL;
+  if (!value) {
+    throw new Error('Missing NEXT_PUBLIC_OVERLORD_MCP_URL.');
+  }
+  return value;
 }
 
 export function getSupabaseSecretKey(): string {
