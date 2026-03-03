@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.0] - 2026-03-03:23:27
+
+### Added
+- Add OAuth client configuration in seed files for CLI and Electron login flows.
+- Enhanced agent token management with improved endpoint handling and security validation.
+- Add device-code polling throttling with `next_poll_at` tracking to prevent rapid request bursts.
+
+### Fixed
+- Fix copy prompt button functionality and styling.
+- Fix `getPlatformURL` resolution for web deployment contexts.
+
+### Changed
+- Enhance Supabase OAuth integration with improved token validation and credential handling.
+- Update auth flows to properly handle OAuth client configuration from seed data.
+- Improve device-code authentication polling behavior with throttling enforcement.
+
+### Security
+- Enforce stricter validation of Supabase OAuth access tokens and client_id claims in token exchange endpoints.
+- Add device-code poll throttling with HTTP 429 responses to prevent enumeration attacks.
+
+### Chore
+- Bump package version to `0.31.0`.
+
 ## [0.30.0] - 2026-03-03:18:00
 
 ### Added

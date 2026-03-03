@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 const accountLinks = [
   { href: '/account', label: 'Profile' },
+  { href: '/account/sessions', label: 'Sessions' },
   { href: '/account/tokens', label: 'Agent tokens' }
 ] as const;
 

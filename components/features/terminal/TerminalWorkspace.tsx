@@ -25,14 +25,16 @@ export function TerminalWorkspace({ children }: TerminalWorkspaceProps) {
   }
 
   return (
-    <ResizablePanelGroup orientation="vertical" className="min-h-0 min-w-0 flex-1">
-      <ResizablePanel defaultSize={72} minSize={35}>
-        {children}
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={28} minSize={15} maxSize={65}>
-        <TerminalPanel />
-      </ResizablePanel>
-    </ResizablePanelGroup>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <ResizablePanelGroup orientation="vertical">
+        <ResizablePanel defaultSize={72} minSize={35}>
+          {children}
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={28} minSize={15} maxSize={65}>
+          <TerminalPanel />
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   );
 }
