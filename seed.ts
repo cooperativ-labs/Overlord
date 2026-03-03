@@ -24,6 +24,39 @@ async function main() {
 
   const jakeId = '11111111-1111-4111-8111-111111111111';
 
+  // Register OAuth clients for CLI and Electron login
+  // Explicitly null out deleted_at, client_secret_hash, client_uri, logo_uri
+  // to prevent Snaplet from auto-generating random values that break things
+  // (e.g. a non-null deleted_at soft-deletes the client).
+  await seed.oauth_clients([
+    {
+      id: '577e4468-a806-489e-8b99-206471e7442c',
+      client_name: 'Overlord CLI',
+      client_type: 'public',
+      registration_type: 'manual',
+      redirect_uris: 'http://127.0.0.1:3000/callback',
+      grant_types: 'authorization_code',
+      token_endpoint_auth_method: 'none',
+      client_secret_hash: null,
+      client_uri: null,
+      logo_uri: null,
+      deleted_at: null
+    },
+    {
+      id: 'f9a4c58c-68c7-4a20-88f9-2a2dc3eed88e',
+      client_name: 'Overlord Electron',
+      client_type: 'public',
+      registration_type: 'manual',
+      redirect_uris: 'http://127.0.0.1:3000/callback',
+      grant_types: 'authorization_code',
+      token_endpoint_auth_method: 'none',
+      client_secret_hash: null,
+      client_uri: null,
+      logo_uri: null,
+      deleted_at: null
+    }
+  ]);
+
   // Insert Jake; trigger creates org 1 for first user
   await seed.users([
     {

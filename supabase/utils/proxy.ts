@@ -42,12 +42,23 @@ export async function updateSession(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const publicPaths = ['/login', '/auth', '/confirm-email', '/privacy', '/terms'];
+  const publicPaths = [
+    '/login',
+    '/electron-login',
+    '/auth',
+    '/confirm-email',
+    '/privacy',
+    '/terms',
+    '/api/auth',
+    '/callback'
+  ];
   const isPublic = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
-    url.pathname = '/login';
+    // Electron embeds "Electron" in the User-Agent — redirect to the OAuth login screen
+    const isElectron = request.headers.get('user-agent')?.includes('Electron');
+    url.pathname = isElectron ? '/electron-login' : '/login';
     return NextResponse.redirect(url);
   }
 
