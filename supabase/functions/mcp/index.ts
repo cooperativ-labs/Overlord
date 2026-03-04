@@ -7,7 +7,7 @@
  * (Claude Code, Codex, etc.) can interact with tickets natively.
  *
  * Protocol: JSON-RPC 2.0 / MCP 2024-11-05
- * Auth: Bearer token (same agent_tokens table as /api/protocol routes)
+ * Auth: OAuth 2.1 JWT (primary) or legacy agent_token bearer
  */
 
 // deno-lint-ignore-file no-explicit-any
@@ -30,6 +30,19 @@ import { TOOLS } from './tools.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+/**
+ * Build the Protected Resource Metadata document (RFC 9728).
+ * This tells MCP clients where to find the authorization server.
+ */
+function buildProtectedResourceMetadata() {
+  return {
+    resource: `${SUPABASE_URL}/functions/v1/mcp`,
+    authorization_servers: [`${SUPABASE_URL}/auth/v1`],
+    scopes_supported: ['openid', 'email', 'profile'],
+    bearer_methods_supported: ['header']
+  };
+}
+
 const MCP_INSTRUCTIONS = `# Overlord MCP Server
 
 This is the **Overlord MCP Server**. It exposes Overlord's ticket system as MCP tools so you can work on tickets, post updates, deliver results, and create follow-up tickets — all without leaving your agent session.
@@ -39,8 +52,13 @@ This is the **Overlord MCP Server**. It exposes Overlord's ticket system as MCP 
 Every request requires a Bearer token in the \`Authorization\` header:
 
 \`\`\`
-Authorization: Bearer <AGENT_TOKEN>
+Authorization: Bearer <TOKEN>
 \`\`\`
+
+Two authentication methods are supported:
+
+1. **OAuth 2.1 (recommended)** — Use the standard OAuth Authorization Code + PKCE flow. The server supports OAuth discovery via Protected Resource Metadata (RFC 9728) and the Supabase OAuth Authorization Server.
+2. **Agent Token (legacy)** — A long-lived token obtained via the \`/api/auth/token\` exchange.
 
 Your token is scoped to one organization. All ticket operations must belong to that organization.
 
@@ -217,6 +235,16 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method === 'GET') {
+    const url = new URL(req.url);
+
+    // Serve Protected Resource Metadata (RFC 9728) for OAuth discovery
+    if (url.pathname.endsWith('/.well-known/oauth-protected-resource')) {
+      return new Response(JSON.stringify(buildProtectedResourceMetadata()), {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+      });
+    }
+
     return new Response(MCP_INSTRUCTIONS, {
       status: 200,
       headers: { ...CORS_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' }
@@ -233,7 +261,22 @@ Deno.serve(async (req: Request) => {
 
   const tokenCtx = await resolveToken(req, supabase);
   if (!tokenCtx) {
-    return rpcError(null, -32600, 'Unauthorized: missing or invalid bearer token.');
+    const resourceMetadataUrl = `${SUPABASE_URL}/functions/v1/mcp/.well-known/oauth-protected-resource`;
+    return new Response(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'Unauthorized: missing or invalid bearer token.' }
+      }),
+      {
+        status: 401,
+        headers: {
+          ...CORS_HEADERS,
+          'Content-Type': 'application/json',
+          'WWW-Authenticate': `Bearer resource_metadata="${resourceMetadataUrl}"`
+        }
+      }
+    );
   }
 
   let body: any;

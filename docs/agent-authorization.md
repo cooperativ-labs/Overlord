@@ -39,9 +39,15 @@ Overlord supports five distinct auth paths. Each path must use the minimum requi
 - Protocol auth requires bearer token and (when configured) matching local secret.
 
 4. Cloud agents via MCP (`supabase/functions/mcp/index.ts`):
-- Auth method: bearer `agent_token`.
-- Token validation must reject revoked or expired tokens.
+- Auth method (primary): Supabase OAuth 2.1 Authorization Code + PKCE.
+  - MCP clients discover the authorization server via Protected Resource Metadata (RFC 9728) at `/.well-known/oauth-protected-resource`.
+  - Dynamic Client Registration (RFC 7591) is enabled so MCP clients (e.g. Claude) can self-register.
+  - The MCP server validates the Supabase OAuth JWT directly — no token exchange needed.
+  - User's organization is resolved from the `members` table at request time.
+- Auth method (legacy): bearer `agent_token`.
+  - Token validation must reject revoked or expired tokens.
 - No local secret requirement for internet-facing MCP.
+- Customer-facing MCP URL: `{PLATFORM_URL}/api/mcp` (proxied to edge function).
 
 5. Standalone CLI login:
 - Browser-mediated login flow obtains credential and stores local `agent_token`.
@@ -59,8 +65,10 @@ Overlord supports five distinct auth paths. Each path must use the minimum requi
 - Must validate `X-Overlord-Local-Secret` when `OVERLORD_LOCAL_SECRET` is set.
 
 3. MCP token resolution:
-- Must validate token exists and is active (`revoked_at IS NULL` and not expired).
-- Must update `last_used_at` best-effort for audit.
+- Must accept both Supabase OAuth JWTs and legacy `agent_token` values.
+- For agent tokens: must validate token exists and is active (`revoked_at IS NULL` and not expired). Must update `last_used_at` best-effort for audit.
+- For OAuth JWTs: must validate via `supabase.auth.getUser()` and resolve organization from `members`.
+- Must return 401 with `WWW-Authenticate: Bearer resource_metadata="..."` when no valid token is provided.
 
 4. UI token selection:
 - Any UI surface that reads a launch token must scope lookup to the current user, not just organization.
