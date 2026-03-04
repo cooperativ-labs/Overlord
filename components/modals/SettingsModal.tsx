@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Edit3, Link2, Monitor, Palette, RefreshCcw, Terminal } from 'lucide-react';
+import { Bot, Edit3, Info, Link2, Monitor, Palette, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -16,21 +16,23 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
 
+import { AboutPage } from './settings/AboutPage';
 import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
 import { AppearancePage } from './settings/AppearancePage';
 import { CliPage } from './settings/CliPage';
 import { CustomizationPage } from './settings/CustomizationPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
 import { TerminalPage } from './settings/TerminalPage';
-import { UpdatesPage } from './settings/UpdatesPage';
 
 type SettingsModalProps = {
   open: boolean;
@@ -43,19 +45,27 @@ type NavItem = {
   electronOnly?: boolean;
 };
 
-const navItems: NavItem[] = [
+const workflowNavItems: NavItem[] = [
   { name: 'Integrations', icon: Link2 },
   { name: 'Agents & MCP', icon: Bot },
   { name: 'Customization', icon: Edit3 },
-  { name: 'CLI', icon: Terminal },
-  { name: 'Appearance', icon: Palette },
-  { name: 'Terminal', icon: Monitor, electronOnly: true },
-  { name: 'Updates', icon: RefreshCcw, electronOnly: true }
+  { name: 'CLI', icon: Terminal }
 ];
+
+const appNavItems: NavItem[] = [
+  { name: 'Appearance', icon: Palette },
+  { name: 'Terminal', icon: Monitor, electronOnly: true }
+];
+
+const aboutNavItem: NavItem = { name: 'About', icon: Info };
+
+const navItems: NavItem[] = [...workflowNavItems, ...appNavItems, aboutNavItem];
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { isElectron } = useElectron();
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
+  const visibleWorkflowNavItems = workflowNavItems.filter(item => !item.electronOnly || isElectron);
+  const visibleAppNavItems = appNavItems.filter(item => !item.electronOnly || isElectron);
   const [activeNav, setActiveNav] = useState<string>('Integrations');
 
   useEffect(() => {
@@ -73,9 +83,28 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           <Sidebar collapsible="none" className="hidden md:flex">
             <SidebarContent>
               <SidebarGroup>
+                <SidebarGroupLabel>Workflow</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {visibleNavItems.map(item => (
+                    {visibleWorkflowNavItems.map(item => (
+                      <SidebarMenuItem key={item.name}>
+                        <SidebarMenuButton
+                          isActive={item.name === activeNav}
+                          onClick={() => setActiveNav(item.name)}
+                        >
+                          <item.icon />
+                          <span>{item.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+              <SidebarGroup>
+                <SidebarGroupLabel>Application</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleAppNavItems.map(item => (
                       <SidebarMenuItem key={item.name}>
                         <SidebarMenuButton
                           isActive={item.name === activeNav}
@@ -90,6 +119,19 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
+            <SidebarFooter>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={aboutNavItem.name === activeNav}
+                    onClick={() => setActiveNav(aboutNavItem.name)}
+                  >
+                    <aboutNavItem.icon />
+                    <span>{aboutNavItem.name}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarFooter>
           </Sidebar>
           <main className="flex h-[540px] flex-1 flex-col overflow-hidden">
             <header className="flex h-16 shrink-0 items-center gap-2 border-b">
@@ -114,7 +156,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               {activeNav === 'CLI' && <CliPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}
               {activeNav === 'Terminal' && isElectron && <TerminalPage open={open} />}
-              {activeNav === 'Updates' && isElectron && <UpdatesPage open={open} />}
+              {activeNav === 'About' && <AboutPage open={open} />}
             </div>
           </main>
         </SidebarProvider>

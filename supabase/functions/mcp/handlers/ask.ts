@@ -6,9 +6,10 @@ import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
 export async function handleAsk(supabase: SupabaseClient, args: any, ctx: TokenContext) {
-  const { sessionKey, ticketId, question, phase, payload = {} } = args;
-  const resolved = await resolveSession(supabase, sessionKey, ticketId, ctx.organizationId);
+  const { sessionKey, ticketId: rawTicketId, question, phase, payload = {} } = args;
+  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
+  const ticketId = resolved.resolvedTicketId!;
 
   await supabase.from('ticket_events').insert({
     event_type: 'question',

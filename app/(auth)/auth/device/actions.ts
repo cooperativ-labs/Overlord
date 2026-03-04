@@ -12,7 +12,7 @@ export async function approveDevice(userCode: string): Promise<void> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(`/login?next=/auth/device?code=${encodeURIComponent(userCode)}`);
+    redirect(`/(auth)/login?next=/(auth)/auth/device?code=${encodeURIComponent(userCode)}`);
   }
 
   const service = createServiceRoleClient();
@@ -25,15 +25,15 @@ export async function approveDevice(userCode: string): Promise<void> {
     .single();
 
   if (findError || !deviceCode) {
-    redirect('/auth/device?error=not_found');
+    redirect('/(auth)/auth/device?error=not_found');
   }
 
   if (new Date(deviceCode.expires_at) < new Date()) {
-    redirect('/auth/device?error=expired');
+    redirect('/(auth)/auth/device?error=expired');
   }
 
   if (deviceCode.approved_at) {
-    redirect('/auth/device?error=already_approved');
+    redirect('/(auth)/auth/device?error=already_approved');
   }
 
   // Look up user's first organization via members (service client to bypass RLS)
@@ -46,7 +46,7 @@ export async function approveDevice(userCode: string): Promise<void> {
     .single();
 
   if (!orgData) {
-    redirect('/auth/device?error=no_organization');
+    redirect('/(auth)/auth/device?error=no_organization');
   }
 
   // Create an agent token for this user
@@ -61,7 +61,7 @@ export async function approveDevice(userCode: string): Promise<void> {
     .single();
 
   if (tokenError || !tokenData) {
-    redirect('/auth/device?error=token_creation_failed');
+    redirect('/(auth)/auth/device?error=token_creation_failed');
   }
 
   // Approve the device code
@@ -75,8 +75,8 @@ export async function approveDevice(userCode: string): Promise<void> {
     .eq('id', deviceCode.id);
 
   if (updateError) {
-    redirect('/auth/device?error=approval_failed');
+    redirect('/(auth)/auth/device?error=approval_failed');
   }
 
-  redirect('/auth/device?approved=1');
+  redirect('/(auth)/auth/device?approved=1');
 }

@@ -6,9 +6,10 @@ import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
 export async function handleWriteContext(supabase: SupabaseClient, args: any, ctx: TokenContext) {
-  const { sessionKey, ticketId, key, value, tags = [] } = args;
-  const resolved = await resolveSession(supabase, sessionKey, ticketId, ctx.organizationId);
+  const { sessionKey, ticketId: rawTicketId, key, value, tags = [] } = args;
+  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
+  const ticketId = resolved.resolvedTicketId!;
 
   const { data: state, error } = await supabase
     .from('shared_state')

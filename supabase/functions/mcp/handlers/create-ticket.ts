@@ -8,7 +8,7 @@ import { resolveSession } from '../session.ts';
 export async function handleCreateTicket(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     sessionKey,
-    ticketId,
+    ticketId: rawTicketId,
     title = '',
     objective,
     acceptanceCriteria = '',
@@ -17,8 +17,9 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     priority = 'medium'
   } = args;
   const { organizationId, userId } = ctx;
-  const resolved = await resolveSession(supabase, sessionKey, ticketId, organizationId);
+  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, organizationId);
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
+  const ticketId = resolved.resolvedTicketId!;
 
   const { data: sourceTicket, error: sourceErr } = await supabase
     .from('tickets')

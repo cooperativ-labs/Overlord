@@ -21,8 +21,8 @@ type ElectronAppUpdateStatus = Awaited<
   ReturnType<NonNullable<Window['electronAPI']>['appUpdate']['getStatus']>
 >;
 
-export function UpdatesPage({ open }: { open: boolean }) {
-  const { api } = useElectron();
+export function AboutPage({ open }: { open: boolean }) {
+  const { api, isElectron } = useElectron();
 
   const [updateStatus, setUpdateStatus] = useState<ElectronAppUpdateStatus | null>(null);
   const [checkUpdateButtonState, setCheckUpdateButtonState] =
@@ -125,84 +125,99 @@ export function UpdatesPage({ open }: { open: boolean }) {
     <>
       <div className="grid gap-4">
         <div className="grid gap-1">
-          <p className="text-sm font-medium">App updates</p>
+          <p className="text-sm font-medium">About</p>
+          <p className="text-xs text-muted-foreground">
+            Overlord helps you coordinate agent and human execution from one shared ticket workflow.
+          </p>
+        </div>
+
+        <div className="rounded-md border p-3">
           <p className="text-xs text-muted-foreground">
             Version {updateStatus?.currentVersion ?? 'unknown'}
             {updateStatus?.availableVersion ? ` • Latest ${updateStatus.availableVersion}` : ''}
           </p>
-          <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
+          {platformUrl ? (
+            <p className="mt-1 text-xs text-muted-foreground">OVERLORD_URL: {platformUrl}</p>
+          ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <LoadingButton
-            buttonState={checkUpdateButtonState}
-            setButtonState={setCheckUpdateButtonState}
-            text="Check for updates"
-            loadingText="Checking..."
-            successText="Check started"
-            errorText="Try again"
-            reset
-            variant="outline"
-            onClick={handleCheckForUpdates}
-          />
-          {canShowDownloadUpdate && (
-            <LoadingButton
-              buttonState={downloadUpdateButtonState}
-              setButtonState={setDownloadUpdateButtonState}
-              text="Download update"
-              loadingText="Starting download..."
-              successText="Download started"
-              errorText="Unavailable"
-              reset
-              variant="outline"
-              onClick={handleDownloadUpdate}
-            />
-          )}
-          {canShowInstallUpdate && (
-            <LoadingButton
-              buttonState={restartToUpdateButtonState}
-              setButtonState={setRestartToUpdateButtonState}
-              text="Install update"
-              loadingText="Installing..."
-              successText="Installing..."
-              errorText="Unavailable"
-              variant="default"
-              onClick={handleRestartToInstallUpdate}
-            />
-          )}
-        </div>
-        {platformUrl && (
-          <div className="rounded-md border p-3">
-            <p className="text-xs text-muted-foreground">OVERLORD_URL: {platformUrl}</p>
+
+        {isElectron ? (
+          <div className="grid gap-2">
+            <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
+            <div className="flex flex-wrap gap-2">
+              <LoadingButton
+                buttonState={checkUpdateButtonState}
+                setButtonState={setCheckUpdateButtonState}
+                text="Check for updates"
+                loadingText="Checking..."
+                successText="Check started"
+                errorText="Try again"
+                reset
+                variant="outline"
+                onClick={handleCheckForUpdates}
+              />
+              {canShowDownloadUpdate ? (
+                <LoadingButton
+                  buttonState={downloadUpdateButtonState}
+                  setButtonState={setDownloadUpdateButtonState}
+                  text="Download update"
+                  loadingText="Starting download..."
+                  successText="Download started"
+                  errorText="Unavailable"
+                  reset
+                  variant="outline"
+                  onClick={handleDownloadUpdate}
+                />
+              ) : null}
+              {canShowInstallUpdate ? (
+                <LoadingButton
+                  buttonState={restartToUpdateButtonState}
+                  setButtonState={setRestartToUpdateButtonState}
+                  text="Install update"
+                  loadingText="Installing..."
+                  successText="Installing..."
+                  errorText="Unavailable"
+                  variant="default"
+                  onClick={handleRestartToInstallUpdate}
+                />
+              ) : null}
+            </div>
           </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Update controls are available in the desktop app.
+          </p>
         )}
       </div>
 
-      <AlertDialog open={installWarningOpen} onOpenChange={setInstallWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Install update now?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {runningAgentCount === 1
-                ? '1 agent is currently running.'
-                : `${runningAgentCount} agents are currently running.`}{' '}
-              Any currently running agents may become detached from Overlord. Please wait until all
-              agents are finished before installing.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>I&apos;ll wait</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={event => {
-                event.preventDefault();
-                setInstallWarningOpen(false);
-                void restartToInstallUpdate();
-              }}
-            >
-              Continue anyway
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isElectron ? (
+        <AlertDialog open={installWarningOpen} onOpenChange={setInstallWarningOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Install update now?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {runningAgentCount === 1
+                  ? '1 agent is currently running.'
+                  : `${runningAgentCount} agents are currently running.`}{' '}
+                Any currently running agents may become detached from Overlord. Please wait until
+                all agents are finished before installing.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>I&apos;ll wait</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={event => {
+                  event.preventDefault();
+                  setInstallWarningOpen(false);
+                  void restartToInstallUpdate();
+                }}
+              >
+                Continue anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
     </>
   );
 }

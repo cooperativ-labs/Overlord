@@ -233,7 +233,7 @@ function buildMcpConfigSection(
 ${settingsJson}
 \`\`\`
 `
-    : `Use this MCP endpoint in your runtime's MCP configuration:
+    : `Use \`OVERLORD_MCP_URL\` as the MCP endpoint in your runtime configuration, and authenticate with \`AGENT_TOKEN\`:
 
 \`\`\`
 ${mcpUrl}
@@ -349,9 +349,9 @@ Use MCP tool: \`deliver\`
 - **Ticket ID:** ${ticketId}
 
 The following environment variables are set in your agent environment:
-- \`OVERLORD_URL\` — base URL for Overlord
-- \`OVERLORD_MCP_URL\` — MCP endpoint for Overlord
-- \`AGENT_TOKEN\` — bearer token for protocol auth
+- \`OVERLORD_MCP_URL\` — MCP endpoint for Overlord (primary)
+- \`AGENT_TOKEN\` — bearer token for MCP/protocol auth
+- \`OVERLORD_URL\` — base URL for Overlord (REST fallback only)
 
 \`TICKET_ID\` is not set in cloud environments. Always include \`"ticketId": "${ticketId}"\` in every protocol call body.
 ${mcpSection}

@@ -21,7 +21,7 @@ export async function getOnboardingState(): Promise<OnboardingState> {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/login');
+    redirect('/(auth)/login');
   }
 
   const displayName =

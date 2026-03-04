@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.0] - 2026-03-04
+
+### Added
+- MCP settings improvements and enhanced protocol handlers.
+
+### Fixed
+- Fix MCP protocol handlers to properly support artifact management and context operations.
+
+### Changed
+- Refactor authentication flow to use new (auth) layout directory pattern.
+- Update MCP protocol routes and handlers with improved validation and error handling.
+- Consolidate OAuth-based authentication pages under new auth layout structure.
+- Improve proxy utilities for MCP request handling.
+
+### Removed
+- Remove legacy authentication pages (device login, confirm-email, electron-login, standalone login, oauth consent, onboarding).
+- Remove MCP_SETUP.md documentation in favor of integrated settings panel.
+- Remove legacy UpdatesPage settings component.
+
+### Chore
+- Update package dependencies and protocol validation schemas.
+
 ## [0.33.0] - 2026-03-04
 
 ### Added

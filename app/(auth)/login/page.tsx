@@ -8,10 +8,8 @@ export default async function LoginPage({
   const { error, message, next } = await searchParams;
 
   return (
-    <div className="flex min-h-dvh w-full items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <AuthForm error={error} message={message} next={next} defaultMode="login" />
-      </div>
+    <div className="w-full max-w-md">
+      <AuthForm error={error} message={message} next={next} defaultMode="login" />
     </div>
   );
 }

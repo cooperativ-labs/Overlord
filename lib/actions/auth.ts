@@ -21,7 +21,7 @@ function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): s
 
 export async function signIn(formData: FormData) {
   const supabase = await createClient();
-  const nextPath = sanitizeNextPath(formData.get('next'), '/onboarding');
+  const nextPath = sanitizeNextPath(formData.get('next'), '/(auth)/onboarding');
 
   const { error } = await supabase.auth.signInWithPassword({
     email: formData.get('email') as string,
@@ -29,7 +29,7 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
-    redirect('/login?error=' + encodeURIComponent(error.message));
+    redirect('/(auth)/login?error=' + encodeURIComponent(error.message));
   }
 
   redirect(nextPath);
@@ -37,7 +37,7 @@ export async function signIn(formData: FormData) {
 
 export async function signUp(formData: FormData) {
   const supabase = await createClient();
-  const nextPath = sanitizeNextPath(formData.get('next'), '/onboarding');
+  const nextPath = sanitizeNextPath(formData.get('next'), '/(auth)/onboarding');
 
   const email = (formData.get('email') as string | null) ?? '';
   const password = (formData.get('password') as string | null) ?? '';
@@ -45,7 +45,7 @@ export async function signUp(formData: FormData) {
   const name = rawName.trim();
 
   if (!name) {
-    redirect('/login?error=' + encodeURIComponent('Name is required.'));
+    redirect('/(auth)/login?error=' + encodeURIComponent('Name is required.'));
   }
 
   const { error } = await supabase.auth.signUp({
@@ -61,14 +61,14 @@ export async function signUp(formData: FormData) {
   });
 
   if (error) {
-    redirect('/login?error=' + encodeURIComponent(error.message));
+    redirect('/(auth)/login?error=' + encodeURIComponent(error.message));
   }
 
-  redirect(`/confirm-email?email=${encodeURIComponent(email)}`);
+  redirect(`/(auth)/confirm-email?email=${encodeURIComponent(email)}`);
 }
 
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect('/login');
+  redirect('/(auth)/login');
 }

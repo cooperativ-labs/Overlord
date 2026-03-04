@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getSupabaseUrl, getPlatformUrl } from '@/lib/env';
+import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
 
 /**
  * Protected Resource Metadata (RFC 9728).

@@ -9,9 +9,10 @@ import { resolveSession } from '../session.ts';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 
 export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: TokenContext) {
-  const { sessionKey, ticketId, summary, artifacts = [] } = args;
-  const resolved = await resolveSession(supabase, sessionKey, ticketId, ctx.organizationId);
+  const { sessionKey, ticketId: rawTicketId, summary, artifacts = [] } = args;
+  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
+  const ticketId = resolved.resolvedTicketId!;
 
   const { data: event, error: eventErr } = await supabase
     .from('ticket_events')

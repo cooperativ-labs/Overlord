@@ -71,11 +71,12 @@ export async function resolveArtifactAccess(
       ticket: null
     };
   }
+  const resolvedTicketId = resolved.resolvedTicketId!;
 
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select('id, organization_id, project_id')
-    .eq('id', args.ticketId)
+    .eq('id', resolvedTicketId)
     .eq('organization_id', ctx.organizationId)
     .single();
 

@@ -6,6 +6,7 @@ import {
   buildTicketStoragePath,
   resolveArtifactAccess
 } from '@/lib/overlord/protocol-artifacts';
+import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import { artifactPrepareUploadSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -14,9 +15,19 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
-    const { artifactType, contentType, fileName, fileSize, label, metadata, sessionKey, ticketId } =
-      parsed.data;
+    const {
+      artifactType,
+      contentType,
+      fileName,
+      fileSize,
+      label,
+      metadata,
+      sessionKey,
+      ticketId: rawTicketId
+    } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
+    const ticketId = await resolveTicketId(rawTicketId, organizationId);
+    if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
     const access = await resolveArtifactAccess({
       organizationId,

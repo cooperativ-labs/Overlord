@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
-import { resolveSession } from '@/lib/overlord/protocol-db';
+import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -19,10 +19,12 @@ export async function POST(request: Request) {
       objective,
       priority,
       sessionKey,
-      ticketId,
+      ticketId: rawTicketId,
       title
     } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
+    const ticketId = await resolveTicketId(rawTicketId, organizationId);
+    if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
     const supabase = createServiceRoleClient();
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);

@@ -5,7 +5,7 @@ import {
   buildAgentNotificationSummary,
   extractAgentNotifications
 } from '@/lib/overlord/agent-notifications';
-import { resolveSession } from '@/lib/overlord/protocol-db';
+import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { updateSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -14,8 +14,10 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
-    const { payload, phase, sessionKey, summary, ticketId } = parsed.data;
+    const { payload, phase, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
     const { organizationId } = parsed.tokenContext;
+    const ticketId = await resolveTicketId(rawTicketId, organizationId);
+    if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {

@@ -5,6 +5,7 @@ import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import {
   buildTicketPromptMarkdown,
   type PromptContext,
@@ -20,7 +21,11 @@ export async function GET(request: Request, { params }: RouteContext) {
     if (authResult.error) return authResult.error;
 
     const { organizationId } = authResult.context;
-    const { ticketId } = await params;
+    const { ticketId: rawTicketId } = await params;
+    const ticketId = await resolveTicketId(rawTicketId, organizationId);
+    if (!ticketId) {
+      return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+    }
     const supabase = createServiceRoleClient();
 
     const { data: ticket, error } = await supabase
@@ -118,7 +123,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (authResult.error) return authResult.error;
 
   const { organizationId, tokenValue } = authResult.context;
-  const { ticketId } = await params;
+  const { ticketId: rawTicketId } = await params;
+  const ticketId = await resolveTicketId(rawTicketId, organizationId);
+  if (!ticketId) {
+    return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
+  }
 
   // Verify ticket belongs to this org
   const supabase = createServiceRoleClient();

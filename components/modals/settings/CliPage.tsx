@@ -87,8 +87,7 @@ export function CliPage({ open }: { open: boolean }) {
   const [slashCommandCopied, setSlashCommandCopied] = useState(false);
   const [agentEnvSnippetCopied, setAgentEnvSnippetCopied] = useState(false);
 
-  const [cliInstallButtonState, setCliInstallButtonState] =
-    useState<ButtonLoadingState>('default');
+  const [cliInstallButtonState, setCliInstallButtonState] = useState<ButtonLoadingState>('default');
   const [cliInstalled, setCliInstalled] = useState(false);
   const [cliInstallPath, setCliInstallPath] = useState<string | null>(null);
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
@@ -222,9 +221,7 @@ export function CliPage({ open }: { open: boolean }) {
             onClick={handleRotateAgentToken}
           />
         </div>
-        {agentTokenError ? (
-          <p className="text-xs text-destructive">{agentTokenError}</p>
-        ) : null}
+        {agentTokenError ? <p className="text-xs text-destructive">{agentTokenError}</p> : null}
         {agentTokenLoading ? (
           <p className="text-xs text-muted-foreground">Loading agent token…</p>
         ) : null}
@@ -328,9 +325,8 @@ export function CliPage({ open }: { open: boolean }) {
           </li>
         </ul>
         <p className="mt-2 text-muted-foreground">
-          Run{' '}
-          <code className="rounded bg-muted px-1 break-all">ovld &lt;command&gt; --help</code> for
-          more detail.
+          Run <code className="rounded bg-muted px-1 break-all">ovld &lt;command&gt; --help</code>{' '}
+          for more detail.
         </p>
       </div>
 

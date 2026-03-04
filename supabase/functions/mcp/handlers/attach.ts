@@ -12,8 +12,28 @@ const TICKET_AGENT_FIELDS =
   'id,title,objective,status,priority,assigned_agent,recent_agent,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,everhour_project_id,created_by';
 
 export async function handleAttach(supabase: SupabaseClient, args: any, ctx: TokenContext) {
-  const { ticketId, agentIdentifier, connectionMethod = 'mcp', metadata = {} } = args;
+  const { ticketId: rawTicketId, agentIdentifier, connectionMethod = 'mcp', metadata = {} } = args;
   const { organizationId } = ctx;
+
+  // Resolve short ID (8-char hex) to full UUID if needed.
+  let ticketId: string = rawTicketId;
+  if (
+    rawTicketId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTicketId)
+  ) {
+    if (/^[0-9a-f]{8}$/i.test(rawTicketId)) {
+      const { data: found } = await supabase
+        .from('tickets')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .ilike('id', `%${rawTicketId}`)
+        .limit(2);
+      if (!found || found.length !== 1) return toolErr('Ticket not found or access denied.');
+      ticketId = found[0].id;
+    } else {
+      return toolErr('Invalid ticket ID format.');
+    }
+  }
 
   const { data: ticket, error: ticketErr } = await supabase
     .from('tickets')

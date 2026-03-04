@@ -1,4 +1,4 @@
-import { getSupabaseUrl, getPlatformUrl } from '@/lib/env';
+import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
 
 /**
  * MCP proxy — customer-facing MCP endpoint.
