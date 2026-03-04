@@ -52,14 +52,16 @@ export function TerminalPanel() {
                 <div className="flex h-full min-h-0 flex-col">
                   <div
                     className={cn(
-                      'flex items-center justify-end border-b px-2 py-1',
-                      activeTerminalId === terminalId ? 'bg-muted/60' : 'bg-muted/30'
+                      'flex items-center justify-end border-b border-white/10 px-2 py-1',
+                      activeTerminalId === terminalId
+                        ? 'bg-black/90 text-white'
+                        : 'bg-black/50 text-white'
                     )}
                   >
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-5 w-5"
+                      className="h-5 w-5 text-white"
                       title="Close terminal session"
                       onClick={() => void closeTerminalById(terminalId)}
                     >

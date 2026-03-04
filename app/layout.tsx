@@ -68,7 +68,7 @@ export default async function RootLayout({
               <ProjectCreatorProvider>
                 <SidebarProvider defaultOpen className="h-dvh min-h-0">
                   {user ? (
-                    <div className="flex h-dvh w-full flex-col overflow-hidden">
+                    <div className="flex h-full w-full flex-col overflow-hidden">
                       <AnnouncementBar />
                       {/* Electron title bar drag region — hidden in browser */}
                       <div className="electron-drag-region shrink-0" />
@@ -87,11 +87,9 @@ export default async function RootLayout({
                         <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
                           <NavHeader userEmail={user.email ?? ''} />
                           <TerminalWorkspace>
-                            <SidePanelProvider>
-                              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
-                                  {children}
-                                </main>
+                            <SidePanelProvider className="flex flex-col ">
+                              <div className="flex min-h-0 min-w-0 ">
+                                <main className="flex min-h-0 min-w-0 flex-col">{children}</main>
                                 <SidePanel />
                               </div>
                             </SidePanelProvider>
@@ -102,7 +100,7 @@ export default async function RootLayout({
                   ) : (
                     <div className="flex h-dvh w-full flex-col overflow-hidden">
                       <AnnouncementBar />
-                      <main className="min-h-0 w-full flex-1 overflow-y-auto">{children}</main>
+                      <main className="min-h-0 w-full flex-1 ">{children}</main>
                     </div>
                   )}
                 </SidebarProvider>

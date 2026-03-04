@@ -27,9 +27,9 @@ interface StoreData {
 }
 
 const defaults: StoreData = {
-  terminalMode: 'embedded',
+  terminalMode: 'external',
   externalTerminalApp: 'default',
-  externalTerminalLaunchMode: 'window',
+  externalTerminalLaunchMode: 'tab',
   externalTerminalCustomHotkey: '',
   customExternalTerminalApp: '',
   windowBounds: { width: 1400, height: 900 }

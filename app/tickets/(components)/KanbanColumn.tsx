@@ -243,7 +243,7 @@ export default function KanbanColumn({
           </Button>
         </div>
       </div>
-      <div className="flex-1 px-3 pb-3">
+      <div className="flex-1 px-3 ">
         <SortableContext items={ticketIds} strategy={verticalListSortingStrategy}>
           <div
             ref={scrollRef}
@@ -353,6 +353,7 @@ export default function KanbanColumn({
             </div>
           </div>
         </SortableContext>
+        <div className="h-6" />
       </div>
     </div>
   );

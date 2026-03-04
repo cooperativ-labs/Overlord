@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.0] - 2026-03-04
+
+### Added
+- None.
+
+### Fixed
+- Fix ResizablePanel defaultSize and minSize props in TerminalWorkspace and TerminalPanel to use percentage strings instead of bare numbers, correcting react-resizable-panels v4 behavior where numbers are interpreted as pixels.
+- Fix TerminalWorkspace layout with proper flex container adjustments and overflow handling for correct height and scrolling behavior.
+- Fix Kanban board scrolling and layout by changing overflow-x-auto to overflow-x-scroll with proper height constraints.
+- Fix SidePanelProvider height handling to ensure full-height layout with proper flex constraints.
+- Improve TerminalPanel styling with better dark theme support using darker background colors and white text.
+
+### Changed
+- Remove legacy organization-scoped routing (`[organizationId]/projects/*`) as projects are now accessed via organization-agnostic `/projects/:projectId` routes.
+- Refactor root layout to use h-full instead of h-dvh for improved flex container behavior with parent constraints.
+- Update TerminalPanel header styling with better visual hierarchy and active state indication.
+- Change default terminal mode from 'embedded' to 'external' and default launch mode from 'window' to 'tab' in Electron settings.
+- Simplify Kanban board and column padding for better visual consistency.
+- Add explanatory comment in TerminalWorkspace documenting react-resizable-panels v4 sizing requirements.
+
+### Removed
+- Remove legacy organization-scoped project and ticket routes and their corresponding pages/layouts.
+
+### Chore
+- Bump package version to `0.33.0`.
+
 ## [0.32.0] - 2026-03-04
 
 ### Added

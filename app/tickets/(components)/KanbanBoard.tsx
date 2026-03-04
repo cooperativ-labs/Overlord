@@ -963,7 +963,7 @@ export default function KanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
             <div className="flex items-center gap-2">
               <TicketsViewToggle initialView={initialView} />
               {projectOptions.length > 1 && (
@@ -1057,9 +1057,9 @@ export default function KanbanBoard({
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="min-h-0 min-w-0 flex-1 overflow-x-auto"
+            className="min-h-0 min-w-0 flex-1 overflow-x-scroll h-dvh"
           >
-            <div className="inline-flex flex-nowrap gap-3 px-4 pb-4 md:px-6">
+            <div className="inline-flex flex-nowrap gap-3 px-4 md:px-6">
               {visibleSortedColumns.map(col => {
                 const rawTickets = columnTickets.get(col.id) ?? [];
                 const { displayed, olderCount } = getDisplayedTicketsForColumn({

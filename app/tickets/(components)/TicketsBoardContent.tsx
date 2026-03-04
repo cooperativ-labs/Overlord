@@ -271,8 +271,8 @@ export default async function TicketsBoardContent({
   const showBoard = view === 'board' && statuses.length > 0;
 
   return (
-    <div className="flex flex-col gap-4 ">
-      <nav className="flex flex-wrap items-center justify-between gap-3 border-b p-4 md:px-6 md:pb-6">
+    <div className="flex flex-col gap-4 h-full">
+      <nav className="flex flex-wrap items-center justify-between gap-3 border-b p-4 md:px-6 shrink-0">
         <div>
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-muted-foreground text-sm">{description}</p>

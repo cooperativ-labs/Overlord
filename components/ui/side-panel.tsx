@@ -53,14 +53,20 @@ export function useSidePanel() {
 // Provider — wrap around the layout that contains a <SidePanel />
 // ---------------------------------------------------------------------------
 
-export function SidePanelProvider({ children }: { children: ReactNode }) {
+export function SidePanelProvider({
+  children,
+  className
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   const [content, setContent] = useState<ReactNode>(null);
   const [closePath, setClosePath] = useState<string | null>(null);
   const isOpen = content !== null;
 
   return (
     <SidePanelContext.Provider value={{ content, setContent, closePath, setClosePath, isOpen }}>
-      {children}
+      <div className={cn('h-full', className)}>{children}</div>
     </SidePanelContext.Provider>
   );
 }
