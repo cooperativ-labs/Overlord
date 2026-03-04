@@ -347,8 +347,9 @@ enabled = false
 enabled = true
 # Path for OAuth consent flow UI (hosted in our Next.js app)
 authorization_url_path = "/oauth/consent"
-# Allow dynamic client registration
-allow_dynamic_registration = false
+# Allow dynamic client registration — required for MCP clients (e.g. Claude)
+# to self-register per RFC 7591
+allow_dynamic_registration = true
 
 [edge_runtime]
 enabled = true

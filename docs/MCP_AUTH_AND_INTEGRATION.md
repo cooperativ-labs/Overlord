@@ -2,19 +2,46 @@
 
 ## Overview
 
-The Overlord MCP (Model Context Protocol) server enables cloud-based agents and CLI tools to interact with the Overlord ticket system. Authentication is handled through bearer tokens that are obtained via an OAuth 2.0 flow.
+The Overlord MCP (Model Context Protocol) server enables cloud-based agents and CLI tools to interact with the Overlord ticket system. Authentication supports two methods:
+
+1. **OAuth 2.1 (recommended)** — Standard OAuth Authorization Code + PKCE flow. MCP clients authenticate directly with Supabase Auth as the OAuth server. No token exchange step needed.
+2. **Agent Token (legacy)** — A long-lived token obtained via the `/api/auth/token` exchange endpoint.
 
 ## Architecture
 
+### OAuth 2.1 Flow (recommended for MCP clients like Claude)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Client (Claude Code, Codex, etc.)        │
+│                     MCP Client (Claude, etc.)                │
+│                                                               │
+│  1. Fetches /.well-known/oauth-protected-resource            │
+│  2. Discovers Supabase Auth as OAuth authorization server    │
+│  3. (Optional) Dynamic Client Registration (RFC 7591)        │
+│  4. OAuth Authorization Code + PKCE flow                     │
+│  5. User approves on consent page                            │
+│  6. Uses Supabase OAuth JWT directly with MCP                │
+└─────────────────────────────────────────────────────────────┘
+              ↓                              ↓
+       ┌──────────┐                   ┌──────────┐
+       │Supabase  │                   │   MCP    │
+       │Auth      │                   │  Server  │
+       │(OAuth    │                   │(validates │
+       │ Server)  │                   │ JWT)     │
+       └──────────┘                   └──────────┘
+```
+
+### Legacy Agent Token Flow (for Electron/CLI)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Client (Electron, CLI, etc.)             │
 │                                                               │
 │  1. Discovers OAuth config from /api/auth/config            │
 │  2. Initiates OAuth flow with Supabase                       │
 │  3. Receives Supabase access token (JWT)                     │
 │  4. Exchanges JWT for long-lived agent token at /api/auth/token │
-│  5. Uses agent token with MCP at /functions/mcp              │
+│  5. Uses agent token with MCP at /api/mcp                    │
 └─────────────────────────────────────────────────────────────┘
               ↓              ↓              ↓
        ┌──────────┐   ┌──────────┐   ┌──────────┐
@@ -25,7 +52,54 @@ The Overlord MCP (Model Context Protocol) server enables cloud-based agents and 
                                       └──────────┘
 ```
 
-## Authentication Flow
+## OAuth 2.1 Authentication (Recommended for MCP Clients)
+
+This is the standard flow for MCP clients like Claude. The MCP server acts as an OAuth-protected resource, and Supabase Auth acts as the authorization server.
+
+### How it works
+
+1. **Discovery** — MCP client fetches `{MCP_URL}/.well-known/oauth-protected-resource` to discover the authorization server.
+2. **OAuth Metadata** — Client fetches `{SUPABASE_URL}/.well-known/oauth-authorization-server/auth/v1` for endpoints.
+3. **Dynamic Registration** (optional) — If the client doesn't have credentials, it registers via RFC 7591.
+4. **Authorization** — Standard Authorization Code + PKCE flow → user approves on consent page.
+5. **Token** — Client receives Supabase OAuth access token (JWT).
+6. **MCP Requests** — Client sends `Authorization: Bearer <jwt>` to MCP. No token exchange needed.
+
+### Customer-facing MCP URL
+
+Use the platform-hosted proxy endpoint: `{PLATFORM_URL}/api/mcp`
+
+This ensures OAuth discovery endpoints (`/.well-known/oauth-protected-resource`) are on the same origin.
+
+### Setting up in Claude
+
+1. Go to Settings > Connectors > Add custom connector
+2. Enter MCP URL: `https://your-overlord-instance.com/api/mcp`
+3. Claude will handle OAuth discovery and authentication automatically via Dynamic Client Registration
+
+### Protected Resource Metadata
+
+```json
+GET /.well-known/oauth-protected-resource
+
+{
+  "resource": "https://your-overlord-instance.com/api/mcp",
+  "authorization_servers": ["https://project.supabase.co/auth/v1"],
+  "scopes_supported": ["openid", "email", "profile"],
+  "bearer_methods_supported": ["header"]
+}
+```
+
+### Configuration Requirements
+
+- **Supabase OAuth Server**: Must be enabled (Authentication → OAuth Server → Enable)
+- **Dynamic Client Registration**: Must be enabled for MCP clients to self-register
+- **JWT Signing**: Must use asymmetric keys (RS256/ES256) for OIDC compatibility
+- **Authorization URL Path**: Set to `/oauth/consent` (the consent page in our Next.js app)
+
+---
+
+## Legacy Authentication Flow (Agent Token Exchange)
 
 ### Step 1: Discover Configuration
 
@@ -117,33 +191,29 @@ curl -X POST https://overlord.platform.url/functions/v1/mcp \
 
 ## MCP Authentication Details
 
-The MCP server validates bearer tokens against the `agent_tokens` table:
+The MCP server accepts two types of bearer tokens (tried in order):
 
-```typescript
-// Token validation in /supabase/functions/mcp/auth.ts
-export async function resolveToken(req: Request, supabase: SupabaseClient) {
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+### 1. Agent Token (legacy)
 
-  const { data } = await supabase
-    .from('agent_tokens')
-    .select('id, user_id, organization_id, token, revoked_at, expires_at')
-    .eq('token', token)
-    .single();
+Validates the bearer value against the `agent_tokens` table:
+- Token must exist, not be revoked (`revoked_at IS NULL`), and not be expired.
+- Returns `TokenContext` with `authMethod: 'agent_token'`.
 
-  // Token is valid if:
-  // - Found in database
-  // - Not revoked (revoked_at IS NULL)
-  // - Not expired (expires_at > now)
+### 2. Supabase OAuth JWT
 
-  return {
-    userId: data.user_id,
-    organizationId: data.organization_id,
-    tokenId: data.id,
-    tokenValue: token
-  };
-}
+If the bearer value is not found in `agent_tokens`, validates it as a Supabase JWT:
+- Calls `supabase.auth.getUser(jwt)` to verify signature and expiry.
+- Resolves the user's organization from the `members` table.
+- Returns `TokenContext` with `authMethod: 'oauth_jwt'`.
+
+### 401 Response
+
+When no valid token is provided, the MCP server returns HTTP 401 with:
 ```
+WWW-Authenticate: Bearer resource_metadata="{MCP_URL}/.well-known/oauth-protected-resource"
+```
+
+This header tells MCP clients where to find the OAuth discovery metadata.
 
 ## Client Integration Instructions
 
@@ -471,6 +541,16 @@ The MCP validates tokens at request time:
 
 ## Implementation Checklist
 
+### OAuth 2.1 (MCP clients)
+- [ ] Enable OAuth Server in Supabase dashboard (Authentication → OAuth Server)
+- [ ] Enable Dynamic Client Registration
+- [ ] Configure asymmetric JWT signing (RS256/ES256)
+- [ ] Set Authorization URL Path to `/oauth/consent`
+- [ ] Verify `/.well-known/oauth-protected-resource` returns correct metadata
+- [ ] Test OAuth flow with Claude or another MCP client
+- [ ] Audit dynamically registered clients regularly
+
+### Legacy Agent Token
 - [ ] Review OAuth client IDs in `/api/auth/config`
 - [ ] Ensure `SUPABASE_OAUTH_*` environment variables are set
 - [ ] Test OAuth flow manually (browser → `/api/auth/config` → Supabase → `/api/auth/token`)
@@ -479,4 +559,3 @@ The MCP validates tokens at request time:
 - [ ] Test MCP connection with valid agent token
 - [ ] Set up monitoring for failed authentication attempts
 - [ ] Document token rotation procedure for team
-- [ ] Configure OAuth clients in Supabase admin panel if needed
