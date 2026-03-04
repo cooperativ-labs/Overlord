@@ -1,19 +1,25 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
+import { NewTicketModal } from '@/components/features/NewTicketModal';
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
-import type { ButtonLoadingState } from '@/components/ui/loading-button';
-import { LoadingButton } from '@/components/ui/loading-button';
-import { createBlankTicketAction } from '@/lib/actions/tickets';
-import { buildProjectPath } from '@/lib/helpers/ticket-path';
+import { Button } from '@/components/ui/button';
+import { createClient } from '@/supabase/utils/client';
+
+type ProjectOption = {
+  id: string;
+  name: string;
+  color: string;
+  everhour_project_id: string | null;
+};
 
 export function NewTicketButton() {
-  const router = useRouter();
   const pathname = usePathname();
   const { defaultProject } = useDefaultProject();
-  const [buttonState, setButtonState] = useState<ButtonLoadingState>('default');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
 
   const segments = pathname.split('/').filter(Boolean);
   // Route format: /projects/[projectId]/... or /u/...
@@ -21,28 +27,41 @@ export function NewTicketButton() {
     defaultProject?.id ??
     (segments[0] === 'projects' && typeof segments[1] === 'string' ? segments[1] : undefined);
 
-  async function handleClick() {
-    setButtonState('loading');
-    try {
-      const { projectId: createdProjectId } = await createBlankTicketAction(undefined, projectId);
-      setButtonState('success');
-      router.push(`${buildProjectPath({ projectId: createdProjectId })}?view=board`);
-      router.refresh();
-    } catch {
-      setButtonState('error');
-    }
-  }
+  // Load projects when modal opens
+  useEffect(() => {
+    if (!isModalOpen) return;
+
+    const loadProjects = async () => {
+      try {
+        const supabase = createClient();
+        const { data: projectsData } = await supabase
+          .from('projects')
+          .select('id,name,color,everhour_project_id')
+          .order('created_at', { ascending: true });
+
+        if (projectsData) {
+          setProjects(projectsData);
+        }
+      } catch (error) {
+        console.error('Failed to load projects:', error);
+      }
+    };
+
+    loadProjects();
+  }, [isModalOpen]);
 
   return (
-    <LoadingButton
-      buttonState={buttonState}
-      setButtonState={setButtonState}
-      size="sm"
-      text="New Ticket"
-      loadingText="Creating…"
-      successText="Opening…"
-      errorText="Failed"
-      onClick={handleClick}
-    />
+    <>
+      <Button size="sm" onClick={() => setIsModalOpen(true)}>
+        New Ticket
+      </Button>
+
+      <NewTicketModal
+        isOpen={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        defaultProjectId={projectId}
+        projects={projects}
+      />
+    </>
   );
 }

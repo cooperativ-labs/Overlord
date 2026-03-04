@@ -85,7 +85,7 @@ export default async function RootLayout({
                           selectedOrgId={selectedOrgId}
                         />
                         <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
-                          <NavHeader userEmail={user.email ?? ''} />
+                          <NavHeader />
                           <TerminalWorkspace>
                             <SidePanelProvider className="flex flex-col ">
                               <div className="flex min-h-0 min-w-0 ">

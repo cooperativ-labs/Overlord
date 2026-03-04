@@ -16,10 +16,14 @@ export default function AuthLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex min-h-dvh w-full flex-col overflow-hidden">
+          <div className="flex min-h-dvh w-full flex-col overflow-hidden items-center justify-center my-20">
             {/* Logo/Image Section */}
             <div className="flex flex-col items-center justify-center px-4 py-8">
-              <img src="/images/512.png" alt="Overlord" className="h-20 w-20 object-contain" />
+              <img
+                src="/images/512.png"
+                alt="Overlord"
+                className="h-20 w-20 object-contain rounded-4xl"
+              />
             </div>
 
             {/* Main Content */}

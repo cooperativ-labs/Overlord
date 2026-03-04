@@ -16,7 +16,6 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -115,23 +114,19 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        isActive={aboutNavItem.name === activeNav}
+                        onClick={() => setActiveNav(aboutNavItem.name)}
+                      >
+                        <aboutNavItem.icon />
+                        <span>{aboutNavItem.name}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
-            <SidebarFooter>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={aboutNavItem.name === activeNav}
-                    onClick={() => setActiveNav(aboutNavItem.name)}
-                  >
-                    <aboutNavItem.icon />
-                    <span>{aboutNavItem.name}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarFooter>
           </Sidebar>
           <main className="flex h-[540px] flex-1 flex-col overflow-hidden">
             <header className="flex h-16 shrink-0 items-center gap-2 border-b">

@@ -1,5 +1,7 @@
 slug: supabase-oauth
 name: supabase-oauth
+description: Implementing and using Supabase as an OAuth 2.1 / OIDC server for
+  MCP authentication and third-party app authorization.
 tags: []
 compat: []
-sha256: 3fc1f495cd66e731b4c9e8f6167987bc3d85251e2a1a9e18c06912b2d0b337cf
+sha256: 509c53805eef5623c2112322678247373c248a227507fc6a9805c7fb8fb7c739

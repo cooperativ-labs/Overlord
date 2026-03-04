@@ -293,6 +293,7 @@ export type Database = {
           device_code: string;
           expires_at: string;
           id: string;
+          next_poll_at: string | null;
           user_code: string;
           user_id: string | null;
         };
@@ -303,6 +304,7 @@ export type Database = {
           device_code: string;
           expires_at?: string;
           id?: string;
+          next_poll_at?: string | null;
           user_code: string;
           user_id?: string | null;
         };
@@ -313,6 +315,7 @@ export type Database = {
           device_code?: string;
           expires_at?: string;
           id?: string;
+          next_poll_at?: string | null;
           user_code?: string;
           user_id?: string | null;
         };

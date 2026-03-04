@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0] - 2026-03-04
+
+### Added
+- Overskill skills management system for organizing reusable AI skills.
+- PWA (Progressive Web App) skill configuration.
+- Enhanced MCP protocol handler with improved artifact and context operations.
+
+### Fixed
+- None.
+
+### Changed
+- Updated skills index and configuration files for Overskill integration.
+- Improved skill metadata management with YAML-based configuration.
+
+### Removed
+- None.
+
+### Chore
+- Update package dependencies and Overskill configuration.
+
 ## [0.34.0] - 2026-03-04
 
 ### Added

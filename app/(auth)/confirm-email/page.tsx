@@ -29,7 +29,7 @@ export default async function ConfirmEmailPage({ searchParams }: ConfirmEmailPag
             different address.
           </FieldDescription>
           <div className="mt-6 text-sm">
-            <Link href="/(auth)/login" className="underline underline-offset-4">
+            <Link href="/login" className="underline underline-offset-4">
               Back to sign in
             </Link>
           </div>

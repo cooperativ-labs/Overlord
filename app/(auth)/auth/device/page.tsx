@@ -18,10 +18,8 @@ export default async function DeviceAuthPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const next = code
-      ? `/(auth)/auth/device?code=${encodeURIComponent(code)}`
-      : '/(auth)/auth/device';
-    redirect(`/(auth)/login?next=${encodeURIComponent(next)}`);
+    const next = code ? `/auth/device?code=${encodeURIComponent(code)}` : '/auth/device';
+    redirect(`/login?next=${encodeURIComponent(next)}`);
   }
 
   if (approved === '1') {

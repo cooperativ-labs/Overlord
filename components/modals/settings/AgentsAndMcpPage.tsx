@@ -149,7 +149,10 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     setAgentTokenLoading(true);
     setAgentTokenError(null);
     try {
-      const token = await getAgentTokenAction();
+      let token = await getAgentTokenAction();
+      if (!token) {
+        token = await rotateAgentTokenAction();
+      }
       setAgentToken(token);
     } catch (error) {
       console.error('Failed to load agent token:', error);
@@ -452,17 +455,15 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
             <p className="text-xs text-muted-foreground">Loading agent token…</p>
           ) : null}
           {!agentToken && !agentTokenLoading && !agentTokenError ? (
-            <p className="text-xs text-muted-foreground">
-              No agent token found yet. Use &quot;Create token&quot; to generate one.
-            </p>
+            <p className="text-xs text-muted-foreground">No agent token found.</p>
           ) : null}
           <div>
             <LoadingButton
               buttonState={rotateTokenButtonState}
               setButtonState={setRotateTokenButtonState}
-              text={agentToken ? 'Rotate token' : 'Create token'}
-              loadingText={agentToken ? 'Rotating...' : 'Creating...'}
-              successText={agentToken ? 'Rotated' : 'Created'}
+              text="Rotate token"
+              loadingText="Rotating..."
+              successText="Rotated"
               errorText="Retry"
               reset
               size="sm"

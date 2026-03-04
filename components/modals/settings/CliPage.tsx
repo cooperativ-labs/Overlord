@@ -2,7 +2,7 @@
 
 import { Check, Copy } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -14,8 +14,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { getAgentTokenAction, rotateAgentTokenAction } from '@/lib/actions/agent-tokens';
-import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 
 type SlashCommandConfig = {
   label: string;
@@ -77,15 +75,8 @@ To switch to a different Overlord ticket, run \`ovld attach\` in the terminal fo
 export function CliPage({ open }: { open: boolean }) {
   const { isElectron, api } = useElectron();
 
-  const [agentToken, setAgentToken] = useState<string | null>(null);
-  const [agentTokenLoading, setAgentTokenLoading] = useState(false);
-  const [agentTokenError, setAgentTokenError] = useState<string | null>(null);
-  const [rotateTokenButtonState, setRotateTokenButtonState] =
-    useState<ButtonLoadingState>('default');
-
   const [selectedSlashAgent, setSelectedSlashAgent] = useState('claude');
   const [slashCommandCopied, setSlashCommandCopied] = useState(false);
-  const [agentEnvSnippetCopied, setAgentEnvSnippetCopied] = useState(false);
 
   const [cliInstallButtonState, setCliInstallButtonState] = useState<ButtonLoadingState>('default');
   const [cliInstalled, setCliInstalled] = useState(false);
@@ -93,30 +84,6 @@ export function CliPage({ open }: { open: boolean }) {
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
   const [cliVersion, setCliVersion] = useState<string | null>(null);
   const [cliIsStale, setCliIsStale] = useState(false);
-
-  const [platformUrl, setPlatformUrl] = useState<string | null>(null);
-
-  const mcpUrl = getOverlordMcpUrl();
-  const resolvedPlatformUrl = getPlatformUrl(platformUrl);
-
-  const loadAgentToken = useCallback(async () => {
-    setAgentTokenLoading(true);
-    setAgentTokenError(null);
-    try {
-      const token = await getAgentTokenAction();
-      setAgentToken(token);
-    } catch (error) {
-      console.error('Failed to load agent token:', error);
-      setAgentTokenError(error instanceof Error ? error.message : 'Failed to load agent token.');
-    } finally {
-      setAgentTokenLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    void loadAgentToken();
-  }, [open, loadAgentToken]);
 
   useEffect(() => {
     if (!open || !isElectron || !api?.cli) return;
@@ -128,43 +95,12 @@ export function CliPage({ open }: { open: boolean }) {
     });
   }, [api, isElectron, open]);
 
-  useEffect(() => {
-    if (!open || !isElectron) return;
-    if (typeof window !== 'undefined' && window.electronAPI?.app?.getPlatformUrl) {
-      void window.electronAPI.app.getPlatformUrl().then(url => {
-        if (url) setPlatformUrl(url);
-      });
-    }
-  }, [isElectron, open]);
-
-  async function handleRotateAgentToken() {
-    setRotateTokenButtonState('loading');
-    setAgentTokenError(null);
-    try {
-      const token = await rotateAgentTokenAction();
-      setAgentToken(token);
-      setRotateTokenButtonState('success');
-    } catch (error) {
-      console.error('Failed to rotate agent token:', error);
-      setRotateTokenButtonState('error');
-      setAgentTokenError(error instanceof Error ? error.message : 'Failed to rotate agent token.');
-    }
-  }
-
   async function handleCopySlashInstall() {
     const config = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
     if (!config) return;
     await navigator.clipboard.writeText(config.installCmd);
     setSlashCommandCopied(true);
     setTimeout(() => setSlashCommandCopied(false), 2000);
-  }
-
-  async function handleCopyAgentEnvSnippet() {
-    const snippetToken = agentToken ?? '<AGENT_TOKEN>';
-    const snippet = `OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${snippetToken}`;
-    await navigator.clipboard.writeText(snippet);
-    setAgentEnvSnippetCopied(true);
-    setTimeout(() => setAgentEnvSnippetCopied(false), 2000);
   }
 
   async function handleInstallCli() {
@@ -199,65 +135,6 @@ export function CliPage({ open }: { open: boolean }) {
         </p>
       </div>
 
-      <div className="grid gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="grid gap-1">
-            <p className="text-sm font-medium">Agent token</p>
-            <p className="text-xs text-muted-foreground">
-              Each user has a personal agent token used when Overlord talks to your cloud IDE
-              agents. Rotate it if it is ever exposed.
-            </p>
-          </div>
-          <LoadingButton
-            buttonState={rotateTokenButtonState}
-            setButtonState={setRotateTokenButtonState}
-            text={agentToken ? 'Rotate token' : 'Create token'}
-            loadingText={agentToken ? 'Rotating...' : 'Creating...'}
-            successText={agentToken ? 'Rotated' : 'Created'}
-            errorText="Retry"
-            reset
-            size="sm"
-            variant="outline"
-            onClick={handleRotateAgentToken}
-          />
-        </div>
-        {agentTokenError ? <p className="text-xs text-destructive">{agentTokenError}</p> : null}
-        {agentTokenLoading ? (
-          <p className="text-xs text-muted-foreground">Loading agent token…</p>
-        ) : null}
-        {agentToken && !agentTokenLoading ? (
-          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-            <div className="flex items-center gap-2">
-              <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                {`OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${agentToken}`}
-              </pre>
-              <button
-                type="button"
-                onClick={() => void handleCopyAgentEnvSnippet()}
-                className="shrink-0 rounded p-1 hover:bg-muted"
-                title="Copy environment snippet"
-              >
-                {agentEnvSnippetCopied ? (
-                  <Check className="h-3.5 w-3.5 text-green-500" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Add this snippet to your custom cloud environment in Claude Code or Codex. Also add
-              the domains from the Cloud agents &amp; MCP domain snippet to the allow-list, and we
-              recommend keeping the option checked to also include the default domain list.
-            </p>
-          </div>
-        ) : null}
-        {!agentToken && !agentTokenLoading && !agentTokenError ? (
-          <p className="text-xs text-muted-foreground">
-            No agent token found yet. Use &quot;Create token&quot; to generate one.
-          </p>
-        ) : null}
-      </div>
-
       <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs">
         <p className="mb-2 font-sans font-medium text-foreground">Top-level</p>
         <ul className="grid gap-1 text-muted-foreground">
@@ -273,10 +150,6 @@ export function CliPage({ open }: { open: boolean }) {
           </li>
           <li className="break-words">
             <code className="rounded bg-muted px-1">ovld ticket</code> context
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1">ovld protocol</code> attach, update, ask,
-            read-context, write-context, deliver
           </li>
           <li className="break-words">
             <code className="rounded bg-muted px-1 break-all">ovld run &lt;agent&gt;</code> launch
@@ -302,21 +175,6 @@ export function CliPage({ open }: { open: boolean }) {
               ovld attach &lt;ticketId&gt; claude
             </code>{' '}
             — fully non-interactive
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">
-              ovld protocol attach --ticket-id &lt;id&gt;
-            </code>
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">
-              ovld protocol update --session-key &lt;key&gt; --summary &quot;...&quot;
-            </code>
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">
-              ovld protocol deliver --session-key &lt;key&gt; --summary &quot;...&quot;
-            </code>
           </li>
           <li className="break-words">
             <code className="rounded bg-muted px-1 break-all">

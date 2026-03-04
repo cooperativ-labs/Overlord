@@ -41,8 +41,8 @@ export default async function OAuthConsentPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const next = `/(auth)/oauth/consent?authorization_id=${encodeURIComponent(authorization_id)}`;
-    redirect(`/(auth)/login?next=${encodeURIComponent(next)}`);
+    const next = `/oauth/consent?authorization_id=${encodeURIComponent(authorization_id)}`;
+    redirect(`/login?next=${encodeURIComponent(next)}`);
   }
 
   const { data: authDetails, error: detailsError } =

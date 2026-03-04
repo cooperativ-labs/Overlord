@@ -10,11 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
-type NavHeaderProps = {
-  userEmail: string;
-};
-
-export function NavHeader({ userEmail }: NavHeaderProps) {
+export function NavHeader() {
   const { isElectron, toggleTerminal, terminalMode } = useTerminal();
   const showTerminalToggle = isElectron && terminalMode === 'embedded';
 
@@ -31,11 +27,10 @@ export function NavHeader({ userEmail }: NavHeaderProps) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 electron-no-drag">
-        <span className="text-muted-foreground max-w-full truncate text-sm">{userEmail}</span>
         {showTerminalToggle ? (
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={() => void toggleTerminal()}
             aria-label="Toggle terminal"

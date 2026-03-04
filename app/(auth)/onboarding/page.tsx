@@ -11,7 +11,7 @@ export default async function OnboardingPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/(auth)/login');
+    redirect('/login');
   }
 
   const state = await getOnboardingState();
