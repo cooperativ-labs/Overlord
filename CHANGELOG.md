@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.0] - 2026-03-04
+
+### Added
+- None.
+
+### Fixed
+- Fix ResizablePanel defaultSize and minSize props in TerminalWorkspace and TerminalPanel to use percentage strings instead of bare numbers, correcting react-resizable-panels v4 behavior where numbers are interpreted as pixels.
+- Fix TerminalWorkspace layout with proper absolute positioning and flex container adjustments for correct height handling.
+- Fix layout CSS classes in root layout and sidebar for proper minimum height constraints and overflow handling.
+
+### Changed
+- Add explanatory comment in TerminalWorkspace documenting react-resizable-panels v4 sizing requirements.
+
+### Chore
+- Bump package version to `0.32.0`.
+
 ## [0.31.0] - 2026-03-03:23:27
 
 ### Added

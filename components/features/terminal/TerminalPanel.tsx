@@ -25,7 +25,7 @@ export function TerminalPanel() {
     return null;
   }
 
-  const defaultSize = terminalIds.length > 0 ? 100 / terminalIds.length : 100;
+  const defaultSize = terminalIds.length > 0 ? `${100 / terminalIds.length}%` : '100%';
 
   return (
     <div className="flex h-full min-h-0 flex-col border-t bg-background">
@@ -48,7 +48,7 @@ export function TerminalPanel() {
           {terminalIds.map((terminalId, index) => (
             <Fragment key={terminalId}>
               {index > 0 ? <ResizableHandle withHandle /> : null}
-              <ResizablePanel defaultSize={defaultSize} minSize={20}>
+              <ResizablePanel defaultSize={defaultSize} minSize="20%">
                 <div className="flex h-full min-h-0 flex-col">
                   <div
                     className={cn(

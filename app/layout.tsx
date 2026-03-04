@@ -66,7 +66,7 @@ export default async function RootLayout({
               initialDefaultProjectId={initialDefaultProjectId}
             >
               <ProjectCreatorProvider>
-                <SidebarProvider defaultOpen>
+                <SidebarProvider defaultOpen className="h-dvh min-h-0">
                   {user ? (
                     <div className="flex h-dvh w-full flex-col overflow-hidden">
                       <AnnouncementBar />
@@ -84,7 +84,7 @@ export default async function RootLayout({
                           organizations={organizations}
                           selectedOrgId={selectedOrgId}
                         />
-                        <SidebarInset className="min-w-0 overflow-hidden">
+                        <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
                           <NavHeader userEmail={user.email ?? ''} />
                           <TerminalWorkspace>
                             <SidePanelProvider>
