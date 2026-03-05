@@ -3,7 +3,7 @@ export const LOCAL_AGENT_FLAGS_STORAGE_KEY = 'overlord_agent_flags';
 export type LocalAgentFlags = Record<string, string[]>;
 
 const DEFAULT_LOCAL_AGENT_FLAGS: LocalAgentFlags = {
-  claude: ['--enable-auto-mode']
+  claude: []
 };
 
 function sanitizeFlag(value: unknown): string | null {

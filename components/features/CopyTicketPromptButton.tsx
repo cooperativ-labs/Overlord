@@ -13,6 +13,40 @@ type Props = {
   className?: string;
 };
 
+async function writeTextToClipboard(value: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      // Fall through to legacy copy method for WebKit permission failures.
+    }
+  }
+
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = value;
+  textArea.setAttribute('readonly', '');
+  textArea.style.position = 'fixed';
+  textArea.style.top = '-9999px';
+  textArea.style.left = '-9999px';
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  textArea.setSelectionRange(0, textArea.value.length);
+
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textArea);
+  }
+}
+
 /**
  * Copies the full LLM prompt for this ticket (ticket content + instructions to pass
  * information back via the overlord protocol) to the clipboard.
@@ -21,7 +55,6 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
   const [copied, setCopied] = useState(false);
 
   async function handleAction() {
-    setCopied(true);
     const { error, prompt } = await getTicketPromptForCopy(ticketId, 'run', undefined);
     if (error || !prompt) {
       console.error('Failed to copy ticket prompt:', error, prompt ? 'prompt' : 'no prompt');
@@ -34,26 +67,37 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
         action: {
           label: 'Copy error',
           onClick: () => {
-            navigator.clipboard.writeText(error ?? 'No error message provided');
+            void writeTextToClipboard(error ?? 'No error message provided');
           }
         }
       });
       setCopied(false);
       return;
     }
-    await navigator.clipboard.writeText(prompt);
+
+    const didCopy = await writeTextToClipboard(prompt);
+    if (!didCopy) {
+      toast.error('Failed to copy ticket prompt', {
+        description: 'Clipboard access is blocked in this browser context.'
+      });
+      setCopied(false);
+      return;
+    }
+
+    setCopied(true);
 
     setTimeout(() => setCopied(false), 2000);
   }
 
   function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
-    handleAction();
+    void handleAction();
   }
 
   function handleTouchEnd(e: React.TouchEvent) {
+    e.preventDefault();
     e.stopPropagation();
-    handleAction();
+    void handleAction();
   }
 
   if (variant === 'icon') {
