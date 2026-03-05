@@ -51,55 +51,63 @@ Generate icon sets at https://realfavicongenerator.net/ and place them in `publi
 ### Installation
 
 ```bash
-yarn add @serwist/next
-yarn add -D serwist
+yarn add -D @serwist/turbopack serwist
 ```
-
-> **Turbopack note:** Serwist does not support Turbopack. Disable it during dev.
 
 ### next.config.ts
 
-For ESM (`next.config.mjs`):
+For TypeScript (`next.config.ts`):
 
 ```ts
-import withSerwistInit from '@serwist/next'
+import { withSerwist } from '@serwist/turbopack'
+import type { NextConfig } from 'next'
 
-const withSerwist = withSerwistInit({
+const securityHeaders = async () => [
+  // ...security headers (see section 3)
+]
+
+export default withSerwist({
   swSrc: 'app/sw.ts',
   swDest: 'public/sw.js',
   disable: process.env.NODE_ENV === 'development', // disable during dev to avoid stale cache
-})
-
-export default withSerwist({
-  // ...your Next.js config
-})
+  reactStrictMode: true,
+  output: 'standalone',
+  headers: securityHeaders
+} as any as NextConfig)
 ```
 
 For CommonJS (`next.config.js`):
 
 ```js
-module.exports = async () => {
-  const withSerwist = (await import('@serwist/next')).default({
-    swSrc: 'app/sw.ts',
-    swDest: 'public/sw.js',
-    disable: process.env.NODE_ENV === 'development',
-  })
-  return withSerwist({
-    // ...your Next.js config
-  })
-}
+const { withSerwist } = require('@serwist/turbopack')
+
+module.exports = withSerwist({
+  reactStrictMode: true,
+  output: 'standalone',
+  // ...your Next.js config
+})
 ```
 
 ### Service Worker (`app/sw.ts`)
 
 ```ts
-import { defaultCache } from '@serwist/next/worker'
+/// <reference no-default-lib="true" />
+/// <reference lib="esnext" />
+/// <reference lib="webworker" />
+import { defaultCache } from '@serwist/turbopack/worker'
+import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist'
 import { Serwist } from 'serwist'
+
+declare global {
+  interface WorkerGlobalScope extends SerwistGlobalConfig {
+    __SW_MANIFEST: (PrecacheEntry | string)[] | undefined
+  }
+}
 
 declare const self: ServiceWorkerGlobalScope
 
 const serwist = new Serwist({
-  precacheEntries: self.__SERWIST_PRECACHE_MANIFEST,
+  precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
@@ -116,8 +124,7 @@ serwist.addEventListeners()
 ```json
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext", "webworker"],
-    "types": ["@serwist/next/typings"]
+    "lib": ["dom", "dom.iterable", "esnext", "webworker"]
   },
   "exclude": ["public/sw.js", "public/swe-worker*.js"]
 }
@@ -135,9 +142,7 @@ public/swe-worker*.js
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `swSrc` | required | Path to your SW source file |
-| `swDest` | required | Output path (must be in `public/`) |
-| `disable` | `false` | Set to `true` in dev |
+
 | `register` | `true` | Auto-registers the SW |
 | `cacheOnNavigation` | `false` | Cache pages during frontend nav |
 | `reloadOnOnline` | `false` | Reload page when connection restored |
@@ -418,8 +423,8 @@ Checklist:
 ### Minimal setup (manifest + Serwist only, no push)
 
 1. Create `app/manifest.ts`
-2. Install `@serwist/next` and `serwist`
-3. Wrap `next.config.ts` with `withSerwist`
+2. Install `@serwist/turbopack` and `serwist` as dev dependencies
+3. Wrap `next.config.ts` with `withSerwist` (use higher-order function pattern)
 4. Create `app/sw.ts` with `defaultCache`
 5. Update `tsconfig.json` and `.gitignore`
 

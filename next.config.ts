@@ -1,11 +1,5 @@
-import withSerwistInit from '@serwist/next';
+import { withSerwist } from '@serwist/turbopack';
 import type { NextConfig } from 'next';
-
-const withSerwist = withSerwistInit({
-  swSrc: 'app/sw.ts',
-  swDest: 'public/sw.js',
-  disable: process.env.NODE_ENV === 'development'
-});
 
 const securityHeaders = async () => [
   {
@@ -26,15 +20,8 @@ const securityHeaders = async () => [
   }
 ];
 
-const nextConfig: NextConfig = {
+export default withSerwist({
   reactStrictMode: true,
   output: 'standalone',
-  headers: securityHeaders,
-  // Use webpack for production builds with Serwist (Turbopack not yet supported)
-  // The webpack config is injected by @serwist/next
-  turbopack: {
-    // Empty config tells Next.js we're aware of Turbopack but using webpack via Serwist
-  }
-};
-
-export default withSerwist(nextConfig);
+  headers: securityHeaders
+} as any as NextConfig);
