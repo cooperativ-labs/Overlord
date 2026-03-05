@@ -112,7 +112,7 @@ export function AppSidebar({
     [selectedOrgId, projects]
   );
 
-  const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
+  // const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
   const isMyTasksActive = pathname === '/u' || pathname.startsWith('/u/');
 
   function isProjectActive(project: SidebarProject) {
@@ -134,14 +134,14 @@ export function AppSidebar({
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
+              {/* <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isInboxActive} tooltip="Inbox">
                   <Link href="/inbox">
                     <Inbox />
                     <span>Inbox</span>
                   </Link>
                 </SidebarMenuButton>
-              </SidebarMenuItem>
+              </SidebarMenuItem> */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isMyTasksActive} tooltip="My Tasks">
                   <Link href="/u">
