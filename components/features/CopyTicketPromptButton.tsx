@@ -5,6 +5,10 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import {
+  readLocalAgentFlagsFromStorage,
+  serializeLocalAgentFlags
+} from '@/lib/helpers/local-agent-config';
 
 type Props = {
   ticketId: string;
@@ -21,7 +25,13 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
   const [showErrorToast, setShowErrorToast] = useState(false);
 
   async function handleAction() {
-    const { error, prompt } = await getTicketPromptForCopy(ticketId);
+    const localAgentFlags = serializeLocalAgentFlags(readLocalAgentFlagsFromStorage());
+    const { error, prompt } = await getTicketPromptForCopy(
+      ticketId,
+      'run',
+      undefined,
+      localAgentFlags
+    );
     if (error || !prompt) {
       setShowErrorToast(true);
       setTimeout(() => setShowErrorToast(false), 3000);

@@ -67,7 +67,11 @@ interface ElectronAPI {
   auth: {
     login: () => Promise<{ ok: true; session: { access_token: string; refresh_token: string } }>;
     logout: () => Promise<{ ok: true }>;
-    getStatus: () => Promise<{ isAuthenticated: boolean; platformUrl: string | null }>;
+    getStatus: () => Promise<{
+      isAuthenticated: boolean;
+      platformUrl: string | null;
+      supabaseRefreshToken: string | null;
+    }>;
   };
   isElectron: true;
 }

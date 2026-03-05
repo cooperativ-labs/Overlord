@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import { getTicketDiscussionPromptForCopy } from '@/lib/actions/tickets';
 import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
@@ -47,7 +47,7 @@ export function AskTicketButton({
           'ask'
         );
       } else {
-        const { error, prompt } = await getTicketPromptForCopy(ticketId, 'ask');
+        const { error, prompt } = await getTicketDiscussionPromptForCopy(ticketId);
         if (error || !prompt) {
           throw new Error(error ?? 'Unable to build ask prompt.');
         }

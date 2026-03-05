@@ -7,6 +7,7 @@ import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import { normalizeHexColor } from '@/lib/helpers/color';
+import { parseLocalAgentFlags } from '@/lib/helpers/local-agent-config';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
@@ -35,6 +36,58 @@ function revalidateTicketDetails(
 }
 
 type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
+
+type PromptTicketSource = {
+  ticket: {
+    id: string;
+    organization_id: number;
+    title: string | null;
+    acceptance_criteria: string | null;
+    available_tools: string | null;
+    execution_target: Database['public']['Enums']['ticket_execution_target'] | null;
+    project_id: string;
+    status: string | null;
+    priority: Database['public']['Enums']['ticket_priority'] | null;
+  };
+  latestObjective: string;
+};
+
+async function resolvePromptTicketSource(
+  supabase: ServerSupabase,
+  ticketId: string
+): Promise<{ error?: string; source?: PromptTicketSource }> {
+  const { data: ticket, error } = await supabase
+    .from('tickets')
+    .select(
+      'id, organization_id, title, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
+    )
+    .eq('id', ticketId)
+    .single();
+
+  if (error || !ticket) {
+    return { error: error?.message ?? 'Ticket not found.' };
+  }
+
+  const { data: draftObjective } = await supabase
+    .from('objectives')
+    .select('objective')
+    .eq('ticket_id', ticketId)
+    .eq('is_executed', false)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!draftObjective || !draftObjective.objective || draftObjective.objective.trim() === '') {
+    return { error: 'No objective found for ticket.' };
+  }
+
+  return {
+    source: {
+      ticket,
+      latestObjective: draftObjective.objective
+    }
+  };
+}
 
 async function resolveTicketProjectAndOrganization(
   supabase: ServerSupabase,
@@ -795,34 +848,14 @@ export async function deleteTicketAction(
 export async function getTicketPromptForCopy(
   ticketId: string,
   launchMode: PromptLaunchMode = 'run',
-  context?: PromptContext
+  context?: PromptContext,
+  localAgentFlagsJson?: string | null
 ): Promise<{ error?: string; prompt?: string }> {
   const supabase = await createClient();
-  const { data: ticket, error } = await supabase
-    .from('tickets')
-    .select(
-      'id, organization_id, title, acceptance_criteria, available_tools, execution_target, project_id, status, priority'
-    )
-    .eq('id', ticketId)
-    .single();
-
-  if (error || !ticket) {
-    return { error: error?.message ?? 'Ticket not found.' };
+  const { error, source } = await resolvePromptTicketSource(supabase, ticketId);
+  if (error || !source) {
+    return { error: error ?? 'Unable to load ticket prompt source.' };
   }
-
-  const { data: draftObjective } = await supabase
-    .from('objectives')
-    .select('objective')
-    .eq('ticket_id', ticketId)
-    .eq('is_executed', false)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!draftObjective || !draftObjective.objective || draftObjective.objective.trim() === '') {
-    return { error: 'No objective found for ticket.' };
-  }
-  const latestObjective = draftObjective.objective;
 
   const {
     data: { user }
@@ -830,6 +863,7 @@ export async function getTicketPromptForCopy(
 
   const platformUrl = getPlatformUrl();
   const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
+  const localAgentFlags = parseLocalAgentFlags(localAgentFlagsJson);
   let mcpUrl: string | undefined;
   try {
     mcpUrl = getOverlordMcpUrl();
@@ -839,13 +873,57 @@ export async function getTicketPromptForCopy(
 
   const prompt = buildTicketPromptMarkdown({
     ticket: {
-      ...ticket,
-      title: ticket.title?.trim(),
-      objective: latestObjective
+      ...source.ticket,
+      title: source.ticket.title?.trim(),
+      objective: source.latestObjective
     },
     platformUrl,
     context,
-    options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions, launchMode }
+    options: {
+      mcpUrl,
+      mcpOnly: Boolean(mcpUrl),
+      customInstructions,
+      launchMode,
+      localAgentFlags
+    }
   });
+  return { prompt };
+}
+
+export async function getTicketDiscussionPromptForCopy(
+  ticketId: string
+): Promise<{ error?: string; prompt?: string }> {
+  const supabase = await createClient();
+  const { error, source } = await resolvePromptTicketSource(supabase, ticketId);
+  if (error || !source) {
+    return { error: error ?? 'Unable to load ticket prompt source.' };
+  }
+
+  const ticketReference = `#${source.ticket.id.slice(0, 8)}`;
+  const title = source.ticket.title?.trim() || '(Untitled)';
+  const executionTarget = source.ticket.execution_target === 'human' ? 'Human' : 'Agent';
+  const section = (heading: string, value: string | null) =>
+    value?.trim() ? `## ${heading}\n${value.trim()}\n` : '';
+
+  const prompt = `You are helping me discuss an Overlord ticket before implementation.
+
+Please act as a collaborative planning partner:
+- Ask clarifying questions when requirements are ambiguous.
+- Help me reason about scope, risks, edge cases, and tradeoffs.
+- Propose implementation options and testing ideas.
+- Do not assume coding should start until I explicitly ask.
+
+## Ticket
+- Reference: ${ticketReference}
+- ID: ${source.ticket.id}
+- Title: ${title}
+- Status: ${source.ticket.status ?? 'unknown'}
+- Priority: ${source.ticket.priority ?? 'unset'}
+- Execution Target: ${executionTarget}
+- Project ID: ${source.ticket.project_id}
+
+${section('Objective', source.latestObjective)}${section('Acceptance Criteria', source.ticket.acceptance_criteria)}${section('Available Tools / Constraints', source.ticket.available_tools)}Please begin by summarizing your understanding of this ticket and asking me the most important next question.
+`;
+
   return { prompt };
 }

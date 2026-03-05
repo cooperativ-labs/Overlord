@@ -19,6 +19,10 @@ import {
   isAgentIdentifierMatch,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
+import {
+  readLocalAgentFlagsFromStorage,
+  serializeLocalAgentFlags
+} from '@/lib/helpers/local-agent-config';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -140,10 +144,12 @@ export function AgentSplitButton({
     if (!isCopyValue && !canRunAgent) return;
 
     if (isCopyValue) {
+      const localAgentFlags = serializeLocalAgentFlags(readLocalAgentFlagsFromStorage());
       const { error, prompt } = await getTicketPromptForCopy(
         ticketId,
         'run',
-        isCopyLocalValue ? 'cli' : 'web'
+        isCopyLocalValue ? 'cli' : 'web',
+        localAgentFlags
       );
       if (error || !prompt) return;
       await navigator.clipboard.writeText(prompt);

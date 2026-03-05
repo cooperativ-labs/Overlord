@@ -18,7 +18,8 @@ export function ElectronLoginScreen() {
 
     try {
       const { session } = await window.electronAPI.auth.login();
-      // Establish a Supabase session in the webview so server components can read it
+      // Establish a Supabase session in the webview so server components can read it.
+      // The refresh_token is included so the SSR client can auto-refresh the access token.
       await createClient().auth.setSession(session);
       // Full reload so Next.js server components pick up the new session cookie
       window.location.href = '/';

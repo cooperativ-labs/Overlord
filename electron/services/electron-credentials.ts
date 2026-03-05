@@ -10,6 +10,7 @@ const FILE_MODE = 0o600;
 export type ElectronCredentials = {
   agent_token: string;
   platform_url: string;
+  supabase_refresh_token?: string;
 };
 
 function ensureOvldDir(): void {
@@ -19,13 +20,29 @@ function ensureOvldDir(): void {
 export function loadElectronCredentials(): ElectronCredentials | null {
   try {
     const raw = fs.readFileSync(CREDENTIALS_FILE, 'utf8');
-    const parsed = JSON.parse(raw) as { encrypted_token?: string; platform_url?: string };
+    const parsed = JSON.parse(raw) as {
+      encrypted_token?: string;
+      platform_url?: string;
+      encrypted_refresh_token?: string;
+    };
 
     if (!parsed.encrypted_token || !parsed.platform_url) return null;
     if (!safeStorage.isEncryptionAvailable()) return null;
 
     const decrypted = safeStorage.decryptString(Buffer.from(parsed.encrypted_token, 'base64'));
-    return { agent_token: decrypted, platform_url: parsed.platform_url };
+
+    let supabase_refresh_token: string | undefined;
+    if (parsed.encrypted_refresh_token) {
+      try {
+        supabase_refresh_token = safeStorage.decryptString(
+          Buffer.from(parsed.encrypted_refresh_token, 'base64')
+        );
+      } catch {
+        // If refresh token decryption fails, continue without it
+      }
+    }
+
+    return { agent_token: decrypted, platform_url: parsed.platform_url, supabase_refresh_token };
   } catch {
     return null;
   }
@@ -37,10 +54,15 @@ export function saveElectronCredentials(credentials: ElectronCredentials): void 
   }
 
   const encrypted = safeStorage.encryptString(credentials.agent_token);
-  const payload = {
+  const payload: Record<string, string> = {
     encrypted_token: encrypted.toString('base64'),
     platform_url: credentials.platform_url
   };
+
+  if (credentials.supabase_refresh_token) {
+    const encryptedRefresh = safeStorage.encryptString(credentials.supabase_refresh_token);
+    payload.encrypted_refresh_token = encryptedRefresh.toString('base64');
+  }
 
   ensureOvldDir();
   const tempFile = `${CREDENTIALS_FILE}.tmp-${process.pid}-${Date.now()}`;

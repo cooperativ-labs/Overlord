@@ -12,6 +12,7 @@ import { ElectronDetector } from '@/components/features/terminal/ElectronDetecto
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { TerminalWorkspace } from '@/components/features/terminal/TerminalWorkspace';
 import { NavHeader } from '@/components/nav-header';
+import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
 import { ThemeProvider } from '@/components/theme-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -59,6 +60,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <ElectronDetector />
+          <ServiceWorkerRegister />
           <ElectronAuthGate />
           <TerminalProvider>
             <DefaultProjectProvider

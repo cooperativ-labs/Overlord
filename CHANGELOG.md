@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.37.0] - 2026-03-05:00:00
+
+### Added
+- Add PWA (Progressive Web App) manifest and service worker configuration for offline support and installability.
+- Add local agent configuration helper (`lib/helpers/local-agent-config.ts`) for improved agent environment setup.
+- Add PWA component suite (`components/pwa/`) with service worker integration and caching strategies.
+
+### Fixed
+- Fix error boundary component handling for improved error reporting and recovery.
+- Improve Electron authentication flow with better credential handling.
+
+### Changed
+- Update Electron authentication gate and login screen for improved session management.
+- Refine agent split button and ticket button components for better UX.
+- Update ticket prompt generation and context handling.
+- Enhance MCP agent configuration page with improved settings layout.
+
+### Security
+- None.
+
+### Removed
+- None.
+
+### Chore
+- Update Supabase configuration for PWA and service worker support.
+- Update TypeScript configuration and type definitions for Electron platform.
+- Update package dependencies and yarn lock.
+
 ## [0.36.0] - 2026-03-04
 
 ### Added

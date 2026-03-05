@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -21,6 +21,11 @@ import {
 } from '@/lib/actions/agent-sessions';
 import { getAgentTokenAction, rotateAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
+import {
+  LOCAL_AGENT_FLAGS_STORAGE_KEY,
+  parseLocalAgentFlags,
+  serializeLocalAgentFlags
+} from '@/lib/helpers/local-agent-config';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
 type McpAgentConfig = {
@@ -29,6 +34,8 @@ type McpAgentConfig = {
   description: string;
   getConfig: (mcpUrl: string, token: string) => string;
 };
+
+const AGENTS = ['claude', 'cursor', 'codex'] as const;
 
 const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
   claude: {
@@ -66,6 +73,12 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
   }
 };
 
+const AGENT_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  cursor: 'Cursor',
+  codex: 'Codex'
+};
+
 export function AgentsAndMcpPage({ open }: { open: boolean }) {
   const { isElectron } = useElectron();
 
@@ -91,6 +104,11 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
   const [agentDomainSnippetCopied, setAgentDomainSnippetCopied] = useState(false);
 
   const [platformUrl, setPlatformUrl] = useState<string | null>(null);
+
+  const [selectedLocalAgent, setSelectedLocalAgent] = useState<string>('claude');
+  const [agentFlags, setAgentFlags] = useState<Record<string, string[]>>({});
+  const [flagInput, setFlagInput] = useState('');
+  const [commandCopied, setCommandCopied] = useState(false);
 
   const mcpUrl = getOverlordMcpUrl();
   const resolvedPlatformUrl = getPlatformUrl(platformUrl);
@@ -167,6 +185,12 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     setAgentsLoaded(false);
     void loadRunningAgents();
     void loadAgentToken();
+
+    // Load agent flags from localStorage
+    if (typeof window !== 'undefined') {
+      const savedFlags = localStorage.getItem(LOCAL_AGENT_FLAGS_STORAGE_KEY);
+      setAgentFlags(parseLocalAgentFlags(savedFlags));
+    }
   }, [open, loadAgentToken]);
 
   async function handleRefreshAgents() {
@@ -229,6 +253,42 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     await navigator.clipboard.writeText(snippet);
     setAgentTokenCopied(true);
     setTimeout(() => setAgentTokenCopied(false), 2000);
+  }
+
+  function handleAddFlag() {
+    if (!flagInput.trim()) return;
+
+    const newFlags = { ...agentFlags };
+    if (!newFlags[selectedLocalAgent]) {
+      newFlags[selectedLocalAgent] = [];
+    }
+
+    const flag = flagInput.trim();
+    if (!newFlags[selectedLocalAgent].includes(flag)) {
+      newFlags[selectedLocalAgent].push(flag);
+      setAgentFlags(newFlags);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LOCAL_AGENT_FLAGS_STORAGE_KEY, serializeLocalAgentFlags(newFlags));
+      }
+    }
+    setFlagInput('');
+  }
+
+  function handleRemoveFlag(agent: string, index: number) {
+    const newFlags = { ...agentFlags };
+    newFlags[agent] = (newFlags[agent] ?? []).filter((_, i) => i !== index);
+    setAgentFlags(newFlags);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_AGENT_FLAGS_STORAGE_KEY, serializeLocalAgentFlags(newFlags));
+    }
+  }
+
+  async function handleCopyCommand() {
+    const flags = (agentFlags[selectedLocalAgent] ?? []).join(' ');
+    const command = `npx overlord resume ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
+    await navigator.clipboard.writeText(command);
+    setCommandCopied(true);
+    setTimeout(() => setCommandCopied(false), 2000);
   }
 
   return (
@@ -470,6 +530,100 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
               variant="outline"
               onClick={handleRotateAgentToken}
             />
+          </div>
+        </div>
+      </div>
+      <div className="grid gap-4">
+        <div className="grid gap-1">
+          <p className="text-sm font-medium">Local agent configuration</p>
+          <p className="text-xs text-muted-foreground">
+            Add custom flags to the agent command when running locally. Claude has
+            --enable-auto-mode enabled by default.
+          </p>
+        </div>
+        <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select agent" />
+          </SelectTrigger>
+          <SelectContent>
+            {AGENTS.map(agent => (
+              <SelectItem key={agent} value={agent}>
+                {AGENT_LABELS[agent]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-foreground">Command flags</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g., --enable-auto-mode"
+                value={flagInput}
+                onChange={e => setFlagInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddFlag();
+                  }
+                }}
+                className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <button
+                type="button"
+                onClick={handleAddFlag}
+                className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+          {(agentFlags[selectedLocalAgent] ?? []).length > 0 && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {(agentFlags[selectedLocalAgent] ?? []).map((flag, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
+                  >
+                    <code className="text-xs font-medium">{flag}</code>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFlag(selectedLocalAgent, index)}
+                      className="rounded p-0.5 hover:bg-muted-foreground/20"
+                      title="Remove flag"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-foreground">Command</p>
+              <button
+                type="button"
+                onClick={() => void handleCopyCommand()}
+                className="shrink-0 rounded p-1 hover:bg-muted"
+                title="Copy command"
+              >
+                {commandCopied ? (
+                  <Check className="h-3.5 w-3.5 text-green-500" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+              {`npx overlord resume ${selectedLocalAgent}${
+                (agentFlags[selectedLocalAgent] ?? []).length > 0
+                  ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                  : ''
+              }`}
+            </pre>
           </div>
         </div>
       </div>

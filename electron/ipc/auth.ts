@@ -161,7 +161,7 @@ async function exchangeCodeForSupabaseTokens(
   code: string,
   codeVerifier: string,
   redirectUri: string
-): Promise<{ access_token: string; refresh_token: string }> {
+): Promise<{ access_token: string; refresh_token: string; expires_in?: number }> {
   const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -179,7 +179,12 @@ async function exchangeCodeForSupabaseTokens(
     throw new Error(`Token exchange failed (${res.status}): ${text.slice(0, 180)}`);
   }
 
-  return res.json() as Promise<{ access_token: string; refresh_token: string }>;
+  const data = await res.json();
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_in: data.expires_in
+  };
 }
 
 async function exchangeForAgentToken(
@@ -257,10 +262,12 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   // 9. Exchange Supabase access token → Overlord agent_token
   const agentTokenData = await exchangeForAgentToken(platformUrl, supabaseTokens.access_token);
 
-  // 10. Persist credentials
+  // 10. Persist credentials including refresh token for session renewal
+  // The refresh_token allows the browser session to automatically refresh the Supabase access token
   saveElectronCredentials({
     agent_token: agentTokenData.access_token,
-    platform_url: agentTokenData.platform_url ?? platformUrl
+    platform_url: agentTokenData.platform_url ?? platformUrl,
+    supabase_refresh_token: supabaseTokens.refresh_token
   });
 
   return {
@@ -293,7 +300,8 @@ export function registerAuthIpc({ getPlatformUrl }: RegisterAuthIpcOptions): voi
     const credentials = loadElectronCredentials();
     return {
       isAuthenticated: credentials !== null,
-      platformUrl: credentials?.platform_url ?? null
+      platformUrl: credentials?.platform_url ?? null,
+      supabaseRefreshToken: credentials?.supabase_refresh_token ?? null
     };
   });
 }

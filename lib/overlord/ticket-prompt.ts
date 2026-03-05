@@ -1,3 +1,4 @@
+import type { LocalAgentFlags } from '@/lib/helpers/local-agent-config';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
@@ -12,6 +13,8 @@ export type PromptOptions = {
   customInstructions?: string | null;
   /** Launch mode for this prompt. Ask mode guides the agent to ask and stop. */
   launchMode?: PromptLaunchMode;
+  /** Optional local agent flags to append to resume commands. */
+  localAgentFlags?: LocalAgentFlags;
 };
 
 /**
@@ -21,7 +24,7 @@ export type PromptOptions = {
  */
 type Ticket = {
   id: string;
-  title: string | null;
+  title: string | null | undefined;
   objective: string | null;
   acceptance_criteria: string | null;
   available_tools: string | null;
@@ -58,7 +61,7 @@ export function buildTicketPromptMarkdown({
       platformUrl.startsWith('http://0.0.0.0');
 
   const protocolSection = isLocal
-    ? buildLocalProtocolSection(ticket.id, platformUrl)
+    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.localAgentFlags)
     : buildRemoteProtocolSection(ticket.id, platformUrl, options);
 
   const customInstructions = options?.customInstructions?.trim();
@@ -103,7 +106,31 @@ ${launchModeSection}
 ${protocolSection}`;
 }
 
-function buildLocalProtocolSection(ticketId: string, platformUrl: string): string {
+function buildResumeCommandWithFlags(
+  command: string,
+  agent: string,
+  localAgentFlags?: LocalAgentFlags
+): string {
+  const flags = localAgentFlags?.[agent] ?? [];
+  return flags.length > 0 ? `${command} ${flags.join(' ')}` : command;
+}
+
+function buildLocalProtocolSection(
+  ticketId: string,
+  platformUrl: string,
+  localAgentFlags?: LocalAgentFlags
+): string {
+  const claudeResumeCommand = buildResumeCommandWithFlags(
+    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume claude`,
+    'claude',
+    localAgentFlags
+  );
+  const codexResumeCommand = buildResumeCommandWithFlags(
+    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume codex`,
+    'codex',
+    localAgentFlags
+  );
+
   return `## Overlord Protocol
 
 - **Base URL:** ${platformUrl}/api/protocol
@@ -171,9 +198,9 @@ Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and have
 Include in your deliver artifacts. If omitted, \`/api/protocol/deliver\` appends one automatically.
 
 \`\`\`bash
-OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume claude
+${claudeResumeCommand}
 # or for Codex:
-OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume codex
+${codexResumeCommand}
 \`\`\`
 
 ---
@@ -263,6 +290,16 @@ function buildRemoteProtocolSection(
   _platformUrl: string,
   options?: PromptOptions
 ): string {
+  const claudeResumeCommand = buildResumeCommandWithFlags(
+    `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude`,
+    'claude',
+    options?.localAgentFlags
+  );
+  const codexResumeCommand = buildResumeCommandWithFlags(
+    `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume codex`,
+    'codex',
+    options?.localAgentFlags
+  );
   const mcpUrl = options?.mcpUrl;
   const mcpOnly = options?.mcpOnly ?? false;
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, ticketId) : '';
@@ -483,13 +520,13 @@ If you omit it, \`/api/protocol/deliver\` will append one automatically based on
 For Claude Code sessions, use this format:
 
 \`\`\`bash
-OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude
+${claudeResumeCommand}
 \`\`\`
 
 For Codex sessions:
 
 \`\`\`bash
-OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume codex
+${codexResumeCommand}
 \`\`\`
 
 To target a specific native agent session ID, optionally set one of:

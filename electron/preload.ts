@@ -82,6 +82,7 @@ const electronAPI = {
       ipcRenderer.invoke('auth:getStatus') as Promise<{
         isAuthenticated: boolean;
         platformUrl: string | null;
+        supabaseRefreshToken: string | null;
       }>
   },
   isElectron: true as const

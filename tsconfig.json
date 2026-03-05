@@ -4,7 +4,8 @@
     "lib": [
       "dom",
       "dom.iterable",
-      "esnext"
+      "esnext",
+      "webworker"
     ],
     "allowJs": true,
     "skipLibCheck": true,
@@ -26,7 +27,8 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "types": ["@serwist/next/typings"]
   },
   "include": [
     "next-env.d.ts",
@@ -42,6 +44,8 @@
     "seed.config.ts",
     "seed.ts",
     "scripts/**",
-    "supabase/functions/**"
+    "supabase/functions/**",
+    "public/sw.js",
+    "public/swe-worker*.js"
   ]
 }
