@@ -123,7 +123,18 @@ function waitForOAuthCallback(
     });
 
     server.listen(port, host);
-    server.on('error', reject);
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        reject(
+          new Error(
+            `OAuth callback port ${port} is already in use. ` +
+              'Close the application using that port or check for firewall/proxy interference, then try again.'
+          )
+        );
+      } else {
+        reject(err);
+      }
+    });
   });
 }
 

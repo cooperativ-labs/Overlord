@@ -106,7 +106,14 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       flags?: string[]
     ) => {
       if (!api) return;
-      const result = await api.terminal.launchAgent(ticketId, agent, cwd, agentToken, launchMode, flags);
+      const result = await api.terminal.launchAgent(
+        ticketId,
+        agent,
+        cwd,
+        agentToken,
+        launchMode,
+        flags
+      );
       // If we got a terminal ID back (embedded mode), track it
       if (typeof result === 'string') {
         setTerminalIds(previous => appendUniqueTerminalId(previous, result));

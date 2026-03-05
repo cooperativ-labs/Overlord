@@ -1,0 +1,155 @@
+'use server';
+
+import { type AgentConfig, agentConfigSchema } from '@/lib/schemas/agent-config';
+import { createClient } from '@/supabase/utils/server';
+
+export async function getAgentConfigAction(agentType: string): Promise<AgentConfig | null> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('user_agent_configs')
+    .select('config')
+    .eq('user_id', user.id)
+    .eq('agent_type', agentType)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // No rows found, return null
+      return null;
+    }
+    throw error;
+  }
+
+  return agentConfigSchema.parse(data.config);
+}
+
+export async function getAllAgentConfigsAction(): Promise<Record<string, AgentConfig>> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  return getAllAgentConfigsByUserIdAction(user.id, supabase);
+}
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+export async function getAllAgentConfigsByUserIdAction(
+  userId: string,
+  supabase?: SupabaseClient
+): Promise<Record<string, AgentConfig>> {
+  if (!supabase) {
+    supabase = await createClient();
+  }
+
+  const { data, error } = await supabase
+    .from('user_agent_configs')
+    .select('agent_type, config')
+    .eq('user_id', userId);
+
+  if (error) {
+    throw error;
+  }
+
+  const configs: Record<string, AgentConfig> = {};
+  data.forEach((row: { agent_type: string; config: unknown }) => {
+    configs[row.agent_type] = agentConfigSchema.parse(row.config);
+  });
+
+  return configs;
+}
+
+export async function upsertAgentConfigAction(
+  agentType: string,
+  config: Partial<AgentConfig>
+): Promise<AgentConfig> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Get existing config if it exists
+  let existingConfig: AgentConfig = {
+    flags: []
+  };
+
+  const { data: existing } = await supabase
+    .from('user_agent_configs')
+    .select('config')
+    .eq('user_id', user.id)
+    .eq('agent_type', agentType)
+    .single();
+
+  if (existing) {
+    existingConfig = agentConfigSchema.parse(existing.config);
+  }
+
+  // Merge with new config
+  const mergedConfig = {
+    ...existingConfig,
+    ...config
+  };
+
+  const validated = agentConfigSchema.parse(mergedConfig);
+
+  const { data, error } = await supabase
+    .from('user_agent_configs')
+    .upsert({
+      user_id: user.id,
+      agent_type: agentType,
+      config: validated,
+      updated_at: new Date().toISOString()
+    })
+    .select('config')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return agentConfigSchema.parse(data.config);
+}
+
+export async function updateAgentFlagsAction(
+  agentType: string,
+  flags: string[]
+): Promise<AgentConfig> {
+  return upsertAgentConfigAction(agentType, { flags });
+}
+
+export async function deleteAgentConfigAction(agentType: string): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { error } = await supabase
+    .from('user_agent_configs')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('agent_type', agentType);
+
+  if (error) {
+    throw error;
+  }
+}

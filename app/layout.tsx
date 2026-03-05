@@ -2,6 +2,7 @@ import './globals.css';
 
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
+import { Toaster } from 'sonner';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
@@ -111,6 +112,7 @@ export default async function RootLayout({
               </ProjectCreatorProvider>
             </DefaultProjectProvider>
           </TerminalProvider>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

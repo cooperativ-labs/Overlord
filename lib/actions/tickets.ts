@@ -3,11 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
+import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import { normalizeHexColor } from '@/lib/helpers/color';
-import { parseLocalAgentFlags } from '@/lib/helpers/local-agent-config';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
@@ -17,6 +17,7 @@ import {
   type PromptLaunchMode
 } from '@/lib/overlord/ticket-prompt';
 import { createTicketSchema } from '@/lib/overlord/validation';
+import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -848,8 +849,7 @@ export async function deleteTicketAction(
 export async function getTicketPromptForCopy(
   ticketId: string,
   launchMode: PromptLaunchMode = 'run',
-  context?: PromptContext,
-  localAgentFlagsJson?: string | null
+  context?: PromptContext
 ): Promise<{ error?: string; prompt?: string }> {
   const supabase = await createClient();
   const { error, source } = await resolvePromptTicketSource(supabase, ticketId);
@@ -863,7 +863,16 @@ export async function getTicketPromptForCopy(
 
   const platformUrl = getPlatformUrl();
   const customInstructions = user ? await fetchProfileCustomInstructions(supabase, user.id) : null;
-  const localAgentFlags = parseLocalAgentFlags(localAgentFlagsJson);
+
+  let agentConfigs: Record<string, AgentConfig> = {};
+  if (user) {
+    try {
+      agentConfigs = await getAllAgentConfigsAction();
+    } catch (error) {
+      console.error('Failed to load agent configs for prompt:', error);
+    }
+  }
+
   let mcpUrl: string | undefined;
   try {
     mcpUrl = getOverlordMcpUrl();
@@ -884,7 +893,7 @@ export async function getTicketPromptForCopy(
       mcpOnly: Boolean(mcpUrl),
       customInstructions,
       launchMode,
-      localAgentFlags
+      agentConfigs
     }
   });
   return { prompt };
@@ -905,13 +914,13 @@ export async function getTicketDiscussionPromptForCopy(
   const section = (heading: string, value: string | null) =>
     value?.trim() ? `## ${heading}\n${value.trim()}\n` : '';
 
-  const prompt = `You are helping me discuss an Overlord ticket before implementation.
+  const prompt = `You are helping me discuss an Overlord ticket before implementation. First, consider the following:
 
-Please act as a collaborative planning partner:
+Your job is to act as a collaborative planning partner:
 - Ask clarifying questions when requirements are ambiguous.
 - Help me reason about scope, risks, edge cases, and tradeoffs.
 - Propose implementation options and testing ideas.
-- Do not assume coding should start until I explicitly ask.
+- Coding should not start until I explicitly ask.
 
 ## Ticket
 - Reference: ${ticketReference}
@@ -922,7 +931,9 @@ Please act as a collaborative planning partner:
 - Execution Target: ${executionTarget}
 - Project ID: ${source.ticket.project_id}
 
-${section('Objective', source.latestObjective)}${section('Acceptance Criteria', source.ticket.acceptance_criteria)}${section('Available Tools / Constraints', source.ticket.available_tools)}Please begin by summarizing your understanding of this ticket and asking me the most important next question.
+${section('Objective', source.latestObjective)}${section('Acceptance Criteria', source.ticket.acceptance_criteria)}${section('Available Tools / Constraints', source.ticket.available_tools)}
+
+Once you have a clear understanding of the ticket, say "I understand the ticket. What would you like to discuss?" and wait for the user to respond.
 `;
 
   return { prompt };

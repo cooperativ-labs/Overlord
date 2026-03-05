@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getAgentConfigAction } from '@/lib/actions/agent-config';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
 import {
   AGENT_SELECTOR_VALUES,
@@ -19,10 +20,6 @@ import {
   isAgentIdentifierMatch,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
-import {
-  readLocalAgentFlagsFromStorage,
-  serializeLocalAgentFlags
-} from '@/lib/helpers/local-agent-config';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -144,12 +141,10 @@ export function AgentSplitButton({
     if (!isCopyValue && !canRunAgent) return;
 
     if (isCopyValue) {
-      const localAgentFlags = serializeLocalAgentFlags(readLocalAgentFlagsFromStorage());
       const { error, prompt } = await getTicketPromptForCopy(
         ticketId,
         'run',
-        isCopyLocalValue ? 'cli' : 'web',
-        localAgentFlags
+        isCopyLocalValue ? 'cli' : 'web'
       );
       if (error || !prompt) return;
       await navigator.clipboard.writeText(prompt);
@@ -162,8 +157,8 @@ export function AgentSplitButton({
       isLaunchingRef.current = true;
       sessionStateAtLaunchRef.current = agentSessionState;
       setIsLaunching(true);
-      const allFlags = readLocalAgentFlagsFromStorage();
-      const agentFlags = allFlags[agentValue] ?? [];
+      const agentConfig = await getAgentConfigAction(agentValue);
+      const agentFlags = agentConfig?.flags ?? [];
       await launchAgent(
         ticketId,
         agentValue,

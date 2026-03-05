@@ -4,9 +4,9 @@ import { useState } from 'react';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { getAgentConfigAction } from '@/lib/actions/agent-config';
 import { getTicketDiscussionPromptForCopy } from '@/lib/actions/tickets';
 import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
-import { readLocalAgentFlagsFromStorage } from '@/lib/helpers/local-agent-config';
 
 import { useTerminal } from './terminal/TerminalProvider';
 
@@ -40,8 +40,8 @@ export function AskTicketButton({
       const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
 
       if (isElectron) {
-        const allFlags = readLocalAgentFlagsFromStorage();
-        const agentFlags = allFlags[preferredAgent] ?? [];
+        const agentConfig = await getAgentConfigAction(preferredAgent);
+        const agentFlags = agentConfig?.flags ?? [];
         await launchAgent(
           ticketId,
           preferredAgent,

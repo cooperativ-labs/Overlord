@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.41.0] - 2026-03-05:14:10
+
+### Added
+- None.
+
+### Fixed
+- Improve CLI auth error handling with clearer messaging for port conflicts during OAuth callback, detecting EADDRINUSE errors and suggesting remediation steps.
+
+### Changed
+- Update authentication redirect flow to send users to `/u` (My Tasks board) after sign-in instead of onboarding page, assuming users with existing accounts are familiar with the system.
+- Refactor agent-related components with improved type safety and cleaner prop handling in AgentSplitButton, AskTicketButton, and CopyTicketPromptButton.
+- Added agent config management by adding it to the database
+- Enhance TerminalProvider initialization and state propagation for improved reliability.
+- Refine settings panel layout and MCP configuration UI for better visual hierarchy.
+
+### Security
+- None.
+
+### Chore
+- Minor dependency and internal type definition updates.
+
 ## [0.40.0] - 2026-03-05
 
 ### Added

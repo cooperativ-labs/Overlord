@@ -2,13 +2,10 @@
 
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
-import {
-  readLocalAgentFlagsFromStorage,
-  serializeLocalAgentFlags
-} from '@/lib/helpers/local-agent-config';
 
 type Props = {
   ticketId: string;
@@ -22,23 +19,30 @@ type Props = {
  */
 export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }: Props) {
   const [copied, setCopied] = useState(false);
-  const [showErrorToast, setShowErrorToast] = useState(false);
 
   async function handleAction() {
-    const localAgentFlags = serializeLocalAgentFlags(readLocalAgentFlagsFromStorage());
-    const { error, prompt } = await getTicketPromptForCopy(
-      ticketId,
-      'run',
-      undefined,
-      localAgentFlags
-    );
+    setCopied(true);
+    const { error, prompt } = await getTicketPromptForCopy(ticketId, 'run', undefined);
     if (error || !prompt) {
-      setShowErrorToast(true);
-      setTimeout(() => setShowErrorToast(false), 3000);
+      console.error('Failed to copy ticket prompt:', error, prompt ? 'prompt' : 'no prompt');
+      toast.error('Failed to copy ticket prompt', {
+        description: error
+          ? !prompt
+            ? 'no prompt'
+            : 'No error message provided'
+          : 'No prompt provided',
+        action: {
+          label: 'Copy error',
+          onClick: () => {
+            navigator.clipboard.writeText(error ?? 'No error message provided');
+          }
+        }
+      });
+      setCopied(false);
       return;
     }
     await navigator.clipboard.writeText(prompt);
-    setCopied(true);
+
     setTimeout(() => setCopied(false), 2000);
   }
 
@@ -52,17 +56,9 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
     handleAction();
   }
 
-  const errorToast = showErrorToast ? (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-destructive/50 bg-destructive px-4 py-3 text-destructive-foreground shadow-lg">
-      <p className="text-sm font-medium">Cannot copy prompt</p>
-      <p className="mt-1 text-xs">Set a ticket objective before copying the LLM prompt.</p>
-    </div>
-  ) : null;
-
   if (variant === 'icon') {
     return (
       <>
-        {errorToast}
         <Button
           aria-label={'Copy ticket prompt for LLM'}
           className={className}
@@ -79,7 +75,6 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
 
   return (
     <>
-      {errorToast}
       <Button
         className={className}
         size="sm"

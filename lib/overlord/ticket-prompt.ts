@@ -1,5 +1,5 @@
-import type { LocalAgentFlags } from '@/lib/helpers/local-agent-config';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import type { AgentConfig } from '@/lib/schemas/agent-config';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 export type PromptLaunchMode = 'run' | 'ask';
@@ -13,8 +13,8 @@ export type PromptOptions = {
   customInstructions?: string | null;
   /** Launch mode for this prompt. Ask mode guides the agent to ask and stop. */
   launchMode?: PromptLaunchMode;
-  /** Optional local agent flags to append to resume commands. */
-  localAgentFlags?: LocalAgentFlags;
+  /** Optional agent configurations (flags, preferences) keyed by agent type. */
+  agentConfigs?: Record<string, AgentConfig>;
 };
 
 /**
@@ -61,7 +61,7 @@ export function buildTicketPromptMarkdown({
       platformUrl.startsWith('http://0.0.0.0');
 
   const protocolSection = isLocal
-    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.localAgentFlags)
+    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs)
     : buildRemoteProtocolSection(ticket.id, platformUrl, options);
 
   const customInstructions = options?.customInstructions?.trim();
@@ -109,26 +109,26 @@ ${protocolSection}`;
 function buildResumeCommandWithFlags(
   command: string,
   agent: string,
-  localAgentFlags?: LocalAgentFlags
+  agentConfigs?: Record<string, AgentConfig>
 ): string {
-  const flags = localAgentFlags?.[agent] ?? [];
+  const flags = agentConfigs?.[agent]?.flags ?? [];
   return flags.length > 0 ? `${command} ${flags.join(' ')}` : command;
 }
 
 function buildLocalProtocolSection(
   ticketId: string,
   platformUrl: string,
-  localAgentFlags?: LocalAgentFlags
+  agentConfigs?: Record<string, AgentConfig>
 ): string {
   const claudeResumeCommand = buildResumeCommandWithFlags(
     `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume claude`,
     'claude',
-    localAgentFlags
+    agentConfigs
   );
   const codexResumeCommand = buildResumeCommandWithFlags(
     `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume codex`,
     'codex',
-    localAgentFlags
+    agentConfigs
   );
 
   return `## Overlord Protocol
@@ -293,12 +293,12 @@ function buildRemoteProtocolSection(
   const claudeResumeCommand = buildResumeCommandWithFlags(
     `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude`,
     'claude',
-    options?.localAgentFlags
+    options?.agentConfigs
   );
   const codexResumeCommand = buildResumeCommandWithFlags(
     `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume codex`,
     'codex',
-    options?.localAgentFlags
+    options?.agentConfigs
   );
   const mcpUrl = options?.mcpUrl;
   const mcpOnly = options?.mcpOnly ?? false;

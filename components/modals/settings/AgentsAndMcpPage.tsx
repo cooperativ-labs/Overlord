@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { getAllAgentConfigsAction, updateAgentFlagsAction } from '@/lib/actions/agent-config';
 import {
   getRunningAgentSessionsAction,
   type RunningAgentSession,
@@ -21,11 +22,6 @@ import {
 } from '@/lib/actions/agent-sessions';
 import { getAgentTokenAction, rotateAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
-import {
-  LOCAL_AGENT_FLAGS_STORAGE_KEY,
-  parseLocalAgentFlags,
-  serializeLocalAgentFlags
-} from '@/lib/helpers/local-agent-config';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
 type McpAgentConfig = {
@@ -186,11 +182,19 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     void loadRunningAgents();
     void loadAgentToken();
 
-    // Load agent flags from localStorage
-    if (typeof window !== 'undefined') {
-      const savedFlags = localStorage.getItem(LOCAL_AGENT_FLAGS_STORAGE_KEY);
-      setAgentFlags(parseLocalAgentFlags(savedFlags));
-    }
+    // Load agent configs from database
+    void (async () => {
+      try {
+        const configs = await getAllAgentConfigsAction();
+        const flags: Record<string, string[]> = {};
+        Object.entries(configs).forEach(([agentType, config]) => {
+          flags[agentType] = config.flags ?? [];
+        });
+        setAgentFlags(flags);
+      } catch (error) {
+        console.error('Failed to load agent configs:', error);
+      }
+    })();
   }, [open, loadAgentToken]);
 
   async function handleRefreshAgents() {
@@ -255,7 +259,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     setTimeout(() => setAgentTokenCopied(false), 2000);
   }
 
-  function handleAddFlag() {
+  async function handleAddFlag() {
     if (!flagInput.trim()) return;
 
     const newFlags = { ...agentFlags };
@@ -267,19 +271,23 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     if (!newFlags[selectedLocalAgent].includes(flag)) {
       newFlags[selectedLocalAgent].push(flag);
       setAgentFlags(newFlags);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_AGENT_FLAGS_STORAGE_KEY, serializeLocalAgentFlags(newFlags));
+      try {
+        await updateAgentFlagsAction(selectedLocalAgent, newFlags[selectedLocalAgent]);
+      } catch (error) {
+        console.error('Failed to save agent flags:', error);
       }
     }
     setFlagInput('');
   }
 
-  function handleRemoveFlag(agent: string, index: number) {
+  async function handleRemoveFlag(agent: string, index: number) {
     const newFlags = { ...agentFlags };
     newFlags[agent] = (newFlags[agent] ?? []).filter((_, i) => i !== index);
     setAgentFlags(newFlags);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(LOCAL_AGENT_FLAGS_STORAGE_KEY, serializeLocalAgentFlags(newFlags));
+    try {
+      await updateAgentFlagsAction(agent, newFlags[agent]);
+    } catch (error) {
+      console.error('Failed to save agent flags:', error);
     }
   }
 
@@ -565,14 +573,14 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    handleAddFlag();
+                    void handleAddFlag();
                   }
                 }}
                 className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
                 type="button"
-                onClick={handleAddFlag}
+                onClick={() => void handleAddFlag()}
                 className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
               >
                 Add
@@ -590,7 +598,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
                     <code className="text-xs font-medium">{flag}</code>
                     <button
                       type="button"
-                      onClick={() => handleRemoveFlag(selectedLocalAgent, index)}
+                      onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
                       className="rounded p-0.5 hover:bg-muted-foreground/20"
                       title="Remove flag"
                     >

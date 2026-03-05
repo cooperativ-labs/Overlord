@@ -21,7 +21,7 @@ function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): s
 
 export async function signIn(formData: FormData) {
   const supabase = await createClient();
-  const nextPath = sanitizeNextPath(formData.get('next'), '/(auth)/onboarding');
+  const nextPath = sanitizeNextPath(formData.get('next'), '/u');
 
   const { error } = await supabase.auth.signInWithPassword({
     email: formData.get('email') as string,
@@ -37,7 +37,7 @@ export async function signIn(formData: FormData) {
 
 export async function signUp(formData: FormData) {
   const supabase = await createClient();
-  const nextPath = sanitizeNextPath(formData.get('next'), '/(auth)/onboarding');
+  const nextPath = sanitizeNextPath(formData.get('next'), '/u');
 
   const email = (formData.get('email') as string | null) ?? '';
   const password = (formData.get('password') as string | null) ?? '';

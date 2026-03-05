@@ -49,7 +49,11 @@ export default function OAuthConfirmationPage({
         </>
       )}
 
-      {!redirectUrl && <p className="text-sm text-muted-foreground">You can close this window.</p>}
+      {!redirectUrl && (
+        <p className="text-sm text-muted-foreground">
+          You can close this window and return to the app.
+        </p>
+      )}
     </div>
   );
 }

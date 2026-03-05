@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
+import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
@@ -87,6 +88,13 @@ export async function GET(request: Request, { params }: RouteContext) {
       console.error('Failed to load custom instructions for context prompt:', error);
     }
 
+    let agentConfigs: Record<string, any> = {};
+    try {
+      agentConfigs = await getAllAgentConfigsByUserIdAction(authResult.context.userId, supabase);
+    } catch (error) {
+      console.error('Failed to load agent configs for context prompt:', error);
+    }
+
     const markdown = buildTicketPromptMarkdown({
       ticket: {
         id: ticket.id,
@@ -101,7 +109,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions, launchMode }
+      options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions, launchMode, agentConfigs }
     });
 
     const headers: Record<string, string> = {
