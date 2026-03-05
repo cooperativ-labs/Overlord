@@ -31,14 +31,16 @@ const electronAPI = {
       agent: 'claude' | 'codex' | 'cursor' | 'gemini',
       cwd?: string,
       agentToken?: string,
-      launchMode?: 'run' | 'ask'
+      launchMode?: 'run' | 'ask',
+      flags?: string[]
     ) =>
       ipcRenderer.invoke('terminal:launch-agent', {
         ticketId,
         agent,
         cwd,
         agentToken,
-        launchMode
+        launchMode,
+        flags
       }),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },

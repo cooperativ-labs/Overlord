@@ -27,8 +27,8 @@ export function TerminalWorkspace({ children }: TerminalWorkspaceProps) {
   // react-resizable-panels v4 treats bare numbers as pixels, not percentages.
   // Use string values with "%" suffix for percentage-based sizing.
   return (
-    <div className="flex flex-col h-full">
-      <ResizablePanelGroup orientation="vertical" className="flex flex-col h-full">
+    <div className="flex flex-1 min-h-0 flex-col">
+      <ResizablePanelGroup orientation="vertical" className="flex flex-1 min-h-0 flex-col">
         <ResizablePanel
           defaultSize="72%"
           minSize="35%"

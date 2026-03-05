@@ -162,11 +162,15 @@ export function AgentSplitButton({
       isLaunchingRef.current = true;
       sessionStateAtLaunchRef.current = agentSessionState;
       setIsLaunching(true);
+      const allFlags = readLocalAgentFlagsFromStorage();
+      const agentFlags = allFlags[agentValue] ?? [];
       await launchAgent(
         ticketId,
         agentValue,
         workingDirectory ?? undefined,
-        agentToken ?? undefined
+        agentToken ?? undefined,
+        'run',
+        agentFlags.length > 0 ? agentFlags : undefined
       );
     } else {
       await navigator.clipboard.writeText(commands[agentValue]);

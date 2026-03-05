@@ -66,7 +66,7 @@ export function SidePanelProvider({
 
   return (
     <SidePanelContext.Provider value={{ content, setContent, closePath, setClosePath, isOpen }}>
-      <div className={cn('h-full', className)}>{children}</div>
+      <div className={cn('flex-1 min-h-0', className)}>{children}</div>
     </SidePanelContext.Provider>
   );
 }

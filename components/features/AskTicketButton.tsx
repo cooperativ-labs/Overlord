@@ -6,6 +6,7 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { getTicketDiscussionPromptForCopy } from '@/lib/actions/tickets';
 import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { readLocalAgentFlagsFromStorage } from '@/lib/helpers/local-agent-config';
 
 import { useTerminal } from './terminal/TerminalProvider';
 
@@ -39,12 +40,15 @@ export function AskTicketButton({
       const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
 
       if (isElectron) {
+        const allFlags = readLocalAgentFlagsFromStorage();
+        const agentFlags = allFlags[preferredAgent] ?? [];
         await launchAgent(
           ticketId,
           preferredAgent,
           workingDirectory ?? undefined,
           agentToken ?? undefined,
-          'ask'
+          'ask',
+          agentFlags.length > 0 ? agentFlags : undefined
         );
       } else {
         const { error, prompt } = await getTicketDiscussionPromptForCopy(ticketId);

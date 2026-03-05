@@ -21,6 +21,8 @@ type LaunchAgentInput = {
   /** Per-user agent token from the agent_tokens table. Falls back to AGENT_TOKEN env var. */
   agentToken?: string;
   launchMode?: AgentLaunchMode;
+  /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
+  flags?: string[];
 };
 
 type LaunchAgentResult = {
@@ -125,14 +127,16 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.';
   let command: string;
 
+  const extraFlags = (input.flags ?? []).map(f => shellQuote(f)).join(' ');
+
   if (input.agent === 'claude') {
-    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})" --settings ${shellQuote(settingsFile)} ${shellQuote(startPrompt)}`;
+    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})" --settings ${shellQuote(settingsFile)}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
-    command = `codex "$(cat ${shellQuote(contextFile)})"`;
+    command = `codex${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'cursor') {
-    command = `agent "$(cat ${shellQuote(contextFile)})"`;
+    command = `agent${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'gemini') {
-    command = `gemini "$(cat ${shellQuote(contextFile)})"`;
+    command = `gemini${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else {
     throw new Error(`Unknown agent type: ${input.agent}`);
   }

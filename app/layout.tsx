@@ -89,9 +89,9 @@ export default async function RootLayout({
                         <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
                           <NavHeader />
                           <TerminalWorkspace>
-                            <SidePanelProvider className="flex flex-col ">
-                              <div className="flex min-h-0 min-w-0 ">
-                                <main className="flex min-h-0 min-w-0 flex-col w-full">
+                            <SidePanelProvider className="flex flex-col overflow-hidden">
+                              <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                                <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
                                   {children}
                                 </main>
                                 <SidePanel />

@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.40.0] - 2026-03-05
+
+### Added
+- Support for extra CLI flags in agent launch configuration (e.g., `--enable-auto-mode`) passed from local agent settings.
+
+### Fixed
+- Fix layout overflow issues in TerminalWorkspace and SidePanelProvider with improved flex container sizing.
+- Improve main content area layout with proper `overflow-hidden` and flex properties for better resizable panel integration.
+
+### Changed
+- Enhanced agent launcher service to accept and apply custom CLI flags for all agent types (Claude, Codex, Cursor, Gemini).
+- Refine TerminalProvider to propagate flags parameter through agent launch API.
+- Update TerminalWorkspace resizable panel layout for better vertical space management.
+
+### Security
+- None.
+
+### Removed
+- None.
+
+### Chore
+- Update Electron IPC and preload types for terminal agent launch signatures.
+- Improve type definitions for terminal launch configuration with flags support.
+
 ## [0.37.0] - 2026-03-05:00:00
 
 ### Added

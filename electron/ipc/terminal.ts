@@ -358,6 +358,7 @@ export function registerTerminalIpc(): void {
         cwd?: string;
         agentToken?: string;
         launchMode?: 'run' | 'ask';
+        flags?: string[];
       }
     ) => {
       const win = BrowserWindow.fromWebContents(event.sender);
@@ -368,7 +369,8 @@ export function registerTerminalIpc(): void {
         agent: payload.agent,
         cwd: payload.cwd,
         agentToken: payload.agentToken,
-        launchMode: payload.launchMode
+        launchMode: payload.launchMode,
+        flags: payload.flags
       });
 
       const terminalMode = store.get('terminalMode', 'embedded') as string;

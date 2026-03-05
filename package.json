@@ -2,7 +2,7 @@
   "name": "overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "0.39.0",
+  "version": "0.40.0",
   "private": true,
   "main": "dist-electron/main.js",
   "bin": {
@@ -49,6 +49,7 @@
     "electron:upload:minor": "node scripts/upload-electron-release.mjs --minor",
     "electron:upload:major": "node scripts/upload-electron-release.mjs --major",
     "electron:upload:no-bump": "node scripts/upload-electron-release.mjs --no-bump",
+    "electron:upload:retry": "node scripts/retry-upload.mjs",
     "install-agent-permissions": "node scripts/install-agent-permissions.mjs",
     "verify-agent-permissions": "node scripts/verify-agent-permissions.mjs",
     "cli:sync": "cp bin/ovld.mjs packages/overlord-cli/bin/ovld.mjs && cp bin/_cli/*.mjs packages/overlord-cli/bin/_cli/",

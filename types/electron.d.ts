@@ -30,7 +30,8 @@ interface ElectronAPI {
       agent: 'claude' | 'codex' | 'cursor' | 'gemini',
       cwd?: string,
       agentToken?: string,
-      launchMode?: 'run' | 'ask'
+      launchMode?: 'run' | 'ask',
+      flags?: string[]
     ) => Promise<string | void>;
     chooseDirectory: () => Promise<string | null>;
   };
