@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.0] - 2026-03-06:21:04
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Add Everhour integration to the navigation header and ticket panel.
+- Add a dropdown menu to the ticket panel with copy ticket ID and delete ticket actions.
+
+### Security
+- None.
+
+
 ## [0.45.0] - 2026-03-06:19:33
 
 ### Added
