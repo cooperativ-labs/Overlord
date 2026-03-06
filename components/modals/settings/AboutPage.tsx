@@ -137,7 +137,7 @@ export function AboutPage({ open }: { open: boolean }) {
             {updateStatus?.availableVersion ? ` • Latest ${updateStatus.availableVersion}` : ''}
           </p>
           {platformUrl ? (
-            <p className="mt-1 text-xs text-muted-foreground">OVERLORD_URL: {platformUrl}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Local URL: {platformUrl}</p>
           ) : null}
         </div>
 
