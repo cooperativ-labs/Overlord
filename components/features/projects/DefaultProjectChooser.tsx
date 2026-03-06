@@ -29,7 +29,8 @@ export function DefaultProjectChooser({ className }: { className?: string }) {
         className={cn('h-8 min-w-56 max-w-[26rem]', className)}
       >
         <div className="flex w-full items-center gap-2">
-          <SelectValue placeholder="Select default project" />
+          <SelectValue placeholder="Select default project" />{' '}
+          <span className="text-muted-foreground text-sm">Default project</span>
         </div>
       </SelectTrigger>
       <SelectContent align="start">

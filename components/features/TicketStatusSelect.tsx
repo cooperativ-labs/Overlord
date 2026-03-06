@@ -3,6 +3,7 @@
 import { useTransition } from 'react';
 
 import { updateTicketStatusAction } from '@/lib/actions/tickets';
+import { capitalizeFirst } from '@/lib/options';
 
 type Props = {
   ticketId: string;
@@ -29,7 +30,7 @@ export function TicketStatusSelect({ ticketId, currentStatus, statusOptions }: P
     >
       {statusOptions.map(status => (
         <option key={status} value={status}>
-          {status}
+          {capitalizeFirst(status)}
         </option>
       ))}
     </select>

@@ -30,9 +30,7 @@ async function getAuthenticatedUser() {
   return { supabase, userId: user.id };
 }
 
-export async function getAiConnectionStatus(
-  provider: AiProvider
-): Promise<AiConnectionStatus> {
+export async function getAiConnectionStatus(provider: AiProvider): Promise<AiConnectionStatus> {
   const { supabase, userId } = await getAuthenticatedUser();
   const { data, error } = await supabase
     .from('user_integrations')

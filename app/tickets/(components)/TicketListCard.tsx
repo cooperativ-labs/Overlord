@@ -8,6 +8,7 @@ import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerBut
 import { Badge } from '@/components/ui/badge';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
+import { capitalizeFirst, getOptionLabel, ticketExecutionTargetOptions } from '@/lib/options';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
@@ -73,14 +74,14 @@ export default function TicketListCard({
         <span className="block truncate text-sm font-medium">{getDisplayTitle(ticket)}</span>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
           <Badge variant="outline" className="py-0 text-[11px]">
-            {ticket.status}
+            {capitalizeFirst(ticket.status)}
           </Badge>
-          <Badge variant="outline" className="py-0 text-[11px] capitalize">
-            {ticket.execution_target}
+          <Badge variant="outline" className="py-0 text-[11px]">
+            {getOptionLabel(ticketExecutionTargetOptions, ticket.execution_target)}
           </Badge>
-          {showOrganizationName && ticket.organization_name ? (
+          {/* {showOrganizationName && ticket.organization_name ? (
             <span className="text-muted-foreground text-[11px]">{ticket.organization_name}</span>
-          ) : null}
+          ) : null} */}
           {ticket.updated_at ? (
             <span className="text-muted-foreground text-[11px]">
               {new Date(ticket.updated_at).toLocaleString()}
@@ -134,13 +135,6 @@ export default function TicketListCard({
         </span>
       ) : null}
 
-      {/* Copy button */}
-      <span
-        className="opacity-0 transition-opacity group-hover:opacity-100"
-        onClick={e => e.stopPropagation()}
-      >
-        <CopyTicketPromptButton ticketId={ticket.id} variant="icon" className="h-7 w-7" />
-      </span>
     </div>
   );
 }

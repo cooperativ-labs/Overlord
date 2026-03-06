@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 
-import { DefaultProjectSection } from '@/components/features/projects/DefaultProjectSection';
+import { AllTasksHeaderSection } from '@/components/features/AllTasksHeaderSection';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 
@@ -16,19 +16,10 @@ export default async function UserLayout({ children }: LayoutProps) {
   const selectedOrgId = rawOrgId ? Number(rawOrgId) : undefined;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col gap-5">
       <ErrorBoundary>
-        <DefaultProjectSection />
-        <TicketsBoardContent
-          organizationId={selectedOrgId}
-          showOrganizationName={!selectedOrgId}
-          title={selectedOrgId ? 'Team Tasks' : 'All Tasks'}
-          description={
-            selectedOrgId
-              ? 'Showing tasks for the selected workspace.'
-              : 'Tasks from all your workspaces.'
-          }
-        />
+        <AllTasksHeaderSection selectedOrgId={selectedOrgId} />
+        <TicketsBoardContent organizationId={selectedOrgId} showOrganizationName={!selectedOrgId} />
         {children}
       </ErrorBoundary>
     </div>

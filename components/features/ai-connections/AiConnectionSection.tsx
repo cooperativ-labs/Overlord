@@ -6,7 +6,11 @@ import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import type { AiConnectionStatus, AiProvider, AiUsageData } from '@/lib/actions/ai-connections';
-import { disconnectAiProvider, getAiConnectionStatus, getAiUsage } from '@/lib/actions/ai-connections';
+import {
+  disconnectAiProvider,
+  getAiConnectionStatus,
+  getAiUsage
+} from '@/lib/actions/ai-connections';
 
 type Props = {
   provider: AiProvider;
@@ -45,11 +49,7 @@ function UsageBar({ used, limit }: { used: number; limit: number | null }) {
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div
             className={`h-full rounded-full transition-all ${
-              pct >= 90
-                ? 'bg-destructive'
-                : pct >= 70
-                  ? 'bg-amber-500'
-                  : 'bg-emerald-500'
+              pct >= 90 ? 'bg-destructive' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
             }`}
             style={{ width: `${pct}%` }}
           />

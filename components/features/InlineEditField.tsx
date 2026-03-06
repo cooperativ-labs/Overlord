@@ -24,11 +24,8 @@ type Props = {
   renderMarkdown?: boolean;
   /** Optional list of project file paths used for @mention suggestions in multiline mode */
   fileMentionPaths?: string[];
-  /**
-   * 'textarea' — when empty in view mode, renders with a subtle border and min-height
-   * so it looks like a clickable textarea rather than invisible text.
-   */
   variant?: 'default' | 'textarea';
+  children?: React.ReactNode;
 };
 
 const MAX_MENTION_RESULTS = 8;
@@ -54,7 +51,8 @@ export function InlineEditField({
   inputClassName,
   renderMarkdown = false,
   fileMentionPaths = [],
-  variant = 'default'
+  variant = 'default',
+  children
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [savedValue, setSavedValue] = useState(initialValue);
@@ -68,8 +66,8 @@ export function InlineEditField({
   const canMentionFiles = multiline && field === 'objective' && fileMentionPaths.length > 0;
   const mentionResults = canMentionFiles
     ? fileMentionPaths
-        .filter(filePath => filePath.toLowerCase().includes(mentionQuery.toLowerCase()))
-        .slice(0, MAX_MENTION_RESULTS)
+      .filter(filePath => filePath.toLowerCase().includes(mentionQuery.toLowerCase()))
+      .slice(0, MAX_MENTION_RESULTS)
     : [];
   const mentionMenuOpen = mentionStart !== null && mentionResults.length > 0;
 
@@ -246,55 +244,58 @@ export function InlineEditField({
   if (editing) {
     if (multiline) {
       return (
-        <div className="relative">
-          <textarea
-            ref={inputRef as React.Ref<HTMLTextAreaElement>}
-            autoFocus
-            className={cn(baseInputClass, 'resize-none leading-relaxed')}
-            disabled={pending}
-            value={value}
-            onBlur={save}
-            onChange={e => {
-              setValue(e.target.value);
-              updateMentionState(e.target.value, e.target.selectionStart ?? e.target.value.length);
-              autoResize();
-            }}
-            onClick={e => {
-              const target = e.target as HTMLTextAreaElement;
-              updateMentionState(value, target.selectionStart ?? value.length);
-            }}
-            onKeyDown={handleKeyDown}
-            onDragOver={e => {
-              if (field === 'objective') {
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }}
-            onDrop={handleDrop}
-          />
-          {mentionMenuOpen ? (
-            <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
-              {mentionResults.map((filePath, index) => (
-                <button
-                  key={filePath}
-                  className={cn(
-                    'block w-full rounded px-2 py-1.5 text-left text-sm',
-                    index === mentionIndex
-                      ? 'bg-accent text-accent-foreground'
-                      : 'hover:bg-accent/60'
-                  )}
-                  type="button"
-                  onMouseDown={event => {
-                    event.preventDefault();
-                    insertMentionAtCursor(filePath);
-                  }}
-                >
-                  @{filePath}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <div className="relative w-full">
+          <div className={cn(baseInputClass, 'resize-none leading-relaxed relative')}>
+            <textarea
+              ref={inputRef as React.Ref<HTMLTextAreaElement>}
+              autoFocus
+              className='w-full focus:outline-none border-none'
+              disabled={pending}
+              value={value}
+              onBlur={save}
+              onChange={e => {
+                setValue(e.target.value);
+                updateMentionState(e.target.value, e.target.selectionStart ?? e.target.value.length);
+                autoResize();
+              }}
+              onClick={e => {
+                const target = e.target as HTMLTextAreaElement;
+                updateMentionState(value, target.selectionStart ?? value.length);
+              }}
+              onKeyDown={handleKeyDown}
+              onDragOver={e => {
+                if (field === 'objective') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
+              onDrop={handleDrop}
+            />{children ? <div className="absolute top-1 right-1 z-10 py-1 border-none focus:outline-none">{children}</div> : null}</div>
+          {
+            mentionMenuOpen ? (
+              <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                {mentionResults.map((filePath, index) => (
+                  <button
+                    key={filePath}
+                    className={cn(
+                      'block w-full rounded px-2 py-1.5 text-left text-sm',
+                      index === mentionIndex
+                        ? 'bg-accent text-accent-foreground'
+                        : 'hover:bg-accent/60'
+                    )}
+                    type="button"
+                    onMouseDown={event => {
+                      event.preventDefault();
+                      insertMentionAtCursor(filePath);
+                    }}
+                  >
+                    @{filePath}
+                  </button>
+                ))}
+              </div>
+            ) : null
+          }
+        </div >
       );
     }
 
@@ -319,15 +320,15 @@ export function InlineEditField({
   return (
     <div
       className={cn(
-        'cursor-text rounded-md transition-colors',
+        'relative w-full cursor-text rounded-md transition-colors',
         displayClassName,
         isTextareaVariant
           ? [
-              'px-2 py-1',
-              isEmpty
-                ? 'min-h-[200px] hover:ring-1 hover:ring-muted-foreground/60'
-                : 'hover:ring-1 hover:ring-muted-foreground/60  '
-            ]
+            'px-2 py-1',
+            isEmpty
+              ? 'min-h-[200px] hover:ring-1 hover:ring-muted-foreground/60'
+              : 'hover:ring-1 hover:ring-muted-foreground/60  '
+          ]
           : ['-mx-2 -my-1 px-2 py-1', 'hover:bg-muted/50']
       )}
       role="button"
@@ -355,6 +356,7 @@ export function InlineEditField({
           {placeholder}
         </span>
       )}
+      {children ? <div className="absolute top-1 right-1 z-10 py-1 border-none focus:outline-none">{children}</div> : null}
     </div>
   );
 }

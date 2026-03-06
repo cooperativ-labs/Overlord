@@ -169,7 +169,7 @@ export function ProjectSettingsSection({
   }
 
   return (
-    <section className="px-5 pt-5">
+    <section className="px-5 py-5 border-b">
       {/* Name + color + optional sync */}
       <div className="flex flex-wrap items-center gap-2">
         <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>

@@ -17,6 +17,7 @@ import {
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
+import { getOptionLabel, ticketExecutionTargetOptions } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -209,8 +210,8 @@ function KanbanCardBody({
         ) : null}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <Badge variant="outline" className="text-xs capitalize">
-          {ticket.execution_target}
+        <Badge variant="outline" className="text-xs">
+          {getOptionLabel(ticketExecutionTargetOptions, ticket.execution_target)}
         </Badge>
       </div>
       <div className="mt-auto flex items-center justify-between gap-2 pt-2">

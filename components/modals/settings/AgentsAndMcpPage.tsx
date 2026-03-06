@@ -63,7 +63,7 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
     label: 'Codex CLI',
     location: '~/.codex/config.toml',
     description:
-      'Add this block to ~/.codex/config.toml using `OVERLORD_MCP_URL` (not `OVERLORD_URL`). Then set `AGENT_TOKEN` in your shell environment (for example in ~/.zshrc or inline as `AGENT_TOKEN=... codex`) before launching Codex.',
+      'Add this block to ~/.codex/config.toml using `OVERLORD_MCP_URL`. Then set `AGENT_TOKEN` in your shell environment (for example in ~/.zshrc or inline as `AGENT_TOKEN=... codex`) before launching Codex.',
     getConfig: (mcpUrl, _token) =>
       `[mcp_servers.overlord]\nurl = "${mcpUrl}"\nbearer_token_env_var = "AGENT_TOKEN"`
   }
@@ -111,7 +111,11 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
 
   const resolvedPlatformDomain = (() => {
     try {
-      return new URL(resolvedPlatformUrl).hostname;
+      if (process.env.NEXT_ENV === 'development') {
+        return new URL(resolvedPlatformUrl).hostname;
+      } else {
+        return 'overlord.cooperativ.io';
+      }
     } catch {
       return 'overlord.cooperativ.io';
     }
@@ -231,7 +235,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
 
   async function handleCopyAgentEnvSnippet() {
     const snippetToken = agentToken ?? '<AGENT_TOKEN>';
-    const snippet = `OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${snippetToken}`;
+    const snippet = `OVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${snippetToken}`;
     await navigator.clipboard.writeText(snippet);
     setAgentEnvSnippetCopied(true);
     setTimeout(() => setAgentEnvSnippetCopied(false), 2000);
@@ -419,9 +423,8 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
                 </button>
               </div>
               <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                {`OVERLORD_URL=${resolvedPlatformUrl}\nOVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${
-                  agentToken ?? '<AGENT_TOKEN>'
-                }`}
+                {`OVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${agentToken ?? '<AGENT_TOKEN>'
+                  }`}
               </pre>
             </div>
             <div className="space-y-2 rounded-md border bg-muted/30 p-3">
@@ -626,11 +629,10 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
               </button>
             </div>
             <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-              {`npx overlord resume ${selectedLocalAgent}${
-                (agentFlags[selectedLocalAgent] ?? []).length > 0
-                  ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                  : ''
-              }`}
+              {`npx overlord resume ${selectedLocalAgent}${(agentFlags[selectedLocalAgent] ?? []).length > 0
+                ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                : ''
+                }`}
             </pre>
           </div>
         </div>

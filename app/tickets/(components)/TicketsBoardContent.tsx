@@ -50,8 +50,6 @@ function dedupeStatuses(
 type TicketsBoardContentProps = {
   organizationId?: number;
   showOrganizationName?: boolean;
-  title?: string;
-  description?: string;
   projectId?: string;
 };
 
@@ -97,8 +95,6 @@ type ReviewStatusChangeForBoard = Pick<
 export default async function TicketsBoardContent({
   organizationId,
   showOrganizationName = false,
-  title,
-  description,
   projectId
 }: TicketsBoardContentProps) {
   const savedView = await getRawViewPreference();
@@ -266,13 +262,6 @@ export default async function TicketsBoardContent({
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      <nav className="flex flex-wrap items-center justify-between gap-3 border-b p-4 md:px-6 shrink-0">
-        <div>
-          <h1 className="text-lg font-semibold">{title}</h1>
-          <p className="text-muted-foreground text-sm">{description}</p>
-        </div>
-      </nav>
-
       {loadError ? (
         <Alert variant="destructive" className="mx-4 md:mx-6">
           <AlertDescription>Failed to load tickets: {loadError.message}</AlertDescription>

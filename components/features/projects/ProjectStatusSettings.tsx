@@ -31,17 +31,13 @@ import {
   reorderTicketStatusesAction,
   updateTicketStatusNameAction
 } from '@/lib/actions/ticket-statuses';
+import { ticketStatusTypeOptions } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
-const statusTypeOptions: Array<{ value: TicketStatusType; label: string }> = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'execute', label: 'Execute' },
-  { value: 'review', label: 'Review' },
-  { value: 'complete', label: 'Complete' }
-];
+const statusTypeOptions = ticketStatusTypeOptions;
 
 type StatusRow = {
   name: string;

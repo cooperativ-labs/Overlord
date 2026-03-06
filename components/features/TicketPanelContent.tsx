@@ -339,7 +339,7 @@ export async function TicketPanelContent({
                   <div className="mb-3 space-y-2 bg-background rounded-md border">
                     {orderedExecutedObjectives.map((objective, index) => (
                       <Collapsible key={objective.id}>
-                        <div className="flex items-center gap-1 hover:bg-background rounded-md ">
+                        <div className="flex items-center gap-1 hover:bg-background rounded-md pr-1">
                           <CollapsibleTrigger asChild>
                             <button
                               className="flex flex-1 items-center justify-between hover:bg-background px-3 py-2 text-left rounded-md "
@@ -369,29 +369,30 @@ export async function TicketPanelContent({
                   </div>
                 ) : null}
 
-                <div className="flex items-start gap-1">
-                  <div className="flex-1">
-                    <InlineEditField
-                      key={draftObjective?.id ?? 'current-objective'}
-                      displayClassName="text-base leading-relaxed"
-                      inputClassName="text-base leading-relaxed"
-                      variant="textarea"
-                      field="objective"
-                      organizationId={organizationId}
-                      fileMentionPaths={objectiveFileMentionPaths}
-                      initialValue={draftObjectiveValue}
-                      multiline
-                      renderMarkdown
-                      placeholder="Click to add an objective…"
-                      ticketId={ticketId}
-                    />
-                  </div>
-                  <ObjectiveMenuButton
+                <div className="flex items-start gap-1 w-full">
+
+                  <InlineEditField
+                    key={draftObjective?.id ?? 'current-objective'}
+
+                    displayClassName="text-base leading-relaxed"
+                    inputClassName="text-base leading-relaxed"
+                    variant="textarea"
+                    field="objective"
+                    organizationId={organizationId}
+                    fileMentionPaths={objectiveFileMentionPaths}
+                    initialValue={draftObjectiveValue}
+                    multiline
+                    renderMarkdown
+                    placeholder="Click to add an objective…"
                     ticketId={ticketId}
-                    objectiveId={draftObjective?.id ?? ''}
-                    isExecuted={!draftObjective || draftObjective.is_executed}
-                    canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
-                  />
+                  > <ObjectiveMenuButton
+                      ticketId={ticketId}
+                      objectiveId={draftObjective?.id ?? ''}
+                      isExecuted={!draftObjective || draftObjective.is_executed}
+                      canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
+                    /></InlineEditField>
+
+
                 </div>
 
                 {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
@@ -446,7 +447,6 @@ export async function TicketPanelContent({
             <Separator className="mb-6" />
 
             <ErrorBoundary>
-
               <TicketPanelLive
                 ticketId={ticketId}
                 projectId={activeProjectId}
@@ -460,11 +460,10 @@ export async function TicketPanelContent({
                 cursorCommand={cursor}
                 geminiCommand={gemini}
               />
-
             </ErrorBoundary>
           </section>
         </div>
       </div>
-    </TicketLiveProvider >
+    </TicketLiveProvider>
   );
 }

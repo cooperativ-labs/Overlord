@@ -1,9 +1,8 @@
 'use client';
 
+import { Plus, Ticket } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-import { Plus, Ticket } from 'lucide-react';
 
 import { NewTicketModal } from '@/components/features/NewTicketModal';
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';

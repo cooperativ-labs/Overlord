@@ -3,14 +3,10 @@
 import { useTransition } from 'react';
 
 import { updateTicketExecutionTargetAction } from '@/lib/actions/tickets';
+import { ticketExecutionTargetOptions } from '@/lib/options';
 import type { Database } from '@/types/database.types';
 
 type ExecutionTarget = Database['public']['Enums']['ticket_execution_target'];
-
-const executionTargetLabels: Record<ExecutionTarget, string> = {
-  agent: 'Agent',
-  human: 'Human'
-};
 
 type Props = {
   ticketId: string;
@@ -35,9 +31,9 @@ export function TicketExecutionTargetSelect({ ticketId, currentExecutionTarget }
       onChange={handleChange}
       aria-label="Execution target"
     >
-      {(Object.keys(executionTargetLabels) as ExecutionTarget[]).map(target => (
-        <option key={target} value={target}>
-          {executionTargetLabels[target]}
+      {ticketExecutionTargetOptions.map(({ value, label }) => (
+        <option key={value} value={value}>
+          {label}
         </option>
       ))}
     </select>
