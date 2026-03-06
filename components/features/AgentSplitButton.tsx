@@ -215,7 +215,7 @@ export function AgentSplitButton({
       )}
       <span
         className={cn(
-          'transition-colors',
+          'transition-colors whitespace-nowrap',
           styles.label,
           isActive && 'text-emerald-600 animate-pulse'
         )}

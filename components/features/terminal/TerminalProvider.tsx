@@ -19,12 +19,11 @@ type TerminalContextValue = {
     launchMode?: 'run' | 'ask',
     flags?: string[]
   ) => Promise<void>;
-  isTerminalOpen: boolean;
+  isTerminalVisible: boolean;
   terminalIds: string[];
   activeTerminalId: string | null;
   openTerminal: () => Promise<void>;
   toggleTerminal: () => Promise<void>;
-  closeTerminal: () => Promise<void>;
   closeTerminalById: (id: string) => Promise<void>;
 };
 
@@ -45,6 +44,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const [terminalIds, setTerminalIds] = useState<string[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
   const [activeTerminalCwd, setActiveTerminalCwd] = useState<string | null>(null);
+  const [isTerminalVisible, setIsTerminalVisible] = useState(false);
 
   // Load saved terminal mode on mount
   useEffect(() => {
@@ -125,12 +125,23 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   );
 
   const openTerminal = useCallback(async () => {
-    if (!api || terminalMode !== 'embedded' || terminalIds.length > 0) return;
+    if (!api || terminalMode !== 'embedded') return;
     const id = await api.terminal.spawn();
     setTerminalIds(previous => appendUniqueTerminalId(previous, id));
     setActiveTerminalId(id);
     setActiveTerminalCwd(null);
-  }, [api, terminalMode, terminalIds]);
+  }, [api, terminalMode]);
+
+  const showTerminal = useCallback(async () => {
+    setIsTerminalVisible(true);
+    if (terminalIds.length === 0) {
+      await openTerminal();
+    }
+  }, [openTerminal, terminalIds.length]);
+
+  const hideTerminal = useCallback(() => {
+    setIsTerminalVisible(false);
+  }, []);
 
   const closeTerminalById = useCallback(
     async (id: string) => {
@@ -149,21 +160,13 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     [api]
   );
 
-  const closeTerminal = useCallback(async () => {
-    if (!api || terminalIds.length === 0) return;
-    await Promise.all(terminalIds.map(id => api.terminal.kill(id)));
-    setTerminalIds([]);
-    setActiveTerminalId(null);
-    setActiveTerminalCwd(null);
-  }, [api, terminalIds]);
-
   const toggleTerminal = useCallback(async () => {
-    if (terminalIds.length > 0) {
-      await closeTerminal();
+    if (isTerminalVisible) {
+      hideTerminal();
       return;
     }
-    await openTerminal();
-  }, [terminalIds, closeTerminal, openTerminal]);
+    await showTerminal();
+  }, [hideTerminal, isTerminalVisible, showTerminal]);
 
   useEffect(() => {
     if (!isElectron || terminalMode !== 'embedded') return;
@@ -198,12 +201,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         setTerminalMode,
         sendCommand,
         launchAgent,
-        isTerminalOpen: terminalIds.length > 0,
+        isTerminalVisible,
         terminalIds,
         activeTerminalId,
         openTerminal,
         toggleTerminal,
-        closeTerminal,
         closeTerminalById
       }}
     >

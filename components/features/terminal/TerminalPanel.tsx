@@ -1,6 +1,6 @@
 'use client';
 
-import { Terminal as TerminalIcon, X } from 'lucide-react';
+import { Plus, Terminal as TerminalIcon, X } from 'lucide-react';
 import { Fragment } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -13,15 +13,16 @@ import { useTerminal } from './TerminalProvider';
 export function TerminalPanel() {
   const {
     isElectron,
-    isTerminalOpen,
+    isTerminalVisible,
     terminalIds,
     activeTerminalId,
-    closeTerminal,
+    toggleTerminal,
     closeTerminalById,
+    openTerminal,
     terminalMode
   } = useTerminal();
 
-  if (!isElectron || !isTerminalOpen || terminalMode !== 'embedded') {
+  if (!isElectron || !isTerminalVisible || terminalMode !== 'embedded') {
     return null;
   }
 
@@ -29,19 +30,30 @@ export function TerminalPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col border-t bg-background">
-      <div className="flex items-center justify-between border-b px-3 py-1.5">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <TerminalIcon className="h-3.5 w-3.5" />
+      <div className="flex items-center justify-between px-3 bg-black/80">
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <TerminalIcon className="h-3 w-3" />
           Terminal
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-6 w-6"
-          onClick={() => void closeTerminal()}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-1 text-muted">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            title="New terminal tab"
+            onClick={() => void openTerminal()}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={() => void toggleTerminal()}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
       <div className="min-h-0 flex-1">
         <ResizablePanelGroup orientation="horizontal" className="h-full min-h-0 w-full">
@@ -52,16 +64,16 @@ export function TerminalPanel() {
                 <div className="flex h-full min-h-0 flex-col">
                   <div
                     className={cn(
-                      'flex items-center justify-end border-b border-white/10 px-2 py-1',
+                      'flex items-center justify-end border-b border-white/10 px-2 pr-4 ',
                       activeTerminalId === terminalId
-                        ? 'bg-black/90 text-white'
-                        : 'bg-black/50 text-white'
+                        ? 'bg-black/90 text-muted'
+                        : 'bg-black/50 text-muted'
                     )}
                   >
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-5 w-5 text-white"
+                      className="h-4 w-4 text-muted"
                       title="Close terminal session"
                       onClick={() => void closeTerminalById(terminalId)}
                     >

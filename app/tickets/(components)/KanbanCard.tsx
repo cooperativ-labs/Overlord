@@ -2,8 +2,10 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTransition } from 'react';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +14,10 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu';
+import { updateTicketPriorityAction } from '@/lib/actions/tickets';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
@@ -46,6 +50,7 @@ export type Ticket = {
   has_unopened_waiting_response?: boolean;
   review_entered_at?: string | null;
   has_unopened_review?: boolean;
+  objectives_executed_count?: number;
   updated_at?: string;
 };
 
@@ -84,6 +89,17 @@ export default function KanbanCard({
     id: ticket.id,
     disabled: isDragOverlay
   });
+  const [isPending, startTransition] = useTransition();
+  const isHighPriority = ticket.priority === 'high';
+  const isMediumPriority = ticket.priority === 'medium';
+  const raiseDisabled = isPending || !isMediumPriority;
+  const reduceDisabled = isPending || !isHighPriority;
+
+  function handlePriorityChange(nextPriority: Database['public']['Enums']['ticket_priority']) {
+    startTransition(async () => {
+      await updateTicketPriorityAction(ticket.id, nextPriority);
+    });
+  }
 
   if (isDragOverlay) {
     return (
@@ -128,13 +144,20 @@ export default function KanbanCard({
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
-            hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
+            hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25',
+            isHighPriority && 'border-l-2 border-l-orange-500'
           )}
           style={style}
           onClick={handleCardClick}
           {...listeners}
           {...attributes}
         >
+          {isHighPriority && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 left-4 w-0 border-l-2 border-orange-500"
+            />
+          )}
           {hasUnopenedWaitingResponse || hasUnopenedReview ? (
             <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1">
               {hasUnopenedWaitingResponse ? (
@@ -160,6 +183,15 @@ export default function KanbanCard({
         </Card>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        <ContextMenuItem onSelect={() => handlePriorityChange('high')} disabled={raiseDisabled}>
+          <ArrowUp className="h-3.5 w-3.5" />
+          Raise priority
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => handlePriorityChange('medium')} disabled={reduceDisabled}>
+          <ArrowDown className="h-3.5 w-3.5" />
+          Reduce priority
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() => {
             handleMarkUnreadClick();
@@ -184,6 +216,7 @@ function KanbanCardBody({
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
   const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
+  const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
   return (
     <CardContent className="flex h-full flex-col p-3">
@@ -223,26 +256,37 @@ function KanbanCardBody({
             />
           ) : null}
         </div>
-        {activeAgentIdentifier ? (
-          <div className="min-w-0">
-            {activeAgentType ? (
-              <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-                <Image
-                  src={activeAgentType.icon}
-                  alt={`${activeAgentType.label} icon`}
-                  width={12}
-                  height={12}
-                  className="h-3 w-3 shrink-0"
-                />
-                <span className="truncate">{activeAgentType.label}</span>
-              </p>
-            ) : (
-              <p className="text-[10px] text-muted-foreground/70 truncate">
-                {activeAgentIdentifier}
-              </p>
-            )}
-          </div>
-        ) : null}
+        <div className="flex items-center gap-1.5">
+          {activeAgentIdentifier ? (
+            <div className="min-w-0">
+              {activeAgentType ? (
+                <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                  <Image
+                    src={activeAgentType.icon}
+                    alt={`${activeAgentType.label} icon`}
+                    width={12}
+                    height={12}
+                    className="h-3 w-3 shrink-0"
+                  />
+                  <span className="truncate">{activeAgentType.label}</span>
+                </p>
+              ) : (
+                <p className="text-[10px] text-muted-foreground/70 truncate">
+                  {activeAgentIdentifier}
+                </p>
+              )}
+            </div>
+          ) : null}
+          {executedObjectivesCount > 0 ? (
+            <span
+              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
+              title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+              aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+            >
+              {executedObjectivesCount}
+            </span>
+          ) : null}
+        </div>
       </div>
     </CardContent>
   );

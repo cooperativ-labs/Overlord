@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.0] - 2026-03-06:19:33
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Update AboutPage to label the local Overlord URL as "Local URL" instead of "OVERLORD_URL" for improved clarity.
+
+### Security
+- None.
+
 ## [0.44.0] - 2026-03-06:16:11
 
 ### Added

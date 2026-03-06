@@ -467,6 +467,38 @@ export async function updateTicketStatusAction(ticketId: string, status: string)
   ]);
 }
 
+export async function updateTicketPriorityAction(
+  ticketId: string,
+  priority: Database['public']['Enums']['ticket_priority']
+): Promise<void> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('tickets')
+    .update({ priority })
+    .eq('id', ticketId)
+    .select('organization_id,project_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update ticket priority.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'priority_change',
+    phase: priority,
+    summary: `Priority changed to ${priority}.`,
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards([data.organization_id]);
+  revalidatePath(
+    buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: data.organization_id, projectId: data.project_id, ticketId }
+  ]);
+}
+
 export async function updateTicketExecutionTargetAction(
   ticketId: string,
   executionTarget: Database['public']['Enums']['ticket_execution_target']

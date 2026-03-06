@@ -33,6 +33,7 @@ export default function TicketListCard({
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
   const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
+  const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
   return (
     <div
@@ -90,23 +91,34 @@ export default function TicketListCard({
         </div>
       </div>
 
-      {/* Agent label */}
-      {activeAgentIdentifier ? (
-        <div className="hidden shrink-0 sm:block">
-          {activeAgentType ? (
-            <p className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-              <Image
-                src={activeAgentType.icon}
-                alt={`${activeAgentType.label} icon`}
-                width={12}
-                height={12}
-                className="h-3 w-3 shrink-0"
-              />
-              <span>{activeAgentType.label}</span>
-            </p>
-          ) : (
-            <p className="text-[10px] text-muted-foreground/70">{activeAgentIdentifier}</p>
-          )}
+      {/* Agent label + executed objectives */}
+      {activeAgentIdentifier || executedObjectivesCount > 0 ? (
+        <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+          {activeAgentIdentifier ? (
+            activeAgentType ? (
+              <p className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
+                <Image
+                  src={activeAgentType.icon}
+                  alt={`${activeAgentType.label} icon`}
+                  width={12}
+                  height={12}
+                  className="h-3 w-3 shrink-0"
+                />
+                <span>{activeAgentType.label}</span>
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground/70">{activeAgentIdentifier}</p>
+            )
+          ) : null}
+          {executedObjectivesCount > 0 ? (
+            <span
+              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
+              title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+              aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+            >
+              {executedObjectivesCount}
+            </span>
+          ) : null}
         </div>
       ) : null}
 

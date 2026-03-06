@@ -1,4 +1,4 @@
-import { ArrowRightToLine, ChevronDown } from 'lucide-react';
+import { ArrowRightToLine, ChevronDown, EllipsisVertical } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import fs from 'node:fs/promises';
@@ -25,6 +25,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Separator } from '@/components/ui/separator';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
@@ -166,7 +171,7 @@ export async function TicketPanelContent({
   const platformUrl = getPlatformUrl();
   const agentToken =
     agentTokenRow &&
-    (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
+      (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
       ? agentTokenRow.token
       : null;
   const workspaceRoot = getWorkspaceRoot();
@@ -232,14 +237,34 @@ export async function TicketPanelContent({
       initialSharedState={state ?? []}
     >
       <div className="flex h-full flex-col bg-background">
-        <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-          <div className="flex items-center gap-1">
-            <p className="text-sm font-medium text-muted-foreground">ID: {ticketIdentifier}</p>
-            <CopyTicketIdentifierButton value={ticketIdentifier} />
-          </div>
-          <div className="flex items-center gap-1">
-            <DeleteTicketButton ticketId={ticketId} ticketLabel={ticketIdentifier} />
-            <Separator orientation="vertical" className="h-4 w-px mr-2 bg-border" />
+        <div className="flex items-center gap-2 border-b px-4 py-3 justify-between">
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button aria-label="Ticket actions" className="h-8 w-8" size="icon" variant="ghost">
+                <EllipsisVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+                <span>Copy ticket ID</span>
+                <CopyTicketIdentifierButton
+                  value={ticket.id}
+                  ariaLabel="Copy full ticket identifier"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-accent"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
+                <span>Delete ticket</span>
+                <DeleteTicketButton
+                  ticketId={ticketId}
+                  ticketLabel={ticketIdentifier}
+                  className="inline-flex h-7 w-7 items-center justify-center"
+                />
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="flex items-center gap-2 justify-end">
             <TicketHeaderAction
               ticketId={ticketId}
               agentToken={agentToken}
@@ -258,6 +283,7 @@ export async function TicketPanelContent({
               </Link>
             </Button>
           </div>
+
         </div>
 
         <TimerWithTimeEntries

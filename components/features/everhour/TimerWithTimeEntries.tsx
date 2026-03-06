@@ -34,7 +34,9 @@ export function TimerWithTimeEntries({
           <h2 className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Time Tracking
           </h2>
-          <p className="text-muted-foreground text-sm">Track time on this ticket with Everhour.</p>
+          <p className="text-muted-foreground text-sm line-clamp-1 truncate">
+            Track time on this ticket with Everhour.
+          </p>
         </div>
         <div className="flex items-center gap-1">
           <Popover>

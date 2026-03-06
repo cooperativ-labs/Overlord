@@ -12,8 +12,8 @@ type TerminalWorkspaceProps = {
 };
 
 export function TerminalWorkspace({ children }: TerminalWorkspaceProps) {
-  const { isElectron, isTerminalOpen, terminalMode } = useTerminal();
-  const showEmbeddedTerminal = isElectron && isTerminalOpen && terminalMode === 'embedded';
+  const { isElectron, isTerminalVisible, terminalMode } = useTerminal();
+  const showEmbeddedTerminal = isElectron && isTerminalVisible && terminalMode === 'embedded';
 
   if (!showEmbeddedTerminal) {
     return (

@@ -67,6 +67,7 @@ type RawTicket = {
   organization_id: number;
   project_id: string;
   everhour_task_id: string | null;
+  objectives_executed_count?: number;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
     | { name: string; color: string; everhour_project_id: string | null }
@@ -155,30 +156,40 @@ export default async function TicketsBoardContent({
   >();
   const waitingQuestionByTicket = new Map<string, string>();
   const reviewStatusByTicket = new Map<string, string>();
+  const executedObjectivesCountByTicket = new Map<string, number>();
 
   if (ticketIds.length > 0) {
-    const [{ data: sessions }, { data: waitingQuestions }, { data: reviewStatusChanges }] =
-      await Promise.all([
-        supabase
-          .from('agent_sessions')
-          .select('ticket_id,session_state,agent_identifier')
-          .in('ticket_id', ticketIds)
-          .order('attached_at', { ascending: false }),
-        supabase
-          .from('ticket_events')
-          .select('ticket_id,created_at')
-          .in('ticket_id', ticketIds)
-          .eq('event_type', 'question')
-          .eq('is_blocking', true)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('ticket_events')
-          .select('ticket_id,created_at')
-          .in('ticket_id', ticketIds)
-          .eq('event_type', 'status_change')
-          .eq('phase', 'review')
-          .order('created_at', { ascending: false })
-      ]);
+    const [
+      { data: sessions },
+      { data: waitingQuestions },
+      { data: reviewStatusChanges },
+      { data: executedObjectives }
+    ] = await Promise.all([
+      supabase
+        .from('agent_sessions')
+        .select('ticket_id,session_state,agent_identifier')
+        .in('ticket_id', ticketIds)
+        .order('attached_at', { ascending: false }),
+      supabase
+        .from('ticket_events')
+        .select('ticket_id,created_at')
+        .in('ticket_id', ticketIds)
+        .eq('event_type', 'question')
+        .eq('is_blocking', true)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('ticket_events')
+        .select('ticket_id,created_at')
+        .in('ticket_id', ticketIds)
+        .eq('event_type', 'status_change')
+        .eq('phase', 'review')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('ticket_objectives')
+        .select('ticket_id')
+        .in('ticket_id', ticketIds)
+        .eq('is_executed', true)
+    ]);
 
     for (const session of (sessions ?? []) as AgentSessionForBoard[]) {
       if (!latestSessionByTicket.has(session.ticket_id)) {
@@ -199,6 +210,13 @@ export default async function TicketsBoardContent({
       if (!reviewStatusByTicket.has(reviewStatusChange.ticket_id)) {
         reviewStatusByTicket.set(reviewStatusChange.ticket_id, reviewStatusChange.created_at);
       }
+    }
+
+    for (const objective of (executedObjectives ?? []) as Array<{ ticket_id: string }>) {
+      executedObjectivesCountByTicket.set(
+        objective.ticket_id,
+        (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1
+      );
     }
   }
 
@@ -224,7 +242,8 @@ export default async function TicketsBoardContent({
         agent_session_state: session?.session_state ?? null,
         running_agent: isAttached ? session.agent_identifier : null,
         waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
-        review_entered_at: reviewStatusByTicket.get(ticket.id) ?? null
+        review_entered_at: reviewStatusByTicket.get(ticket.id) ?? null,
+        objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0
       };
     });
   const statuses = dedupeStatuses(statusesResult.data ?? []);

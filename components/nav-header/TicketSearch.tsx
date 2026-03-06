@@ -149,7 +149,9 @@ export function TicketSearch({ className }: TicketSearchProps) {
           placeholder="Search tickets…"
           value={query}
           onChange={event => setQuery(event.target.value)}
-          className="w-full pr-10"
+          className={cn(
+            'w-full pr-10 rounded-lg shadow-sm focus:shadow-lg focus:scale-105 transition-height transition-shadow duration-200 ease-in-out'
+          )}
           role="combobox"
           aria-expanded={isOpen}
           aria-controls={listboxId}
@@ -171,7 +173,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
         <ul
           role="listbox"
           id={listboxId}
-          className="absolute left-0 top-full mt-1 z-20 w-full overflow-hidden rounded-2xl border border-border bg-card shadow-lg"
+          className="absolute left-0 top-full mt-6 z-20 w-full overflow-hidden rounded-xl border border-border bg-card shadow-xl scale-105"
         >
           {results.map((ticket, index) => {
             const isActive = index === activeIndex;
