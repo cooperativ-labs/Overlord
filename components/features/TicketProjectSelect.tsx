@@ -132,58 +132,54 @@ export function TicketProjectSelect({
     : undefined;
 
   return (
-    <section className="mb-6 rounded-lg p-3">
-      <div className="mt-2 space-y-2">
-        <Select
-          open={isSelectOpen}
-          onOpenChange={setIsSelectOpen}
-          value={selectedProjectId}
-          onValueChange={(value: string | undefined) => handleProjectChange(value ?? '')}
-          disabled={isSavingProject}
+    <>
+      <Select
+        open={isSelectOpen}
+        onOpenChange={setIsSelectOpen}
+        value={selectedProjectId}
+        onValueChange={(value: string | undefined) => handleProjectChange(value ?? '')}
+        disabled={isSavingProject}
+      >
+        <SelectTrigger
+          id="ticket-project-select"
+          aria-label="Select project"
+          className="h-7 w-auto rounded-full border border-dashed bg-transparent px-3 text-xs font-medium hover:bg-muted"
         >
-          <SelectTrigger
-            id="ticket-project-select"
-            aria-label="Select project"
-            className="h-auto w-full rounded-full border-border bg-background px-3 py-1.5 text-left shadow-sm hover:bg-accent hover:text-accent-foreground"
-          >
-            <span className="flex items-center gap-2 pr-2">
-              {selectedProject ? (
-                <span className="h-3 w-3 rounded-[6px] border" style={projectIndicatorStyle} />
-              ) : (
-                <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
-              )}
-              <span className="text-sm font-medium">
-                {selectedProject?.name ?? 'Select project'}
-              </span>
-            </span>
-          </SelectTrigger>
-          <SelectContent align="start">
-            {availableProjects.map(project => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
-            ))}
-            <SelectSeparator />
-            <div className="p-1 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => {
-                  setIsSelectOpen(false);
-                  handleCreateDialogOpenChange(true);
-                }}
-              >
-                Create new project
-              </Button>
-            </div>
-          </SelectContent>
-        </Select>
-        {isSavingProject ? <p className="text-xs text-muted-foreground">Saving project…</p> : null}
-        {updateError ? <p className="text-xs text-destructive">{updateError}</p> : null}
-      </div>
-
+          <span className="flex items-center gap-1.5">
+            {selectedProject ? (
+              <span
+                className="h-2.5 w-2.5 rounded-[4px] border shrink-0"
+                style={projectIndicatorStyle}
+              />
+            ) : (
+              <span className="h-2.5 w-2.5 rounded-[4px] border border-muted-foreground/50 bg-muted shrink-0" />
+            )}
+            <span>{selectedProject?.name ?? 'Project'}</span>
+          </span>
+        </SelectTrigger>
+        <SelectContent align="start">
+          {availableProjects.map(project => (
+            <SelectItem key={project.id} value={project.id}>
+              {project.name}
+            </SelectItem>
+          ))}
+          <SelectSeparator />
+          <div className="p-1 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                setIsSelectOpen(false);
+                handleCreateDialogOpenChange(true);
+              }}
+            >
+              Create new project
+            </Button>
+          </div>
+        </SelectContent>
+      </Select>
       <Dialog open={showCreateForm} onOpenChange={handleCreateDialogOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -237,6 +233,6 @@ export function TicketProjectSelect({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </>
   );
 }

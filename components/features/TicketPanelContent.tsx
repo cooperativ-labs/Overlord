@@ -16,6 +16,12 @@ import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -260,186 +266,203 @@ export async function TicketPanelContent({
           everhourIntegration={everhourIntegration ?? null}
         />
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">
-          <div className="mb-4">
-            <InlineEditField
-              displayClassName="text-xl font-bold tracking-tight"
-              field="title"
-              organizationId={organizationId}
-              initialValue={ticket.title ?? ''}
-              inputClassName="text-xl font-bold tracking-tight"
-              placeholder="Untitled — click to add a title"
-              ticketId={ticketId}
-            />
-          </div>
-
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <TicketStatusSelect
-              currentStatus={ticket.status ?? ''}
-              statusOptions={[...statusOptions]}
-              ticketId={ticketId}
-            />
-            <div className="h-4 w-px bg-border" />
-            <TicketExecutionTargetSelect
-              currentExecutionTarget={ticket.execution_target ?? 'agent'}
-              ticketId={ticketId}
-            />
-            <div className="h-4 w-px bg-border" />
-            <Badge className="rounded-full" variant="outline">
-              Priority {ticket.priority}
-            </Badge>
-            {(() => {
-              const runningAgent =
-                agentSession?.session_state === 'attached' ? agentSession.agent_identifier : null;
-              const displayAgent =
-                runningAgent ?? ticket.recent_agent ?? ticket.assigned_agent ?? null;
-              if (!displayAgent) return null;
-              const agentType = getAgentTypeByIdentifier(displayAgent);
-              return (
-                <Badge className="rounded-full gap-1.5" variant="secondary">
-                  {agentType ? (
-                    <>
-                      <Image
-                        src={agentType.icon}
-                        alt={`${agentType.label} icon`}
-                        width={12}
-                        height={12}
-                        className="h-3 w-3"
-                      />
-                      {agentType.label}
-                    </>
-                  ) : (
-                    displayAgent
-                  )}
-                </Badge>
-              );
-            })()}
-          </div>
-          <TicketProjectSelect
-            ticketId={ticketId}
-            organizationId={organizationId}
-            currentProjectId={activeProjectId}
-            projects={projectOptions}
-          />
-
-          <section className="mb-8 rounded-xl border border-primary/25 bg-primary/4 p-4">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary/90">
-              Objective
-            </h2>
-            {orderedExecutedObjectives.length > 0 ? (
-              <div className="mb-3 space-y-2">
-                {orderedExecutedObjectives.map((objective, index) => (
-                  <Collapsible key={objective.id}>
-                    <div className="flex items-start gap-1">
-                      <CollapsibleTrigger asChild>
-                        <button
-                          className="flex flex-1 items-center justify-between rounded-md border bg-background px-3 py-2 text-left hover:bg-muted/40"
-                          type="button"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">Previous Objective {index + 1}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Executed {new Date(objective.created_at).toLocaleString()}
-                            </p>
-                          </div>
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        </button>
-                      </CollapsibleTrigger>
-                      <ObjectiveMenuButton
-                        ticketId={ticketId}
-                        objectiveId={objective.id}
-                        isExecuted={objective.is_executed}
-                        canMarkExecuted={objective.objective.trim().length > 0}
-                      />
-                    </div>
-                    <CollapsibleContent className="px-1 pb-2 pt-1">
-                      <MarkdownContent compact>{objective.objective}</MarkdownContent>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="rounded-md border bg-background p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Current Objective
-                </p>
-                <ObjectiveMenuButton
+        <div className="flex-1 overflow-y-auto overflow-x-hidden  bg-muted/50">
+          <section className="bg-background pt-5">
+            <div className="px-5">
+              <div className="mb-4">
+                <InlineEditField
+                  displayClassName="text-xl font-bold tracking-tight"
+                  field="title"
+                  organizationId={organizationId}
+                  initialValue={ticket.title ?? ''}
+                  inputClassName="text-xl font-bold tracking-tight"
+                  placeholder="Untitled — click to add a title"
                   ticketId={ticketId}
-                  objectiveId={draftObjective?.id ?? ''}
-                  isExecuted={!draftObjective || draftObjective.is_executed}
-                  canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
                 />
               </div>
-              <InlineEditField
-                key={draftObjective?.id ?? 'current-objective'}
-                displayClassName="text-sm leading-relaxed"
-                field="objective"
-                organizationId={organizationId}
-                fileMentionPaths={objectiveFileMentionPaths}
-                initialValue={draftObjectiveValue}
-                multiline
-                renderMarkdown
-                placeholder="No objective — click to add one."
-                ticketId={ticketId}
-              />
+
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <TicketProjectSelect
+                  ticketId={ticketId}
+                  organizationId={organizationId}
+                  currentProjectId={activeProjectId}
+                  projects={projectOptions}
+                />
+                <div className="h-4 w-px bg-border" />
+                <TicketStatusSelect
+                  currentStatus={ticket.status ?? ''}
+                  statusOptions={[...statusOptions]}
+                  ticketId={ticketId}
+                />
+                <div className="h-4 w-px bg-border" />
+                <TicketExecutionTargetSelect
+                  currentExecutionTarget={ticket.execution_target ?? 'agent'}
+                  ticketId={ticketId}
+                />
+
+                {(() => {
+                  const runningAgent =
+                    agentSession?.session_state === 'attached'
+                      ? agentSession.agent_identifier
+                      : null;
+                  const displayAgent =
+                    runningAgent ?? ticket.recent_agent ?? ticket.assigned_agent ?? null;
+                  if (!displayAgent) return null;
+                  const agentType = getAgentTypeByIdentifier(displayAgent);
+                  return (
+                    <Badge className="rounded-full gap-1.5" variant="secondary">
+                      {agentType ? (
+                        <>
+                          <Image
+                            src={agentType.icon}
+                            alt={`${agentType.label} icon`}
+                            width={12}
+                            height={12}
+                            className="h-3 w-3"
+                          />
+                          {agentType.label}
+                        </>
+                      ) : (
+                        displayAgent
+                      )}
+                    </Badge>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="my-5 pt-7 py-5 ">
+              {/* <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Objectives
+            </h2> */}
+              <div className="px-5">
+                {orderedExecutedObjectives.length > 0 ? (
+                  <div className="mb-3 space-y-2 bg-background rounded-md border">
+                    {orderedExecutedObjectives.map((objective, index) => (
+                      <Collapsible key={objective.id}>
+                        <div className="flex items-center gap-1 hover:bg-background rounded-md ">
+                          <CollapsibleTrigger asChild>
+                            <button
+                              className="flex flex-1 items-center justify-between hover:bg-background px-3 py-2 text-left rounded-md "
+                              type="button"
+                            >
+                              <div>
+                                <p className="text-sm font-medium">Objective {index + 1}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Executed {new Date(objective.created_at).toLocaleString()}
+                                </p>
+                              </div>
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </CollapsibleTrigger>
+                          <ObjectiveMenuButton
+                            ticketId={ticketId}
+                            objectiveId={objective.id}
+                            isExecuted={objective.is_executed}
+                            canMarkExecuted={objective.objective.trim().length > 0}
+                          />
+                        </div>
+                        <CollapsibleContent className="px-3 pb-2 pt-1">
+                          <MarkdownContent compact>{objective.objective}</MarkdownContent>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="flex items-start gap-1">
+                  <div className="flex-1">
+                    <InlineEditField
+                      key={draftObjective?.id ?? 'current-objective'}
+                      displayClassName="text-base leading-relaxed"
+                      inputClassName="text-base leading-relaxed"
+                      variant="textarea"
+                      field="objective"
+                      organizationId={organizationId}
+                      fileMentionPaths={objectiveFileMentionPaths}
+                      initialValue={draftObjectiveValue}
+                      multiline
+                      renderMarkdown
+                      placeholder="Click to add an objective…"
+                      ticketId={ticketId}
+                    />
+                  </div>
+                  <ObjectiveMenuButton
+                    ticketId={ticketId}
+                    objectiveId={draftObjective?.id ?? ''}
+                    isExecuted={!draftObjective || draftObjective.is_executed}
+                    canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
+                  />
+                </div>
+
+                {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
+              </div>
+            </div>
+          </section>
+          <section className="bg-muted/50 px-5">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="tools-criteria">
+                <AccordionTrigger className="text-xs font-semibold uppercase tracking-widest text-muted-foreground py-3 hover:no-underline">
+                  Tools and Acceptance Criteria
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="flex flex-col gap-4 pb-2 pl-2">
+                    <div>
+                      <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Available Tools
+                      </h2>
+                      <InlineEditField
+                        displayClassName="text-sm leading-relaxed"
+                        field="available_tools"
+                        organizationId={organizationId}
+                        initialValue={ticket.available_tools ?? ''}
+                        multiline
+                        placeholder="None specified — click to add."
+                        ticketId={ticketId}
+                      />
+                    </div>
+                    <div>
+                      <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        Acceptance Criteria
+                      </h2>
+                      <InlineEditField
+                        displayClassName="text-sm leading-relaxed"
+                        field="acceptance_criteria"
+                        organizationId={organizationId}
+                        initialValue={ticket.acceptance_criteria ?? ''}
+                        multiline
+                        placeholder="None specified — click to add."
+                        ticketId={ticketId}
+                      />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+
+            <div className="mb-6">
+              <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
             </div>
 
-            {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
+            <Separator className="mb-6" />
+
+            <ErrorBoundary>
+              <div className="px-5">
+                <TicketPanelLive
+                  ticketId={ticketId}
+                  projectId={activeProjectId}
+                  editorScheme={editorScheme}
+                  workspaceRoot={workspaceRoot}
+                  workingDirectory={workingDirectory}
+                  hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+                  agentToken={agentToken}
+                  claudeCommand={claudeCode}
+                  codexCommand={codex}
+                  cursorCommand={cursor}
+                  geminiCommand={gemini}
+                />
+              </div>
+            </ErrorBoundary>
           </section>
-
-          <section className="mb-6">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Available Tools
-            </h2>
-            <InlineEditField
-              displayClassName="text-sm leading-relaxed"
-              field="available_tools"
-              organizationId={organizationId}
-              initialValue={ticket.available_tools ?? ''}
-              multiline
-              placeholder="None specified — click to add."
-              ticketId={ticketId}
-            />
-          </section>
-
-          <section className="mb-6">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Acceptance Criteria
-            </h2>
-            <InlineEditField
-              displayClassName="text-sm leading-relaxed"
-              field="acceptance_criteria"
-              organizationId={organizationId}
-              initialValue={ticket.acceptance_criteria ?? ''}
-              multiline
-              placeholder="None specified — click to add."
-              ticketId={ticketId}
-            />
-          </section>
-
-          <section className="mb-6">
-            <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
-          </section>
-
-          <Separator className="mb-6" />
-
-          <ErrorBoundary>
-            <TicketPanelLive
-              ticketId={ticketId}
-              projectId={activeProjectId}
-              editorScheme={editorScheme}
-              workspaceRoot={workspaceRoot}
-              workingDirectory={workingDirectory}
-              hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-              agentToken={agentToken}
-              claudeCommand={claudeCode}
-              codexCommand={codex}
-              cursorCommand={cursor}
-              geminiCommand={gemini}
-            />
-          </ErrorBoundary>
         </div>
       </div>
     </TicketLiveProvider>

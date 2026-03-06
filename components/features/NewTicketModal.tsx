@@ -22,6 +22,7 @@ import {
   updateTicketFieldAction
 } from '@/lib/actions/tickets';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
+import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 const MAX_MENTION_RESULTS = 8;
@@ -199,9 +200,13 @@ export function NewTicketModal({
     setSubmitButtonState('loading');
 
     try {
-      // Objective is already auto-saved, just need to redirect
       const ticket = projects.find(p => p.id === selectedProjectId);
       if (!ticket) throw new Error('Selected project not found');
+
+      // Set the title from the first 60 characters of the description
+      if (objective.trim()) {
+        await updateTicketFieldAction(ticketId, 'title', deriveTitleFromObjective(objective));
+      }
 
       setSubmitButtonState('success');
       onOpenChange(false);

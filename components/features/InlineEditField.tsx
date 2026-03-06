@@ -24,6 +24,11 @@ type Props = {
   renderMarkdown?: boolean;
   /** Optional list of project file paths used for @mention suggestions in multiline mode */
   fileMentionPaths?: string[];
+  /**
+   * 'textarea' — when empty in view mode, renders with a subtle border and min-height
+   * so it looks like a clickable textarea rather than invisible text.
+   */
+  variant?: 'default' | 'textarea';
 };
 
 const MAX_MENTION_RESULTS = 8;
@@ -48,7 +53,8 @@ export function InlineEditField({
   displayClassName,
   inputClassName,
   renderMarkdown = false,
-  fileMentionPaths = []
+  fileMentionPaths = [],
+  variant = 'default'
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [savedValue, setSavedValue] = useState(initialValue);
@@ -244,7 +250,7 @@ export function InlineEditField({
           <textarea
             ref={inputRef as React.Ref<HTMLTextAreaElement>}
             autoFocus
-            className={cn(baseInputClass, 'resize-none text-sm leading-relaxed')}
+            className={cn(baseInputClass, 'resize-none leading-relaxed')}
             disabled={pending}
             value={value}
             onBlur={save}
@@ -307,12 +313,22 @@ export function InlineEditField({
     );
   }
 
+  const isEmpty = !savedValue;
+  const isTextareaVariant = variant === 'textarea';
+
   return (
     <div
       className={cn(
-        'group -mx-2 -my-1 cursor-text rounded-md px-2 py-1',
-        'hover:bg-muted/50 transition-colors',
-        displayClassName
+        'cursor-text rounded-md transition-colors',
+        displayClassName,
+        isTextareaVariant
+          ? [
+              'px-2 py-1',
+              isEmpty
+                ? 'min-h-[200px] hover:ring-1 hover:ring-muted-foreground/60'
+                : 'hover:ring-1 hover:ring-muted-foreground/60  '
+            ]
+          : ['-mx-2 -my-1 px-2 py-1', 'hover:bg-muted/50']
       )}
       role="button"
       tabIndex={0}
@@ -323,14 +339,21 @@ export function InlineEditField({
     >
       {savedValue ? (
         renderMarkdown ? (
-          <MarkdownContent compact className="pointer-events-none">
+          <MarkdownContent compact className={cn('pointer-events-none', displayClassName)}>
             {field === 'objective' ? convertFileMentionsToMarkdown(savedValue) : savedValue}
           </MarkdownContent>
         ) : (
           <span className="whitespace-pre-wrap">{savedValue}</span>
         )
       ) : (
-        <span className="italic text-muted-foreground">{placeholder}</span>
+        <span
+          className={cn(
+            'text-muted-foreground',
+            isTextareaVariant ? (displayClassName ? displayClassName : 'text-base') : 'italic'
+          )}
+        >
+          {placeholder}
+        </span>
       )}
     </div>
   );

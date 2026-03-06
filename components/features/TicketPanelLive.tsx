@@ -76,7 +76,7 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
       {visibleEvents.map(event => (
         <article className="flex gap-3" key={event.id}>
           <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30" />
-          <div className="grid gap-1">
+          <div className="grid gap-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium">{getEventLabel(event)}</span>
               {event.phase ? (
@@ -122,12 +122,12 @@ function LiveArtifacts({
       </h2>
       <div className="grid gap-4">
         {artifacts.map(artifact => (
-          <div key={artifact.id}>
-            <p className="mb-0.5 text-xs font-medium">{artifact.label}</p>
+          <div key={artifact.id} className="min-w-0">
+            <p className="mb-0.5 text-xs font-medium break-words">{artifact.label}</p>
             <p className="mb-1 text-xs text-muted-foreground">{artifact.artifact_type}</p>
             {artifact.uri ? (
               <a
-                className="text-xs text-primary underline-offset-4 hover:underline"
+                className="text-xs text-primary underline-offset-4 hover:underline break-all"
                 href={artifact.uri}
               >
                 {artifact.uri}
@@ -267,7 +267,7 @@ export function TicketPanelLive({
                   {sharedState.map(item => (
                     <div key={item.id}>
                       <p className="mb-1 text-xs font-medium">{item.state_key}</p>
-                      <code className="block max-h-32 overflow-auto rounded border bg-muted p-2 text-xs">
+                      <code className="block max-h-32 overflow-auto whitespace-pre-wrap break-all rounded border bg-muted p-2 text-xs">
                         {JSON.stringify(item.state_value, null, 2)}
                       </code>
                     </div>

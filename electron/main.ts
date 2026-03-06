@@ -1,5 +1,5 @@
 import { config as loadDotenv } from 'dotenv';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu, MenuItemConstructorOptions } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
@@ -137,11 +137,13 @@ function createWindow(port: number) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      spellcheck: true
     }
   });
 
   applyRendererCsp(mainWindow, port);
+  registerNativeContextMenu(mainWindow);
   mainWindow.loadURL(`http://localhost:${port}`);
 
   if (isDev) {
@@ -154,6 +156,49 @@ function createWindow(port: number) {
   });
 
   appUpdater.setMainWindow(mainWindow);
+}
+
+function registerNativeContextMenu(window: BrowserWindow): void {
+  window.webContents.on('context-menu', (_event, params) => {
+    const template: MenuItemConstructorOptions[] = [];
+    const hasSelection = Boolean(params.selectionText?.trim());
+
+    if (params.isEditable) {
+      if (params.misspelledWord) {
+        const suggestions = params.dictionarySuggestions.slice(0, 6);
+        if (suggestions.length > 0) {
+          template.push(
+            ...suggestions.map(suggestion => ({
+              label: suggestion,
+              click: () => window.webContents.replaceMisspelling(suggestion)
+            }))
+          );
+        } else {
+          template.push({
+            label: 'No spelling suggestions',
+            enabled: false
+          });
+        }
+        template.push({ type: 'separator' });
+      }
+
+      template.push(
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      );
+    } else if (hasSelection) {
+      template.push({ role: 'copy' }, { type: 'separator' }, { role: 'selectAll' });
+    }
+
+    if (template.length === 0) return;
+
+    Menu.buildFromTemplate(template).popup({ window });
+  });
 }
 
 app.whenReady().then(async () => {

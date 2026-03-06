@@ -26,7 +26,7 @@ export function MarkdownContent({
     : proseBaseClasses;
 
   return (
-    <div className={`${proseClasses} ${className}`}>
+    <div className={`${proseClasses} overflow-hidden break-words ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

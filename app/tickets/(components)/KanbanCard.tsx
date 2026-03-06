@@ -209,7 +209,6 @@ function KanbanCardBody({
         ) : null}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <Badge className="text-xs">{ticket.priority}</Badge>
         <Badge variant="outline" className="text-xs capitalize">
           {ticket.execution_target}
         </Badge>

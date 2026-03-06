@@ -1,6 +1,7 @@
+import { headers } from 'next/headers';
+
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent } from '@/components/ui/card';
-import { getViewPreference } from '@/lib/actions/view-preference';
+import { getRawViewPreference } from '@/lib/actions/view-preference';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
@@ -8,17 +9,6 @@ import type { Database } from '@/types/database.types';
 import KanbanBoard from './KanbanBoard';
 import TicketListView from './TicketListView';
 import TicketsViewToggle from './TicketsViewToggle';
-
-const statusOrder = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'];
-
-function sortByStatus<T extends { status: string }>(items: T[]): T[] {
-  const statusWeight = new Map(statusOrder.map((status, index) => [status, index]));
-  return [...items].sort((left, right) => {
-    const leftWeight = statusWeight.get(left.status) ?? 999;
-    const rightWeight = statusWeight.get(right.status) ?? 999;
-    return leftWeight - rightWeight;
-  });
-}
 
 function getOrganizationName(
   organization: { name: string } | Array<{ name: string }> | null | undefined
@@ -111,7 +101,13 @@ export default async function TicketsBoardContent({
   description,
   projectId
 }: TicketsBoardContentProps) {
-  const view = await getViewPreference();
+  const savedView = await getRawViewPreference();
+  // Default to list view on mobile when no explicit preference has been saved
+  const headerStore = await headers();
+  const ua = headerStore.get('user-agent') ?? '';
+  const isMobile = /mobile|android|iphone|ipad/i.test(ua);
+  const defaultView = isMobile ? 'list' : 'board';
+  const view = savedView ?? defaultView;
   const supabase = await createClient();
   const {
     data: { user }
@@ -266,8 +262,6 @@ export default async function TicketsBoardContent({
     }
   }
 
-  const sorted = sortByStatus(tickets);
-
   const showBoard = view === 'board' && statuses.length > 0;
 
   return (
@@ -279,15 +273,8 @@ export default async function TicketsBoardContent({
         </div>
       </nav>
 
-      {!showBoard ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
-          <TicketsViewToggle initialView={view} />
-          <div />
-        </div>
-      ) : null}
-
       {loadError ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="mx-4 md:mx-6">
           <AlertDescription>Failed to load tickets: {loadError.message}</AlertDescription>
         </Alert>
       ) : null}
@@ -303,15 +290,16 @@ export default async function TicketsBoardContent({
           initialView={view}
         />
       ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <TicketListView
-              tickets={sorted}
-              showOrganizationName={showOrganizationName}
-              ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
-            />
-          </CardContent>
-        </Card>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <TicketsViewToggle initialView={view} />
+          </div>
+          <TicketListView
+            tickets={tickets}
+            showOrganizationName={showOrganizationName}
+            ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
+          />
+        </div>
       )}
     </div>
   );

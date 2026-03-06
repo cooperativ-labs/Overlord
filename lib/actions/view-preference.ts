@@ -21,3 +21,10 @@ export async function getViewPreference(): Promise<string> {
   const value = cookieStore.get(COOKIE_NAME)?.value;
   return VALID_VIEWS.has(value ?? '') ? (value as string) : 'board';
 }
+
+/** Returns null if no preference has been explicitly saved. */
+export async function getRawViewPreference(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const value = cookieStore.get(COOKIE_NAME)?.value;
+  return VALID_VIEWS.has(value ?? '') ? (value as string) : null;
+}

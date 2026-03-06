@@ -50,6 +50,7 @@ import {
   type TicketOpenedTimestamps,
   type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';
+import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
@@ -86,12 +87,6 @@ function toColumnTitle(status: string): string {
     .split('-')
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
-}
-
-function deriveTitleFromObjective(objective: string): string {
-  const trimmed = objective.trim();
-  if (trimmed.length <= 60) return trimmed;
-  return `${trimmed.slice(0, 60)}...`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -351,6 +346,10 @@ export default function KanbanBoard({
   function groupTickets(tickets: Ticket[]) {
     const groups = new Map<string, Ticket[]>();
     const uncategorized: Ticket[] = [];
+    const getUpdatedAtMs = (ticket: Ticket) => {
+      const value = ticket.updated_at ? Date.parse(ticket.updated_at) : Number.NaN;
+      return Number.isNaN(value) ? -1 : value;
+    };
 
     for (const col of sortedColumns) {
       groups.set(col.id, []);
@@ -368,7 +367,16 @@ export default function KanbanBoard({
       if (!visibleSlugs.has(slug)) {
         continue;
       }
-      columnTickets.sort((a, b) => a.board_position - b.board_position);
+      const isCompleteColumn = columnById.get(slug)?.statusType === 'complete';
+      if (isCompleteColumn) {
+        columnTickets.sort((a, b) => {
+          const updatedAtDiff = getUpdatedAtMs(b) - getUpdatedAtMs(a);
+          if (updatedAtDiff !== 0) return updatedAtDiff;
+          return a.board_position - b.board_position;
+        });
+      } else {
+        columnTickets.sort((a, b) => a.board_position - b.board_position);
+      }
     }
 
     uncategorized.sort((a, b) => a.board_position - b.board_position);
