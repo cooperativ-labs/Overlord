@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 
+import { DefaultProjectSection } from '@/components/features/projects/DefaultProjectSection';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 
@@ -17,6 +18,7 @@ export default async function UserLayout({ children }: LayoutProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ErrorBoundary>
+        <DefaultProjectSection />
         <TicketsBoardContent
           organizationId={selectedOrgId}
           showOrganizationName={!selectedOrgId}
