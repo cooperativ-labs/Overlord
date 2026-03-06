@@ -3,6 +3,8 @@
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { Plus, Ticket } from 'lucide-react';
+
 import { NewTicketModal } from '@/components/features/NewTicketModal';
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { Button } from '@/components/ui/button';
@@ -53,7 +55,11 @@ export function NewTicketButton() {
   return (
     <>
       <Button size="sm" onClick={() => setIsModalOpen(true)}>
-        New Ticket
+        <span className="flex items-center gap-0.5 sm:hidden">
+          <Plus className="h-3.5 w-3.5" />
+          <Ticket className="h-3.5 w-3.5" />
+        </span>
+        <span className="hidden sm:inline">New Ticket</span>
       </Button>
 
       <NewTicketModal
