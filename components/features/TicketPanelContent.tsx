@@ -166,7 +166,7 @@ export async function TicketPanelContent({
   const platformUrl = getPlatformUrl();
   const agentToken =
     agentTokenRow &&
-    (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
+      (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
       ? agentTokenRow.token
       : null;
   const workspaceRoot = getWorkspaceRoot();
@@ -398,7 +398,7 @@ export async function TicketPanelContent({
               </div>
             </div>
           </section>
-          <section className="bg-muted/50 px-5">
+          <section className="flex flex-col px-5 gap-3">
             <Accordion type="single" collapsible>
               <AccordionItem value="tools-criteria">
                 <AccordionTrigger className="text-xs font-semibold uppercase tracking-widest text-muted-foreground py-3 hover:no-underline">
@@ -446,25 +446,25 @@ export async function TicketPanelContent({
             <Separator className="mb-6" />
 
             <ErrorBoundary>
-              <div className="px-5">
-                <TicketPanelLive
-                  ticketId={ticketId}
-                  projectId={activeProjectId}
-                  editorScheme={editorScheme}
-                  workspaceRoot={workspaceRoot}
-                  workingDirectory={workingDirectory}
-                  hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-                  agentToken={agentToken}
-                  claudeCommand={claudeCode}
-                  codexCommand={codex}
-                  cursorCommand={cursor}
-                  geminiCommand={gemini}
-                />
-              </div>
+
+              <TicketPanelLive
+                ticketId={ticketId}
+                projectId={activeProjectId}
+                editorScheme={editorScheme}
+                workspaceRoot={workspaceRoot}
+                workingDirectory={workingDirectory}
+                hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+                agentToken={agentToken}
+                claudeCommand={claudeCode}
+                codexCommand={codex}
+                cursorCommand={cursor}
+                geminiCommand={gemini}
+              />
+
             </ErrorBoundary>
           </section>
         </div>
       </div>
-    </TicketLiveProvider>
+    </TicketLiveProvider >
   );
 }
