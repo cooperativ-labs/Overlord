@@ -40,9 +40,10 @@ export function spawnTerminal(
 ): string {
   const id = `term-${++counter}`;
   const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh');
+  const shellArgs = getShellLaunchArgs(shell);
   const resolvedCwd = normalizeTerminalCwd(cwd) ?? homeDirectory;
 
-  const term = pty.spawn(shell, [], {
+  const term = pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
@@ -105,6 +106,22 @@ export function spawnTerminal(
   }
 
   return id;
+}
+
+function getShellLaunchArgs(shellPath: string): string[] {
+  if (os.platform() === 'win32') return [];
+
+  const shellName = path.basename(shellPath).toLowerCase();
+
+  if (shellName === 'zsh' || shellName === 'fish') {
+    return ['-l'];
+  }
+
+  if (shellName === 'bash') {
+    return ['--login'];
+  }
+
+  return [];
 }
 
 export function writeToTerminal(id: string, data: string): void {

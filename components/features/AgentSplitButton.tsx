@@ -13,6 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getAgentConfigAction } from '@/lib/actions/agent-config';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
   AGENT_SELECTOR_VALUES,
   type AgentSelectorValue,
@@ -119,6 +120,19 @@ export function AgentSplitButton({
 
   const isLaunchingRef = useRef(false);
   const sessionStateAtLaunchRef = useRef<SessionState | null | undefined>(undefined);
+  const appliedStoredDefaultRef = useRef(false);
+
+  useEffect(() => {
+    if (appliedStoredDefaultRef.current) return;
+    appliedStoredDefaultRef.current = true;
+    if (activeAgentIdentifier) return;
+    if (selectedAgent !== 'claude') return;
+
+    const configuredDefault = readDefaultAgentTriggerFromStorage();
+    if (configuredDefault !== selectedAgent) {
+      onSelectAgent(configuredDefault);
+    }
+  }, [activeAgentIdentifier, onSelectAgent, selectedAgent]);
 
   useEffect(() => {
     if (!isLaunchingRef.current) return;

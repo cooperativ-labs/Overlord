@@ -74,6 +74,11 @@ interface ElectronAPI {
       supabaseRefreshToken: string | null;
     }>;
     saveRefreshToken: (token: string) => Promise<{ ok: true }>;
+    refreshSession: () => Promise<{
+      ok: boolean;
+      session?: { access_token: string; refresh_token: string };
+      error?: string;
+    }>;
   };
   isElectron: true;
 }

@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
   AGENT_SELECTOR_VALUES,
   type AgentSelectorValue,
@@ -49,7 +50,9 @@ function useLastAgent(): [AgentSelectorValue, (agent: AgentSelectorValue) => voi
     const stored = localStorage.getItem(LAST_AGENT_KEY);
     if (stored && AGENT_SELECTOR_VALUES.includes(stored as AgentSelectorValue)) {
       setAgent(stored as AgentSelectorValue);
+      return;
     }
+    setAgent(readDefaultAgentTriggerFromStorage());
   }, []);
 
   const persist = useCallback((next: AgentSelectorValue) => {

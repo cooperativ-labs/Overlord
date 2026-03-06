@@ -54,7 +54,7 @@ export function ProjectLayoutClient({
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}
     >
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-1 min-h-0 flex-col gap-5">
         <ProjectSettingsSection
           projectId={projectId}
           initialName={projectName}

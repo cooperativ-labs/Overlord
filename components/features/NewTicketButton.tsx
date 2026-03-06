@@ -51,6 +51,23 @@ export function NewTicketButton() {
     loadProjects();
   }, [isModalOpen]);
 
+  useEffect(() => {
+    const handleNewTicketHotkey = (event: globalThis.KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === 'n'
+      ) {
+        event.preventDefault();
+        setIsModalOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleNewTicketHotkey);
+    return () => window.removeEventListener('keydown', handleNewTicketHotkey);
+  }, []);
+
   return (
     <>
       <Button size="sm" onClick={() => setIsModalOpen(true)}>

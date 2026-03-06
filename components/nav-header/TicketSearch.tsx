@@ -26,6 +26,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
   const router = useRouter();
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const [query, setQuery] = useState('');
@@ -33,6 +34,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchShortcutHint, setSearchShortcutHint] = useState('⌘F');
 
   useEffect(() => {
     if (!query.trim()) {
@@ -89,6 +91,25 @@ export function TicketSearch({ className }: TicketSearchProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    setSearchShortcutHint(navigator.platform.toLowerCase().includes('mac') ? '⌘F' : 'Ctrl+F');
+
+    const handleGlobalSearchHotkey = (event: globalThis.KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === 'f'
+      ) {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalSearchHotkey);
+    return () => window.removeEventListener('keydown', handleGlobalSearchHotkey);
+  }, []);
+
   const selectTicket = (ticket: TicketSearchResult) => {
     if (!ticket.project_id) {
       return;
@@ -124,6 +145,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
     <div ref={containerRef} className={cn('relative', className)}>
       <div className="relative">
         <Input
+          ref={inputRef}
           placeholder="Search tickets…"
           value={query}
           onChange={event => setQuery(event.target.value)}
@@ -134,6 +156,11 @@ export function TicketSearch({ className }: TicketSearchProps) {
           aria-autocomplete="list"
           onKeyDown={handleKeyDown}
         />
+        {!isLoading && (
+          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {searchShortcutHint}
+          </kbd>
+        )}
         {isLoading && (
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
             Loading…

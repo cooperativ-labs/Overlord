@@ -288,6 +288,48 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
 }
 
 // ---------------------------------------------------------------------------
+// OAuth token refresh
+// ---------------------------------------------------------------------------
+// The @supabase/ssr auto-refresh calls /auth/v1/token?grant_type=refresh_token,
+// which is the standard GoTrue endpoint. OAuth-issued refresh tokens require
+// the OAuth endpoint (/auth/v1/oauth/token) with the client_id parameter.
+// Without this, the browser session silently expires every jwt_expiry interval
+// (default 3600s) and the user is forced to re-login.
+//
+// This function calls the correct OAuth endpoint so the Electron main process
+// can refresh tokens on behalf of the webview.
+// ---------------------------------------------------------------------------
+
+async function refreshOAuthTokens(
+  platformUrl: string,
+  refreshToken: string
+): Promise<SupabaseSession> {
+  const { supabase_url: supabaseUrl, electron_client_id: clientId } =
+    await fetchAuthConfig(platformUrl);
+
+  const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId
+    })
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OAuth token refresh failed (${res.status}): ${text.slice(0, 180)}`);
+  }
+
+  const data = await res.json();
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token
+  };
+}
+
+// ---------------------------------------------------------------------------
 // IPC registration
 // ---------------------------------------------------------------------------
 
@@ -322,5 +364,31 @@ export function registerAuthIpc({ getPlatformUrl }: RegisterAuthIpcOptions): voi
       saveElectronCredentials({ ...credentials, supabase_refresh_token: refreshToken });
     }
     return { ok: true };
+  });
+
+  // Refresh the Supabase session via the OAuth token endpoint.
+  // Called by ElectronAuthGate to proactively renew tokens before expiry.
+  ipcMain.handle('auth:refreshSession', async () => {
+    const credentials = loadElectronCredentials();
+    if (!credentials?.supabase_refresh_token) {
+      return { ok: false, error: 'No refresh token available' };
+    }
+
+    try {
+      const session = await refreshOAuthTokens(
+        credentials.platform_url,
+        credentials.supabase_refresh_token
+      );
+
+      // Persist the rotated refresh token for next time
+      saveElectronCredentials({
+        ...credentials,
+        supabase_refresh_token: session.refresh_token
+      });
+
+      return { ok: true, session };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Refresh failed' };
+    }
   });
 }

@@ -87,7 +87,15 @@ const electronAPI = {
         supabaseRefreshToken: string | null;
       }>,
     saveRefreshToken: (token: string) =>
-      ipcRenderer.invoke('auth:saveRefreshToken', token) as Promise<{ ok: true }>
+      ipcRenderer.invoke('auth:saveRefreshToken', token) as Promise<{ ok: true }>,
+    // Refresh session via the OAuth token endpoint (not the standard GoTrue endpoint).
+    // Required because OAuth-issued refresh tokens are not accepted by /auth/v1/token.
+    refreshSession: () =>
+      ipcRenderer.invoke('auth:refreshSession') as Promise<{
+        ok: boolean;
+        session?: { access_token: string; refresh_token: string };
+        error?: string;
+      }>
   },
   isElectron: true as const
 };

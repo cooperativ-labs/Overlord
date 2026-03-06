@@ -32,7 +32,7 @@ export function TerminalWorkspace({ children }: TerminalWorkspaceProps) {
         <ResizablePanel
           defaultSize="72%"
           minSize="35%"
-          className="flex flex-col overflow-y-scroll h-full"
+          className="flex flex-col overflow-y-auto h-full"
         >
           {children}
         </ResizablePanel>

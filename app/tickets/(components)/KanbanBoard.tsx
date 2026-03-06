@@ -1049,7 +1049,7 @@ export default function KanbanBoard({
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}
-            className="min-h-0 min-w-0 flex-1 overflow-x-scroll h-dvh"
+            className="min-h-0 min-w-0 flex-1 overflow-x-scroll"
           >
             <div className="inline-flex flex-nowrap gap-3 px-4 md:px-6">
               {visibleSortedColumns.map(col => {

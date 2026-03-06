@@ -57,7 +57,7 @@ export function TicketHeaderAction({
         hasProjectWorkingDirectory={hasProjectWorkingDirectory}
       />
       <AgentSplitButtonLive
-        defaultAgent={getLaunchAgentTypeByIdentifier(agentIdentifier)}
+        defaultAgent={agentIdentifier ? getLaunchAgentTypeByIdentifier(agentIdentifier) : undefined}
         ticketId={ticketId}
         agentToken={agentToken}
         commands={{

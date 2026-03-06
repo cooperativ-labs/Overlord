@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Edit3, Info, Link2, Monitor, Palette, Terminal } from 'lucide-react';
+import { Bot, Edit3, Info, Keyboard, Link2, Monitor, Palette, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -30,6 +30,7 @@ import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
 import { AppearancePage } from './settings/AppearancePage';
 import { CliPage } from './settings/CliPage';
 import { CustomizationPage } from './settings/CustomizationPage';
+import { HotkeysPage } from './settings/HotkeysPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
 import { TerminalPage } from './settings/TerminalPage';
 
@@ -45,7 +46,7 @@ type NavItem = {
 };
 
 const workflowNavItems: NavItem[] = [
-  { name: 'Integrations', icon: Link2 },
+  { name: 'Terminal', icon: Monitor, electronOnly: true },
   { name: 'Agents & MCP', icon: Bot },
   { name: 'Customization', icon: Edit3 },
   { name: 'CLI', icon: Terminal }
@@ -53,7 +54,8 @@ const workflowNavItems: NavItem[] = [
 
 const appNavItems: NavItem[] = [
   { name: 'Appearance', icon: Palette },
-  { name: 'Terminal', icon: Monitor, electronOnly: true }
+  { name: 'Hotkeys', icon: Keyboard },
+  { name: 'Integrations', icon: Link2 }
 ];
 
 const aboutNavItem: NavItem = { name: 'About', icon: Info };
@@ -150,6 +152,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI' && <CliPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}
+              {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Terminal' && isElectron && <TerminalPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>

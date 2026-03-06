@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.44.0] - 2026-03-06:16:11
+
+### Added
+- Add a default agent trigger selector to the Agents & MCP settings and persist the choice so the launch command bar, agent split buttons, and live launches always honor the stored preference.
+- Document keyboard shortcuts via a new Hotkeys settings page and surface Cmd/Ctrl+F (focus ticket search) plus Cmd/Ctrl+N (open the new ticket modal) so those actions stay reachable without reaching for the mouse.
+
+### Fixed
+- Ensure the Electron terminal manager starts zsh, bash, and fish as login shells so local environment variables and dotfiles are available before running commands.
+- Remove the `h-dvh` restriction from the Kanban scroll container so columns can flex to the available viewport height without cutting off content.
+
+### Changed
+- Default the tickets page to list view on mobile, hide the board/list toggle there, and keep desktop views respecting saved preferences so small-screen users land in a layout that feels native.
+
+### Security
+- Refresh Electron sessions via a new `auth:refreshSession` IPC handler that uses the OAuth token endpoint, persist the rotated refresh token, and trigger proactive refreshes before expiry so the Electron app no longer signs users out when Supabase tries to refresh.
+
 ## [0.43.0] - 2026-03-06:14:06
 
 ### Added

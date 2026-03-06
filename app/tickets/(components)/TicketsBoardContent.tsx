@@ -98,12 +98,10 @@ export default async function TicketsBoardContent({
   projectId
 }: TicketsBoardContentProps) {
   const savedView = await getRawViewPreference();
-  // Default to list view on mobile when no explicit preference has been saved
   const headerStore = await headers();
   const ua = headerStore.get('user-agent') ?? '';
   const isMobile = /mobile|android|iphone|ipad/i.test(ua);
-  const defaultView = isMobile ? 'list' : 'board';
-  const view = savedView ?? defaultView;
+  const view = isMobile ? 'list' : (savedView ?? 'board');
   const supabase = await createClient();
   const {
     data: { user }
@@ -261,7 +259,7 @@ export default async function TicketsBoardContent({
   const showBoard = view === 'board' && statuses.length > 0;
 
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-1 min-h-0 flex-col gap-4">
       {loadError ? (
         <Alert variant="destructive" className="mx-4 md:mx-6">
           <AlertDescription>Failed to load tickets: {loadError.message}</AlertDescription>
@@ -280,9 +278,11 @@ export default async function TicketsBoardContent({
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <TicketsViewToggle initialView={view} />
-          </div>
+          {!isMobile ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <TicketsViewToggle initialView={view} />
+            </div>
+          ) : null}
           <TicketListView
             tickets={tickets}
             showOrganizationName={showOrganizationName}
