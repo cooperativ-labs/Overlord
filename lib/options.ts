@@ -28,10 +28,7 @@ export const ticketExecutionTargetOptions: Option<TicketExecutionTarget>[] = [
   { value: 'human', label: 'Human' }
 ];
 
-export function getOptionLabel<T extends string>(
-  options: Option<T>[],
-  value: T
-): string {
+export function getOptionLabel<T extends string>(options: Option<T>[], value: T): string {
   return options.find(o => o.value === value)?.label ?? value;
 }
 

@@ -13,6 +13,7 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import {
+  disconnectProjectFromEverhourAction,
   updateProjectColorAction,
   updateProjectNameAction,
   updateProjectWorkingDirectoryAction
@@ -30,6 +31,7 @@ type ProjectSettingsModalProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
+  initialEverhourProjectId: string | null;
   initialStatuses: Array<{
     name: string;
     position: number;
@@ -47,6 +49,7 @@ export function ProjectSettingsModal({
   initialName,
   initialColor,
   initialWorkingDirectory,
+  initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey
 }: ProjectSettingsModalProps) {
@@ -57,10 +60,12 @@ export function ProjectSettingsModal({
   const [savedColor, setSavedColor] = useState(initialColor);
   const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
+  const [savedEverhourProjectId, setSavedEverhourProjectId] = useState(initialEverhourProjectId);
   const [nameSaveState, setNameSaveState] = useState<ButtonLoadingState>('default');
   const [workingDirectorySaveState, setWorkingDirectorySaveState] =
     useState<ButtonLoadingState>('default');
   const [syncButtonState, setSyncButtonState] = useState<ButtonLoadingState>('default');
+  const [disconnectButtonState, setDisconnectButtonState] = useState<ButtonLoadingState>('default');
   const [nameError, setNameError] = useState<string | null>(null);
   const [colorError, setColorError] = useState<string | null>(null);
   const [workingDirectoryError, setWorkingDirectoryError] = useState<string | null>(null);
@@ -77,6 +82,10 @@ export function ProjectSettingsModal({
     setWorkingDirectory(next);
     setSavedWorkingDirectory(next);
   }, [initialWorkingDirectory]);
+
+  useEffect(() => {
+    setSavedEverhourProjectId(initialEverhourProjectId);
+  }, [initialEverhourProjectId]);
 
   useEffect(() => {
     if (open) {
@@ -120,6 +129,8 @@ export function ProjectSettingsModal({
     setSyncMessage(null);
     try {
       const result = await syncEverhourProjectsForOrganization(organizationId);
+      const syncedProject = result.projects.find(project => project.id === projectId);
+      setSavedEverhourProjectId(syncedProject?.everhour_project_id ?? null);
       setSyncButtonState('success');
       const baseMessage = `Synced ${result.totalLocal} project${result.totalLocal === 1 ? '' : 's'} to Everhour (${result.created} created, ${result.linked} linked, ${result.mapped} mapped).`;
       const failedMessage =
@@ -131,6 +142,25 @@ export function ProjectSettingsModal({
     } catch (error) {
       setSyncButtonState('error');
       setSyncMessage(error instanceof Error ? error.message : 'Failed to sync Everhour projects.');
+    }
+  }
+
+  async function handleDisconnectEverhour() {
+    if (!savedEverhourProjectId) return;
+
+    setDisconnectButtonState('loading');
+    setSyncMessage(null);
+    try {
+      await disconnectProjectFromEverhourAction({ projectId });
+      setSavedEverhourProjectId(null);
+      setDisconnectButtonState('success');
+      setSyncMessage('Disconnected this project from Everhour.');
+      router.refresh();
+    } catch (error) {
+      setDisconnectButtonState('error');
+      setSyncMessage(
+        error instanceof Error ? error.message : 'Failed to disconnect project from Everhour.'
+      );
     }
   }
 
@@ -292,18 +322,38 @@ export function ProjectSettingsModal({
 
           {hasEverhourApiKey ? (
             <div className="grid gap-2">
-              <LoadingButton
-                buttonState={syncButtonState}
-                setButtonState={setSyncButtonState}
-                text="Sync Everhour"
-                loadingText="Syncing…"
-                successText="Synced"
-                errorText="Retry"
-                reset
-                size="sm"
-                variant="outline"
-                onClick={handleSyncEverhour}
-              />
+              <label className="text-xs font-medium text-muted-foreground">Everhour</label>
+              <p className="text-xs text-muted-foreground">
+                This project syncs with the identically named project in your Everhour account. Make
+                sure only one Everhour project has this exact name.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <LoadingButton
+                  buttonState={syncButtonState}
+                  setButtonState={setSyncButtonState}
+                  text="Sync Everhour"
+                  loadingText="Syncing…"
+                  successText="Synced"
+                  errorText="Retry"
+                  reset
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSyncEverhour}
+                />
+                <LoadingButton
+                  buttonState={disconnectButtonState}
+                  setButtonState={setDisconnectButtonState}
+                  text="Disconnect"
+                  loadingText="Disconnecting…"
+                  successText="Disconnected"
+                  errorText="Retry"
+                  reset
+                  size="sm"
+                  variant="outline"
+                  disabled={!savedEverhourProjectId || syncButtonState === 'loading'}
+                  onClick={handleDisconnectEverhour}
+                />
+              </div>
               {syncMessage ? (
                 <p className="text-xs text-muted-foreground" title={syncMessage}>
                   {syncMessage}

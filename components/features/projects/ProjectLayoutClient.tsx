@@ -15,6 +15,7 @@ type ProjectLayoutClientProps = {
   projectName: string;
   projectColor: string;
   projectWorkingDirectory: string | null;
+  projectEverhourProjectId: string | null;
   statuses: Array<{
     name: string;
     position: number;
@@ -31,6 +32,7 @@ export function ProjectLayoutClient({
   projectName,
   projectColor,
   projectWorkingDirectory,
+  projectEverhourProjectId,
   statuses,
   hasEverhourApiKey
 }: ProjectLayoutClientProps) {
@@ -48,17 +50,16 @@ export function ProjectLayoutClient({
       initialName={projectName}
       initialColor={projectColor}
       initialWorkingDirectory={projectWorkingDirectory}
+      initialEverhourProjectId={projectEverhourProjectId}
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}
     >
       <div className="flex flex-col gap-5">
         <ProjectSettingsSection
           projectId={projectId}
-          organizationId={organizationId}
           initialName={projectName}
           initialColor={projectColor}
           initialWorkingDirectory={projectWorkingDirectory}
-          hasEverhourApiKey={hasEverhourApiKey}
         />
         {children}
       </div>

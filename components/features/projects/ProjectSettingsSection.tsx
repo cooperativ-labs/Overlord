@@ -10,9 +10,7 @@ import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
-import { LoadingButton } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import {
   updateProjectColorAction,
   updateProjectNameAction,
@@ -22,20 +20,16 @@ import { cn } from '@/lib/utils';
 
 type ProjectSettingsSectionProps = {
   projectId: string;
-  organizationId: number;
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
-  hasEverhourApiKey: boolean;
 };
 
 export function ProjectSettingsSection({
   projectId,
-  organizationId,
   initialName,
   initialColor,
-  initialWorkingDirectory,
-  hasEverhourApiKey
+  initialWorkingDirectory
 }: ProjectSettingsSectionProps) {
   const { api, isElectron } = useElectron();
   const router = useRouter();
@@ -50,10 +44,8 @@ export function ProjectSettingsSection({
   const [colorSaveState, setColorSaveState] = useState<ButtonLoadingState>('default');
   const [workingDirectorySaveState, setWorkingDirectorySaveState] =
     useState<ButtonLoadingState>('default');
-  const [syncButtonState, setSyncButtonState] = useState<ButtonLoadingState>('default');
   const [nameError, setNameError] = useState<string | null>(null);
   const [colorError, setColorError] = useState<string | null>(null);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const hasSavedWorkingDirectory = savedWorkingDirectory.trim().length > 0;
@@ -116,26 +108,6 @@ export function ProjectSettingsSection({
     } catch (error) {
       setColorSaveState('error');
       setColorError(error instanceof Error ? error.message : 'Failed to update color.');
-    }
-  }
-
-  async function handleSyncEverhour() {
-    setSyncButtonState('loading');
-    setSyncMessage(null);
-
-    try {
-      const result = await syncEverhourProjectsForOrganization(organizationId);
-      setSyncButtonState('success');
-      const baseMessage = `Synced ${result.totalLocal} project${result.totalLocal === 1 ? '' : 's'} to Everhour (${result.created} created, ${result.linked} linked, ${result.mapped} mapped).`;
-      const failedMessage =
-        result.failedProjects.length > 0
-          ? ` Could not auto-create: ${result.failedProjects.join(', ')}. Create these in Everhour, then sync again.`
-          : '';
-      setSyncMessage(`${baseMessage}${failedMessage}`);
-      router.refresh();
-    } catch (error) {
-      setSyncButtonState('error');
-      setSyncMessage(error instanceof Error ? error.message : 'Failed to sync Everhour projects.');
     }
   }
 
@@ -249,30 +221,10 @@ export function ProjectSettingsSection({
             </Button>
           ) : null}
         </div>
-
-        {hasEverhourApiKey ? (
-          <LoadingButton
-            buttonState={syncButtonState}
-            setButtonState={setSyncButtonState}
-            text="Sync Everhour"
-            loadingText="Syncing…"
-            successText="Synced"
-            errorText="Retry"
-            reset
-            size="sm"
-            variant="outline"
-            onClick={handleSyncEverhour}
-          />
-        ) : null}
       </div>
 
       {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
       {colorError ? <p className="text-xs text-destructive">{colorError}</p> : null}
-      {syncMessage ? (
-        <p className="text-xs text-muted-foreground" title={syncMessage}>
-          {syncMessage}
-        </p>
-      ) : null}
     </section>
   );
 }

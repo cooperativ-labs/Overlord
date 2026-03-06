@@ -71,9 +71,31 @@ export async function POST(request: Request) {
     }
 
     if (phase) {
+      const ticketUpdate: Record<string, unknown> = { status: phase };
+
+      // If moving to a review-type status, place the ticket at the top of that column
+      const { data: statusInfo } = await supabase
+        .from('ticket_statuses')
+        .select('status_type')
+        .eq('organization_id', organizationId)
+        .eq('name', phase)
+        .maybeSingle();
+
+      if (statusInfo?.status_type === 'review') {
+        const { data: headTickets } = await supabase
+          .from('tickets')
+          .select('board_position')
+          .eq('organization_id', organizationId)
+          .eq('status', phase)
+          .neq('id', ticketId)
+          .order('board_position', { ascending: true })
+          .limit(1);
+        ticketUpdate.board_position = (headTickets?.[0]?.board_position ?? 0) - 1;
+      }
+
       const { error: ticketError } = await supabase
         .from('tickets')
-        .update({ status: phase })
+        .update(ticketUpdate)
         .eq('id', ticketId);
       if (ticketError) {
         return NextResponse.json({ error: ticketError.message }, { status: 500 });

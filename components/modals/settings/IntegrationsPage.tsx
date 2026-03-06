@@ -29,7 +29,7 @@ export function IntegrationsPage({ open }: { open: boolean }) {
 
   return (
     <div className="space-y-6">
-      <AiConnectionSection
+      {/* <AiConnectionSection
         provider="claude-code"
         title="Claude Code"
         description="Connect your Anthropic account to view your Claude Code subscription usage, including 5-hour and weekly token consumption."
@@ -45,11 +45,11 @@ export function IntegrationsPage({ open }: { open: boolean }) {
         description="Connect your OpenAI account to view your Codex subscription usage, including 5-hour rate limits and weekly consumption."
         connectHref="/api/auth/codex/initiate"
         open={open}
-      />
+      /> */}
 
       {everhourStatusLoaded ? (
         <>
-          <Separator />
+          {/* <Separator /> */}
           <EverhourSettings
             initiallyConnected={everhourConnected}
             lastUpdatedAt={everhourUpdatedAt}

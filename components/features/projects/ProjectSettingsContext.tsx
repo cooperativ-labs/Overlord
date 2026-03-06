@@ -25,6 +25,7 @@ type ProjectSettingsProviderProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
+  initialEverhourProjectId: string | null;
   initialStatuses: Array<{
     name: string;
     position: number;
@@ -41,6 +42,7 @@ export function ProjectSettingsProvider({
   initialName,
   initialColor,
   initialWorkingDirectory,
+  initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey
 }: ProjectSettingsProviderProps) {
@@ -65,6 +67,7 @@ export function ProjectSettingsProvider({
         initialName={initialName}
         initialColor={initialColor}
         initialWorkingDirectory={initialWorkingDirectory}
+        initialEverhourProjectId={initialEverhourProjectId}
         initialStatuses={initialStatuses}
         hasEverhourApiKey={hasEverhourApiKey}
       />

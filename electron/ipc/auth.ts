@@ -315,4 +315,12 @@ export function registerAuthIpc({ getPlatformUrl }: RegisterAuthIpcOptions): voi
       supabaseRefreshToken: credentials?.supabase_refresh_token ?? null
     };
   });
+
+  ipcMain.handle('auth:saveRefreshToken', (_, refreshToken: string) => {
+    const credentials = loadElectronCredentials();
+    if (credentials && refreshToken) {
+      saveElectronCredentials({ ...credentials, supabase_refresh_token: refreshToken });
+    }
+    return { ok: true };
+  });
 }

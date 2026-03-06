@@ -26,7 +26,16 @@ import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
   title: 'Overlord',
-  description: 'Local-first AI agent orchestration dashboard'
+  description: 'Local-first AI agent orchestration dashboard',
+  icons: {
+    apple: '/images/256.png'
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Overlord',
+    startupImage: '/images/1024.png'
+  }
 };
 
 export default async function RootLayout({

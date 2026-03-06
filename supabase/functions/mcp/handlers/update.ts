@@ -51,7 +51,30 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
   }
 
   if (phase) {
-    await supabase.from('tickets').update({ status: phase }).eq('id', ticketId);
+    const ticketUpdate: Record<string, unknown> = { status: phase };
+
+    // If moving to a review-type status, place the ticket at the top of that column
+    const { data: statusInfo } = await supabase
+      .from('ticket_statuses')
+      .select('status_type')
+      .eq('organization_id', ctx.organizationId)
+      .eq('name', phase)
+      .maybeSingle();
+
+    if ((statusInfo as { status_type: string } | null)?.status_type === 'review') {
+      const { data: headTickets } = await supabase
+        .from('tickets')
+        .select('board_position')
+        .eq('organization_id', ctx.organizationId)
+        .eq('status', phase)
+        .neq('id', ticketId)
+        .order('board_position', { ascending: true })
+        .limit(1);
+      ticketUpdate.board_position =
+        ((headTickets as { board_position: number }[] | null)?.[0]?.board_position ?? 0) - 1;
+    }
+
+    await supabase.from('tickets').update(ticketUpdate).eq('id', ticketId);
   }
 
   return toolOk({ ok: true });

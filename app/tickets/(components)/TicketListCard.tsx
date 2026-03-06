@@ -134,7 +134,6 @@ export default function TicketListCard({
           <KanbanTimerButton initialTaskId={ticket.everhour_task_id ?? null} ticketId={ticket.id} />
         </span>
       ) : null}
-
     </div>
   );
 }

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.0] - 2026-03-06:14:06
+
+### Added
+- Add Everhour sync guidance and a `Disconnect` workflow inside the project settings modal: the new controls describe the 1:1 naming requirement, include a button that calls `disconnectProjectFromEverhourAction`, and remember the linked `everhour_project_id` so the UI reflects whether the project is connected.
+
+### Fixed
+- Electron token refresh handling and storage.
+
+### Changed
+- Project layout now fetches `everhour_project_id` and passes it through the modal so the Everhour controls never lose sight of whether a project is linked.
+- Tickets that land in review-type statuses (either from deliver or updates) are now given the lowest `board_position` so they always appear at the top of the review column; the same logic runs in the MCP deliver/update handlers.
+- The root metadata and web manifest include the Apple touch icons, startup image, and 256/512/1024 artwork so Overlord presents correctly as a PWA/Apple home-screen app.
+
+### Security
+- Electron auth now listens for Supabase `TOKEN_REFRESHED` events and exposes an `auth:saveRefreshToken` IPC method so refreshed tokens persist across restarts and the app can restore sessions without forcing another login.
+
 ## [0.41.0] - 2026-03-05:14:10
 
 ### Added

@@ -73,6 +73,7 @@ interface ElectronAPI {
       platformUrl: string | null;
       supabaseRefreshToken: string | null;
     }>;
+    saveRefreshToken: (token: string) => Promise<{ ok: true }>;
   };
   isElectron: true;
 }

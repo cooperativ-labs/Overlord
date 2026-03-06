@@ -21,7 +21,20 @@ export function ElectronAuthGate() {
 
     const client = createClient();
 
-    const restoreAndRefreshSession = async () => {
+    // Listen to auth state changes first, before triggering any refresh,
+    // so we don't miss TOKEN_REFRESHED events.
+    const { data } = client.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        router.replace('/electron-login');
+      }
+      // Supabase issues a NEW refresh_token on every refresh — save it so
+      // the next app restart can restore the session without re-logging in.
+      if (event === 'TOKEN_REFRESHED' && session?.refresh_token) {
+        window.electronAPI?.auth.saveRefreshToken(session.refresh_token);
+      }
+    });
+
+    const restoreSession = async () => {
       if (!window.electronAPI?.auth) return;
 
       const status = await window.electronAPI.auth.getStatus();
@@ -31,53 +44,35 @@ export function ElectronAuthGate() {
       }
 
       try {
-        // Check if we currently have a valid session
         const { data: currentSession } = await client.auth.getSession();
 
         if (!currentSession?.session) {
-          // No session in browser — restore it from the stored refresh token
+          // No session in browser — restore from the stored refresh token.
           if (status.supabaseRefreshToken) {
-            const { data, error } = await client.auth.refreshSession({
+            const { error } = await client.auth.refreshSession({
               refresh_token: status.supabaseRefreshToken
             });
-            if (error || !data?.session) {
-              // Refresh token is invalid or expired — force re-login
+            if (error) {
+              // Refresh token is invalid or expired — force re-login.
               router.replace('/electron-login');
             }
+            // On success, onAuthStateChange fires TOKEN_REFRESHED and saves the new token.
           } else {
-            // No refresh token stored — force re-login
             router.replace('/electron-login');
           }
         } else {
-          // Session exists but may be expiring soon — proactively refresh
-          const expiresAt = currentSession.session.expires_at ?? 0;
-          const secondsUntilExpiry = expiresAt - Math.floor(Date.now() / 1000);
-          if (secondsUntilExpiry < 300) {
-            // Less than 5 minutes remaining — refresh now
-            await client.auth.refreshSession();
-          }
+          // Session exists — let @supabase/ssr handle auto-refresh via its built-in timer.
+          // The TOKEN_REFRESHED listener above will persist any new refresh tokens.
         }
       } catch (err) {
-        // Network error — don't redirect, user might be temporarily offline
+        // Network error — don't redirect, user may be temporarily offline.
         console.warn('Session check failed:', err);
       }
     };
 
-    // Restore/verify session immediately on mount (covers app restart case)
-    restoreAndRefreshSession();
-
-    // Periodically keep the session fresh while the app is running
-    const interval = setInterval(restoreAndRefreshSession, 4 * 60 * 1000);
-
-    // Redirect immediately when Supabase detects a sign-out
-    const { data } = client.auth.onAuthStateChange(event => {
-      if (event === 'SIGNED_OUT') {
-        router.replace('/electron-login');
-      }
-    });
+    restoreSession();
 
     return () => {
-      clearInterval(interval);
       data?.subscription?.unsubscribe();
     };
   }, [pathname, router]);

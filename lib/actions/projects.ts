@@ -109,6 +109,26 @@ export async function updateProjectWorkingDirectoryAction(input: {
   revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
 }
 
+export async function disconnectProjectFromEverhourAction(input: {
+  projectId: string;
+}): Promise<void> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ everhour_project_id: null })
+    .eq('id', input.projectId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to disconnect project from Everhour.');
+  }
+
+  revalidatePath('/u');
+  revalidatePath(`/${data.organization_id}`);
+  revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
+}
+
 export type CreateProjectResult = {
   id: string;
   name: string;

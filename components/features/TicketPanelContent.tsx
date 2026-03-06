@@ -166,7 +166,7 @@ export async function TicketPanelContent({
   const platformUrl = getPlatformUrl();
   const agentToken =
     agentTokenRow &&
-      (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
+    (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
       ? agentTokenRow.token
       : null;
   const workspaceRoot = getWorkspaceRoot();
@@ -370,10 +370,8 @@ export async function TicketPanelContent({
                 ) : null}
 
                 <div className="flex items-start gap-1 w-full">
-
                   <InlineEditField
                     key={draftObjective?.id ?? 'current-objective'}
-
                     displayClassName="text-base leading-relaxed"
                     inputClassName="text-base leading-relaxed"
                     variant="textarea"
@@ -385,14 +383,15 @@ export async function TicketPanelContent({
                     renderMarkdown
                     placeholder="Click to add an objective…"
                     ticketId={ticketId}
-                  > <ObjectiveMenuButton
+                  >
+                    {' '}
+                    <ObjectiveMenuButton
                       ticketId={ticketId}
                       objectiveId={draftObjective?.id ?? ''}
                       isExecuted={!draftObjective || draftObjective.is_executed}
                       canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
-                    /></InlineEditField>
-
-
+                    />
+                  </InlineEditField>
                 </div>
 
                 {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}

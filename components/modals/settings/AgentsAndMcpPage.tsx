@@ -423,8 +423,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
                 </button>
               </div>
               <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                {`OVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${agentToken ?? '<AGENT_TOKEN>'
-                  }`}
+                {`OVERLORD_MCP_URL=${mcpUrl}\nAGENT_TOKEN=${agentToken ?? '<AGENT_TOKEN>'}`}
               </pre>
             </div>
             <div className="space-y-2 rounded-md border bg-muted/30 p-3">
@@ -629,10 +628,11 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
               </button>
             </div>
             <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-              {`npx overlord resume ${selectedLocalAgent}${(agentFlags[selectedLocalAgent] ?? []).length > 0
-                ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                : ''
-                }`}
+              {`npx overlord resume ${selectedLocalAgent}${
+                (agentFlags[selectedLocalAgent] ?? []).length > 0
+                  ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                  : ''
+              }`}
             </pre>
           </div>
         </div>

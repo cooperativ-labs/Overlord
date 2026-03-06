@@ -107,10 +107,25 @@ export async function POST(request: Request) {
           }
         }
 
+        // Place delivered ticket at the top of the review column
+        const { data: headTickets } = await supabase
+          .from('tickets')
+          .select('board_position')
+          .eq('organization_id', organizationId)
+          .eq('status', 'review')
+          .neq('id', ticketId)
+          .order('board_position', { ascending: true })
+          .limit(1);
+        const topBoardPosition = (headTickets?.[0]?.board_position ?? 0) - 1;
+
         const [{ error: ticketError }, { error: sessionError }] = await Promise.all([
           supabase
             .from('tickets')
-            .update({ recent_agent: agentIdentifier, status: 'review' })
+            .update({
+              recent_agent: agentIdentifier,
+              status: 'review',
+              board_position: topBoardPosition
+            })
             .eq('id', ticketId),
           supabase
             .from('agent_sessions')

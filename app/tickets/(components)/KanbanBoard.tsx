@@ -184,21 +184,11 @@ export default function KanbanBoard({
 
   const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
   const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
-  const openedWaitingTimestampsRef = useRef(openedWaitingTimestamps);
-  const openedReviewTimestampsRef = useRef(openedReviewTimestamps);
   const waitingByTicketRef = useRef(waitingByTicket);
   const reviewByTicketRef = useRef(reviewByTicket);
   const openTicketIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollKey = `kanban-scroll:${projectId ?? organizationId ?? 'default'}`;
-
-  useEffect(() => {
-    openedWaitingTimestampsRef.current = openedWaitingTimestamps;
-  }, [openedWaitingTimestamps]);
-
-  useEffect(() => {
-    openedReviewTimestampsRef.current = openedReviewTimestamps;
-  }, [openedReviewTimestamps]);
 
   useEffect(() => {
     waitingByTicketRef.current = waitingByTicket;
@@ -634,9 +624,6 @@ export default function KanbanBoard({
           setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
           setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
 
-          const openedAt = openedWaitingTimestampsRef.current[event.ticket_id];
-          if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;
-
           const ticket = ticketsByIdRef.current.get(event.ticket_id);
           const title = ticket?.title?.trim()
             ? `Agent waiting: ${ticket.title.trim()}`
@@ -678,9 +665,6 @@ export default function KanbanBoard({
           markTicketReviewRaised(event.ticket_id, openTicketIdRef.current === event.ticket_id);
           setOpenedReviewTimestamps(getOpenedReviewTimestamps());
           setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
-
-          const openedAt = openedReviewTimestampsRef.current[event.ticket_id];
-          if (!hasUnopenedTimestamp(event.created_at, openedAt)) return;
 
           const reviewSound = reviewSoundRef.current;
           if (reviewSound) {
