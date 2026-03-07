@@ -660,13 +660,25 @@ export async function stopEverhourTimer(): Promise<void> {
   await everhourFetch<null>(apiKey, '/timers/current', { method: 'DELETE' });
 }
 
-export async function listTimeRecordsForTicket(
-  ticketId: string,
-  daysBack = 1
-): Promise<EverhourTimeRecord[]> {
+export async function listTimeRecordsForTicket({
+  ticketId,
+  daysBack = 1,
+  everhourTaskId
+}: {
+  ticketId?: string | null;
+  daysBack?: number;
+  everhourTaskId?: string | null;
+}): Promise<EverhourTimeRecord[]> {
   const { supabase, userId } = await getAuthenticatedContext();
-  const ticket = await getTicketEverhourState(supabase, ticketId);
-  if (!ticket.everhour_task_id) {
+
+  let taskId = everhourTaskId;
+  if (ticketId) {
+    const ticket = await getTicketEverhourState(supabase, ticketId);
+    if (ticket.everhour_task_id) {
+      taskId = ticket.everhour_task_id;
+    }
+  }
+  if (!taskId) {
     return [];
   }
 
@@ -686,7 +698,7 @@ export async function listTimeRecordsForTicket(
     page: '1',
     to: parseISODate(to)
   });
-  const taskId = ticket.everhour_task_id;
+
   const encodedTaskId = encodeURIComponent(taskId);
   const primaryPaths = [`/tasks/${encodedTaskId}/time?${baseParams.toString()}`];
 
@@ -746,14 +758,30 @@ export async function listTimeRecordsForTicket(
   throw new Error(parseEverhourErrorMessage(lastError), { cause: lastError });
 }
 
-export async function createTimeRecordForTicket(
-  ticketId: string,
-  seconds: number,
-  date: string,
-  comment?: string
-): Promise<EverhourTimeRecord> {
+export async function createTimeRecordForTicket({
+  ticketId,
+  everhourTaskId,
+  seconds,
+  date,
+  comment
+}: {
+  ticketId?: string | null;
+  everhourTaskId?: string | null;
+  seconds: number;
+  date: string;
+  comment?: string;
+}): Promise<EverhourTimeRecord> {
   const { supabase, userId } = await getAuthenticatedContext();
-  const { taskId } = await ensureEverhourTaskForTicket(ticketId);
+  let taskId = everhourTaskId;
+  if (ticketId) {
+    const ticket = await getTicketEverhourState(supabase, ticketId);
+    if (ticket.everhour_task_id) {
+      taskId = ticket.everhour_task_id;
+    }
+  }
+  if (!taskId) {
+    throw new Error('No task ID found.');
+  }
   const apiKey = await requireEverhourApiKey(supabase, userId);
   const sanitizedSeconds = sanitizeDuration(seconds);
 

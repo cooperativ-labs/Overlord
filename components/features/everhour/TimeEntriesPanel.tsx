@@ -17,7 +17,8 @@ import {
 } from '@/lib/actions/everhour';
 
 type TimeEntriesPanelProps = {
-  ticketId: string;
+  ticketId?: string | null;
+  everhourTaskId?: string | null;
 };
 
 function formatTotal(seconds: number): string {
@@ -58,7 +59,7 @@ function getErrorMessage(error: unknown): string {
   return 'Everhour request failed.';
 }
 
-export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
+export function TimeEntriesPanel({ ticketId, everhourTaskId }: TimeEntriesPanelProps) {
   const [entries, setEntries] = useState<EverhourTimeRecord[]>([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -75,10 +76,11 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
   const [deleteButtonState, setDeleteButtonState] = useState<ButtonLoadingState>('default');
   const [deletingEntryId, setDeletingEntryId] = useState<number | null>(null);
 
+
   const loadEntries = useCallback(async (): Promise<boolean> => {
     setIsLoadingEntries(true);
     try {
-      const records = await listTimeRecordsForTicket(ticketId, rangeDays);
+      const records = await listTimeRecordsForTicket({ ticketId, daysBack: rangeDays, everhourTaskId });
       setEntries(records);
       setErrorMessage(null);
       return true;
@@ -98,6 +100,10 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
     return entries.reduce((sum, entry) => sum + entry.time, 0);
   }, [entries]);
 
+  if (!ticketId && !everhourTaskId) {
+    return null;
+  }
+
   async function handleAdd() {
     const seconds = parseDurationInput(newDuration);
     if (!seconds) {
@@ -110,7 +116,7 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
     setErrorMessage(null);
 
     try {
-      await createTimeRecordForTicket(ticketId, seconds, newDate, newComment);
+      await createTimeRecordForTicket({ ticketId, everhourTaskId, seconds, date: newDate, comment: newComment });
       const didReload = await loadEntries();
       if (!didReload) {
         setAddButtonState('error');
@@ -181,77 +187,6 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
         <h3 className="text-sm font-medium">Time Entries</h3>
         <div className="text-muted-foreground text-xs">Total: {formatTotal(totalSeconds)}</div>
       </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-muted-foreground text-xs">
-          Showing entries from the past {rangeDays === 1 ? 'day' : 'week'}
-        </p>
-        <Button
-          disabled={isLoadingEntries}
-          onClick={() => setRangeDays(previous => (previous === 1 ? 7 : 1))}
-          size="sm"
-          variant="ghost"
-        >
-          {rangeDays === 1 ? 'Show Past Week' : 'Show Past Day'}
-        </Button>
-      </div>
-
-      <Button
-        onClick={() => {
-          setAddOpen(previous => !previous);
-          setErrorMessage(null);
-        }}
-        size="sm"
-        variant="outline"
-      >
-        <Plus className="mr-1 h-4 w-4" />
-        {addOpen ? 'Close' : 'Add Entry'}
-      </Button>
-
-      {addOpen ? (
-        <div className="space-y-2 rounded-md border bg-muted/40 p-3">
-          <div className="flex flex-wrap gap-2">
-            <Input
-              className="w-40"
-              onChange={event => setNewDate(event.target.value)}
-              type="date"
-              value={newDate}
-            />
-            <Input
-              className="w-40"
-              onChange={event => setNewDuration(event.target.value)}
-              placeholder="e.g. 1h 30m"
-              value={newDuration}
-            />
-          </div>
-          <Textarea
-            onChange={event => setNewComment(event.target.value)}
-            placeholder="Optional comment"
-            rows={2}
-            value={newComment}
-          />
-          <div className="flex items-center gap-2">
-            <LoadingButton
-              buttonState={addButtonState}
-              setButtonState={setAddButtonState}
-              text="Save Entry"
-              loadingText="Saving…"
-              successText="Saved"
-              errorText="Retry"
-              reset
-              size="sm"
-              onClick={handleAdd}
-            />
-            <button
-              className="text-muted-foreground text-xs"
-              onClick={() => setAddOpen(false)}
-              type="button"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       <div className="space-y-2">
         {isLoadingEntries ? (
@@ -354,6 +289,76 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
           );
         })}
       </div>
+
+      <div className="flex items-center  gap-2">
+        <Button
+          onClick={() => {
+            setAddOpen(previous => !previous);
+            setErrorMessage(null);
+          }}
+          size="sm"
+          variant="outline"
+        >
+          <Plus className="mr-1 h-4 w-4" />
+          {addOpen ? 'Close' : 'Add Entry'}
+        </Button>
+        <Button
+          disabled={isLoadingEntries}
+          onClick={() => setRangeDays(previous => (previous === 1 ? 7 : 1))}
+          size="sm"
+          variant="ghost"
+        >
+          {rangeDays === 1 ? 'Show Past Week' : 'Show Past Day'}
+        </Button>
+      </div>
+
+
+
+      {addOpen ? (
+        <div className="space-y-2 rounded-md border bg-muted/40 p-3">
+          <div className="flex flex-wrap gap-2">
+            <Input
+              className="w-40"
+              onChange={event => setNewDate(event.target.value)}
+              type="date"
+              value={newDate}
+            />
+            <Input
+              className="w-40"
+              onChange={event => setNewDuration(event.target.value)}
+              placeholder="e.g. 1h 30m"
+              value={newDuration}
+            />
+          </div>
+          <Textarea
+            onChange={event => setNewComment(event.target.value)}
+            placeholder="Optional comment"
+            rows={2}
+            value={newComment}
+          />
+          <div className="flex items-center gap-2">
+            <LoadingButton
+              buttonState={addButtonState}
+              setButtonState={setAddButtonState}
+              text="Save Entry"
+              loadingText="Saving…"
+              successText="Saved"
+              errorText="Retry"
+              reset
+              size="sm"
+              onClick={handleAdd}
+            />
+            <button
+              className="text-muted-foreground text-xs"
+              onClick={() => setAddOpen(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
 
       {errorMessage ? <p className="text-xs text-destructive">{errorMessage}</p> : null}
     </section>

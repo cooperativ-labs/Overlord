@@ -64,6 +64,7 @@ export function EverhourNavTimer() {
   const [isActionPending, setIsActionPending] = useState(false);
 
   const isRunning = timer.status === 'active';
+  const everhourTaskId = timer.task?.id ?? null;
   const hasTicketContext = Boolean(ticketId);
 
   useEffect(() => {
