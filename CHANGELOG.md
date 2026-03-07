@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.0] - 2026-03-07:20:00
+
+### Added
+- Add OAuth runtime configuration module (`lib/auth/oauth-runtime.ts`) for centralized environment variable handling across auth routes.
+- Add backward compatibility support for legacy single-client OAuth environment variables in OAuth configuration resolution.
+
+### Fixed
+- None.
+
+### Changed
+- Refactor auth routes (`/api/auth/config` and `/api/auth/token`) to use centralized OAuth runtime configuration module.
+- Improve OAuth configuration error messages to indicate support for legacy environment variable names.
+
+### Security
+- None.
+
+### Removed
+- Remove obsolete feature planning documents.
+
 ## [0.48.0] - 2026-03-07:18:00
 
 ### Added

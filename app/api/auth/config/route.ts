@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { getOAuthRuntimeConfig } from '@/lib/auth/oauth-runtime';
 import { getSupabaseUrl } from '@/lib/env';
 
 /**
@@ -9,16 +10,14 @@ import { getSupabaseUrl } from '@/lib/env';
  */
 export async function GET() {
   const supabaseUrl = getSupabaseUrl();
-  const cliClientId = process.env.SUPABASE_OAUTH_CLI_CLIENT_ID;
-  const electronClientId = process.env.SUPABASE_OAUTH_ELECTRON_CLIENT_ID;
-  const cliRedirectUri = process.env.SUPABASE_OAUTH_CLI_REDIRECT_URI;
-  const electronRedirectUri = process.env.SUPABASE_OAUTH_ELECTRON_REDIRECT_URI;
+  const { cliClientId, electronClientId, cliRedirectUri, electronRedirectUri } =
+    getOAuthRuntimeConfig();
 
   if (!cliClientId && !electronClientId) {
     return NextResponse.json(
       {
         error:
-          'OAuth not configured. Set SUPABASE_OAUTH_CLI_CLIENT_ID and/or SUPABASE_OAUTH_ELECTRON_CLIENT_ID.'
+          'OAuth not configured. Set SUPABASE_OAUTH_CLI_CLIENT_ID and/or SUPABASE_OAUTH_ELECTRON_CLIENT_ID (or legacy SUPABASE_OAUTH_CLIENT_ID).'
       },
       { status: 503 }
     );

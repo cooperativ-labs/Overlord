@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { getOAuthRuntimeConfig } from '@/lib/auth/oauth-runtime';
 import { getPlatformUrl } from '@/lib/env';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -47,16 +48,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const allowedClientIds = [
-    process.env.SUPABASE_OAUTH_CLI_CLIENT_ID,
-    process.env.SUPABASE_OAUTH_ELECTRON_CLIENT_ID
-  ].filter((value): value is string => Boolean(value && value.trim()));
+  const { allowedClientIds } = getOAuthRuntimeConfig();
 
   if (allowedClientIds.length === 0) {
     return NextResponse.json(
       {
         error:
-          'OAuth token exchange is not configured. Set SUPABASE_OAUTH_CLI_CLIENT_ID and/or SUPABASE_OAUTH_ELECTRON_CLIENT_ID.'
+          'OAuth token exchange is not configured. Set SUPABASE_OAUTH_CLI_CLIENT_ID and/or SUPABASE_OAUTH_ELECTRON_CLIENT_ID (or legacy SUPABASE_OAUTH_CLIENT_ID).'
       },
       { status: 503 }
     );
