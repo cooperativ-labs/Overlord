@@ -32,11 +32,13 @@ Overlord supports five distinct auth paths. Each path must use the minimum requi
 - Auth method: Supabase OAuth Authorization Code + PKCE.
 - Exchange: `/api/auth/token` accepts only OAuth tokens with an allowlisted `client_id`.
 - Output credential: persisted `agent_token` in encrypted local storage.
+- Packaged Electron must target the hosted `NEXT_PUBLIC_SITE_URL` platform directly.
 
-3. Terminal agents launched from Electron (local):
+3. Terminal agents launched from Electron:
 - Must remain zero-link UX: no extra login/link steps.
-- Agent process receives `AGENT_TOKEN`, `OVERLORD_URL`, `TICKET_ID`, and `OVERLORD_LOCAL_SECRET` from Electron at launch.
-- Protocol auth requires bearer token and (when configured) matching local secret.
+- Agent process receives `AGENT_TOKEN`, `OVERLORD_URL`, and `TICKET_ID` from Electron at launch.
+- `OVERLORD_LOCAL_SECRET` is included only for localhost development runs that still use a local-only secret.
+- Protocol auth requires bearer token and matching local secret only when `OVERLORD_LOCAL_SECRET` is configured.
 
 4. Cloud agents via MCP (`supabase/functions/mcp/index.ts`):
 - Auth method (primary): Supabase OAuth 2.1 Authorization Code + PKCE.
@@ -51,7 +53,7 @@ Overlord supports five distinct auth paths. Each path must use the minimum requi
 
 5. Standalone CLI login:
 - Browser-mediated login flow obtains credential and stores local `agent_token`.
-- Standalone CLI calls protocol routes with bearer token (and local secret only when targeting local Electron-hosted Overlord).
+- Standalone CLI calls hosted protocol routes with bearer token by default, and includes the local secret only when targeting local Electron development flows.
 
 ## Normative Rules
 
@@ -77,5 +79,6 @@ Overlord supports five distinct auth paths. Each path must use the minimum requi
 
 1. `agent_token` is organization-scoped and high-privilege; treat as secret.
 2. Local secret is defense-in-depth for local-only protocol traffic.
-3. OAuth scopes do not enforce DB permissions; RLS and token resolution do.
-4. Future hardening candidate: short-lived session/ticket-scoped agent credentials.
+3. Production Electron is a thin wrapper and must not depend on localhost-only protocol routes.
+4. OAuth scopes do not enforce DB permissions; RLS and token resolution do.
+5. Future hardening candidate: short-lived session/ticket-scoped agent credentials.

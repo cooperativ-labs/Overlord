@@ -2,7 +2,7 @@
   "name": "overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "0.47.0",
+  "version": "0.48.0",
   "private": true,
   "main": "dist-electron/main.js",
   "bin": {
@@ -26,6 +26,7 @@
     "functions-deploy": "supabase functions deploy --project-ref zitmmhvbilhjjdwgxlfm",
     "functions-set-secret": "supabase secrets set --env-file ./supabase/.env.prod --project-ref zitmmhvbilhjjdwgxlfm",
     "lint": "yarn run js-lint && yarn run type-check",
+    "verify:electron-runtime-env": "node scripts/check-electron-runtime-env.mjs",
     "fix-js-lint": "eslint -c eslint.config.mjs --fix '**/*.ts' '**/*.tsx' -f table",
     "fix": "yarn run fix-js-lint",
     "js-lint-src": "eslint -c eslint.config.mjs '**/*.ts' '**/*.tsx' -f table",

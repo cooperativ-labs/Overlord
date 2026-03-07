@@ -50,8 +50,8 @@ function buildProtocolHeaders(agentToken: string): Record<string, string> {
 }
 
 function getPlatformUrl(): string {
-  // Electron should target the locally running Overlord app by default.
-  // NEXT_PUBLIC_SITE_URL may point to a deployed web instance and break local launches.
+  // Dev Electron defaults to localhost. Packaged Electron sets OVERLORD_URL explicitly
+  // so agent launches target the hosted platform without falling back to localhost.
   return process.env.OVERLORD_URL ?? OVERLORD_URL_DEFAULT;
 }
 

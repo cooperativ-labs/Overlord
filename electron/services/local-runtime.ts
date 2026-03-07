@@ -10,7 +10,7 @@ export const LOCAL_SECRET_HEADER = 'x-overlord-local-secret';
 
 type RuntimeMetadata = {
   platform_url: string;
-  local_secret: string;
+  local_secret?: string;
   pid: number;
   started_at: string;
 };
@@ -19,31 +19,38 @@ function getRuntimeDir(): string {
   return path.join(os.homedir(), '.ovld');
 }
 
-function getRuntimeFilePath(platformUrl: string): string {
-  let port: string;
+function getRuntimeFileKey(platformUrl: string): string {
   try {
-    port = new URL(platformUrl).port || '80';
+    const parsed = new URL(platformUrl);
+    const origin = parsed.origin.toLowerCase();
+    const normalized = origin.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return normalized || 'unknown';
   } catch {
-    port = 'unknown';
+    return 'unknown';
   }
-  return path.join(getRuntimeDir(), `runtime.${port}.json`);
+}
+
+function getRuntimeFilePath(platformUrl: string): string {
+  return path.join(getRuntimeDir(), `runtime.${getRuntimeFileKey(platformUrl)}.json`);
 }
 
 export function generateLocalSecret(): string {
   return crypto.randomBytes(24).toString('hex');
 }
 
-export function writeLocalRuntime(platformUrl: string, localSecret: string): void {
+export function writeLocalRuntime(platformUrl: string, localSecret?: string): void {
   const runtimeDir = getRuntimeDir();
   const runtimeFile = getRuntimeFilePath(platformUrl);
   const tempFile = `${runtimeFile}.tmp-${process.pid}-${Date.now()}`;
 
   const payload: RuntimeMetadata = {
     platform_url: platformUrl,
-    local_secret: localSecret,
     pid: process.pid,
     started_at: new Date().toISOString()
   };
+  if (localSecret) {
+    payload.local_secret = localSecret;
+  }
 
   fs.mkdirSync(runtimeDir, { recursive: true, mode: OVLD_DIR_MODE });
   fs.chmodSync(runtimeDir, OVLD_DIR_MODE);

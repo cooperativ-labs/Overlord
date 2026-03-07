@@ -150,7 +150,7 @@ async function fetchAuthConfig(platformUrl: string): Promise<{
   const res = await fetch(`${platformUrl}/api/auth/config`);
   if (!res.ok) {
     throw new Error(
-      `Failed to fetch auth config (${res.status}). Check that Overlord is running at ${platformUrl}.`
+      `Failed to fetch auth config (${res.status}). Check that Overlord is reachable at ${platformUrl}.`
     );
   }
   const json = await res.json();

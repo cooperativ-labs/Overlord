@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.48.0] - 2026-03-07:18:00
+
+### Added
+- Begin thin wrapper migration for Electron: production builds now load hosted platform URL instead of local Next.js server.
+- Add runtime environment allowlist to Electron production build path, restricting generated env vars to public configuration only.
+
+### Fixed
+- Fix list ticket layout in TicketListCard and TicketListView for consistent rendering.
+
+### Changed
+- Improve time entries screen with enhanced EverhourNavTimer and TimeEntriesPanel components.
+- Update Next.js configuration for optimal build performance.
+- Refactor Electron platform URL resolution to separate dev (localhost) and production (hosted) boot paths.
+
+### Security
+- Begin removing service-role credentials from Electron production build artifacts as part of thin wrapper migration.
+
+### Removed
+- Remove local Next.js server startup from packaged Electron production builds.
+
 ## [0.47.0] - 2026-03-07:12:00
 
 ### Added

@@ -76,11 +76,14 @@ export function TimeEntriesPanel({ ticketId, everhourTaskId }: TimeEntriesPanelP
   const [deleteButtonState, setDeleteButtonState] = useState<ButtonLoadingState>('default');
   const [deletingEntryId, setDeletingEntryId] = useState<number | null>(null);
 
-
   const loadEntries = useCallback(async (): Promise<boolean> => {
     setIsLoadingEntries(true);
     try {
-      const records = await listTimeRecordsForTicket({ ticketId, daysBack: rangeDays, everhourTaskId });
+      const records = await listTimeRecordsForTicket({
+        ticketId,
+        daysBack: rangeDays,
+        everhourTaskId
+      });
       setEntries(records);
       setErrorMessage(null);
       return true;
@@ -90,7 +93,7 @@ export function TimeEntriesPanel({ ticketId, everhourTaskId }: TimeEntriesPanelP
     } finally {
       setIsLoadingEntries(false);
     }
-  }, [ticketId, rangeDays]);
+  }, [ticketId, rangeDays, everhourTaskId]);
 
   useEffect(() => {
     void loadEntries();
@@ -116,7 +119,13 @@ export function TimeEntriesPanel({ ticketId, everhourTaskId }: TimeEntriesPanelP
     setErrorMessage(null);
 
     try {
-      await createTimeRecordForTicket({ ticketId, everhourTaskId, seconds, date: newDate, comment: newComment });
+      await createTimeRecordForTicket({
+        ticketId,
+        everhourTaskId,
+        seconds,
+        date: newDate,
+        comment: newComment
+      });
       const didReload = await loadEntries();
       if (!didReload) {
         setAddButtonState('error');
@@ -311,9 +320,6 @@ export function TimeEntriesPanel({ ticketId, everhourTaskId }: TimeEntriesPanelP
           {rangeDays === 1 ? 'Show Past Week' : 'Show Past Day'}
         </Button>
       </div>
-
-
-
       {addOpen ? (
         <div className="space-y-2 rounded-md border bg-muted/40 p-3">
           <div className="flex flex-wrap gap-2">
@@ -358,7 +364,6 @@ export function TimeEntriesPanel({ ticketId, everhourTaskId }: TimeEntriesPanelP
           </div>
         </div>
       ) : null}
-
 
       {errorMessage ? <p className="text-xs text-destructive">{errorMessage}</p> : null}
     </section>

@@ -772,13 +772,13 @@ export async function createTimeRecordForTicket({
   comment?: string;
 }): Promise<EverhourTimeRecord> {
   const { supabase, userId } = await getAuthenticatedContext();
-  let taskId = everhourTaskId;
-  if (ticketId) {
-    const ticket = await getTicketEverhourState(supabase, ticketId);
-    if (ticket.everhour_task_id) {
-      taskId = ticket.everhour_task_id;
+  const taskId = await resolveCreateTimeRecordTaskId(
+    { everhourTaskId, ticketId },
+    {
+      ensureTaskForTicket: ensureEverhourTaskForTicket,
+      getTicketState: async requestedTicketId => getTicketEverhourState(supabase, requestedTicketId)
     }
-  }
+  );
   if (!taskId) {
     throw new Error('No task ID found.');
   }
@@ -794,6 +794,34 @@ export async function createTimeRecordForTicket({
     }),
     method: 'POST'
   });
+}
+
+export async function resolveCreateTimeRecordTaskId(
+  {
+    everhourTaskId,
+    ticketId
+  }: {
+    ticketId?: string | null;
+    everhourTaskId?: string | null;
+  },
+  {
+    ensureTaskForTicket,
+    getTicketState
+  }: {
+    getTicketState: (ticketId: string) => Promise<{ everhour_task_id: string | null }>;
+    ensureTaskForTicket: (ticketId: string) => Promise<{ taskId: string }>;
+  }
+): Promise<string | null> {
+  let taskId = everhourTaskId ?? null;
+  if (ticketId) {
+    const ticket = await getTicketState(ticketId);
+    if (ticket.everhour_task_id) {
+      return ticket.everhour_task_id;
+    }
+    const ensuredTask = await ensureTaskForTicket(ticketId);
+    return ensuredTask.taskId;
+  }
+  return taskId;
 }
 
 export async function updateTimeRecord(

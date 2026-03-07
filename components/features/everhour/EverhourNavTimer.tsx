@@ -44,7 +44,7 @@ function getErrorMessage(error: unknown): string {
   return 'Everhour request failed.';
 }
 
-function deriveTicketIdFromPath(pathname: string) {
+export function deriveTicketIdFromPath(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
   if (segments[0] === 'projects' && typeof segments[2] === 'string') {
     return segments[2];
@@ -53,6 +53,16 @@ function deriveTicketIdFromPath(pathname: string) {
     return segments[1];
   }
   return null;
+}
+
+export function shouldShowNavTimerTimeEntriesContext({
+  ticketId,
+  everhourTaskId
+}: {
+  ticketId: string | null;
+  everhourTaskId: string | null;
+}) {
+  return Boolean(ticketId || everhourTaskId);
 }
 
 export function EverhourNavTimer() {
@@ -92,6 +102,10 @@ export function EverhourNavTimer() {
   const actionLabel = isRunning ? 'Stop timer' : 'Start timer';
   const isStartDisabled = !isRunning && !hasTicketContext;
   const isButtonDisabled = isActionPending || isStartDisabled;
+  const shouldShowTimeEntries = shouldShowNavTimerTimeEntriesContext({
+    everhourTaskId,
+    ticketId
+  });
 
   const handleAction = useCallback(async () => {
     setActionError(null);
@@ -137,7 +151,9 @@ export function EverhourNavTimer() {
           <PopoverDescription className="truncate text-sm">{description}</PopoverDescription>
         </PopoverHeader>
         <div className="mt-4 flex flex-col gap-3">
-          {ticketId ? <TimeEntriesPanel ticketId={ticketId} /> : null}
+          {shouldShowTimeEntries ? (
+            <TimeEntriesPanel ticketId={ticketId} everhourTaskId={everhourTaskId} />
+          ) : null}
           <Button
             variant={isRunning ? 'destructive' : 'outline'}
             className="w-full"

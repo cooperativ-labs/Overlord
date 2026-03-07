@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global console, process */
 /**
  * Unified Electron production build script.
  *
@@ -23,6 +24,8 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { pickRuntimeEnv } from './electron-runtime-allowlist.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -89,7 +92,13 @@ console.log(
 // Step 2 — Generate electron/_prod-env.generated.ts  (runtime main-process patch)
 // ---------------------------------------------------------------------------
 
-const entries = Object.entries(prodEnvVars)
+const runtimeEnvVars = pickRuntimeEnv(prodEnvVars);
+
+console.log(
+  `[build] Writing ${Object.keys(runtimeEnvVars).length} allowlisted runtime vars: ${Object.keys(runtimeEnvVars).join(', ')}`
+);
+
+const entries = Object.entries(runtimeEnvVars)
   .map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`)
   .join('\n');
 

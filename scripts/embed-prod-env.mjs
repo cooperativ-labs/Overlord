@@ -1,20 +1,19 @@
 #!/usr/bin/env node
+/* global console, process */
 /**
  * Reads .env.prod and generates electron/_prod-env.generated.ts
- * so production env vars get compiled into the Electron binary (inside the asar).
+ * using the same Electron runtime allowlist as the production build script.
  *
- * Run this before `yarn electron:build` / `yarn electron:pack`.
+ * Prefer `node scripts/electron-build.mjs` for full packaging.
+ * This helper exists for generating the runtime file only.
  * The generated file is gitignored — never commit it.
- *
- * NOTE: The values end up in the compiled JS inside the asar bundle.
- * A determined user can unpack the asar and read them. This is the standard
- * trade-off for all Electron apps that embed credentials. For this use case
- * (developer tool, Supabase service-role key, agent token) this is acceptable.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { pickRuntimeEnv } from './electron-runtime-allowlist.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -48,8 +47,10 @@ try {
   process.exit(1);
 }
 
-// Generate TypeScript — values are embedded as string literals
-const entries = Object.entries(envVars)
+const runtimeEnvVars = pickRuntimeEnv(envVars);
+
+// Generate TypeScript — only allowlisted runtime values are embedded.
+const entries = Object.entries(runtimeEnvVars)
   .map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`)
   .join('\n');
 
@@ -63,4 +64,6 @@ ${entries}
 
 const outFile = resolve(ROOT, 'electron', '_prod-env.generated.ts');
 writeFileSync(outFile, output, 'utf8');
-console.log(`[embed-prod-env] Written ${Object.keys(envVars).length} vars to electron/_prod-env.generated.ts`);
+console.log(
+  `[embed-prod-env] Written ${Object.keys(runtimeEnvVars).length} allowlisted vars to electron/_prod-env.generated.ts`
+);
