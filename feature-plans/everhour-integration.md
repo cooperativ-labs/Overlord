@@ -100,7 +100,8 @@ The API key is obtained from the user's Everhour account: **Settings → My Prof
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/time` | List time records (params: `from` **required**, `to` **required**, `tasks`, `users`) |
+| `GET` | `/tasks/{taskId}/time` | List time records for one task (params: `from` **required**, `to` **required**, optional `limit`, `page`) |
+| `GET` | `/time` | List time records across filters (legacy/compatibility path; params include `from`, `to`, `tasks`, `users`) |
 | `GET` | `/time/{recordId}` | Get a single time record |
 | `POST` | `/time` | Create a time record manually |
 | `PUT` | `/time/{recordId}` | Update a time record |
@@ -108,7 +109,7 @@ The API key is obtained from the user's Everhour account: **Settings → My Prof
 
 **List time records for a task:**
 ```
-GET /time?from=2024-01-01&to=2024-12-31&tasks=ev:12345678
+GET /tasks/ev:12345678/time?from=2024-01-01&to=2024-12-31&limit=10000&page=1
 ```
 
 **Create time record request body:**
@@ -821,7 +822,7 @@ The `ensureEverhourTask` function stores the Everhour task ID on the ticket afte
 Everhour timers are per-user — only one timer can run at a time per user. Starting a timer for a different task in Everhour automatically stops the previous one. The UI should reflect this.
 
 ### Date range for time records
-`GET /time` requires `from` and `to` query params. The implementation above defaults to the past year. For tickets with older entries, consider exposing a date range filter in the UI.
+`GET /tasks/{taskId}/time` requires `from` and `to` query params. The implementation above defaults to the past year. For tickets with older entries, consider exposing a date range filter in the UI.
 
 ### Everhour project
 Tasks must belong to a project in Everhour. The simplest approach is one shared internal Everhour project (e.g., "Cooperativ") whose ID is stored as an env var. An organization-level setting could be added later.

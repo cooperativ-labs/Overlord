@@ -62,6 +62,7 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
   const [entries, setEntries] = useState<EverhourTimeRecord[]>([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [rangeDays, setRangeDays] = useState<1 | 7>(1);
   const [addOpen, setAddOpen] = useState(false);
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [newDuration, setNewDuration] = useState('');
@@ -74,18 +75,20 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
   const [deleteButtonState, setDeleteButtonState] = useState<ButtonLoadingState>('default');
   const [deletingEntryId, setDeletingEntryId] = useState<number | null>(null);
 
-  const loadEntries = useCallback(async () => {
+  const loadEntries = useCallback(async (): Promise<boolean> => {
     setIsLoadingEntries(true);
     try {
-      const records = await listTimeRecordsForTicket(ticketId);
+      const records = await listTimeRecordsForTicket(ticketId, rangeDays);
       setEntries(records);
       setErrorMessage(null);
+      return true;
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
+      return false;
     } finally {
       setIsLoadingEntries(false);
     }
-  }, [ticketId]);
+  }, [ticketId, rangeDays]);
 
   useEffect(() => {
     void loadEntries();
@@ -107,8 +110,12 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
     setErrorMessage(null);
 
     try {
-      const created = await createTimeRecordForTicket(ticketId, seconds, newDate, newComment);
-      setEntries(previous => [created, ...previous]);
+      await createTimeRecordForTicket(ticketId, seconds, newDate, newComment);
+      const didReload = await loadEntries();
+      if (!didReload) {
+        setAddButtonState('error');
+        return;
+      }
       setNewDuration('');
       setNewComment('');
       setAddOpen(false);
@@ -131,8 +138,12 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
     setErrorMessage(null);
 
     try {
-      const updated = await updateTimeRecord(recordId, seconds, editComment);
-      setEntries(previous => previous.map(entry => (entry.id === recordId ? updated : entry)));
+      await updateTimeRecord(recordId, seconds, editComment);
+      const didReload = await loadEntries();
+      if (!didReload) {
+        setEditButtonState('error');
+        return;
+      }
       setEditingId(null);
       setEditDuration('');
       setEditComment('');
@@ -150,7 +161,11 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
 
     try {
       await deleteTimeRecord(recordId);
-      setEntries(previous => previous.filter(entry => entry.id !== recordId));
+      const didReload = await loadEntries();
+      if (!didReload) {
+        setDeleteButtonState('error');
+        return;
+      }
       setDeleteButtonState('success');
     } catch (error) {
       setDeleteButtonState('error');
@@ -165,6 +180,20 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium">Time Entries</h3>
         <div className="text-muted-foreground text-xs">Total: {formatTotal(totalSeconds)}</div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-muted-foreground text-xs">
+          Showing entries from the past {rangeDays === 1 ? 'day' : 'week'}
+        </p>
+        <Button
+          disabled={isLoadingEntries}
+          onClick={() => setRangeDays(previous => (previous === 1 ? 7 : 1))}
+          size="sm"
+          variant="ghost"
+        >
+          {rangeDays === 1 ? 'Show Past Week' : 'Show Past Day'}
+        </Button>
       </div>
 
       <Button
@@ -229,7 +258,9 @@ export function TimeEntriesPanel({ ticketId }: TimeEntriesPanelProps) {
           <p className="text-muted-foreground text-xs">Loading entries…</p>
         ) : null}
         {!isLoadingEntries && entries.length === 0 ? (
-          <p className="text-muted-foreground text-xs">No entries yet.</p>
+          <p className="text-muted-foreground text-xs">
+            No entries found in the past {rangeDays === 1 ? 'day' : 'week'}.
+          </p>
         ) : null}
 
         {entries.map(entry => {

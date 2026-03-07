@@ -19,6 +19,8 @@ const isRedirectError = (err: unknown): boolean =>
 
 type AuthMode = 'login' | 'signup';
 
+type FormSubmitEvent = { preventDefault: () => void; currentTarget: HTMLFormElement };
+
 type AuthFormProps = {
   className?: string;
   defaultMode?: AuthMode;
@@ -40,7 +42,7 @@ export function AuthForm({
 
   const isLogin = mode === 'login';
 
-  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSignIn = async (e: FormSubmitEvent) => {
     e.preventDefault();
     setSignInButtonState('loading');
     const form = e.currentTarget;
@@ -54,7 +56,7 @@ export function AuthForm({
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSignUp = async (e: FormSubmitEvent) => {
     e.preventDefault();
     setSignUpButtonState('loading');
     const form = e.currentTarget;
@@ -101,7 +103,7 @@ export function AuthForm({
       </div>
 
       {isLogin ? (
-        <form onSubmit={handleSignIn}>
+        <form method="post" onSubmit={handleSignIn}>
           {next ? <input type="hidden" name="next" value={next} /> : null}
           <FieldGroup>
             <div className="flex flex-col items-center gap-2 text-center">
@@ -150,7 +152,7 @@ export function AuthForm({
           </FieldGroup>
         </form>
       ) : (
-        <form onSubmit={handleSignUp}>
+        <form method="post" onSubmit={handleSignUp}>
           {next ? <input type="hidden" name="next" value={next} /> : null}
           <FieldGroup>
             <div className="flex flex-col items-center gap-2 text-center">

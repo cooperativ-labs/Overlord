@@ -72,6 +72,29 @@ function StatusDot({
   );
 }
 
+function ActiveAgentDisplay({ identifier }: { identifier: string | null }) {
+  if (!identifier) return null;
+  const agentType = getAgentTypeByIdentifier(identifier);
+  return (
+    <div className="min-w-0">
+      {agentType ? (
+        <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+          <Image
+            src={agentType.icon}
+            alt={`${agentType.label} icon`}
+            width={12}
+            height={12}
+            className="h-3 w-3 shrink-0"
+          />
+          <span className="truncate">{agentType.label}</span>
+        </p>
+      ) : (
+        <p className="text-[10px] text-muted-foreground/70 truncate">{identifier}</p>
+      )}
+    </div>
+  );
+}
+
 export default function KanbanCard({
   ticket,
   isDragOverlay,
@@ -215,7 +238,6 @@ function KanbanCardBody({
   const isAgentRunning = ticket.agent_session_state === 'attached';
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
-  const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
   return (
@@ -257,26 +279,7 @@ function KanbanCardBody({
           ) : null}
         </div>
         <div className="flex items-center gap-1.5">
-          {activeAgentIdentifier ? (
-            <div className="min-w-0">
-              {activeAgentType ? (
-                <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-                  <Image
-                    src={activeAgentType.icon}
-                    alt={`${activeAgentType.label} icon`}
-                    width={12}
-                    height={12}
-                    className="h-3 w-3 shrink-0"
-                  />
-                  <span className="truncate">{activeAgentType.label}</span>
-                </p>
-              ) : (
-                <p className="text-[10px] text-muted-foreground/70 truncate">
-                  {activeAgentIdentifier}
-                </p>
-              )}
-            </div>
-          ) : null}
+          <ActiveAgentDisplay identifier={activeAgentIdentifier} />
           {executedObjectivesCount > 0 ? (
             <span
               className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"

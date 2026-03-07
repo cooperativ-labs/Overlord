@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
+import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,8 +26,6 @@ import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
-const MAX_MENTION_RESULTS = 8;
-
 type ProjectOption = {
   id: string;
   name: string;
@@ -40,6 +39,7 @@ type NewTicketModalProps = {
   defaultProjectId?: string;
   organizationId?: number;
   projects: ProjectOption[];
+  fileMentionPaths?: string[];
 };
 
 export function NewTicketModal({
@@ -47,7 +47,8 @@ export function NewTicketModal({
   onOpenChange,
   defaultProjectId,
   organizationId,
-  projects
+  projects,
+  fileMentionPaths = []
 }: NewTicketModalProps) {
   const router = useRouter();
   const [ticketId, setTicketId] = useState<string | null>(null);
@@ -60,14 +61,6 @@ export function NewTicketModal({
   const [submitButtonState, setSubmitButtonState] = useState<ButtonLoadingState>('default');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Mention menu state
-  const [mentionStart, setMentionStart] = useState<number | null>(null);
-  const [mentionQuery, setMentionQuery] = useState('');
-  const [mentionIndex, setMentionIndex] = useState(0);
-
-  const mentionResults: string[] = [];
-  const mentionMenuOpen = false;
 
   // Auto-resize textarea
   const autoResize = useCallback(() => {
@@ -124,72 +117,7 @@ export function NewTicketModal({
     }
   }, [isOpen, autoResize]);
 
-  function clearMentionState() {
-    setMentionStart(null);
-    setMentionQuery('');
-    setMentionIndex(0);
-  }
-
-  function updateMentionState() {
-    clearMentionState();
-  }
-
-  function insertMentionAtCursor(filePath: string) {
-    const el = textareaRef.current;
-    if (!el || mentionStart === null || !filePath) return;
-
-    const cursor = el.selectionStart ?? objective.length;
-    let mentionText = `@${filePath}`;
-    const suffix = objective.slice(cursor);
-    if (suffix.length === 0 || (!suffix.startsWith(' ') && !suffix.startsWith('\n'))) {
-      mentionText += ' ';
-    }
-
-    const nextValue = `${objective.slice(0, mentionStart)}${mentionText}${suffix}`;
-    const nextCursor = mentionStart + mentionText.length;
-
-    setObjective(nextValue);
-    clearMentionState();
-
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(nextCursor, nextCursor);
-      autoResize();
-    });
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (mentionMenuOpen) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setMentionIndex(current => (current + 1) % mentionResults.length);
-        return;
-      }
-
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setMentionIndex(current => (current - 1 + mentionResults.length) % mentionResults.length);
-        return;
-      }
-
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        insertMentionAtCursor(mentionResults[mentionIndex] ?? mentionResults[0] ?? '');
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        clearMentionState();
-        return;
-      }
-    }
-  }
-
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const newValue = e.target.value;
-    setObjective(newValue);
-    updateMentionState();
+  function handleChange() {
     autoResize();
   }
 
@@ -270,12 +198,16 @@ export function NewTicketModal({
               <Label htmlFor="ticket-objective" className="mb-2 block text-sm font-medium">
                 Ticket Description
               </Label>
-              <textarea
+              <MentionableTextarea
                 ref={textareaRef}
                 id="ticket-objective"
                 value={objective}
+                onValueChange={setObjective}
+                mentionPaths={fileMentionPaths}
                 onChange={handleChange}
-                onKeyDown={handleKeyDown}
+                onMentionSelect={() => {
+                  requestAnimationFrame(() => autoResize());
+                }}
                 placeholder="Describe what needs to be done…"
                 className={cn(
                   'w-full min-h-48 flex-1 rounded-md border border-border/40 bg-background px-3 py-2 text-sm',

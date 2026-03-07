@@ -64,7 +64,7 @@ export async function signUp(formData: FormData) {
     redirect('/(auth)/login?error=' + encodeURIComponent(error.message));
   }
 
-  redirect(`/(auth)/confirm-email?email=${encodeURIComponent(email)}`);
+  redirect('/(auth)/confirm-email');
 }
 
 export async function signOut() {

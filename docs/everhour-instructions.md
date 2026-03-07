@@ -43,3 +43,5 @@ Apply the migration that adds:
 - Everhour timers are per-user. You can only run one at a time.
 - Starting a timer on a different ticket stops the previous one in Everhour.
 - A ticket must have a project assigned, and that project must be synced to Everhour.
+- Ticket time entries are retrieved from `GET /tasks/{task_id}/time` with required `from` and `to` dates.
+- That endpoint also supports pagination via `limit` and `page`.

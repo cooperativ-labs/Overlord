@@ -17,8 +17,9 @@ Use these rules when creating or updating Everhour integrations:
 - Stop timer: `DELETE /timers/current`
 
 3. Time-entry endpoints:
-- List records: `GET /time` with query params `from`, `to`, and `task` (singular).
-- Keep fallback support for `tasks` when needed for compatibility.
+- List records for one task: `GET /tasks/{taskId}/time` with query params `from`, `to`, and optional `limit` / `page`.
+- `from` and `to` are required when listing time entries.
+- Keep fallback support for filtered `GET /time` requests only when needed for compatibility with older integrations.
 - Create record: `POST /time` with `{ task, date, time, comment? }`.
 - Update record: `PUT /time/{recordId}` with `{ time, comment? }`.
 - Delete record: `DELETE /time/{recordId}`.
@@ -42,6 +43,11 @@ await everhourFetch(apiKey, '/timers', {
 ```
 
 ```ts
-const params = new URLSearchParams({ from: '2025-01-01', to: '2026-01-01', task: taskId });
-const records = await everhourFetch(apiKey, `/time?${params.toString()}`);
+const params = new URLSearchParams({
+  from: '2025-01-01',
+  to: '2026-01-01',
+  limit: '10000',
+  page: '1'
+});
+const records = await everhourFetch(apiKey, `/tasks/${encodeURIComponent(taskId)}/time?${params.toString()}`);
 ```

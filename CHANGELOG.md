@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.47.0] - 2026-03-07:12:00
+
+### Added
+- Add BlankTicketCard component for creating new tickets directly in Kanban columns.
+- Add UserTicketsSettingsPanel for managing ticket view preferences.
+- Add OrganizationOnboardingModal for new organization setup flow.
+- Add MentionableTextarea component for handling @file mentions in ticket objectives.
+- Add multi-status filtering in ticket list view to filter by multiple ticket statuses simultaneously.
+- Add TicketsViewToggle component for switching between Kanban and list views.
+
+### Fixed
+- Fix OAuth public client configuration by ensuring client_secret_hash is never null, improving compatibility with GoTrue versions that require non-nullable strings.
+
+### Changed
+- Refactor InlineEditField to use the extracted MentionableTextarea component for better code organization.
+- Update Kanban and ticket list components for improved filtering and rendering logic.
+- Update EverhourNavTimer and TimeEntriesPanel for enhanced Everhour integration.
+- Update ElectronLoginScreen authentication flow.
+
+### Security
+- None.
+
+### Removed
+- Remove AllTasksHeaderSection component.
+
 ## [0.46.0] - 2026-03-06:21:04
 
 ### Added

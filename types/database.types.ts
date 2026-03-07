@@ -728,6 +728,33 @@ export type Database = {
           }
         ];
       };
+      user_agent_configs: {
+        Row: {
+          agent_type: string;
+          config: Json;
+          created_at: string | null;
+          id: string;
+          updated_at: string | null;
+          user_id: string;
+        };
+        Insert: {
+          agent_type: string;
+          config?: Json;
+          created_at?: string | null;
+          id?: string;
+          updated_at?: string | null;
+          user_id: string;
+        };
+        Update: {
+          agent_type?: string;
+          config?: Json;
+          created_at?: string | null;
+          id?: string;
+          updated_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       user_integrations: {
         Row: {
           api_key: string;

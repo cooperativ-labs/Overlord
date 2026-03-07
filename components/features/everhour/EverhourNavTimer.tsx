@@ -1,6 +1,5 @@
 'use client';
 
-import { Play, PlayIcon } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -16,6 +15,7 @@ import {
 import type { EverhourTimer } from '@/lib/actions/everhour';
 import { cn } from '@/lib/utils';
 
+import { TimeEntriesPanel } from './TimeEntriesPanel';
 import { useEverhourTimer } from './use-everhour-timer';
 
 function getElapsedFromTimer(timer: EverhourTimer): number {
@@ -83,7 +83,7 @@ export function EverhourNavTimer() {
   }, [isRunning]);
 
   const title = timer.task?.name ?? 'No timer running';
-  const badge = isRunning ? formatElapsed(elapsedSeconds) : <Play className="h-4 w-4" />;
+  const badge = isRunning ? formatElapsed(elapsedSeconds) : null;
   const description = isRunning
     ? `Elapsed ${formatElapsed(elapsedSeconds)}`
     : 'No timer is running right now.';
@@ -120,7 +120,7 @@ export function EverhourNavTimer() {
               'flex shrink-0 items-center justify-center rounded-full border transition-[width,background-color,box-shadow,border] duration-200 ease-in-out',
               isRunning
                 ? 'min-w-[70px] gap-2 border-red-500/40 bg-red-500/15 text-red-600   px-1 py-2 text-xs font-semibold  '
-                : 'h-8 w-8 border-emerald-400/40 bg-emerald-500/15 text-emerald-600'
+                : 'hidden'
             )}
           >
             <span className="pointer-events-none text-[11px]" aria-live="polite">
@@ -130,12 +130,13 @@ export function EverhourNavTimer() {
           </button>
         </PopoverTrigger>
       </div>
-      <PopoverContent className="w-72">
+      <PopoverContent className="max-h-[70vh] w-[26rem] overflow-y-auto">
         <PopoverHeader>
           <PopoverTitle className="truncate text-base">{title}</PopoverTitle>
           <PopoverDescription className="truncate text-sm">{description}</PopoverDescription>
         </PopoverHeader>
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-4 flex flex-col gap-3">
+          {ticketId ? <TimeEntriesPanel ticketId={ticketId} /> : null}
           <Button
             variant={isRunning ? 'destructive' : 'outline'}
             className="w-full"

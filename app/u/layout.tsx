@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 
-import { AllTasksHeaderSection } from '@/components/features/AllTasksHeaderSection';
+import { UserTicketsSettingsPanel } from '@/components/features/UserTicketsSettingsPanel';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 
@@ -18,7 +18,7 @@ export default async function UserLayout({ children }: LayoutProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
       <ErrorBoundary>
-        <AllTasksHeaderSection selectedOrgId={selectedOrgId} />
+        <UserTicketsSettingsPanel selectedOrgId={selectedOrgId} />
         <TicketsBoardContent organizationId={selectedOrgId} showOrganizationName={!selectedOrgId} />
         {children}
       </ErrorBoundary>

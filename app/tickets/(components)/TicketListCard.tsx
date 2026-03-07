@@ -35,6 +35,50 @@ export default function TicketListCard({
   const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
+  const ProjectColorDot = ticket.project_color ? (
+    <span
+      className="block h-2 w-2 shrink-0 rounded-[2px] border"
+      style={{ backgroundColor: ticket.project_color, borderColor: ticket.project_color }}
+      title={ticket.project_name ?? 'Project'}
+    />
+  ) : (
+    <span
+      className="block h-2 w-2 shrink-0 rounded-[2px] border border-muted-foreground/50"
+      title="No project"
+    />
+  );
+
+  const ActiveAgentDisplay =
+    activeAgentIdentifier || executedObjectivesCount > 0 ? (
+      <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+        {activeAgentIdentifier ? (
+          activeAgentType ? (
+            <p className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
+              <Image
+                src={activeAgentType.icon}
+                alt={`${activeAgentType.label} icon`}
+                width={12}
+                height={12}
+                className="h-3 w-3 shrink-0"
+              />
+              <span>{activeAgentType.label}</span>
+            </p>
+          ) : (
+            <p className="text-[10px] text-muted-foreground/70">{activeAgentIdentifier}</p>
+          )
+        ) : null}
+        {executedObjectivesCount > 0 ? (
+          <span
+            className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
+            title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+            aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+          >
+            {executedObjectivesCount}
+          </span>
+        ) : null}
+      </div>
+    ) : null;
+
   return (
     <div
       role="button"
@@ -57,23 +101,25 @@ export default function TicketListCard({
       )}
 
       {/* Project color dot */}
-      {ticket.project_color ? (
-        <span
-          className="block h-2 w-2 shrink-0 rounded-[2px] border"
-          style={{ backgroundColor: ticket.project_color, borderColor: ticket.project_color }}
-          title={ticket.project_name ?? 'Project'}
-        />
-      ) : (
-        <span
-          className="block h-2 w-2 shrink-0 rounded-[2px] border border-muted-foreground/50"
-          title="No project"
-        />
-      )}
 
       {/* Title + meta */}
-      <div className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{getDisplayTitle(ticket)}</span>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+      <div className="min-w-0 flex-1 flex flex-col gap-1">
+        <span className="flex items-center gap-2 truncate text-sm font-medium">
+          {ProjectColorDot}
+          {getDisplayTitle(ticket)}
+        </span>
+        <div className="mt-0.5 flex items-center gap-1.5 overflow-hidden">
+          <div>
+            {ticket.project_everhour_project_id ? (
+              <span onClick={e => e.stopPropagation()}>
+                <KanbanTimerButton
+                  initialTaskId={ticket.everhour_task_id ?? null}
+                  ticketId={ticket.id}
+                />
+              </span>
+            ) : null}
+          </div>
+          {ActiveAgentDisplay}
           <Badge variant="outline" className="py-0 text-[11px]">
             {capitalizeFirst(ticket.status)}
           </Badge>
@@ -83,44 +129,8 @@ export default function TicketListCard({
           {/* {showOrganizationName && ticket.organization_name ? (
             <span className="text-muted-foreground text-[11px]">{ticket.organization_name}</span>
           ) : null} */}
-          {ticket.updated_at ? (
-            <span className="text-muted-foreground text-[11px]">
-              {new Date(ticket.updated_at).toLocaleString()}
-            </span>
-          ) : null}
         </div>
       </div>
-
-      {/* Agent label + executed objectives */}
-      {activeAgentIdentifier || executedObjectivesCount > 0 ? (
-        <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-          {activeAgentIdentifier ? (
-            activeAgentType ? (
-              <p className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-                <Image
-                  src={activeAgentType.icon}
-                  alt={`${activeAgentType.label} icon`}
-                  width={12}
-                  height={12}
-                  className="h-3 w-3 shrink-0"
-                />
-                <span>{activeAgentType.label}</span>
-              </p>
-            ) : (
-              <p className="text-[10px] text-muted-foreground/70">{activeAgentIdentifier}</p>
-            )
-          ) : null}
-          {executedObjectivesCount > 0 ? (
-            <span
-              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
-              title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-              aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-            >
-              {executedObjectivesCount}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
 
       {/* Status dots */}
       {(hasUnopenedWaitingResponse || hasUnopenedReview) && (
@@ -141,11 +151,12 @@ export default function TicketListCard({
       )}
 
       {/* Everhour timer button — stops propagation internally via KanbanTimerButton */}
-      {ticket.project_everhour_project_id ? (
-        <span onClick={e => e.stopPropagation()}>
-          <KanbanTimerButton initialTaskId={ticket.everhour_task_id ?? null} ticketId={ticket.id} />
-        </span>
-      ) : null}
+      {/* <div className="flex md:hidden">
+        {ticket.project_everhour_project_id ? (
+          <span onClick={e => e.stopPropagation()}>
+            <KanbanTimerButton initialTaskId={ticket.everhour_task_id ?? null} ticketId={ticket.id} />
+          </span>
+        ) : null}</div> */}
     </div>
   );
 }

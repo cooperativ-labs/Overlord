@@ -7,6 +7,7 @@ import { Toaster } from 'sonner';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
+import { OrganizationOnboardingModal } from '@/components/features/onboarding/OrganizationOnboardingModal';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
@@ -59,6 +60,19 @@ export default async function RootLayout({
     profileSettings?.default_project_id ?? cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
   const selectedOrgIdStr = cookieStore.get(SELECTED_ORG_COOKIE)?.value ?? null;
   const selectedOrgId = selectedOrgIdStr ? Number(selectedOrgIdStr) : null;
+  const needsOrganizationOnboarding = !!user && organizations.length === 0;
+  const onboardingState = needsOrganizationOnboarding
+    ? {
+        userName:
+          (user.user_metadata as { name?: string; full_name?: string })?.name ??
+          (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
+          user.email?.split('@')[0] ??
+          null,
+        hasOrganizations: false,
+        hasProjects: projects.length > 0,
+        firstOrganizationId: null
+      }
+    : null;
 
   return (
     <html lang="en">
@@ -117,6 +131,9 @@ export default async function RootLayout({
                       <main className="min-h-0 w-full flex-1 ">{children}</main>
                     </div>
                   )}
+                  {onboardingState ? (
+                    <OrganizationOnboardingModal initialState={onboardingState} />
+                  ) : null}
                 </SidebarProvider>
               </ProjectCreatorProvider>
             </DefaultProjectProvider>

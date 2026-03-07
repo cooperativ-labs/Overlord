@@ -2,11 +2,11 @@
 
 import { DefaultProjectChooser } from '@/components/features/projects/DefaultProjectChooser';
 
-type AllTasksHeaderSectionProps = {
+type UserTicketsSettingsPanelProps = {
   selectedOrgId?: number;
 };
 
-export function AllTasksHeaderSection({ selectedOrgId }: AllTasksHeaderSectionProps) {
+export function UserTicketsSettingsPanel({ selectedOrgId }: UserTicketsSettingsPanelProps) {
   const title = selectedOrgId ? 'Team Tasks' : 'All Tasks';
   const description = selectedOrgId
     ? 'Showing tasks for the selected workspace.'
@@ -14,7 +14,7 @@ export function AllTasksHeaderSection({ selectedOrgId }: AllTasksHeaderSectionPr
 
   return (
     <section className="px-5 py-5 border-b">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-wrap gap-3 md:items-center md:justify-between">
         <div>
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-muted-foreground text-sm">{description}</p>

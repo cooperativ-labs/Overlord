@@ -58,9 +58,11 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
+    const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
     // Electron embeds "Electron" in the User-Agent — redirect to the OAuth login screen
     const isElectron = request.headers.get('user-agent')?.includes('Electron');
     url.pathname = isElectron ? '/electron-login' : '/login';
+    url.searchParams.set('next', nextPath);
     return NextResponse.redirect(url);
   }
 

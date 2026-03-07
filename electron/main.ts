@@ -129,7 +129,7 @@ function createWindow(port: number) {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    minWidth: 900,
+    minWidth: 400,
     minHeight: 600,
     center: true,
     titleBarStyle: 'hiddenInset',

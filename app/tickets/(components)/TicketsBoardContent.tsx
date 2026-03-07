@@ -8,7 +8,6 @@ import type { Database } from '@/types/database.types';
 
 import KanbanBoard from './KanbanBoard';
 import TicketListView from './TicketListView';
-import TicketsViewToggle from './TicketsViewToggle';
 
 function getOrganizationName(
   organization: { name: string } | Array<{ name: string }> | null | undefined
@@ -297,15 +296,12 @@ export default async function TicketsBoardContent({
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
-          {!isMobile ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <TicketsViewToggle initialView={view} />
-            </div>
-          ) : null}
           <TicketListView
             tickets={tickets}
             showOrganizationName={showOrganizationName}
             ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
+            initialView={view}
+            showViewToggle={!isMobile}
           />
         </div>
       )}

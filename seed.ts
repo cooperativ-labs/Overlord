@@ -25,9 +25,10 @@ async function main() {
   const jakeId = '11111111-1111-4111-8111-111111111111';
 
   // Register OAuth clients for CLI and Electron login
-  // Explicitly null out deleted_at, client_secret_hash, client_uri, logo_uri
-  // to prevent Snaplet from auto-generating random values that break things
-  // (e.g. a non-null deleted_at soft-deletes the client).
+  // Explicitly control nullable fields to prevent Snaplet from auto-generating
+  // random values that break things (e.g. a non-null deleted_at soft-deletes
+  // the client). Keep client_secret_hash as empty string for public clients,
+  // because some GoTrue versions scan this column into a non-nullable string.
   await seed.oauth_clients([
     {
       id: '577e4468-a806-489e-8b99-206471e7442c',
@@ -37,7 +38,7 @@ async function main() {
       redirect_uris: 'http://127.0.0.1:45619/callback',
       grant_types: 'authorization_code',
       token_endpoint_auth_method: 'none',
-      client_secret_hash: null,
+      client_secret_hash: '',
       client_uri: null,
       logo_uri: null,
       deleted_at: null
@@ -50,7 +51,7 @@ async function main() {
       redirect_uris: 'http://127.0.0.1:45620/callback',
       grant_types: 'authorization_code',
       token_endpoint_auth_method: 'none',
-      client_secret_hash: null,
+      client_secret_hash: '',
       client_uri: null,
       logo_uri: null,
       deleted_at: null

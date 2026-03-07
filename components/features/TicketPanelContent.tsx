@@ -171,7 +171,7 @@ export async function TicketPanelContent({
   const platformUrl = getPlatformUrl();
   const agentToken =
     agentTokenRow &&
-      (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
+    (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
       ? agentTokenRow.token
       : null;
   const workspaceRoot = getWorkspaceRoot();
@@ -238,7 +238,6 @@ export async function TicketPanelContent({
     >
       <div className="flex h-full flex-col bg-background">
         <div className="flex items-center gap-2 border-b px-4 py-3 justify-between">
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button aria-label="Ticket actions" className="h-8 w-8" size="icon" variant="ghost">
@@ -283,7 +282,6 @@ export async function TicketPanelContent({
               </Link>
             </Button>
           </div>
-
         </div>
 
         <TimerWithTimeEntries

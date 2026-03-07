@@ -1,5 +1,7 @@
 import '../globals.css';
 
+import Image from 'next/image';
+
 import { ThemeProvider } from '@/components/theme-provider';
 
 export default function AuthLayout({
@@ -16,18 +18,20 @@ export default function AuthLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <div className="flex min-h-dvh w-full flex-col overflow-hidden items-center justify-center my-20">
+          <div className="flex flex-col min-h-dvh w-full gap-8 overflow-hidden items-center justify-center">
             {/* Logo/Image Section */}
             <div className="flex flex-col items-center justify-center px-4 py-8">
-              <img
-                src="/images/512.png"
+              <Image
+                src="/images/256.png"
                 alt="Overlord"
-                className="h-20 w-20 object-contain rounded-4xl"
+                className="h-32 w-32 object-contain rounded-4xl"
+                width={128}
+                height={128}
               />
             </div>
 
             {/* Main Content */}
-            <main className="flex flex-1 items-center justify-center px-4 pb-8">{children}</main>
+            <main className="flex  items-center justify-center px-4 pb-8">{children}</main>
           </div>
         </ThemeProvider>
       </body>

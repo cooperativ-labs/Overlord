@@ -660,7 +660,10 @@ export async function stopEverhourTimer(): Promise<void> {
   await everhourFetch<null>(apiKey, '/timers/current', { method: 'DELETE' });
 }
 
-export async function listTimeRecordsForTicket(ticketId: string): Promise<EverhourTimeRecord[]> {
+export async function listTimeRecordsForTicket(
+  ticketId: string,
+  daysBack = 1
+): Promise<EverhourTimeRecord[]> {
   const { supabase, userId } = await getAuthenticatedContext();
   const ticket = await getTicketEverhourState(supabase, ticketId);
   if (!ticket.everhour_task_id) {
@@ -672,25 +675,26 @@ export async function listTimeRecordsForTicket(ticketId: string): Promise<Everho
     return [];
   }
 
+  const sanitizedDaysBack = Number.isFinite(daysBack) ? Math.max(1, Math.round(daysBack)) : 1;
   const to = new Date();
   const from = new Date();
-  from.setFullYear(to.getFullYear() - 1);
+  from.setDate(to.getDate() - sanitizedDaysBack);
 
-  const baseParams = {
+  const baseParams = new URLSearchParams({
     from: parseISODate(from),
+    limit: '10000',
+    page: '1',
     to: parseISODate(to)
-  };
+  });
   const taskId = ticket.everhour_task_id;
-  const primaryPaths = [
-    `/time?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
-    `/time?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`
-  ];
+  const encodedTaskId = encodeURIComponent(taskId);
+  const primaryPaths = [`/tasks/${encodedTaskId}/time?${baseParams.toString()}`];
 
   let lastError: unknown = null;
   let sawPrimarySuccess = false;
   let emptyPrimaryResult: EverhourTimeRecord[] = [];
 
-  // Probe both `task` and `tasks` filters before deciding there are no records.
+  // Preferred task-scoped endpoint.
   for (const path of primaryPaths) {
     try {
       const response = await everhourFetch<unknown>(apiKey, path);
@@ -714,10 +718,12 @@ export async function listTimeRecordsForTicket(ticketId: string): Promise<Everho
   }
 
   const fallbackPaths = [
-    `/reports/time?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
-    `/time/records?${new URLSearchParams({ ...baseParams, task: taskId }).toString()}`,
-    `/reports/time?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`,
-    `/time/records?${new URLSearchParams({ ...baseParams, tasks: taskId }).toString()}`
+    `/time?${new URLSearchParams({ from: parseISODate(from), to: parseISODate(to), task: taskId }).toString()}`,
+    `/time?${new URLSearchParams({ from: parseISODate(from), to: parseISODate(to), tasks: taskId }).toString()}`,
+    `/reports/time?${new URLSearchParams({ from: parseISODate(from), to: parseISODate(to), task: taskId }).toString()}`,
+    `/time/records?${new URLSearchParams({ from: parseISODate(from), to: parseISODate(to), task: taskId }).toString()}`,
+    `/reports/time?${new URLSearchParams({ from: parseISODate(from), to: parseISODate(to), tasks: taskId }).toString()}`,
+    `/time/records?${new URLSearchParams({ from: parseISODate(from), to: parseISODate(to), tasks: taskId }).toString()}`
   ];
 
   for (const path of fallbackPaths) {

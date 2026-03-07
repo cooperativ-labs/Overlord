@@ -4,6 +4,7 @@ import { ArrowUpDown, Check, Filter } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -29,6 +30,7 @@ import {
 
 import type { Ticket } from './KanbanCard';
 import TicketListCard from './TicketListCard';
+import TicketsViewToggle from './TicketsViewToggle';
 
 type SortKey = 'updated_at' | 'status' | 'priority';
 
@@ -39,6 +41,14 @@ const SORT_LABELS: Record<SortKey, string> = {
 };
 
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
+const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
+
+function formatStatusLabel(status: string): string {
+  return status
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 function getPathTicketId(pathname: string): string | null {
   const segments = pathname.split('/').filter(Boolean);
@@ -48,16 +58,22 @@ function getPathTicketId(pathname: string): string | null {
 export default function TicketListView({
   tickets,
   showOrganizationName = false,
-  ticketUrlBase
+  ticketUrlBase,
+  initialView,
+  showViewToggle = true
 }: {
   tickets: Ticket[];
   showOrganizationName?: boolean;
   ticketUrlBase?: string;
+  initialView: string;
+  showViewToggle?: boolean;
 }) {
   const pathname = usePathname();
 
   const [sortKey, setSortKey] = useState<SortKey>('updated_at');
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => [
+    ...DEFAULT_SELECTED_STATUSES
+  ]);
   const [filterProject, setFilterProject] = useState<string | null>(null);
 
   const [openedWaitingTimestamps, setOpenedWaitingTimestamps] = useState<TicketOpenedTimestamps>(
@@ -126,9 +142,39 @@ export default function TicketListView({
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [tickets]);
 
+  const selectedStatusesSet = useMemo(() => new Set(selectedStatuses), [selectedStatuses]);
+  const areAllStatusesSelected = uniqueStatuses.every(status => selectedStatusesSet.has(status));
+  const statusFilterLabel = useMemo(() => {
+    if (areAllStatusesSelected || uniqueStatuses.length === 0) return 'All statuses';
+    if (selectedStatuses.length === 1) return formatStatusLabel(selectedStatuses[0] ?? '');
+    if (selectedStatuses.length <= 2) return selectedStatuses.map(formatStatusLabel).join(', ');
+    return `${selectedStatuses.length} statuses`;
+  }, [areAllStatusesSelected, uniqueStatuses.length, selectedStatuses]);
+
+  const activeStatusLabels = useMemo(
+    () =>
+      selectedStatuses
+        .filter(status => uniqueStatuses.includes(status))
+        .map(status => formatStatusLabel(status)),
+    [selectedStatuses, uniqueStatuses]
+  );
+  const activeProjectLabel = filterProject
+    ? (projectOptions.find(project => project.id === filterProject)?.name ?? 'Project')
+    : null;
+
+  function toggleStatus(status: string) {
+    setSelectedStatuses(current => {
+      if (current.includes(status))
+        return current.filter(currentStatus => currentStatus !== status);
+      return [...current, status];
+    });
+  }
+
   const sorted = useMemo(() => {
     let filtered = ticketsWithIndicators;
-    if (filterStatus) filtered = filtered.filter(t => t.status === filterStatus);
+    if (!areAllStatusesSelected && selectedStatuses.length > 0) {
+      filtered = filtered.filter(t => selectedStatusesSet.has(t.status));
+    }
     if (filterProject) filtered = filtered.filter(t => t.project_id === filterProject);
 
     return [...filtered].sort((a, b) => {
@@ -142,122 +188,151 @@ export default function TicketListView({
       }
       return 0;
     });
-  }, [ticketsWithIndicators, sortKey, filterStatus, filterProject]);
+  }, [
+    ticketsWithIndicators,
+    sortKey,
+    selectedStatusesSet,
+    selectedStatuses.length,
+    areAllStatusesSelected,
+    filterProject
+  ]);
 
-  if (!tickets.length) {
-    return (
-      <Card>
-        <CardContent className="pt-6">No tickets yet. Create the first one.</CardContent>
-      </Card>
-    );
-  }
+  const hasTickets = tickets.length > 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              {SORT_LABELS[sortKey]}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
-              <DropdownMenuItem key={key} onClick={() => setSortKey(key)} className="gap-2">
-                {SORT_LABELS[key]}
-                {sortKey === key && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {showViewToggle || hasTickets ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {showViewToggle ? <TicketsViewToggle initialView={initialView} /> : null}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Filter className="h-3.5 w-3.5" />
-              {filterStatus ?? 'All statuses'}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setFilterStatus(null)} className="gap-2">
-              All statuses
-              {filterStatus === null && <Check className="ml-auto h-4 w-4" />}
-            </DropdownMenuItem>
-            {uniqueStatuses.map(status => (
-              <DropdownMenuItem
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className="gap-2"
-              >
-                {status}
-                {filterStatus === status && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          {hasTickets ? (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <ArrowUpDown className="h-3.5 w-3.5" />
+                    {SORT_LABELS[sortKey]}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-44">
+                  <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+                    <DropdownMenuItem key={key} onClick={() => setSortKey(key)} className="gap-2">
+                      {SORT_LABELS[key]}
+                      {sortKey === key && <Check className="ml-auto h-4 w-4" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-        {projectOptions.length > 1 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                {filterProject
-                  ? (projectOptions.find(p => p.id === filterProject)?.name ?? 'Project')
-                  : 'All projects'}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setFilterProject(null)} className="gap-2">
-                All projects
-                {filterProject === null && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              {projectOptions.map(p => (
-                <DropdownMenuItem
-                  key={p.id}
-                  onClick={() => setFilterProject(p.id)}
-                  className="gap-2"
-                >
-                  {p.color && (
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-[2px] border"
-                      style={{ backgroundColor: p.color, borderColor: p.color }}
-                    />
-                  )}
-                  <span className="truncate">{p.name}</span>
-                  {filterProject === p.id && <Check className="ml-auto h-4 w-4" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <Filter className="h-3.5 w-3.5" />
+                    {statusFilterLabel}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-44">
+                  <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setSelectedStatuses(uniqueStatuses)}
+                    className="gap-2"
+                  >
+                    All statuses
+                    {areAllStatusesSelected && <Check className="ml-auto h-4 w-4" />}
+                  </DropdownMenuItem>
+                  {uniqueStatuses.map(status => (
+                    <DropdownMenuItem
+                      key={status}
+                      onClick={() => toggleStatus(status)}
+                      className="gap-2"
+                    >
+                      {formatStatusLabel(status)}
+                      {selectedStatusesSet.has(status) && <Check className="ml-auto h-4 w-4" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-      {/* Ticket rows */}
-      <div className="min-h-0 flex-1 overflow-y-auto space-y-1">
-        {sorted.map(ticket => {
-          const ticketPath = ticketUrlBase
-            ? `${ticketUrlBase}/${ticket.id}`
-            : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
-          const isSelected = pathname === ticketPath;
+              {projectOptions.length > 1 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      {filterProject
+                        ? (projectOptions.find(p => p.id === filterProject)?.name ?? 'Project')
+                        : 'All projects'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setFilterProject(null)} className="gap-2">
+                      All projects
+                      {filterProject === null && <Check className="ml-auto h-4 w-4" />}
+                    </DropdownMenuItem>
+                    {projectOptions.map(p => (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onClick={() => setFilterProject(p.id)}
+                        className="gap-2"
+                      >
+                        {p.color && (
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-[2px] border"
+                            style={{ backgroundColor: p.color, borderColor: p.color }}
+                          />
+                        )}
+                        <span className="truncate">{p.name}</span>
+                        {filterProject === p.id && <Check className="ml-auto h-4 w-4" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      {hasTickets && (activeStatusLabels.length > 0 || activeProjectLabel) ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Showing:</span>
+          {activeStatusLabels.map(status => (
+            <Badge key={status} variant="outline">
+              {status}
+            </Badge>
+          ))}
+          {activeProjectLabel ? (
+            <Badge variant="outline">Project: {activeProjectLabel}</Badge>
+          ) : null}
+        </div>
+      ) : null}
 
-          return (
-            <TicketListCard
-              key={ticket.id}
-              ticket={ticket}
-              ticketPath={ticketPath}
-              isSelected={isSelected}
-              showOrganizationName={showOrganizationName}
-            />
-          );
-        })}
-      </div>
+      {hasTickets ? (
+        <div className="flex flex-col min-h-0 flex-1 overflow-y-auto gap-2">
+          {sorted.map(ticket => {
+            const ticketPath = ticketUrlBase
+              ? `${ticketUrlBase}/${ticket.id}`
+              : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
+            const isSelected = pathname === ticketPath;
+
+            return (
+              <TicketListCard
+                key={ticket.id}
+                ticket={ticket}
+                ticketPath={ticketPath}
+                isSelected={isSelected}
+                showOrganizationName={showOrganizationName}
+              />
+            );
+          })}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="pt-6">No tickets yet. Create the first one.</CardContent>
+        </Card>
+      )}
     </div>
   );
 }
