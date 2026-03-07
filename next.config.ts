@@ -1,6 +1,10 @@
 import { withSerwist } from '@serwist/turbopack';
 import type { NextConfig } from 'next';
 
+const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+  : 'zitmmhvbilhjjdwgxlfm.supabase.co';
+
 const securityHeaders = async () => [
   {
     source: '/(.*)',
@@ -23,5 +27,30 @@ const securityHeaders = async () => [
 export default withSerwist({
   reactStrictMode: true,
   output: 'standalone',
-  headers: securityHeaders
+  headers: securityHeaders,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: supabaseHostname,
+        pathname: '/storage/v1/object/public/**'
+      },
+      {
+        protocol: 'https',
+        hostname: 'cooperativ.io'
+      },
+      {
+        protocol: 'https',
+        hostname: 'ovld.ai'
+      },
+      {
+        protocol: 'http',
+        hostname: '127.0.0.1'
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost'
+      }
+    ]
+  }
 } as any as NextConfig);
