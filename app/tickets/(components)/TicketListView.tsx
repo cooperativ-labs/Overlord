@@ -296,7 +296,7 @@ export default function TicketListView({
         </div>
       ) : null}
       {hasTickets && (activeStatusLabels.length > 0 || activeProjectLabel) ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 ">
           <span className="text-xs text-muted-foreground">Showing:</span>
           {activeStatusLabels.map(status => (
             <Badge key={status} variant="outline">
@@ -310,7 +310,7 @@ export default function TicketListView({
       ) : null}
 
       {hasTickets ? (
-        <div className="flex flex-col min-h-0 flex-1 overflow-y-auto gap-2">
+        <div className="flex flex-col min-h-0 flex-1 h-full overflow-y-auto gap-2">
           {sorted.map(ticket => {
             const ticketPath = ticketUrlBase
               ? `${ticketUrlBase}/${ticket.id}`

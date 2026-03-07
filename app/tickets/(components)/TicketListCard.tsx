@@ -89,7 +89,7 @@ export default function TicketListCard({
       }}
       aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
       className={cn(
-        'group relative flex cursor-pointer items-center gap-2.5 overflow-hidden rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/50',
+        'group relative flex  min-h-fit cursor-pointer items-center gap-2.5 overflow-hidden rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/50 ',
         isAgentRunning && 'animate-pulse border-emerald-500/40',
         isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
         hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
