@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { normalizeHexColor } from '@/lib/helpers/color';
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { createClient } from '@/supabase/utils/server';
 
 export type SidebarProject = {
@@ -11,6 +12,14 @@ export type SidebarProject = {
   color: string;
   organizationId: number;
 };
+
+function revalidateProjectPaths(projectId: string) {
+  const projectPath = buildProjectPath({ projectId });
+  revalidatePath('/u');
+  revalidatePath('/projects');
+  revalidatePath(projectPath);
+  revalidatePath(projectPath, 'layout');
+}
 
 export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   const supabase = await createClient();
@@ -51,9 +60,7 @@ export async function updateProjectColorAction(input: {
     throw new Error(error?.message ?? 'Failed to update project color.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${data.organization_id}`);
-  revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
+  revalidateProjectPaths(input.projectId);
 }
 
 export async function updateProjectNameAction(input: {
@@ -78,9 +85,7 @@ export async function updateProjectNameAction(input: {
     throw new Error(error?.message ?? 'Failed to update project name.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${data.organization_id}`);
-  revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
+  revalidateProjectPaths(input.projectId);
 }
 
 export async function updateProjectWorkingDirectoryAction(input: {
@@ -104,9 +109,7 @@ export async function updateProjectWorkingDirectoryAction(input: {
     throw new Error(error?.message ?? 'Failed to update project working directory.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${data.organization_id}`);
-  revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
+  revalidateProjectPaths(input.projectId);
 }
 
 export async function disconnectProjectFromEverhourAction(input: {
@@ -124,9 +127,7 @@ export async function disconnectProjectFromEverhourAction(input: {
     throw new Error(error?.message ?? 'Failed to disconnect project from Everhour.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${data.organization_id}`);
-  revalidatePath(`/${data.organization_id}/projects/${input.projectId}`);
+  revalidateProjectPaths(input.projectId);
 }
 
 export type CreateProjectResult = {
@@ -162,9 +163,7 @@ export async function createProject(input: {
     throw new Error(error?.message ?? 'Failed to create project.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${data.organization_id}`);
-  revalidatePath(`/${data.organization_id}/projects/${data.id}`);
+  revalidateProjectPaths(data.id);
 
   return {
     id: data.id,

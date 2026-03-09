@@ -9,6 +9,7 @@ import { getTicketDiscussionPromptForCopy } from '@/lib/actions/tickets';
 import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
+import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
 
 type AskTicketButtonProps = {
   ticketId: string;
@@ -27,7 +28,7 @@ export function AskTicketButton({
 }: AskTicketButtonProps) {
   const { isElectron, launchAgent } = useTerminal();
   const [askButtonState, setAskButtonState] = useState<ButtonLoadingState>('default');
-  const canRunAgent = hasProjectWorkingDirectory ?? true;
+  const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
 
   async function handleAsk() {
     if (isElectron && !canRunAgent) {

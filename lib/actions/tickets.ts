@@ -22,16 +22,16 @@ import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 function revalidateTicketBoards(organizationIds: Iterable<number>) {
+  void organizationIds;
   revalidatePath('/u');
-  for (const organizationId of organizationIds) {
-    revalidatePath(`/${organizationId}`);
-  }
+  revalidatePath('/projects');
 }
 
 function revalidateTicketDetails(
   items: Iterable<{ organizationId: number; projectId: string; ticketId: string }>
 ) {
   for (const { organizationId, projectId, ticketId } of items) {
+    revalidatePath(`/u/${ticketId}`);
     revalidatePath(buildTicketPath({ organizationId, projectId, ticketId }));
   }
 }
@@ -869,8 +869,7 @@ export async function deleteTicketAction(
     throw new Error(error?.message ?? 'Failed to delete ticket.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${data.organization_id}`);
+  revalidateTicketBoards([data.organization_id]);
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );

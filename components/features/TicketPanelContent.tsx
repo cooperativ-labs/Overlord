@@ -1,4 +1,5 @@
 import { ArrowRightToLine, ChevronDown, EllipsisVertical } from 'lucide-react';
+import { headers } from 'next/headers';
 import Image from 'next/image';
 import Link from 'next/link';
 import fs from 'node:fs/promises';
@@ -197,28 +198,45 @@ export async function TicketPanelContent({
   const projectWorkingDirectory = projectOptions.find(
     project => project.id === activeProjectId
   )?.local_working_directory;
-  const closePath = closePathProp ?? buildProjectPath({ projectId: activeProjectId });
-  const resolvedProjectDirectory = resolveLinkedDirectory(projectWorkingDirectory);
-  const resolvedWorkspaceDirectory = resolveLinkedDirectory(workspaceRoot);
-
-  const projectDirectoryExists = resolvedProjectDirectory
-    ? Boolean((await fs.stat(resolvedProjectDirectory).catch(() => null))?.isDirectory())
-    : false;
-  const workspaceDirectoryExists = resolvedWorkspaceDirectory
-    ? Boolean((await fs.stat(resolvedWorkspaceDirectory).catch(() => null))?.isDirectory())
-    : false;
-
-  const workingDirectory = projectDirectoryExists
-    ? resolvedProjectDirectory
-    : workspaceDirectoryExists
-      ? resolvedWorkspaceDirectory
+  const configuredProjectDirectory =
+    typeof projectWorkingDirectory === 'string' && projectWorkingDirectory.trim().length > 0
+      ? projectWorkingDirectory.trim()
       : null;
-  const hasProjectWorkingDirectory = projectDirectoryExists;
+  const headerStore = await headers();
+  const userAgent = headerStore.get('user-agent') ?? '';
+  const isElectronRequest = /electron/i.test(userAgent);
+  const closePath = closePathProp ?? buildProjectPath({ projectId: activeProjectId });
+  const resolvedProjectDirectory = resolveLinkedDirectory(configuredProjectDirectory);
+  const resolvedWorkspaceDirectory = resolveLinkedDirectory(workspaceRoot);
+  let workingDirectory: string | null;
+  let hasProjectWorkingDirectory: boolean;
+  let objectiveFileMentionPaths: string[];
 
-  const objectiveFileMentionPaths =
-    projectDirectoryExists && resolvedProjectDirectory
-      ? (await listProjectFiles(resolvedProjectDirectory)).files
-      : [];
+  if (isElectronRequest) {
+    // Electron uses IPC for local filesystem checks. Keep the configured path here so
+    // client-side launch components can validate and use the real local directory.
+    workingDirectory = configuredProjectDirectory;
+    hasProjectWorkingDirectory = Boolean(configuredProjectDirectory);
+    objectiveFileMentionPaths = [];
+  } else {
+    const projectDirectoryExists = resolvedProjectDirectory
+      ? Boolean((await fs.stat(resolvedProjectDirectory).catch(() => null))?.isDirectory())
+      : false;
+    const workspaceDirectoryExists = resolvedWorkspaceDirectory
+      ? Boolean((await fs.stat(resolvedWorkspaceDirectory).catch(() => null))?.isDirectory())
+      : false;
+
+    workingDirectory = projectDirectoryExists
+      ? resolvedProjectDirectory
+      : workspaceDirectoryExists
+        ? resolvedWorkspaceDirectory
+        : null;
+    hasProjectWorkingDirectory = projectDirectoryExists;
+    objectiveFileMentionPaths =
+      projectDirectoryExists && resolvedProjectDirectory
+        ? (await listProjectFiles(resolvedProjectDirectory)).files
+        : [];
+  }
   const objectiveThreadItems = objectives ?? [];
   const draftObjective = objectiveThreadItems.find(objective => !objective.is_executed) ?? null;
   const executedObjectives = objectiveThreadItems.filter(
@@ -402,6 +420,7 @@ export async function TicketPanelContent({
                     field="objective"
                     organizationId={organizationId}
                     fileMentionPaths={objectiveFileMentionPaths}
+                    workingDirectory={workingDirectory}
                     initialValue={draftObjectiveValue}
                     multiline
                     renderMarkdown

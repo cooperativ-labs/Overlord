@@ -5,6 +5,7 @@ import path from 'path';
 
 import { registerAppIpc } from './ipc/app';
 import { registerAuthIpc } from './ipc/auth';
+import { registerFilesystemIpc } from './ipc/filesystem';
 import { registerSupabaseIpc } from './ipc/supabase';
 import { registerTerminalIpc } from './ipc/terminal';
 import { registerAppMenu } from './services/app-menu';
@@ -260,6 +261,7 @@ app.whenReady().then(async () => {
 
   // Register IPC handlers
   registerTerminalIpc();
+  registerFilesystemIpc();
   registerSupabaseIpc(supabaseManager);
   registerAppIpc({ appUpdater, platformUrl });
   registerAuthIpc({ getPlatformUrl: () => platformUrl });

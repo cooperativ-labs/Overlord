@@ -101,6 +101,7 @@ export default async function TicketsBoardContent({
   const headerStore = await headers();
   const ua = headerStore.get('user-agent') ?? '';
   const isMobile = /mobile|android|iphone|ipad/i.test(ua);
+  const isElectronRequest = /electron/i.test(ua);
   const view = isMobile ? 'list' : (savedView ?? 'board');
   const supabase = await createClient();
   const {
@@ -249,7 +250,7 @@ export default async function TicketsBoardContent({
   const loadError = ticketsResult.error ?? statusesResult.error;
   let objectiveFileMentionPaths: string[] = [];
 
-  if (projectId && view === 'board') {
+  if (projectId && view === 'board' && !isElectronRequest) {
     const { data: projectForMentions } = await supabase
       .from('projects')
       .select('local_working_directory')

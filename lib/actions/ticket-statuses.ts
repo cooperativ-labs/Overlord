@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -10,6 +11,14 @@ type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 const allowedStatusTypes: TicketStatusType[] = ['draft', 'execute', 'review', 'complete'];
 const requiredStatusTypes: TicketStatusType[] = ['draft', 'execute', 'review'];
 const statusNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function revalidateTicketStatusPaths(projectId: string) {
+  const projectPath = buildProjectPath({ projectId });
+  revalidatePath('/u');
+  revalidatePath('/projects');
+  revalidatePath(projectPath);
+  revalidatePath(projectPath, 'layout');
+}
 
 function normalizeStatusType(statusType: string): TicketStatusType {
   if (allowedStatusTypes.includes(statusType as TicketStatusType)) {
@@ -92,9 +101,7 @@ export async function createTicketStatusAction(input: {
     throw new Error(error?.message ?? 'Failed to create status.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${organizationId}`);
-  revalidatePath(`/${organizationId}/projects/${projectId}`);
+  revalidateTicketStatusPaths(projectId);
 
   return {
     name: data.name,
@@ -167,9 +174,7 @@ export async function deleteTicketStatusAction(input: {
     throw new Error(error.message ?? 'Failed to delete status.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${organizationId}`);
-  revalidatePath(`/${organizationId}/projects/${projectId}`);
+  revalidateTicketStatusPaths(projectId);
 }
 
 export async function updateTicketStatusNameAction(input: {
@@ -211,9 +216,7 @@ export async function updateTicketStatusNameAction(input: {
     throw new Error(error?.message ?? 'Failed to update status name.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${organizationId}`);
-  revalidatePath(`/${organizationId}/projects/${projectId}`);
+  revalidateTicketStatusPaths(projectId);
 
   return {
     name: data.name,
@@ -292,9 +295,7 @@ export async function reorderTicketStatusesAction(input: {
     throw new Error(selectError.message ?? 'Failed to load reordered statuses.');
   }
 
-  revalidatePath('/u');
-  revalidatePath(`/${organizationId}`);
-  revalidatePath(`/${organizationId}/projects/${projectId}`);
+  revalidateTicketStatusPaths(projectId);
 
   return (data ?? []).map(status => ({
     name: status.name,

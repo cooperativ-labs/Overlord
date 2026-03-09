@@ -17,6 +17,7 @@ type Props = {
   ticketId: string;
   projectId: string;
   events: TicketEvent[];
+  workingDirectory?: string | null;
 };
 
 type FileTreeResponse = {
@@ -46,7 +47,12 @@ async function postConversationEntry(
   }
 }
 
-export function TicketConversationComposer({ ticketId, projectId, events }: Props) {
+export function TicketConversationComposer({
+  ticketId,
+  projectId,
+  events,
+  workingDirectory
+}: Props) {
   const { isElectron } = useTerminal();
   const [followUpDraft, setFollowUpDraft] = useState('');
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
@@ -71,6 +77,23 @@ export function TicketConversationComposer({ ticketId, projectId, events }: Prop
       setFileTreeError(null);
 
       try {
+        if (
+          isElectron &&
+          workingDirectory?.trim() &&
+          window.electronAPI?.filesystem?.listProjectFiles
+        ) {
+          const payload = await window.electronAPI.filesystem.listProjectFiles({
+            directory: workingDirectory.trim()
+          });
+          if (payload.error) {
+            throw new Error(payload.error);
+          }
+          if (cancelled) return;
+          setLinkedFiles(payload.files ?? []);
+          setFileTreeTruncated(Boolean(payload.truncated));
+          return;
+        }
+
         const response = await fetch(`/api/projects/${projectId}/file-tree`, { cache: 'no-store' });
         const payload = (await response.json()) as FileTreeResponse;
 
@@ -97,7 +120,7 @@ export function TicketConversationComposer({ ticketId, projectId, events }: Prop
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [isElectron, projectId, workingDirectory]);
 
   function appendLinkedFile(message: string, filePath: string): string {
     const trimmedPath = filePath.trim();

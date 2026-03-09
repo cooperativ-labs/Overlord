@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 import { useTerminal } from './terminal/TerminalProvider';
+import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
 
 type SessionState = Database['public']['Enums']['session_state'];
 
@@ -109,12 +110,13 @@ export function AgentSplitButton({
   const agentDetails = isCopySelected ? null : getAgentTypeByValue(selectedAgent);
   const copyLabel = isCopyLocalSelected ? 'Copy Local' : 'Copy Cloud';
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
+
   const isActive =
     !isCopySelected &&
     isAgentIdentifierMatch(selectedAgent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
-  const canRunAgent = hasProjectWorkingDirectory ?? true;
+  const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
   const isDisabled = !isCopySelected && !canRunAgent;
   const styles = sizeStyles[size];
 

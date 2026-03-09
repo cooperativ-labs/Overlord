@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.50.0] - 2026-03-09:09:48
+
+### Added
+- Add Electron filesystem IPC handlers for validating linked directories and listing project files from the local machine.
+- Add shared local-directory access hook used by ticket action buttons to verify Electron working-directory availability before launching agents.
+
+### Fixed
+- Fix objective file mention suggestions and linked-file loading in Electron by sourcing project files through local IPC instead of server-side filesystem lookups.
+- Fix ticket board and panel mention-file loading in Electron requests so local-only directories no longer trigger server-side file scans.
+- Fix stale ticket and project views after ticket, project, status, and Everhour mutations by revalidating current `/projects` and `/u` route paths.
+
+### Changed
+- Update ticket panel working-directory resolution to preserve configured local directories in Electron while keeping web behavior unchanged.
+- Standardize server action cache revalidation to use shared project/ticket path builders instead of legacy organization-scoped routes.
+
+### Security
+- None.
+
 ## [0.49.0] - 2026-03-07:20:00
 
 ### Added

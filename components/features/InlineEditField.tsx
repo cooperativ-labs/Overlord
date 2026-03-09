@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { uploadImageArtifactAction } from '@/lib/actions/artifacts';
 import { updateTicketFieldAction } from '@/lib/actions/tickets';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,8 @@ type Props = {
   renderMarkdown?: boolean;
   /** Optional list of project file paths used for @mention suggestions in multiline mode */
   fileMentionPaths?: string[];
+  /** Optional absolute directory used for local Electron file mention suggestions */
+  workingDirectory?: string | null;
   variant?: 'default' | 'textarea';
   children?: React.ReactNode;
 };
@@ -50,15 +53,23 @@ export function InlineEditField({
   inputClassName,
   renderMarkdown = false,
   fileMentionPaths = [],
+  workingDirectory,
   variant = 'default',
   children
 }: Props) {
+  const { api, isElectron } = useElectron();
   const [editing, setEditing] = useState(false);
   const [savedValue, setSavedValue] = useState(initialValue);
   const [value, setValue] = useState(initialValue);
+  const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const canMentionFiles = multiline && field === 'objective';
+  const effectiveMentionPaths = canMentionFiles
+    ? isElectron
+      ? localFileMentionPaths
+      : fileMentionPaths
+    : [];
 
   const autoResize = useCallback(() => {
     if (!multiline) return;
@@ -73,6 +84,45 @@ export function InlineEditField({
       autoResize();
     }
   }, [editing, multiline, value, autoResize]);
+
+  useEffect(() => {
+    if (!canMentionFiles) {
+      setLocalFileMentionPaths([]);
+      return;
+    }
+
+    if (!isElectron) {
+      setLocalFileMentionPaths(fileMentionPaths);
+      return;
+    }
+
+    const directory = workingDirectory?.trim() ?? '';
+    if (!directory || !api?.filesystem?.listProjectFiles) {
+      setLocalFileMentionPaths(fileMentionPaths);
+      return;
+    }
+
+    let cancelled = false;
+    void api.filesystem
+      .listProjectFiles({ directory })
+      .then(result => {
+        if (cancelled) return;
+        if (result.error) {
+          setLocalFileMentionPaths(fileMentionPaths);
+          return;
+        }
+        setLocalFileMentionPaths(result.files ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLocalFileMentionPaths(fileMentionPaths);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, canMentionFiles, fileMentionPaths, isElectron, workingDirectory]);
 
   function startEditing() {
     setEditing(true);
@@ -166,7 +216,7 @@ export function InlineEditField({
               disabled={pending}
               value={value}
               onValueChange={setValue}
-              mentionPaths={canMentionFiles ? fileMentionPaths : []}
+              mentionPaths={effectiveMentionPaths}
               onBlur={save}
               onChange={autoResize}
               onKeyDown={handleKeyDown}

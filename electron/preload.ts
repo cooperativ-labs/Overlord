@@ -44,6 +44,16 @@ const electronAPI = {
       }),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },
+  filesystem: {
+    directoryExists: (directory?: string) =>
+      ipcRenderer.invoke('filesystem:directory-exists', directory),
+    listProjectFiles: (options?: {
+      directory?: string;
+      maxDepth?: number;
+      maxEntriesPerDirectory?: number;
+      maxFiles?: number;
+    }) => ipcRenderer.invoke('filesystem:list-project-files', options)
+  },
   supabase: {
     getStatus: () => ipcRenderer.invoke('supabase:status'),
     restart: () => ipcRenderer.invoke('supabase:restart')

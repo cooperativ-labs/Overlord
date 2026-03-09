@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { createClient } from '@/supabase/utils/server';
 
@@ -285,22 +286,21 @@ async function stopCurrentTimerIfRunning(apiKey: string): Promise<void> {
   await everhourFetch<null>(apiKey, '/timers/current', { method: 'DELETE' });
 }
 
-function revalidateTicketPaths(organizationId: number, ticketId: string) {
+function revalidateTicketPaths(ticketId: string) {
+  revalidatePath('/projects');
   revalidatePath('/u');
-  revalidatePath(`/${organizationId}`);
-  revalidatePath(`/${organizationId}/${ticketId}`);
+  revalidatePath(`/u/${ticketId}`);
 }
 
-function revalidateProjectTicketPaths(
-  organizationId: number,
-  projectId: string | null,
-  ticketId: string
-) {
+function revalidateProjectTicketPaths(projectId: string | null, ticketId: string) {
   if (!projectId) {
     return;
   }
-  revalidatePath(`/${organizationId}/projects/${projectId}`);
-  revalidatePath(`/${organizationId}/projects/${projectId}/${ticketId}`);
+
+  const projectPath = buildProjectPath({ projectId });
+  revalidatePath(projectPath);
+  revalidatePath(projectPath, 'layout');
+  revalidatePath(buildTicketPath({ projectId, ticketId }));
 }
 
 async function getAuthenticatedContext(): Promise<AuthenticatedContext> {
@@ -565,7 +565,13 @@ export async function syncEverhourProjectsForOrganization(organizationId: number
     throw new Error(projectsAfterSyncError.message);
   }
 
-  revalidatePath(`/${organizationId}`);
+  revalidatePath('/u');
+  revalidatePath('/projects');
+  for (const project of projectsAfterSync ?? []) {
+    const projectPath = buildProjectPath({ projectId: project.id });
+    revalidatePath(projectPath);
+    revalidatePath(projectPath, 'layout');
+  }
 
   const mapped =
     projectsAfterSync?.filter(project => typeof project.everhour_project_id === 'string').length ??
@@ -617,8 +623,8 @@ export async function ensureEverhourTaskForTicket(ticketId: string): Promise<{
     throw new Error(error.message);
   }
 
-  revalidateTicketPaths(ticket.organization_id, ticket.id);
-  revalidateProjectTicketPaths(ticket.organization_id, ticket.project_id, ticket.id);
+  revalidateTicketPaths(ticket.id);
+  revalidateProjectTicketPaths(ticket.project_id, ticket.id);
   return { projectId, taskId };
 }
 

@@ -35,6 +35,20 @@ interface ElectronAPI {
     ) => Promise<string | void>;
     chooseDirectory: () => Promise<string | null>;
   };
+  filesystem: {
+    directoryExists: (directory?: string) => Promise<boolean>;
+    listProjectFiles: (options?: {
+      directory?: string;
+      maxDepth?: number;
+      maxEntriesPerDirectory?: number;
+      maxFiles?: number;
+    }) => Promise<{
+      files: string[];
+      linkedDirectory: string | null;
+      truncated: boolean;
+      error?: string;
+    }>;
+  };
   supabase: {
     getStatus: () => Promise<{ running: boolean; url: string }>;
     restart: () => Promise<void>;
