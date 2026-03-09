@@ -15,7 +15,7 @@ Add the following to your Claude Code configuration (typically `~/.claude/settin
       "command": "node",
       "args": ["./mcp-client.js"],
       "env": {
-        "OVERLORD_URL": "https://overlord.cooperativ.io",
+        "OVERLORD_URL": "https://ovld.ai",
         "SUPABASE_URL": "https://zitmmhvbilhjjdwgxlfm.supabase.co",
         "SUPABASE_OAUTH_CLIENT_ID": "577e4468-a806-489e-8b99-206471e7442c",
         "SUPABASE_OAUTH_REDIRECT_URI": "http://127.0.0.1:3000/callback"
@@ -38,7 +38,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const OVERLORD_URL = process.env.OVERLORD_URL || 'https://overlord.cooperativ.io';
+const OVERLORD_URL = process.env.OVERLORD_URL || 'https://ovld.ai';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zitmmhvbilhjjdwgxlfm.supabase.co';
 const CLIENT_ID = process.env.SUPABASE_OAUTH_CLIENT_ID || '';
 const REDIRECT_URI = process.env.SUPABASE_OAUTH_REDIRECT_URI || 'http://127.0.0.1:3000/callback';
@@ -377,7 +377,7 @@ Once the MCP is configured, you can use it directly in Claude Code sessions:
 Instead of hardcoding in MCP config, set environment variables:
 
 ```bash
-export OVERLORD_URL=https://overlord.cooperativ.io
+export OVERLORD_URL=https://ovld.ai
 export SUPABASE_URL=https://your-project.supabase.co
 export SUPABASE_OAUTH_CLIENT_ID=577e4468-a806-489e-8b99-206471e7442c
 export SUPABASE_OAUTH_REDIRECT_URI=http://127.0.0.1:3000/callback

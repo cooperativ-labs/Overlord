@@ -131,10 +131,10 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
       if (process.env.NEXT_ENV === 'development') {
         return new URL(resolvedPlatformUrl).hostname;
       } else {
-        return 'overlord.cooperativ.io';
+        return 'ovld.ai';
       }
     } catch {
-      return 'overlord.cooperativ.io';
+      return 'ovld.ai';
     }
   })();
   const supabaseDomain = (() => {
@@ -440,11 +440,10 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
               </button>
             </div>
             <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-              {`npx overlord resume ${selectedLocalAgent}${
-                (agentFlags[selectedLocalAgent] ?? []).length > 0
+              {`npx overlord resume ${selectedLocalAgent}${(agentFlags[selectedLocalAgent] ?? []).length > 0
                   ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
                   : ''
-              }`}
+                }`}
             </pre>
           </div>
         </div>

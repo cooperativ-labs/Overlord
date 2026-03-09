@@ -63,15 +63,15 @@ export default async function RootLayout({
   const needsOrganizationOnboarding = !!user && organizations.length === 0;
   const onboardingState = needsOrganizationOnboarding
     ? {
-        userName:
-          (user.user_metadata as { name?: string; full_name?: string })?.name ??
-          (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
-          user.email?.split('@')[0] ??
-          null,
-        hasOrganizations: false,
-        hasProjects: projects.length > 0,
-        firstOrganizationId: null
-      }
+      userName:
+        (user.user_metadata as { name?: string; full_name?: string })?.name ??
+        (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
+        user.email?.split('@')[0] ??
+        null,
+      hasOrganizations: false,
+      hasProjects: projects.length > 0,
+      firstOrganizationId: null
+    }
     : null;
 
   return (
@@ -126,9 +126,9 @@ export default async function RootLayout({
                       </div>
                     </div>
                   ) : (
-                    <div className="flex h-dvh w-full flex-col overflow-hidden">
+                    <div className="flex w-full flex-col ">
                       <AnnouncementBar />
-                      <main className="min-h-0 w-full flex-1 ">{children}</main>
+                      <main className="w-full h-full ">{children}</main>
                     </div>
                   )}
                   {onboardingState ? (

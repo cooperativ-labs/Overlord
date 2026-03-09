@@ -459,7 +459,7 @@ Configure the following environment variables on clients:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `OVERLORD_URL` | Base URL of Overlord platform | `https://overlord.cooperativ.io` |
+| `OVERLORD_URL` | Base URL of Overlord platform | `https://ovld.ai` |
 | `OVERLORD_AGENT_TOKEN` | Long-lived agent token (obtained via OAuth) | `agent_token_xyz...` |
 | `SUPABASE_URL` | Supabase project URL (discovered via `/api/auth/config`) | `https://project.supabase.co` |
 | `SUPABASE_OAUTH_CLIENT_ID` | OAuth client ID for your client type (discovered via `/api/auth/config`) | `577e4468-a806-489e-8b99-206471e7442c` |

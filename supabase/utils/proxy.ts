@@ -42,7 +42,8 @@ export async function updateSession(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const publicPaths = [
+  const publicExactPaths = ['/'];
+  const publicPathPrefixes = [
     '/login',
     '/electron-login',
     '/confirm-email',
@@ -54,7 +55,9 @@ export async function updateSession(request: NextRequest) {
     '/api/auth',
     '/callback'
   ];
-  const isPublic = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
+  const isPublic =
+    publicExactPaths.includes(request.nextUrl.pathname) ||
+    publicPathPrefixes.some(path => request.nextUrl.pathname.startsWith(path));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
