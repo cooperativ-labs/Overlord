@@ -10,6 +10,16 @@ import { updateTicketFieldAction } from '@/lib/actions/tickets';
 import { cn } from '@/lib/utils';
 
 type EditableField = 'title' | 'objective' | 'available_tools' | 'acceptance_criteria';
+const EMPTY_MENTION_PATHS: string[] = [];
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
 
 type Props = {
   ticketId: string;
@@ -52,7 +62,7 @@ export function InlineEditField({
   displayClassName,
   inputClassName,
   renderMarkdown = false,
-  fileMentionPaths = [],
+  fileMentionPaths = EMPTY_MENTION_PATHS,
   workingDirectory,
   variant = 'default',
   children
@@ -71,6 +81,12 @@ export function InlineEditField({
       : fileMentionPaths
     : [];
 
+  const syncLocalFileMentionPaths = useCallback((nextPaths: string[]) => {
+    setLocalFileMentionPaths(current =>
+      areStringArraysEqual(current, nextPaths) ? current : nextPaths
+    );
+  }, []);
+
   const autoResize = useCallback(() => {
     if (!multiline) return;
     const el = inputRef.current as HTMLTextAreaElement | null;
@@ -87,18 +103,18 @@ export function InlineEditField({
 
   useEffect(() => {
     if (!canMentionFiles) {
-      setLocalFileMentionPaths([]);
+      syncLocalFileMentionPaths(EMPTY_MENTION_PATHS);
       return;
     }
 
     if (!isElectron) {
-      setLocalFileMentionPaths(fileMentionPaths);
+      syncLocalFileMentionPaths(fileMentionPaths);
       return;
     }
 
     const directory = workingDirectory?.trim() ?? '';
     if (!directory || !api?.filesystem?.listProjectFiles) {
-      setLocalFileMentionPaths(fileMentionPaths);
+      syncLocalFileMentionPaths(fileMentionPaths);
       return;
     }
 
@@ -108,21 +124,28 @@ export function InlineEditField({
       .then(result => {
         if (cancelled) return;
         if (result.error) {
-          setLocalFileMentionPaths(fileMentionPaths);
+          syncLocalFileMentionPaths(fileMentionPaths);
           return;
         }
-        setLocalFileMentionPaths(result.files ?? []);
+        syncLocalFileMentionPaths(result.files ?? EMPTY_MENTION_PATHS);
       })
       .catch(() => {
         if (!cancelled) {
-          setLocalFileMentionPaths(fileMentionPaths);
+          syncLocalFileMentionPaths(fileMentionPaths);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [api, canMentionFiles, fileMentionPaths, isElectron, workingDirectory]);
+  }, [
+    api,
+    canMentionFiles,
+    fileMentionPaths,
+    isElectron,
+    syncLocalFileMentionPaths,
+    workingDirectory
+  ]);
 
   function startEditing() {
     setEditing(true);
