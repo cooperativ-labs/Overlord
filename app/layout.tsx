@@ -10,6 +10,7 @@ import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAu
 import { OrganizationOnboardingModal } from '@/components/features/onboarding/OrganizationOnboardingModal';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
+import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { TerminalWorkspace } from '@/components/features/terminal/TerminalWorkspace';
@@ -86,6 +87,7 @@ export default async function RootLayout({
           <ElectronDetector />
           <ServiceWorkerRegister />
           <ElectronAuthGate />
+          <ElectronOfflineGate>
           <TerminalProvider>
             <DefaultProjectProvider
               projects={projects}
@@ -138,6 +140,7 @@ export default async function RootLayout({
               </ProjectCreatorProvider>
             </DefaultProjectProvider>
           </TerminalProvider>
+          </ElectronOfflineGate>
           <Toaster />
         </ThemeProvider>
       </body>
