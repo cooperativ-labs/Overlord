@@ -6,10 +6,18 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { insertChangeRationales, resolveTicketProjectContext } from './_change-rationales.ts';
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 
 export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: TokenContext) {
-  const { sessionKey, ticketId: rawTicketId, summary, artifacts = [] } = args;
+  const {
+    sessionKey,
+    ticketId: rawTicketId,
+    summary,
+    artifacts = [],
+    changeRationales = []
+  } = args;
   const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
@@ -27,6 +35,21 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     .single();
 
   if (eventErr || !event) return toolErr(eventErr?.message ?? 'Failed to write delivery event.');
+
+  if (Array.isArray(changeRationales) && changeRationales.length > 0) {
+    const ticketContext = await resolveTicketProjectContext(supabase, ticketId);
+    if (!ticketContext) return toolErr('Failed to resolve ticket project context.');
+
+    const rationaleResult = await insertChangeRationales(supabase, {
+      changeRationales,
+      eventId: event.id,
+      organizationId: ticketContext.organization_id,
+      projectId: ticketContext.project_id,
+      sessionId: resolved.session.id,
+      ticketId
+    });
+    if (rationaleResult.error) return toolErr(rationaleResult.error);
+  }
 
   const mcpFunctionsUrl = `${SUPABASE_URL}/functions/v1/mcp`;
   const restartCommand = `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude`;

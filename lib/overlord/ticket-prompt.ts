@@ -337,7 +337,22 @@ Store \`session.sessionKey\` from the response. It is required for all later too
 Use MCP tool: \`update\`
 
 \`\`\`json
-{ "sessionKey": "<from attach>", "ticketId": "${ticketId}", "summary": "What you did and why.", "phase": "execute" }
+{
+  "sessionKey": "<from attach>",
+  "ticketId": "${ticketId}",
+  "summary": "What you did and why.",
+  "phase": "execute",
+  "changeRationales": [
+    {
+      "label": "Short reviewer-facing title",
+      "file_path": "path/to/file.ts",
+      "summary": "What changed.",
+      "why": "Why it changed.",
+      "impact": "Behavioral or review impact.",
+      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
+    }
+  ]
+}
 \`\`\`
 
 Pass \`eventType\` to publish a specific activity event (default: \`update\`). Available event types:
@@ -374,6 +389,16 @@ Use MCP tool: \`deliver\`
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
   "summary": "Narrative: what you did, what you considered, and next steps for the PM.",
+  "changeRationales": [
+    {
+      "label": "Short reviewer-facing title",
+      "file_path": "path/to/file.ts",
+      "summary": "What changed.",
+      "why": "Why it changed.",
+      "impact": "Behavioral or review impact.",
+      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
+    }
+  ],
   "artifacts": [
     { "type": "file_changes", "label": "Files modified", "content": "git diff --stat output or file list" },
     { "type": "next_steps", "label": "Recommended next steps", "content": "Bulleted list." }
@@ -386,6 +411,8 @@ Use MCP tool: \`deliver\`
 - Use MCP tools only for this session.
 - Always attach first; always deliver when done.
 - Post at least one update before delivering.
+- Record \`changeRationales\` only for meaningful behavioral changes. Skip formatting-only noise.
+- Prefer 1-5 concise \`changeRationales\` for a typical ticket, each tied to a specific file and diff hunk.
 - If blocked on human-only work, create a follow-up ticket.
 - **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
 `;
@@ -447,6 +474,16 @@ POST $OVERLORD_URL/api/protocol/update
   "ticketId": "${ticketId}",
   "summary": "What you did and why.",
   "phase": "execute",
+  "changeRationales": [
+    {
+      "label": "Short reviewer-facing title",
+      "file_path": "path/to/file.ts",
+      "summary": "What changed.",
+      "why": "Why it changed.",
+      "impact": "Behavioral or review impact.",
+      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
+    }
+  ],
   "payload": {
     "notifications": [
       { "message": "Need clarification on migration order.", "kind": "question", "blocking": true },
@@ -516,6 +553,16 @@ POST $OVERLORD_URL/api/protocol/deliver
   "sessionKey": "<from attach>",
   "ticketId": "${ticketId}",
   "summary": "Narrative: what you did, what you considered, and next steps for the PM.",
+  "changeRationales": [
+    {
+      "label": "Short reviewer-facing title",
+      "file_path": "path/to/file.ts",
+      "summary": "What changed.",
+      "why": "Why it changed.",
+      "impact": "Behavioral or review impact.",
+      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
+    }
+  ],
   "artifacts": [
     { "type": "file_changes", "label": "Files modified", "content": "git diff --stat output or file list" },
     { "type": "next_steps", "label": "Recommended next steps", "content": "Bulleted list." }
@@ -555,6 +602,7 @@ To target a specific native agent session ID, optionally set one of:
 - Always attach before anything else.
 - Always deliver when done — even for minor changes. The PM needs the feedback loop.
 - Post at least one update before delivering.
+- Record \`changeRationales\` for meaningful behavioral changes and tie each one to a specific file and hunk when possible.
 - If blocked on human-only work, create a follow-up ticket in the same project using \`/api/protocol/create-ticket\`.
 - Include a \`Restart session command\` artifact when delivering when possible. The deliver endpoint auto-appends one if missing.
 - The \`summary\` in deliver is what the PM reads first — write it as a clear narrative, not a list of commands.

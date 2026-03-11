@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.52.0] - 2026-03-11:22:22
+
+### Added
+- Add Change Explorer feature for Electron: inspect all uncommitted changes from linked working directories with per-file unified diff rendering.
+- Add Current Changes page at `/projects/[projectId]/current-changes` (Electron-only) to browse and review local repository modifications.
+- Add Change Rationale system to track why changes were made, with explicit attribution to tickets and agent sessions.
+- Add API routes for submitting and retrieving change rationales during agent `update` and `deliver` operations.
+- Add ticket 'is_read' status to improve ticket tracking and provide visual indicators in Kanban and list views.
+- Add global hotkey for toggling into and out of Current Changes view while in Electron.
+
+### Fixed
+- Fix Kanban and list view state management for ticket read/unread status tracking.
+
+### Changed
+- Enhance Electron IPC filesystem API with improved directory validation and error handling.
+- Update agent protocol documentation to guide agents on submitting change rationales with structured metadata.
+- Update project settings section with new entry point for accessing Change Explorer.
+- Update hotkeys page documentation to include new keyboard shortcuts for Change Explorer navigation.
+
+### Security
+- None.
+
 ## [0.51.0] - 2026-03-11:14:32
 
 ### Added

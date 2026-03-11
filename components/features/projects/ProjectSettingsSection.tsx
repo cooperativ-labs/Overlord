@@ -1,6 +1,6 @@
 'use client';
 
-import { Folder, Settings } from 'lucide-react';
+import { Folder, GitCompareArrows, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -189,23 +189,42 @@ export function ProjectSettingsSection({
           )}
 
           {isElectron ? (
-            <button
-              type="button"
-              className={cn(
-                'mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
-                hasSavedWorkingDirectory
-                  ? 'border-border'
-                  : 'border-dashed border-muted-foreground/60 italic'
-              )}
-              onClick={handleChooseDirectory}
-              disabled={workingDirectorySaveState === 'loading'}
-              title={hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
-            >
-              <Folder className="h-3 w-3" />
-              <span className="truncate">
-                {hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
-              </span>
-            </button>
+            <>
+              <button
+                type="button"
+                className={cn(
+                  'mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
+                  hasSavedWorkingDirectory
+                    ? 'border-border'
+                    : 'border-dashed border-muted-foreground/60 italic'
+                )}
+                onClick={handleChooseDirectory}
+                disabled={workingDirectorySaveState === 'loading'}
+                title={hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
+              >
+                <Folder className="h-3 w-3" />
+                <span className="truncate">
+                  {hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
+                </span>
+              </button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1 h-7 gap-1.5 text-xs md:mt-0"
+                onClick={() => router.push(`/projects/${projectId}/current-changes`)}
+                disabled={!hasSavedWorkingDirectory}
+                title={
+                  hasSavedWorkingDirectory
+                    ? 'Open Current Changes'
+                    : 'Link a project directory to inspect current changes'
+                }
+              >
+                <GitCompareArrows className="h-3.5 w-3.5" />
+                Current Changes
+              </Button>
+            </>
           ) : null}
 
           {projectSettings ? (

@@ -49,7 +49,38 @@ const updateEventTypeSchema = z
   .optional()
   .default('update');
 
+const changeRationaleHunkSchema = z
+  .object({
+    header: z.string().trim().min(1).max(240).optional(),
+    new_lines: z.number().int().min(0).optional(),
+    new_start: z.number().int().min(0).optional(),
+    old_lines: z.number().int().min(0).optional(),
+    old_start: z.number().int().min(0).optional()
+  })
+  .refine(
+    input =>
+      typeof input.header === 'string' ||
+      typeof input.new_start === 'number' ||
+      typeof input.old_start === 'number',
+    {
+      error: 'Each hunk needs a header or line range.'
+    }
+  );
+
+export const changeRationaleSchema = z.object({
+  attribution_source: z.string().trim().min(1).max(40).optional().default('explicit'),
+  change_kind: z.string().trim().min(1).max(40).optional().default('modify'),
+  confidence: z.string().trim().min(1).max(40).optional().default('explicit'),
+  file_path: z.string().trim().min(1).max(1024),
+  hunks: z.array(changeRationaleHunkSchema).min(1).max(20),
+  impact: z.string().trim().min(1).max(2_000),
+  label: z.string().trim().min(1).max(160),
+  summary: z.string().trim().min(1).max(2_000),
+  why: z.string().trim().min(1).max(2_000)
+});
+
 export const updateSchema = z.object({
+  changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
   sessionKey: z.string().uuid(),
   ticketId: ticketIdSchema,
   summary: z.string().trim().min(1).max(20_000),
@@ -74,6 +105,7 @@ export const writeContextSchema = z.object({
 });
 
 export const deliverSchema = z.object({
+  changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
   sessionKey: z.string().uuid(),
   ticketId: ticketIdSchema,
   summary: z.string().trim().min(1).max(20_000),

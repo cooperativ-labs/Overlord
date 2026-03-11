@@ -52,7 +52,15 @@ const electronAPI = {
       maxDepth?: number;
       maxEntriesPerDirectory?: number;
       maxFiles?: number;
-    }) => ipcRenderer.invoke('filesystem:list-project-files', options)
+    }) => ipcRenderer.invoke('filesystem:list-project-files', options),
+    getGitStatus: (options?: { directory?: string }) =>
+      ipcRenderer.invoke('filesystem:get-git-status', options),
+    getGitDiff: (options?: {
+      directory?: string;
+      originalPath?: string;
+      path?: string;
+      status?: string;
+    }) => ipcRenderer.invoke('filesystem:get-git-diff', options)
   },
   supabase: {
     getStatus: () => ipcRenderer.invoke('supabase:status'),
