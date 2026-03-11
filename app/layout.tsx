@@ -64,15 +64,15 @@ export default async function RootLayout({
   const needsOrganizationOnboarding = !!user && organizations.length === 0;
   const onboardingState = needsOrganizationOnboarding
     ? {
-      userName:
-        (user.user_metadata as { name?: string; full_name?: string })?.name ??
-        (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
-        user.email?.split('@')[0] ??
-        null,
-      hasOrganizations: false,
-      hasProjects: projects.length > 0,
-      firstOrganizationId: null
-    }
+        userName:
+          (user.user_metadata as { name?: string; full_name?: string })?.name ??
+          (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
+          user.email?.split('@')[0] ??
+          null,
+        hasOrganizations: false,
+        hasProjects: projects.length > 0,
+        firstOrganizationId: null
+      }
     : null;
 
   return (

@@ -56,7 +56,7 @@ import type { Database } from '@/types/database.types';
 
 import KanbanCard, { type Ticket } from './KanbanCard';
 import KanbanColumn from './KanbanColumn';
-import TicketsViewToggle from './TicketsViewToggle';
+import TicketsViewControls from './TicketsViewControls';
 
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
@@ -135,6 +135,7 @@ export default function KanbanBoard({
   organizationId,
   projectId,
   fileMentionPaths = [],
+  workingDirectory = null,
   initialView
 }: {
   tickets: Ticket[];
@@ -143,6 +144,7 @@ export default function KanbanBoard({
   organizationId?: number;
   projectId?: string;
   fileMentionPaths?: string[];
+  workingDirectory?: string | null;
   initialView: string;
 }) {
   const pathname = usePathname();
@@ -379,6 +381,24 @@ export default function KanbanBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [displayedTickets, sortedColumns, visibleSlugs]
   );
+
+  function handleMarkColumnRead(ticketIds: string[]) {
+    const now = Date.now();
+    for (const id of ticketIds) {
+      const ticket = ticketsByIdRef.current.get(id);
+      if (!ticket) continue;
+      if (waitingByTicket[id] ?? ticket.waiting_for_response_at) {
+        markTicketWaitingOpened(id, now);
+      }
+      if (reviewByTicket[id] ?? ticket.review_entered_at) {
+        markTicketReviewOpened(id, now);
+      }
+    }
+    setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
+    setOpenedReviewTimestamps(getOpenedReviewTimestamps());
+    setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
+    setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
+  }
 
   function handleMarkUnread(ticketId: string) {
     const ticket = ticketsByIdRef.current.get(ticketId);
@@ -957,7 +977,7 @@ export default function KanbanBoard({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
             <div className="flex items-center gap-2">
-              <TicketsViewToggle initialView={initialView} />
+              <TicketsViewControls initialView={initialView} />
               {projectOptions.length > 1 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1066,8 +1086,10 @@ export default function KanbanBoard({
                     showOrganizationName={showOrganizationName}
                     projectId={projectId}
                     fileMentionPaths={fileMentionPaths}
+                    workingDirectory={workingDirectory}
                     onCreateTicket={handleCreateTicket}
                     onMarkUnread={handleMarkUnread}
+                    onMarkAllRead={() => handleMarkColumnRead(displayed.map(t => t.id))}
                     olderTicketsCount={olderCount}
                     isCompleteColumn={col.statusType === 'complete'}
                     showOlder={expandedCompleteColumns.has(col.id)}
@@ -1089,8 +1111,10 @@ export default function KanbanBoard({
                   showOrganizationName={showOrganizationName}
                   projectId={projectId}
                   fileMentionPaths={fileMentionPaths}
+                  workingDirectory={workingDirectory}
                   onCreateTicket={handleCreateTicket}
                   onMarkUnread={handleMarkUnread}
+                  onMarkAllRead={() => handleMarkColumnRead(uncategorized.map(t => t.id))}
                   olderTicketsCount={0}
                   isCompleteColumn={false}
                   showOlder={false}

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.51.0] - 2026-03-11:14:32
+
+### Added
+- Add TicketsViewControls component for unified ticket view state management across list and board layouts.
+- Add database-backed agent configuration system with per-user persistence and multi-device sync support.
+
+### Fixed
+- Fix Kanban card collapse behavior to properly maintain expanded/collapsed state.
+
+### Changed
+- Refactor layout and loading components for improved user experience with enhanced onboarding state handling.
+- Replace UserTicketsLoading component with TicketsBoardLoadingSkeleton for better visual consistency.
+- Refactor InlineEditField to improve file mention path handling with better state synchronization.
+- Update RootLayout styles and session management in proxy utility for improved public path handling.
+- Update documentation URLs and settings references to reflect new domain configuration.
+- Migrate agent configuration storage from localStorage to database for persistent, multi-device support.
+
+### Security
+- None.
+
+### Refactor
+- Refactor Kanban board and related components (KanbanBoard, KanbanColumn, BlankTicketCard, TicketListView, TicketsBoardContent) for better organization and maintainability.
+
+### Chore
+- Update package.json dependencies and Electron configuration.
+- Enhanced ElectronLoginScreen with improved authentication flow.
+
 ## [0.50.0] - 2026-03-09:09:48
 
 ### Added

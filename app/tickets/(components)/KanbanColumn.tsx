@@ -2,11 +2,12 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { CheckCheck, ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import BlankTicketCard from './BlankTicketCard';
 import KanbanCard, { type Ticket } from './KanbanCard';
@@ -22,8 +23,10 @@ export default function KanbanColumn({
   showOrganizationName = false,
   projectId,
   fileMentionPaths = [],
+  workingDirectory = null,
   onCreateTicket,
   onMarkUnread,
+  onMarkAllRead,
   olderTicketsCount = 0,
   isCompleteColumn = false,
   showOlder = false,
@@ -34,8 +37,10 @@ export default function KanbanColumn({
   showOrganizationName?: boolean;
   projectId?: string;
   fileMentionPaths?: string[];
+  workingDirectory?: string | null;
   onCreateTicket: (status: string, objective: string) => Promise<void> | void;
   onMarkUnread?: (ticketId: string) => void;
+  onMarkAllRead?: () => void;
   olderTicketsCount?: number;
   isCompleteColumn?: boolean;
   showOlder?: boolean;
@@ -80,6 +85,24 @@ export default function KanbanColumn({
           <Badge variant="secondary" className="rounded-full">
             {tickets.length}
           </Badge>
+          {onMarkAllRead && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={onMarkAllRead}
+                    aria-label={`Mark all tickets in ${column.title} as read`}
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Mark all in column as read</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -117,6 +140,7 @@ export default function KanbanColumn({
                   inputId={inputId}
                   status={column.id}
                   fileMentionPaths={fileMentionPaths}
+                  workingDirectory={workingDirectory}
                   onCreateTicket={onCreateTicket}
                   onClose={handleCloseBlankCard}
                   onSubmitted={() => setFocusEditorCount(c => c + 1)}

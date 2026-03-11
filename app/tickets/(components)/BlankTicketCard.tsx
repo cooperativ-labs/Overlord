@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { Card, CardContent } from '@/components/ui/card';
+
+const EMPTY_PATHS: string[] = [];
 
 type BlankTicketCardProps = {
   inputId: string;
   status: string;
   fileMentionPaths: string[];
+  workingDirectory?: string | null;
   onCreateTicket: (status: string, objective: string) => Promise<void> | void;
   onClose: () => void;
   onSubmitted?: () => void;
@@ -19,6 +23,7 @@ export default function BlankTicketCard({
   inputId,
   status,
   fileMentionPaths,
+  workingDirectory = null,
   onCreateTicket,
   onClose,
   onSubmitted,
@@ -26,7 +31,9 @@ export default function BlankTicketCard({
 }: BlankTicketCardProps) {
   const [value, setValue] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { api, isElectron } = useElectron();
 
   useEffect(() => {
     if (focusTrigger === 0) return;
@@ -36,6 +43,37 @@ export default function BlankTicketCard({
     const cursor = textArea.value.length;
     textArea.setSelectionRange(cursor, cursor);
   }, [focusTrigger]);
+
+  // In Electron, fetch file mention paths locally via IPC
+  useEffect(() => {
+    if (!isElectron || !api?.filesystem?.listProjectFiles) {
+      setLocalFileMentionPaths(fileMentionPaths);
+      return;
+    }
+
+    const directory = workingDirectory?.trim() ?? '';
+    if (!directory) {
+      setLocalFileMentionPaths(fileMentionPaths);
+      return;
+    }
+
+    let cancelled = false;
+    void api.filesystem
+      .listProjectFiles({ directory })
+      .then(result => {
+        if (cancelled) return;
+        setLocalFileMentionPaths(result.error ? fileMentionPaths : (result.files ?? EMPTY_PATHS));
+      })
+      .catch(() => {
+        if (!cancelled) setLocalFileMentionPaths(fileMentionPaths);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, isElectron, workingDirectory, fileMentionPaths]);
+
+  const effectiveMentionPaths = isElectron ? localFileMentionPaths : fileMentionPaths;
 
   const handleBlur = useCallback(
     async (currentValue: string) => {
@@ -97,15 +135,15 @@ export default function BlankTicketCard({
           placeholder="Write an objective…"
           value={value}
           onValueChange={setValue}
-          mentionPaths={fileMentionPaths}
+          mentionPaths={effectiveMentionPaths}
           onBlur={e => {
             void handleBlur(e.target.value);
           }}
           onKeyDown={e => {
             void handleKeyDown(e);
           }}
-          className="min-h-[72px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0"
-          rows={3}
+          className="min-h-[120px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0"
+          rows={5}
         />
       </CardContent>
     </Card>

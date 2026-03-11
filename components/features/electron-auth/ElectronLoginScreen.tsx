@@ -1,13 +1,13 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
 
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { createClient } from '@/supabase/utils/client';
 
-function sanitizeNextPath(value: string | null, fallback = '/') {
-  if (!value) return fallback;
+function sanitizeNextPath(value: string | null, fallback = '/u') {
+  if (!value || value === '/') return fallback;
   if (!value.startsWith('/') || value.startsWith('//')) return fallback;
 
   try {
@@ -19,17 +19,31 @@ function sanitizeNextPath(value: string | null, fallback = '/') {
 }
 
 export function ElectronLoginScreen() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [signInButtonState, setSignInButtonState] = useState<ButtonLoadingState>('default');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const nextPath = sanitizeNextPath(searchParams.get('next'));
 
+  // Stable ref so the effect doesn't re-run when router identity changes.
+  const routerRef = React.useRef(router);
+  routerRef.current = router;
+  const nextPathRef = React.useRef(nextPath);
+  nextPathRef.current = nextPath;
+
   useEffect(() => {
     const electronAuth = window.electronAPI?.auth;
     if (!electronAuth) return;
 
     let cancelled = false;
+
+    const giveUp = () => {
+      if (!cancelled) {
+        setIsRestoringSession(false);
+        setSignInButtonState('default');
+      }
+    };
 
     const restoreSession = async () => {
       setIsRestoringSession(true);
@@ -38,49 +52,53 @@ export function ElectronLoginScreen() {
       try {
         const client = createClient();
         const { data } = await client.auth.getSession();
+        if (cancelled) return;
         if (data.session?.access_token) {
-          window.location.href = nextPath;
+          routerRef.current.replace(nextPathRef.current);
           return;
         }
 
         const status = await electronAuth.getStatus();
+        if (cancelled) return;
         if (!status.isAuthenticated) {
-          if (!cancelled) {
-            setIsRestoringSession(false);
-            setSignInButtonState('default');
-          }
+          giveUp();
           return;
         }
 
         const result = await electronAuth.refreshSession();
+        if (cancelled) return;
         if (!result.ok || !result.session) {
-          if (!cancelled) {
-            setIsRestoringSession(false);
-            setSignInButtonState('default');
-          }
+          giveUp();
           return;
         }
 
         await client.auth.setSession(result.session);
-
         if (!cancelled) {
-          window.location.href = nextPath;
+          routerRef.current.replace(nextPathRef.current);
         }
       } catch (err) {
         console.warn('Electron session recovery failed:', err);
-        if (!cancelled) {
-          setIsRestoringSession(false);
-          setSignInButtonState('default');
-        }
+        giveUp();
       }
     };
 
-    void restoreSession();
+    // Race: if restore hasn't finished in 2 s, give up and show the sign-in button.
+    const timeout = setTimeout(giveUp, 2000);
+    void restoreSession().finally(() => clearTimeout(timeout));
 
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
-  }, [nextPath]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleLogout() {
+    await window.electronAPI?.auth.logout?.();
+    await createClient().auth.signOut();
+    setIsRestoringSession(false);
+    setSignInButtonState('default');
+  }
 
   async function handleSignIn() {
     const electronAuth = window.electronAPI?.auth;
@@ -93,9 +111,9 @@ export function ElectronLoginScreen() {
     try {
       const { session } = await electronAuth.login();
       // Establish a Supabase session in the webview so server components can read it.
-      // The refresh_token is included so the SSR client can auto-refresh the access token.
       await createClient().auth.setSession(session);
-      // Full reload so Next.js server components pick up the new session cookie
+      // Full reload so Next.js server components pick up the new session cookie.
+      // After a fresh login the cookie IS set, so the middleware will see it.
       window.location.href = nextPath;
     } catch (err) {
       const message =
@@ -129,11 +147,22 @@ export function ElectronLoginScreen() {
               onClick={handleSignIn}
             />
             {signInButtonState === 'loading' && (
-              <p className="text-xs text-muted-foreground">
-                {isRestoringSession
-                  ? 'Trying to restore your previous session...'
-                  : 'Complete sign-in in your browser, then return here.'}
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {isRestoringSession
+                    ? 'Trying to restore your previous session...'
+                    : 'Complete sign-in in your browser, then return here.'}
+                </p>
+                {isRestoringSession && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline hover:text-foreground"
+                    onClick={handleLogout}
+                  >
+                    Log out
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

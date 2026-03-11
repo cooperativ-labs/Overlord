@@ -238,17 +238,17 @@ app.whenReady().then(async () => {
     }
   }
 
-  let windowUrl = 'http://localhost:3000';
   let localSecret = '';
 
   if (isDev) {
-    windowUrl = 'http://localhost:3000';
-    platformUrl = windowUrl;
+    platformUrl = 'http://localhost:3000';
     localSecret = generateLocalSecret();
   } else {
     platformUrl = resolveProductionPlatformUrl();
-    windowUrl = platformUrl;
   }
+
+  // Always open to /u — the middleware will redirect to /electron-login if not authenticated.
+  const windowUrl = `${platformUrl}/u`;
 
   if (localSecret) {
     process.env.OVERLORD_LOCAL_SECRET = localSecret;

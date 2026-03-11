@@ -100,7 +100,7 @@ export default async function TicketsBoardContent({
   const savedView = await getRawViewPreference();
   const headerStore = await headers();
   const ua = headerStore.get('user-agent') ?? '';
-  const isMobile = /mobile|android|iphone|ipad/i.test(ua);
+  const isMobile = /mobile|android|iphone/i.test(ua);
   const isElectronRequest = /electron/i.test(ua);
   const view = isMobile ? 'list' : (savedView ?? 'board');
   const supabase = await createClient();
@@ -249,28 +249,36 @@ export default async function TicketsBoardContent({
   const statuses = dedupeStatuses(statusesResult.data ?? []);
   const loadError = ticketsResult.error ?? statusesResult.error;
   let objectiveFileMentionPaths: string[] = [];
+  let kanbanWorkingDirectory: string | null = null;
 
-  if (projectId && view === 'board' && !isElectronRequest) {
+  if (projectId && view === 'board') {
     const { data: projectForMentions } = await supabase
       .from('projects')
       .select('local_working_directory')
       .eq('id', projectId)
       .limit(1)
       .maybeSingle();
-    const resolvedProjectDirectory = resolveLinkedDirectory(
-      projectForMentions?.local_working_directory
-    );
-    if (resolvedProjectDirectory) {
-      try {
-        const result = await Promise.race([
-          listProjectFiles(resolvedProjectDirectory),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('File listing timed out')), 3000)
-          )
-        ]);
-        objectiveFileMentionPaths = result.files;
-      } catch {
-        // Non-fatal: file mentions will be unavailable
+
+    if (isElectronRequest) {
+      // In Electron, pass the raw configured path so the client can fetch files locally via IPC
+      kanbanWorkingDirectory = projectForMentions?.local_working_directory ?? null;
+    } else {
+      const resolvedProjectDirectory = resolveLinkedDirectory(
+        projectForMentions?.local_working_directory
+      );
+      if (resolvedProjectDirectory) {
+        kanbanWorkingDirectory = resolvedProjectDirectory;
+        try {
+          const result = await Promise.race([
+            listProjectFiles(resolvedProjectDirectory),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('File listing timed out')), 3000)
+            )
+          ]);
+          objectiveFileMentionPaths = result.files;
+        } catch {
+          // Non-fatal: file mentions will be unavailable
+        }
       }
     }
   }
@@ -293,6 +301,7 @@ export default async function TicketsBoardContent({
           organizationId={organizationId}
           projectId={projectId}
           fileMentionPaths={objectiveFileMentionPaths}
+          workingDirectory={kanbanWorkingDirectory}
           initialView={view}
         />
       ) : (

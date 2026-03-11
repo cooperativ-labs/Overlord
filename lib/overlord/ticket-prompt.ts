@@ -154,6 +154,11 @@ npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} 
 
 Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI.
 
+Pass \`--event-type <type>\` to publish a specific activity event (default: \`update\`). Available event types:
+- \`update\` — standard progress update (default)
+- \`user_follow_up\` — a message or question from the human user
+- \`alert\` — surface a warning or non-blocking alert
+
 ### 4 — Ask (blocking question — stop working after calling)
 
 \`\`\`bash
@@ -212,7 +217,7 @@ ${codexResumeCommand}
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately post an update with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
 `;
 }
 
@@ -335,6 +340,11 @@ Use MCP tool: \`update\`
 { "sessionKey": "<from attach>", "ticketId": "${ticketId}", "summary": "What you did and why.", "phase": "execute" }
 \`\`\`
 
+Pass \`eventType\` to publish a specific activity event (default: \`update\`). Available event types:
+- \`update\` — standard progress update (default)
+- \`user_follow_up\` — a message or question from the human user
+- \`alert\` — surface a warning or non-blocking alert
+
 ### 3 — Ask a blocking question (when you cannot proceed)
 
 Use MCP tool: \`ask\`
@@ -377,7 +387,7 @@ Use MCP tool: \`deliver\`
 - Always attach first; always deliver when done.
 - Post at least one update before delivering.
 - If blocked on human-only work, create a follow-up ticket.
-- **If the user sends you a message during your session, immediately post an update with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
 `;
   }
 
@@ -448,6 +458,11 @@ POST $OVERLORD_URL/api/protocol/update
 
 Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while actively working.
 When \`payload.notifications\` is provided, Overlord will fan these out into app-visible notification events.
+
+Pass \`"eventType"\` to publish a specific activity event (default: \`"update"\`). Available event types:
+- \`"update"\` — standard progress update (default)
+- \`"user_follow_up"\` — a message or question from the human user
+- \`"alert"\` — surface a warning or non-blocking alert
 
 ### 3 — Ask a blocking question (when you cannot proceed)
 
@@ -545,6 +560,6 @@ To target a specific native agent session ID, optionally set one of:
 - The \`summary\` in deliver is what the PM reads first — write it as a clear narrative, not a list of commands.
 - Use \`write-context\` for constraints, or facts a future agent session should know.
 - Prefer direct \`curl\` JSON payloads for protocol calls; avoid brittle shell quoting and \`jq\` payload wrappers.
-- **If the user sends you a message during your session, immediately post an update with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
 `;
 }

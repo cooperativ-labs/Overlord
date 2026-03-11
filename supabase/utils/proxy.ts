@@ -42,6 +42,16 @@ export async function updateSession(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
+  // Electron embeds "Electron" in the User-Agent.
+  const isElectron = request.headers.get('user-agent')?.includes('Electron');
+
+  // In the Electron app, /login should always go to /electron-login.
+  if (isElectron && request.nextUrl.pathname === '/login') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/electron-login';
+    return NextResponse.redirect(url);
+  }
+
   const publicExactPaths = ['/'];
   const publicPathPrefixes = [
     '/login',
@@ -62,8 +72,6 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
-    // Electron embeds "Electron" in the User-Agent — redirect to the OAuth login screen
-    const isElectron = request.headers.get('user-agent')?.includes('Electron');
     url.pathname = isElectron ? '/electron-login' : '/login';
     url.searchParams.set('next', nextPath);
     return NextResponse.redirect(url);
