@@ -1,14 +1,18 @@
 'use client';
 
+import { usePathname, useRouter, useSelectedLayoutSegment } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 
 import { ProjectSettingsProvider } from '@/components/features/projects/ProjectSettingsContext';
 import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
 type ProjectLayoutClientProps = {
+  board: ReactNode;
   children: ReactNode;
   projectId: string;
   organizationId: number;
@@ -26,6 +30,7 @@ type ProjectLayoutClientProps = {
 };
 
 export function ProjectLayoutClient({
+  board,
   children,
   projectId,
   organizationId,
@@ -36,12 +41,52 @@ export function ProjectLayoutClient({
   statuses,
   hasEverhourApiKey
 }: ProjectLayoutClientProps) {
+  const { isElectron } = useElectron();
+  const pathname = usePathname();
+  const router = useRouter();
+  const selectedSegment = useSelectedLayoutSegment();
   const initialStatuses = statuses.map(s => ({
     name: s.name,
     position: s.position,
     statusType: s.status_type,
     isDefault: s.is_default
   }));
+
+  useEffect(() => {
+    if (!isElectron) return;
+
+    const handleCurrentChangesHotkey = (event: KeyboardEvent) => {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        !event.shiftKey ||
+        event.altKey ||
+        event.key !== '.'
+      ) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable ||
+          target.getAttribute('role') === 'textbox')
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      if (pathname.startsWith(`/projects/${projectId}/current-changes`)) {
+        router.push(`/projects/${projectId}`);
+        return;
+      }
+      router.push(`/projects/${projectId}/current-changes`);
+    };
+
+    window.addEventListener('keydown', handleCurrentChangesHotkey);
+    return () => window.removeEventListener('keydown', handleCurrentChangesHotkey);
+  }, [isElectron, pathname, projectId, router]);
 
   return (
     <ProjectSettingsProvider
@@ -61,7 +106,8 @@ export function ProjectLayoutClient({
           initialColor={projectColor}
           initialWorkingDirectory={projectWorkingDirectory}
         />
-        {children}
+        {selectedSegment === 'current-changes' ? children : board}
+        {selectedSegment === 'current-changes' ? null : children}
       </div>
     </ProjectSettingsProvider>
   );

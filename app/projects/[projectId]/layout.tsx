@@ -52,6 +52,9 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
   return (
     <ErrorBoundary>
       <ProjectLayoutClient
+        board={
+          <TicketsBoardContent organizationId={project.organization_id} projectId={projectId} />
+        }
         projectId={project.id}
         organizationId={project.organization_id}
         projectName={project.name}
@@ -61,7 +64,6 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}
       >
-        <TicketsBoardContent organizationId={project.organization_id} projectId={projectId} />
         {children}
       </ProjectLayoutClient>
     </ErrorBoundary>

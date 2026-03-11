@@ -1,12 +1,18 @@
 import * as Sentry from '@sentry/nextjs';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { getPlatformUrl } from '@/lib/env';
+import {
+  insertChangeRationales,
+  resolveTicketProjectContext
+} from '@/lib/overlord/change-rationales';
 import { buildResumeCommands, selectRestartSessionCommand } from '@/lib/overlord/launch-commands';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { deliverSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
+import type { Database } from '@/types/database.types';
 
 export async function POST(request: Request) {
   const requestStart = Date.now();
@@ -16,11 +22,12 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
-    const { artifacts, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
+    const { artifacts, changeRationales, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
     const { organizationId, tokenValue } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
+    const typedSupabase = supabase as SupabaseClient<Database>;
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
@@ -44,6 +51,30 @@ export async function POST(request: Request) {
         { error: eventError?.message ?? 'Failed to write delivery event.' },
         { status: 500 }
       );
+    }
+
+    if (Array.isArray(changeRationales) && changeRationales.length > 0) {
+      const ticketContext = await resolveTicketProjectContext(typedSupabase, ticketId);
+      if (!ticketContext) {
+        return NextResponse.json(
+          { error: 'Failed to resolve ticket project context.' },
+          { status: 500 }
+        );
+      }
+
+      const rationaleResult = await insertChangeRationales({
+        changeRationales,
+        eventId: event.id,
+        organizationId: ticketContext.organization_id,
+        projectId: ticketContext.project_id,
+        sessionId: resolved.session.id,
+        supabase: typedSupabase,
+        ticketId
+      });
+
+      if (rationaleResult.error) {
+        return NextResponse.json({ error: rationaleResult.error }, { status: 500 });
+      }
     }
 
     const { claudeCode, codex, cursor, gemini } = buildResumeCommands({

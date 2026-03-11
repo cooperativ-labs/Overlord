@@ -36,6 +36,31 @@ interface ElectronAPI {
     chooseDirectory: () => Promise<string | null>;
   };
   filesystem: {
+    getGitDiff: (options?: {
+      directory?: string;
+      originalPath?: string;
+      path?: string;
+      status?: string;
+    }) => Promise<{
+      diff: string;
+      error?: string;
+      path: string | null;
+      repoRoot: string | null;
+      status: string | null;
+    }>;
+    getGitStatus: (options?: { directory?: string }) => Promise<{
+      branch: string | null;
+      error?: string;
+      files: Array<{
+        originalPath?: string | null;
+        path: string;
+        stagedStatus: string;
+        status: string;
+        unstagedStatus: string;
+      }>;
+      linkedDirectory: string | null;
+      repoRoot: string | null;
+    }>;
     directoryExists: (directory?: string) => Promise<boolean>;
     listProjectFiles: (options?: {
       directory?: string;

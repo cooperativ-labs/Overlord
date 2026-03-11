@@ -44,6 +44,38 @@ export const TOOLS = [
           enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'],
           description: 'Current phase. Use "execute" while actively working.'
         },
+        changeRationales: {
+          type: 'array',
+          description:
+            'Optional structured rationale records for meaningful code changes. Prefer 1-5 concise entries per ticket.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              file_path: { type: 'string' },
+              summary: { type: 'string' },
+              why: { type: 'string' },
+              impact: { type: 'string' },
+              change_kind: { type: 'string' },
+              attribution_source: { type: 'string' },
+              confidence: { type: 'string' },
+              hunks: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    header: { type: 'string' },
+                    old_start: { type: 'number' },
+                    old_lines: { type: 'number' },
+                    new_start: { type: 'number' },
+                    new_lines: { type: 'number' }
+                  }
+                }
+              }
+            },
+            required: ['label', 'file_path', 'summary', 'why', 'impact', 'hunks']
+          }
+        },
         payload: {
           type: 'object',
           description: 'Optional payload. Include notifications array to surface events in the UI.'
@@ -170,6 +202,38 @@ export const TOOLS = [
           type: 'string',
           description:
             'Narrative summary: what you did, key decisions, and next steps. The PM reads this first.'
+        },
+        changeRationales: {
+          type: 'array',
+          description:
+            'Optional structured rationale records for meaningful code changes. Prefer 1-5 concise entries per ticket.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              file_path: { type: 'string' },
+              summary: { type: 'string' },
+              why: { type: 'string' },
+              impact: { type: 'string' },
+              change_kind: { type: 'string' },
+              attribution_source: { type: 'string' },
+              confidence: { type: 'string' },
+              hunks: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    header: { type: 'string' },
+                    old_start: { type: 'number' },
+                    old_lines: { type: 'number' },
+                    new_start: { type: 'number' },
+                    new_lines: { type: 'number' }
+                  }
+                }
+              }
+            },
+            required: ['label', 'file_path', 'summary', 'why', 'impact', 'hunks']
+          }
         },
         artifacts: {
           type: 'array',

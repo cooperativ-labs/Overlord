@@ -5,8 +5,17 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { insertChangeRationales, resolveTicketProjectContext } from './_change-rationales.ts';
+
 export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: TokenContext) {
-  const { sessionKey, ticketId: rawTicketId, summary, phase, payload = {} } = args;
+  const {
+    sessionKey,
+    ticketId: rawTicketId,
+    summary,
+    phase,
+    payload = {},
+    changeRationales = []
+  } = args;
   const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
@@ -25,6 +34,21 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     .single();
 
   if (eventErr || !event) return toolErr(eventErr?.message ?? 'Failed to create event.');
+
+  if (Array.isArray(changeRationales) && changeRationales.length > 0) {
+    const ticketContext = await resolveTicketProjectContext(supabase, ticketId);
+    if (!ticketContext) return toolErr('Failed to resolve ticket project context.');
+
+    const rationaleResult = await insertChangeRationales(supabase, {
+      changeRationales,
+      eventId: event.id,
+      organizationId: ticketContext.organization_id,
+      projectId: ticketContext.project_id,
+      sessionId: resolved.session.id,
+      ticketId
+    });
+    if (rationaleResult.error) return toolErr(rationaleResult.error);
+  }
 
   // Fan out notifications if provided
   const notifications: any[] = Array.isArray(payload?.notifications) ? payload.notifications : [];
