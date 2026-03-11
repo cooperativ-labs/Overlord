@@ -30,7 +30,7 @@ import {
 
 import type { Ticket } from './KanbanCard';
 import TicketListCard from './TicketListCard';
-import TicketsViewToggle from './TicketsViewToggle';
+import TicketsViewControls from './TicketsViewControls';
 
 type SortKey = 'updated_at' | 'status' | 'priority';
 
@@ -162,6 +162,18 @@ export default function TicketListView({
     ? (projectOptions.find(project => project.id === filterProject)?.name ?? 'Project')
     : null;
 
+  function handleMarkAllRead() {
+    const now = Date.now();
+    for (const ticket of tickets) {
+      if (ticket.waiting_for_response_at) markTicketWaitingOpened(ticket.id, now);
+      if (ticket.review_entered_at) markTicketReviewOpened(ticket.id, now);
+    }
+    setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
+    setOpenedReviewTimestamps(getOpenedReviewTimestamps());
+    setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
+    setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
+  }
+
   function toggleStatus(status: string) {
     setSelectedStatuses(current => {
       if (current.includes(status))
@@ -203,7 +215,9 @@ export default function TicketListView({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {showViewToggle || hasTickets ? (
         <div className="flex flex-wrap items-center gap-2">
-          {showViewToggle ? <TicketsViewToggle initialView={initialView} /> : null}
+          {showViewToggle ? (
+            <TicketsViewControls initialView={initialView} />
+          ) : null}
 
           {hasTickets ? (
             <>

@@ -44,11 +44,21 @@ export const askSchema = z.object({
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
 
+const updateEventTypeSchema = z
+  .enum([
+    'update',
+    'user_follow_up',
+    'alert'
+  ])
+  .optional()
+  .default('update');
+
 export const updateSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: ticketIdSchema,
   summary: z.string().trim().min(1).max(20_000),
   phase: ticketStatusSchema.optional(),
+  eventType: updateEventTypeSchema,
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
 

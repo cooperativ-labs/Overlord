@@ -440,10 +440,11 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
               </button>
             </div>
             <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-              {`npx overlord resume ${selectedLocalAgent}${(agentFlags[selectedLocalAgent] ?? []).length > 0
+              {`npx overlord resume ${selectedLocalAgent}${
+                (agentFlags[selectedLocalAgent] ?? []).length > 0
                   ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
                   : ''
-                }`}
+              }`}
             </pre>
           </div>
         </div>

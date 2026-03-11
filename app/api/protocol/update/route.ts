@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
-    const { payload, phase, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
+    const { eventType, payload, phase, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
     const { organizationId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const { data: event, error: eventError } = await supabase
       .from('ticket_events')
       .insert({
-        event_type: 'update',
+        event_type: eventType ?? 'update',
         payload,
         phase: phase ?? null,
         session_id: resolved.session.id,
