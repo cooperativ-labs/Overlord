@@ -45,11 +45,7 @@ export const askSchema = z.object({
 });
 
 const updateEventTypeSchema = z
-  .enum([
-    'update',
-    'user_follow_up',
-    'alert'
-  ])
+  .enum(['update', 'user_follow_up', 'alert'])
   .optional()
   .default('update');
 

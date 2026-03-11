@@ -7,10 +7,10 @@ import { Toaster } from 'sonner';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
+import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { OrganizationOnboardingModal } from '@/components/features/onboarding/OrganizationOnboardingModal';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
-import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
 import { TerminalWorkspace } from '@/components/features/terminal/TerminalWorkspace';
@@ -88,58 +88,60 @@ export default async function RootLayout({
           <ServiceWorkerRegister />
           <ElectronAuthGate />
           <ElectronOfflineGate>
-          <TerminalProvider>
-            <DefaultProjectProvider
-              projects={projects}
-              initialDefaultProjectId={initialDefaultProjectId}
-            >
-              <ProjectCreatorProvider>
-                <SidebarProvider defaultOpen className="h-dvh min-h-0">
-                  {user ? (
-                    <div className="flex h-full w-full flex-col overflow-hidden">
-                      <AnnouncementBar />
-                      {/* Electron title bar drag region — hidden in browser */}
-                      <div className="electron-drag-region shrink-0" />
-                      <div className="flex min-h-0 flex-1 overflow-hidden">
-                        <AppSidebar
-                          user={{
-                            name:
-                              user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User',
-                            email: user.email ?? '',
-                            avatar: user.user_metadata?.avatar_url ?? ''
-                          }}
-                          projects={projects}
-                          organizations={organizations}
-                          selectedOrgId={selectedOrgId}
-                        />
-                        <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
-                          <NavHeader />
-                          <TerminalWorkspace>
-                            <SidePanelProvider className="flex flex-col overflow-hidden">
-                              <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-                                <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
-                                  {children}
-                                </main>
-                                <SidePanel />
-                              </div>
-                            </SidePanelProvider>
-                          </TerminalWorkspace>
-                        </SidebarInset>
+            <TerminalProvider>
+              <DefaultProjectProvider
+                projects={projects}
+                initialDefaultProjectId={initialDefaultProjectId}
+              >
+                <ProjectCreatorProvider>
+                  <SidebarProvider defaultOpen className="h-dvh min-h-0">
+                    {user ? (
+                      <div className="flex h-full w-full flex-col overflow-hidden">
+                        <AnnouncementBar />
+                        {/* Electron title bar drag region — hidden in browser */}
+                        <div className="electron-drag-region shrink-0" />
+                        <div className="flex min-h-0 flex-1 overflow-hidden">
+                          <AppSidebar
+                            user={{
+                              name:
+                                user.user_metadata?.full_name ??
+                                user.email?.split('@')[0] ??
+                                'User',
+                              email: user.email ?? '',
+                              avatar: user.user_metadata?.avatar_url ?? ''
+                            }}
+                            projects={projects}
+                            organizations={organizations}
+                            selectedOrgId={selectedOrgId}
+                          />
+                          <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
+                            <NavHeader />
+                            <TerminalWorkspace>
+                              <SidePanelProvider className="flex flex-col overflow-hidden">
+                                <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                                  <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
+                                    {children}
+                                  </main>
+                                  <SidePanel />
+                                </div>
+                              </SidePanelProvider>
+                            </TerminalWorkspace>
+                          </SidebarInset>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex w-full flex-col ">
-                      <AnnouncementBar />
-                      <main className="w-full h-full ">{children}</main>
-                    </div>
-                  )}
-                  {onboardingState ? (
-                    <OrganizationOnboardingModal initialState={onboardingState} />
-                  ) : null}
-                </SidebarProvider>
-              </ProjectCreatorProvider>
-            </DefaultProjectProvider>
-          </TerminalProvider>
+                    ) : (
+                      <div className="flex w-full flex-col ">
+                        <AnnouncementBar />
+                        <main className="w-full h-full ">{children}</main>
+                      </div>
+                    )}
+                    {onboardingState ? (
+                      <OrganizationOnboardingModal initialState={onboardingState} />
+                    ) : null}
+                  </SidebarProvider>
+                </ProjectCreatorProvider>
+              </DefaultProjectProvider>
+            </TerminalProvider>
           </ElectronOfflineGate>
           <Toaster />
         </ThemeProvider>

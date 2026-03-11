@@ -34,16 +34,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { createTicketInColumnAction, reorderTicketsAction } from '@/lib/actions/tickets';
 import {
-  getOpenedReviewTimestamps,
+  createTicketInColumnAction,
+  markTicketReadAction,
+  markTicketsReadAction,
+  markTicketUnreadAction,
+  reorderTicketsAction
+} from '@/lib/actions/tickets';
+import {
   getOpenedWaitingTimestamps,
-  getReviewRaisedWhileOpenMap,
   getWaitingRaisedWhileOpenMap,
   hasUnopenedTimestamp,
-  markTicketReviewOpened,
-  markTicketReviewRaised,
-  markTicketReviewUnread,
   markTicketWaitingOpened,
   markTicketWaitingRaised,
   markTicketWaitingUnread,
@@ -74,7 +75,10 @@ type StatusColumn = {
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type RealtimeTicketPatch = Partial<
-  Pick<Ticket, 'status' | 'title' | 'agent_session_state' | 'running_agent' | 'recent_agent'>
+  Pick<
+    Ticket,
+    'status' | 'title' | 'agent_session_state' | 'running_agent' | 'recent_agent' | 'is_read'
+  >
 >;
 type ToastState = {
   ticketId: string;
@@ -108,15 +112,6 @@ function toWaitingByTicket(tickets: Ticket[]): Record<string, string> {
   return tickets.reduce<Record<string, string>>((acc, ticket) => {
     if (ticket.waiting_for_response_at) {
       acc[ticket.id] = ticket.waiting_for_response_at;
-    }
-    return acc;
-  }, {});
-}
-
-function toReviewByTicket(tickets: Ticket[]): Record<string, string> {
-  return tickets.reduce<Record<string, string>>((acc, ticket) => {
-    if (ticket.review_entered_at) {
-      acc[ticket.id] = ticket.review_entered_at;
     }
     return acc;
   }, {});
@@ -157,20 +152,11 @@ export default function KanbanBoard({
   const [waitingByTicket, setWaitingByTicket] = useState<Record<string, string>>(() =>
     toWaitingByTicket(initialTickets)
   );
-  const [reviewByTicket, setReviewByTicket] = useState<Record<string, string>>(() =>
-    toReviewByTicket(initialTickets)
-  );
   const [openedWaitingTimestamps, setOpenedWaitingTimestamps] = useState<TicketOpenedTimestamps>(
     () => getOpenedWaitingTimestamps()
   );
-  const [openedReviewTimestamps, setOpenedReviewTimestamps] = useState<TicketOpenedTimestamps>(() =>
-    getOpenedReviewTimestamps()
-  );
   const [waitingRaisedWhileOpen, setWaitingRaisedWhileOpen] = useState<TicketRaisedWhileOpenMap>(
     () => getWaitingRaisedWhileOpenMap()
-  );
-  const [reviewRaisedWhileOpen, setReviewRaisedWhileOpen] = useState<TicketRaisedWhileOpenMap>(() =>
-    getReviewRaisedWhileOpenMap()
   );
 
   const [realtimeOverrides, setRealtimeOverrides] = useState<Map<string, RealtimeTicketPatch>>(
@@ -187,7 +173,6 @@ export default function KanbanBoard({
   const waitingSoundRef = useRef<HTMLAudioElement | null>(null);
   const reviewSoundRef = useRef<HTMLAudioElement | null>(null);
   const waitingByTicketRef = useRef(waitingByTicket);
-  const reviewByTicketRef = useRef(reviewByTicket);
   const openTicketIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollKey = `kanban-scroll:${projectId ?? organizationId ?? 'default'}`;
@@ -197,15 +182,7 @@ export default function KanbanBoard({
   }, [waitingByTicket]);
 
   useEffect(() => {
-    reviewByTicketRef.current = reviewByTicket;
-  }, [reviewByTicket]);
-
-  useEffect(() => {
     setWaitingByTicket(toWaitingByTicket(initialTickets));
-  }, [initialTickets]);
-
-  useEffect(() => {
-    setReviewByTicket(toReviewByTicket(initialTickets));
   }, [initialTickets]);
 
   useEffect(() => {
@@ -278,17 +255,12 @@ export default function KanbanBoard({
     const merged = override ? { ...ticket, ...override } : ticket;
     const waitingForResponseAt =
       waitingByTicket[merged.id] ?? merged.waiting_for_response_at ?? null;
-    const reviewEnteredAt = reviewByTicket[merged.id] ?? merged.review_entered_at ?? null;
     return {
       ...merged,
       waiting_for_response_at: waitingForResponseAt,
-      review_entered_at: reviewEnteredAt,
       has_unopened_waiting_response:
         waitingRaisedWhileOpen[merged.id] === true ||
-        hasUnopenedTimestamp(waitingForResponseAt, openedWaitingTimestamps[merged.id]),
-      has_unopened_review:
-        reviewRaisedWhileOpen[merged.id] === true ||
-        hasUnopenedTimestamp(reviewEnteredAt, openedReviewTimestamps[merged.id])
+        hasUnopenedTimestamp(waitingForResponseAt, openedWaitingTimestamps[merged.id])
     };
   });
 
@@ -384,42 +356,45 @@ export default function KanbanBoard({
 
   function handleMarkColumnRead(ticketIds: string[]) {
     const now = Date.now();
+    const unreadIds: string[] = [];
     for (const id of ticketIds) {
       const ticket = ticketsByIdRef.current.get(id);
       if (!ticket) continue;
       if (waitingByTicket[id] ?? ticket.waiting_for_response_at) {
         markTicketWaitingOpened(id, now);
       }
-      if (reviewByTicket[id] ?? ticket.review_entered_at) {
-        markTicketReviewOpened(id, now);
+      if (ticket.is_read === false) {
+        unreadIds.push(id);
+        setRealtimeOverrides(prev => {
+          const next = new Map(prev);
+          next.set(id, { ...next.get(id), is_read: true });
+          return next;
+        });
       }
     }
     setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
-    setOpenedReviewTimestamps(getOpenedReviewTimestamps());
     setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-    setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
+    if (unreadIds.length > 0) {
+      startTransition(() => markTicketsReadAction(unreadIds));
+    }
   }
 
   function handleMarkUnread(ticketId: string) {
     const ticket = ticketsByIdRef.current.get(ticketId);
     if (!ticket) return;
 
-    let didUpdate = false;
-
     if (ticket.waiting_for_response_at) {
       setOpenedWaitingTimestamps(markTicketWaitingUnread(ticketId));
-      didUpdate = true;
-    }
-
-    if (ticket.review_entered_at) {
-      setOpenedReviewTimestamps(markTicketReviewUnread(ticketId));
-      didUpdate = true;
-    }
-
-    if (didUpdate) {
       setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-      setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
     }
+
+    // Optimistically mark as unread in realtimeOverrides, then persist to server.
+    setRealtimeOverrides(prev => {
+      const next = new Map(prev);
+      next.set(ticketId, { ...next.get(ticketId), is_read: false });
+      return next;
+    });
+    startTransition(() => markTicketUnreadAction(ticketId));
   }
 
   function getDisplayedTicketsForColumn({
@@ -462,9 +437,18 @@ export default function KanbanBoard({
     }
 
     setOpenedWaitingTimestamps(markTicketWaitingOpened(pathTicketId));
-    setOpenedReviewTimestamps(markTicketReviewOpened(pathTicketId));
     setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-    setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
+
+    // Mark the ticket as read when the user navigates to it.
+    const ticket = ticketsByIdRef.current.get(pathTicketId);
+    if (ticket?.is_read === false) {
+      setRealtimeOverrides(prev => {
+        const next = new Map(prev);
+        next.set(pathTicketId, { ...next.get(pathTicketId), is_read: true });
+        return next;
+      });
+      startTransition(() => markTicketReadAction(pathTicketId));
+    }
   }, [pathname]);
 
   useEffect(() => {
@@ -494,33 +478,25 @@ export default function KanbanBoard({
       const ticketIds = [...ticketIdsRef.current];
       if (ticketIds.length === 0) return;
 
-      const [
-        { data: sessions },
-        { data: waitingQuestions },
-        { data: reviewChanges },
-        { data: ticketUpdates }
-      ] = await Promise.all([
-        supabase
-          .from('agent_sessions')
-          .select('ticket_id,session_state,agent_identifier,attached_at')
-          .in('ticket_id', ticketIds)
-          .order('attached_at', { ascending: false }),
-        supabase
-          .from('ticket_events')
-          .select('ticket_id,created_at')
-          .in('ticket_id', ticketIds)
-          .eq('event_type', 'question')
-          .eq('is_blocking', true)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('ticket_events')
-          .select('ticket_id,created_at')
-          .in('ticket_id', ticketIds)
-          .eq('event_type', 'status_change')
-          .eq('phase', 'review')
-          .order('created_at', { ascending: false }),
-        supabase.from('tickets').select('id,status,title,recent_agent').in('id', ticketIds)
-      ]);
+      const [{ data: sessions }, { data: waitingQuestions }, { data: ticketUpdates }] =
+        await Promise.all([
+          supabase
+            .from('agent_sessions')
+            .select('ticket_id,session_state,agent_identifier,attached_at')
+            .in('ticket_id', ticketIds)
+            .order('attached_at', { ascending: false }),
+          supabase
+            .from('ticket_events')
+            .select('ticket_id,created_at')
+            .in('ticket_id', ticketIds)
+            .eq('event_type', 'question')
+            .eq('is_blocking', true)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('tickets')
+            .select('id,status,title,recent_agent,is_read')
+            .in('id', ticketIds)
+        ]);
 
       if (cancelled) return;
 
@@ -544,6 +520,7 @@ export default function KanbanBoard({
             ...next.get(t.id),
             status: t.status ?? undefined,
             title: t.title,
+            is_read: (t as { is_read?: boolean }).is_read ?? undefined,
             recent_agent: (t as { recent_agent?: string | null }).recent_agent ?? undefined
           };
           const session = sessionByTicket.get(t.id);
@@ -581,40 +558,6 @@ export default function KanbanBoard({
         }
         setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
         setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-      }
-
-      const executeTicketIds = new Set(
-        (ticketUpdates ?? []).filter(t => t.status === 'execute').map(t => t.id)
-      );
-      const nextReviewByTicket = { ...reviewByTicketRef.current };
-      let reviewChanged = false;
-      const raisedReviewTicketIds: string[] = [];
-      // Clear review indicator for tickets that have since moved back to execute
-      for (const id of executeTicketIds) {
-        if (nextReviewByTicket[id]) {
-          delete nextReviewByTicket[id];
-          reviewChanged = true;
-        }
-      }
-      for (const r of (reviewChanges ?? []) as { ticket_id: string; created_at: string }[]) {
-        if (executeTicketIds.has(r.ticket_id)) continue;
-        if (
-          !nextReviewByTicket[r.ticket_id] ||
-          Date.parse(r.created_at) > Date.parse(nextReviewByTicket[r.ticket_id])
-        ) {
-          nextReviewByTicket[r.ticket_id] = r.created_at;
-          raisedReviewTicketIds.push(r.ticket_id);
-          reviewChanged = true;
-        }
-      }
-      if (reviewChanged) {
-        setReviewByTicket(nextReviewByTicket);
-        for (const ticketId of raisedReviewTicketIds) {
-          const isTicketOpen = openTicketIdRef.current === ticketId;
-          markTicketReviewRaised(ticketId, isTicketOpen);
-        }
-        setOpenedReviewTimestamps(getOpenedReviewTimestamps());
-        setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
       }
     };
 
@@ -675,16 +618,15 @@ export default function KanbanBoard({
           if (event.phase !== 'review') return;
           if (!ticketIdsRef.current.has(event.ticket_id)) return;
 
-          setReviewByTicket(previous => {
-            const existing = previous[event.ticket_id];
-            if (existing && Date.parse(existing) >= Date.parse(event.created_at)) {
-              return previous;
-            }
-            return { ...previous, [event.ticket_id]: event.created_at };
-          });
-          markTicketReviewRaised(event.ticket_id, openTicketIdRef.current === event.ticket_id);
-          setOpenedReviewTimestamps(getOpenedReviewTimestamps());
-          setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
+          // Mark as unread in realtimeOverrides so the indicator shows immediately.
+          // The DB is already updated by the API route that triggered this event.
+          if (openTicketIdRef.current !== event.ticket_id) {
+            setRealtimeOverrides(prev => {
+              const next = new Map(prev);
+              next.set(event.ticket_id, { ...next.get(event.ticket_id), is_read: false });
+              return next;
+            });
+          }
 
           const reviewSound = reviewSoundRef.current;
           if (reviewSound) {
@@ -719,20 +661,11 @@ export default function KanbanBoard({
             next.set(updated.id, {
               ...next.get(updated.id),
               status: updated.status ?? undefined,
-              title: updated.title
+              title: updated.title,
+              is_read: updated.is_read
             });
             return next;
           });
-          // When a ticket moves back to execute (e.g. user followed up after delivery),
-          // clear its review indicator so the sky-blue dot/border is dismissed.
-          if (updated.status === 'execute') {
-            setReviewByTicket(prev => {
-              if (!prev[updated.id]) return prev;
-              const next = { ...prev };
-              delete next[updated.id];
-              return next;
-            });
-          }
         }
       )
       .on<AgentSession>(
@@ -909,10 +842,14 @@ export default function KanbanBoard({
     const clientTicketId = crypto.randomUUID();
 
     const previous = workingTickets.current;
+    const columnTicketsForStatus = previous.filter(ticket => ticket.status === status);
     const positionInColumn =
-      previous
-        .filter(ticket => ticket.status === status)
-        .reduce((max, ticket) => Math.max(max, ticket.board_position), -1) + 1;
+      columnTicketsForStatus.length > 0
+        ? columnTicketsForStatus.reduce(
+            (min, ticket) => Math.min(min, ticket.board_position),
+            Infinity
+          ) - 1
+        : 0;
 
     const referenceTicket =
       previous.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? previous[0];
@@ -936,8 +873,7 @@ export default function KanbanBoard({
       organization_name: referenceTicket?.organization_name ?? null,
       waiting_for_response_at: null,
       has_unopened_waiting_response: false,
-      review_entered_at: null,
-      has_unopened_review: false
+      is_read: true
     };
 
     const optimisticNext = [...previous, optimisticTicket];

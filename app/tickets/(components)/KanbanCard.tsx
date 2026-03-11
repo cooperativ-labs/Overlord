@@ -48,8 +48,7 @@ export type Ticket = {
   organization_name?: string | null;
   waiting_for_response_at?: string | null;
   has_unopened_waiting_response?: boolean;
-  review_entered_at?: string | null;
-  has_unopened_review?: boolean;
+  is_read?: boolean;
   objectives_executed_count?: number;
   updated_at?: string;
 };
@@ -139,7 +138,7 @@ export default function KanbanCard({
 
   const isAgentRunning = ticket.agent_session_state === 'attached';
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
-  const hasUnopenedReview = ticket.has_unopened_review === true;
+  const hasUnopenedReview = ticket.is_read === false;
 
   const isOnUserPage = pathname === '/u' || pathname.startsWith('/u/');
   const ticketPath = isOnUserPage

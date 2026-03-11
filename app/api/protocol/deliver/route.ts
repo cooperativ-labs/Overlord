@@ -122,6 +122,7 @@ export async function POST(request: Request) {
           supabase
             .from('tickets')
             .update({
+              is_read: false,
               recent_agent: agentIdentifier,
               status: 'review',
               board_position: topBoardPosition

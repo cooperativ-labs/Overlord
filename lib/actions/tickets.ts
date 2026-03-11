@@ -179,6 +179,36 @@ async function assignTicketToColumnEnd(
   }
 }
 
+async function assignTicketToColumnStart(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ticketId: string,
+  status: string,
+  organizationId: number
+) {
+  const { data: headTicket, error: headTicketError } = await supabase
+    .from('tickets')
+    .select('board_position')
+    .eq('organization_id', organizationId)
+    .eq('status', status)
+    .neq('id', ticketId)
+    .order('board_position', { ascending: true })
+    .limit(1);
+
+  if (headTicketError) {
+    throw new Error(headTicketError.message);
+  }
+
+  const minBoardPosition = headTicket?.[0]?.board_position ?? 0;
+  const { error: updateError } = await supabase
+    .from('tickets')
+    .update({ board_position: minBoardPosition - 1 })
+    .eq('id', ticketId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+}
+
 export async function createTicketInColumnAction(
   status: string,
   objective: string,
@@ -220,7 +250,7 @@ export async function createTicketInColumnAction(
   }
 
   await upsertDraftObjective(supabase, data.id, trimmedObjective);
-  await assignTicketToColumnEnd(supabase, data.id, status, data.organization_id);
+  await assignTicketToColumnStart(supabase, data.id, status, data.organization_id);
 
   revalidateTicketBoards([data.organization_id]);
   revalidatePath(
@@ -558,7 +588,6 @@ export async function setTicketProjectAction(ticketId: string, projectId: string
   const { data, error } = await supabase
     .from('tickets')
     .update({
-      everhour_project_id: null,
       everhour_task_id: null,
       project_id: nextProjectId
     })
@@ -840,6 +869,25 @@ export async function reorderTicketsAction(
   }
 
   revalidateTicketBoards(organizationIds);
+}
+
+export async function markTicketReadAction(ticketId: string): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from('tickets').update({ is_read: true }).eq('id', ticketId);
+  revalidateTicketBoards([]);
+}
+
+export async function markTicketsReadAction(ticketIds: string[]): Promise<void> {
+  if (ticketIds.length === 0) return;
+  const supabase = await createClient();
+  await supabase.from('tickets').update({ is_read: true }).in('id', ticketIds);
+  revalidateTicketBoards([]);
+}
+
+export async function markTicketUnreadAction(ticketId: string): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from('tickets').update({ is_read: false }).eq('id', ticketId);
+  revalidateTicketBoards([]);
 }
 
 export async function markSessionDisconnectedAction(sessionId: string): Promise<void> {

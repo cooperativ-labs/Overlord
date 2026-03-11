@@ -638,10 +638,10 @@ export type Database = {
           context: string;
           created_at: string;
           created_by: string;
-          everhour_project_id: string | null;
           everhour_task_id: string | null;
           execution_target: Database['public']['Enums']['ticket_execution_target'];
           id: string;
+          is_read: boolean;
           objective: string | null;
           organization_id: number;
           output_format: string;
@@ -663,10 +663,10 @@ export type Database = {
           context?: string;
           created_at?: string;
           created_by?: string;
-          everhour_project_id?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;
+          is_read?: boolean;
           objective?: string | null;
           organization_id: number;
           output_format?: string;
@@ -688,10 +688,10 @@ export type Database = {
           context?: string;
           created_at?: string;
           created_by?: string;
-          everhour_project_id?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;
+          is_read?: boolean;
           objective?: string | null;
           organization_id?: number;
           output_format?: string;

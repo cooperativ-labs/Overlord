@@ -42,7 +42,6 @@ type AuthenticatedContext = {
 };
 
 type TicketEverhourState = {
-  everhour_project_id: string | null;
   everhour_task_id: string | null;
   id: string;
   organization_id: number;
@@ -376,7 +375,7 @@ async function getTicketEverhourState(
 ): Promise<TicketEverhourState> {
   const { data, error } = await supabase
     .from('tickets')
-    .select('id,organization_id,project_id,title,everhour_task_id,everhour_project_id')
+    .select('id,organization_id,project_id,title,everhour_task_id')
     .eq('id', ticketId)
     .single();
 
@@ -587,18 +586,12 @@ export async function syncEverhourProjectsForOrganization(organizationId: number
   };
 }
 
-export async function ensureEverhourTaskForTicket(ticketId: string): Promise<{
-  projectId: string;
-  taskId: string;
-}> {
+export async function ensureEverhourTaskForTicket(ticketId: string): Promise<{ taskId: string }> {
   const { supabase, userId } = await getAuthenticatedContext();
   const ticket = await getTicketEverhourState(supabase, ticketId);
 
   if (ticket.everhour_task_id) {
-    return {
-      projectId: ticket.everhour_project_id ?? '',
-      taskId: ticket.everhour_task_id
-    };
+    return { taskId: ticket.everhour_task_id };
   }
 
   const projectId = await getEverhourProjectIdForTicket(supabase, ticket);
@@ -614,7 +607,6 @@ export async function ensureEverhourTaskForTicket(ticketId: string): Promise<{
   const { error } = await supabase
     .from('tickets')
     .update({
-      everhour_project_id: projectId,
       everhour_task_id: taskId
     })
     .eq('id', ticket.id);
@@ -625,7 +617,7 @@ export async function ensureEverhourTaskForTicket(ticketId: string): Promise<{
 
   revalidateTicketPaths(ticket.id);
   revalidateProjectTicketPaths(ticket.project_id, ticket.id);
-  return { projectId, taskId };
+  return { taskId };
 }
 
 export async function getCurrentEverhourTimer(): Promise<EverhourTimer> {

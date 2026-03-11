@@ -110,12 +110,15 @@ export async function upsertAgentConfigAction(
 
   const { data, error } = await supabase
     .from('user_agent_configs')
-    .upsert({
-      user_id: user.id,
-      agent_type: agentType,
-      config: validated,
-      updated_at: new Date().toISOString()
-    })
+    .upsert(
+      {
+        user_id: user.id,
+        agent_type: agentType,
+        config: validated,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: 'user_id,agent_type' }
+    )
     .select('config')
     .single();
 

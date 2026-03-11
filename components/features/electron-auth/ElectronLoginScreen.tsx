@@ -90,7 +90,6 @@ export function ElectronLoginScreen() {
       cancelled = true;
       clearTimeout(timeout);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleLogout() {

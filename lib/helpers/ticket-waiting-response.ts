@@ -1,5 +1,4 @@
 const OPENED_WAITING_KEY = 'overlord.ticket.lastOpenedAt.waiting';
-const OPENED_REVIEW_KEY = 'overlord.ticket.lastOpenedAt.review';
 
 export type TicketOpenedTimestamps = Record<string, number>;
 export type TicketRaisedWhileOpenMap = Record<string, boolean>;
@@ -110,12 +109,12 @@ function toRaisedWhileOpenMap(stateMap: TicketIndicatorStateMap): TicketRaisedWh
   }, {});
 }
 
-function getIndicatorStorageKey(kind: 'waiting' | 'review'): string {
-  return kind === 'waiting' ? OPENED_WAITING_KEY : OPENED_REVIEW_KEY;
+function getIndicatorStorageKey(kind: 'waiting'): string {
+  return OPENED_WAITING_KEY;
 }
 
 function markTicketIndicatorOpened(
-  kind: 'waiting' | 'review',
+  kind: 'waiting',
   ticketId: string,
   openedAt: number = Date.now()
 ): TicketOpenedTimestamps {
@@ -137,7 +136,7 @@ function markTicketIndicatorOpened(
 }
 
 function markTicketIndicatorRaised(
-  kind: 'waiting' | 'review',
+  kind: 'waiting',
   ticketId: string,
   isTicketOpen: boolean
 ): TicketOpenedTimestamps {
@@ -159,10 +158,7 @@ function markTicketIndicatorRaised(
   return toOpenedTimestampMap(writeIndicatorStateMap(key, next));
 }
 
-function markTicketIndicatorUnread(
-  kind: 'waiting' | 'review',
-  ticketId: string
-): TicketOpenedTimestamps {
+function markTicketIndicatorUnread(kind: 'waiting', ticketId: string): TicketOpenedTimestamps {
   if (!ticketId.trim()) {
     return toOpenedTimestampMap(readIndicatorStateMap(getIndicatorStorageKey(kind)));
   }
@@ -184,16 +180,8 @@ export function getOpenedWaitingTimestamps(): TicketOpenedTimestamps {
   return toOpenedTimestampMap(readIndicatorStateMap(OPENED_WAITING_KEY));
 }
 
-export function getOpenedReviewTimestamps(): TicketOpenedTimestamps {
-  return toOpenedTimestampMap(readIndicatorStateMap(OPENED_REVIEW_KEY));
-}
-
 export function getWaitingRaisedWhileOpenMap(): TicketRaisedWhileOpenMap {
   return toRaisedWhileOpenMap(readIndicatorStateMap(OPENED_WAITING_KEY));
-}
-
-export function getReviewRaisedWhileOpenMap(): TicketRaisedWhileOpenMap {
-  return toRaisedWhileOpenMap(readIndicatorStateMap(OPENED_REVIEW_KEY));
 }
 
 export function markTicketWaitingOpened(
@@ -203,19 +191,8 @@ export function markTicketWaitingOpened(
   return markTicketIndicatorOpened('waiting', ticketId, openedAt);
 }
 
-export function markTicketReviewOpened(
-  ticketId: string,
-  openedAt: number = Date.now()
-): TicketOpenedTimestamps {
-  return markTicketIndicatorOpened('review', ticketId, openedAt);
-}
-
 export function markTicketWaitingUnread(ticketId: string): TicketOpenedTimestamps {
   return markTicketIndicatorUnread('waiting', ticketId);
-}
-
-export function markTicketReviewUnread(ticketId: string): TicketOpenedTimestamps {
-  return markTicketIndicatorUnread('review', ticketId);
 }
 
 export function markTicketWaitingRaised(
@@ -223,13 +200,6 @@ export function markTicketWaitingRaised(
   isTicketOpen: boolean
 ): TicketOpenedTimestamps {
   return markTicketIndicatorRaised('waiting', ticketId, isTicketOpen);
-}
-
-export function markTicketReviewRaised(
-  ticketId: string,
-  isTicketOpen: boolean
-): TicketOpenedTimestamps {
-  return markTicketIndicatorRaised('review', ticketId, isTicketOpen);
 }
 
 export function hasUnopenedTimestamp(

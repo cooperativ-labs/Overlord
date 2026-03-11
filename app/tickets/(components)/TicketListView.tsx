@@ -17,12 +17,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import {
-  getOpenedReviewTimestamps,
   getOpenedWaitingTimestamps,
-  getReviewRaisedWhileOpenMap,
   getWaitingRaisedWhileOpenMap,
   hasUnopenedTimestamp,
-  markTicketReviewOpened,
   markTicketWaitingOpened,
   type TicketOpenedTimestamps,
   type TicketRaisedWhileOpenMap
@@ -79,14 +76,8 @@ export default function TicketListView({
   const [openedWaitingTimestamps, setOpenedWaitingTimestamps] = useState<TicketOpenedTimestamps>(
     () => getOpenedWaitingTimestamps()
   );
-  const [openedReviewTimestamps, setOpenedReviewTimestamps] = useState<TicketOpenedTimestamps>(() =>
-    getOpenedReviewTimestamps()
-  );
   const [waitingRaisedWhileOpen, setWaitingRaisedWhileOpen] = useState<TicketRaisedWhileOpenMap>(
     () => getWaitingRaisedWhileOpenMap()
-  );
-  const [reviewRaisedWhileOpen, setReviewRaisedWhileOpen] = useState<TicketRaisedWhileOpenMap>(() =>
-    getReviewRaisedWhileOpenMap()
   );
 
   const ticketIdsRef = useRef<Set<string>>(new Set());
@@ -97,9 +88,7 @@ export default function TicketListView({
     if (!pathTicketId || !ticketIdsRef.current.has(pathTicketId)) return;
 
     setOpenedWaitingTimestamps(markTicketWaitingOpened(pathTicketId));
-    setOpenedReviewTimestamps(markTicketReviewOpened(pathTicketId));
     setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-    setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
   }, [pathname]);
 
   const ticketsWithIndicators = useMemo(
@@ -108,18 +97,9 @@ export default function TicketListView({
         ...ticket,
         has_unopened_waiting_response:
           waitingRaisedWhileOpen[ticket.id] === true ||
-          hasUnopenedTimestamp(ticket.waiting_for_response_at, openedWaitingTimestamps[ticket.id]),
-        has_unopened_review:
-          reviewRaisedWhileOpen[ticket.id] === true ||
-          hasUnopenedTimestamp(ticket.review_entered_at, openedReviewTimestamps[ticket.id])
+          hasUnopenedTimestamp(ticket.waiting_for_response_at, openedWaitingTimestamps[ticket.id])
       })),
-    [
-      tickets,
-      waitingRaisedWhileOpen,
-      reviewRaisedWhileOpen,
-      openedWaitingTimestamps,
-      openedReviewTimestamps
-    ]
+    [tickets, waitingRaisedWhileOpen, openedWaitingTimestamps]
   );
 
   const uniqueStatuses = useMemo(() => {
@@ -166,12 +146,9 @@ export default function TicketListView({
     const now = Date.now();
     for (const ticket of tickets) {
       if (ticket.waiting_for_response_at) markTicketWaitingOpened(ticket.id, now);
-      if (ticket.review_entered_at) markTicketReviewOpened(ticket.id, now);
     }
     setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
-    setOpenedReviewTimestamps(getOpenedReviewTimestamps());
     setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-    setReviewRaisedWhileOpen(getReviewRaisedWhileOpenMap());
   }
 
   function toggleStatus(status: string) {
@@ -215,9 +192,7 @@ export default function TicketListView({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {showViewToggle || hasTickets ? (
         <div className="flex flex-wrap items-center gap-2">
-          {showViewToggle ? (
-            <TicketsViewControls initialView={initialView} />
-          ) : null}
+          {showViewToggle ? <TicketsViewControls initialView={initialView} /> : null}
 
           {hasTickets ? (
             <>

@@ -74,6 +74,7 @@ export async function POST(request: Request) {
       const ticketUpdate: Record<string, unknown> = { status: phase };
 
       // If moving to a review-type status, place the ticket at the top of that column
+      // and mark it unread so the review indicator appears for the user.
       const { data: statusInfo } = await supabase
         .from('ticket_statuses')
         .select('status_type')
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
           .order('board_position', { ascending: true })
           .limit(1);
         ticketUpdate.board_position = (headTickets?.[0]?.board_position ?? 0) - 1;
+        ticketUpdate.is_read = false;
       }
 
       const { error: ticketError } = await supabase

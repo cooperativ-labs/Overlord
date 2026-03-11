@@ -28,7 +28,7 @@ export default function TicketListCard({
 
   const isAgentRunning = ticket.agent_session_state === 'attached';
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
-  const hasUnopenedReview = ticket.has_unopened_review === true;
+  const hasUnopenedReview = ticket.is_read === false;
 
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;

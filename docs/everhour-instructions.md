@@ -15,7 +15,6 @@ This is a personal key. Each teammate must add their own token.
 Apply the migration that adds:
 
 - `tickets.everhour_task_id`
-- `tickets.everhour_project_id`
 - `user_integrations` table (stores per-user Everhour API keys with RLS)
 - `projects.everhour_project_id` (links local projects to Everhour projects)
 

@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
     const { error: ticketError } = await supabase
       .from('tickets')
-      .update({ status: phase ?? 'review' })
+      .update({ status: phase ?? 'review', is_read: false })
       .eq('id', ticketId);
     if (ticketError) {
       return NextResponse.json({ error: ticketError.message }, { status: 500 });

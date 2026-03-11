@@ -122,6 +122,18 @@ export default function KanbanColumn({
             className="h-[calc(100vh-16rem)] overflow-y-auto pr-2"
           >
             <div className="flex flex-col gap-2">
+              {isAdding && (
+                <BlankTicketCard
+                  inputId={inputId}
+                  status={column.id}
+                  fileMentionPaths={fileMentionPaths}
+                  workingDirectory={workingDirectory}
+                  onCreateTicket={onCreateTicket}
+                  onClose={handleCloseBlankCard}
+                  onSubmitted={() => setFocusEditorCount(c => c + 1)}
+                  focusTrigger={focusEditorCount}
+                />
+              )}
               {tickets.length === 0 && !isAdding && (
                 <div className="text-muted-foreground rounded-md bg-background/50 p-4 text-center text-xs">
                   No tickets
@@ -135,18 +147,7 @@ export default function KanbanColumn({
                   onMarkUnread={onMarkUnread}
                 />
               ))}
-              {isAdding ? (
-                <BlankTicketCard
-                  inputId={inputId}
-                  status={column.id}
-                  fileMentionPaths={fileMentionPaths}
-                  workingDirectory={workingDirectory}
-                  onCreateTicket={onCreateTicket}
-                  onClose={handleCloseBlankCard}
-                  onSubmitted={() => setFocusEditorCount(c => c + 1)}
-                  focusTrigger={focusEditorCount}
-                />
-              ) : (
+              {!isAdding && (
                 <button
                   onClick={handleStartAdding}
                   className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-muted-foreground/20 py-2 text-xs text-muted-foreground/40 transition-colors hover:border-muted-foreground/40 hover:text-muted-foreground/70"

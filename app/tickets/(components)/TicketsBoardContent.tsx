@@ -61,6 +61,7 @@ type RawTicket = {
   priority: string;
   assigned_agent: string | null;
   recent_agent: string | null;
+  is_read: boolean;
   updated_at: string;
   board_position: number;
   organization_id: number;
@@ -87,10 +88,6 @@ type WaitingQuestionForBoard = Pick<
   Database['public']['Tables']['ticket_events']['Row'],
   'ticket_id' | 'created_at'
 >;
-type ReviewStatusChangeForBoard = Pick<
-  Database['public']['Tables']['ticket_events']['Row'],
-  'ticket_id' | 'created_at'
->;
 
 export default async function TicketsBoardContent({
   organizationId,
@@ -111,7 +108,7 @@ export default async function TicketsBoardContent({
   let ticketsQuery = supabase
     .from('tickets')
     .select(
-      'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+      'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
     )
     .order('board_position', { ascending: true })
     .order('created_at', { ascending: true });
@@ -155,41 +152,29 @@ export default async function TicketsBoardContent({
     { session_state: SessionState; agent_identifier: string }
   >();
   const waitingQuestionByTicket = new Map<string, string>();
-  const reviewStatusByTicket = new Map<string, string>();
   const executedObjectivesCountByTicket = new Map<string, number>();
 
   if (ticketIds.length > 0) {
-    const [
-      { data: sessions },
-      { data: waitingQuestions },
-      { data: reviewStatusChanges },
-      { data: executedObjectives }
-    ] = await Promise.all([
-      supabase
-        .from('agent_sessions')
-        .select('ticket_id,session_state,agent_identifier')
-        .in('ticket_id', ticketIds)
-        .order('attached_at', { ascending: false }),
-      supabase
-        .from('ticket_events')
-        .select('ticket_id,created_at')
-        .in('ticket_id', ticketIds)
-        .eq('event_type', 'question')
-        .eq('is_blocking', true)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('ticket_events')
-        .select('ticket_id,created_at')
-        .in('ticket_id', ticketIds)
-        .eq('event_type', 'status_change')
-        .eq('phase', 'review')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('ticket_objectives')
-        .select('ticket_id')
-        .in('ticket_id', ticketIds)
-        .eq('is_executed', true)
-    ]);
+    const [{ data: sessions }, { data: waitingQuestions }, { data: executedObjectives }] =
+      await Promise.all([
+        supabase
+          .from('agent_sessions')
+          .select('ticket_id,session_state,agent_identifier')
+          .in('ticket_id', ticketIds)
+          .order('attached_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('ticket_id,created_at')
+          .in('ticket_id', ticketIds)
+          .eq('event_type', 'question')
+          .eq('is_blocking', true)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('ticket_objectives')
+          .select('ticket_id')
+          .in('ticket_id', ticketIds)
+          .eq('is_executed', true)
+      ]);
 
     for (const session of (sessions ?? []) as AgentSessionForBoard[]) {
       if (!latestSessionByTicket.has(session.ticket_id)) {
@@ -203,12 +188,6 @@ export default async function TicketsBoardContent({
     for (const waitingQuestion of (waitingQuestions ?? []) as WaitingQuestionForBoard[]) {
       if (!waitingQuestionByTicket.has(waitingQuestion.ticket_id)) {
         waitingQuestionByTicket.set(waitingQuestion.ticket_id, waitingQuestion.created_at);
-      }
-    }
-
-    for (const reviewStatusChange of (reviewStatusChanges ?? []) as ReviewStatusChangeForBoard[]) {
-      if (!reviewStatusByTicket.has(reviewStatusChange.ticket_id)) {
-        reviewStatusByTicket.set(reviewStatusChange.ticket_id, reviewStatusChange.created_at);
       }
     }
 
@@ -242,7 +221,6 @@ export default async function TicketsBoardContent({
         agent_session_state: session?.session_state ?? null,
         running_agent: isAttached ? session.agent_identifier : null,
         waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
-        review_entered_at: reviewStatusByTicket.get(ticket.id) ?? null,
         objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0
       };
     });
