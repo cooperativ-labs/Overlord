@@ -239,6 +239,7 @@ async function protocolUpdate(args) {
     ticketId,
     summary,
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
+    ...(flags['event-type'] ? { eventType: String(flags['event-type']) } : {}),
     ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {}),
     ...(changeRationales.length > 0 ? { changeRationales } : {})
   };

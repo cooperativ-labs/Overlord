@@ -72,7 +72,7 @@ export const changeRationaleSchema = z.object({
   change_kind: z.string().trim().min(1).max(40).optional().default('modify'),
   confidence: z.string().trim().min(1).max(40).optional().default('explicit'),
   file_path: z.string().trim().min(1).max(1024),
-  hunks: z.array(changeRationaleHunkSchema).min(1).max(20),
+  hunks: z.array(changeRationaleHunkSchema).max(20).optional().default([]),
   impact: z.string().trim().min(1).max(2_000),
   label: z.string().trim().min(1).max(160),
   summary: z.string().trim().min(1).max(2_000),
