@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.56.0] - 2026-03-12:18:30
+
+### Added
+- Add lightweight `protocol connect`, `load-context`, and `spawn` endpoints with matching CLI subcommands/flags so agents can start tracking a ticket, inspect context, or create+connect a new ticket without reloading the entire deliver context.
+- Persist per-user hidden Kanban columns for the shared ticket view by caching preferences in localStorage when no project is selected, keeping board layouts consistent across scopes.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Documentation
+- Document the new mid-session `connect`, `load-context`, and `spawn` workflows inside the ticket prompt guidance so agents know which CLI commands to run during a session.
+
 ## [0.55.0] - 2026-03-12:15:30
 
 ### Added
