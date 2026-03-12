@@ -82,6 +82,7 @@ type CurrentChangesPageProps = {
   projectId: string;
   projectName: string;
   workingDirectory: string | null;
+  initialFilePath?: string | null;
 };
 
 function formatStatus(status: string): string {
@@ -413,7 +414,8 @@ function DiffPane({
 export function CurrentChangesPage({
   projectId,
   projectName,
-  workingDirectory
+  workingDirectory,
+  initialFilePath
 }: CurrentChangesPageProps) {
   const { api, isElectron } = useElectron();
   const [statusResponse, setStatusResponse] = useState<GitStatusResponse | null>(null);
@@ -490,6 +492,10 @@ export function CurrentChangesPage({
     setStatusResponse(result);
     setSelectedPath(current => {
       if (!result.files.length) return null;
+      // Prefer initialFilePath from query param on first load
+      if (initialFilePath && result.files.some(file => file.path === initialFilePath)) {
+        return initialFilePath;
+      }
       if (current && result.files.some(file => file.path === current)) return current;
       return result.files[0]?.path ?? null;
     });

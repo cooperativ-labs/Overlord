@@ -107,11 +107,13 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
 function LiveArtifacts({
   artifacts,
   editorScheme,
-  workspaceRoot
+  workspaceRoot,
+  projectId
 }: {
   artifacts: Artifact[];
   editorScheme: string;
   workspaceRoot: string;
+  projectId: string;
 }) {
   if (!artifacts.length) return null;
 
@@ -139,6 +141,7 @@ function LiveArtifacts({
                   content={artifact.content}
                   editorScheme={editorScheme}
                   workspaceRoot={workspaceRoot}
+                  projectId={projectId}
                 />
               ) : (
                 <MarkdownContent compact className="mt-1 text-xs text-muted-foreground">
@@ -171,7 +174,7 @@ type TicketPanelLiveProps = {
 
 export function TicketPanelLive({
   ticketId,
-  projectId: _projectId,
+  projectId,
   editorScheme,
   workspaceRoot,
   workingDirectory,
@@ -279,6 +282,7 @@ export function TicketPanelLive({
               artifacts={artifacts}
               editorScheme={editorScheme}
               workspaceRoot={workspaceRoot}
+              projectId={projectId}
             />
           </div>
         </>

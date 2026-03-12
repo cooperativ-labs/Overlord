@@ -38,9 +38,10 @@ type Props = {
   content: string;
   workspaceRoot: string;
   editorScheme: string;
+  projectId?: string;
 };
 
-export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Props) {
+export function FileChangesArtifact({ content, workspaceRoot, editorScheme, projectId }: Props) {
   const files = parseFileChanges(content);
 
   if (!files.length) {
@@ -58,7 +59,11 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Pr
       {files.map(({ path, note }) => {
         const filename = path.split('/').pop() ?? path;
         const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-        const href = canLink ? buildEditorHref(path, workspaceRoot, editorScheme) : undefined;
+        const currentChangesHref = projectId
+          ? `/projects/${projectId}/current-changes?file=${encodeURIComponent(path)}`
+          : undefined;
+        const editorHref = canLink ? buildEditorHref(path, workspaceRoot, editorScheme) : undefined;
+        const href = currentChangesHref ?? editorHref;
 
         return (
           <li className="text-xs" key={path}>
@@ -66,7 +71,7 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Pr
               <a
                 className="inline-flex flex-wrap items-baseline gap-1 rounded hover:underline underline-offset-4 text-primary"
                 href={href}
-                title={`Open ${path} in editor`}
+                title={currentChangesHref ? `View ${path} in Current Changes` : `Open ${path} in editor`}
               >
                 <span className="font-medium">{filename}</span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}
