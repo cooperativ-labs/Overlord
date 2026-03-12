@@ -109,7 +109,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { mcpUrl, mcpOnly: Boolean(mcpUrl), customInstructions, launchMode, agentConfigs }
+      options: { mcpUrl, customInstructions, launchMode, agentConfigs }
     });
 
     const headers: Record<string, string> = {

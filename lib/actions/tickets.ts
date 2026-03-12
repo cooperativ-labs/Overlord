@@ -969,7 +969,6 @@ export async function getTicketPromptForCopy(
     context,
     options: {
       mcpUrl,
-      mcpOnly: Boolean(mcpUrl),
       customInstructions,
       launchMode,
       agentConfigs

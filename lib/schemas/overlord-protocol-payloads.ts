@@ -49,7 +49,7 @@ export const AttachPayload = z.object({
   connectionMethod: z
     .string()
     .describe('How the agent is connecting: "mcp", "cli", "rest", etc.'),
-  metadata: z.record(z.any()).optional().describe('Optional agent-specific metadata')
+  metadata: z.record(z.string(), z.any()).optional().describe('Optional agent-specific metadata')
 });
 export type AttachPayload = z.infer<typeof AttachPayload>;
 
