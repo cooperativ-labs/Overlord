@@ -102,6 +102,14 @@ export function InlineEditField({
   }, [editing, multiline, value, autoResize]);
 
   useEffect(() => {
+    if (editing && inputRef.current) {
+      const el = inputRef.current;
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    }
+  }, [editing]);
+
+  useEffect(() => {
     if (!canMentionFiles) {
       syncLocalFileMentionPaths(EMPTY_MENTION_PATHS);
       return;

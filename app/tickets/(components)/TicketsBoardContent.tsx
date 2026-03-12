@@ -111,6 +111,26 @@ export default async function TicketsBoardContent({
     data: { user }
   } = await supabase.auth.getUser();
 
+  let statusesQuery = supabase
+    .from('ticket_statuses')
+    .select('name,position,status_type')
+    .order('position', { ascending: true });
+
+  if (organizationId !== undefined) {
+    statusesQuery = statusesQuery.eq('organization_id', organizationId);
+  }
+
+  // Fetch statuses first so we can filter complete-type tickets by date
+  const statusesResult = await statusesQuery;
+  const allStatuses = dedupeStatuses(statusesResult.data ?? []);
+  const completeStatusNames = allStatuses
+    .filter(s => s.status_type === 'complete')
+    .map(s => s.name);
+
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  const oneWeekAgoStr = oneWeekAgo.toISOString();
+
   let ticketsQuery = supabase
     .from('tickets')
     .select(
@@ -119,23 +139,24 @@ export default async function TicketsBoardContent({
     .order('board_position', { ascending: true })
     .order('created_at', { ascending: true });
 
-  let statusesQuery = supabase
-    .from('ticket_statuses')
-    .select('name,position,status_type')
-    .order('position', { ascending: true });
-
   if (organizationId !== undefined) {
     ticketsQuery = ticketsQuery.eq('organization_id', organizationId);
-    statusesQuery = statusesQuery.eq('organization_id', organizationId);
   }
 
   if (projectId !== undefined) {
     ticketsQuery = ticketsQuery.eq('project_id', projectId);
   }
 
-  const [ticketsResult, statusesResult, everhourIntegrationResult] = await Promise.all([
+  // For complete-type columns, only load tickets updated in the past week.
+  // Non-complete tickets are loaded without a date restriction.
+  if (completeStatusNames.length > 0) {
+    ticketsQuery = ticketsQuery.or(
+      `status.not.in.(${completeStatusNames.join(',')}),updated_at.gte.${oneWeekAgoStr}`
+    );
+  }
+
+  const [ticketsResult, everhourIntegrationResult] = await Promise.all([
     ticketsQuery,
-    statusesQuery,
     supabase
       .from('user_integrations')
       .select('api_key')
@@ -230,7 +251,7 @@ export default async function TicketsBoardContent({
         objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0
       };
     });
-  const statuses = dedupeStatuses(statusesResult.data ?? []);
+  const statuses = allStatuses;
   const loadError = ticketsResult.error ?? statusesResult.error;
   let objectiveFileMentionPaths: string[] = [];
   let kanbanWorkingDirectory: string | null = null;
@@ -288,6 +309,7 @@ export default async function TicketsBoardContent({
           workingDirectory={kanbanWorkingDirectory}
           initialView={view}
           initialHiddenColumns={initialHiddenColumns}
+          initialCutoffDate={oneWeekAgoStr}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">

@@ -137,6 +137,22 @@ Agents can attach structured outputs to tickets, such as:
 
 This makes the final output easier to review than digging through raw terminal logs.
 
+### Change Viewer
+
+The Change Viewer is a built-in diff browser available in the desktop app. It lets you see all uncommitted Git changes in a linked project repository and trace each changed hunk back to the ticket that caused it.
+
+To use the Change Viewer:
+
+1. Open a project that has a linked working directory set up in the desktop app.
+2. Navigate to the project's **Current Changes** view.
+3. A list of all uncommitted files appears on the left, with status badges showing whether each file was added, modified, deleted, or renamed.
+4. Select any file to see its unified diff on the right.
+5. Click any changed line in the diff to open a popover showing the change rationale attached to that hunk — including why the change was made, what the expected impact is, and which ticket and agent session produced it.
+
+Change rationales are recorded by agents when they deliver work. When an agent attaches rationale to a hunk, that context is stored alongside the ticket and becomes inspectable here as soon as you open the diff.
+
+The Change Viewer is only available in the Electron desktop app because it reads your local Git working directory directly. It requires that the project has a linked working directory configured in project settings.
+
 ### Shared Context Across Sessions
 
 Overlord supports ticket-specific shared context so useful facts can persist across agent sessions. That helps when work pauses, gets resumed later, or moves between different agent runtimes.

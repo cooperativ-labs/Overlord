@@ -20,9 +20,10 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
 type BlankTicketCardProps = {
   inputId: string;
   status: string;
+  position: 'top' | 'bottom';
   fileMentionPaths: string[];
   workingDirectory?: string | null;
-  onCreateTicket: (status: string, objective: string) => Promise<void> | void;
+  onCreateTicket: (status: string, objective: string, position: 'top' | 'bottom') => Promise<void> | void;
   onClose: () => void;
   onSubmitted?: () => void;
   focusTrigger?: number;
@@ -31,6 +32,7 @@ type BlankTicketCardProps = {
 export default function BlankTicketCard({
   inputId,
   status,
+  position,
   fileMentionPaths,
   workingDirectory = null,
   onCreateTicket,
@@ -97,7 +99,7 @@ export default function BlankTicketCard({
       if (trimmed) {
         setIsCreating(true);
         try {
-          await onCreateTicket(status, trimmed);
+          await onCreateTicket(status, trimmed, position);
         } finally {
           setIsCreating(false);
         }
@@ -128,7 +130,7 @@ export default function BlankTicketCard({
         }
         setIsCreating(true);
         try {
-          await onCreateTicket(status, trimmed);
+          await onCreateTicket(status, trimmed, position);
         } finally {
           setIsCreating(false);
         }

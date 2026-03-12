@@ -149,36 +149,6 @@ async function resolveTicketProjectAndOrganization(
   return { organizationId: fallbackProject.organization_id, projectId: fallbackProject.id };
 }
 
-async function assignTicketToColumnEnd(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  ticketId: string,
-  status: string,
-  organizationId: number
-) {
-  const { data: tailTicket, error: tailTicketError } = await supabase
-    .from('tickets')
-    .select('board_position')
-    .eq('organization_id', organizationId)
-    .eq('status', status)
-    .neq('id', ticketId)
-    .order('board_position', { ascending: false })
-    .limit(1);
-
-  if (tailTicketError) {
-    throw new Error(tailTicketError.message);
-  }
-
-  const maxBoardPosition = tailTicket?.[0]?.board_position ?? -1;
-  const { error: updateError } = await supabase
-    .from('tickets')
-    .update({ board_position: maxBoardPosition + 1 })
-    .eq('id', ticketId);
-
-  if (updateError) {
-    throw new Error(updateError.message);
-  }
-}
-
 async function assignTicketToColumnStart(
   supabase: Awaited<ReturnType<typeof createClient>>,
   ticketId: string,
@@ -209,12 +179,43 @@ async function assignTicketToColumnStart(
   }
 }
 
+async function assignTicketToColumnEnd(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ticketId: string,
+  status: string,
+  organizationId: number
+) {
+  const { data: tailTicket, error: tailTicketError } = await supabase
+    .from('tickets')
+    .select('board_position')
+    .eq('organization_id', organizationId)
+    .eq('status', status)
+    .neq('id', ticketId)
+    .order('board_position', { ascending: false })
+    .limit(1);
+
+  if (tailTicketError) {
+    throw new Error(tailTicketError.message);
+  }
+
+  const maxBoardPosition = tailTicket?.[0]?.board_position ?? 0;
+  const { error: updateError } = await supabase
+    .from('tickets')
+    .update({ board_position: maxBoardPosition + 1 })
+    .eq('id', ticketId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+}
+
 export async function createTicketInColumnAction(
   status: string,
   objective: string,
   ticketId: string,
   organizationId?: number,
-  projectId?: string
+  projectId?: string,
+  position: 'top' | 'bottom' = 'top'
 ) {
   const supabase = await createClient();
   const selected = await resolveTicketProjectAndOrganization(supabase, {
@@ -250,7 +251,11 @@ export async function createTicketInColumnAction(
   }
 
   await upsertDraftObjective(supabase, data.id, trimmedObjective);
-  await assignTicketToColumnStart(supabase, data.id, status, data.organization_id);
+  if (position === 'bottom') {
+    await assignTicketToColumnEnd(supabase, data.id, status, data.organization_id);
+  } else {
+    await assignTicketToColumnStart(supabase, data.id, status, data.organization_id);
+  }
 
   revalidateTicketBoards([data.organization_id]);
   revalidatePath(
@@ -1015,4 +1020,97 @@ Once you have a clear understanding of the ticket, say "I understand the ticket.
 `;
 
   return { prompt };
+}
+
+const TICKET_BOARD_SELECT =
+  'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+
+type RawBoardTicket = {
+  id: string;
+  title: string | null;
+  objective: string | null;
+  execution_target: Database['public']['Enums']['ticket_execution_target'];
+  status: string;
+  priority: string;
+  assigned_agent: string | null;
+  recent_agent: string | null;
+  is_read: boolean;
+  updated_at: string;
+  board_position: number;
+  organization_id: number;
+  project_id: string;
+  everhour_task_id: string | null;
+  organization: { name: string } | Array<{ name: string }> | null;
+  project:
+    | { name: string; color: string; everhour_project_id: string | null }
+    | Array<{ name: string; color: string; everhour_project_id: string | null }>
+    | null;
+};
+
+function mapBoardTicket(raw: RawBoardTicket) {
+  const p = Array.isArray(raw.project) ? raw.project[0] : raw.project;
+  const org = Array.isArray(raw.organization) ? raw.organization[0] : raw.organization;
+  return {
+    id: raw.id,
+    title: raw.title,
+    objective: raw.objective,
+    execution_target: raw.execution_target,
+    status: raw.status,
+    priority: raw.priority,
+    assigned_agent: raw.assigned_agent,
+    recent_agent: raw.recent_agent,
+    is_read: raw.is_read,
+    updated_at: raw.updated_at,
+    board_position: raw.board_position,
+    organization_id: raw.organization_id,
+    project_id: raw.project_id,
+    everhour_task_id: raw.everhour_task_id,
+    organization_name: org?.name ?? null,
+    project_name: p?.name ?? null,
+    project_color: p?.color ?? null,
+    project_everhour_project_id: p?.everhour_project_id ?? null,
+    agent_session_state: null,
+    running_agent: null,
+    waiting_for_response_at: null,
+    has_unopened_waiting_response: false,
+    objectives_executed_count: 0
+  };
+}
+
+export async function loadMoreCompleteTicketsAction({
+  status,
+  organizationId,
+  projectId,
+  beforeDate
+}: {
+  status: string;
+  organizationId?: number;
+  projectId?: string;
+  beforeDate: string;
+}): Promise<{ tickets: ReturnType<typeof mapBoardTicket>[] }> {
+  const supabase = await createClient();
+
+  const twoWeeksBefore = new Date(beforeDate);
+  twoWeeksBefore.setDate(twoWeeksBefore.getDate() - 14);
+  const twoWeeksBeforeStr = twoWeeksBefore.toISOString();
+
+  let query = supabase
+    .from('tickets')
+    .select(TICKET_BOARD_SELECT)
+    .eq('status', status)
+    .lt('updated_at', beforeDate)
+    .gte('updated_at', twoWeeksBeforeStr)
+    .order('updated_at', { ascending: false });
+
+  if (organizationId !== undefined) {
+    query = query.eq('organization_id', organizationId);
+  }
+  if (projectId !== undefined) {
+    query = query.eq('project_id', projectId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return { tickets: ((data ?? []) as RawBoardTicket[]).map(mapBoardTicket) };
 }

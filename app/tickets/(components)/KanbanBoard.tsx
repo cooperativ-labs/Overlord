@@ -37,6 +37,7 @@ import {
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import {
   createTicketInColumnAction,
+  loadMoreCompleteTicketsAction,
   markTicketReadAction,
   markTicketsReadAction,
   markTicketUnreadAction,
@@ -64,8 +65,6 @@ const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
 const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
-
-const COMPLETE_RECENT_DAYS = 14;
 
 type StatusColumn = {
   id: string;
@@ -129,7 +128,8 @@ export default function KanbanBoard({
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
   workingDirectory = null,
   initialView,
-  initialHiddenColumns = []
+  initialHiddenColumns = [],
+  initialCutoffDate
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number; status_type?: string }>;
@@ -140,6 +140,7 @@ export default function KanbanBoard({
   workingDirectory?: string | null;
   initialView: string;
   initialHiddenColumns?: string[];
+  initialCutoffDate?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -223,15 +224,12 @@ export default function KanbanBoard({
   const [visibleSlugs, setVisibleSlugs] = useState<Set<string>>(
     () => new Set(allColumnSlugs.filter(slug => !hiddenSet.has(slug)))
   );
-  const [expandedCompleteColumns, setExpandedCompleteColumns] = useState<Set<string>>(
-    () => new Set()
+  // Per-column load-more state for complete columns
+  type ColumnLoadMoreState = { cutoff: string; hasMore: boolean; isLoading: boolean };
+  const [columnLoadMoreStates, setColumnLoadMoreStates] = useState<Map<string, ColumnLoadMoreState>>(
+    () => new Map()
   );
-
-  const twoWeeksAgo = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - COMPLETE_RECENT_DAYS);
-    return d.toISOString();
-  }, []);
+  const [extraTickets, setExtraTickets] = useState<Ticket[]>([]);
 
   const [optimisticTickets, applyOptimistic] = useOptimistic(
     initialTickets,
@@ -286,12 +284,15 @@ export default function KanbanBoard({
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [initialTickets, projectId]);
 
+  const allTickets = useMemo(
+    () => [...ticketsWithIndicators, ...extraTickets],
+    [ticketsWithIndicators, extraTickets]
+  );
+
   const displayedTickets = useMemo(
     () =>
-      filteredProjectId
-        ? ticketsWithIndicators.filter(t => t.project_id === filteredProjectId)
-        : ticketsWithIndicators,
-    [ticketsWithIndicators, filteredProjectId]
+      filteredProjectId ? allTickets.filter(t => t.project_id === filteredProjectId) : allTickets,
+    [allTickets, filteredProjectId]
   );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -393,23 +394,47 @@ export default function KanbanBoard({
     startTransition(() => markTicketUnreadAction(ticketId));
   }
 
-  function getDisplayedTicketsForColumn({
-    column,
-    tickets
-  }: {
-    column: StatusColumn;
-    tickets: Ticket[];
-  }): { displayed: Ticket[]; olderCount: number } {
-    const isComplete = column.statusType === 'complete';
-    if (!isComplete) return { displayed: tickets, olderCount: 0 };
+  async function handleLoadMore(columnId: string) {
+    const state = columnLoadMoreStates.get(columnId);
+    if (state?.isLoading || state?.hasMore === false) return;
 
-    const recent = tickets.filter(t => !t.updated_at || t.updated_at >= twoWeeksAgo);
-    const older = tickets.filter(t => t.updated_at && t.updated_at < twoWeeksAgo);
-    const showOlder = expandedCompleteColumns.has(column.id);
-    return {
-      displayed: showOlder ? tickets : recent,
-      olderCount: older.length
-    };
+    const cutoff = state?.cutoff ?? initialCutoffDate ?? new Date().toISOString();
+
+    setColumnLoadMoreStates(prev => {
+      const next = new Map(prev);
+      next.set(columnId, { cutoff, hasMore: true, isLoading: true });
+      return next;
+    });
+
+    try {
+      const { tickets: loaded } = await loadMoreCompleteTicketsAction({
+        status: columnId,
+        organizationId,
+        projectId,
+        beforeDate: cutoff
+      });
+
+      const newCutoff = new Date(cutoff);
+      newCutoff.setDate(newCutoff.getDate() - 14);
+
+      setExtraTickets(prev => [...prev, ...(loaded as Ticket[])]);
+      setColumnLoadMoreStates(prev => {
+        const next = new Map(prev);
+        next.set(columnId, {
+          cutoff: newCutoff.toISOString(),
+          hasMore: loaded.length > 0,
+          isLoading: false
+        });
+        return next;
+      });
+    } catch {
+      setColumnLoadMoreStates(prev => {
+        const next = new Map(prev);
+        const existing = prev.get(columnId);
+        next.set(columnId, { cutoff, hasMore: true, isLoading: false, ...existing });
+        return next;
+      });
+    }
   }
 
   useEffect(() => {
@@ -830,7 +855,7 @@ export default function KanbanBoard({
     });
   }
 
-  async function handleCreateTicket(status: string, objective: string) {
+  async function handleCreateTicket(status: string, objective: string, position: 'top' | 'bottom' = 'top') {
     const trimmedObjective = objective.trim();
     if (!trimmedObjective) {
       return;
@@ -841,10 +866,15 @@ export default function KanbanBoard({
     const columnTicketsForStatus = previous.filter(ticket => ticket.status === status);
     const positionInColumn =
       columnTicketsForStatus.length > 0
-        ? columnTicketsForStatus.reduce(
-            (min, ticket) => Math.min(min, ticket.board_position),
-            Infinity
-          ) - 1
+        ? position === 'bottom'
+          ? columnTicketsForStatus.reduce(
+              (max, ticket) => Math.max(max, ticket.board_position),
+              -Infinity
+            ) + 1
+          : columnTicketsForStatus.reduce(
+              (min, ticket) => Math.min(min, ticket.board_position),
+              Infinity
+            ) - 1
         : 0;
 
     const referenceTicket =
@@ -882,7 +912,8 @@ export default function KanbanBoard({
         trimmedObjective,
         clientTicketId,
         organizationId,
-        projectId
+        projectId,
+        position
       );
     } catch {
       workingTickets.current = previous;
@@ -1005,34 +1036,27 @@ export default function KanbanBoard({
           >
             <div className="inline-flex flex-nowrap gap-3 px-4 md:px-6">
               {visibleSortedColumns.map(col => {
-                const rawTickets = columnTickets.get(col.id) ?? [];
-                const { displayed, olderCount } = getDisplayedTicketsForColumn({
-                  column: col,
-                  tickets: rawTickets
-                });
+                const colTickets = columnTickets.get(col.id) ?? [];
+                const isComplete = col.statusType === 'complete';
+                const loadMoreState = columnLoadMoreStates.get(col.id);
+                const hasMore = isComplete && loadMoreState?.hasMore !== false;
+                const isLoadingMore = loadMoreState?.isLoading ?? false;
                 return (
                   <KanbanColumn
                     key={col.id}
                     column={col}
-                    tickets={displayed}
+                    tickets={colTickets}
                     showOrganizationName={showOrganizationName}
                     projectId={projectId}
                     fileMentionPaths={fileMentionPaths}
                     workingDirectory={workingDirectory}
                     onCreateTicket={handleCreateTicket}
                     onMarkUnread={handleMarkUnread}
-                    onMarkAllRead={() => handleMarkColumnRead(displayed.map(t => t.id))}
-                    olderTicketsCount={olderCount}
-                    isCompleteColumn={col.statusType === 'complete'}
-                    showOlder={expandedCompleteColumns.has(col.id)}
-                    onToggleShowOlder={() =>
-                      setExpandedCompleteColumns(prev => {
-                        const next = new Set(prev);
-                        if (next.has(col.id)) next.delete(col.id);
-                        else next.add(col.id);
-                        return next;
-                      })
-                    }
+                    onMarkAllRead={() => handleMarkColumnRead(colTickets.map(t => t.id))}
+                    isCompleteColumn={isComplete}
+                    hasMore={hasMore}
+                    isLoadingMore={isLoadingMore}
+                    onLoadMore={() => void handleLoadMore(col.id)}
                   />
                 );
               })}
@@ -1047,10 +1071,9 @@ export default function KanbanBoard({
                   onCreateTicket={handleCreateTicket}
                   onMarkUnread={handleMarkUnread}
                   onMarkAllRead={() => handleMarkColumnRead(uncategorized.map(t => t.id))}
-                  olderTicketsCount={0}
                   isCompleteColumn={false}
-                  showOlder={false}
-                  onToggleShowOlder={() => {}}
+                  hasMore={false}
+                  isLoadingMore={false}
                 />
               )}
             </div>
