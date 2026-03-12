@@ -226,9 +226,9 @@ export default function KanbanBoard({
   );
   // Per-column load-more state for complete columns
   type ColumnLoadMoreState = { cutoff: string; hasMore: boolean; isLoading: boolean };
-  const [columnLoadMoreStates, setColumnLoadMoreStates] = useState<Map<string, ColumnLoadMoreState>>(
-    () => new Map()
-  );
+  const [columnLoadMoreStates, setColumnLoadMoreStates] = useState<
+    Map<string, ColumnLoadMoreState>
+  >(() => new Map());
   const [extraTickets, setExtraTickets] = useState<Ticket[]>([]);
 
   const [optimisticTickets, applyOptimistic] = useOptimistic(
@@ -855,7 +855,11 @@ export default function KanbanBoard({
     });
   }
 
-  async function handleCreateTicket(status: string, objective: string, position: 'top' | 'bottom' = 'top') {
+  async function handleCreateTicket(
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom' = 'top'
+  ) {
     const trimmedObjective = objective.trim();
     if (!trimmedObjective) {
       return;

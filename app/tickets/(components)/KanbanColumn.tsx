@@ -40,7 +40,11 @@ export default function KanbanColumn({
   projectId?: string;
   fileMentionPaths?: string[];
   workingDirectory?: string | null;
-  onCreateTicket: (status: string, objective: string, position: 'top' | 'bottom') => Promise<void> | void;
+  onCreateTicket: (
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom'
+  ) => Promise<void> | void;
   onMarkUnread?: (ticketId: string) => void;
   onMarkAllRead?: () => void;
   isCompleteColumn?: boolean;

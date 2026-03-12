@@ -23,7 +23,11 @@ type BlankTicketCardProps = {
   position: 'top' | 'bottom';
   fileMentionPaths: string[];
   workingDirectory?: string | null;
-  onCreateTicket: (status: string, objective: string, position: 'top' | 'bottom') => Promise<void> | void;
+  onCreateTicket: (
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom'
+  ) => Promise<void> | void;
   onClose: () => void;
   onSubmitted?: () => void;
   focusTrigger?: number;

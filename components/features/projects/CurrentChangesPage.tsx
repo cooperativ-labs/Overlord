@@ -1,10 +1,11 @@
 'use client';
 
-import { ArrowLeft, FileCode2, GitBranch, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, FileCode2, Filter, GitBranch, Loader2, RefreshCw, X } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -429,6 +430,46 @@ export function CurrentChangesPage({
     isLoading: false,
     parsed: null
   });
+  const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
+
+  const uniqueTickets = useMemo(() => {
+    const ticketMap = new Map<string, { id: string; title: string | null }>();
+    for (const rationale of rationales) {
+      if (rationale.ticket && !ticketMap.has(rationale.ticket.id)) {
+        ticketMap.set(rationale.ticket.id, rationale.ticket);
+      }
+    }
+    return [...ticketMap.values()].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+  }, [rationales]);
+
+  const filteredFiles = useMemo(() => {
+    const files = statusResponse?.files ?? [];
+    if (selectedTicketIds.size === 0) return files;
+    const filePathsWithMatchingRationales = new Set(
+      rationales.filter(r => r.ticket && selectedTicketIds.has(r.ticket.id)).map(r => r.file_path)
+    );
+    return files.filter(
+      file =>
+        filePathsWithMatchingRationales.has(file.path) ||
+        (file.originalPath && filePathsWithMatchingRationales.has(file.originalPath))
+    );
+  }, [statusResponse?.files, rationales, selectedTicketIds]);
+
+  function toggleTicketFilter(ticketId: string) {
+    setSelectedTicketIds(prev => {
+      const next = new Set(prev);
+      if (next.has(ticketId)) {
+        next.delete(ticketId);
+      } else {
+        next.add(ticketId);
+      }
+      return next;
+    });
+  }
+
+  function clearTicketFilter() {
+    setSelectedTicketIds(new Set());
+  }
 
   function getRationalePaths(files: GitStatusFile[]): string[] {
     return [
@@ -626,9 +667,106 @@ export function CurrentChangesPage({
         <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">
           <div className="flex min-h-0 flex-col border-r">
             <div className="border-b px-4 py-3">
-              <p className="text-sm font-medium text-foreground">Uncommitted files</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Uncommitted files</p>
+                {uniqueTickets.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 gap-1 px-2">
+                        <Filter className="h-3.5 w-3.5" />
+                        {selectedTicketIds.size > 0 && (
+                          <Badge
+                            variant="secondary"
+                            className="h-4 min-w-4 rounded-full px-1 text-[10px]"
+                          >
+                            {selectedTicketIds.size}
+                          </Badge>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-72 p-0">
+                      <div className="flex items-center justify-between border-b px-3 py-2">
+                        <p className="text-xs font-medium">Filter by ticket</p>
+                        {selectedTicketIds.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={clearTicketFilter}
+                            className="text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-60 overflow-auto p-1">
+                        {uniqueTickets.map(ticket => (
+                          <button
+                            key={ticket.id}
+                            type="button"
+                            onClick={() => toggleTicketFilter(ticket.id)}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition',
+                              selectedTicketIds.has(ticket.id)
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'flex h-4 w-4 shrink-0 items-center justify-center rounded border',
+                                selectedTicketIds.has(ticket.id)
+                                  ? 'border-primary bg-primary text-primary-foreground'
+                                  : 'border-muted-foreground/30'
+                              )}
+                            >
+                              {selectedTicketIds.has(ticket.id) && (
+                                <svg
+                                  className="h-3 w-3"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={3}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                              )}
+                            </span>
+                            <span className="min-w-0 truncate">
+                              {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">{workingDirectory}</p>
             </div>
+            {selectedTicketIds.size > 0 && (
+              <div className="flex flex-wrap items-center gap-1 border-b px-3 py-2">
+                {[...selectedTicketIds].map(id => {
+                  const ticket = uniqueTickets.find(t => t.id === id);
+                  return (
+                    <Badge key={id} variant="secondary" className="gap-1 text-[10px]">
+                      <span className="max-w-[140px] truncate">
+                        {ticket?.title?.trim() || `Ticket ${id.slice(-8)}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleTicketFilter(id)}
+                        className="ml-0.5 hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
             <div className="min-h-0 flex-1 overflow-auto p-3">
               {statusLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -639,9 +777,13 @@ export function CurrentChangesPage({
                 <p className="text-sm text-destructive">{statusResponse.error}</p>
               ) : !statusResponse?.files.length ? (
                 <p className="text-sm text-muted-foreground">No uncommitted changes found.</p>
+              ) : filteredFiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No files match the selected ticket filter.
+                </p>
               ) : (
                 <div className="space-y-2">
-                  {statusResponse.files.map(file => {
+                  {filteredFiles.map(file => {
                     const candidatePaths = new Set([file.path, file.originalPath].filter(Boolean));
                     const rationaleCount = rationales.filter(rationale =>
                       candidatePaths.has(rationale.file_path)

@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.55.0] - 2026-03-12:15:30
+
+### Added
+- Enhance ticket creation and loading functionality in Kanban components with improved card interactions and state management.
+
+### Fixed
+- Fix change rationales never being recorded due to required hunks validation blocking submissions.
+
+### Changed
+- None.
+
+### Security
+- None.
+
 ## [0.54.0] - 2026-03-12:10:06
 
 ### Added
