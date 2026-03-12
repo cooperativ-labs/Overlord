@@ -21,7 +21,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -128,10 +134,39 @@ run('cp -r .next/static .next/standalone/.next/static');
 run('cp -r public .next/standalone/public');
 
 // ---------------------------------------------------------------------------
-// Step 5 — Compile Electron main-process TypeScript
+// Step 4.5 — Clean up standalone output (remove build-time-only packages)
 // ---------------------------------------------------------------------------
 
-run('yarn tsc -p electron/tsconfig.json');
+run('rm -rf .next/standalone/node_modules/typescript');
+run('rm -rf .next/standalone/node_modules/@esbuild');
+
+// ---------------------------------------------------------------------------
+// Step 5 — Bundle Electron main-process with esbuild
+// ---------------------------------------------------------------------------
+
+run(
+  'npx esbuild electron/main.ts --bundle --platform=node --target=node20 --outfile=dist-electron/main.js --external:electron --external:node-pty --format=cjs --sourcemap'
+);
+run(
+  'npx esbuild electron/preload.ts --bundle --platform=node --target=node20 --outfile=dist-electron/preload.js --external:electron --format=cjs --sourcemap'
+);
+
+// ---------------------------------------------------------------------------
+// Step 5.5 — Strip non-target node-pty prebuilds
+// ---------------------------------------------------------------------------
+
+const prebuildsDir = resolve(ROOT, 'node_modules', 'node-pty', 'prebuilds');
+if (existsSync(prebuildsDir)) {
+  const target = `${process.platform}-${process.arch}`;
+  console.log(`[build] Stripping node-pty prebuilds (keeping ${target})`);
+
+  for (const entry of readdirSync(prebuildsDir)) {
+    if (entry !== target) {
+      rmSync(resolve(prebuildsDir, entry), { recursive: true, force: true });
+      console.log(`[build]   Removed prebuilds/${entry}`);
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Step 6 — electron-builder
