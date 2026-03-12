@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.54.0] - 2026-03-12:10:06
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Chore
+- Treat `node_modules/node-pty` as an `extraResources` asset in `electron-builder.yml` so the native addon ships with packaged Electron builds without unpacking the rest of `node_modules`.
+
 ## [0.53.0] - 2026-03-12:09:01
 
 ### Added

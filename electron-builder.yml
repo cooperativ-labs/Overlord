@@ -10,8 +10,11 @@ files:
   - "dist-electron/**/*"
   - ".next/standalone/**/*"
   - "bin/**/*"
-  - "node_modules/node-pty/**/*"
   - "!node_modules"
+
+extraResources:
+  - from: "node_modules/node-pty"
+    to: "node_modules/node-pty"
 
 mac:
   target:
@@ -28,7 +31,6 @@ linux:
   icon: public/images/512.png
 
 asarUnpack:
-  - "node_modules/node-pty/**/*"
   - ".next/standalone/**/*"
   - "bin/**/*"
 
