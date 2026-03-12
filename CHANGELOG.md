@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.53.0] - 2026-03-12:09:01
+
+### Added
+- Persist per-user, per-project board preferences (hidden Kanban columns and preferred board/list view) in the new `project_user_preferences` table so column visibility and the selected view survive refreshes and stay scoped to each project.
+- Surface ticket card context menu actions on both Kanban and list layouts so you can raise/reduce priority or mark a card as unread without leaving the board, with the column menu propagating the same unread/reading logic.
+- Extend the Change Explorer diff view to call the new `/api/projects/[projectId]/change-rationales` endpoint, show counts for linked change rationales next to each file, and reveal hunk-level cards that describe the rationale label, why/impact text, and related ticket/event/session.
+- Add `--change-rationales-json` and `--change-rationales-file` flags to `ovld protocol update`/`deliver` plus supporting prompt docs so CLI agents can submit structured change rationales from inline JSON or files.
+
+### Fixed
+- None.
+
+### Changed
+- Tickets board and view toggles now read from the per-project preferences when rendering, and the controls write back through the new server actions so every project remembers its hidden columns and last-used view when you return.
+- The new ticket modal in Electron loads local project files for `@path` mentions whenever a working directory is linked, keeping mention suggestions in sync with the repository you are working in.
+- Overlord protocol payload validation and prompt helpers now require metadata keys to be strings and drop the redundant `mcpOnly` flag so the MCP configuration guidance stays simpler.
+
+### Security
+- None.
+
 ## [0.52.0] - 2026-03-11:22:22
 
 ### Added
