@@ -17,7 +17,6 @@ import {
 } from './services/local-runtime';
 import { SupabaseManager } from './services/supabase-manager';
 import { killAllTerminals } from './services/terminal-manager';
-
 // Baked-in production runtime vars (generated from an explicit allowlist before build).
 // In dev mode, the committed default file exports an empty object.
 import { PROD_ENV } from './_prod-env.generated';
