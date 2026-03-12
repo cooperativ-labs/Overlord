@@ -2,7 +2,7 @@
 
 import { ArrowUpDown, Check, Filter } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { markTicketUnreadAction } from '@/lib/actions/tickets';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import {
   getOpenedWaitingTimestamps,
@@ -57,15 +58,18 @@ export default function TicketListView({
   showOrganizationName = false,
   ticketUrlBase,
   initialView,
-  showViewToggle = true
+  showViewToggle = true,
+  projectId
 }: {
   tickets: Ticket[];
   showOrganizationName?: boolean;
   ticketUrlBase?: string;
   initialView: string;
   showViewToggle?: boolean;
+  projectId?: string;
 }) {
   const pathname = usePathname();
+  const [, startTransition] = useTransition();
 
   const [sortKey, setSortKey] = useState<SortKey>('updated_at');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => [
@@ -82,6 +86,10 @@ export default function TicketListView({
 
   const ticketIdsRef = useRef<Set<string>>(new Set());
   ticketIdsRef.current = new Set(tickets.map(t => t.id));
+
+  function handleMarkUnread(ticketId: string) {
+    startTransition(() => markTicketUnreadAction(ticketId));
+  }
 
   useEffect(() => {
     const pathTicketId = getPathTicketId(pathname);
@@ -192,7 +200,9 @@ export default function TicketListView({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {showViewToggle || hasTickets ? (
         <div className="flex flex-wrap items-center gap-2">
-          {showViewToggle ? <TicketsViewControls initialView={initialView} /> : null}
+          {showViewToggle ? (
+            <TicketsViewControls initialView={initialView} projectId={projectId} />
+          ) : null}
 
           {hasTickets ? (
             <>
@@ -313,6 +323,7 @@ export default function TicketListView({
                 ticketPath={ticketPath}
                 isSelected={isSelected}
                 showOrganizationName={showOrganizationName}
+                onMarkUnread={handleMarkUnread}
               />
             );
           })}

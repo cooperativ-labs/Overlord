@@ -580,7 +580,7 @@ export function CurrentChangesPage({
   const selectedFile = statusResponse?.files.find(file => file.path === selectedPath) ?? null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 pl-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">

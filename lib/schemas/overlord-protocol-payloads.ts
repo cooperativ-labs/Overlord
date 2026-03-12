@@ -46,9 +46,7 @@ export const Phase = z
 export const AttachPayload = z.object({
   ticketId: z.string().describe('Target ticket ID'),
   agentIdentifier: z.string().describe('Agent name or identifier, e.g. "claude-code", "codex"'),
-  connectionMethod: z
-    .string()
-    .describe('How the agent is connecting: "mcp", "cli", "rest", etc.'),
+  connectionMethod: z.string().describe('How the agent is connecting: "mcp", "cli", "rest", etc.'),
   metadata: z.record(z.string(), z.any()).optional().describe('Optional agent-specific metadata')
 });
 export type AttachPayload = z.infer<typeof AttachPayload>;
@@ -135,9 +133,7 @@ export const CreateTicketPayload = z.object({
   ticketId: z.string().describe('Parent ticket ID'),
   title: z.string().describe('Title for the follow-up ticket'),
   objective: z.string().describe('What needs to be done'),
-  acceptanceCriteria: z
-    .string()
-    .describe('How to verify the work is complete'),
+  acceptanceCriteria: z.string().describe('How to verify the work is complete'),
   executionTarget: z.enum(['human', 'agent']).describe('Who should execute this ticket')
 });
 export type CreateTicketPayload = z.infer<typeof CreateTicketPayload>;
@@ -150,10 +146,7 @@ export const DeliverPayload = z.object({
     .array(ChangeRationale)
     .optional()
     .describe('Meaningful behavioral changes only'),
-  artifacts: z
-    .array(Artifact)
-    .optional()
-    .describe('Deliverables and supplementary artifacts')
+  artifacts: z.array(Artifact).optional().describe('Deliverables and supplementary artifacts')
 });
 export type DeliverPayload = z.infer<typeof DeliverPayload>;
 

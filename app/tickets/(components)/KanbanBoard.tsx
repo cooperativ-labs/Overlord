@@ -34,6 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import {
   createTicketInColumnAction,
   markTicketReadAction,
@@ -80,11 +81,6 @@ type RealtimeTicketPatch = Partial<
     'status' | 'title' | 'agent_session_state' | 'running_agent' | 'recent_agent' | 'is_read'
   >
 >;
-type ToastState = {
-  ticketId: string;
-  message: string;
-  title: string;
-};
 
 function toColumnTitle(status: string): string {
   return status
@@ -131,7 +127,8 @@ export default function KanbanBoard({
   projectId,
   fileMentionPaths = [],
   workingDirectory = null,
-  initialView
+  initialView,
+  initialHiddenColumns = []
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number; status_type?: string }>;
@@ -141,13 +138,13 @@ export default function KanbanBoard({
   fileMentionPaths?: string[];
   workingDirectory?: string | null;
   initialView: string;
+  initialHiddenColumns?: string[];
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [, startTransition] = useTransition();
   const projectSettings = useProjectSettings();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
-  const [toastState, setToastState] = useState<ToastState | null>(null);
   const [filteredProjectId, setFilteredProjectId] = useState<string | null>(null);
   const [waitingByTicket, setWaitingByTicket] = useState<Record<string, string>>(() =>
     toWaitingByTicket(initialTickets)
@@ -185,11 +182,6 @@ export default function KanbanBoard({
     setWaitingByTicket(toWaitingByTicket(initialTickets));
   }, [initialTickets]);
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => setToastState(null), 3_000);
-    return () => window.clearTimeout(timeoutId);
-  }, [toastState]);
-
   // Restore x-scroll position after remount (e.g. when opening a ticket reloads the board)
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -226,7 +218,10 @@ export default function KanbanBoard({
   }));
 
   const allColumnSlugs = columns.map(c => c.id);
-  const [visibleSlugs, setVisibleSlugs] = useState<Set<string>>(() => new Set(allColumnSlugs));
+  const hiddenSet = new Set(initialHiddenColumns);
+  const [visibleSlugs, setVisibleSlugs] = useState<Set<string>>(
+    () => new Set(allColumnSlugs.filter(slug => !hiddenSet.has(slug)))
+  );
   const [expandedCompleteColumns, setExpandedCompleteColumns] = useState<Set<string>>(
     () => new Set()
   );
@@ -592,11 +587,7 @@ export default function KanbanBoard({
             ? `Agent waiting: ${ticket.title.trim()}`
             : 'Agent waiting for response';
 
-          setToastState({
-            ticketId: event.ticket_id,
-            title,
-            message: getEventMessage(event)
-          });
+          void window.electronAPI?.app?.notify(title, getEventMessage(event));
 
           const waitingSound = waitingSoundRef.current;
           if (waitingSound) {
@@ -638,11 +629,7 @@ export default function KanbanBoard({
           const reviewTitle = reviewTicket?.title?.trim()
             ? `Ready for review: ${reviewTicket.title.trim()}`
             : 'Ticket moved to review';
-          setToastState({
-            ticketId: event.ticket_id,
-            title: reviewTitle,
-            message: 'The agent has delivered this ticket.'
-          });
+          void window.electronAPI?.app?.notify(reviewTitle, 'The agent has delivered this ticket.');
         }
       )
       .on<Database['public']['Tables']['tickets']['Row']>(
@@ -711,6 +698,14 @@ export default function KanbanBoard({
       const next = new Set(prev);
       if (next.has(slug)) next.delete(slug);
       else next.add(slug);
+
+      if (projectId) {
+        const hiddenColumns = allColumnSlugs.filter(s => !next.has(s));
+        startTransition(() => {
+          void upsertProjectUserPreferencesAction(projectId, { hidden_columns: hiddenColumns });
+        });
+      }
+
       return next;
     });
   };
@@ -913,7 +908,7 @@ export default function KanbanBoard({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
             <div className="flex items-center gap-2">
-              <TicketsViewControls initialView={initialView} />
+              <TicketsViewControls initialView={initialView} projectId={projectId} />
               {projectOptions.length > 1 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1071,13 +1066,6 @@ export default function KanbanBoard({
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      {toastState ? (
-        <div className="pointer-events-none fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border bg-card px-4 py-3 shadow-lg">
-          <p className="text-sm font-medium">{toastState.title}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{toastState.message}</p>
-        </div>
-      ) : null}
     </>
   );
 }

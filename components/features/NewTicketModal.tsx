@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -31,6 +32,7 @@ type ProjectOption = {
   name: string;
   color: string;
   everhour_project_id: string | null;
+  local_working_directory?: string | null;
 };
 
 type NewTicketModalProps = {
@@ -61,6 +63,8 @@ export function NewTicketModal({
   const [submitButtonState, setSubmitButtonState] = useState<ButtonLoadingState>('default');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const { api, isElectron } = useElectron();
+  const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
 
   // Auto-resize textarea
   const autoResize = useCallback(() => {
@@ -107,15 +111,47 @@ export function NewTicketModal({
     };
   }, [ticketId, objective]);
 
-  // Focus textarea and resize on modal open
+  // Load file mention paths via Electron IPC when selected project changes
   useEffect(() => {
-    if (isOpen && textareaRef.current) {
-      setTimeout(() => {
+    if (!isElectron || !api?.filesystem?.listProjectFiles) {
+      setLocalFileMentionPaths(fileMentionPaths);
+      return;
+    }
+
+    const selectedProject = projects.find(p => p.id === selectedProjectId);
+    const directory = selectedProject?.local_working_directory?.trim() ?? '';
+    if (!directory) {
+      setLocalFileMentionPaths(fileMentionPaths);
+      return;
+    }
+
+    let cancelled = false;
+    void api.filesystem
+      .listProjectFiles({ directory })
+      .then(result => {
+        if (cancelled) return;
+        setLocalFileMentionPaths(result.error ? fileMentionPaths : (result.files ?? []));
+      })
+      .catch(() => {
+        if (!cancelled) setLocalFileMentionPaths(fileMentionPaths);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, isElectron, selectedProjectId, projects, fileMentionPaths]);
+
+  const effectiveMentionPaths = isElectron ? localFileMentionPaths : fileMentionPaths;
+
+  // Focus textarea once ticket creation finishes and textarea is rendered
+  useEffect(() => {
+    if (isOpen && !isCreating) {
+      requestAnimationFrame(() => {
         textareaRef.current?.focus();
         autoResize();
-      }, 0);
+      });
     }
-  }, [isOpen, autoResize]);
+  }, [isOpen, isCreating, autoResize]);
 
   function handleChange() {
     autoResize();
@@ -196,14 +232,14 @@ export function NewTicketModal({
             {/* Objective textarea */}
             <div className="relative flex flex-1 flex-col">
               <Label htmlFor="ticket-objective" className="mb-2 block text-sm font-medium">
-                Ticket Description
+                Objective
               </Label>
               <MentionableTextarea
                 ref={textareaRef}
                 id="ticket-objective"
                 value={objective}
                 onValueChange={setObjective}
-                mentionPaths={fileMentionPaths}
+                mentionPaths={effectiveMentionPaths}
                 onChange={handleChange}
                 onMentionSelect={() => {
                   requestAnimationFrame(() => autoResize());

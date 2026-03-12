@@ -202,6 +202,56 @@ export type Database = {
           }
         ];
       };
+      auth_grants: {
+        Row: {
+          agent_token_id: string | null;
+          approved_at: string | null;
+          client_name: string | null;
+          client_type: string;
+          consumed_at: string | null;
+          created_at: string;
+          expires_at: string;
+          grant_code: string;
+          id: string;
+          user_code: string;
+          user_id: string | null;
+        };
+        Insert: {
+          agent_token_id?: string | null;
+          approved_at?: string | null;
+          client_name?: string | null;
+          client_type?: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          grant_code?: string;
+          id?: string;
+          user_code: string;
+          user_id?: string | null;
+        };
+        Update: {
+          agent_token_id?: string | null;
+          approved_at?: string | null;
+          client_name?: string | null;
+          client_type?: string;
+          consumed_at?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          grant_code?: string;
+          id?: string;
+          user_code?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'auth_grants_agent_token_id_fkey';
+            columns: ['agent_token_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_tokens';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       change_rationales: {
         Row: {
           attribution_source: string;
@@ -294,56 +344,6 @@ export type Database = {
             columns: ['ticket_id'];
             isOneToOne: false;
             referencedRelation: 'tickets';
-            referencedColumns: ['id'];
-          }
-        ];
-      };
-      auth_grants: {
-        Row: {
-          agent_token_id: string | null;
-          approved_at: string | null;
-          client_name: string | null;
-          client_type: string;
-          consumed_at: string | null;
-          created_at: string;
-          expires_at: string;
-          grant_code: string;
-          id: string;
-          user_code: string;
-          user_id: string | null;
-        };
-        Insert: {
-          agent_token_id?: string | null;
-          approved_at?: string | null;
-          client_name?: string | null;
-          client_type?: string;
-          consumed_at?: string | null;
-          created_at?: string;
-          expires_at?: string;
-          grant_code?: string;
-          id?: string;
-          user_code: string;
-          user_id?: string | null;
-        };
-        Update: {
-          agent_token_id?: string | null;
-          approved_at?: string | null;
-          client_name?: string | null;
-          client_type?: string;
-          consumed_at?: string | null;
-          created_at?: string;
-          expires_at?: string;
-          grant_code?: string;
-          id?: string;
-          user_code?: string;
-          user_id?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'auth_grants_agent_token_id_fkey';
-            columns: ['agent_token_id'];
-            isOneToOne: false;
-            referencedRelation: 'agent_tokens';
             referencedColumns: ['id'];
           }
         ];
@@ -540,6 +540,41 @@ export type Database = {
           {
             foreignKeyName: 'profiles_default_project_id_fkey';
             columns: ['default_project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      project_user_preferences: {
+        Row: {
+          created_at: string | null;
+          id: string;
+          preferences: Json;
+          project_id: string;
+          updated_at: string | null;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string | null;
+          id?: string;
+          preferences?: Json;
+          project_id: string;
+          updated_at?: string | null;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string | null;
+          id?: string;
+          preferences?: Json;
+          project_id?: string;
+          updated_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'project_user_preferences_project_id_fkey';
+            columns: ['project_id'];
             isOneToOne: false;
             referencedRelation: 'projects';
             referencedColumns: ['id'];

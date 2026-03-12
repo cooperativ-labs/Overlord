@@ -1,11 +1,11 @@
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
-import type { AgentConfig } from '@/lib/schemas/agent-config';
 import {
-  generateUpdatePayloadExample,
-  generateDeliverPayloadExample,
+  generateAskPayloadExample,
   generateAttachPayloadExample,
-  generateAskPayloadExample
+  generateDeliverPayloadExample,
+  generateUpdatePayloadExample
 } from '@/lib/overlord/protocol-schema-utils';
+import type { AgentConfig } from '@/lib/schemas/agent-config';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 export type PromptLaunchMode = 'run' | 'ask';

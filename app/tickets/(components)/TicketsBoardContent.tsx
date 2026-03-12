@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { createClient } from '@/supabase/utils/server';
@@ -99,7 +100,12 @@ export default async function TicketsBoardContent({
   const ua = headerStore.get('user-agent') ?? '';
   const isMobile = /mobile|android|iphone/i.test(ua);
   const isElectronRequest = /electron/i.test(ua);
-  const view = isMobile ? 'list' : (savedView ?? 'board');
+
+  const projectPreferences = projectId ? await getProjectUserPreferencesAction(projectId) : null;
+
+  const preferredView = projectPreferences?.preferred_view ?? savedView;
+  const view = isMobile ? 'list' : (preferredView ?? 'board');
+  const initialHiddenColumns = projectPreferences?.hidden_columns ?? [];
   const supabase = await createClient();
   const {
     data: { user }
@@ -281,6 +287,7 @@ export default async function TicketsBoardContent({
           fileMentionPaths={objectiveFileMentionPaths}
           workingDirectory={kanbanWorkingDirectory}
           initialView={view}
+          initialHiddenColumns={initialHiddenColumns}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
@@ -290,6 +297,7 @@ export default async function TicketsBoardContent({
             ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
             initialView={view}
             showViewToggle={!isMobile}
+            projectId={projectId}
           />
         </div>
       )}
