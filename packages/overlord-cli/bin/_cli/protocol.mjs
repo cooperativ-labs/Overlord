@@ -153,6 +153,36 @@ function requireFlag(flags, name, envAlias) {
 }
 
 // ---------------------------------------------------------------------------
+// changeRationales helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve changeRationales from --change-rationales-json or --change-rationales-file flags.
+ * @param {Record<string, string | boolean>} flags
+ * @returns {Promise<Array<object>>}
+ */
+async function resolveChangeRationales(flags) {
+  if (flags['change-rationales-file']) {
+    const { readFileSync } = await import('node:fs');
+    try {
+      return JSON.parse(readFileSync(String(flags['change-rationales-file']), 'utf8'));
+    } catch (err) {
+      throw new Error(
+        `--change-rationales-file: could not read or parse "${flags['change-rationales-file']}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+  if (flags['change-rationales-json']) {
+    try {
+      return JSON.parse(String(flags['change-rationales-json']));
+    } catch {
+      throw new Error('--change-rationales-json must be valid JSON');
+    }
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // attach
 // ---------------------------------------------------------------------------
 
@@ -202,12 +232,15 @@ async function protocolUpdate(args) {
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
+  const changeRationales = await resolveChangeRationales(flags);
+
   const body = {
     sessionKey,
     ticketId,
     summary,
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
-    ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {})
+    ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {}),
+    ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
 
   const data = await apiPost(
@@ -355,7 +388,15 @@ async function protocolDeliver(args) {
     }
   }
 
-  const body = { sessionKey, ticketId, summary, artifacts };
+  const changeRationales = await resolveChangeRationales(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    summary,
+    artifacts,
+    ...(changeRationales.length > 0 ? { changeRationales } : {})
+  };
 
   const data = await apiPost(
     platformUrl,
@@ -560,6 +601,10 @@ Flags read from env vars when not provided:
 Common flags (all subcommands):
   --timeout <ms>          Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS}).
                           Also: OVERLORD_TIMEOUT env var.
+
+Change rationale flags (update & deliver):
+  --change-rationales-json <json>  Inline JSON array of change rationale objects.
+  --change-rationales-file <path>  Path to a JSON file containing change rationales.
 
 Deliver-specific flags:
   --artifacts-json <json> Inline JSON array of artifact objects.

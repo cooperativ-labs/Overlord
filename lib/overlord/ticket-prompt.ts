@@ -1,5 +1,11 @@
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
+import {
+  generateUpdatePayloadExample,
+  generateDeliverPayloadExample,
+  generateAttachPayloadExample,
+  generateAskPayloadExample
+} from '@/lib/overlord/protocol-schema-utils';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 export type PromptLaunchMode = 'run' | 'ask';
@@ -7,8 +13,6 @@ export type PromptLaunchMode = 'run' | 'ask';
 export type PromptOptions = {
   /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */
   mcpUrl?: string;
-  /** When true, remote protocol instructions are MCP-only (no REST fallback section). */
-  mcpOnly?: boolean;
   /** Optional user-level custom instructions to prepend to the prompt */
   customInstructions?: string | null;
   /** Launch mode for this prompt. Ask mode guides the agent to ask and stop. */
@@ -159,6 +163,24 @@ Pass \`--event-type <type>\` to publish a specific activity event (default: \`up
 - \`user_follow_up\` — a message or question from the human user
 - \`alert\` — surface a warning or non-blocking alert
 
+#### Change rationales (optional on updates)
+
+Record \`changeRationales\` for meaningful behavioral changes during long-running work. Write the JSON array to a temp file and pass it:
+
+\`\`\`bash
+npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
+  --summary "Added retry logic to API client." --phase execute \\
+  --change-rationales-file /tmp/rationales.json
+\`\`\`
+
+Or inline for a single rationale:
+
+\`\`\`bash
+npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
+  --summary "Added retry logic to API client." --phase execute \\
+  --change-rationales-json '[{"label":"Add exponential backoff","file_path":"lib/api-client.ts","summary":"Added retry with backoff.","why":"Transient failures caused data loss.","impact":"Requests retry up to 3 times before failing.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+\`\`\`
+
 ### 4 — Ask (blocking question — stop working after calling)
 
 \`\`\`bash
@@ -191,10 +213,30 @@ npx overlord protocol artifact-download-url --session-key <sessionKey> --ticket-
 npx overlord protocol deliver --session-key <sessionKey> \\
   --ticket-id ${ticketId} \\
   --summary "Narrative: what you did, next steps." \\
-  --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."},{"type":"next_steps","label":"Next steps","content":"..."}]'
+  --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."},{"type":"next_steps","label":"Next steps","content":"..."}]' \\
+  --change-rationales-file /tmp/rationales.json
 \`\`\`
 
 Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`.
+
+#### Change rationales (expected on deliver)
+
+Always include \`changeRationales\` when delivering. Write a JSON file with one entry per meaningful file change:
+
+\`\`\`json
+[
+  {
+    "label": "Short reviewer-facing title",
+    "file_path": "path/to/file.ts",
+    "summary": "What changed.",
+    "why": "Why it changed.",
+    "impact": "Behavioral or review impact.",
+    "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
+  }
+]
+\`\`\`
+
+Save to a temp file and pass via \`--change-rationales-file\`, or use \`--change-rationales-json\` inline for small payloads. Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
 Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
 
@@ -214,6 +256,9 @@ ${codexResumeCommand}
 
 - Always attach first; always deliver when done.
 - Post at least one update before delivering.
+- Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
+- Record \`changeRationales\` only for meaningful behavioral changes. Skip formatting-only noise.
+- Prefer 1–5 concise \`changeRationales\` for a typical ticket, each tied to a specific file and diff hunk.
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
@@ -222,19 +267,14 @@ ${codexResumeCommand}
 }
 
 /**
- * Builds an MCP server configuration block to include in the remote prompt.
+ * Builds an MCP server configuration block for the remote protocol section.
  * Agents that support MCP (Claude Code, etc.) can configure this server to get
- * native tool access to Overlord instead of using raw curl/REST calls.
+ * native tool access to Overlord.
  *
  * Note: This section intentionally avoids embedding concrete token values. Agents
  * should read `AGENT_TOKEN` from their environment when configuring auth.
  */
-function buildMcpConfigSection(
-  mcpUrl: string,
-  ticketId: string,
-  includeRestFallbackHeading = true,
-  includeSetupStep = true
-): string {
+function buildMcpConfigSection(mcpUrl: string, ticketId: string): string {
   const settingsJson = JSON.stringify(
     {
       mcpServers: {
@@ -249,34 +289,15 @@ function buildMcpConfigSection(
     2
   );
 
-  const restFallbackHeading = includeRestFallbackHeading
-    ? `
+  return `
 
----
-
-### REST API (fallback if MCP is not available)
-`
-    : '';
-
-  const setupStep = includeSetupStep
-    ? `**Step 1** — Add to your project's \`.claude/settings.json\` (or global \`~/.claude/settings.json\`):
+**Step 1** — Add to your project's \`.claude/settings.json\` (or global \`~/.claude/settings.json\`):
 
 \`\`\`json
 ${settingsJson}
 \`\`\`
-`
-    : `Use \`OVERLORD_MCP_URL\` as the MCP endpoint in your runtime configuration, and authenticate with \`AGENT_TOKEN\`:
 
-\`\`\`
-${mcpUrl}
-\`\`\`
-`;
-
-  return `
-
-${setupStep}
-
-**Step 2** — Available MCP tools (use these instead of curl):
+**Step 2** — Available MCP tools:
 - \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
 - \`artifact_prepare_upload\` / \`artifact_finalize_upload\` — upload and associate storage artifacts
 - \`artifact_get_download_url\` — signed read URL for storage artifacts
@@ -284,10 +305,7 @@ ${setupStep}
 - \`ask\` — ask a blocking question
 - \`read_context\` / \`write_context\` — persist findings across sessions
 - \`deliver\` — deliver completed work
-- \`create_ticket\` — create a follow-up ticket for human work
-
-> If you configure the MCP server, use MCP tools exclusively — do not mix MCP and REST calls in the same session.
-${restFallbackHeading}`;
+- \`create_ticket\` — create a follow-up ticket for human work`;
 }
 
 function buildRemoteProtocolSection(
@@ -295,319 +313,67 @@ function buildRemoteProtocolSection(
   _platformUrl: string,
   options?: PromptOptions
 ): string {
-  const claudeResumeCommand = buildResumeCommandWithFlags(
-    `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude`,
-    'claude',
-    options?.agentConfigs
-  );
-  const codexResumeCommand = buildResumeCommandWithFlags(
-    `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume codex`,
-    'codex',
-    options?.agentConfigs
-  );
   const mcpUrl = options?.mcpUrl;
-  const mcpOnly = options?.mcpOnly ?? false;
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, ticketId) : '';
 
-  if (mcpUrl && mcpOnly) {
-    return `## Overlord Protocol (MCP Only)
+  return `## Overlord Protocol (MCP)
 
-- **Ticket ID:** ${ticketId}
-- **MCP URL:** ${mcpUrl}
+Ticket ID: \`${ticketId}\`
 
-The following environment variables are set in your agent environment:
-- \`OVERLORD_MCP_URL\` — MCP endpoint for Overlord
-- \`AGENT_TOKEN\` — bearer token for MCP auth
+Environment variables:
+- \`OVERLORD_MCP_URL\` — MCP endpoint
+- \`AGENT_TOKEN\` — bearer token
 
-\`TICKET_ID\` is not set in cloud environments. Always send \`ticketId: "${ticketId}"\` in every MCP tool payload.
-${buildMcpConfigSection(mcpUrl, ticketId, false, false)}
+Always include \`ticketId: "${ticketId}"\` in every MCP tool call.
+${mcpSection}
 
-### 1 — Attach (**always first**, before any other work)
-
-Use MCP tool: \`attach\`
+### 1 — attach (always first)
 
 \`\`\`json
-{ "ticketId": "${ticketId}", "agentIdentifier": "<your-agent-id>", "connectionMethod": "mcp", "metadata": {} }
+${generateAttachPayloadExample(ticketId)}
 \`\`\`
 
-Store \`session.sessionKey\` from the response. It is required for all later tools.
-
-### 2 — Post updates during work
-
-Use MCP tool: \`update\`
+### 2 — update (after each meaningful step)
 
 \`\`\`json
-{
-  "sessionKey": "<from attach>",
-  "ticketId": "${ticketId}",
-  "summary": "What you did and why.",
-  "phase": "execute",
-  "changeRationales": [
-    {
-      "label": "Short reviewer-facing title",
-      "file_path": "path/to/file.ts",
-      "summary": "What changed.",
-      "why": "Why it changed.",
-      "impact": "Behavioral or review impact.",
-      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
-    }
-  ]
-}
+${generateUpdatePayloadExample(ticketId)}
 \`\`\`
 
-Pass \`eventType\` to publish a specific activity event (default: \`update\`). Available event types:
-- \`update\` — standard progress update (default)
-- \`user_follow_up\` — a message or question from the human user
-- \`alert\` — surface a warning or non-blocking alert
+Optional: \`eventType\`: "update" | "user_follow_up" | "alert"
 
-### 3 — Ask a blocking question (when you cannot proceed)
-
-Use MCP tool: \`ask\`
+### 3 — ask (when blocked)
 
 \`\`\`json
-{ "sessionKey": "<from attach>", "ticketId": "${ticketId}", "question": "Specific question for the PM.", "phase": "review" }
+${generateAskPayloadExample(ticketId)}
 \`\`\`
 
-### 4 — Read / write shared context (optional)
+### 4 — read_context / write_context (optional)
 
-Use MCP tools: \`read_context\`, \`write_context\`
+For persisting findings across sessions.
 
-### 5 — Storage artifacts (optional)
+### 5 — artifact_* (optional)
 
-Use MCP tools: \`artifact_prepare_upload\`, \`artifact_finalize_upload\`, \`artifact_get_download_url\`
+Upload/download storage artifacts:
+- \`artifact_prepare_upload\` — begin upload
+- \`artifact_finalize_upload\` — commit upload
+- \`artifact_get_download_url\` — get signed URL
 
-### 6 — Create follow-up ticket for human help (optional)
+### 6 — create_ticket (optional)
 
-Use MCP tool: \`create_ticket\`
+Create follow-up ticket for human work.
 
-### 7 — Deliver (always last)
-
-Use MCP tool: \`deliver\`
+### 7 — deliver (always last)
 
 \`\`\`json
-{
-  "sessionKey": "<from attach>",
-  "ticketId": "${ticketId}",
-  "summary": "Narrative: what you did, what you considered, and next steps for the PM.",
-  "changeRationales": [
-    {
-      "label": "Short reviewer-facing title",
-      "file_path": "path/to/file.ts",
-      "summary": "What changed.",
-      "why": "Why it changed.",
-      "impact": "Behavioral or review impact.",
-      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
-    }
-  ],
-  "artifacts": [
-    { "type": "file_changes", "label": "Files modified", "content": "git diff --stat output or file list" },
-    { "type": "next_steps", "label": "Recommended next steps", "content": "Bulleted list." }
-  ]
-}
+${generateDeliverPayloadExample(ticketId)}
 \`\`\`
 
 ### Rules
 
-- Use MCP tools only for this session.
 - Always attach first; always deliver when done.
-- Post at least one update before delivering.
-- Record \`changeRationales\` only for meaningful behavioral changes. Skip formatting-only noise.
-- Prefer 1-5 concise \`changeRationales\` for a typical ticket, each tied to a specific file and diff hunk.
-- If blocked on human-only work, create a follow-up ticket.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
-`;
-  }
-
-  return `## Overlord Protocol
-
-- **Ticket ID:** ${ticketId}
-
-The following environment variables are set in your agent environment:
-- \`OVERLORD_MCP_URL\` — MCP endpoint for Overlord (primary)
-- \`AGENT_TOKEN\` — bearer token for MCP/protocol auth
-- \`OVERLORD_URL\` — base URL for Overlord (REST fallback only)
-
-\`TICKET_ID\` is not set in cloud environments. Always include \`"ticketId": "${ticketId}"\` in every protocol call body.
-${mcpSection}
-
-### 1 — Attach (always first, before any other work)
-
-\`\`\`
-POST $OVERLORD_URL/api/protocol/attach
-Content-Type: application/json
-
-{
-  "ticketId": "${ticketId}",
-  "agentIdentifier": "<your-agent-id, e.g. codex or claude-code>",
-  "connectionMethod": "<mcp|cli|rest|chatgpt|claude_app|claude_code|other>",
-  "metadata": {}
-}
-\`\`\`
-
-Use this exact shell shape for the first attach call:
-
-\`\`\`bash
-curl -sS -X POST "$OVERLORD_URL/api/protocol/attach" \\
-  -H "Authorization: Bearer $AGENT_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{"ticketId":"${ticketId}","agentIdentifier":"codex","connectionMethod":"cli","metadata":{}}'
-\`\`\`
-
-Replace \`agentIdentifier\` and \`connectionMethod\` when needed for your runtime.
-Do not build the JSON body with \`jq\` unless absolutely necessary.
-
-The response includes:
-- \`session.sessionKey\` — store this, required for every subsequent call
-- \`ticket\` — full ticket record
-- \`history\` — prior \`deliver\` events on this ticket
-- \`artifacts\` — saved ticket artifacts from previous deliveries/sessions
-- \`sharedState\` — persisted key/value context from previous sessions
-
-### 2 — Post updates during work
-
-Call after completing meaningful logical steps (not after every file change).
-
-\`\`\`
-POST $OVERLORD_URL/api/protocol/update
-{
-  "sessionKey": "<from attach>",
-  "ticketId": "${ticketId}",
-  "summary": "What you did and why.",
-  "phase": "execute",
-  "changeRationales": [
-    {
-      "label": "Short reviewer-facing title",
-      "file_path": "path/to/file.ts",
-      "summary": "What changed.",
-      "why": "Why it changed.",
-      "impact": "Behavioral or review impact.",
-      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
-    }
-  ],
-  "payload": {
-    "notifications": [
-      { "message": "Need clarification on migration order.", "kind": "question", "blocking": true },
-      { "message": "Background sync started.", "level": "info", "kind": "event" }
-    ]
-  }
-}
-\`\`\`
-
-Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while actively working.
-When \`payload.notifications\` is provided, Overlord will fan these out into app-visible notification events.
-
-Pass \`"eventType"\` to publish a specific activity event (default: \`"update"\`). Available event types:
-- \`"update"\` — standard progress update (default)
-- \`"user_follow_up"\` — a message or question from the human user
-- \`"alert"\` — surface a warning or non-blocking alert
-
-### 3 — Ask a blocking question (when you cannot proceed)
-
-\`\`\`
-POST $OVERLORD_URL/api/protocol/ask
-{
-  "sessionKey": "<from attach>",
-  "ticketId": "${ticketId}",
-  "question": "Specific question for the PM.",
-  "phase": "review"
-}
-\`\`\`
-
-Stop working after calling ask. The ticket moves to \`review\` until a human responds. Do not guess.
-
-### 5 — Read / write shared context (optional)
-
-Persist findings or decisions that future agent sessions should know about.
-
-\`\`\`
-POST $OVERLORD_URL/api/protocol/read-context
-{ "sessionKey": "...", "ticketId": "${ticketId}", "query": "optional key filter", "limit": 20 }
-
-POST $OVERLORD_URL/api/protocol/write-context
-{ "sessionKey": "...", "ticketId": "${ticketId}", "key": "descriptive-key", "value": <any JSON>, "tags": [] }
-\`\`\`
-
-### 6 — Create a follow-up ticket for human help (optional)
-
-When you are blocked by a human-only action (for example local configuration, credentials, or access), create a new ticket in the same project.
-
-\`\`\`
-POST $OVERLORD_URL/api/protocol/create-ticket
-{
-  "sessionKey": "<from attach>",
-  "ticketId": "${ticketId}",
-  "title": "Short follow-up title",
-  "objective": "What a human needs to do.",
-  "acceptanceCriteria": "How to verify the human task is complete.",
-  "executionTarget": "human"
-}
-\`\`\`
-
-This endpoint creates the follow-up ticket in the same organization/project as the current ticket and links it in events.
-
-### 7 — Deliver (always last, when work is fully complete)
-
-\`\`\`
-POST $OVERLORD_URL/api/protocol/deliver
-{
-  "sessionKey": "<from attach>",
-  "ticketId": "${ticketId}",
-  "summary": "Narrative: what you did, what you considered, and next steps for the PM.",
-  "changeRationales": [
-    {
-      "label": "Short reviewer-facing title",
-      "file_path": "path/to/file.ts",
-      "summary": "What changed.",
-      "why": "Why it changed.",
-      "impact": "Behavioral or review impact.",
-      "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
-    }
-  ],
-  "artifacts": [
-    { "type": "file_changes", "label": "Files modified", "content": "git diff --stat output or file list" },
-    { "type": "next_steps", "label": "Recommended next steps", "content": "Bulleted list." }
-  ]
-}
-\`\`\`
-
-Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`.
-
-Deliver moves the ticket to \`review\` and ends your session. Do not call deliver if you used ask and have not received an answer.
-
-### 8 — Return a restart command on the ticket
-
-Include a restart command in your deliver artifacts so a future session can relaunch from the ticket immediately.
-If you omit it, \`/api/protocol/deliver\` will append one automatically based on your attached \`agentIdentifier\`.
-
-For Claude Code sessions, use this format:
-
-\`\`\`bash
-${claudeResumeCommand}
-\`\`\`
-
-For Codex sessions:
-
-\`\`\`bash
-${codexResumeCommand}
-\`\`\`
-
-To target a specific native agent session ID, optionally set one of:
-- \`CLAUDE_SESSION_ID=<session-id>\` before \`npx overlord resume claude\`
-- \`CODEX_SESSION_ID=<session-id>\` before \`npx overlord resume codex\`
-
----
-
-## Rules
-
-- Always attach before anything else.
-- Always deliver when done — even for minor changes. The PM needs the feedback loop.
-- Post at least one update before delivering.
-- Record \`changeRationales\` for meaningful behavioral changes and tie each one to a specific file and hunk when possible.
-- If blocked on human-only work, create a follow-up ticket in the same project using \`/api/protocol/create-ticket\`.
-- Include a \`Restart session command\` artifact when delivering when possible. The deliver endpoint auto-appends one if missing.
-- The \`summary\` in deliver is what the PM reads first — write it as a clear narrative, not a list of commands.
-- Use \`write-context\` for constraints, or facts a future agent session should know.
-- Prefer direct \`curl\` JSON payloads for protocol calls; avoid brittle shell quoting and \`jq\` payload wrappers.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+- Post ≥1 update before delivering.
+- Only include \`changeRationales\` for meaningful behavioral changes.
+- If blocked, create a follow-up ticket.
+- If user sends a message, publish \`user_follow_up\` event immediately with message verbatim.
 `;
 }
