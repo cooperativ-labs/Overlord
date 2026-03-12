@@ -17,58 +17,304 @@ import {
 
 type SlashCommandConfig = {
   label: string;
-  filePath: string;
   description: string;
+  supportNote?: string;
+  filePaths: string[];
   fileContent: string;
   installCmd: string;
 };
 
+type SlashCommandFile = {
+  path: string;
+  content: string;
+};
+
+function parentDir(path: string): string | null {
+  const index = path.lastIndexOf('/');
+  return index > 0 ? path.slice(0, index) : null;
+}
+
+function buildInstallCommand(files: SlashCommandFile[]): string {
+  const directories = Array.from(
+    new Set(
+      files.map(file => parentDir(file.path)).filter((value): value is string => Boolean(value))
+    )
+  );
+
+  return [
+    ...directories.map(directory => `mkdir -p ${directory}`),
+    ...files.map(file => `cat > ${file.path} << 'EOF'\n${file.content}\nEOF`)
+  ].join('\n\n');
+}
+
+const CLAUDE_FILES: SlashCommandFile[] = [
+  {
+    path: '.claude/commands/connect.md',
+    content: `---
+description: Connect this session to another Overlord ticket by ticket ID
+argument-hint: <ticket-id>
+disable-model-invocation: true
+---
+
+Connect this session to another Overlord ticket.
+
+Treat \`$ARGUMENTS\` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`npx overlord protocol connect --ticket-id <ticketId>\`
+
+Rules:
+- Use \`connect\`, not \`attach\`.
+- Do not load extra ticket context unless the user explicitly asks for it.
+- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
+  },
+  {
+    path: '.claude/commands/load.md',
+    content: `---
+description: Load Overlord ticket context without creating a new session
+argument-hint: <ticket-id>
+disable-model-invocation: true
+---
+
+Load Overlord ticket context without attaching to the ticket.
+
+Treat \`$ARGUMENTS\` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`npx overlord protocol load-context --ticket-id <ticketId>\`
+
+Rules:
+- Use \`load-context\`, not \`attach\`.
+- Do not create or switch sessions.
+- Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+  },
+  {
+    path: '.claude/commands/spawn.md',
+    content: `---
+description: Create a new Overlord ticket from the current conversation
+argument-hint: <objective or raw flags>
+disable-model-invocation: true
+---
+
+Create a new Overlord ticket from the user's request.
+
+Use \`$ARGUMENTS\` as the input.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`npx overlord protocol spawn\`.
+Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
+\`npx overlord protocol spawn --objective "<objective>"\`
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new \`TICKET_ID\` and \`SESSION_KEY\`.`
+  }
+];
+
+const CURSOR_FILES: SlashCommandFile[] = [
+  {
+    path: '.cursor/commands/connect.md',
+    content: `Connect this session to another Overlord ticket.
+
+The text after \`/connect\` is the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`npx overlord protocol connect --ticket-id <ticketId>\`
+
+Rules:
+- Use \`connect\`, not \`attach\`.
+- Do not load extra ticket context unless the user explicitly asks for it.
+- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
+  },
+  {
+    path: '.cursor/commands/load.md',
+    content: `Load Overlord ticket context without creating a new session.
+
+The text after \`/load\` is the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`npx overlord protocol load-context --ticket-id <ticketId>\`
+
+Rules:
+- Use \`load-context\`, not \`attach\`.
+- Do not create or switch sessions.
+- Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+  },
+  {
+    path: '.cursor/commands/spawn.md',
+    content: `Create a new Overlord ticket from the user's request.
+
+The text after \`/spawn\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
+
+If raw flags are present, run:
+\`npx overlord protocol spawn <raw arguments>\`
+
+Otherwise, run:
+\`npx overlord protocol spawn --objective "<objective>"\`
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new \`TICKET_ID\` and \`SESSION_KEY\`.`
+  }
+];
+
+const GEMINI_FILES: SlashCommandFile[] = [
+  {
+    path: '.gemini/commands/connect.toml',
+    content:
+      `description = "Connect this session to another Overlord ticket by ticket ID."
+prompt = """
+Connect this session to another Overlord ticket.
+
+Treat ` +
+      '`{{args}}`' +
+      ` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+` +
+      '`npx overlord protocol connect --ticket-id <ticketId>`' +
+      `
+
+Rules:
+- Use ` +
+      '`connect`' +
+      `, not ` +
+      '`attach`' +
+      `.
+- Do not load extra ticket context unless the user explicitly asks for it.
+- After the command succeeds, report the returned ` +
+      '`SESSION_KEY`' +
+      ` and confirm that future updates should use that ticket.
+"""`
+  },
+  {
+    path: '.gemini/commands/load.toml',
+    content:
+      `description = "Load Overlord ticket context without creating a new session."
+prompt = """
+Load Overlord ticket context without attaching to the ticket.
+
+Treat ` +
+      '`{{args}}`' +
+      ` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+` +
+      '`npx overlord protocol load-context --ticket-id <ticketId>`' +
+      `
+
+Rules:
+- Use ` +
+      '`load-context`' +
+      `, not ` +
+      '`attach`' +
+      `.
+- Do not create or switch sessions.
+- Summarize the returned ticket details, history, artifacts, and shared context for the user.
+"""`
+  },
+  {
+    path: '.gemini/commands/spawn.toml',
+    content:
+      `description = "Create a new Overlord ticket from the current conversation."
+prompt = """
+Create a new Overlord ticket from the user's request.
+
+Use ` +
+      '`{{args}}`' +
+      ` as the input.
+If it already contains flags such as ` +
+      '`--title`' +
+      `, ` +
+      '`--priority`' +
+      `, ` +
+      '`--project-id`' +
+      `, or ` +
+      '`--execution-target`' +
+      `, pass those flags through after ` +
+      '`npx overlord protocol spawn`' +
+      `.
+Otherwise, treat ` +
+      '`{{args}}`' +
+      ` as the objective text and run:
+` +
+      '`npx overlord protocol spawn --objective "<objective>"`' +
+      `
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new ` +
+      '`TICKET_ID`' +
+      ` and ` +
+      '`SESSION_KEY`' +
+      `.
+"""`
+  }
+];
+
+const CODEX_APPENDIX = `## Overlord mid-session ticket commands
+
+When the user types a slash-style command for Overlord work, interpret it as follows:
+
+- \`/connect <ticket-id>\`:
+  Run \`npx overlord protocol connect --ticket-id <ticket-id>\`.
+  Use this instead of \`attach\` when the user wants to start updating another ticket without loading its full context.
+  After success, report the returned \`SESSION_KEY\`.
+
+- \`/load <ticket-id>\`:
+  Run \`npx overlord protocol load-context --ticket-id <ticket-id>\`.
+  Do not create a session.
+  Summarize the returned ticket details, history, artifacts, and shared context.
+
+- \`/spawn <objective>\`:
+  If the text after \`/spawn\` already contains raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, run \`npx overlord protocol spawn <raw arguments>\`.
+  Otherwise run \`npx overlord protocol spawn --objective "<objective>"\`.
+  After success, report the new \`TICKET_ID\` and \`SESSION_KEY\`.
+
+If a required argument is missing, ask the user for it before running any command.`;
+
 const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
   claude: {
     label: 'Claude Code',
-    filePath: '.claude/commands/switch-ticket.md',
     description:
-      'Creates a /switch-ticket slash command for Claude Code in your project directory.',
-    fileContent: `The user wants to switch to a different Overlord ticket.
-
-Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once the user picks a ticket, run \`ovld attach <ticketId> claude\` to launch a new agent session on that ticket.`,
-    installCmd: `mkdir -p .claude/commands && cat > .claude/commands/switch-ticket.md << 'EOF'\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once the user picks a ticket, run \`ovld attach <ticketId> claude\` to launch a new agent session on that ticket.\nEOF`
+      'Installs native project slash commands for mid-session Overlord ticket operations.',
+    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `.claude/commands/`.',
+    filePaths: CLAUDE_FILES.map(file => file.path),
+    fileContent: CLAUDE_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
+    installCmd: buildInstallCommand(CLAUDE_FILES)
   },
   codex: {
     label: 'Codex CLI',
-    filePath: 'AGENTS.md',
     description:
-      'Appends switch-ticket instructions to your AGENTS.md so Codex knows how to switch tickets.',
-    fileContent: `## Switching Overlord tickets
-
-To switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> codex\` to go directly to a specific ticket.`,
-    installCmd: `cat >> AGENTS.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> codex\` to go directly to a specific ticket.\nEOF`
+      'Adds slash-style Overlord command instructions to AGENTS.md so Codex can interpret `/connect`, `/load`, and `/spawn` during a session.',
+    supportNote:
+      'Uses AGENTS.md guidance instead of native project command files, so Codex understands the slash forms even when Overlord was not the original launcher.',
+    filePaths: ['AGENTS.md'],
+    fileContent: CODEX_APPENDIX,
+    installCmd: `cat >> AGENTS.md << 'EOF'\n\n${CODEX_APPENDIX}\nEOF`
   },
   cursor: {
     label: 'Cursor',
-    filePath: '.cursor/rules/switch-ticket.mdc',
     description:
-      'Creates a Cursor rule that teaches the agent how to switch Overlord tickets on request.',
-    fileContent: `---
-description: Switch to a different Overlord ticket
-globs:
-alwaysApply: false
----
-
-The user wants to switch to a different Overlord ticket.
-
-Run \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once confirmed, run \`ovld attach <ticketId> cursor\` to start a new session on that ticket.`,
-    installCmd: `mkdir -p .cursor/rules && cat > .cursor/rules/switch-ticket.mdc << 'EOF'\n---\ndescription: Switch to a different Overlord ticket\nglobs:\nalwaysApply: false\n---\n\nThe user wants to switch to a different Overlord ticket.\n\nRun \`ovld tickets list\` to show available tickets, or \`ovld attach\` for an interactive picker. Once confirmed, run \`ovld attach <ticketId> cursor\` to start a new session on that ticket.\nEOF`
+      'Installs native project slash commands for mid-session Overlord ticket operations.',
+    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `.cursor/commands/`.',
+    filePaths: CURSOR_FILES.map(file => file.path),
+    fileContent: CURSOR_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
+    installCmd: buildInstallCommand(CURSOR_FILES)
   },
   gemini: {
     label: 'Gemini CLI',
-    filePath: 'GEMINI.md',
     description:
-      'Appends switch-ticket instructions to your GEMINI.md so Gemini knows how to switch tickets.',
-    fileContent: `## Switching Overlord tickets
-
-To switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> gemini\` to go directly to a specific ticket.`,
-    installCmd: `cat >> GEMINI.md << 'EOF'\n\n## Switching Overlord tickets\n\nTo switch to a different Overlord ticket, run \`ovld attach\` in the terminal for an interactive picker, or \`ovld attach <ticketId> gemini\` to go directly to a specific ticket.\nEOF`
+      'Installs native project slash commands for mid-session Overlord ticket operations.',
+    supportNote:
+      'Creates `/connect`, `/load`, and `/spawn` in `.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
+    filePaths: GEMINI_FILES.map(file => file.path),
+    fileContent: GEMINI_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
+    installCmd: buildInstallCommand(GEMINI_FILES)
   }
 };
 
@@ -189,11 +435,13 @@ export function CliPage({ open }: { open: boolean }) {
       </div>
 
       <div className="grid gap-2">
-        <p className="text-sm font-medium">Agent slash commands</p>
+        <p className="text-sm font-medium">Agent ticket commands</p>
         <p className="text-xs text-muted-foreground">
-          Install a <code className="rounded bg-muted px-1">/switch-ticket</code> command so your
-          agent can switch Overlord tickets without leaving its session. Select your agent for setup
-          instructions.
+          Install mid-session ticket commands so your agent can handle{' '}
+          <code className="rounded bg-muted px-1">/connect</code>,{' '}
+          <code className="rounded bg-muted px-1">/load</code>, and{' '}
+          <code className="rounded bg-muted px-1">/spawn</code> without relying on Overlord launch
+          context alone. Select your agent for setup instructions.
         </p>
         <Select value={selectedSlashAgent} onValueChange={setSelectedSlashAgent}>
           <SelectTrigger>
@@ -213,8 +461,11 @@ export function CliPage({ open }: { open: boolean }) {
           return (
             <div className="rounded-md border bg-muted/30 p-3 text-xs">
               <p className="mb-1 font-sans text-muted-foreground">{cfg.description}</p>
+              {cfg.supportNote ? (
+                <p className="mb-2 font-sans text-muted-foreground">{cfg.supportNote}</p>
+              ) : null}
               <p className="mb-2 break-all font-sans text-muted-foreground">
-                File: <code className="rounded bg-muted px-1">{cfg.filePath}</code>
+                Files: <code className="rounded bg-muted px-1">{cfg.filePaths.join(', ')}</code>
               </p>
               <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
                 {cfg.fileContent}

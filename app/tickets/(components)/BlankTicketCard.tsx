@@ -111,7 +111,7 @@ export default function BlankTicketCard({
       onClose();
       setValue('');
     },
-    [isCreating, onCreateTicket, status, onClose]
+    [isCreating, onCreateTicket, status, position, onClose]
   );
 
   const handleKeyDown = useCallback(
@@ -142,7 +142,7 @@ export default function BlankTicketCard({
         onSubmitted?.();
       }
     },
-    [onClose, isCreating, onCreateTicket, status, onSubmitted]
+    [onClose, isCreating, onCreateTicket, status, position, onSubmitted]
   );
 
   return (

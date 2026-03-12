@@ -144,6 +144,33 @@ export const createFollowUpTicketSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium')
 });
 
+/** connect: lightweight session creation, no ticket context returned */
+export const connectSchema = z.object({
+  ticketId: ticketIdSchema,
+  agentIdentifier: z.string().trim().min(1).max(120),
+  connectionMethod: connectionMethodSchema.default('rest'),
+  metadata: z.record(z.string(), z.unknown()).optional().default({})
+});
+
+/** load-context: read-only fetch of ticket details, no session created */
+export const loadContextSchema = z.object({
+  ticketId: ticketIdSchema
+});
+
+/** spawn: create a new ticket and immediately connect to it */
+export const spawnSchema = z.object({
+  title: z.string().trim().max(180).optional().default(''),
+  objective: z.string().trim().min(1).max(20_000),
+  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
+  availableTools: z.string().trim().max(20_000).optional().default(''),
+  executionTarget: ticketExecutionTargetSchema.default('agent'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  projectId: z.string().optional(),
+  agentIdentifier: z.string().trim().min(1).max(120),
+  connectionMethod: connectionMethodSchema.default('rest'),
+  metadata: z.record(z.string(), z.unknown()).optional().default({})
+});
+
 export const artifactPrepareUploadSchema = z.object({
   sessionKey: z.uuid(),
   ticketId: ticketIdSchema,

@@ -65,6 +65,7 @@ const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
 const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
+const USER_HIDDEN_COLUMNS_KEY = 'overlord:user-board:hidden-columns';
 
 type StatusColumn = {
   id: string;
@@ -220,10 +221,19 @@ export default function KanbanBoard({
   }));
 
   const allColumnSlugs = columns.map(c => c.id);
-  const hiddenSet = new Set(initialHiddenColumns);
-  const [visibleSlugs, setVisibleSlugs] = useState<Set<string>>(
-    () => new Set(allColumnSlugs.filter(slug => !hiddenSet.has(slug)))
-  );
+  const [visibleSlugs, setVisibleSlugs] = useState<Set<string>>(() => {
+    let hidden = initialHiddenColumns;
+    if (!projectId && typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(USER_HIDDEN_COLUMNS_KEY);
+        if (stored) hidden = JSON.parse(stored) as string[];
+      } catch {
+        // ignore malformed localStorage
+      }
+    }
+    const hiddenSet = new Set(hidden);
+    return new Set(allColumnSlugs.filter(slug => !hiddenSet.has(slug)));
+  });
   // Per-column load-more state for complete columns
   type ColumnLoadMoreState = { cutoff: string; hasMore: boolean; isLoading: boolean };
   const [columnLoadMoreStates, setColumnLoadMoreStates] = useState<
@@ -725,11 +735,18 @@ export default function KanbanBoard({
       if (next.has(slug)) next.delete(slug);
       else next.add(slug);
 
+      const hiddenColumns = allColumnSlugs.filter(s => !next.has(s));
+
       if (projectId) {
-        const hiddenColumns = allColumnSlugs.filter(s => !next.has(s));
         startTransition(() => {
           void upsertProjectUserPreferencesAction(projectId, { hidden_columns: hiddenColumns });
         });
+      } else {
+        try {
+          localStorage.setItem(USER_HIDDEN_COLUMNS_KEY, JSON.stringify(hiddenColumns));
+        } catch {
+          // ignore localStorage errors (quota, private browsing)
+        }
       }
 
       return next;

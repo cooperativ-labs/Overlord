@@ -536,6 +536,107 @@ async function protocolArtifactUploadFile(args) {
 }
 
 // ---------------------------------------------------------------------------
+// connect (lightweight session, no context returned)
+// ---------------------------------------------------------------------------
+
+async function protocolConnect(args) {
+  const flags = parseFlags(args);
+  const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    ticketId,
+    agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
+    connectionMethod: String(flags.method ?? 'cli'),
+    metadata: {}
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/connect',
+    body,
+    timeoutMs
+  );
+
+  const sessionKey = data.session?.sessionKey;
+  console.log(JSON.stringify(data, null, 2));
+
+  if (sessionKey) {
+    process.stderr.write(`\nSESSION_KEY=${sessionKey}\n`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// load-context (read-only ticket fetch, no session)
+// ---------------------------------------------------------------------------
+
+async function protocolLoadContext(args) {
+  const flags = parseFlags(args);
+  const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = { ticketId };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/load-context',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// spawn (create ticket + connect in one call)
+// ---------------------------------------------------------------------------
+
+async function protocolSpawn(args) {
+  const flags = parseFlags(args);
+  const objective = requireFlag(flags, 'objective', undefined);
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    objective,
+    agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
+    connectionMethod: String(flags.method ?? 'cli'),
+    metadata: {},
+    ...(flags.title ? { title: String(flags.title) } : {}),
+    ...(flags.priority ? { priority: String(flags.priority) } : {}),
+    ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
+    ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
+    ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
+    ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/spawn',
+    body,
+    timeoutMs
+  );
+
+  const sessionKey = data.session?.sessionKey;
+  const ticketId = data.ticket?.id;
+  console.log(JSON.stringify(data, null, 2));
+
+  if (sessionKey) {
+    process.stderr.write(`\nSESSION_KEY=${sessionKey}\n`);
+  }
+  if (ticketId) {
+    process.stderr.write(`TICKET_ID=${ticketId}\n`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -544,16 +645,19 @@ export async function runProtocolCommand(subcommand, args) {
     console.log(`ovld protocol <subcommand> [flags]
 
 Subcommands:
-  attach          Start a session on a ticket
-  artifact-prepare-upload   Get a signed upload URL for a ticket artifact
-  artifact-finalize-upload  Create artifact row after upload
-  artifact-download-url     Get a signed download URL for an artifact
-  artifact-upload-file      Upload local file and finalize in one command
+  attach          Start a session on a ticket (returns full context)
+  connect         Start a session on a ticket (lightweight, no context returned)
+  load-context    Fetch ticket details read-only (no session created)
+  spawn           Create a new ticket and connect to it immediately
   update          Post a progress update
   ask             Post a blocking question
   read-context    Retrieve shared context
   write-context   Store a key/value in shared context
   deliver         Mark the ticket complete and deliver artifacts
+  artifact-prepare-upload   Get a signed upload URL for a ticket artifact
+  artifact-finalize-upload  Create artifact row after upload
+  artifact-download-url     Get a signed download URL for an artifact
+  artifact-upload-file      Upload local file and finalize in one command
 
 Flags read from env vars when not provided:
   SESSION_KEY, TICKET_ID, OVERLORD_URL, AGENT_TOKEN
@@ -567,8 +671,18 @@ Deliver-specific flags:
   --artifacts-file <path> Path to a JSON file containing artifacts (avoids shell-escaping issues
                           with large payloads).
 
+Spawn-specific flags:
+  --objective <text>      Ticket objective (required)
+  --title <text>          Ticket title (optional, derived from objective if omitted)
+  --priority <level>      low | medium | high | urgent (default: medium)
+  --project-id <id>       Target project (optional, defaults to first in org)
+  --execution-target <t>  agent | human (default: agent)
+
 Examples:
   ovld protocol attach --ticket-id abc-123
+  ovld protocol connect --ticket-id abc-123
+  ovld protocol load-context --ticket-id abc-123
+  ovld protocol spawn --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X"
   ovld protocol ask --session-key <key> --ticket-id <id> --question "Which approach?"
   ovld protocol read-context --session-key <key> --ticket-id <id>
@@ -583,6 +697,9 @@ Examples:
   }
 
   if (subcommand === 'attach') { await protocolAttach(args); return; }
+  if (subcommand === 'connect') { await protocolConnect(args); return; }
+  if (subcommand === 'load-context') { await protocolLoadContext(args); return; }
+  if (subcommand === 'spawn') { await protocolSpawn(args); return; }
   if (subcommand === 'artifact-prepare-upload') { await protocolArtifactPrepareUpload(args); return; }
   if (subcommand === 'artifact-finalize-upload') { await protocolArtifactFinalizeUpload(args); return; }
   if (subcommand === 'artifact-download-url') { await protocolArtifactGetDownloadUrl(args); return; }

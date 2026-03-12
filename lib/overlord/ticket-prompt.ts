@@ -50,12 +50,10 @@ export function buildTicketPromptMarkdown({
   context,
   options
 }: BuildTicketPromptMarkdownInput): string {
-  const ref = getTicketIdentifier(ticket.id);
+  const ref = ticket.id;
   const title = ticket.title ?? '(Untitled)';
   const section = (heading: string, body: string | null) =>
     body?.trim() ? `### ${heading}\n\n${body.trim()}\n` : '';
-  const executionTargetLabel = ticket.execution_target === 'human' ? 'Human' : 'Agent';
-  const projectLabel = ticket.project_id;
   const launchMode = options?.launchMode ?? 'run';
 
   const isLocal = context
@@ -95,10 +93,6 @@ Complete the work described below, then deliver a summary back to the platform.
 
 - **Title:** ${title}
 - **Reference:** ${ref}
-- **Status:** ${ticket.status ?? 'unknown'}
-- **Priority:** ${ticket.priority ?? 'unset'}
-- **Execution Target:** ${executionTargetLabel}
-- **Project ID:** ${projectLabel}
 
 ${section('Objective', ticket.objective)}
 ${section('Acceptance Criteria', ticket.acceptance_criteria)}
@@ -252,6 +246,36 @@ ${codexResumeCommand}
 
 ---
 
+## Mid-Session Operations
+
+These commands can be used during an existing session to interact with other tickets.
+
+### Connect (start tracking a different ticket without loading its context)
+
+\`\`\`bash
+npx overlord protocol connect --ticket-id <ticketId>
+\`\`\`
+
+Creates a session and moves the ticket to \`execute\`, but returns only the session key — no ticket details, history, or artifacts. Use this when you are already working and want to start sending updates to a ticket without polluting your context.
+
+### Load Context (read ticket details without creating a session)
+
+\`\`\`bash
+npx overlord protocol load-context --ticket-id <ticketId>
+\`\`\`
+
+Returns the full ticket record, history, artifacts, and shared state — but does not create a session or change ticket status. Use this to inspect a ticket's context.
+
+### Spawn (create a new ticket and connect to it)
+
+\`\`\`bash
+npx overlord protocol spawn --objective "Description of the work" --title "Optional title" --priority medium
+\`\`\`
+
+Creates a new ticket, populates it with the objective, and immediately creates a session so you can send updates and deliver to it. Returns the new ticket ID and session key. Use this when mid-conversation work should become a tracked ticket.
+
+---
+
 ## Rules
 
 - Always attach first; always deliver when done.
@@ -361,6 +385,12 @@ Upload/download storage artifacts:
 ### 6 — create_ticket (optional)
 
 Create follow-up ticket for human work.
+
+### Mid-session operations
+
+- \`connect\` — start tracking a different ticket (creates session, no context returned)
+- \`load_context\` — read ticket details without creating a session
+- \`spawn\` — create a new ticket and connect to it immediately
 
 ### 7 — deliver (always last)
 

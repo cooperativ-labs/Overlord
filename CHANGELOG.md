@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.57.0] - 2026-03-12:19:22
+
+### Added
+- Add lightweight `protocol connect`, `load-context`, and `spawn` endpoints plus matching `ovld protocol` subcommands so agents can start tracking a ticket without reloading its context, fetch a ticket’s context read-only, or spawn a new ticket and session mid-conversation.
+- Add a rationale-aware Current Changes explorer in Electron that loads local Git status/diffs, surfaces change rationales per file, lets you filter files by ticket, and shows hunk-level popovers tied to each rationale so reviewers understand why each edit exists.
+
+### Fixed
+- None.
+
+### Changed
+- Make the project settings toggle switch between the Work Board and Current Changes view and stay disabled (with a tooltip) until a linked working directory exists, preventing navigation to the Electron-only explorer when no repo is configured.
+
+### Security
+- None.
+
+### Documentation
+- Document the new mid-session operations (`connect`, `load-context`, `spawn`) in the ticket prompt and CLI settings (Claude/Cursor/Gemini slash-command templates) so agents know which command to run, what each call returns, and when to report the returned `SESSION_KEY`/`TICKET_ID`.
+
 ## [0.56.0] - 2026-03-12:18:30
 
 ### Added

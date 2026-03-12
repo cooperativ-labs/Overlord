@@ -1,7 +1,7 @@
 'use client';
 
 import { Folder, GitCompareArrows, Settings } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
@@ -16,6 +16,7 @@ import {
   updateProjectNameAction,
   updateProjectWorkingDirectoryAction
 } from '@/lib/actions/projects';
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
 type ProjectSettingsSectionProps = {
@@ -33,6 +34,7 @@ export function ProjectSettingsSection({
 }: ProjectSettingsSectionProps) {
   const { api, isElectron } = useElectron();
   const router = useRouter();
+  const pathname = usePathname();
   const projectSettings = useProjectSettings();
   const [name, setName] = useState(initialName);
   const [savedName, setSavedName] = useState(initialName);
@@ -49,6 +51,17 @@ export function ProjectSettingsSection({
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const hasSavedWorkingDirectory = savedWorkingDirectory.trim().length > 0;
+  const isCurrentChangesView = pathname.startsWith(`/projects/${projectId}/current-changes`);
+  const currentChangesToggleLabel = isCurrentChangesView ? 'Work Board' : 'Current Changes';
+  const currentChangesToggleHref = isCurrentChangesView
+    ? buildProjectPath({ projectId })
+    : `/projects/${projectId}/current-changes`;
+  const currentChangesToggleDisabled = !isCurrentChangesView && !hasSavedWorkingDirectory;
+  const currentChangesToggleTitle = currentChangesToggleDisabled
+    ? 'Link a project directory to inspect current changes'
+    : isCurrentChangesView
+      ? 'Open Work Board'
+      : 'Open Current Changes';
 
   useEffect(() => {
     setSavedColor(initialColor);
@@ -213,16 +226,12 @@ export function ProjectSettingsSection({
                 variant="outline"
                 size="sm"
                 className="mt-1 h-7 gap-1.5 text-xs md:mt-0"
-                onClick={() => router.push(`/projects/${projectId}/current-changes`)}
-                disabled={!hasSavedWorkingDirectory}
-                title={
-                  hasSavedWorkingDirectory
-                    ? 'Open Current Changes'
-                    : 'Link a project directory to inspect current changes'
-                }
+                onClick={() => router.push(currentChangesToggleHref)}
+                disabled={currentChangesToggleDisabled}
+                title={currentChangesToggleTitle}
               >
                 <GitCompareArrows className="h-3.5 w-3.5" />
-                Current Changes
+                {currentChangesToggleLabel}
               </Button>
             </>
           ) : null}

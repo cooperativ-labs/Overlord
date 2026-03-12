@@ -71,7 +71,9 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme, proj
               <a
                 className="inline-flex flex-wrap items-baseline gap-1 rounded hover:underline underline-offset-4 text-primary"
                 href={href}
-                title={currentChangesHref ? `View ${path} in Current Changes` : `Open ${path} in editor`}
+                title={
+                  currentChangesHref ? `View ${path} in Current Changes` : `Open ${path} in editor`
+                }
               >
                 <span className="font-medium">{filename}</span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}
