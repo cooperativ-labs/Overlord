@@ -10,6 +10,8 @@ files:
   - "dist-electron/**/*"
   - ".next/standalone/**/*"
   - "bin/**/*"
+  - "node_modules/node-pty/**/*"
+  - "!node_modules"
 
 mac:
   target:

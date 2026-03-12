@@ -19,16 +19,8 @@ import { SupabaseManager } from './services/supabase-manager';
 import { killAllTerminals } from './services/terminal-manager';
 
 // Baked-in production runtime vars (generated from an explicit allowlist before build).
-// Falls back to an empty object if the file doesn't exist (e.g. in dev or CI without the script).
-let PROD_ENV: Record<string, string> = {};
-try {
-  // Dynamic import so missing file doesn't crash the module load
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const generated = require('./_prod-env.generated');
-  PROD_ENV = generated.PROD_ENV ?? {};
-} catch {
-  // Not present — either dev build or script wasn't run
-}
+// In dev mode, the committed default file exports an empty object.
+import { PROD_ENV } from './_prod-env.generated';
 
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
