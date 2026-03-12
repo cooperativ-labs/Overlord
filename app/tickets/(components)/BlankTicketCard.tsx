@@ -8,6 +8,15 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const EMPTY_PATHS: string[] = [];
 
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
 type BlankTicketCardProps = {
   inputId: string;
   status: string;
@@ -35,6 +44,12 @@ export default function BlankTicketCard({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { api, isElectron } = useElectron();
 
+  const syncLocalFileMentionPaths = useCallback((nextPaths: string[]) => {
+    setLocalFileMentionPaths(current =>
+      areStringArraysEqual(current, nextPaths) ? current : nextPaths
+    );
+  }, []);
+
   useEffect(() => {
     if (focusTrigger === 0) return;
     const textArea = inputRef.current;
@@ -47,13 +62,13 @@ export default function BlankTicketCard({
   // In Electron, fetch file mention paths locally via IPC
   useEffect(() => {
     if (!isElectron || !api?.filesystem?.listProjectFiles) {
-      setLocalFileMentionPaths(fileMentionPaths);
+      syncLocalFileMentionPaths(fileMentionPaths);
       return;
     }
 
     const directory = workingDirectory?.trim() ?? '';
     if (!directory) {
-      setLocalFileMentionPaths(fileMentionPaths);
+      syncLocalFileMentionPaths(fileMentionPaths);
       return;
     }
 
@@ -62,16 +77,16 @@ export default function BlankTicketCard({
       .listProjectFiles({ directory })
       .then(result => {
         if (cancelled) return;
-        setLocalFileMentionPaths(result.error ? fileMentionPaths : (result.files ?? EMPTY_PATHS));
+        syncLocalFileMentionPaths(result.error ? fileMentionPaths : (result.files ?? EMPTY_PATHS));
       })
       .catch(() => {
-        if (!cancelled) setLocalFileMentionPaths(fileMentionPaths);
+        if (!cancelled) syncLocalFileMentionPaths(fileMentionPaths);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [api, isElectron, workingDirectory, fileMentionPaths]);
+  }, [api, fileMentionPaths, isElectron, syncLocalFileMentionPaths, workingDirectory]);
 
   const effectiveMentionPaths = isElectron ? localFileMentionPaths : fileMentionPaths;
 

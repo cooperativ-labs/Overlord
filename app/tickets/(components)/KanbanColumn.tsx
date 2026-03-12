@@ -12,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import BlankTicketCard from './BlankTicketCard';
 import KanbanCard, { type Ticket } from './KanbanCard';
 
+const EMPTY_FILE_MENTION_PATHS: string[] = [];
+
 type KanbanColumnModel = {
   id: string;
   title: string;
@@ -22,7 +24,7 @@ export default function KanbanColumn({
   tickets,
   showOrganizationName = false,
   projectId,
-  fileMentionPaths = [],
+  fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
   workingDirectory = null,
   onCreateTicket,
   onMarkUnread,

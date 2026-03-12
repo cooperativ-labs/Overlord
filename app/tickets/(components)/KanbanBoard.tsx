@@ -63,6 +63,7 @@ import TicketsViewControls from './TicketsViewControls';
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
 const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
+const EMPTY_FILE_MENTION_PATHS: string[] = [];
 
 const COMPLETE_RECENT_DAYS = 14;
 
@@ -125,7 +126,7 @@ export default function KanbanBoard({
   showOrganizationName = false,
   organizationId,
   projectId,
-  fileMentionPaths = [],
+  fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
   workingDirectory = null,
   initialView,
   initialHiddenColumns = []

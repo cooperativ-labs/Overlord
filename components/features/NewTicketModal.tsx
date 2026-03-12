@@ -27,6 +27,17 @@ import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
+const EMPTY_FILE_MENTION_PATHS: string[] = [];
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
 type ProjectOption = {
   id: string;
   name: string;
@@ -50,7 +61,7 @@ export function NewTicketModal({
   defaultProjectId,
   organizationId,
   projects,
-  fileMentionPaths = []
+  fileMentionPaths = EMPTY_FILE_MENTION_PATHS
 }: NewTicketModalProps) {
   const router = useRouter();
   const [ticketId, setTicketId] = useState<string | null>(null);
@@ -65,6 +76,12 @@ export function NewTicketModal({
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { api, isElectron } = useElectron();
   const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
+
+  const syncLocalFileMentionPaths = useCallback((nextPaths: string[]) => {
+    setLocalFileMentionPaths(current =>
+      areStringArraysEqual(current, nextPaths) ? current : nextPaths
+    );
+  }, []);
 
   // Auto-resize textarea
   const autoResize = useCallback(() => {
@@ -114,14 +131,14 @@ export function NewTicketModal({
   // Load file mention paths via Electron IPC when selected project changes
   useEffect(() => {
     if (!isElectron || !api?.filesystem?.listProjectFiles) {
-      setLocalFileMentionPaths(fileMentionPaths);
+      syncLocalFileMentionPaths(fileMentionPaths);
       return;
     }
 
     const selectedProject = projects.find(p => p.id === selectedProjectId);
     const directory = selectedProject?.local_working_directory?.trim() ?? '';
     if (!directory) {
-      setLocalFileMentionPaths(fileMentionPaths);
+      syncLocalFileMentionPaths(fileMentionPaths);
       return;
     }
 
@@ -130,16 +147,18 @@ export function NewTicketModal({
       .listProjectFiles({ directory })
       .then(result => {
         if (cancelled) return;
-        setLocalFileMentionPaths(result.error ? fileMentionPaths : (result.files ?? []));
+        syncLocalFileMentionPaths(
+          result.error ? fileMentionPaths : (result.files ?? EMPTY_FILE_MENTION_PATHS)
+        );
       })
       .catch(() => {
-        if (!cancelled) setLocalFileMentionPaths(fileMentionPaths);
+        if (!cancelled) syncLocalFileMentionPaths(fileMentionPaths);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [api, isElectron, selectedProjectId, projects, fileMentionPaths]);
+  }, [api, fileMentionPaths, isElectron, projects, selectedProjectId, syncLocalFileMentionPaths]);
 
   const effectiveMentionPaths = isElectron ? localFileMentionPaths : fileMentionPaths;
 
