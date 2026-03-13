@@ -676,6 +676,59 @@ export type Database = {
           }
         ];
       };
+      ssh_server_profiles: {
+        Row: {
+          created_at: string;
+          created_by: string;
+          host: string;
+          id: string;
+          last_tested_at: string | null;
+          name: string;
+          organization_id: number;
+          port: number;
+          private_key: string;
+          updated_at: string;
+          username: string;
+          working_directory: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by: string;
+          host: string;
+          id?: string;
+          last_tested_at?: string | null;
+          name: string;
+          organization_id: number;
+          port?: number;
+          private_key: string;
+          updated_at?: string;
+          username: string;
+          working_directory?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string;
+          host?: string;
+          id?: string;
+          last_tested_at?: string | null;
+          name?: string;
+          organization_id?: number;
+          port?: number;
+          private_key?: string;
+          updated_at?: string;
+          username?: string;
+          working_directory?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ssh_server_profiles_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       ticket_events: {
         Row: {
           created_at: string;

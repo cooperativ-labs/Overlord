@@ -53,7 +53,7 @@ type NavItem = {
 };
 
 const workflowNavItems: NavItem[] = [
-  { name: 'Terminal', icon: Monitor, electronOnly: true },
+  { name: 'Terminal', icon: Monitor },
   { name: 'Agents & MCP', icon: Bot },
   { name: 'Customization', icon: Edit3 },
   { name: 'CLI', icon: Terminal }
@@ -179,7 +179,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               {activeNav === 'CLI' && <CliPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
-              {activeNav === 'Terminal' && isElectron && <TerminalPage open={open} />}
+              {activeNav === 'Terminal' && <TerminalPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>
           </main>

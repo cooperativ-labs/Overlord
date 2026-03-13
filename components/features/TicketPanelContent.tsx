@@ -35,6 +35,7 @@ import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Separator } from '@/components/ui/separator';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
+import { listSshServerProfilesAction } from '@/lib/actions/ssh-servers';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -112,7 +113,8 @@ export async function TicketPanelContent({
     projectsResult,
     agentSessionResult,
     agentTokenResult,
-    objectivesResult
+    objectivesResult,
+    sshProfilesResult
   ] = await Promise.all([
     supabase
       .from('ticket_events')
@@ -169,7 +171,8 @@ export async function TicketPanelContent({
       .from('objectives')
       .select('id,objective,is_executed,created_at')
       .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }),
+    listSshServerProfilesAction().catch(() => [])
   ]);
 
   const events = eventsResult.data;
@@ -181,6 +184,7 @@ export async function TicketPanelContent({
   const agentSession = agentSessionResult.data;
   const agentTokenRow = agentTokenResult.data;
   const objectives = objectivesResult.data;
+  const sshProfiles = sshProfilesResult ?? [];
 
   const platformUrl = getPlatformUrl();
   const agentConfigs = user ? await getAllAgentConfigsByUserIdAction(user.id, supabase) : {};
@@ -313,6 +317,7 @@ export async function TicketPanelContent({
               geminiCommand={gemini}
               workingDirectory={workingDirectory}
               hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+              sshProfiles={sshProfiles}
             />
 
             <Button asChild size="icon" variant="ghost" className="h-8 w-10 ml-2">

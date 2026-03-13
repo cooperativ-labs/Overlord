@@ -4,11 +4,12 @@ import {
   getLaunchAgentTypeByIdentifier,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
+import type { SshServerProfileSummary } from '@/lib/actions/ssh-servers';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import { AskTicketButton } from './AskTicketButton';
-import { CopyTicketPromptButton } from './CopyTicketPromptButton';
 import { AgentSplitButtonLive } from './TicketLiveProvider';
+import { WebLaunchSplitButton } from './WebLaunchSplitButton';
 
 type TicketHeaderActionProps = {
   ticketId: string;
@@ -21,6 +22,7 @@ type TicketHeaderActionProps = {
   geminiCommand: string;
   workingDirectory: string | null;
   hasProjectWorkingDirectory: boolean;
+  sshProfiles: SshServerProfileSummary[];
 };
 
 export function TicketHeaderAction({
@@ -33,7 +35,8 @@ export function TicketHeaderAction({
   cursorCommand,
   geminiCommand,
   workingDirectory,
-  hasProjectWorkingDirectory
+  hasProjectWorkingDirectory,
+  sshProfiles
 }: TicketHeaderActionProps) {
   const { isElectron } = useTerminal();
 
@@ -48,7 +51,11 @@ export function TicketHeaderAction({
           workingDirectory={workingDirectory}
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         />
-        <CopyTicketPromptButton ticketId={ticketId} variant="default" />
+        <WebLaunchSplitButton
+          ticketId={ticketId}
+          agentToken={agentToken}
+          sshProfiles={sshProfiles}
+        />
       </div>
     );
   }
