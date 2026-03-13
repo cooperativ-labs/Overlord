@@ -44,7 +44,7 @@ export function DiffPane({
     // From file attributions (deterministic, from agent delivery artifacts)
     for (const a of fileAttributions) {
       if (candidatePaths.has(a.file_path) && !ticketMap.has(a.ticket_id)) {
-        ticketMap.set(a.ticket_id, { id: a.ticket_id, title: a.ticket_title });
+        ticketMap.set(a.ticket_id, { id: a.ticket_id, status: null, title: a.ticket_title });
       }
     }
     return [...ticketMap.values()];
