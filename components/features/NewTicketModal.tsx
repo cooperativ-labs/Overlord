@@ -25,6 +25,7 @@ import {
 } from '@/lib/actions/tickets';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
+import type { EditableTextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
@@ -85,7 +86,7 @@ export function NewTicketModal({
 
   // Auto-resize textarea
   const autoResize = useCallback(() => {
-    const el = textareaRef.current;
+    const el = textareaRef.current as EditableTextareaHandle | null;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
@@ -166,7 +167,7 @@ export function NewTicketModal({
   useEffect(() => {
     if (isOpen && !isCreating) {
       requestAnimationFrame(() => {
-        textareaRef.current?.focus();
+        (textareaRef.current as EditableTextareaHandle | null)?.focus();
         autoResize();
       });
     }

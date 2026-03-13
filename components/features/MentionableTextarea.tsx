@@ -2,15 +2,10 @@
 
 import * as React from 'react';
 
+import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 const MAX_MENTION_RESULTS = 8;
-
-type FocusableTextarea = {
-  focus: () => void;
-  selectionStart: number | null;
-  setSelectionRange: (start: number, end: number) => void;
-};
 
 type MentionableTextareaProps = Omit<
   React.ComponentProps<'textarea'>,
@@ -126,7 +121,11 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
 
     const insertMentionAtCursor = React.useCallback(
       (filePath: string) => {
-        const textArea = textareaRef.current as FocusableTextarea | null;
+        const textArea = textareaRef.current as
+          | (TextareaHandle & {
+              selectionStart: number | null;
+            })
+          | null;
         if (!textArea || mentionStart === null || !filePath) return;
 
         const cursor = textArea.selectionStart ?? value.length;

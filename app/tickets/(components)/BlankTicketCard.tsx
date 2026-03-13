@@ -5,14 +5,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Card, CardContent } from '@/components/ui/card';
+import type { TextareaHandle } from '@/lib/types/text-control';
 
 const EMPTY_PATHS: string[] = [];
-
-type FocusableTextarea = {
-  focus: () => void;
-  value: string;
-  setSelectionRange: (start: number, end: number) => void;
-};
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   if (left === right) return true;
@@ -64,7 +59,7 @@ export default function BlankTicketCard({
 
   useEffect(() => {
     if (focusTrigger === 0) return;
-    const textArea = inputRef.current as FocusableTextarea | null;
+    const textArea = inputRef.current as TextareaHandle | null;
     if (!textArea) return;
     textArea.focus();
     const cursor = textArea.value.length;

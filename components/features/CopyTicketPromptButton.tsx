@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import type { SelectableTextareaHandle } from '@/lib/types/text-control';
 
 type Props = {
   ticketId: string;
@@ -54,7 +55,10 @@ async function writeTextToClipboardLazy(textPromise: Promise<string>): Promise<b
 
   if (typeof document === 'undefined') return false;
 
-  const textArea = document.createElement('textarea');
+  const textArea = document.createElement('textarea') as SelectableTextareaHandle & {
+    setAttribute: (qualifiedName: string, value: string) => void;
+    style: CSSStyleDeclaration;
+  };
   textArea.value = text;
   textArea.setAttribute('readonly', '');
   textArea.style.position = 'fixed';

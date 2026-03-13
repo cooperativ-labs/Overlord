@@ -7,6 +7,7 @@ import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { uploadImageArtifactAction } from '@/lib/actions/artifacts';
 import { updateTicketFieldAction } from '@/lib/actions/tickets';
+import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 type EditableField = 'title' | 'objective' | 'available_tools' | 'acceptance_criteria';
@@ -89,7 +90,7 @@ export function InlineEditField({
 
   const autoResize = useCallback(() => {
     if (!multiline) return;
-    const el = inputRef.current as HTMLTextAreaElement | null;
+    const el = inputRef.current as EditableTextareaHandle | null;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
@@ -103,7 +104,7 @@ export function InlineEditField({
 
   useEffect(() => {
     if (editing && inputRef.current) {
-      const el = inputRef.current;
+      const el = inputRef.current as TextareaHandle | HTMLInputElement;
       const len = el.value.length;
       el.setSelectionRange(len, len);
     }
@@ -195,10 +196,10 @@ export function InlineEditField({
         const result = await uploadImageArtifactAction(ticketId, organizationId ?? 0, formData);
         const markdown = `[${result.label}](artifact:${result.uri})`;
 
-        const textArea = inputRef.current as HTMLTextAreaElement | null;
+        const textArea = inputRef.current as EditableTextareaHandle | null;
         if (textArea) {
-          const start = textArea.selectionStart;
-          const end = textArea.selectionEnd;
+          const start = textArea.selectionStart ?? value.length;
+          const end = textArea.selectionEnd ?? start;
           const newValue = value.substring(0, start) + markdown + value.substring(end);
           setValue(newValue);
 
