@@ -162,7 +162,7 @@ export default function KanbanCard({
           ref={setNodeRef}
           aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
           className={cn(
-            'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-all hover:shadow-md',
+            'relative cursor-grab border-border/80 overflow-hidden transition-all hover:shadow-md',
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
