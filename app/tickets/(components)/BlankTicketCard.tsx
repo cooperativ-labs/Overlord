@@ -8,6 +8,12 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const EMPTY_PATHS: string[] = [];
 
+type FocusableTextarea = {
+  focus: () => void;
+  value: string;
+  setSelectionRange: (start: number, end: number) => void;
+};
+
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   if (left === right) return true;
   if (left.length !== right.length) return false;
@@ -58,13 +64,11 @@ export default function BlankTicketCard({
 
   useEffect(() => {
     if (focusTrigger === 0) return;
-    const textArea = inputRef.current;
+    const textArea = inputRef.current as FocusableTextarea | null;
     if (!textArea) return;
     textArea.focus();
     const cursor = textArea.value.length;
-    (textArea as HTMLTextAreaElement & {
-      setSelectionRange: (start: number, end: number) => void;
-    }).setSelectionRange(cursor, cursor);
+    textArea.setSelectionRange(cursor, cursor);
   }, [focusTrigger]);
 
   // In Electron, fetch file mention paths locally via IPC
