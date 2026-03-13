@@ -120,8 +120,6 @@ export function AgentSplitButton({
   const isDisabled = !isCopySelected && !canRunAgent;
   const styles = sizeStyles[size];
 
-  const isLaunchingRef = useRef(false);
-  const sessionStateAtLaunchRef = useRef<SessionState | null | undefined>(undefined);
   const appliedStoredDefaultRef = useRef(false);
 
   useEffect(() => {
@@ -135,19 +133,6 @@ export function AgentSplitButton({
       onSelectAgent(configuredDefault);
     }
   }, [activeAgentIdentifier, onSelectAgent, selectedAgent]);
-
-  useEffect(() => {
-    if (!isLaunchingRef.current) return;
-    if (
-      agentSessionState !== sessionStateAtLaunchRef.current &&
-      (agentSessionState === 'attached' ||
-        agentSessionState === 'blocked' ||
-        agentSessionState === 'disconnected')
-    ) {
-      isLaunchingRef.current = false;
-      setIsLaunching(false);
-    }
-  }, [agentSessionState]);
 
   async function handleLaunch(agentValue: AgentSelectorValue = selectedAgent): Promise<void> {
     const isCopyLocalValue = agentValue === 'copy-local';
@@ -170,19 +155,23 @@ export function AgentSplitButton({
     }
 
     if (isElectron) {
-      isLaunchingRef.current = true;
-      sessionStateAtLaunchRef.current = agentSessionState;
       setIsLaunching(true);
-      const agentConfig = await getAgentConfigAction(agentValue);
-      const agentFlags = agentConfig?.flags ?? [];
-      await launchAgent(
-        ticketId,
-        agentValue,
-        workingDirectory ?? undefined,
-        agentToken ?? undefined,
-        'run',
-        agentFlags.length > 0 ? agentFlags : undefined
-      );
+      try {
+        const agentConfig = await getAgentConfigAction(agentValue);
+        const agentFlags = agentConfig?.flags ?? [];
+        await launchAgent(
+          ticketId,
+          agentValue,
+          workingDirectory ?? undefined,
+          agentToken ?? undefined,
+          'run',
+          agentFlags.length > 0 ? agentFlags : undefined
+        );
+      } catch (error) {
+        console.error('Failed to launch agent:', error);
+      } finally {
+        setIsLaunching(false);
+      }
     } else {
       await navigator.clipboard.writeText(commands[agentValue]);
       setCopied(true);

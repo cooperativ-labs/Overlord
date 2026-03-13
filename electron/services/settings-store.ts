@@ -16,6 +16,7 @@ export type ExternalTerminalApp =
 export type ExternalTerminalLaunchMode = 'window' | 'tab' | 'custom';
 
 interface StoreData {
+  terminalMode?: 'embedded' | 'external';
   externalTerminalApp: ExternalTerminalApp;
   externalTerminalLaunchMode: ExternalTerminalLaunchMode;
   externalTerminalCustomHotkey: string;
@@ -38,11 +39,43 @@ function getStorePath(): string {
   return path.join(app.getPath('userData'), 'settings.json');
 }
 
+function migrateLegacySettings(raw: Record<string, unknown>): {
+  data: StoreData;
+  changed: boolean;
+} {
+  const next = { ...defaults, ...raw } as StoreData;
+  let changed = false;
+
+  if (raw.terminalMode === 'embedded') {
+    changed = true;
+    next.externalTerminalApp =
+      typeof raw.externalTerminalApp === 'string' && raw.externalTerminalApp.length > 0
+        ? (raw.externalTerminalApp as ExternalTerminalApp)
+        : defaults.externalTerminalApp;
+    next.externalTerminalLaunchMode =
+      typeof raw.externalTerminalLaunchMode === 'string' &&
+      raw.externalTerminalLaunchMode.length > 0
+        ? (raw.externalTerminalLaunchMode as ExternalTerminalLaunchMode)
+        : defaults.externalTerminalLaunchMode;
+  }
+
+  if ('terminalMode' in next) {
+    changed = true;
+    delete next.terminalMode;
+  }
+
+  return { data: next, changed };
+}
+
 function load(): StoreData {
   if (data) return data;
   try {
     const raw = fs.readFileSync(getStorePath(), 'utf-8');
-    data = { ...defaults, ...JSON.parse(raw) };
+    const migrated = migrateLegacySettings(JSON.parse(raw) as Record<string, unknown>);
+    data = migrated.data;
+    if (migrated.changed) {
+      save();
+    }
   } catch {
     data = { ...defaults };
   }
