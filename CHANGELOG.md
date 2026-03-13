@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.62.0] - 2026-03-13:17:45
+
+### Added
+- Guide new users through a five-step tutorial (create workspace/project, download the desktop app, install/configure an agent, and read the ticket flow) that auto-opens for fresh accounts or incomplete runs and remembers progress so you can pick up where you left off.
+- Surface CLI agent setup instructions (install command, `npx overlord setup`, and your default agent token) inside the wizard and persist the preferred agent so future visits default to that vendor.
+- Add a “Take Tutorial” action to the sidebar rail so you can revisit the wizard at any time, starting at the post-setup steps once you already have a project.
+
+### Fixed
+- None.
+
+### Changed
+- Wrap the app in a tutorial provider that loads onboarding state, refreshes the UI after workspace creation, and auto-launches the modal when the profile indicates an incomplete tutorial or a new account.
+
+### Security
+- None.
+
+### Chore
+- Add an `profiles.onboarding` JSON column via a migration so the tutorial can store completed steps, skip status, and preferred agent metadata.
+
 ## [0.60.0] - 2026-03-13:16:00
 
 ### Added

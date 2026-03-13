@@ -2,16 +2,40 @@
 
 import { redirect } from 'next/navigation';
 
+import type { AgentTypeValue } from '@/lib/helpers/agent-types';
 import { createProject, updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
 import { createClient } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
+
+export type OnboardingProgress = {
+  completedStep: number;
+  skipped: boolean;
+  preferredAgent?: AgentTypeValue;
+};
 
 export type OnboardingState = {
   userName: string | null;
   hasOrganizations: boolean;
   hasProjects: boolean;
   firstOrganizationId: number | null;
+  onboardingCompletedStep: number;
+  onboardingSkipped: boolean;
+  preferredAgent?: AgentTypeValue;
 };
+
+function parseOnboardingProgress(raw: unknown): OnboardingProgress {
+  if (!raw || typeof raw !== 'object') {
+    return { completedStep: 0, skipped: false };
+  }
+  const obj = raw as Record<string, unknown>;
+  return {
+    completedStep: typeof obj['completed_step'] === 'number' ? obj['completed_step'] : 0,
+    skipped: typeof obj['skipped'] === 'boolean' ? obj['skipped'] : false,
+    preferredAgent: typeof obj['preferred_agent'] === 'string'
+      ? (obj['preferred_agent'] as AgentTypeValue)
+      : undefined
+  };
+}
 
 export async function getOnboardingState(): Promise<OnboardingState> {
   const supabase = await createClient();
@@ -30,21 +54,27 @@ export async function getOnboardingState(): Promise<OnboardingState> {
     user.email?.split('@')[0] ??
     null;
 
-  const { data: organizations, error: orgError } = await supabase
-    .from('organizations')
-    .select('id')
-    .order('id', { ascending: true });
+  // Load profile onboarding progress in parallel with org/project queries
+  const [profileResult, orgResult] = await Promise.all([
+    supabase.from('profiles').select('onboarding').eq('id', user.id).maybeSingle(),
+    supabase.from('organizations').select('id').order('id', { ascending: true })
+  ]);
 
-  if (orgError) {
+  const progress = parseOnboardingProgress(profileResult.data?.onboarding);
+
+  if (orgResult.error) {
     return {
       userName: displayName,
       hasOrganizations: false,
       hasProjects: false,
-      firstOrganizationId: null
+      firstOrganizationId: null,
+      onboardingCompletedStep: progress.completedStep,
+      onboardingSkipped: progress.skipped,
+      preferredAgent: progress.preferredAgent
     };
   }
 
-  const firstOrganizationId = organizations?.[0]?.id ?? null;
+  const firstOrganizationId = orgResult.data?.[0]?.id ?? null;
   const hasOrganizations = !!firstOrganizationId;
 
   if (!hasOrganizations) {
@@ -52,7 +82,10 @@ export async function getOnboardingState(): Promise<OnboardingState> {
       userName: displayName,
       hasOrganizations: false,
       hasProjects: false,
-      firstOrganizationId: null
+      firstOrganizationId: null,
+      onboardingCompletedStep: progress.completedStep,
+      onboardingSkipped: progress.skipped,
+      preferredAgent: progress.preferredAgent
     };
   }
 
@@ -68,8 +101,75 @@ export async function getOnboardingState(): Promise<OnboardingState> {
     userName: displayName,
     hasOrganizations,
     hasProjects,
-    firstOrganizationId
+    firstOrganizationId,
+    onboardingCompletedStep: progress.completedStep,
+    onboardingSkipped: progress.skipped,
+    preferredAgent: progress.preferredAgent
   };
+}
+
+export async function updateOnboardingProgressAction(update: {
+  completedStep?: number;
+  skipped?: boolean;
+  preferredAgent?: AgentTypeValue;
+}): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  // Read current value, merge, write back
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('onboarding')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const current = parseOnboardingProgress(profile?.onboarding);
+
+  const next = {
+    completed_step:
+      update.completedStep !== undefined
+        ? Math.max(current.completedStep, update.completedStep)
+        : current.completedStep,
+    skipped: update.skipped !== undefined ? update.skipped : current.skipped,
+    preferred_agent:
+      update.preferredAgent !== undefined ? update.preferredAgent : current.preferredAgent
+  };
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ onboarding: next })
+    .eq('id', user.id);
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to update onboarding progress.');
+  }
+}
+
+export async function getDefaultAgentTokenAction(): Promise<string | null> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from('agent_tokens')
+    .select('token')
+    .eq('user_id', user.id)
+    .eq('name', 'Default CLI Token')
+    .is('revoked_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return data?.token ?? null;
 }
 
 export async function createFirstOrganization(input: { name: string }): Promise<{

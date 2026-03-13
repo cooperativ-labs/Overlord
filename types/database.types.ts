@@ -523,6 +523,7 @@ export type Database = {
           id: string
           image_url: string
           name: string
+          onboarding: Json
           updated_at: string
         }
         Insert: {
@@ -533,6 +534,7 @@ export type Database = {
           id: string
           image_url?: string
           name?: string
+          onboarding?: Json
           updated_at?: string
         }
         Update: {
@@ -543,6 +545,7 @@ export type Database = {
           id?: string
           image_url?: string
           name?: string
+          onboarding?: Json
           updated_at?: string
         }
         Relationships: [

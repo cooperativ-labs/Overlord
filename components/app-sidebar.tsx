@@ -1,6 +1,6 @@
 'use client';
 
-import { Inbox, ListChecks, MoreHorizontal, Plus, Settings } from 'lucide-react';
+import { GraduationCap, Inbox, ListChecks, MoreHorizontal, Plus, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -31,6 +31,7 @@ import {
   SidebarMenuItem,
   SidebarRail
 } from '@/components/ui/sidebar';
+import { useTutorialWizard } from '@/components/features/onboarding/TutorialWizardContext';
 import type { UserOrganization } from '@/lib/actions/organizations';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { updateProjectColorAction } from '@/lib/actions/projects';
@@ -98,6 +99,7 @@ export function AppSidebar({
   const pathname = usePathname();
   const { openProjectCreator } = useProjectCreator();
   const { defaultProject } = useDefaultProject();
+  const { openTutorial } = useTutorialWizard();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
   const defaultOrganizationId = React.useMemo(() => {
@@ -202,6 +204,12 @@ export function AppSidebar({
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Tutorial" onClick={() => openTutorial({ startAtStep: 3 })}>
+              <GraduationCap />
+              <span>Take Tutorial</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton tooltip="Settings" onClick={() => setSettingsOpen(true)}>
               <Settings />

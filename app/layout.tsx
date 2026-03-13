@@ -8,7 +8,8 @@ import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
 import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
-import { OrganizationOnboardingModal } from '@/components/features/onboarding/OrganizationOnboardingModal';
+import { TutorialProvider } from '@/components/features/onboarding/TutorialWizardContext';
+import { TutorialWizardModal } from '@/components/features/onboarding/TutorialWizardModal';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
@@ -19,6 +20,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { getUserOrganizations } from '@/lib/actions/organizations';
+import { getOnboardingState } from '@/lib/actions/onboarding';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
@@ -60,9 +62,20 @@ export default async function RootLayout({
     profileSettings?.default_project_id ?? cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
   const selectedOrgIdStr = cookieStore.get(SELECTED_ORG_COOKIE)?.value ?? null;
   const selectedOrgId = selectedOrgIdStr ? Number(selectedOrgIdStr) : null;
-  const needsOrganizationOnboarding = !!user && organizations.length === 0;
-  const onboardingState = needsOrganizationOnboarding
-    ? {
+
+  // Determine whether to auto-show the tutorial wizard and at what step.
+  // - No org yet → show from step 1 (workspace creation)
+  // - Has org+project but tutorial not finished/skipped → show from step 3
+  let tutorialAutoOpen = false;
+  let tutorialAutoStep = 1;
+  let onboardingState = null;
+
+  if (user) {
+    if (organizations.length === 0) {
+      // New user — needs workspace setup
+      tutorialAutoOpen = true;
+      tutorialAutoStep = 1;
+      onboardingState = {
         userName:
           (user.user_metadata as { name?: string; full_name?: string })?.name ??
           (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
@@ -70,9 +83,23 @@ export default async function RootLayout({
           null,
         hasOrganizations: false,
         hasProjects: projects.length > 0,
-        firstOrganizationId: null
+        firstOrganizationId: null,
+        onboardingCompletedStep: 0,
+        onboardingSkipped: false
+      };
+    } else {
+      // Existing user — check tutorial progress
+      const progress = await getOnboardingState();
+      onboardingState = progress;
+      const hasCompletedTutorial = progress.onboardingCompletedStep >= 5;
+      const hasSkipped = progress.onboardingSkipped;
+      if (!hasCompletedTutorial && !hasSkipped) {
+        tutorialAutoOpen = true;
+        // Start at the step after the last completed one, minimum 3
+        tutorialAutoStep = Math.max(3, progress.onboardingCompletedStep + 1);
       }
-    : null;
+    }
+  }
 
   return (
     <html lang="en">
@@ -93,49 +120,53 @@ export default async function RootLayout({
                 initialDefaultProjectId={initialDefaultProjectId}
               >
                 <ProjectCreatorProvider>
-                  <SidebarProvider defaultOpen className="h-dvh min-h-0">
-                    {user ? (
-                      <div className="flex h-full w-full flex-col overflow-hidden">
-                        <AnnouncementBar />
-                        {/* Electron title bar drag region — hidden in browser */}
-                        <div className="electron-drag-region shrink-0" />
-                        <div className="flex min-h-0 flex-1 overflow-hidden">
-                          <AppSidebar
-                            user={{
-                              name:
-                                user.user_metadata?.full_name ??
-                                user.email?.split('@')[0] ??
-                                'User',
-                              email: user.email ?? '',
-                              avatar: user.user_metadata?.avatar_url ?? ''
-                            }}
-                            projects={projects}
-                            organizations={organizations}
-                            selectedOrgId={selectedOrgId}
-                          />
-                          <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
-                            <NavHeader />
-                            <SidePanelProvider className="flex flex-col overflow-hidden">
-                              <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-                                <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
-                                  {children}
-                                </main>
-                                <SidePanel />
-                              </div>
-                            </SidePanelProvider>
-                          </SidebarInset>
+                  <TutorialProvider
+                    autoOpen={tutorialAutoOpen}
+                    autoOpenStep={tutorialAutoStep}
+                    initialState={onboardingState}
+                  >
+                    <SidebarProvider defaultOpen className="h-dvh min-h-0">
+                      {user ? (
+                        <div className="flex h-full w-full flex-col overflow-hidden">
+                          <AnnouncementBar />
+                          {/* Electron title bar drag region — hidden in browser */}
+                          <div className="electron-drag-region shrink-0" />
+                          <div className="flex min-h-0 flex-1 overflow-hidden">
+                            <AppSidebar
+                              user={{
+                                name:
+                                  user.user_metadata?.full_name ??
+                                  user.email?.split('@')[0] ??
+                                  'User',
+                                email: user.email ?? '',
+                                avatar: user.user_metadata?.avatar_url ?? ''
+                              }}
+                              projects={projects}
+                              organizations={organizations}
+                              selectedOrgId={selectedOrgId}
+                            />
+                            <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
+                              <NavHeader />
+                              <SidePanelProvider className="flex flex-col overflow-hidden">
+                                <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                                  <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
+                                    {children}
+                                  </main>
+                                  <SidePanel />
+                                </div>
+                              </SidePanelProvider>
+                            </SidebarInset>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex w-full flex-col ">
-                        <AnnouncementBar />
-                        <main className="w-full h-full ">{children}</main>
-                      </div>
-                    )}
-                    {onboardingState ? (
-                      <OrganizationOnboardingModal initialState={onboardingState} />
-                    ) : null}
-                  </SidebarProvider>
+                      ) : (
+                        <div className="flex w-full flex-col ">
+                          <AnnouncementBar />
+                          <main className="w-full h-full ">{children}</main>
+                        </div>
+                      )}
+                      <TutorialWizardModal />
+                    </SidebarProvider>
+                  </TutorialProvider>
                 </ProjectCreatorProvider>
               </DefaultProjectProvider>
             </TerminalProvider>
