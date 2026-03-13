@@ -2,8 +2,8 @@
 
 import { redirect } from 'next/navigation';
 
-import type { AgentTypeValue } from '@/lib/helpers/agent-types';
 import { createProject, updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
+import type { AgentTypeValue } from '@/lib/helpers/agent-types';
 import { createClient } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -31,9 +31,10 @@ function parseOnboardingProgress(raw: unknown): OnboardingProgress {
   return {
     completedStep: typeof obj['completed_step'] === 'number' ? obj['completed_step'] : 0,
     skipped: typeof obj['skipped'] === 'boolean' ? obj['skipped'] : false,
-    preferredAgent: typeof obj['preferred_agent'] === 'string'
-      ? (obj['preferred_agent'] as AgentTypeValue)
-      : undefined
+    preferredAgent:
+      typeof obj['preferred_agent'] === 'string'
+        ? (obj['preferred_agent'] as AgentTypeValue)
+        : undefined
   };
 }
 
@@ -141,10 +142,7 @@ export async function updateOnboardingProgressAction(update: {
       update.preferredAgent !== undefined ? update.preferredAgent : current.preferredAgent
   };
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ onboarding: next })
-    .eq('id', user.id);
+  const { error } = await supabase.from('profiles').update({ onboarding: next }).eq('id', user.id);
 
   if (error) {
     throw new Error(error.message ?? 'Failed to update onboarding progress.');

@@ -24,8 +24,24 @@ const FLOW_NODES: FlowNode[] = [
     icon: (
       <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" aria-hidden>
         <rect x="2" y="5" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="5" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <line x1="5" y1="12" x2="11" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <line
+          x1="5"
+          y1="9"
+          x2="15"
+          y2="9"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <line
+          x1="5"
+          y1="12"
+          x2="11"
+          y2="12"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
     ),
     label: 'Type your objective',
@@ -101,8 +117,8 @@ export function TicketFlowStep({ onContinue }: Props) {
       <div className="rounded-lg border border-dashed p-4">
         <p className="text-sm font-medium">What happens next?</p>
         <p className="text-muted-foreground mt-0.5 text-sm">
-          The agent reads your ticket, runs code in the terminal, and posts progress updates back
-          to Overlord. You can watch live, pause, or let it run in the background.
+          The agent reads your ticket, runs code in the terminal, and posts progress updates back to
+          Overlord. You can watch live, pause, or let it run in the background.
         </p>
       </div>
 

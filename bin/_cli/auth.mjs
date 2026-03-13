@@ -163,7 +163,11 @@ async function fetchAuthConfig(platformUrl, localSecret) {
       `Failed to fetch auth config (${res.status}). Check that Overlord is running at ${platformUrl}.`
     );
   }
-  return readJsonOrThrow(res, 'Auth config', platformUrl);
+  const config = await readJsonOrThrow(res, 'Auth config', platformUrl);
+  return {
+    ...config,
+    platform_url: new URL(res.url).origin
+  };
 }
 
 async function exchangeCodeForSupabaseTokens(supabaseUrl, clientId, code, codeVerifier, redirectUri) {
@@ -227,12 +231,13 @@ export async function authLogin() {
   console.log('Starting Overlord CLI authorization...\n');
 
   // 1. Discover OAuth config from the platform
-  let supabaseUrl, cliClientId, cliRedirectUri;
+  let supabaseUrl, cliClientId, cliRedirectUri, resolvedPlatformUrl;
   try {
     const config = await fetchAuthConfig(platformUrl, localSecret);
     supabaseUrl = config.supabase_url;
     cliClientId = config.cli_client_id;
     cliRedirectUri = config.cli_redirect_uri;
+    resolvedPlatformUrl = config.platform_url ?? platformUrl;
   } catch (err) {
     console.error(`\nError: ${err.message}`);
     process.exit(1);
@@ -307,7 +312,11 @@ export async function authLogin() {
   // 8. Exchange Supabase access token → Overlord agent_token
   let agentTokenData;
   try {
-    agentTokenData = await exchangeForAgentToken(platformUrl, supabaseTokens.access_token, localSecret);
+    agentTokenData = await exchangeForAgentToken(
+      resolvedPlatformUrl,
+      supabaseTokens.access_token,
+      localSecret
+    );
   } catch (err) {
     console.error(`\nError obtaining agent token: ${err.message}`);
     process.exit(1);
@@ -316,7 +325,7 @@ export async function authLogin() {
   // 9. Persist credentials (same format — backward-compatible)
   saveCredentials({
     access_token: agentTokenData.access_token,
-    platform_url: agentTokenData.platform_url ?? platformUrl
+    platform_url: agentTokenData.platform_url ?? resolvedPlatformUrl
   });
 
   console.log('Logged in successfully!');

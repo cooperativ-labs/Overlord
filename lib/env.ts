@@ -33,12 +33,8 @@ export function getPlatformUrl(providedURL?: string | null): string {
   return value;
 }
 
-export function getOverlordMcpUrl(): string {
-  const value = process.env.NEXT_PUBLIC_OVERLORD_MCP_URL;
-  if (!value) {
-    throw new Error('Missing NEXT_PUBLIC_OVERLORD_MCP_URL.');
-  }
-  return value;
+export function getOverlordMcpUrl(providedURL?: string | null): string {
+  return new URL('/api/mcp', getPlatformUrl(providedURL)).toString();
 }
 
 export function getSupabaseSecretKey(): string {

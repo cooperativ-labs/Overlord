@@ -145,6 +145,7 @@ function waitForOAuthCallback(
 async function fetchAuthConfig(platformUrl: string): Promise<{
   electron_client_id: string;
   electron_redirect_uri?: string | null;
+  platform_url: string;
   supabase_url: string;
 }> {
   const res = await fetch(`${platformUrl}/api/auth/config`);
@@ -159,9 +160,15 @@ async function fetchAuthConfig(platformUrl: string): Promise<{
       'Auth config is missing supabase_url or electron_client_id. Check SUPABASE_OAUTH_ELECTRON_CLIENT_ID is set.'
     );
   }
-  return json as {
+
+  const resolvedPlatformUrl = new URL(res.url).origin;
+  return {
+    ...json,
+    platform_url: resolvedPlatformUrl
+  } as {
     electron_client_id: string;
     electron_redirect_uri?: string | null;
+    platform_url: string;
     supabase_url: string;
   };
 }
@@ -229,7 +236,8 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   const {
     supabase_url: supabaseUrl,
     electron_client_id: clientId,
-    electron_redirect_uri: configuredRedirectUri
+    electron_redirect_uri: configuredRedirectUri,
+    platform_url: resolvedPlatformUrl
   } = await fetchAuthConfig(platformUrl);
 
   // 2. PKCE parameters + state
@@ -271,13 +279,16 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   );
 
   // 9. Exchange Supabase access token → Overlord agent_token
-  const agentTokenData = await exchangeForAgentToken(platformUrl, supabaseTokens.access_token);
+  const agentTokenData = await exchangeForAgentToken(
+    resolvedPlatformUrl,
+    supabaseTokens.access_token
+  );
 
   // 10. Persist credentials including refresh token for session renewal
   // The refresh_token allows the browser session to automatically refresh the Supabase access token
   saveElectronCredentials({
     agent_token: agentTokenData.access_token,
-    platform_url: agentTokenData.platform_url ?? platformUrl,
+    platform_url: agentTokenData.platform_url ?? resolvedPlatformUrl,
     supabase_refresh_token: supabaseTokens.refresh_token
   });
 

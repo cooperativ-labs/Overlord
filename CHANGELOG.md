@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.63.0] - 2026-03-13:16:25
+
+### Added
+- None.
+
+### Fixed
+- Resolve CLI/Electron login failures caused by proxy or rewrite hosts by using the platform URL returned from `/api/auth/config` when exchanging Supabase tokens and persisting credentials, ensuring the saved `platform_url` matches the actual Overlord origin.
+
+### Changed
+- Derive the MCP endpoint (`/api/mcp`) from the current platform base URL so local MCP requests automatically follow the same host when `NEXT_PUBLIC_OVERLORD_MCP_URL` isn’t supplied.
+
+### Security
+- None.
+
 ## [0.62.0] - 2026-03-13:17:45
 
 ### Added

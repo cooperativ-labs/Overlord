@@ -2,8 +2,8 @@
 
 import { Check, Download, Monitor, Terminal, Zap } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { useElectron } from '@/components/features/terminal/useElectron';
+import { Button } from '@/components/ui/button';
 
 type Props = {
   onContinue: () => void;

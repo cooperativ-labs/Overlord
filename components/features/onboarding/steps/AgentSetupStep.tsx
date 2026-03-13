@@ -5,7 +5,10 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { getDefaultAgentTokenAction, updateOnboardingProgressAction } from '@/lib/actions/onboarding';
+import {
+  getDefaultAgentTokenAction,
+  updateOnboardingProgressAction
+} from '@/lib/actions/onboarding';
 import { AGENT_TYPES, type AgentTypeValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 

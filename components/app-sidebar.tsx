@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 
+import { useTutorialWizard } from '@/components/features/onboarding/TutorialWizardContext';
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import { useProjectCreator } from '@/components/features/projects/ProjectCreatorContext';
@@ -31,7 +32,6 @@ import {
   SidebarMenuItem,
   SidebarRail
 } from '@/components/ui/sidebar';
-import { useTutorialWizard } from '@/components/features/onboarding/TutorialWizardContext';
 import type { UserOrganization } from '@/lib/actions/organizations';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { updateProjectColorAction } from '@/lib/actions/projects';

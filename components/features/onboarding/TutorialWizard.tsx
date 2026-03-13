@@ -3,27 +3,27 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
+import { AgentSetupStep } from '@/components/features/onboarding/steps/AgentSetupStep';
+import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
+import { TicketFlowStep } from '@/components/features/onboarding/steps/TicketFlowStep';
 import {
   DEFAULT_PROJECT_COLOR,
   ProjectColorSetter
 } from '@/components/features/projects/ProjectColorSetter';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
-import { AgentSetupStep } from '@/components/features/onboarding/steps/AgentSetupStep';
-import { TicketFlowStep } from '@/components/features/onboarding/steps/TicketFlowStep';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import type { AgentTypeValue } from '@/lib/helpers/agent-types';
+import type { OnboardingState } from '@/lib/actions/onboarding';
 import {
   createFirstOrganization,
   createFirstProjectWithDirectory,
   updateOnboardingProgressAction
 } from '@/lib/actions/onboarding';
-import type { OnboardingState } from '@/lib/actions/onboarding';
+import type { AgentTypeValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
 const TOTAL_STEPS = 5;
@@ -185,9 +185,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
 
   // Progress bar: only show for tutorial steps 3–5
   const showProgress = currentStep >= 3;
-  const progressPercent = showProgress
-    ? ((currentStep - 3) / (TOTAL_STEPS - 3)) * 100
-    : 0;
+  const progressPercent = showProgress ? ((currentStep - 3) / (TOTAL_STEPS - 3)) * 100 : 0;
 
   return (
     <div className="flex flex-col gap-0">
@@ -375,9 +373,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
           </FieldGroup>
         )}
 
-        {currentStep === 3 && (
-          <DownloadAppStep onContinue={() => void handleStepComplete(3)} />
-        )}
+        {currentStep === 3 && <DownloadAppStep onContinue={() => void handleStepComplete(3)} />}
 
         {currentStep === 4 && (
           <AgentSetupStep
@@ -386,9 +382,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
           />
         )}
 
-        {currentStep === 5 && (
-          <TicketFlowStep onContinue={() => void handleStepComplete(5)} />
-        )}
+        {currentStep === 5 && <TicketFlowStep onContinue={() => void handleStepComplete(5)} />}
       </div>
     </div>
   );

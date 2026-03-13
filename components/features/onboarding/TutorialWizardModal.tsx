@@ -2,8 +2,8 @@
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 
-import { useTutorialWizard } from './TutorialWizardContext';
 import { TutorialWizard } from './TutorialWizard';
+import { useTutorialWizard } from './TutorialWizardContext';
 
 export function TutorialWizardModal() {
   const { isOpen, startAtStep, initialState, closeTutorial } = useTutorialWizard();
@@ -16,11 +16,20 @@ export function TutorialWizardModal() {
   const allowDismiss = !needsWorkspace || startAtStep >= 3;
 
   return (
-    <Dialog open onOpenChange={open => { if (!open && allowDismiss) closeTutorial(); }}>
+    <Dialog
+      open
+      onOpenChange={open => {
+        if (!open && allowDismiss) closeTutorial();
+      }}
+    >
       <DialogContent
         className="max-h-[90dvh] overflow-y-auto p-0 sm:max-w-xl"
-        onPointerDownOutside={event => { if (!allowDismiss) event.preventDefault(); }}
-        onEscapeKeyDown={event => { if (!allowDismiss) event.preventDefault(); }}
+        onPointerDownOutside={event => {
+          if (!allowDismiss) event.preventDefault();
+        }}
+        onEscapeKeyDown={event => {
+          if (!allowDismiss) event.preventDefault();
+        }}
       >
         <DialogTitle className="sr-only">Overlord setup</DialogTitle>
         <DialogDescription className="sr-only">
