@@ -43,9 +43,15 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     .single();
 
   if (ticketError || !ticket) {
+    const is404 = ticketError?.code === 'PGRST116';
+
+    if (ticketError && !is404) {
+      console.error('[attach] ticket select error:', ticketError.message, ticketError.code);
+    }
+
     return {
       error: 'Ticket not found.',
-      status: ticketError?.code === 'PGRST116' ? 404 : 500
+      status: is404 ? 404 : 500
     } as const;
   }
 

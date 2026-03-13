@@ -8,48 +8,7 @@ Before starting any task, read `.claude/skills/SKILLS_INDEX.md` to discover avai
 To manage skills, use the `skill` CLI command (run `skill --help` for usage).
 <!-- overskill-end -->
 
-## Project setup 
 
-This is a new project setup. Use the @next-project-setup skill to setup the project.
-
-## Project Structure
-
-```
-root/
-├── feature-plans/                # AI-generated feature plans
-├── docs/                         # Project documentation
-├── app/                          # Next.js App Router pages
-│   ├── account/                  # Account management
-│   ├── api/                      # API routes
-│   ├── auth/                     # Authentication pages
-│   ├── layout.tsx                # Root layout
-│   ├── globals.css               # Global styles
-│   └── page.tsx                  # Landing page
-├── components/                   # React components
-│   ├── features/                 # Feature-specific components
-│   ├── forms/                    # Form components
-│   ├── modals/                   # Modal dialogs
-│   ├── ui/                       # shadcn/ui base components
-│   └── *.tsx                     # Various feature components
-├── contexts/                     # React contexts
-├── lib/                          # Utility libraries
-│   ├── actions/                  # Server actions
-│   ├── helpers/                  # Helper functions
-│   ├── hooks/                    # Custom React hooks
-│   ├── enums/                    # Enums
-│   ├── hooks/                    # Custom React hooks
-│   ├── utils/                    # Utility functions
-├── supabase/                     # Supabase configuration
-│   ├── functions/                # Edge functions
-│   ├── migrations/               # Database migrations
-│   ├── utils/                    # Supabase utilities
-│   ├── config.toml               # Supabase configuration
-│   └── seed.sql                  # Database seed data
-├── types/                        # TypeScript type definitions
-│   └── database.types.ts         # Auto-generated Supabase types
-├── scripts/                      # Build and utility scripts
-└── tests/                        # Test files
-```
 
 ## Supabase local APIs
 

@@ -42,7 +42,12 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     .eq('organization_id', organizationId)
     .single();
 
-  if (ticketErr || !ticket) return toolErr('Ticket not found or access denied.');
+  if (ticketErr || !ticket) {
+    if (ticketErr) {
+      console.error('[attach] ticket select error:', ticketErr.message, ticketErr.code);
+    }
+    return toolErr('Ticket not found or access denied.');
+  }
 
   const sessionKey = crypto.randomUUID();
   const { data: session, error: sessionErr } = await supabase

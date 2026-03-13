@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.58.0] - 2026-03-13:12:00
+
+### Added
+- Add error boundary pages for `/projects`, `/u`, and `/account` routes so unhandled errors show a recovery UI instead of crashing the page.
+
+### Fixed
+- Fix `InlineEditField` memory leak: replace `setTimeout` with `requestAnimationFrame` for post-drop cursor positioning.
+- Fix `TicketPanelContent` crash: destructure parallel query results individually so a single failed sub-query no longer crashes the entire panel.
+
+### Changed
+- None.
+
+### Security
+- Replace permissive `using(true)` RLS policies on `agent_sessions`, `artifacts`, `shared_state`, and `ticket_events` with proper org-scoped policies using the `is_ticket_org_member()` helper; AGENT+ role required for writes, MANAGER+ for deletes.
+- Add `assertTicketAccess()` guard to all ticket mutation server actions (`updateTicketField`, `updateTicketStatus`, `updateTicketPriority`, `updateTicketExecutionTarget`, `setTicketProject`, `deleteTicket`, `markSessionDisconnected`) to verify user authorization before mutating.
+- Harden MCP edge function: replace wildcard CORS with an origin allowlist (cooperativ.io, ovld.ai, Vercel previews, localhost), add server-side input validation for all tool calls, sanitize error messages to prevent internal details leaking to clients, and enforce a 30-minute session timeout that marks stale sessions as disconnected.
+- Add request tracing via `x-request-id` header (client-provided or auto-generated) and include the reference ID in error responses for debugging.
+- Support `x-organization-id` header for multi-org OAuth JWT users in MCP.
+
 ## [0.57.0] - 2026-03-12:19:22
 
 ### Added
