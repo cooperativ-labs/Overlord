@@ -24,8 +24,9 @@ import { handleReadContext } from './handlers/read-context.ts';
 import { handleUpdate } from './handlers/update.ts';
 import { handleWriteContext } from './handlers/write-context.ts';
 import { resolveToken } from './auth.ts';
-import { CORS_HEADERS, rpcError, rpcResult } from './rpc.ts';
+import { buildCorsHeaders, rpcError, rpcResult } from './rpc.ts';
 import { TOOLS } from './tools.ts';
+import { validateToolInput } from './validate.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -230,8 +231,15 @@ attach(ticketId)
 `;
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get('origin');
+  const cors = buildCorsHeaders(origin);
+
+  // Request tracing — use client-provided ID or generate one
+  const requestId = req.headers.get('x-request-id') ?? crypto.randomUUID();
+  cors['x-request-id'] = requestId;
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: cors });
   }
 
   if (req.method === 'GET') {
@@ -241,18 +249,18 @@ Deno.serve(async (req: Request) => {
     if (url.pathname.endsWith('/.well-known/oauth-protected-resource')) {
       return new Response(JSON.stringify(buildProtectedResourceMetadata()), {
         status: 200,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+        headers: { ...cors, 'Content-Type': 'application/json' }
       });
     }
 
     return new Response(MCP_INSTRUCTIONS, {
       status: 200,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' }
+      headers: { ...cors, 'Content-Type': 'text/plain; charset=utf-8' }
     });
   }
 
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+    return new Response('Method not allowed', { status: 405, headers: cors });
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -271,7 +279,7 @@ Deno.serve(async (req: Request) => {
       {
         status: 401,
         headers: {
-          ...CORS_HEADERS,
+          ...cors,
           'Content-Type': 'application/json',
           'WWW-Authenticate': `Bearer resource_metadata="${resourceMetadataUrl}"`
         }
@@ -301,7 +309,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (method === 'notifications/initialized') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response(null, { status: 204, headers: cors });
   }
 
   if (method === 'ping') {
@@ -319,6 +327,15 @@ Deno.serve(async (req: Request) => {
   if (method === 'tools/call') {
     const toolName: string = params?.name;
     const toolArgs: any = params?.arguments ?? {};
+
+    // Server-side input validation against tool schema
+    const validationError = validateToolInput(toolName, toolArgs);
+    if (validationError) {
+      return rpcResult(id, {
+        content: [{ type: 'text', text: validationError }],
+        isError: true
+      });
+    }
 
     try {
       let result: ReturnType<typeof import('./rpc.ts').toolOk>;
@@ -349,10 +366,10 @@ Deno.serve(async (req: Request) => {
 
       return rpcResult(id, result);
     } catch (err) {
-      console.error(`[mcp] tool error (${toolName}):`, err);
-      const msg = err instanceof Error ? err.message : String(err);
+      // Log full error with request ID for debugging, return sanitized message to client
+      console.error(`[mcp] tool error (${toolName}) [${requestId}]:`, err);
       return rpcResult(id, {
-        content: [{ type: 'text', text: `Internal error: ${msg}` }],
+        content: [{ type: 'text', text: `An internal error occurred (ref: ${requestId}). Please try again or contact support.` }],
         isError: true
       });
     }

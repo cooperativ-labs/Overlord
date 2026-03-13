@@ -21,6 +21,10 @@ export type TokenContext = {
  *
  * 1. Try matching against `agent_tokens` (legacy flow).
  * 2. If that fails, validate as a Supabase OAuth JWT (new flow for MCP OAuth clients).
+ *
+ * For OAuth JWT auth with multi-org users, the `x-organization-id` header
+ * selects which organization to scope the request to. Without it, the first
+ * membership (by org ID ascending) is used.
  */
 export async function resolveToken(
   req: Request,
@@ -30,12 +34,16 @@ export async function resolveToken(
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
   if (!token) return null;
 
+  // Optional org hint for multi-org OAuth users
+  const orgIdHint = req.headers.get('x-organization-id');
+  const parsedOrgId = orgIdHint ? parseInt(orgIdHint, 10) : null;
+
   // --- Path 1: agent_token lookup ---
   const agentCtx = await resolveAgentToken(token, supabase);
   if (agentCtx) return agentCtx;
 
   // --- Path 2: Supabase OAuth JWT ---
-  const oauthCtx = await resolveOAuthJwt(token, supabase);
+  const oauthCtx = await resolveOAuthJwt(token, supabase, parsedOrgId);
   if (oauthCtx) return oauthCtx;
 
   return null;
@@ -81,7 +89,8 @@ async function resolveAgentToken(
 
 async function resolveOAuthJwt(
   token: string,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  organizationIdHint: number | null = null
 ): Promise<TokenContext | null> {
   // Validate the JWT via Supabase Auth — this checks signature, expiry, etc.
   const {
@@ -91,7 +100,28 @@ async function resolveOAuthJwt(
 
   if (userError || !user) return null;
 
-  // Look up the user's organization via the members table
+  // If caller specified an organization, verify membership in that org
+  if (organizationIdHint && !isNaN(organizationIdHint)) {
+    const { data: targetMember } = await supabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .eq('organization_id', organizationIdHint)
+      .single();
+
+    if (targetMember) {
+      return {
+        userId: user.id,
+        organizationId: targetMember.organization_id,
+        tokenId: null,
+        tokenValue: token,
+        authMethod: 'oauth_jwt'
+      };
+    }
+    // If not a member of the requested org, fall through to default
+  }
+
+  // Default: pick the user's first organization (by ID ascending)
   const { data: member } = await supabase
     .from('members')
     .select('organization_id')
