@@ -1128,17 +1128,13 @@ export async function loadMoreCompleteTicketsAction({
 }): Promise<{ tickets: ReturnType<typeof mapBoardTicket>[] }> {
   const supabase = await createClient();
 
-  const twoWeeksBefore = new Date(beforeDate);
-  twoWeeksBefore.setDate(twoWeeksBefore.getDate() - 14);
-  const twoWeeksBeforeStr = twoWeeksBefore.toISOString();
-
   let query = supabase
     .from('tickets')
     .select(TICKET_BOARD_SELECT)
     .eq('status', status)
     .lt('updated_at', beforeDate)
-    .gte('updated_at', twoWeeksBeforeStr)
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    .limit(100);
 
   if (organizationId !== undefined) {
     query = query.eq('organization_id', organizationId);

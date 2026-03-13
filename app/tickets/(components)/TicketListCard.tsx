@@ -21,11 +21,7 @@ import { capitalizeFirst } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
-import {
-  ExecutionTargetBadge,
-  getExecutionTargetCardClassName,
-  getExecutionTargetSurfaceClassName
-} from './ExecutionTargetBadge';
+import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 import type { Ticket } from './KanbanCard';
 
 export default function TicketListCard({
@@ -121,8 +117,6 @@ export default function TicketListCard({
           className={cn(
             'group relative flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/50 ',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
-            getExecutionTargetCardClassName(ticket.execution_target),
-            getExecutionTargetSurfaceClassName(ticket.execution_target),
             isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
             hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
           )}

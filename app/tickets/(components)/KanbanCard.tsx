@@ -23,11 +23,7 @@ import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
-import {
-  ExecutionTargetBadge,
-  getExecutionTargetCardClassName,
-  getExecutionTargetSurfaceClassName
-} from './ExecutionTargetBadge';
+import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 
 type SessionState = Database['public']['Enums']['session_state'];
 
@@ -168,8 +164,6 @@ export default function KanbanCard({
           className={cn(
             'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-all hover:shadow-md',
             isDragging ? 'opacity-40' : '',
-            getExecutionTargetCardClassName(ticket.execution_target),
-            getExecutionTargetSurfaceClassName(ticket.execution_target),
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
             hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25',

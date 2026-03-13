@@ -408,7 +408,17 @@ export default function KanbanBoard({
     const state = columnLoadMoreStates.get(columnId);
     if (state?.isLoading || state?.hasMore === false) return;
 
-    const cutoff = state?.cutoff ?? initialCutoffDate ?? new Date().toISOString();
+    // Derive initial cursor from the oldest updated_at in the column's current tickets
+    const colTickets = columnTickets.get(columnId) ?? [];
+    const colOldestUpdatedAt =
+      colTickets
+        .map(t => t.updated_at)
+        .filter(Boolean)
+        .sort()[0] ??
+      initialCutoffDate ??
+      new Date().toISOString();
+
+    const cutoff = state?.cutoff ?? colOldestUpdatedAt;
 
     setColumnLoadMoreStates(prev => {
       const next = new Map(prev);
@@ -424,15 +434,16 @@ export default function KanbanBoard({
         beforeDate: cutoff
       });
 
-      const newCutoff = new Date(cutoff);
-      newCutoff.setDate(newCutoff.getDate() - 14);
+      // Next cursor is the oldest updated_at in this batch
+      const newCutoff =
+        loaded.length > 0 ? (loaded[loaded.length - 1].updated_at ?? cutoff) : cutoff;
 
       setExtraTickets(prev => [...prev, ...(loaded as Ticket[])]);
       setColumnLoadMoreStates(prev => {
         const next = new Map(prev);
         next.set(columnId, {
-          cutoff: newCutoff.toISOString(),
-          hasMore: loaded.length > 0,
+          cutoff: newCutoff,
+          hasMore: loaded.length === 100,
           isLoading: false
         });
         return next;

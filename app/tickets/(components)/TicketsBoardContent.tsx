@@ -120,24 +120,17 @@ export default async function TicketsBoardContent({
     statusesQuery = statusesQuery.eq('organization_id', organizationId);
   }
 
-  // Fetch statuses first so we can filter complete-type tickets by date
   const statusesResult = await statusesQuery;
   const allStatuses = dedupeStatuses(statusesResult.data ?? []);
-  const completeStatusNames = allStatuses
-    .filter(s => s.status_type === 'complete')
-    .map(s => s.name);
 
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const oneWeekAgoStr = oneWeekAgo.toISOString();
-
+  // Load the 80 most recently updated tickets per project
   let ticketsQuery = supabase
     .from('tickets')
     .select(
       'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
     )
-    .order('board_position', { ascending: true })
-    .order('created_at', { ascending: true });
+    .order('updated_at', { ascending: false })
+    .limit(80);
 
   if (organizationId !== undefined) {
     ticketsQuery = ticketsQuery.eq('organization_id', organizationId);
@@ -145,14 +138,6 @@ export default async function TicketsBoardContent({
 
   if (projectId !== undefined) {
     ticketsQuery = ticketsQuery.eq('project_id', projectId);
-  }
-
-  // For complete-type columns, only load tickets updated in the past week.
-  // Non-complete tickets are loaded without a date restriction.
-  if (completeStatusNames.length > 0) {
-    ticketsQuery = ticketsQuery.or(
-      `status.not.in.(${completeStatusNames.join(',')}),updated_at.gte.${oneWeekAgoStr}`
-    );
   }
 
   const [ticketsResult, everhourIntegrationResult] = await Promise.all([
@@ -253,6 +238,14 @@ export default async function TicketsBoardContent({
     });
   const statuses = allStatuses;
   const loadError = ticketsResult.error ?? statusesResult.error;
+  // Cursor for "load more": the oldest updated_at from the initial 80 tickets
+  const initialCutoffDate =
+    rawTickets.length > 0
+      ? rawTickets.reduce(
+          (min, t) => (t.updated_at < min ? t.updated_at : min),
+          rawTickets[0]!.updated_at
+        )
+      : undefined;
   let objectiveFileMentionPaths: string[] = [];
   let kanbanWorkingDirectory: string | null = null;
 
@@ -309,7 +302,7 @@ export default async function TicketsBoardContent({
           workingDirectory={kanbanWorkingDirectory}
           initialView={view}
           initialHiddenColumns={initialHiddenColumns}
-          initialCutoffDate={oneWeekAgoStr}
+          initialCutoffDate={initialCutoffDate}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
