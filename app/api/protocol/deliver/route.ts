@@ -73,7 +73,11 @@ export async function POST(request: Request) {
       });
 
       if (rationaleResult.error) {
-        return NextResponse.json({ error: rationaleResult.error }, { status: 500 });
+        console.error('[protocol:deliver] change rationale insert error:', rationaleResult.error);
+        Sentry.captureException(new Error(rationaleResult.error), {
+          extra: { ticketId, sessionId: resolved.session.id, eventId: event.id }
+        });
+        // Non-fatal: continue with delivery even if rationale insertion fails
       }
     }
 

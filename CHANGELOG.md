@@ -2,7 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.59.0] - 2026-03-13:15:32
+## [0.60.0] - 2026-03-13:16:00
+
+### Added
+- Add file-to-ticket attribution API (`/api/projects/[projectId]/file-attribution`) and integrate it into the Electron-only Current Changes explorer so you can see which tickets touched each modified file and filter the file list by ticket.
+
+### Fixed
+- None.
+
+### Changed
+- Current Changes view now loads change rationales and file attributions together, shows the active Git branch and a refresh control, and keeps the selected file stable when the status list updates.
+- Electron agent launches now always open in an external terminal by generating a temporary launch script and sending it to your configured terminal app, with support for window/tab/custom-hotkey behaviors.
+
+### Security
+- None.
+
+### Removed
+- Remove the embedded terminal workspace and in-app terminal panels; all agents now run in your external terminal.
+
+### Refactor
+- Refactor `ExecutionTargetBadge`, Kanban ticket components, and related UI to clarify agent vs human execution targets and reduce rendering complexity.
+
+### Chore
+- Simplify `electron-builder` configuration to package `dist-electron`, Next.js standalone output, and CLI binaries without special-casing native modules.
 
 ### Added
 - New `ExecutionTargetBadge` component to visually differentiate agent and human execution targets on ticket cards with color-coded theming.

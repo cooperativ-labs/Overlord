@@ -2,15 +2,39 @@ import Link from 'next/link';
 
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
-import type { ChangeRationaleRecord } from './types';
+import type { ChangeRationaleRecord, TicketSummary } from './types';
 
 type HunkPopoverContentProps = {
+  fileTickets?: TicketSummary[];
   matches: ChangeRationaleRecord[];
   projectId: string;
 };
 
-export function HunkPopoverContent({ matches, projectId }: HunkPopoverContentProps) {
+export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopoverContentProps) {
   if (matches.length === 0) {
+    if (fileTickets && fileTickets.length > 0) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">No rationale for this hunk</p>
+          <p className="text-xs text-muted-foreground">
+            This hunk doesn&apos;t have a specific rationale, but the file was changed by{' '}
+            {fileTickets.length === 1 ? 'this ticket' : 'these tickets'}:
+          </p>
+          <div className="space-y-1">
+            {fileTickets.map(ticket => (
+              <Link
+                key={ticket.id}
+                className="block rounded-md border px-3 py-2 text-xs font-medium text-primary hover:bg-muted/60"
+                href={buildTicketPath({ projectId, ticketId: ticket.id })}
+              >
+                {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+              </Link>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-1">
         <p className="text-sm font-medium">No rationale recorded</p>

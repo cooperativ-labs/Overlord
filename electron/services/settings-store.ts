@@ -2,7 +2,6 @@ import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
-export type TerminalMode = 'embedded' | 'external';
 export type ExternalTerminalApp =
   | 'default'
   | 'terminal'
@@ -17,7 +16,6 @@ export type ExternalTerminalApp =
 export type ExternalTerminalLaunchMode = 'window' | 'tab' | 'custom';
 
 interface StoreData {
-  terminalMode: TerminalMode;
   externalTerminalApp: ExternalTerminalApp;
   externalTerminalLaunchMode: ExternalTerminalLaunchMode;
   externalTerminalCustomHotkey: string;
@@ -27,7 +25,6 @@ interface StoreData {
 }
 
 const defaults: StoreData = {
-  terminalMode: 'external',
   externalTerminalApp: 'default',
   externalTerminalLaunchMode: 'tab',
   externalTerminalCustomHotkey: '',

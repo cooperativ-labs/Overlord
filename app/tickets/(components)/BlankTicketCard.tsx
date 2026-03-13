@@ -62,7 +62,9 @@ export default function BlankTicketCard({
     if (!textArea) return;
     textArea.focus();
     const cursor = textArea.value.length;
-    textArea.setSelectionRange(cursor, cursor);
+    (textArea as HTMLTextAreaElement & {
+      setSelectionRange: (start: number, end: number) => void;
+    }).setSelectionRange(cursor, cursor);
   }, [focusTrigger]);
 
   // In Electron, fetch file mention paths locally via IPC

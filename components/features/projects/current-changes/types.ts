@@ -72,3 +72,9 @@ export type TicketSummary = {
   id: string;
   title: string | null;
 };
+
+export type FileAttribution = {
+  file_path: string;
+  ticket_id: string;
+  ticket_title: string | null;
+};

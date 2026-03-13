@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
@@ -7,12 +7,13 @@ import { cn } from '@/lib/utils';
 
 import { buildHunkMatches, lineNumber } from './helpers';
 import { HunkPopoverContent } from './HunkPopoverContent';
-import type { ChangeRationaleRecord, GitStatusFile } from './types';
+import type { ChangeRationaleRecord, FileAttribution, GitStatusFile, TicketSummary } from './types';
 
 type DiffPaneProps = {
   diff: ParsedUnifiedDiff | null;
   diffError: string | null;
   file: GitStatusFile;
+  fileAttributions: FileAttribution[];
   isLoading: boolean;
   projectId: string;
   rationales: ChangeRationaleRecord[];
@@ -23,12 +24,31 @@ export function DiffPane({
   diff,
   diffError,
   file,
+  fileAttributions,
   isLoading,
   projectId,
   rationales,
   selectedFilePath
 }: DiffPaneProps) {
   const [openPopoverKey, setOpenPopoverKey] = useState<string | null>(null);
+
+  const fileTickets = useMemo(() => {
+    const candidatePaths = new Set([file.path, file.originalPath].filter(Boolean));
+    const ticketMap = new Map<string, TicketSummary>();
+    // From rationales (hunk-level, may not exist)
+    for (const r of rationales) {
+      if (candidatePaths.has(r.file_path) && r.ticket && !ticketMap.has(r.ticket.id)) {
+        ticketMap.set(r.ticket.id, r.ticket);
+      }
+    }
+    // From file attributions (deterministic, from agent delivery artifacts)
+    for (const a of fileAttributions) {
+      if (candidatePaths.has(a.file_path) && !ticketMap.has(a.ticket_id)) {
+        ticketMap.set(a.ticket_id, { id: a.ticket_id, title: a.ticket_title });
+      }
+    }
+    return [...ticketMap.values()];
+  }, [rationales, fileAttributions, file.path, file.originalPath]);
 
   useEffect(() => {
     setOpenPopoverKey(null);
@@ -77,6 +97,10 @@ export function DiffPane({
                   <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
                     {matches.length} linked
                   </span>
+                ) : fileTickets.length > 0 ? (
+                  <span className="rounded-full border border-muted-foreground/20 bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                    {fileTickets.length} {fileTickets.length === 1 ? 'ticket' : 'tickets'}
+                  </span>
                 ) : null}
               </div>
               <div className="font-mono text-xs">
@@ -87,8 +111,8 @@ export function DiffPane({
                     <div
                       className={cn(
                         'grid grid-cols-[56px_56px_minmax(0,1fr)] items-start gap-3 px-3 py-1.5 text-left',
-                        line.kind === 'add' && 'bg-emerald-500/5',
-                        line.kind === 'del' && 'bg-rose-500/5',
+                        line.kind === 'add' && 'bg-emerald-500/10',
+                        line.kind === 'del' && 'bg-rose-500/10',
                         isChanged && 'hover:bg-muted/60'
                       )}
                     >
@@ -125,7 +149,11 @@ export function DiffPane({
                         </button>
                       </PopoverTrigger>
                       <PopoverContent align="start" className="w-[420px]">
-                        <HunkPopoverContent matches={matches} projectId={projectId} />
+                        <HunkPopoverContent
+                          fileTickets={fileTickets}
+                          matches={matches}
+                          projectId={projectId}
+                        />
                       </PopoverContent>
                     </Popover>
                   );

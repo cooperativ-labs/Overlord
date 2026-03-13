@@ -21,13 +21,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import {
-  existsSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -145,31 +139,14 @@ run('rm -rf .next/standalone/node_modules/@esbuild');
 // ---------------------------------------------------------------------------
 
 run(
-  'npx esbuild electron/main.ts --bundle --platform=node --target=node20 --outfile=dist-electron/main.js --external:electron --external:node-pty --format=cjs --sourcemap'
+  'npx esbuild electron/main.ts --bundle --platform=node --target=node20 --outfile=dist-electron/main.js --external:electron --format=cjs --sourcemap'
 );
 run(
   'npx esbuild electron/preload.ts --bundle --platform=node --target=node20 --outfile=dist-electron/preload.js --external:electron --format=cjs --sourcemap'
 );
 
 // ---------------------------------------------------------------------------
-// Step 5.5 — Strip non-target node-pty prebuilds
-// ---------------------------------------------------------------------------
-
-const prebuildsDir = resolve(ROOT, 'node_modules', 'node-pty', 'prebuilds');
-if (existsSync(prebuildsDir)) {
-  const target = `${process.platform}-${process.arch}`;
-  console.log(`[build] Stripping node-pty prebuilds (keeping ${target})`);
-
-  for (const entry of readdirSync(prebuildsDir)) {
-    if (entry !== target) {
-      rmSync(resolve(prebuildsDir, entry), { recursive: true, force: true });
-      console.log(`[build]   Removed prebuilds/${entry}`);
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Step 6 — electron-builder
+// Step 5.5 — electron-builder
 // ---------------------------------------------------------------------------
 
 run(`yarn electron-builder${isDirMode ? ' --dir' : ''}`);

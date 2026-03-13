@@ -12,10 +12,6 @@ files:
   - "bin/**/*"
   - "!node_modules"
 
-extraResources:
-  - from: "node_modules/node-pty"
-    to: "node_modules/node-pty"
-
 mac:
   target:
     - dmg

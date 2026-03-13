@@ -18,13 +18,6 @@ interface AppUpdateStatus {
 
 interface ElectronAPI {
   terminal: {
-    spawn: (command?: string, cwd?: string) => Promise<string>;
-    write: (id: string, data: string) => void;
-    resize: (id: string, cols: number, rows: number) => void;
-    kill: (id: string) => Promise<void>;
-    onData: (callback: (id: string, data: string) => void) => () => void;
-    onExit: (callback: (id: string, code: number) => void) => () => void;
-    openExternal: (command: string, cwd?: string) => Promise<void>;
     launchAgent: (
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini',
@@ -32,7 +25,7 @@ interface ElectronAPI {
       agentToken?: string,
       launchMode?: 'run' | 'ask',
       flags?: string[]
-    ) => Promise<string | void>;
+    ) => Promise<void>;
     chooseDirectory: () => Promise<string | null>;
   };
   filesystem: {

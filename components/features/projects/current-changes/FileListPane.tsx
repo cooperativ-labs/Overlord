@@ -7,12 +7,14 @@ import { countFileRationales } from './helpers';
 import { TicketFilterPopover } from './TicketFilterPopover';
 import type {
   ChangeRationaleRecord,
+  FileAttribution,
   GitStatusFile,
   GitStatusResponse,
   TicketSummary
 } from './types';
 
 type FileListPaneProps = {
+  fileAttributions: FileAttribution[];
   filteredFiles: GitStatusFile[];
   rationales: ChangeRationaleRecord[];
   selectedPath: string | null;
@@ -27,6 +29,7 @@ type FileListPaneProps = {
 };
 
 export function FileListPane({
+  fileAttributions,
   filteredFiles,
   rationales,
   selectedPath,
@@ -95,6 +98,12 @@ export function FileListPane({
             {filteredFiles.map(file => (
               <FileListItem
                 key={`${file.status}:${file.path}`}
+                attributionCount={
+                  fileAttributions.filter(a => {
+                    const paths = [file.path, file.originalPath].filter(Boolean);
+                    return paths.includes(a.file_path);
+                  }).length
+                }
                 file={file}
                 isSelected={selectedPath === file.path}
                 onSelect={() => onSelectFile(file.path)}

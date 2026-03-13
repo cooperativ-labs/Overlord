@@ -6919,27 +6919,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@xterm/addon-fit@npm:^0.11.0":
-  version: 0.11.0
-  resolution: "@xterm/addon-fit@npm:0.11.0"
-  checksum: 10c0/c0ce94f7e877d07e7197d15d041cc629ce2e853016400aadddc9810838ea8a26e836f87f325eba36df88c03feb72d9f13cd8c3bb41ee31e701f1058edb8553c3
-  languageName: node
-  linkType: hard
-
-"@xterm/addon-web-links@npm:^0.12.0":
-  version: 0.12.0
-  resolution: "@xterm/addon-web-links@npm:0.12.0"
-  checksum: 10c0/1c4847f43948483a6a0f59994090b8b9d9f6006a1e4a8deed7d9c28fcb47422d77eb418fb8fc63fbfb0c486c49e4646b73188ff2efac5290b680db34f298f334
-  languageName: node
-  linkType: hard
-
-"@xterm/xterm@npm:^6.0.0":
-  version: 6.0.0
-  resolution: "@xterm/xterm@npm:6.0.0"
-  checksum: 10c0/b99122553f323a65b708e5eba9903d4c5a1bcb59fe576d29d6e91a33002bccfd1b99403e1e839e1942f4952039db6d3d74ca9d65ed0399b4e9a0a5f35b8c12d9
-  languageName: node
-  linkType: hard
-
 "abbrev@npm:^3.0.0":
   version: 3.0.1
   resolution: "abbrev@npm:3.0.1"
@@ -14663,15 +14642,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-addon-api@npm:^7.1.0":
-  version: 7.1.1
-  resolution: "node-addon-api@npm:7.1.1"
-  dependencies:
-    node-gyp: "npm:latest"
-  checksum: 10c0/fb32a206276d608037fa1bcd7e9921e177fe992fc610d098aa3128baca3c0050fc1e014fa007e9b3874cf865ddb4f5bd9f43ccb7cbbbe4efaff6a83e920b17e9
-  languageName: node
-  linkType: hard
-
 "node-api-version@npm:^0.2.1":
   version: 0.2.1
   resolution: "node-api-version@npm:0.2.1"
@@ -14771,16 +14741,6 @@ __metadata:
   bin:
     node-gyp: bin/node-gyp.js
   checksum: 10c0/3ed046746a5a7d90950cd8b0547332b06598443f31fe213ef4332a7174c7b7d259e1704835feda79b87d3f02e59d7791842aac60642ede4396ab25fdf0f8f759
-  languageName: node
-  linkType: hard
-
-"node-pty@npm:^1.1.0":
-  version: 1.1.0
-  resolution: "node-pty@npm:1.1.0"
-  dependencies:
-    node-addon-api: "npm:^7.1.0"
-    node-gyp: "npm:latest"
-  checksum: 10c0/e527305263da36d554b7d2116aee6430b898675fc50e7bd82fbd762f14cb6b948fb8d997736af1f70d76bf9ffd4f5179bc1ed1d8002567dfcf3b29f039291798
   languageName: node
   linkType: hard
 
@@ -15207,9 +15167,6 @@ __metadata:
     "@types/pg": "npm:^8.16.0"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
-    "@xterm/addon-fit": "npm:^0.11.0"
-    "@xterm/addon-web-links": "npm:^0.12.0"
-    "@xterm/xterm": "npm:^6.0.0"
     autoprefixer: "npm:^10.4.24"
     browser-image-compression: "npm:^2.0.2"
     class-variance-authority: "npm:^0.7.1"
@@ -15234,7 +15191,6 @@ __metadata:
     next: "npm:^16.1.6"
     next-pwa: "npm:^5.6.0"
     next-themes: "npm:^0.4.6"
-    node-pty: "npm:^1.1.0"
     pg: "npm:^8.18.0"
     postcss: "npm:^8.5.6"
     prettier: "npm:^3.8.1"

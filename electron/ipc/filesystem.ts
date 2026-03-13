@@ -4,8 +4,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { normalizeTerminalCwd } from '../services/terminal-manager';
-
 const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_DEPTH = 8;
 const DEFAULT_MAX_ENTRIES_PER_DIRECTORY = 5000;
@@ -24,6 +22,12 @@ const IGNORED_DIRECTORY_NAMES = new Set([
 
 function toPosixPath(value: string): string {
   return value.split(path.sep).join('/');
+}
+
+function normalizeDirectory(directory?: string): string | undefined {
+  const trimmed = directory?.trim();
+  if (!trimmed) return undefined;
+  return path.resolve(trimmed);
 }
 
 function normalizeGitStatus(code: string): string {
@@ -253,7 +257,7 @@ async function listProjectFiles(
 
 export function registerFilesystemIpc(): void {
   ipcMain.handle('filesystem:directory-exists', async (_event, directory?: string) => {
-    const resolvedDirectory = normalizeTerminalCwd(directory);
+    const resolvedDirectory = normalizeDirectory(directory);
     if (!resolvedDirectory) return false;
 
     const stat = await fs.stat(resolvedDirectory).catch(() => null);
@@ -271,7 +275,7 @@ export function registerFilesystemIpc(): void {
         maxFiles?: number;
       }
     ) => {
-      const resolvedDirectory = normalizeTerminalCwd(payload?.directory);
+      const resolvedDirectory = normalizeDirectory(payload?.directory);
       if (!resolvedDirectory) {
         return {
           files: [],
@@ -291,7 +295,7 @@ export function registerFilesystemIpc(): void {
   );
 
   ipcMain.handle('filesystem:get-git-status', async (_event, payload?: { directory?: string }) => {
-    const resolvedDirectory = normalizeTerminalCwd(payload?.directory);
+    const resolvedDirectory = normalizeDirectory(payload?.directory);
     if (!resolvedDirectory) {
       return {
         branch: null,
@@ -325,7 +329,7 @@ export function registerFilesystemIpc(): void {
       _event,
       payload?: { directory?: string; originalPath?: string; path?: string; status?: string }
     ) => {
-      const resolvedDirectory = normalizeTerminalCwd(payload?.directory);
+      const resolvedDirectory = normalizeDirectory(payload?.directory);
       const relativePath = payload?.path?.trim();
       if (!resolvedDirectory) {
         return {

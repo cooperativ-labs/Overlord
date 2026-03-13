@@ -10,6 +10,7 @@ import { getRationalePaths } from '@/components/features/projects/current-change
 import {
   type ChangeRationaleRecord,
   type DiffState,
+  type FileAttribution,
   type GitDiffResponse,
   type GitStatusResponse
 } from '@/components/features/projects/current-changes/types';
@@ -37,6 +38,7 @@ export function CurrentChangesPage({
   const [statusLoading, setStatusLoading] = useState(true);
   const [rationales, setRationales] = useState<ChangeRationaleRecord[]>([]);
   const [rationalesError, setRationalesError] = useState<string | null>(null);
+  const [fileAttributions, setFileAttributions] = useState<FileAttribution[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [diffState, setDiffState] = useState<DiffState>({
     error: null,
@@ -52,8 +54,13 @@ export function CurrentChangesPage({
         ticketMap.set(rationale.ticket.id, rationale.ticket);
       }
     }
+    for (const attr of fileAttributions) {
+      if (!ticketMap.has(attr.ticket_id)) {
+        ticketMap.set(attr.ticket_id, { id: attr.ticket_id, title: attr.ticket_title });
+      }
+    }
     return [...ticketMap.values()].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
-  }, [rationales]);
+  }, [rationales, fileAttributions]);
 
   const filteredFiles = useMemo(() => {
     const files = statusResponse?.files ?? [];
@@ -61,12 +68,18 @@ export function CurrentChangesPage({
     const filePathsWithMatchingRationales = new Set(
       rationales.filter(r => r.ticket && selectedTicketIds.has(r.ticket.id)).map(r => r.file_path)
     );
+    const filePathsWithMatchingAttributions = new Set(
+      fileAttributions.filter(a => selectedTicketIds.has(a.ticket_id)).map(a => a.file_path)
+    );
     return files.filter(
       file =>
         filePathsWithMatchingRationales.has(file.path) ||
-        (file.originalPath && filePathsWithMatchingRationales.has(file.originalPath))
+        filePathsWithMatchingAttributions.has(file.path) ||
+        (file.originalPath &&
+          (filePathsWithMatchingRationales.has(file.originalPath) ||
+            filePathsWithMatchingAttributions.has(file.originalPath)))
     );
-  }, [statusResponse?.files, rationales, selectedTicketIds]);
+  }, [statusResponse?.files, rationales, fileAttributions, selectedTicketIds]);
 
   function toggleTicketFilter(ticketId: string) {
     setSelectedTicketIds(prev => {
@@ -101,6 +114,32 @@ export function CurrentChangesPage({
     });
     setStatusLoading(false);
     return result;
+  }
+
+  async function loadFileAttributions(files: GitStatusResponse['files']) {
+    try {
+      const filePaths = getRationalePaths(files);
+      if (filePaths.length === 0) {
+        setFileAttributions([]);
+        return;
+      }
+      const searchParams = new URLSearchParams();
+      for (const filePath of filePaths) {
+        searchParams.append('filePath', filePath);
+      }
+      const response = await fetch(`/api/projects/${projectId}/file-attribution?${searchParams}`, {
+        cache: 'no-store'
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        attributions?: FileAttribution[];
+      };
+      if (response.ok) {
+        setFileAttributions(payload.attributions ?? []);
+      }
+    } catch {
+      // Non-critical: file attribution is supplementary
+    }
   }
 
   async function loadRationales(files: GitStatusResponse['files']) {
@@ -144,7 +183,8 @@ export function CurrentChangesPage({
 
     void (async () => {
       const result = await loadStatus();
-      await loadRationales(result?.files ?? []);
+      const files = result?.files ?? [];
+      await Promise.all([loadRationales(files), loadFileAttributions(files)]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isElectron, workingDirectory, projectId, api]);
@@ -236,7 +276,8 @@ export function CurrentChangesPage({
             onClick={() =>
               void (async () => {
                 const result = await loadStatus();
-                await loadRationales(result?.files ?? []);
+                const files = result?.files ?? [];
+                await Promise.all([loadRationales(files), loadFileAttributions(files)]);
               })()
             }
           >
@@ -255,6 +296,7 @@ export function CurrentChangesPage({
       <div className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-background">
         <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">
           <FileListPane
+            fileAttributions={fileAttributions}
             filteredFiles={filteredFiles}
             rationales={rationales}
             selectedPath={selectedPath}
@@ -279,6 +321,7 @@ export function CurrentChangesPage({
                 diff={diffState.parsed}
                 diffError={diffState.error}
                 file={selectedFile}
+                fileAttributions={fileAttributions}
                 isLoading={diffState.isLoading}
                 projectId={projectId}
                 rationales={rationales}

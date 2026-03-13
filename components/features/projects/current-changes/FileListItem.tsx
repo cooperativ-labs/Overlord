@@ -4,13 +4,20 @@ import { formatStatus, getStatusClasses } from './helpers';
 import type { GitStatusFile } from './types';
 
 type FileListItemProps = {
+  attributionCount: number;
   file: GitStatusFile;
   isSelected: boolean;
   onSelect: () => void;
   rationaleCount: number;
 };
 
-export function FileListItem({ file, isSelected, onSelect, rationaleCount }: FileListItemProps) {
+export function FileListItem({
+  attributionCount,
+  file,
+  isSelected,
+  onSelect,
+  rationaleCount
+}: FileListItemProps) {
   const fileName = file.path.split('/').pop() ?? file.path;
   const directory = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
 
@@ -41,7 +48,13 @@ export function FileListItem({ file, isSelected, onSelect, rationaleCount }: Fil
         <span className="truncate">
           {file.originalPath ? `${file.originalPath} -> ${file.path}` : file.path}
         </span>
-        {rationaleCount > 0 ? <span>{rationaleCount} rationale</span> : null}
+        {rationaleCount > 0 ? (
+          <span>{rationaleCount} rationale</span>
+        ) : attributionCount > 0 ? (
+          <span>
+            {attributionCount} {attributionCount === 1 ? 'ticket' : 'tickets'}
+          </span>
+        ) : null}
       </div>
     </button>
   );

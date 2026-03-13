@@ -13,7 +13,6 @@ import { DefaultProjectProvider } from '@/components/features/projects/DefaultPr
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
-import { TerminalWorkspace } from '@/components/features/terminal/TerminalWorkspace';
 import { NavHeader } from '@/components/nav-header';
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -116,16 +115,14 @@ export default async function RootLayout({
                           />
                           <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
                             <NavHeader />
-                            <TerminalWorkspace>
-                              <SidePanelProvider className="flex flex-col overflow-hidden">
-                                <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-                                  <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
-                                    {children}
-                                  </main>
-                                  <SidePanel />
-                                </div>
-                              </SidePanelProvider>
-                            </TerminalWorkspace>
+                            <SidePanelProvider className="flex flex-col overflow-hidden">
+                              <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                                <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
+                                  {children}
+                                </main>
+                                <SidePanel />
+                              </div>
+                            </SidePanelProvider>
                           </SidebarInset>
                         </div>
                       </div>

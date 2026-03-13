@@ -14,13 +14,18 @@ export default function OAuthConfirmationPage({
     : null;
 
   useEffect(() => {
-    // Auto-redirect after 2 seconds if we have a redirect URL
-    if (redirectUrl) {
-      const timer = setTimeout(() => {
-        window.location.href = redirectUrl;
-      }, 2000);
-      return () => clearTimeout(timer);
+    if (!redirectUrl) {
+      return;
     }
+
+    // Auto-redirect after 2 seconds if we have a redirect URL
+    const timer = setTimeout(() => {
+      (globalThis as any).location.href = redirectUrl;
+    }, 2000);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [redirectUrl]);
 
   return (
@@ -40,7 +45,7 @@ export default function OAuthConfirmationPage({
           </p>
           <Button
             onClick={() => {
-              window.location.href = redirectUrl;
+              (globalThis as any).location.href = redirectUrl;
             }}
             className="w-full"
           >

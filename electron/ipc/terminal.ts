@@ -1,26 +1,11 @@
 import { exec } from 'child_process';
-import { BrowserWindow, ipcMain } from 'electron';
-import { dialog } from 'electron';
+import { BrowserWindow, dialog, ipcMain } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 import { type AgentType, prepareAgentLaunch } from '../services/agent-launcher';
 import { store } from '../services/settings-store';
-import {
-  killTerminal,
-  normalizeTerminalCwd,
-  resizeTerminal,
-  spawnTerminal,
-  writeToTerminal
-} from '../services/terminal-manager';
-
-type TerminalLaunchPayload =
-  | string
-  | {
-      command?: string;
-      cwd?: string;
-    };
 
 function runAppleScript(script: string) {
   return new Promise<void>((resolve, reject) => {
@@ -29,24 +14,6 @@ function runAppleScript(script: string) {
       else resolve();
     });
   });
-}
-
-function normalizeLaunchPayload(payload?: TerminalLaunchPayload): {
-  command?: string;
-  cwd?: string;
-} {
-  if (!payload) return {};
-  if (typeof payload === 'string') {
-    return { command: payload };
-  }
-
-  const command =
-    typeof payload.command === 'string' && payload.command.trim().length > 0
-      ? payload.command
-      : undefined;
-  const cwd = typeof payload.cwd === 'string' ? normalizeTerminalCwd(payload.cwd) : undefined;
-
-  return { command, cwd };
 }
 
 function shellQuote(value: string): string {
@@ -81,7 +48,6 @@ function buildHotkeyAppleScript(hotkey: string): string | null {
   };
 
   const applescriptModifiers = modifiers.map(mod => modifierMap[mod]).filter(Boolean);
-
   const keyLiteral = key.length === 1 ? key : '';
   if (!keyLiteral) return null;
 
@@ -89,230 +55,166 @@ function buildHotkeyAppleScript(hotkey: string): string | null {
     return `keystroke "${keyLiteral}"`;
   }
 
-  const modifierList = applescriptModifiers.join(', ');
-  return `keystroke "${keyLiteral}" using {${modifierList}}`;
+  return `keystroke "${keyLiteral}" using {${applescriptModifiers.join(', ')}}`;
 }
 
-export function registerTerminalIpc(): void {
-  ipcMain.handle('terminal:spawn', (event, payload?: TerminalLaunchPayload) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) throw new Error('No window found');
-    const { command, cwd } = normalizeLaunchPayload(payload);
-    return spawnTerminal(win, command, cwd);
-  });
+function buildLaunchScriptContent(
+  command: string,
+  cwd?: string,
+  env?: Record<string, string>
+): string {
+  const envLines = env
+    ? Object.entries(env)
+        .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
+        .join('\n')
+    : '';
 
-  ipcMain.on('terminal:write', (_event, id: string, data: string) => {
-    writeToTerminal(id, data);
-  });
+  return ['#!/bin/bash', cwd ? `cd ${shellQuote(cwd)}` : null, envLines || null, command]
+    .filter(Boolean)
+    .join('\n');
+}
 
-  ipcMain.on('terminal:resize', (_event, id: string, cols: number, rows: number) => {
-    resizeTerminal(id, cols, rows);
-  });
+function writeLaunchScript(command: string, cwd?: string, env?: Record<string, string>) {
+  const scriptPath = path.join(
+    os.tmpdir(),
+    `overlord-launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sh`
+  );
 
-  ipcMain.handle('terminal:kill', (_event, id: string) => {
-    killTerminal(id);
-  });
+  fs.writeFileSync(scriptPath, buildLaunchScriptContent(command, cwd, env), { mode: 0o755 });
 
-  ipcMain.handle('terminal:open-external', (_event, payload?: TerminalLaunchPayload) => {
-    const { command, cwd } = normalizeLaunchPayload(payload);
-    if (!command) {
-      return;
+  setTimeout(() => {
+    try {
+      fs.unlinkSync(scriptPath);
+    } catch {
+      // Already deleted or unavailable.
     }
+  }, 15 * 60_000);
 
-    // Write the command to a temp script file to avoid escaping issues
-    // when passing complex commands (with $(curl ...), &&, quotes, etc.)
-    // through AppleScript string interpolation.
-    const scriptPath = path.join(
-      os.tmpdir(),
-      `overlord-launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sh`
-    );
+  return scriptPath;
+}
 
-    let scriptContent = '#!/bin/bash\n';
-    if (cwd) {
-      scriptContent += `cd ${shellQuote(cwd)}\n`;
-    }
-    scriptContent += `${command}\n`;
+function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
+  const launchCmd = [
+    `if [ -f ${shellQuote(scriptPath)} ]; then`,
+    `bash ${shellQuote(scriptPath)};`,
+    'else',
+    `echo "Launch script missing: ${scriptPath}";`,
+    'echo "Re-run the launch command from Overlord to generate a new script.";',
+    'fi'
+  ].join(' ');
+  const termApp = store.get('externalTerminalApp', 'default') as string;
+  const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
+  const openInTab = launchMode === 'tab';
+  const isCustomLaunchMode = launchMode === 'custom';
+  const customHotkeyValue = store.get('externalTerminalCustomHotkey', '') as string;
+  const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);
+  const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-    fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
+  let script: string;
 
-    // Run via bash and keep the script around briefly so delayed/replayed launches
-    // do not immediately fail with "no such file or directory".
-    const launchCmd = [
-      `if [ -f ${shellQuote(scriptPath)} ]; then`,
-      `bash ${shellQuote(scriptPath)};`,
-      'else',
-      `echo "Launch script missing: ${scriptPath}";`,
-      'echo "Re-run the launch command from Overlord to generate a new script.";',
-      'fi'
-    ].join(' ');
-    const termApp = store.get('externalTerminalApp', 'default') as string;
-    const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
-    const openInTab = launchMode === 'tab';
-    const isCustomLaunchMode = launchMode === 'custom';
-    const customHotkeyValue = store.get('externalTerminalCustomHotkey', '') as string;
-    const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);
-    const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-    // Best-effort cleanup after a reasonable grace period.
-    setTimeout(() => {
-      try {
-        fs.unlinkSync(scriptPath);
-      } catch {
-        // Already deleted or unavailable — ignore.
-      }
-    }, 15 * 60_000);
-
-    let script: string;
-
-    switch (termApp) {
-      case 'iterm':
-        if (isCustomLaunchMode && hotkeyScript) {
-          script = `
+  switch (termApp) {
+    case 'iterm':
+      if (isCustomLaunchMode && hotkeyScript) {
+        script = `
+            tell application "iTerm"
+              activate
+              if (count of windows) = 0 then
+                create window with default profile
+              end if
+            end tell
+            tell application "System Events"
+              ${hotkeyScript}
+              keystroke "${escapedLaunchCmd}" & return
+            end tell
+          `;
+      } else {
+        script = openInTab
+          ? `
               tell application "iTerm"
                 activate
                 if (count of windows) = 0 then
                   create window with default profile
+                else
+                  tell current window
+                    create tab with default profile
+                  end tell
                 end if
+                tell current session of current window
+                  write text "${escapedLaunchCmd}"
+                end tell
               end tell
-              tell application "System Events"
-                ${hotkeyScript}
-                keystroke "${escapedLaunchCmd}" & return
+            `
+          : `
+              tell application "iTerm"
+                activate
+                create window with default profile
+                tell current session of current window
+                  write text "${escapedLaunchCmd}"
+                end tell
               end tell
             `;
-        } else {
-          script = openInTab
+      }
+      return runAppleScript(script);
+    case 'warp':
+      exec('open -a Warp');
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const baseScript = hotkeyScript
             ? `
-                tell application "iTerm"
-                  activate
-                  if (count of windows) = 0 then
-                    create window with default profile
-                  else
-                    tell current window
-                      create tab with default profile
-                    end tell
-                  end if
-                  tell current session of current window
-                    write text "${escapedLaunchCmd}"
-                  end tell
-                end tell
-              `
-            : `
-                tell application "iTerm"
-                  activate
-                  create window with default profile
-                  tell current session of current window
-                    write text "${escapedLaunchCmd}"
-                  end tell
-                end tell
-              `;
-        }
-        break;
-      case 'warp':
-        // Warp supports direct CLI invocation
-        exec(`open -a Warp`);
-        // Give Warp time to open, then use AppleScript to type command
-        return new Promise<void>(resolve => {
-          setTimeout(() => {
-            const baseScript = hotkeyScript
-              ? `
-                  tell application "System Events"
-                    ${hotkeyScript}
-                    keystroke "${escapedLaunchCmd}" & return
-                  end tell
-                `
-              : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
-            runAppleScript(baseScript).finally(() => resolve());
-          }, 1000);
-        });
-      case 'ghostty':
-        exec(`ghostty -e bash ${shellQuote(scriptPath)}`);
-        return Promise.resolve();
-      case 'alacritty':
-        exec(`alacritty -e bash ${shellQuote(scriptPath)}`);
-        return Promise.resolve();
-      case 'kitty':
-        exec(`kitty bash ${shellQuote(scriptPath)}`);
-        return Promise.resolve();
-      case 'hyper':
-        exec(`open -a Hyper`);
-        return new Promise<void>(resolve => {
-          setTimeout(() => {
-            const baseScript = hotkeyScript
-              ? `
-                  tell application "System Events"
-                    ${hotkeyScript}
-                    keystroke "${escapedLaunchCmd}" & return
-                  end tell
-                `
-              : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
-            runAppleScript(baseScript).finally(() => resolve());
-          }, 1000);
-        });
-      case 'cmux':
-        exec(`open -a cmux`);
-        return new Promise<void>(resolve => {
-          setTimeout(() => {
-            const baseScript = hotkeyScript
-              ? `
-                  tell application "System Events"
-                    ${hotkeyScript}
-                    keystroke "${escapedLaunchCmd}" & return
-                  end tell
-                `
-              : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
-            runAppleScript(baseScript).finally(() => resolve());
-          }, 1000);
-        });
-      case 'custom': {
-        const customApp = store.get('customExternalTerminalApp', '') as string;
-        if (!customApp) {
-          if (isCustomLaunchMode && hotkeyScript) {
-            script = `
-                tell application "Terminal"
-                  activate
-                  if (count of windows) = 0 then
-                    do script ""
-                  end if
-                end tell
                 tell application "System Events"
                   ${hotkeyScript}
                   keystroke "${escapedLaunchCmd}" & return
                 end tell
-              `;
-          } else {
-            script = openInTab
-              ? `
-                  tell application "Terminal"
-                    activate
-                    if (count of windows) = 0 then
-                      do script "${escapedLaunchCmd}"
-                    else
-                      do script "${escapedLaunchCmd}" in front window
-                    end if
-                  end tell
-                `
-              : `
-                  tell application "Terminal"
-                    activate
-                    do script "${escapedLaunchCmd}"
-                  end tell
-                `;
-          }
-          break;
-        }
-
-        exec(`open -a ${shellQuote(customApp)}`);
-        return new Promise<void>(resolve => {
-          setTimeout(() => {
-            runAppleScript(
-              `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-            ).finally(() => resolve());
-          }, 1000);
-        });
-      }
-      default: // 'terminal' or 'default'
-        if (isCustomLaunchMode && hotkeyScript) {
-          script = `
+              `
+            : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+          runAppleScript(baseScript).finally(() => resolve());
+        }, 1000);
+      });
+    case 'ghostty':
+      exec(`ghostty -e bash ${shellQuote(scriptPath)}`);
+      return Promise.resolve();
+    case 'alacritty':
+      exec(`alacritty -e bash ${shellQuote(scriptPath)}`);
+      return Promise.resolve();
+    case 'kitty':
+      exec(`kitty bash ${shellQuote(scriptPath)}`);
+      return Promise.resolve();
+    case 'hyper':
+      exec('open -a Hyper');
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const baseScript = hotkeyScript
+            ? `
+                tell application "System Events"
+                  ${hotkeyScript}
+                  keystroke "${escapedLaunchCmd}" & return
+                end tell
+              `
+            : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+          runAppleScript(baseScript).finally(() => resolve());
+        }, 1000);
+      });
+    case 'cmux':
+      exec('open -a cmux');
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const baseScript = hotkeyScript
+            ? `
+                tell application "System Events"
+                  ${hotkeyScript}
+                  keystroke "${escapedLaunchCmd}" & return
+                end tell
+              `
+            : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
+          runAppleScript(baseScript).finally(() => resolve());
+        }, 1000);
+      });
+    case 'custom': {
+      const customApp = store.get('customExternalTerminalApp', '') as string;
+      if (!customApp) {
+        script =
+          isCustomLaunchMode && hotkeyScript
+            ? `
               tell application "Terminal"
                 activate
                 if (count of windows) = 0 then
@@ -323,10 +225,9 @@ export function registerTerminalIpc(): void {
                 ${hotkeyScript}
                 keystroke "${escapedLaunchCmd}" & return
               end tell
-            `;
-        } else {
-          script = openInTab
-            ? `
+            `
+            : openInTab
+              ? `
                 tell application "Terminal"
                   activate
                   if (count of windows) = 0 then
@@ -336,22 +237,65 @@ export function registerTerminalIpc(): void {
                   end if
                 end tell
               `
-            : `
+              : `
                 tell application "Terminal"
                   activate
                   do script "${escapedLaunchCmd}"
                 end tell
               `;
-        }
+        return runAppleScript(script);
+      }
+
+      exec(`open -a ${shellQuote(customApp)}`);
+      return new Promise(resolve => {
+        setTimeout(() => {
+          runAppleScript(
+            `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
+          ).finally(() => resolve());
+        }, 1000);
+      });
     }
+    default:
+      script =
+        isCustomLaunchMode && hotkeyScript
+          ? `
+            tell application "Terminal"
+              activate
+              if (count of windows) = 0 then
+                do script ""
+              end if
+            end tell
+            tell application "System Events"
+              ${hotkeyScript}
+              keystroke "${escapedLaunchCmd}" & return
+            end tell
+          `
+          : openInTab
+            ? `
+              tell application "Terminal"
+                activate
+                if (count of windows) = 0 then
+                  do script "${escapedLaunchCmd}"
+                else
+                  do script "${escapedLaunchCmd}" in front window
+                end if
+              end tell
+            `
+            : `
+              tell application "Terminal"
+                activate
+                do script "${escapedLaunchCmd}"
+              end tell
+            `;
+      return runAppleScript(script);
+  }
+}
 
-    return runAppleScript(script);
-  });
-
+export function registerTerminalIpc(): void {
   ipcMain.handle(
     'terminal:launch-agent',
     async (
-      event,
+      _event,
       payload: {
         ticketId: string;
         agent: AgentType;
@@ -361,9 +305,6 @@ export function registerTerminalIpc(): void {
         flags?: string[];
       }
     ) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      if (!win) throw new Error('No window found');
-
       const { command, cwd, env } = await prepareAgentLaunch({
         ticketId: payload.ticketId,
         agent: payload.agent,
@@ -373,230 +314,8 @@ export function registerTerminalIpc(): void {
         flags: payload.flags
       });
 
-      const terminalMode = store.get('terminalMode', 'embedded') as string;
-
-      if (terminalMode === 'external') {
-        // For external terminal, write a self-contained script
-        const scriptPath = path.join(
-          os.tmpdir(),
-          `overlord-launch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sh`
-        );
-
-        const envLines = Object.entries(env)
-          .map(([k, v]) => `export ${k}=${shellQuote(v)}`)
-          .join('\n');
-
-        let scriptContent = '#!/bin/bash\n';
-        if (cwd) {
-          scriptContent += `cd ${shellQuote(cwd)}\n`;
-        }
-        scriptContent += `${envLines}\n`;
-        scriptContent += `${command}\n`;
-
-        fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
-
-        setTimeout(() => {
-          try {
-            fs.unlinkSync(scriptPath);
-          } catch {
-            // Already deleted — ignore
-          }
-        }, 15 * 60_000);
-
-        const launchCmd = `bash ${shellQuote(scriptPath)}`;
-        const termApp = store.get('externalTerminalApp', 'default') as string;
-        const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
-        const openInTab = launchMode === 'tab';
-        const isCustomLaunchMode = launchMode === 'custom';
-        const customHotkeyValue = store.get('externalTerminalCustomHotkey', '') as string;
-        const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);
-        const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-        let script: string;
-        switch (termApp) {
-          case 'iterm':
-            if (isCustomLaunchMode && hotkeyScript) {
-              script = `
-                  tell application "iTerm"
-                    activate
-                    if (count of windows) = 0 then
-                      create window with default profile
-                    end if
-                  end tell
-                  tell application "System Events"
-                    ${hotkeyScript}
-                    keystroke "${escapedLaunchCmd}" & return
-                  end tell
-                `;
-            } else {
-              script = openInTab
-                ? `
-                    tell application "iTerm"
-                      activate
-                      if (count of windows) = 0 then
-                        create window with default profile
-                      else
-                        tell current window
-                          create tab with default profile
-                        end tell
-                      end if
-                      tell current session of current window
-                        write text "${escapedLaunchCmd}"
-                      end tell
-                    end tell
-                  `
-                : `
-                    tell application "iTerm"
-                      activate
-                      create window with default profile
-                      tell current session of current window
-                        write text "${escapedLaunchCmd}"
-                      end tell
-                    end tell
-                  `;
-            }
-            break;
-          case 'warp':
-            exec(`open -a Warp`);
-            return new Promise<void>(resolve => {
-              setTimeout(() => {
-                const baseScript = hotkeyScript
-                  ? `
-                      tell application "System Events"
-                        ${hotkeyScript}
-                        keystroke "${escapedLaunchCmd}" & return
-                      end tell
-                    `
-                  : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
-                runAppleScript(baseScript).finally(() => resolve());
-              }, 1000);
-            });
-          case 'ghostty':
-            exec(`ghostty -e bash ${shellQuote(scriptPath)}`);
-            return Promise.resolve();
-          case 'alacritty':
-            exec(`alacritty -e bash ${shellQuote(scriptPath)}`);
-            return Promise.resolve();
-          case 'kitty':
-            exec(`kitty bash ${shellQuote(scriptPath)}`);
-            return Promise.resolve();
-          case 'hyper':
-            exec(`open -a Hyper`);
-            return new Promise<void>(resolve => {
-              setTimeout(() => {
-                const baseScript = hotkeyScript
-                  ? `
-                      tell application "System Events"
-                        ${hotkeyScript}
-                        keystroke "${escapedLaunchCmd}" & return
-                      end tell
-                    `
-                  : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
-                runAppleScript(baseScript).finally(() => resolve());
-              }, 1000);
-            });
-          case 'cmux':
-            exec(`open -a cmux`);
-            return new Promise<void>(resolve => {
-              setTimeout(() => {
-                const baseScript = hotkeyScript
-                  ? `
-                      tell application "System Events"
-                        ${hotkeyScript}
-                        keystroke "${escapedLaunchCmd}" & return
-                      end tell
-                    `
-                  : `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`;
-                runAppleScript(baseScript).finally(() => resolve());
-              }, 1000);
-            });
-          case 'custom': {
-            const customApp = store.get('customExternalTerminalApp', '') as string;
-            if (!customApp) {
-              if (isCustomLaunchMode && hotkeyScript) {
-                script = `
-                    tell application "Terminal"
-                      activate
-                      if (count of windows) = 0 then
-                        do script ""
-                      end if
-                    end tell
-                    tell application "System Events"
-                      ${hotkeyScript}
-                      keystroke "${escapedLaunchCmd}" & return
-                    end tell
-                  `;
-              } else {
-                script = openInTab
-                  ? `
-                      tell application "Terminal"
-                        activate
-                        if (count of windows) = 0 then
-                          do script "${escapedLaunchCmd}"
-                        else
-                          do script "${escapedLaunchCmd}" in front window
-                        end if
-                      end tell
-                    `
-                  : `
-                      tell application "Terminal"
-                        activate
-                        do script "${escapedLaunchCmd}"
-                      end tell
-                    `;
-              }
-              break;
-            }
-
-            exec(`open -a ${shellQuote(customApp)}`);
-            return new Promise<void>(resolve => {
-              setTimeout(() => {
-                runAppleScript(
-                  `tell application "System Events" to keystroke "${escapedLaunchCmd}" & return`
-                ).finally(() => resolve());
-              }, 1000);
-            });
-          }
-          default:
-            if (isCustomLaunchMode && hotkeyScript) {
-              script = `
-                  tell application "Terminal"
-                    activate
-                    if (count of windows) = 0 then
-                      do script ""
-                    end if
-                  end tell
-                  tell application "System Events"
-                    ${hotkeyScript}
-                    keystroke "${escapedLaunchCmd}" & return
-                  end tell
-                `;
-            } else {
-              script = openInTab
-                ? `
-                    tell application "Terminal"
-                      activate
-                      if (count of windows) = 0 then
-                        do script "${escapedLaunchCmd}"
-                      else
-                        do script "${escapedLaunchCmd}" in front window
-                      end if
-                    end tell
-                  `
-                : `
-                    tell application "Terminal"
-                      activate
-                      do script "${escapedLaunchCmd}"
-                    end tell
-                  `;
-            }
-        }
-
-        return runAppleScript(script);
-      }
-
-      // Embedded terminal — spawn PTY with env vars baked in
-      return spawnTerminal(win, command, cwd, env);
+      const scriptPath = writeLaunchScript(command, cwd, env);
+      return launchScriptInExternalTerminal(scriptPath);
     }
   );
 
