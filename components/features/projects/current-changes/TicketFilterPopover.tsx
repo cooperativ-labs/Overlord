@@ -83,6 +83,11 @@ export function TicketFilterPopover({
                 <span className="min-w-0 truncate">
                   {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
                 </span>
+                {ticket.status ? (
+                  <span className="ml-auto shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                    {ticket.status}
+                  </span>
+                ) : null}
               </button>
             );
           })}

@@ -46,6 +46,7 @@ export async function GET(request: Request, { params }: RouteContext) {
         .map(v => v.trim())
         .filter(Boolean)
     );
+    const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
 
     const supabase = await createClient();
     const {
@@ -58,7 +59,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id')
+      .select('id,organization_id')
       .eq('id', projectId)
       .maybeSingle();
 
@@ -69,8 +70,32 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
+    // When not including completed tickets, resolve which ticket IDs to exclude.
+    let excludedTicketIds: string[] = [];
+    if (!includeCompleted && project.organization_id) {
+      const { data: completeStatuses } = await supabase
+        .from('ticket_statuses')
+        .select('name')
+        .eq('organization_id', project.organization_id)
+        .eq('status_type', 'complete');
+
+      const completeStatusNames = (completeStatuses ?? []).map(
+        (s: { name: string }) => s.name
+      );
+
+      if (completeStatusNames.length > 0) {
+        const { data: completedTickets } = await supabase
+          .from('tickets')
+          .select('id')
+          .eq('project_id', projectId)
+          .in('status', completeStatusNames);
+
+        excludedTicketIds = (completedTickets ?? []).map((t: { id: string }) => t.id);
+      }
+    }
+
     // Get file_changes artifacts for tickets in this project, joined with ticket data.
-    const { data: artifacts, error: artifactError } = await supabase
+    let artifactQuery = supabase
       .from('artifacts')
       .select('content,ticket_id,tickets!inner(id,title,project_id)')
       .eq('artifact_type', 'file_changes')
@@ -78,6 +103,16 @@ export async function GET(request: Request, { params }: RouteContext) {
       .not('content', 'is', null)
       .order('created_at', { ascending: false })
       .limit(500);
+
+    if (excludedTicketIds.length > 0) {
+      artifactQuery = artifactQuery.not(
+        'ticket_id',
+        'in',
+        `(${excludedTicketIds.join(',')})`
+      );
+    }
+
+    const { data: artifacts, error: artifactError } = await artifactQuery;
 
     if (artifactError) {
       return NextResponse.json({ error: artifactError.message }, { status: 500 });

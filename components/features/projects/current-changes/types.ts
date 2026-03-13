@@ -56,6 +56,7 @@ export type ChangeRationaleRecord = {
   summary: string;
   ticket: {
     id: string;
+    status: string;
     title: string | null;
   } | null;
   updated_at: string;
@@ -70,6 +71,7 @@ export type DiffState = {
 
 export type TicketSummary = {
   id: string;
+  status: string | null;
   title: string | null;
 };
 
