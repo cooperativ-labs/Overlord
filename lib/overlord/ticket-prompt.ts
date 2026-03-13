@@ -1,4 +1,4 @@
-import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { buildPromptContext } from '@/lib/overlord/prompt-context';
 import {
   generateAskPayloadExample,
   generateAttachPayloadExample,
@@ -32,6 +32,8 @@ type Ticket = {
   objective: string | null;
   acceptance_criteria: string | null;
   available_tools: string | null;
+  constraints?: string | null;
+  output_format?: string | null;
   execution_target: 'agent' | 'human' | null;
   project_id: string;
   status: string | null;
@@ -51,9 +53,6 @@ export function buildTicketPromptMarkdown({
   options
 }: BuildTicketPromptMarkdownInput): string {
   const ref = ticket.id;
-  const title = ticket.title ?? '(Untitled)';
-  const section = (heading: string, body: string | null) =>
-    body?.trim() ? `### ${heading}\n\n${body.trim()}\n` : '';
   const launchMode = options?.launchMode ?? 'run';
 
   const isLocal = context
@@ -65,40 +64,18 @@ export function buildTicketPromptMarkdown({
   const protocolSection = isLocal
     ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs)
     : buildRemoteProtocolSection(ticket.id, platformUrl, options);
-
-  const customInstructions = options?.customInstructions?.trim();
-  const customInstructionsSection = customInstructions
-    ? `### Custom instructions
-
-${customInstructions}
-`
-    : '';
-  const launchModeSection =
-    launchMode === 'ask'
-      ? `### Ask mode
-
-This session is **Ask-only**:
-- Attach first and read the ticket context.
-- Ask a focused blocking question with the protocol \`ask\` call.
-- Stop after calling \`ask\`. Do not implement code, apply patches, or deliver.
-`
-      : '';
+  const { promptContext } = buildPromptContext({
+    ticket,
+    customInstructions: options?.customInstructions,
+    launchMode
+  });
 
   return `# Overlord — Agent Instructions
 
 You are an AI coding agent working on ticket **${ref}** via Overlord.
 Complete the work described below, then deliver a summary back to the platform.
 
-## Your Ticket
-
-- **Title:** ${title}
-- **Reference:** ${ref}
-
-${section('Objective', ticket.objective)}
-${section('Acceptance Criteria', ticket.acceptance_criteria)}
-${section('Available Tools / Constraints', ticket.available_tools)}
-${customInstructionsSection}
-${launchModeSection}
+${promptContext}
 ---
 
 ${protocolSection}`;
@@ -143,6 +120,7 @@ npx overlord protocol attach --ticket-id ${ticketId}
 \`\`\`
 
 Prints response JSON to stdout. Store \`session.sessionKey\` — required for every subsequent call. Response also includes \`ticket\`, \`history\` (deliver events), \`artifacts\`, and \`sharedState\`.
+\`promptContext\` is also returned as a ready-to-use assembled context block.
 
 ### 2 — Update (after each meaningful step)
 
@@ -150,7 +128,7 @@ Prints response JSON to stdout. Store \`session.sessionKey\` — required for ev
 npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} --summary "What you did and why." --phase execute
 \`\`\`
 
-Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI.
+Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI. Use \`--external-url https://...\` when you want Overlord to store a deep link back to the live agent session.
 
 Pass \`--event-type <type>\` to publish a specific activity event (default: \`update\`). Available event types:
 - \`update\` — standard progress update (default)

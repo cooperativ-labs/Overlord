@@ -4,6 +4,8 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
+import { buildPromptContext } from './_prompt-context.ts';
+
 /**
  * Explicit ticket columns returned to agents — excludes internal fields like search_vector.
  * IMPORTANT: Keep this in sync with lib/overlord/protocol-attach.ts (TICKET_AGENT_FIELDS).
@@ -113,7 +115,14 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     if (reopenEventError) return toolErr('Failed to record reopen event.');
   }
 
-  const [{ data: history }, { data: artifacts }, { data: sharedState }] = await Promise.all([
+  const [
+    { data: history },
+    { data: artifacts },
+    { data: sharedState },
+    { data: recentEvents },
+    { data: project },
+    { data: profile }
+  ] = await Promise.all([
     supabase
       .from('ticket_events')
       .select('*')
@@ -132,14 +141,40 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       .select('*')
       .or(`ticket_id.eq.${ticketId},ticket_id.is.null`)
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(50),
+    supabase
+      .from('ticket_events')
+      .select('*')
+      .eq('ticket_id', ticketId)
+      .neq('event_type', 'system')
+      .order('created_at', { ascending: false })
+      .limit(12),
+    supabase
+      .from('projects')
+      .select('local_working_directory')
+      .eq('id', ticket.project_id)
+      .maybeSingle(),
+    supabase.from('profiles').select('custom_agent_instructions').eq('id', ctx.userId).maybeSingle()
   ]);
+
+  const resolvedTicket = { ...ticket, objective: executedObjective ?? ticket.objective };
+  const { promptContext, promptContextSections } = buildPromptContext({
+    ticket: resolvedTicket,
+    recentEvents: recentEvents ?? [],
+    history: history ?? [],
+    artifacts: artifacts ?? [],
+    sharedState: sharedState ?? [],
+    customInstructions: profile?.custom_agent_instructions ?? null,
+    workingDirectory: project?.local_working_directory ?? null
+  });
 
   return toolOk({
     history: history ?? [],
     artifacts: artifacts ?? [],
     session: { id: session.id, sessionKey: session.session_key, state: session.session_state },
     sharedState: sharedState ?? [],
-    ticket: { ...ticket, objective: executedObjective ?? ticket.objective }
+    promptContext,
+    promptContextSections,
+    ticket: resolvedTicket
   });
 }

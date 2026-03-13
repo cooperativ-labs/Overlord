@@ -24,7 +24,7 @@ const ALLOWED_ORIGIN_PATTERNS = [/^https:\/\/.*\.vercel\.app$/];
 export function getAllowedOrigin(origin: string | null): string | null {
   if (!origin) return null; // No Origin header = non-browser client (allowed)
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  if (ALLOWED_ORIGIN_PATTERNS.some((p) => p.test(origin))) return origin;
+  if (ALLOWED_ORIGIN_PATTERNS.some(p => p.test(origin))) return origin;
   return null;
 }
 
@@ -33,7 +33,8 @@ export function buildCorsHeaders(origin: string | null): Record<string, string> 
   return {
     'Access-Control-Allow-Origin': allowed ?? '',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, content-type, mcp-session-id, x-organization-id, x-request-id',
+    'Access-Control-Allow-Headers':
+      'authorization, content-type, mcp-session-id, x-organization-id, x-request-id',
     ...(allowed ? { Vary: 'Origin' } : {})
   };
 }
@@ -45,7 +46,8 @@ export function buildCorsHeaders(origin: string | null): Record<string, string> 
 export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, content-type, mcp-session-id, x-organization-id, x-request-id'
+  'Access-Control-Allow-Headers':
+    'authorization, content-type, mcp-session-id, x-organization-id, x-request-id'
 };
 
 export function jsonResponse(body: unknown, status = 200): Response {

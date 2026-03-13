@@ -6,7 +6,7 @@ export const TOOLS = [
   {
     name: 'attach',
     description:
-      'Attach to an Overlord ticket session. Call this FIRST before any other tool. Returns session.sessionKey (required for all subsequent calls), the full ticket record, prior delivery history, artifacts, and shared state.',
+      'Attach to an Overlord ticket session. Call this FIRST before any other tool. Returns session.sessionKey, the full ticket record, a preassembled promptContext string, prior delivery history, artifacts, and shared state.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -39,6 +39,11 @@ export const TOOLS = [
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: { type: 'string', description: 'Ticket UUID.' },
         summary: { type: 'string', description: 'What you did and why.' },
+        externalUrl: {
+          type: ['string', 'null'],
+          description:
+            'Optional agent dashboard URL for this session. Pass null to clear a previously stored link.'
+        },
         phase: {
           type: 'string',
           enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'],

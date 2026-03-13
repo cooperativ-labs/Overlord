@@ -17,17 +17,22 @@ import {
 import { updateTicketPriorityAction } from '@/lib/actions/tickets';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
-import { capitalizeFirst, getOptionLabel, ticketExecutionTargetOptions } from '@/lib/options';
+import { capitalizeFirst } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
+import {
+  ExecutionTargetBadge,
+  getExecutionTargetCardClassName,
+  getExecutionTargetSurfaceClassName
+} from './ExecutionTargetBadge';
 import type { Ticket } from './KanbanCard';
 
 export default function TicketListCard({
   ticket,
   ticketPath,
   isSelected,
-  showOrganizationName = false,
+  showOrganizationName: _showOrganizationName = false,
   onMarkUnread
 }: {
   ticket: Ticket;
@@ -116,6 +121,8 @@ export default function TicketListCard({
           className={cn(
             'group relative flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/50 ',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
+            getExecutionTargetCardClassName(ticket.execution_target),
+            getExecutionTargetSurfaceClassName(ticket.execution_target),
             isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
             hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
           )}
@@ -146,9 +153,7 @@ export default function TicketListCard({
               <Badge variant="outline" className="py-0 text-[11px]">
                 {capitalizeFirst(ticket.status)}
               </Badge>
-              <Badge variant="outline" className="py-0 text-[11px]">
-                {getOptionLabel(ticketExecutionTargetOptions, ticket.execution_target)}
-              </Badge>
+              <ExecutionTargetBadge executionTarget={ticket.execution_target} />
             </div>
           </div>
 

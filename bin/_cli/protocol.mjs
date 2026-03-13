@@ -206,6 +206,14 @@ async function protocolUpdate(args) {
     sessionKey,
     ticketId,
     summary,
+    ...(flags['external-url']
+      ? {
+          externalUrl:
+            String(flags['external-url']).trim().toLowerCase() === 'null'
+              ? null
+              : String(flags['external-url'])
+        }
+      : {}),
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
     ...(flags['event-type'] ? { eventType: String(flags['event-type']) } : {}),
     ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {})
@@ -665,6 +673,9 @@ Flags read from env vars when not provided:
 Common flags (all subcommands):
   --timeout <ms>          Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS}).
                           Also: OVERLORD_TIMEOUT env var.
+
+Update-specific flags:
+  --external-url <url>   Store or refresh a deep link to the current agent session.
 
 Deliver-specific flags:
   --artifacts-json <json> Inline JSON array of artifact objects.

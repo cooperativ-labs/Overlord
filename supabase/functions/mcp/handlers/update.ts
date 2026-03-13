@@ -13,6 +13,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     ticketId: rawTicketId,
     summary,
     phase,
+    externalUrl,
     payload = {},
     changeRationales = []
   } = args;
@@ -48,6 +49,14 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
       ticketId
     });
     if (rationaleResult.error) return toolErr(rationaleResult.error);
+  }
+
+  if (externalUrl !== undefined) {
+    const { error: sessionErr } = await supabase
+      .from('agent_sessions')
+      .update({ external_url: externalUrl })
+      .eq('id', resolved.session.id);
+    if (sessionErr) return toolErr(sessionErr.message);
   }
 
   // Fan out notifications if provided

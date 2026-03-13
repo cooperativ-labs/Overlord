@@ -81,6 +81,7 @@ Call \`attach\` first. Pass the ticket's UUID (from the \`TICKET_ID\` environmen
 
 The response contains:
 - \`session.sessionKey\` — required for all subsequent calls
+- \`promptContext\` — a ready-to-use context block assembled from the ticket, recent activity, artifacts, shared state, and user instructions
 - \`ticket\` — full ticket record (objective, acceptance criteria, available tools, status, priority)
 - \`history\` — prior delivery events from previous sessions
 - \`artifacts\` — previously uploaded files
@@ -369,7 +370,12 @@ Deno.serve(async (req: Request) => {
       // Log full error with request ID for debugging, return sanitized message to client
       console.error(`[mcp] tool error (${toolName}) [${requestId}]:`, err);
       return rpcResult(id, {
-        content: [{ type: 'text', text: `An internal error occurred (ref: ${requestId}). Please try again or contact support.` }],
+        content: [
+          {
+            type: 'text',
+            text: `An internal error occurred (ref: ${requestId}). Please try again or contact support.`
+          }
+        ],
         isError: true
       });
     }

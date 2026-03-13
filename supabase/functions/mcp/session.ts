@@ -77,7 +77,8 @@ export async function resolveSession(
         .update({ session_state: 'disconnected', detached_at: new Date().toISOString() })
         .eq('id', session.id);
       return {
-        error: 'Session timed out due to inactivity. Please call attach again to start a new session.',
+        error:
+          'Session timed out due to inactivity. Please call attach again to start a new session.',
         session: null,
         resolvedTicketId: null
       };
