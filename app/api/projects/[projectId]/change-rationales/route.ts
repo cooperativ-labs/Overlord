@@ -21,9 +21,11 @@ export async function GET(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
+    const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
+
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id')
+      .select('id,organization_id')
       .eq('id', projectId)
       .maybeSingle();
 
@@ -32,6 +34,31 @@ export async function GET(request: Request, { params }: RouteContext) {
         { error: projectError?.message ?? 'Project not found.' },
         { status: 404 }
       );
+    }
+
+    // When not including completed tickets, resolve which ticket IDs to exclude
+    // by looking up status names with status_type = 'complete' for this org.
+    let excludedTicketIds: string[] = [];
+    if (!includeCompleted && project.organization_id) {
+      const { data: completeStatuses } = await supabase
+        .from('ticket_statuses')
+        .select('name')
+        .eq('organization_id', project.organization_id)
+        .eq('status_type', 'complete');
+
+      const completeStatusNames = (completeStatuses ?? []).map(
+        (s: { name: string }) => s.name
+      );
+
+      if (completeStatusNames.length > 0) {
+        const { data: completedTickets } = await supabase
+          .from('tickets')
+          .select('id')
+          .eq('project_id', projectId)
+          .in('status', completeStatusNames);
+
+        excludedTicketIds = (completedTickets ?? []).map((t: { id: string }) => t.id);
+      }
     }
 
     let rationaleQuery = supabase
@@ -46,6 +73,15 @@ export async function GET(request: Request, { params }: RouteContext) {
       rationaleQuery = rationaleQuery.in('file_path', filePaths);
     }
 
+    if (excludedTicketIds.length > 0) {
+      // PostgREST `not.in` filter: exclude rationales from completed tickets
+      rationaleQuery = rationaleQuery.not(
+        'ticket_id',
+        'in',
+        `(${excludedTicketIds.join(',')})`
+      );
+    }
+
     const { data: rationales, error: rationaleError } = await rationaleQuery;
     if (rationaleError) {
       return NextResponse.json({ error: rationaleError.message }, { status: 500 });
@@ -57,8 +93,11 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const [ticketsResult, eventsResult, sessionsResult] = await Promise.all([
       ticketIds.length
-        ? supabase.from('tickets').select('id,title').in('id', ticketIds)
-        : Promise.resolve({ data: [] as { id: string; title: string | null }[], error: null }),
+        ? supabase.from('tickets').select('id,title,status').in('id', ticketIds)
+        : Promise.resolve({
+            data: [] as { id: string; title: string | null; status: string }[],
+            error: null
+          }),
       eventIds.length
         ? supabase
             .from('ticket_events')

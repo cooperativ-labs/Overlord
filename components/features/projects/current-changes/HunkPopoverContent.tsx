@@ -68,12 +68,17 @@ export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopo
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             {match.ticket ? (
-              <Link
-                className="rounded underline-offset-4 hover:underline"
-                href={buildTicketPath({ projectId, ticketId: match.ticket.id })}
-              >
-                {match.ticket.title?.trim() || `Ticket ${match.ticket.id.slice(-8)}`}
-              </Link>
+              <>
+                <Link
+                  className="rounded underline-offset-4 hover:underline"
+                  href={buildTicketPath({ projectId, ticketId: match.ticket.id })}
+                >
+                  {match.ticket.title?.trim() || `Ticket ${match.ticket.id.slice(-8)}`}
+                </Link>
+                <span className="rounded-full border px-1.5 py-0.5 text-[9px]">
+                  {match.ticket.status}
+                </span>
+              </>
             ) : null}
             {match.event ? <span>{match.event.event_type}</span> : null}
             {match.session ? <span>{match.session.agent_identifier}</span> : null}
