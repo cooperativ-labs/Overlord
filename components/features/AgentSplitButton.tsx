@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getAgentConfigAction } from '@/lib/actions/agent-config';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
@@ -36,6 +35,7 @@ type AgentSplitButtonProps = {
   onSelectAgent: (agent: AgentSelectorValue) => void;
   ticketId: string;
   agentToken?: string | null;
+  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   commands: Record<LaunchAgentTypeValue, string>;
   workingDirectory?: string | null;
   activeAgentIdentifier?: string | null;
@@ -94,6 +94,7 @@ export function AgentSplitButton({
   onSelectAgent,
   ticketId,
   agentToken,
+  agentFlags,
   commands,
   workingDirectory,
   activeAgentIdentifier,
@@ -157,15 +158,13 @@ export function AgentSplitButton({
     if (isElectron) {
       setIsLaunching(true);
       try {
-        const agentConfig = await getAgentConfigAction(agentValue);
-        const agentFlags = agentConfig?.flags ?? [];
         await launchAgent(
           ticketId,
           agentValue,
           workingDirectory ?? undefined,
           agentToken ?? undefined,
           'run',
-          agentFlags.length > 0 ? agentFlags : undefined
+          agentFlags?.[agentValue]
         );
       } catch (error) {
         console.error('Failed to launch agent:', error);

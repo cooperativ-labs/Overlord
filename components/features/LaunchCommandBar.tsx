@@ -30,6 +30,7 @@ type SessionState = Database['public']['Enums']['session_state'];
 type Props = {
   ticketId: string;
   agentToken?: string | null;
+  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   claudeCommand: string;
   codexCommand: string;
   cursorCommand: string;
@@ -114,6 +115,7 @@ function CopyAgentCommandButton({
 export function LaunchCommandBar({
   ticketId,
   agentToken,
+  agentFlags,
   claudeCommand,
   codexCommand,
   cursorCommand,
@@ -150,6 +152,7 @@ export function LaunchCommandBar({
         onSelectAgent={setSelectedAgent}
         ticketId={ticketId}
         agentToken={agentToken}
+        agentFlags={agentFlags}
         commands={commands}
         workingDirectory={workingDirectory}
         activeAgentIdentifier={activeAgentIdentifier}

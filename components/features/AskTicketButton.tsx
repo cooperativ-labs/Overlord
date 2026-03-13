@@ -4,9 +4,11 @@ import { useState } from 'react';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { getAgentConfigAction } from '@/lib/actions/agent-config';
 import { getTicketDiscussionPromptForCopy } from '@/lib/actions/tickets';
-import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import {
+  getLaunchAgentTypeByIdentifier,
+  type LaunchAgentTypeValue
+} from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
@@ -15,6 +17,7 @@ type AskTicketButtonProps = {
   ticketId: string;
   agentIdentifier?: string | null;
   agentToken?: string | null;
+  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   workingDirectory?: string | null;
   hasProjectWorkingDirectory?: boolean;
 };
@@ -23,6 +26,7 @@ export function AskTicketButton({
   ticketId,
   agentIdentifier,
   agentToken,
+  agentFlags,
   workingDirectory,
   hasProjectWorkingDirectory
 }: AskTicketButtonProps) {
@@ -41,15 +45,13 @@ export function AskTicketButton({
       const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
 
       if (isElectron) {
-        const agentConfig = await getAgentConfigAction(preferredAgent);
-        const agentFlags = agentConfig?.flags ?? [];
         await launchAgent(
           ticketId,
           preferredAgent,
           workingDirectory ?? undefined,
           agentToken ?? undefined,
           'ask',
-          agentFlags.length > 0 ? agentFlags : undefined
+          agentFlags?.[preferredAgent]
         );
       } else {
         const { error, prompt } = await getTicketDiscussionPromptForCopy(ticketId);

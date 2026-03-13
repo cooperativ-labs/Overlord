@@ -33,10 +33,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Separator } from '@/components/ui/separator';
+import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
-import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
@@ -182,11 +183,18 @@ export async function TicketPanelContent({
   const objectives = objectivesResult.data;
 
   const platformUrl = getPlatformUrl();
+  const agentConfigs = user ? await getAllAgentConfigsByUserIdAction(user.id, supabase) : {};
   const agentToken =
     agentTokenRow &&
     (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
       ? agentTokenRow.token
       : null;
+  const agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>> = {
+    claude: agentConfigs.claude?.flags ?? [],
+    codex: agentConfigs.codex?.flags ?? [],
+    cursor: agentConfigs.cursor?.flags ?? [],
+    gemini: agentConfigs.gemini?.flags ?? []
+  };
   const workspaceRoot = getWorkspaceRoot();
   const editorScheme = getEditorScheme();
   const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
@@ -297,6 +305,7 @@ export async function TicketPanelContent({
             <TicketHeaderAction
               ticketId={ticketId}
               agentToken={agentToken}
+              agentFlags={agentFlags}
               agentIdentifier={agentSession?.agent_identifier ?? null}
               claudeCommand={claudeCode}
               codexCommand={codex}

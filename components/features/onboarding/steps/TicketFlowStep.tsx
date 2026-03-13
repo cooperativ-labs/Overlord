@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, ChevronDown, FolderOpen, Plus, Terminal } from 'lucide-react';
+import { ArrowRight, Play, Plus, Terminal } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
@@ -12,6 +12,8 @@ type FlowNode = {
   icon: React.ReactNode;
   label: string;
   description: string;
+  badge?: string;
+  screenshotSrc?: string;
 };
 
 const FLOW_NODES: FlowNode[] = [
@@ -48,36 +50,19 @@ const FLOW_NODES: FlowNode[] = [
     description: 'Describe what you want the agent to do — be as specific or brief as you like'
   },
   {
-    icon: <FolderOpen className="h-5 w-5" />,
-    label: 'Set the project',
-    description: 'Choose which codebase the agent should work in'
-  },
-  {
-    icon: <AgentRunButtonPreview />,
-    label: 'Click Run',
-    description: 'Pick your agent (Claude, Codex, Cursor…) and click the Run button'
+    icon: <Play className="h-5 w-5" />,
+    label: 'Launch the agent',
+    description: 'Pick your agent (Claude, Codex, Cursor…) and launch it from the ticket',
+    screenshotSrc: '/images/onboarding/launch-screenshot.png'
   },
   {
     icon: <Terminal className="h-5 w-5" />,
     label: 'Terminal opens',
     description:
-      'The desktop app launches a terminal in your project directory and the agent gets to work'
+      'A terminal launches in your project directory and the agent gets to work automatically',
+    badge: 'Desktop app only'
   }
 ];
-
-/** A miniaturised replica of AgentSplitButton for the diagram */
-function AgentRunButtonPreview() {
-  return (
-    <div className="inline-flex items-stretch rounded border border-input bg-background text-xs shadow-sm">
-      <div className="flex items-center gap-1 px-2 py-1 font-medium">
-        <span className="text-[10px]">Claude Code</span>
-      </div>
-      <div className="flex items-center border-l px-1">
-        <ChevronDown className="h-3 w-3 text-muted-foreground" />
-      </div>
-    </div>
-  );
-}
 
 export function TicketFlowStep({ onContinue }: Props) {
   return (
@@ -106,8 +91,26 @@ export function TicketFlowStep({ onContinue }: Props) {
               </div>
               {/* Content */}
               <div className="pb-5 pt-1.5">
-                <p className="text-sm font-semibold">{node.label}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">{node.label}</p>
+                  {node.badge && (
+                    <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium">
+                      {node.badge}
+                    </span>
+                  )}
+                </div>
                 <p className="text-muted-foreground text-sm">{node.description}</p>
+                {node.screenshotSrc && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={node.screenshotSrc}
+                    alt="Screenshot of the agent launcher"
+                    className="mt-3 w-full rounded-lg border shadow-sm"
+                    onError={e => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>

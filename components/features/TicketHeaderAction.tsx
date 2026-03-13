@@ -1,6 +1,9 @@
 'use client';
 
-import { getLaunchAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import {
+  getLaunchAgentTypeByIdentifier,
+  type LaunchAgentTypeValue
+} from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import { AskTicketButton } from './AskTicketButton';
@@ -10,6 +13,7 @@ import { AgentSplitButtonLive } from './TicketLiveProvider';
 type TicketHeaderActionProps = {
   ticketId: string;
   agentToken: string | null;
+  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   agentIdentifier: string | null;
   claudeCommand: string;
   codexCommand: string;
@@ -22,6 +26,7 @@ type TicketHeaderActionProps = {
 export function TicketHeaderAction({
   ticketId,
   agentToken,
+  agentFlags,
   agentIdentifier,
   claudeCommand,
   codexCommand,
@@ -39,6 +44,7 @@ export function TicketHeaderAction({
           ticketId={ticketId}
           agentIdentifier={agentIdentifier}
           agentToken={agentToken}
+          agentFlags={agentFlags}
           workingDirectory={workingDirectory}
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         />
@@ -53,6 +59,7 @@ export function TicketHeaderAction({
         ticketId={ticketId}
         agentIdentifier={agentIdentifier}
         agentToken={agentToken}
+        agentFlags={agentFlags}
         workingDirectory={workingDirectory}
         hasProjectWorkingDirectory={hasProjectWorkingDirectory}
       />
@@ -60,6 +67,7 @@ export function TicketHeaderAction({
         defaultAgent={agentIdentifier ? getLaunchAgentTypeByIdentifier(agentIdentifier) : undefined}
         ticketId={ticketId}
         agentToken={agentToken}
+        agentFlags={agentFlags}
         commands={{
           claude: claudeCommand,
           codex: codexCommand,

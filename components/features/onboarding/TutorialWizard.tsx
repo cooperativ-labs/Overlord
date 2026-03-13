@@ -26,9 +26,10 @@ import {
 import type { AgentTypeValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS_WEB = 4;
+const TOTAL_STEPS_ELECTRON = 5;
 
-const STEP_LABELS = ['Organization', 'Project', 'Desktop App', 'Agent Setup', 'How it works'];
+const STEP_LABELS = ['Organization', 'Project', 'Desktop App', 'How it works', 'CLI Setup'];
 
 type TutorialWizardProps = {
   initialState: OnboardingState;
@@ -42,6 +43,8 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   const { api, isElectron } = useElectron();
 
   // Determine the effective first step
+  const TOTAL_STEPS = isElectron ? TOTAL_STEPS_ELECTRON : TOTAL_STEPS_WEB;
+
   const effectiveStart = !initialState.hasOrganizations
     ? 1
     : !initialState.hasProjects
@@ -183,8 +186,9 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     }
   }
 
-  // Progress bar: only show for tutorial steps 3–5
+  // Progress bar: only show for tutorial steps 3+
   const showProgress = currentStep >= 3;
+  const tutorialStepLabels = STEP_LABELS.slice(2, 2 + (TOTAL_STEPS - 2));
   const progressPercent = showProgress ? ((currentStep - 3) / (TOTAL_STEPS - 3)) * 100 : 0;
 
   return (
@@ -199,7 +203,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
             <p className="text-muted-foreground text-sm">
               {currentStep <= 2
                 ? "Let's set up your workspace."
-                : `Step ${currentStep - 2} of 3 — ${STEP_LABELS[currentStep - 1]}`}
+                : `Step ${currentStep - 2} of ${TOTAL_STEPS - 2} — ${STEP_LABELS[currentStep - 1]}`}
             </p>
           </div>
           {canSkip && (
@@ -234,7 +238,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
               />
             </div>
             <div className="mt-1.5 flex justify-between">
-              {STEP_LABELS.slice(2).map((label, i) => (
+              {tutorialStepLabels.map((label, i) => (
                 <span
                   key={label}
                   className={cn(
@@ -375,14 +379,14 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
 
         {currentStep === 3 && <DownloadAppStep onContinue={() => void handleStepComplete(3)} />}
 
-        {currentStep === 4 && (
+        {currentStep === 4 && <TicketFlowStep onContinue={() => void handleStepComplete(4)} />}
+
+        {currentStep === 5 && isElectron && (
           <AgentSetupStep
             initialPreferredAgent={preferredAgent}
-            onContinue={() => void handleStepComplete(4)}
+            onContinue={() => void handleStepComplete(5)}
           />
         )}
-
-        {currentStep === 5 && <TicketFlowStep onContinue={() => void handleStepComplete(5)} />}
       </div>
     </div>
   );
