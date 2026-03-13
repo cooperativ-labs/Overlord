@@ -105,7 +105,7 @@ export function TicketFlowStep({ onContinue }: Props) {
                   <img
                     src={node.screenshotSrc}
                     alt="Screenshot of the agent launcher"
-                    className="mt-3 w-full rounded-lg border shadow-sm"
+                    className="mt-3 w-full rounded-lg max-h-14 shadow-sm"
                     onError={e => {
                       (e.currentTarget as HTMLImageElement).style.display = 'none';
                     }}
