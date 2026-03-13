@@ -46,9 +46,7 @@ export async function GET(request: Request, { params }: RouteContext) {
         .eq('organization_id', project.organization_id)
         .eq('status_type', 'complete');
 
-      const completeStatusNames = (completeStatuses ?? []).map(
-        (s: { name: string }) => s.name
-      );
+      const completeStatusNames = (completeStatuses ?? []).map((s: { name: string }) => s.name);
 
       if (completeStatusNames.length > 0) {
         const { data: completedTickets } = await supabase
@@ -75,11 +73,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     if (excludedTicketIds.length > 0) {
       // PostgREST `not.in` filter: exclude rationales from completed tickets
-      rationaleQuery = rationaleQuery.not(
-        'ticket_id',
-        'in',
-        `(${excludedTicketIds.join(',')})`
-      );
+      rationaleQuery = rationaleQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
     }
 
     const { data: rationales, error: rationaleError } = await rationaleQuery;

@@ -48,7 +48,10 @@ export function CurrentChangesPage({
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
 
   const uniqueTickets = useMemo(() => {
-    const ticketMap = new Map<string, { id: string; status: string | null; title: string | null }>();
+    const ticketMap = new Map<
+      string,
+      { id: string; status: string | null; title: string | null }
+    >();
     for (const rationale of rationales) {
       if (rationale.ticket && !ticketMap.has(rationale.ticket.id)) {
         ticketMap.set(rationale.ticket.id, rationale.ticket);

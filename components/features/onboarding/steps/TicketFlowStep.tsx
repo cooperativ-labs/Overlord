@@ -47,12 +47,13 @@ const FLOW_NODES: FlowNode[] = [
       </svg>
     ),
     label: 'Type your objective',
-    description: 'Describe what you want the agent to do — be as specific or brief as you like'
+    description:
+      'Describe what you want the agent to do — be as specific or brief as you like. You can even @mention files.'
   },
   {
     icon: <Play className="h-5 w-5" />,
     label: 'Launch the agent',
-    description: 'Pick your agent (Claude, Codex, Cursor…) and launch it from the ticket',
+    description: 'Pick your agent (Claude, Codex, Cursor…) and launch it from the ticket:',
     screenshotSrc: '/images/onboarding/launch-screenshot.png'
   },
   {
@@ -101,11 +102,10 @@ export function TicketFlowStep({ onContinue }: Props) {
                 </div>
                 <p className="text-muted-foreground text-sm">{node.description}</p>
                 {node.screenshotSrc && (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={node.screenshotSrc}
                     alt="Screenshot of the agent launcher"
-                    className="mt-3 w-full rounded-lg max-h-14 shadow-sm"
+                    className="mt-3 rounded-lg h-8  shadow-sm"
                     onError={e => {
                       (e.currentTarget as HTMLImageElement).style.display = 'none';
                     }}
