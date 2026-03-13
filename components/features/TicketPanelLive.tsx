@@ -4,13 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useTransition } from 'react';
 
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
-import { LaunchCommandBar } from '@/components/features/LaunchCommandBar';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
+import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { getConversationEntryType } from '@/lib/overlord/conversation';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
@@ -177,13 +177,13 @@ export function TicketPanelLive({
   projectId,
   editorScheme,
   workspaceRoot,
-  workingDirectory,
-  hasProjectWorkingDirectory,
-  agentToken,
-  claudeCommand,
-  codexCommand,
-  cursorCommand,
-  geminiCommand
+  workingDirectory: _workingDirectory,
+  hasProjectWorkingDirectory: _hasProjectWorkingDirectory,
+  agentToken: _agentToken,
+  claudeCommand: _claudeCommand,
+  codexCommand: _codexCommand,
+  cursorCommand: _cursorCommand,
+  geminiCommand: _geminiCommand
 }: TicketPanelLiveProps) {
   const router = useRouter();
   const { events, artifacts, session, sharedState } = useTicketLive();
@@ -207,7 +207,7 @@ export function TicketPanelLive({
   }, [ticketId, router]);
 
   const isRunning = session?.session_state === 'attached';
-  const activeAgentIdentifier = isRunning ? session.agent_identifier : null;
+  const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);
 
   function handleForceDisconnect() {
     if (!session) return;
@@ -242,6 +242,13 @@ export function TicketPanelLive({
             Activity
           </h2>
           <AgentSessionBadge session={session} />
+          {session?.external_url ? (
+            <Button asChild className="h-5 px-2 text-[10px]" size="sm" variant="outline">
+              <a href={session.external_url} target="_blank" rel="noreferrer">
+                View in {activeAgentType?.label ?? 'agent'}
+              </a>
+            </Button>
+          ) : null}
           {isRunning ? (
             <Button
               className="h-5 px-2 text-[10px]"

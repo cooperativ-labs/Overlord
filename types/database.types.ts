@@ -35,6 +35,7 @@ export type Database = {
           connection_method: Database['public']['Enums']['connection_method'];
           created_at: string;
           detached_at: string | null;
+          external_url: string | null;
           heartbeat_at: string;
           id: string;
           metadata: Json;
@@ -49,6 +50,7 @@ export type Database = {
           connection_method?: Database['public']['Enums']['connection_method'];
           created_at?: string;
           detached_at?: string | null;
+          external_url?: string | null;
           heartbeat_at?: string;
           id?: string;
           metadata?: Json;
@@ -63,6 +65,7 @@ export type Database = {
           connection_method?: Database['public']['Enums']['connection_method'];
           created_at?: string;
           detached_at?: string | null;
+          external_url?: string | null;
           heartbeat_at?: string;
           id?: string;
           metadata?: Json;
@@ -940,6 +943,7 @@ export type Database = {
         Args: { target_organization_id: number };
         Returns: boolean;
       };
+      is_ticket_org_member: { Args: { p_ticket_id: string }; Returns: boolean };
       seed_default_ticket_statuses_for_organization: {
         Args: { target_organization_id: number };
         Returns: undefined;

@@ -102,6 +102,8 @@ export async function GET(request: Request, { params }: RouteContext) {
         objective: draftObjective?.objective,
         acceptance_criteria: ticket.acceptance_criteria,
         available_tools: ticket.available_tools,
+        constraints: ticket.constraints,
+        output_format: ticket.output_format,
         execution_target: ticket.execution_target,
         project_id: ticket.project_id,
         status: ticket.status,

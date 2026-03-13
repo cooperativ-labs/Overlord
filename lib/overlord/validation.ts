@@ -81,6 +81,7 @@ export const changeRationaleSchema = z.object({
 
 export const updateSchema = z.object({
   changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
+  externalUrl: z.string().trim().max(2_048).pipe(z.url()).nullable().optional(),
   sessionKey: z.string().uuid(),
   ticketId: ticketIdSchema,
   summary: z.string().trim().min(1).max(20_000),

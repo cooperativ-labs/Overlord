@@ -1,0 +1,182 @@
+import type { Database, Json } from '@/types/database.types';
+
+type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
+type Artifact = Database['public']['Tables']['artifacts']['Row'];
+type SharedState = Database['public']['Tables']['shared_state']['Row'];
+
+type TicketLike = {
+  id: string;
+  title: string | null | undefined;
+  objective: string | null;
+  acceptance_criteria: string | null;
+  available_tools: string | null;
+  constraints?: string | null;
+  output_format?: string | null;
+  execution_target: 'agent' | 'human' | null;
+  project_id: string;
+  status: string | null;
+  priority: string | number | null;
+};
+
+export type PromptContextSections = {
+  task: string;
+  guidance: string;
+  history: string;
+  artifacts: string;
+  sharedContext: string;
+};
+
+type BuildPromptContextInput = {
+  ticket: TicketLike;
+  recentEvents?: TicketEvent[];
+  history?: TicketEvent[];
+  artifacts?: Artifact[];
+  sharedState?: SharedState[];
+  customInstructions?: string | null;
+  workingDirectory?: string | null;
+  launchMode?: 'run' | 'ask';
+};
+
+function section(heading: string, body: string): string {
+  const trimmed = body.trim();
+  return trimmed ? `## ${heading}\n\n${trimmed}` : '';
+}
+
+function optionalSubsection(heading: string, value: string | null | undefined): string {
+  return value?.trim() ? `### ${heading}\n\n${value.trim()}` : '';
+}
+
+function formatJsonInline(value: Json): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatTicketMetadata(ticket: TicketLike): string {
+  const lines = [
+    `- **Title:** ${ticket.title?.trim() || '(Untitled)'}`,
+    `- **Reference:** ${ticket.id}`,
+    `- **Status:** ${ticket.status ?? 'unknown'}`,
+    `- **Priority:** ${ticket.priority ?? 'unspecified'}`,
+    `- **Execution Target:** ${ticket.execution_target ?? 'agent'}`,
+    `- **Project ID:** ${ticket.project_id}`
+  ];
+
+  return lines.join('\n');
+}
+
+function formatEventLine(event: TicketEvent): string {
+  const parts: string[] = [event.event_type];
+  if (event.phase) parts.push(event.phase);
+  const prefix = parts.join(' / ');
+  const summary = event.summary?.trim() || '(no summary)';
+  return `- [${prefix}] ${summary}`;
+}
+
+function formatArtifactLine(artifact: Artifact): string {
+  const location = artifact.uri || artifact.storage_path || 'stored in Overlord';
+  return `- ${artifact.label} (${artifact.artifact_type}) — ${location}`;
+}
+
+function formatSharedStateLine(item: SharedState): string {
+  const rendered = formatJsonInline(item.state_value);
+  return `- ${item.state_key}: ${rendered}`;
+}
+
+export function buildPromptContextSections(input: BuildPromptContextInput): PromptContextSections {
+  const {
+    ticket,
+    recentEvents = [],
+    history = [],
+    artifacts = [],
+    sharedState = [],
+    customInstructions,
+    workingDirectory,
+    launchMode = 'run'
+  } = input;
+
+  const taskParts = [
+    formatTicketMetadata(ticket),
+    optionalSubsection('Objective', ticket.objective),
+    optionalSubsection('Acceptance Criteria', ticket.acceptance_criteria),
+    optionalSubsection('Constraints', ticket.constraints),
+    optionalSubsection('Available Tools', ticket.available_tools),
+    optionalSubsection('Output Format', ticket.output_format)
+  ].filter(Boolean);
+
+  const guidanceLines: string[] = [];
+  if (customInstructions?.trim()) {
+    guidanceLines.push('### Custom Instructions');
+    guidanceLines.push('');
+    guidanceLines.push(customInstructions.trim());
+  }
+  if (workingDirectory?.trim()) {
+    if (guidanceLines.length > 0) guidanceLines.push('');
+    guidanceLines.push('### Working Directory');
+    guidanceLines.push('');
+    guidanceLines.push(workingDirectory.trim());
+  }
+  if (launchMode === 'ask') {
+    if (guidanceLines.length > 0) guidanceLines.push('');
+    guidanceLines.push('### Ask Mode');
+    guidanceLines.push('');
+    guidanceLines.push('- Attach first and read the ticket context.');
+    guidanceLines.push('- Ask one focused blocking question.');
+    guidanceLines.push('- Stop after asking. Do not implement or deliver.');
+  }
+
+  const recentEventLines = recentEvents
+    .filter(event => event.event_type !== 'system' && event.event_type !== 'context_read')
+    .map(formatEventLine);
+  const deliverHistoryLines = history.map(formatEventLine);
+
+  const historyParts: string[] = [];
+  if (recentEventLines.length > 0) {
+    historyParts.push('### Recent Activity');
+    historyParts.push('');
+    historyParts.push(recentEventLines.join('\n'));
+  }
+  if (deliverHistoryLines.length > 0) {
+    if (historyParts.length > 0) historyParts.push('');
+    historyParts.push('### Prior Deliveries');
+    historyParts.push('');
+    historyParts.push(deliverHistoryLines.join('\n'));
+  }
+
+  const artifactLines = artifacts.map(formatArtifactLine);
+  const sharedStateLines = sharedState.map(formatSharedStateLine);
+
+  return {
+    task: taskParts.join('\n\n'),
+    guidance: guidanceLines.join('\n'),
+    history: historyParts.join('\n'),
+    artifacts: artifactLines.length > 0 ? artifactLines.join('\n') : '',
+    sharedContext: sharedStateLines.length > 0 ? sharedStateLines.join('\n') : ''
+  };
+}
+
+export function renderPromptContextMarkdown(sections: PromptContextSections): string {
+  return [
+    section('Task', sections.task),
+    section('Guidance', sections.guidance),
+    section('History', sections.history),
+    section('Artifacts', sections.artifacts),
+    section('Shared Context', sections.sharedContext)
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function buildPromptContext(input: BuildPromptContextInput): {
+  promptContext: string;
+  promptContextSections: PromptContextSections;
+} {
+  const promptContextSections = buildPromptContextSections(input);
+  return {
+    promptContextSections,
+    promptContext: renderPromptContextMarkdown(promptContextSections)
+  };
+}

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.59.0] - 2026-03-13:15:32
+
+### Added
+- New `ExecutionTargetBadge` component to visually differentiate agent and human execution targets on ticket cards with color-coded theming.
+- New `prompt-context` module with structured context building functions (`buildPromptContextSections`, `renderPromptContextMarkdown`) that organize ticket metadata, guidance, history, artifacts, and shared state into a coherent prompt structure.
+- Agent session external URL storage to track where a session was launched from (e.g., IDE, web, CLI).
+- Enhanced protocol attach handler with expanded context gathering: recent events, project metadata, and user profile information.
+- Support for execution target (agent/human) in ticket prompt context and MCP tools.
+
+### Fixed
+- None.
+
+### Changed
+- SettingsModal now responsive on mobile with dropdown navigation instead of sidebar, improving usability on small screens.
+- Ticket components (Kanban and list cards) now display execution target badges to clarify agent vs. human work allocation.
+- Protocol attach and update handlers gather richer context from database queries, enabling more informative agent prompts.
+- MCP handlers updated to use new prompt context module for consistent formatting across attach, update, and context operations.
+
+### Security
+- None.
+
 ## [0.58.0] - 2026-03-13:12:00
 
 ### Added

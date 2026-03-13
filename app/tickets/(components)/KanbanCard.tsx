@@ -8,7 +8,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   ContextMenu,
@@ -21,9 +20,14 @@ import { updateTicketPriorityAction } from '@/lib/actions/tickets';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
-import { getOptionLabel, ticketExecutionTargetOptions } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
+
+import {
+  ExecutionTargetBadge,
+  getExecutionTargetCardClassName,
+  getExecutionTargetSurfaceClassName
+} from './ExecutionTargetBadge';
 
 type SessionState = Database['public']['Enums']['session_state'];
 
@@ -164,6 +168,8 @@ export default function KanbanCard({
           className={cn(
             'relative cursor-grab border-border/40 shadow-sm overflow-hidden transition-all hover:shadow-md',
             isDragging ? 'opacity-40' : '',
+            getExecutionTargetCardClassName(ticket.execution_target),
+            getExecutionTargetSurfaceClassName(ticket.execution_target),
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
             hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25',
@@ -234,7 +240,6 @@ function KanbanCardBody({
   ticket: Ticket;
   showOrganizationName: boolean;
 }) {
-  const isAgentRunning = ticket.agent_session_state === 'attached';
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
@@ -264,9 +269,7 @@ function KanbanCardBody({
         ) : null}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <Badge variant="outline" className="text-xs">
-          {getOptionLabel(ticketExecutionTargetOptions, ticket.execution_target)}
-        </Badge>
+        <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
       </div>
       <div className="mt-auto flex items-center justify-between gap-2 pt-2">
         <div className="flex min-w-0 items-center">

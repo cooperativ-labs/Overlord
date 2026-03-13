@@ -14,6 +14,13 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
@@ -77,7 +84,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden p-0 md:max-h-[560px] md:max-w-[700px] lg:max-w-[800px]">
+      <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[700px] md:max-w-[900px] lg:max-w-[1000px]">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Customize your settings here.</DialogDescription>
         <SidebarProvider className="items-start">
@@ -130,15 +137,34 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </SidebarGroup>
             </SidebarContent>
           </Sidebar>
-          <main className="flex h-[540px] flex-1 flex-col overflow-hidden">
-            <header className="flex h-16 shrink-0 items-center gap-2 border-b">
-              <div className="flex items-center gap-2 px-4">
+          <main className="flex h-[100dvh] flex-1 flex-col overflow-hidden md:h-[680px]">
+            <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+              {/* Mobile: page selector dropdown */}
+              <div className="flex w-full items-center md:hidden">
+                <Select value={activeNav} onValueChange={setActiveNav}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {visibleNavItems.map(item => (
+                      <SelectItem key={item.name} value={item.name}>
+                        <div className="flex items-center gap-2">
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Desktop: breadcrumb */}
+              <div className="hidden items-center gap-2 md:flex">
                 <Breadcrumb>
                   <BreadcrumbList>
-                    <BreadcrumbItem className="hidden md:block">
+                    <BreadcrumbItem>
                       <BreadcrumbLink href="#">Settings</BreadcrumbLink>
                     </BreadcrumbItem>
-                    <BreadcrumbSeparator className="hidden md:block" />
+                    <BreadcrumbSeparator />
                     <BreadcrumbItem>
                       <BreadcrumbPage>{activeNav}</BreadcrumbPage>
                     </BreadcrumbItem>

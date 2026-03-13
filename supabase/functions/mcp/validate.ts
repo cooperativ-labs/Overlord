@@ -20,7 +20,7 @@ export function validateToolInput(
   // deno-lint-ignore no-explicit-any
   args: Record<string, any>
 ): string | null {
-  const tool = TOOLS.find((t) => t.name === toolName);
+  const tool = TOOLS.find(t => t.name === toolName);
   if (!tool) return `Unknown tool: ${toolName}`;
 
   const schema = tool.inputSchema;
@@ -51,7 +51,10 @@ export function validateToolInput(
     if (prop.type === 'array' && !Array.isArray(value)) {
       return `Field "${key}" must be an array.`;
     }
-    if (prop.type === 'object' && (typeof value !== 'object' || Array.isArray(value) || value === null)) {
+    if (
+      prop.type === 'object' &&
+      (typeof value !== 'object' || Array.isArray(value) || value === null)
+    ) {
       return `Field "${key}" must be an object.`;
     }
 

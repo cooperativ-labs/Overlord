@@ -238,6 +238,14 @@ async function protocolUpdate(args) {
     sessionKey,
     ticketId,
     summary,
+    ...(flags['external-url']
+      ? {
+          externalUrl:
+            String(flags['external-url']).trim().toLowerCase() === 'null'
+              ? null
+              : String(flags['external-url'])
+        }
+      : {}),
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
     ...(flags['event-type'] ? { eventType: String(flags['event-type']) } : {}),
     ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {}),
@@ -710,6 +718,9 @@ Common flags (all subcommands):
 Change rationale flags (update & deliver):
   --change-rationales-json <json>  Inline JSON array of change rationale objects.
   --change-rationales-file <path>  Path to a JSON file containing change rationales.
+
+Update-specific flags:
+  --external-url <url>   Store or refresh a deep link to the current agent session.
 
 Deliver-specific flags:
   --artifacts-json <json> Inline JSON array of artifact objects.
