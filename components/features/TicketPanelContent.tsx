@@ -100,16 +100,18 @@ export async function TicketPanelContent({
     );
   }
 
+  // Fetch all related data in parallel. Individual query failures are
+  // handled gracefully — the component still renders with partial data.
   const [
-    { data: events },
-    { data: state },
-    { data: artifacts },
-    { data: statuses },
-    { data: everhourIntegration },
-    { data: projects },
-    { data: agentSession },
-    { data: agentTokenRow },
-    { data: objectives }
+    eventsResult,
+    stateResult,
+    artifactsResult,
+    statusesResult,
+    everhourResult,
+    projectsResult,
+    agentSessionResult,
+    agentTokenResult,
+    objectivesResult
   ] = await Promise.all([
     supabase
       .from('ticket_events')
@@ -168,6 +170,16 @@ export async function TicketPanelContent({
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
   ]);
+
+  const events = eventsResult.data;
+  const state = stateResult.data;
+  const artifacts = artifactsResult.data;
+  const statuses = statusesResult.data;
+  const everhourIntegration = everhourResult.data;
+  const projects = projectsResult.data;
+  const agentSession = agentSessionResult.data;
+  const agentTokenRow = agentTokenResult.data;
+  const objectives = objectivesResult.data;
 
   const platformUrl = getPlatformUrl();
   const agentToken =

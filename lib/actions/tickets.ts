@@ -38,6 +38,29 @@ function revalidateTicketDetails(
 
 type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
 
+/**
+ * Verify the current user has access to a ticket by checking it exists
+ * within the user's organization scope. RLS on the tickets table already
+ * enforces org membership, so if the query returns nothing, the user
+ * either doesn't have access or the ticket doesn't exist.
+ */
+async function assertTicketAccess(
+  supabase: ServerSupabase,
+  ticketId: string
+): Promise<{ organization_id: number; project_id: string }> {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+
+  if (error || !data) {
+    throw new Error('Ticket not found or access denied.');
+  }
+
+  return data;
+}
+
 type PromptTicketSource = {
   ticket: {
     id: string;
@@ -432,6 +455,8 @@ export async function updateTicketFieldAction(
   }
 
   const supabase = await createClient();
+  await assertTicketAccess(supabase, ticketId);
+
   const normalizedValue = value.trim();
   const ticketUpdatePayload =
     field === 'objective'
@@ -476,6 +501,8 @@ export async function updateTicketStatusAction(ticketId: string, status: string)
   }
 
   const supabase = await createClient();
+  await assertTicketAccess(supabase, ticketId);
+
   const { data, error } = await supabase
     .from('tickets')
     .update({ status: trimmedStatus })
@@ -507,6 +534,8 @@ export async function updateTicketPriorityAction(
   priority: Database['public']['Enums']['ticket_priority']
 ): Promise<void> {
   const supabase = await createClient();
+  await assertTicketAccess(supabase, ticketId);
+
   const { data, error } = await supabase
     .from('tickets')
     .update({ priority })
@@ -543,6 +572,8 @@ export async function updateTicketExecutionTargetAction(
   }
 
   const supabase = await createClient();
+  await assertTicketAccess(supabase, ticketId);
+
   const { data, error } = await supabase
     .from('tickets')
     .update({ execution_target: executionTarget })
@@ -576,15 +607,8 @@ export async function setTicketProjectAction(ticketId: string, projectId: string
     throw new Error('Project is required.');
   }
 
-  const { data: existingTicket, error: existingTicketError } = await supabase
-    .from('tickets')
-    .select('organization_id,project_id')
-    .eq('id', ticketId)
-    .single();
-
-  if (existingTicketError || !existingTicket) {
-    throw new Error(existingTicketError?.message ?? 'Ticket not found.');
-  }
+  // assertTicketAccess verifies RLS access; reuse the result as existingTicket
+  const existingTicket = await assertTicketAccess(supabase, ticketId);
 
   if (existingTicket.project_id === nextProjectId) {
     return;
@@ -897,6 +921,18 @@ export async function markTicketUnreadAction(ticketId: string): Promise<void> {
 
 export async function markSessionDisconnectedAction(sessionId: string): Promise<void> {
   const supabase = await createClient();
+
+  // Verify the session exists and the user has access (RLS on agent_sessions)
+  const { data: session, error: sessionError } = await supabase
+    .from('agent_sessions')
+    .select('id')
+    .eq('id', sessionId)
+    .single();
+
+  if (sessionError || !session) {
+    throw new Error('Session not found or access denied.');
+  }
+
   const { error } = await supabase
     .from('agent_sessions')
     .update({ session_state: 'disconnected', detached_at: new Date().toISOString() })
@@ -911,6 +947,8 @@ export async function deleteTicketAction(
   ticketId: string
 ): Promise<{ organizationId: number; projectId: string }> {
   const supabase = await createClient();
+  await assertTicketAccess(supabase, ticketId);
+
   const { data, error } = await supabase
     .from('tickets')
     .delete()

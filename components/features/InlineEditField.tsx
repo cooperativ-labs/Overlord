@@ -202,12 +202,14 @@ export function InlineEditField({
           const newValue = value.substring(0, start) + markdown + value.substring(end);
           setValue(newValue);
 
-          // Need to wait for React to update the state before setting cursor position
-          setTimeout(() => {
+          // Wait for React to update the state before setting cursor position.
+          // requestAnimationFrame is preferred over setTimeout for DOM updates
+          // and doesn't require cleanup since it fires before the next paint.
+          requestAnimationFrame(() => {
             textArea.selectionStart = textArea.selectionEnd = start + markdown.length;
             textArea.focus();
             autoResize();
-          }, 0);
+          });
         } else {
           setValue(prev => (prev ? `${prev}\n${markdown}` : markdown));
         }
