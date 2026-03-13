@@ -3,6 +3,9 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHORT_ID_REGEX = /^[0-9a-f]{8}$/i;
 
+/** Sessions without a heartbeat for this duration are considered stale. */
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
 /**
  * Resolves a ticket ID to a full UUID, scoped to the organization.
  * - Full UUIDs are returned as-is (no DB query).
@@ -65,6 +68,23 @@ export async function resolveSession(
     return { error: 'Session not found for ticket.', session: null, resolvedTicketId: null };
   }
 
+  // Check for session timeout — mark stale sessions as disconnected
+  if (session.session_state === 'attached' && session.heartbeat_at) {
+    const lastHeartbeat = new Date(session.heartbeat_at).getTime();
+    if (Date.now() - lastHeartbeat > SESSION_TIMEOUT_MS) {
+      await supabase
+        .from('agent_sessions')
+        .update({ session_state: 'disconnected', detached_at: new Date().toISOString() })
+        .eq('id', session.id);
+      return {
+        error: 'Session timed out due to inactivity. Please call attach again to start a new session.',
+        session: null,
+        resolvedTicketId: null
+      };
+    }
+  }
+
+  // Update heartbeat
   await supabase
     .from('agent_sessions')
     .update({ heartbeat_at: new Date().toISOString() })
