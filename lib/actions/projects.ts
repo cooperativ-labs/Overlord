@@ -11,6 +11,7 @@ export type SidebarProject = {
   name: string;
   color: string;
   organizationId: number;
+  localWorkingDirectory: string | null;
 };
 
 function revalidateProjectPaths(projectId: string) {
@@ -26,7 +27,7 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
 
   const { data, error } = await supabase
     .from('projects')
-    .select('id,name,color,organization_id')
+    .select('id,name,color,organization_id,local_working_directory')
     .order('name', { ascending: true });
 
   if (error || !data) {
@@ -38,7 +39,8 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
     id: project.id,
     name: project.name,
     color: project.color,
-    organizationId: project.organization_id
+    organizationId: project.organization_id,
+    localWorkingDirectory: project.local_working_directory
   }));
 }
 

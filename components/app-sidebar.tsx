@@ -1,6 +1,6 @@
 'use client';
 
-import { GraduationCap, Inbox, ListChecks, MoreHorizontal, Plus, Settings } from 'lucide-react';
+import { GraduationCap, ListChecks, MoreHorizontal, Plus, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -9,6 +9,8 @@ import { useTutorialWizard } from '@/components/features/onboarding/TutorialWiza
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import { useProjectCreator } from '@/components/features/projects/ProjectCreatorContext';
+import { ProjectWorkingDirectoryRequiredModal } from '@/components/features/projects/ProjectWorkingDirectoryRequiredModal';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
@@ -97,10 +99,15 @@ export function AppSidebar({
   ...props
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { isElectron } = useElectron();
   const { openProjectCreator } = useProjectCreator();
   const { defaultProject } = useDefaultProject();
   const { openTutorial } = useTutorialWizard();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [projectNeedingDirectory, setProjectNeedingDirectory] =
+    React.useState<SidebarProject | null>(null);
+  const [pendingPath, setPendingPath] = React.useState<string | null>(null);
 
   const defaultOrganizationId = React.useMemo(() => {
     if (selectedOrgId !== null) return selectedOrgId;
@@ -126,6 +133,24 @@ export function AppSidebar({
     return segment === 'projects' && projectId === project.id;
   }
 
+  function hasWorkingDirectory(project: SidebarProject | null): boolean {
+    return Boolean(project?.localWorkingDirectory?.trim());
+  }
+
+  function handleProjectNavigationClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    project: SidebarProject,
+    destinationPath: string
+  ) {
+    if (!isElectron || hasWorkingDirectory(project)) {
+      return;
+    }
+
+    event.preventDefault();
+    setProjectNeedingDirectory(project);
+    setPendingPath(destinationPath);
+  }
+
   return (
     <Sidebar collapsible="icon" variant="floating" {...props}>
       <SidebarHeader className="electron-sidebar-offset">
@@ -146,7 +171,15 @@ export function AppSidebar({
               </SidebarMenuItem> */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isMyTasksActive} tooltip="My Tasks">
-                  <Link href="/u">
+                  <Link
+                    href="/u"
+                    onClick={event => {
+                      if (!defaultProject) {
+                        return;
+                      }
+                      handleProjectNavigationClick(event, defaultProject, '/u');
+                    }}
+                  >
                     <ListChecks />
                     <span>My Tasks</span>
                   </Link>
@@ -184,7 +217,12 @@ export function AppSidebar({
                     isActive={isProjectActive(project)}
                     tooltip={project.name}
                   >
-                    <Link href={`/projects/${project.id}`}>
+                    <Link
+                      href={`/projects/${project.id}`}
+                      onClick={event =>
+                        handleProjectNavigationClick(event, project, `/projects/${project.id}`)
+                      }
+                    >
                       <span
                         className="h-3 w-3 rounded-[6px] border group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:border-0"
                         style={{
@@ -220,6 +258,23 @@ export function AppSidebar({
         <NavUser user={user} />
       </SidebarFooter>
       <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ProjectWorkingDirectoryRequiredModal
+        open={projectNeedingDirectory !== null}
+        project={projectNeedingDirectory}
+        onOpenChange={open => {
+          if (!open) {
+            setProjectNeedingDirectory(null);
+            setPendingPath(null);
+          }
+        }}
+        onLinked={() => {
+          if (pendingPath) {
+            router.push(pendingPath);
+          }
+          setProjectNeedingDirectory(null);
+          setPendingPath(null);
+        }}
+      />
       <SidebarRail />
     </Sidebar>
   );

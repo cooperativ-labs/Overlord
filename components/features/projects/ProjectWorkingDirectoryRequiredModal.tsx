@@ -1,0 +1,122 @@
+'use client';
+
+import { Folder } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { useElectron } from '@/components/features/terminal/useElectron';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle
+} from '@/components/ui/dialog';
+import type { ButtonLoadingState } from '@/components/ui/loading-button';
+import { LoadingButton } from '@/components/ui/loading-button';
+import { updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
+
+type ProjectWorkingDirectoryRequiredModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  project: {
+    id: string;
+    name: string;
+  } | null;
+  onLinked?: (directory: string) => void;
+};
+
+export function ProjectWorkingDirectoryRequiredModal({
+  open,
+  onOpenChange,
+  project,
+  onLinked
+}: ProjectWorkingDirectoryRequiredModalProps) {
+  const { api, isElectron } = useElectron();
+  const router = useRouter();
+  const [selectFolderState, setSelectFolderState] = useState<ButtonLoadingState>('default');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setSelectFolderState('default');
+    setError(null);
+  }, [open, project?.id]);
+
+  async function handleSelectFolder() {
+    if (!project || !isElectron || !api?.terminal?.chooseDirectory) {
+      return;
+    }
+
+    setSelectFolderState('loading');
+    setError(null);
+
+    try {
+      const chosenPath = await api.terminal.chooseDirectory();
+      if (!chosenPath) {
+        setSelectFolderState('default');
+        return;
+      }
+
+      await updateProjectWorkingDirectoryAction({
+        projectId: project.id,
+        workingDirectory: chosenPath
+      });
+
+      setSelectFolderState('success');
+      onLinked?.(chosenPath);
+      onOpenChange(false);
+      router.refresh();
+    } catch (updateError) {
+      setSelectFolderState('error');
+      setError(
+        updateError instanceof Error ? updateError.message : 'Failed to save the project folder.'
+      );
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogTitle>Select a project folder</DialogTitle>
+        <DialogDescription className="space-y-2">
+          <span className="block">
+            <strong>{project?.name ?? 'This project'}</strong> does not have a linked working
+            directory yet.
+          </span>
+          <span className="block">
+            Overlord uses this folder to run local agent commands, read files, and include the right
+            project context.
+          </span>
+        </DialogDescription>
+
+        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Not now
+          </Button>
+          <LoadingButton
+            buttonState={selectFolderState}
+            className="gap-1.5"
+            errorText="Try again"
+            loadingText="Opening picker..."
+            setButtonState={setSelectFolderState}
+            successText="Folder linked"
+            text={
+              <span className="inline-flex items-center gap-1.5">
+                <Folder className="h-4 w-4" />
+                Select Folder
+              </span>
+            }
+            onClick={handleSelectFolder}
+          />
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
