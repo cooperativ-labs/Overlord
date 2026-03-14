@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-03-14:12:45
+
+### Added
+- Write CLI-friendly `~/.ovld/credentials.json` alongside the Electron credentials file so `npx overlord` commands reuse the exact agent token saved by the app without requiring a separate login flow.
+
+### Fixed
+- None.
+
+### Changed
+- Make `resolveAuth()` prefer `AGENT_TOKEN` from the environment before falling back to saved credentials so temporary overrides (like CI overrides or dev env tweaks) are respected by both the CLI and Electron launchers.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `1.6.0` to align the release with this changelog entry.
+
 ## [1.5.0] - 2026-03-14:12:16
 
 ### Added
