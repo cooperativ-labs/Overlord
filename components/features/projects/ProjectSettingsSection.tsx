@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
+  isWorkingDirectoryNone,
   updateProjectColorAction,
   updateProjectNameAction,
   updateProjectWorkingDirectoryAction
@@ -50,7 +51,8 @@ export function ProjectSettingsSection({
   const [colorError, setColorError] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const hasSavedWorkingDirectory = savedWorkingDirectory.trim().length > 0;
+  const hasSavedWorkingDirectory =
+    savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
   const isCurrentChangesView = pathname.startsWith(`/projects/${projectId}/current-changes`);
   const currentChangesToggleLabel = isCurrentChangesView ? 'Work Board' : 'Current Changes';
   const currentChangesToggleHref = isCurrentChangesView

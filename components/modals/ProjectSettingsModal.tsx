@@ -1,22 +1,36 @@
 'use client';
 
-import { Folder } from 'lucide-react';
+import { Folder, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import { ProjectStatusSettings } from '@/components/features/projects/ProjectStatusSettings';
 import { useElectron } from '@/components/features/terminal/useElectron';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import {
+  deleteProjectAction,
   disconnectProjectFromEverhourAction,
+  isWorkingDirectoryNone,
   updateProjectColorAction,
   updateProjectNameAction,
-  updateProjectWorkingDirectoryAction
+  updateProjectWorkingDirectoryAction,
+  WORKING_DIRECTORY_NONE
 } from '@/lib/actions/projects';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
@@ -70,8 +84,12 @@ export function ProjectSettingsModal({
   const [colorError, setColorError] = useState<string | null>(null);
   const [workingDirectoryError, setWorkingDirectoryError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteState, setDeleteState] = useState<ButtonLoadingState>('default');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
-  const hasSavedWorkingDirectory = savedWorkingDirectory.trim().length > 0;
+  const hasSavedWorkingDirectory =
+    savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
 
   useEffect(() => {
     setSavedColor(initialColor);
@@ -93,6 +111,25 @@ export function ProjectSettingsModal({
       setSavedName(initialName);
     }
   }, [open, initialName]);
+
+  async function handleDeleteProject() {
+    setDeleteState('loading');
+    setDeleteError(null);
+    try {
+      await deleteProjectAction({ projectId });
+      setDeleteState('success');
+      onOpenChange(false);
+      router.push('/projects');
+      router.refresh();
+    } catch (error) {
+      setDeleteState('error');
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete project.');
+    }
+  }
+
+  async function handleSkipWorkingDirectory() {
+    await handleSaveWorkingDirectory(WORKING_DIRECTORY_NONE);
+  }
 
   async function handleSaveName() {
     const trimmed = name.trim();
@@ -294,9 +331,25 @@ export function ProjectSettingsModal({
                 >
                   <Folder className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">
-                    {hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
+                    {hasSavedWorkingDirectory
+                      ? savedWorkingDirectory
+                      : isWorkingDirectoryNone(savedWorkingDirectory)
+                        ? 'No directory'
+                        : 'Add a project directory'}
                   </span>
                 </button>
+                {!hasSavedWorkingDirectory && !isWorkingDirectoryNone(savedWorkingDirectory) ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-2 py-1.5 text-xs text-muted-foreground"
+                    onClick={handleSkipWorkingDirectory}
+                    disabled={workingDirectorySaveState === 'loading'}
+                  >
+                    Skip — no directory
+                  </Button>
+                ) : null}
                 <input
                   ref={directoryInputRef}
                   type="file"
@@ -368,8 +421,45 @@ export function ProjectSettingsModal({
             initialStatuses={initialStatuses}
             defaultExpanded
           />
+
+          <div className="grid gap-2 border-t pt-4">
+            <label className="text-xs font-medium text-muted-foreground">Danger zone</label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit gap-1.5 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete project
+            </Button>
+            {deleteError ? <p className="text-xs text-destructive">{deleteError}</p> : null}
+          </div>
         </div>
       </DialogContent>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{savedName}</strong> and all its tickets. This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteState === 'loading'}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteState === 'loading'}
+              onClick={handleDeleteProject}
+            >
+              {deleteState === 'loading' ? 'Deleting…' : 'Delete project'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
