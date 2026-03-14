@@ -223,20 +223,37 @@ function writePermissionRequestHookFiles(tag: string): {
 
   fs.writeFileSync(hookScript, scriptLines.join('\n'), { encoding: 'utf-8', mode: 0o755 });
 
-  // Claude settings format: hooks → event name → array of matcher objects,
-  // each with a nested hooks array. ".*" matches all tool names.
-  const settings = {
+  // Read the user's existing Claude settings and merge our hook into them
+  // so we don't clobber their preferences (model, plugins, permissions, etc.).
+  const userSettingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+  let baseSettings: Record<string, unknown> = {};
+  try {
+    const raw = fs.readFileSync(userSettingsPath, 'utf-8');
+    baseSettings = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    // No user settings or invalid JSON — start from scratch
+  }
+
+  const overlordHook = {
+    matcher: '.*',
+    hooks: [{ type: 'command', command: hookScript }]
+  };
+
+  // Merge into existing hooks.PermissionRequest array (if any)
+  const existingHooks = (baseSettings.hooks ?? {}) as Record<string, unknown[]>;
+  const existingPermHooks = Array.isArray(existingHooks.PermissionRequest)
+    ? existingHooks.PermissionRequest
+    : [];
+
+  const mergedSettings = {
+    ...baseSettings,
     hooks: {
-      PermissionRequest: [
-        {
-          matcher: '.*',
-          hooks: [{ type: 'command', command: hookScript }]
-        }
-      ]
+      ...existingHooks,
+      PermissionRequest: [...existingPermHooks, overlordHook]
     }
   };
 
-  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf-8');
+  fs.writeFileSync(settingsFile, JSON.stringify(mergedSettings, null, 2), 'utf-8');
 
   return { hookScript, settingsFile };
 }
