@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -65,6 +66,12 @@ export function AskTicketButton({
     } catch (error) {
       setAskButtonState('error');
       console.error('Failed to run Ask flow:', error);
+      toast.error('Failed to open terminal', {
+        description:
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : 'Check your terminal settings and agent token, then try again.'
+      });
     }
   }
 

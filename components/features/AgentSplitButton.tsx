@@ -3,6 +3,7 @@
 import { Check, ChevronDown, Copy, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import {
   DropdownMenu,
@@ -168,6 +169,12 @@ export function AgentSplitButton({
         );
       } catch (error) {
         console.error('Failed to launch agent:', error);
+        toast.error('Failed to open terminal', {
+          description:
+            error instanceof Error && error.message.trim().length > 0
+              ? error.message
+              : 'Check your terminal settings and agent token, then try again.'
+        });
       } finally {
         setIsLaunching(false);
       }

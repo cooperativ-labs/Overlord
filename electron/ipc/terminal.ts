@@ -16,8 +16,44 @@ function runAppleScript(script: string) {
   });
 }
 
+function runShellCommand(command: string) {
+  return new Promise<void>((resolve, reject) => {
+    exec(command, err => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildOpenApplicationCommand(app: string, args?: string[]) {
+  const argSegment = args && args.length > 0 ? ` --args ${args.map(shellQuote).join(' ')}` : '';
+  return `open -a ${shellQuote(app)}${argSegment}`;
+}
+
+async function runShellCommandWithFallback(
+  commands: string[],
+  errorMessage: string
+): Promise<void> {
+  let lastError: unknown = null;
+
+  for (const command of commands) {
+    try {
+      await runShellCommand(command);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const detail =
+    lastError instanceof Error && lastError.message.trim().length > 0
+      ? `: ${lastError.message}`
+      : '';
+  throw new Error(`${errorMessage}${detail}`);
 }
 
 function buildHotkeyAppleScript(hotkey: string): string | null {
@@ -93,7 +129,7 @@ function writeLaunchScript(command: string, cwd?: string, env?: Record<string, s
   return scriptPath;
 }
 
-function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
+async function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
   const launchCmd = [
     `if [ -f ${shellQuote(scriptPath)} ]; then`,
     `bash ${shellQuote(scriptPath)};`,
@@ -156,7 +192,7 @@ function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
       }
       return runAppleScript(script);
     case 'warp':
-      exec('open -a Warp');
+      await runShellCommand(buildOpenApplicationCommand('Warp'));
       return new Promise(resolve => {
         setTimeout(() => {
           const baseScript = hotkeyScript
@@ -171,16 +207,35 @@ function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
         }, 1000);
       });
     case 'ghostty':
-      exec(`ghostty -e bash ${shellQuote(scriptPath)}`);
+      await runShellCommandWithFallback(
+        [
+          `ghostty -e bash ${shellQuote(scriptPath)}`,
+          buildOpenApplicationCommand('Ghostty', ['-e', 'bash', scriptPath])
+        ],
+        'Failed to open Ghostty.'
+      );
       return Promise.resolve();
     case 'alacritty':
-      exec(`alacritty -e bash ${shellQuote(scriptPath)}`);
+      await runShellCommandWithFallback(
+        [
+          `alacritty -e bash ${shellQuote(scriptPath)}`,
+          buildOpenApplicationCommand('Alacritty', ['-e', 'bash', scriptPath])
+        ],
+        'Failed to open Alacritty.'
+      );
       return Promise.resolve();
     case 'kitty':
-      exec(`kitty bash ${shellQuote(scriptPath)}`);
+      await runShellCommandWithFallback(
+        [
+          `kitty bash ${shellQuote(scriptPath)}`,
+          buildOpenApplicationCommand('Kitty', ['bash', scriptPath]),
+          buildOpenApplicationCommand('kitty', ['bash', scriptPath])
+        ],
+        'Failed to open Kitty.'
+      );
       return Promise.resolve();
     case 'hyper':
-      exec('open -a Hyper');
+      await runShellCommand(buildOpenApplicationCommand('Hyper'));
       return new Promise(resolve => {
         setTimeout(() => {
           const baseScript = hotkeyScript
@@ -195,7 +250,7 @@ function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
         }, 1000);
       });
     case 'cmux':
-      exec('open -a cmux');
+      await runShellCommand(buildOpenApplicationCommand('cmux'));
       return new Promise(resolve => {
         setTimeout(() => {
           const baseScript = hotkeyScript
@@ -246,7 +301,7 @@ function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
         return runAppleScript(script);
       }
 
-      exec(`open -a ${shellQuote(customApp)}`);
+      await runShellCommand(buildOpenApplicationCommand(customApp));
       return new Promise(resolve => {
         setTimeout(() => {
           runAppleScript(

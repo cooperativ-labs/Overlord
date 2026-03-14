@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2026-03-14:08:53
+
+### Added
+- Show toast errors when agent launches or the Ask flow fails to open the configured terminal so users get actionable guidance about their terminal settings and agent tokens.
+
+### Fixed
+- Make the Electron terminal IPC launch helper wait for shell commands, add `open -a` fallback variants, and bubble precise failure details for most terminal targets (Warp, Ghostty, Alacritty, Kitty, Hyper, cmux, and custom apps) so the external terminal launch path is more reliable and debuggable.
+
+### Changed
+- Navigate to new projects through `buildProjectPath` so the Creator modal always uses the shared project route builder instead of hand-constructing the URL.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `1.0.0` to align the release with the changelog entry.
+
 ## [0.63.0] - 2026-03-13:16:25
 
 ### Added

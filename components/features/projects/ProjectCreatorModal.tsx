@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { createProject } from '@/lib/actions/projects';
+import { buildProjectPath } from '@/lib/helpers/ticket-path';
 
 type ProjectCreatorModalProps = {
   open: boolean;
@@ -74,7 +75,7 @@ export function ProjectCreatorModal({
       setCreateButtonState('success');
       router.refresh();
       handleOpenChange(false);
-      router.push(`/${created.organizationId}/projects/${created.id}`);
+      router.push(buildProjectPath({ projectId: created.id }));
     } catch (err) {
       setCreateButtonState('error');
       setError(err instanceof Error ? err.message : 'Failed to create project.');
