@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { createClient } from '@/supabase/utils/server';
+import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export type AgentTokenListItem = {
   id: string;
@@ -12,7 +13,9 @@ export type AgentTokenListItem = {
   expiresAt: string | null;
 };
 
-export async function getAgentTokenAction(): Promise<string | null> {
+export async function getAgentTokenAction(
+  preferredOrganizationId?: number
+): Promise<string | null> {
   const supabase = await createClient();
   const {
     data: { user }
@@ -22,14 +25,17 @@ export async function getAgentTokenAction(): Promise<string | null> {
     throw new Error('Unauthorized');
   }
 
-  const { data, error } = await supabase
+  const query = supabase
     .from('agent_tokens')
     .select('token, created_at, revoked_at, expires_at')
     .eq('user_id', user.id)
     .is('revoked_at', null)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  const { data, error } = preferredOrganizationId
+    ? await query.eq('organization_id', preferredOrganizationId).maybeSingle()
+    : await query.maybeSingle();
 
   if (error && !data) {
     throw new Error(error.message ?? 'Failed to load agent token.');
@@ -42,7 +48,7 @@ export async function getAgentTokenAction(): Promise<string | null> {
   return data?.token ?? null;
 }
 
-export async function rotateAgentTokenAction(): Promise<string> {
+export async function ensureAgentTokenAction(preferredOrganizationId?: number): Promise<string> {
   const supabase = await createClient();
   const {
     data: { user }
@@ -52,12 +58,90 @@ export async function rotateAgentTokenAction(): Promise<string> {
     throw new Error('Unauthorized');
   }
 
-  const { data: orgRow, error: orgError } = await supabase
-    .from('organizations')
-    .select('id')
-    .order('id', { ascending: true })
-    .limit(1)
+  const now = Date.now();
+  const tokenQuery = supabase
+    .from('agent_tokens')
+    .select('token, expires_at')
+    .eq('user_id', user.id)
+    .is('revoked_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const { data: tokenRow, error: tokenError } = preferredOrganizationId
+    ? await tokenQuery.eq('organization_id', preferredOrganizationId).maybeSingle()
+    : await tokenQuery.maybeSingle();
+
+  if (tokenError && !tokenRow) {
+    throw new Error(tokenError.message ?? 'Failed to load agent token.');
+  }
+
+  if (tokenRow && (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() > now)) {
+    return tokenRow.token;
+  }
+
+  const serviceSupabase = createServiceRoleClient();
+  let organizationId = preferredOrganizationId;
+
+  if (!organizationId) {
+    const { data: orgRow, error: orgError } = await serviceSupabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .order('organization_id', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (orgError || !orgRow) {
+      throw new Error(orgError?.message ?? 'No organization found for this user.');
+    }
+
+    organizationId = orgRow.organization_id;
+  }
+
+  const { data: createdToken, error: createError } = await serviceSupabase
+    .from('agent_tokens')
+    .insert({
+      user_id: user.id,
+      organization_id: organizationId,
+      name: 'CLI Token'
+    })
+    .select('token')
     .single();
+
+  if (createError || !createdToken) {
+    throw new Error(createError?.message ?? 'Failed to create new agent token.');
+  }
+
+  revalidatePath('/account/tokens');
+
+  return createdToken.token;
+}
+
+export async function rotateAgentTokenAction(preferredOrganizationId?: number): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const { data: orgRow, error: orgError } = preferredOrganizationId
+    ? await supabase
+        .from('members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('organization_id', preferredOrganizationId)
+        .limit(1)
+        .maybeSingle()
+    : await supabase
+        .from('members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .order('organization_id', { ascending: true })
+        .limit(1)
+        .single();
 
   if (orgError || !orgRow) {
     throw new Error(orgError?.message ?? 'No organization found for this user.');
@@ -67,6 +151,7 @@ export async function rotateAgentTokenAction(): Promise<string> {
     .from('agent_tokens')
     .update({ revoked_at: new Date().toISOString() })
     .eq('user_id', user.id)
+    .eq('organization_id', preferredOrganizationId ?? orgRow.organization_id)
     .is('revoked_at', null);
 
   if (revokeError) {
@@ -77,7 +162,7 @@ export async function rotateAgentTokenAction(): Promise<string> {
     .from('agent_tokens')
     .insert({
       user_id: user.id,
-      organization_id: orgRow.id,
+      organization_id: preferredOrganizationId ?? orgRow.organization_id,
       name: 'CLI Token'
     })
     .select('token')

@@ -257,7 +257,12 @@ export function AppSidebar({
         </SidebarMenu>
         <NavUser user={user} />
       </SidebarFooter>
-      <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        organizations={organizations}
+        selectedOrgId={selectedOrgId}
+      />
       <ProjectWorkingDirectoryRequiredModal
         open={projectNeedingDirectory !== null}
         project={projectNeedingDirectory}

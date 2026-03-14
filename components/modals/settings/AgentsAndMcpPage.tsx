@@ -20,7 +20,8 @@ import {
   type RunningAgentSession,
   stopRunningAgentSessionAction
 } from '@/lib/actions/agent-sessions';
-import { getAgentTokenAction, rotateAgentTokenAction } from '@/lib/actions/agent-tokens';
+import { ensureAgentTokenAction, rotateAgentTokenAction } from '@/lib/actions/agent-tokens';
+import type { UserOrganization } from '@/lib/actions/organizations';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import {
   DEFAULT_AGENT_TRIGGER_STORAGE_KEY,
@@ -90,7 +91,15 @@ function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
   return getAgentTypeByValue(agentValue).label;
 }
 
-export function AgentsAndMcpPage({ open }: { open: boolean }) {
+export function AgentsAndMcpPage({
+  open,
+  organizations,
+  selectedOrgId
+}: {
+  open: boolean;
+  organizations: UserOrganization[];
+  selectedOrgId: number | null;
+}) {
   const { isElectron } = useElectron();
 
   const [runningAgents, setRunningAgents] = useState<RunningAgentSession[]>([]);
@@ -107,6 +116,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
   const [agentTokenError, setAgentTokenError] = useState<string | null>(null);
   const [rotateTokenButtonState, setRotateTokenButtonState] =
     useState<ButtonLoadingState>('default');
+  const [selectedTokenOrgId, setSelectedTokenOrgId] = useState<string>('');
 
   const [selectedMcpAgent, setSelectedMcpAgent] = useState('claude-cloud');
   const [selectedDefaultAgentTrigger, setSelectedDefaultAgentTrigger] =
@@ -150,6 +160,14 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     new Set([resolvedPlatformDomain, supabaseDomain].filter((v): v is string => Boolean(v)))
   ).join('\n');
   const isLocationUrl = (value: string) => /^https?:\/\//i.test(value);
+  const resolvedTokenOrgId =
+    selectedTokenOrgId !== ''
+      ? Number(selectedTokenOrgId)
+      : (selectedOrgId ?? organizations[0]?.id ?? null);
+  const selectedTokenOrg =
+    resolvedTokenOrgId !== null
+      ? (organizations.find(org => org.id === resolvedTokenOrgId) ?? null)
+      : null;
 
   const sessionCountLabel =
     runningAgents.length === 1
@@ -170,6 +188,12 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     setSelectedDefaultAgentTrigger(readDefaultAgentTriggerFromStorage());
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const nextOrgId = selectedOrgId ?? organizations[0]?.id ?? null;
+    setSelectedTokenOrgId(nextOrgId !== null ? String(nextOrgId) : '');
+  }, [open, organizations, selectedOrgId]);
+
   async function loadRunningAgents(): Promise<boolean> {
     setAgentsError(null);
     try {
@@ -189,10 +213,11 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     setAgentTokenLoading(true);
     setAgentTokenError(null);
     try {
-      let token = await getAgentTokenAction();
-      if (!token) {
-        token = await rotateAgentTokenAction();
+      if (resolvedTokenOrgId === null) {
+        setAgentToken(null);
+        return;
       }
+      const token = await ensureAgentTokenAction(resolvedTokenOrgId);
       setAgentToken(token);
     } catch (error) {
       console.error('Failed to load agent token:', error);
@@ -200,7 +225,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     } finally {
       setAgentTokenLoading(false);
     }
-  }, []);
+  }, [resolvedTokenOrgId]);
 
   useEffect(() => {
     if (!open) return;
@@ -245,7 +270,10 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
     setRotateTokenButtonState('loading');
     setAgentTokenError(null);
     try {
-      const token = await rotateAgentTokenAction();
+      if (resolvedTokenOrgId === null) {
+        throw new Error('No organization available for token rotation.');
+      }
+      const token = await rotateAgentTokenAction(resolvedTokenOrgId);
       setAgentToken(token);
       setRotateTokenButtonState('success');
     } catch (error) {
@@ -577,13 +605,30 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
         <div className="grid gap-1">
           <p className="text-sm font-medium">Agent token</p>
           <p className="text-xs text-muted-foreground">
-            Each user has a personal agent token used when Overlord talks to your cloud IDE agents.
-            Rotate it if it is ever exposed.
+            Agent tokens are scoped per user and per workspace. Select a workspace to view and copy
+            the token to use in cloud environments.
           </p>
+        </div>
+        <div className="grid gap-2">
+          <p className="text-xs font-medium text-foreground">Workspace</p>
+          <Select value={selectedTokenOrgId} onValueChange={setSelectedTokenOrgId}>
+            <SelectTrigger className="max-w-sm">
+              <SelectValue placeholder="Select workspace" />
+            </SelectTrigger>
+            <SelectContent>
+              {organizations.map(org => (
+                <SelectItem key={org.id} value={String(org.id)}>
+                  {org.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2 rounded-md border bg-muted/30 p-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-foreground">AGENT_TOKEN</p>
+            <p className="text-xs font-medium text-foreground">
+              {selectedTokenOrg ? `${selectedTokenOrg.name} AGENT_TOKEN` : 'AGENT_TOKEN'}
+            </p>
             <button
               type="button"
               onClick={() => void handleCopyAgentTokenSnippet()}
@@ -603,6 +648,9 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
           {agentTokenError ? <p className="text-xs text-destructive">{agentTokenError}</p> : null}
           {agentTokenLoading ? (
             <p className="text-xs text-muted-foreground">Loading agent token…</p>
+          ) : null}
+          {!selectedTokenOrgId ? (
+            <p className="text-xs text-muted-foreground">No workspace selected.</p>
           ) : null}
           {!agentToken && !agentTokenLoading && !agentTokenError ? (
             <p className="text-xs text-muted-foreground">No agent token found.</p>

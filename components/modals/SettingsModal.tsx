@@ -31,6 +31,7 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
+import type { UserOrganization } from '@/lib/actions/organizations';
 
 import { AboutPage } from './settings/AboutPage';
 import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
@@ -44,6 +45,8 @@ import { TerminalPage } from './settings/TerminalPage';
 type SettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  organizations: UserOrganization[];
+  selectedOrgId: number | null;
 };
 
 type NavItem = {
@@ -69,7 +72,12 @@ const aboutNavItem: NavItem = { name: 'About', icon: Info };
 
 const navItems: NavItem[] = [...workflowNavItems, ...appNavItems, aboutNavItem];
 
-export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
+export function SettingsModal({
+  open,
+  onOpenChange,
+  organizations,
+  selectedOrgId
+}: SettingsModalProps) {
   const { isElectron } = useElectron();
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const visibleWorkflowNavItems = workflowNavItems.filter(item => !item.electronOnly || isElectron);
@@ -174,7 +182,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </header>
             <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
               {activeNav === 'Integrations' && <IntegrationsPage open={open} />}
-              {activeNav === 'Agents & MCP' && <AgentsAndMcpPage open={open} />}
+              {activeNav === 'Agents & MCP' && (
+                <AgentsAndMcpPage
+                  open={open}
+                  organizations={organizations}
+                  selectedOrgId={selectedOrgId}
+                />
+              )}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI' && <CliPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}

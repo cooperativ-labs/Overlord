@@ -64,6 +64,11 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const platformUrl = getPlatformUrl();
   // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
   const agentToken = input.agentToken ?? process.env.AGENT_TOKEN ?? '';
+  if (!agentToken.trim()) {
+    throw new Error(
+      'No agent token is available for this workspace. Open Settings > Agents & MCP and refresh the token.'
+    );
+  }
   const launchMode = input.launchMode ?? 'run';
   const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
   const launchEnv = {

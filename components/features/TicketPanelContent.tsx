@@ -34,6 +34,7 @@ import {
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Separator } from '@/components/ui/separator';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
+import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
@@ -184,11 +185,19 @@ export async function TicketPanelContent({
 
   const platformUrl = getPlatformUrl();
   const agentConfigs = user ? await getAllAgentConfigsByUserIdAction(user.id, supabase) : {};
-  const agentToken =
+  const existingAgentToken =
     agentTokenRow &&
     (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
       ? agentTokenRow.token
       : null;
+  const agentToken =
+    existingAgentToken ??
+    (user
+      ? await ensureAgentTokenAction(organizationId).catch(error => {
+          console.error('Failed to ensure agent token for ticket launch:', error);
+          return null;
+        })
+      : null);
   const agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>> = {
     claude: agentConfigs.claude?.flags ?? [],
     codex: agentConfigs.codex?.flags ?? [],
