@@ -145,10 +145,12 @@ function isLoopbackUrl(value: string): boolean {
 
 function resolveProductionPlatformUrl(): string {
   const configuredUrl =
-    process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.OVERLORD_URL?.trim();
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.OVERLORD_PLATFORM_URL?.trim() ||
+    process.env.OVERLORD_URL?.trim();
   if (!configuredUrl) {
     throw new Error(
-      'Missing NEXT_PUBLIC_SITE_URL (or OVERLORD_URL override) for packaged Electron startup.'
+      'Missing NEXT_PUBLIC_SITE_URL (or OVERLORD_PLATFORM_URL / OVERLORD_URL override) for packaged Electron startup.'
     );
   }
 
@@ -156,7 +158,14 @@ function resolveProductionPlatformUrl(): string {
 }
 
 function resolveConnectorUrl(fallbackUrl: string): string {
-  const configuredUrl = process.env.OVERLORD_URL?.trim() || fallbackUrl;
+  const explicitConnectorUrl = process.env.OVERLORD_CONNECTOR_URL?.trim();
+  if (explicitConnectorUrl) {
+    return normalizeConfiguredUrl(explicitConnectorUrl, 'Electron connector URL');
+  }
+
+  const legacyOverlordUrl = process.env.OVERLORD_URL?.trim();
+  const configuredUrl =
+    legacyOverlordUrl && isLoopbackUrl(legacyOverlordUrl) ? legacyOverlordUrl : fallbackUrl;
   return normalizeConfiguredUrl(configuredUrl, 'Electron connector URL');
 }
 
@@ -270,7 +279,8 @@ app.whenReady().then(async () => {
   } else {
     delete process.env.OVERLORD_LOCAL_SECRET;
   }
-  process.env.OVERLORD_URL = connectorUrl;
+  process.env.OVERLORD_PLATFORM_URL = platformUrl;
+  process.env.OVERLORD_CONNECTOR_URL = connectorUrl;
 
   writeLocalRuntime(connectorUrl, localSecret);
 

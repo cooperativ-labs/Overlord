@@ -50,9 +50,24 @@ function buildProtocolHeaders(agentToken: string): Record<string, string> {
 }
 
 function getConnectorUrl(): string {
-  // Electron exports OVERLORD_URL as the protocol connector target. In thin-wrapper
-  // runs this can differ from the hosted web app origin loaded in the BrowserWindow.
-  return process.env.OVERLORD_URL ?? OVERLORD_URL_DEFAULT;
+  const explicitConnectorUrl = process.env.OVERLORD_CONNECTOR_URL?.trim();
+  if (explicitConnectorUrl) {
+    return explicitConnectorUrl;
+  }
+
+  const legacyOverlordUrl = process.env.OVERLORD_URL?.trim();
+  if (legacyOverlordUrl) {
+    try {
+      const parsed = new URL(legacyOverlordUrl);
+      if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+        return parsed.toString().replace(/\/$/, '');
+      }
+    } catch {
+      // Fall through to the default connector URL.
+    }
+  }
+
+  return OVERLORD_URL_DEFAULT;
 }
 
 function normalizeAgentToken(value?: string): string {
@@ -78,6 +93,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
   const launchEnv = {
     OVERLORD_URL: connectorUrl,
+    OVERLORD_CONNECTOR_URL: connectorUrl,
     AGENT_TOKEN: agentToken,
     TICKET_ID: input.ticketId,
     AGENT_IDENTIFIER: agentIdentifierMap[input.agent],
