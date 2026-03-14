@@ -16,6 +16,7 @@ import {
   updateProjectNameAction,
   updateProjectWorkingDirectoryAction
 } from '@/lib/actions/projects';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
@@ -50,7 +51,8 @@ export function ProjectSettingsSection({
   const [colorError, setColorError] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const hasSavedWorkingDirectory = savedWorkingDirectory.trim().length > 0;
+  const hasSavedWorkingDirectory =
+    savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
   const isCurrentChangesView = pathname.startsWith(`/projects/${projectId}/current-changes`);
   const currentChangesToggleLabel = isCurrentChangesView ? 'Work Board' : 'Current Changes';
   const currentChangesToggleHref = isCurrentChangesView

@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { cn } from '@/lib/utils';
 
 export function DefaultProjectChooser({ className }: { className?: string }) {
@@ -28,7 +29,9 @@ export function DefaultProjectChooser({ className }: { className?: string }) {
       return;
     }
 
-    const hasWorkingDirectory = Boolean(defaultProject.localWorkingDirectory?.trim());
+    const wd = defaultProject.localWorkingDirectory;
+    const hasWorkingDirectory =
+      wd !== null && wd !== undefined && (isWorkingDirectoryNone(wd) || wd.trim().length > 0);
     if (hasWorkingDirectory) {
       return;
     }
@@ -53,7 +56,10 @@ export function DefaultProjectChooser({ className }: { className?: string }) {
       return;
     }
 
-    if (!selectedProject.localWorkingDirectory?.trim()) {
+    const swd = selectedProject.localWorkingDirectory;
+    const selectedHasDir =
+      swd !== null && swd !== undefined && (isWorkingDirectoryNone(swd) || swd.trim().length > 0);
+    if (!selectedHasDir) {
       setProjectNeedingDirectory(selectedProject);
     }
   }

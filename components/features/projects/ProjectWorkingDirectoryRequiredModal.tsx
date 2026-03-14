@@ -16,6 +16,7 @@ import {
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
+import { WORKING_DIRECTORY_NONE } from '@/lib/helpers/project-working-directory';
 
 type ProjectWorkingDirectoryRequiredModalProps = {
   open: boolean;
@@ -36,6 +37,7 @@ export function ProjectWorkingDirectoryRequiredModal({
   const { api, isElectron } = useElectron();
   const router = useRouter();
   const [selectFolderState, setSelectFolderState] = useState<ButtonLoadingState>('default');
+  const [skipState, setSkipState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +46,7 @@ export function ProjectWorkingDirectoryRequiredModal({
     }
 
     setSelectFolderState('default');
+    setSkipState('default');
     setError(null);
   }, [open, project?.id]);
 
@@ -79,6 +82,27 @@ export function ProjectWorkingDirectoryRequiredModal({
     }
   }
 
+  async function handleSkipDirectory() {
+    if (!project) return;
+
+    setSkipState('loading');
+    setError(null);
+
+    try {
+      await updateProjectWorkingDirectoryAction({
+        projectId: project.id,
+        workingDirectory: WORKING_DIRECTORY_NONE
+      });
+
+      setSkipState('success');
+      onOpenChange(false);
+      router.refresh();
+    } catch (updateError) {
+      setSkipState('error');
+      setError(updateError instanceof Error ? updateError.message : 'Failed to save preference.');
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -96,25 +120,38 @@ export function ProjectWorkingDirectoryRequiredModal({
 
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Not now
-          </Button>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
           <LoadingButton
-            buttonState={selectFolderState}
-            className="gap-1.5"
+            buttonState={skipState}
+            variant="ghost"
+            className="text-muted-foreground"
             errorText="Try again"
-            loadingText="Opening picker..."
-            setButtonState={setSelectFolderState}
-            successText="Folder linked"
-            text={
-              <span className="inline-flex items-center gap-1.5">
-                <Folder className="h-4 w-4" />
-                Select Folder
-              </span>
-            }
-            onClick={handleSelectFolder}
+            loadingText="Saving…"
+            setButtonState={setSkipState}
+            successText="Saved"
+            text="Don't use a directory"
+            onClick={handleSkipDirectory}
           />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Not now
+            </Button>
+            <LoadingButton
+              buttonState={selectFolderState}
+              className="gap-1.5"
+              errorText="Try again"
+              loadingText="Opening picker..."
+              setButtonState={setSelectFolderState}
+              successText="Folder linked"
+              text={
+                <span className="inline-flex items-center gap-1.5">
+                  <Folder className="h-4 w-4" />
+                  Select Folder
+                </span>
+              }
+              onClick={handleSelectFolder}
+            />
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

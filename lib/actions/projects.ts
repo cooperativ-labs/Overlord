@@ -139,6 +139,18 @@ export type CreateProjectResult = {
   organizationId: number;
 };
 
+export async function deleteProjectAction(input: { projectId: string }): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from('projects').delete().eq('id', input.projectId);
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to delete project.');
+  }
+
+  revalidatePath('/projects');
+  revalidatePath('/u');
+}
+
 export async function createProject(input: {
   organizationId: number;
   name: string;

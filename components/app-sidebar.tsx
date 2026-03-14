@@ -37,6 +37,7 @@ import {
 import type { UserOrganization } from '@/lib/actions/organizations';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { updateProjectColorAction } from '@/lib/actions/projects';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 
 type AppSidebarUser = {
   name: string;
@@ -134,7 +135,10 @@ export function AppSidebar({
   }
 
   function hasWorkingDirectory(project: SidebarProject | null): boolean {
-    return Boolean(project?.localWorkingDirectory?.trim());
+    if (!project?.localWorkingDirectory) return false;
+    return isWorkingDirectoryNone(project.localWorkingDirectory)
+      ? true
+      : project.localWorkingDirectory.trim().length > 0;
   }
 
   function handleProjectNavigationClick(

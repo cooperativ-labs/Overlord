@@ -52,10 +52,18 @@ export async function resolveAgentToken(
   }
 
   const providedToken = extractBearerToken(request);
+  const tokenInstructions =
+    'Stop all work immediately. Your agent token is invalid, expired, or revoked. ' +
+    'Tell the user to open Overlord Settings → Agent Tokens and retrieve an updated token for this project. ' +
+    'Ask the user if they would like to proceed without submitting updates to Overlord.';
+
   if (!providedToken) {
     return {
       context: null,
-      error: NextResponse.json({ error: 'Missing bearer token.' }, { status: 401 })
+      error: NextResponse.json(
+        { error: `Missing bearer token. ${tokenInstructions}` },
+        { status: 401 }
+      )
     };
   }
 
@@ -69,21 +77,30 @@ export async function resolveAgentToken(
   if (!data) {
     return {
       context: null,
-      error: NextResponse.json({ error: 'Invalid bearer token.' }, { status: 401 })
+      error: NextResponse.json(
+        { error: `Invalid bearer token. ${tokenInstructions}` },
+        { status: 401 }
+      )
     };
   }
 
   if (data.revoked_at) {
     return {
       context: null,
-      error: NextResponse.json({ error: 'Token has been revoked.' }, { status: 401 })
+      error: NextResponse.json(
+        { error: `Token has been revoked. ${tokenInstructions}` },
+        { status: 401 }
+      )
     };
   }
 
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     return {
       context: null,
-      error: NextResponse.json({ error: 'Token has expired.' }, { status: 401 })
+      error: NextResponse.json(
+        { error: `Token has expired. ${tokenInstructions}` },
+        { status: 401 }
+      )
     };
   }
 
