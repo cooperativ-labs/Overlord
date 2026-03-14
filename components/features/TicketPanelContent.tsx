@@ -313,6 +313,7 @@ export async function TicketPanelContent({
           <div className="flex items-center gap-2 justify-end">
             <TicketHeaderAction
               ticketId={ticketId}
+              organizationId={organizationId}
               agentToken={agentToken}
               agentFlags={agentFlags}
               agentIdentifier={agentSession?.agent_identifier ?? null}

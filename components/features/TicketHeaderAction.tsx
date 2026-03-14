@@ -12,6 +12,7 @@ import { AgentSplitButtonLive } from './TicketLiveProvider';
 
 type TicketHeaderActionProps = {
   ticketId: string;
+  organizationId: number;
   agentToken: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   agentIdentifier: string | null;
@@ -25,6 +26,7 @@ type TicketHeaderActionProps = {
 
 export function TicketHeaderAction({
   ticketId,
+  organizationId,
   agentToken,
   agentFlags,
   agentIdentifier,
@@ -42,6 +44,7 @@ export function TicketHeaderAction({
       <div className="flex items-center gap-2">
         <AskTicketButton
           ticketId={ticketId}
+          organizationId={organizationId}
           agentIdentifier={agentIdentifier}
           agentToken={agentToken}
           agentFlags={agentFlags}
@@ -57,6 +60,7 @@ export function TicketHeaderAction({
     <div className="flex items-center gap-2">
       <AskTicketButton
         ticketId={ticketId}
+        organizationId={organizationId}
         agentIdentifier={agentIdentifier}
         agentToken={agentToken}
         agentFlags={agentFlags}
@@ -66,6 +70,7 @@ export function TicketHeaderAction({
       <AgentSplitButtonLive
         defaultAgent={agentIdentifier ? getLaunchAgentTypeByIdentifier(agentIdentifier) : undefined}
         ticketId={ticketId}
+        organizationId={organizationId}
         agentToken={agentToken}
         agentFlags={agentFlags}
         commands={{

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketDiscussionPromptForCopy } from '@/lib/actions/tickets';
 import {
   getLaunchAgentTypeByIdentifier,
@@ -16,6 +17,7 @@ import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
 
 type AskTicketButtonProps = {
   ticketId: string;
+  organizationId?: number;
   agentIdentifier?: string | null;
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
@@ -25,6 +27,7 @@ type AskTicketButtonProps = {
 
 export function AskTicketButton({
   ticketId,
+  organizationId,
   agentIdentifier,
   agentToken,
   agentFlags,
@@ -46,11 +49,18 @@ export function AskTicketButton({
       const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
 
       if (isElectron) {
+        const resolvedAgentToken =
+          agentToken ??
+          (organizationId
+            ? await ensureAgentTokenAction(organizationId)
+            : (() => {
+                throw new Error('No workspace is available for agent token resolution.');
+              })());
         await launchAgent(
           ticketId,
           preferredAgent,
           workingDirectory ?? undefined,
-          agentToken ?? undefined,
+          resolvedAgentToken,
           'ask',
           agentFlags?.[preferredAgent]
         );

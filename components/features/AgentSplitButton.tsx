@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
@@ -35,6 +36,7 @@ type AgentSplitButtonProps = {
   selectedAgent: AgentSelectorValue;
   onSelectAgent: (agent: AgentSelectorValue) => void;
   ticketId: string;
+  organizationId?: number;
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   commands: Record<LaunchAgentTypeValue, string>;
@@ -94,6 +96,7 @@ export function AgentSplitButton({
   selectedAgent,
   onSelectAgent,
   ticketId,
+  organizationId,
   agentToken,
   agentFlags,
   commands,
@@ -159,11 +162,18 @@ export function AgentSplitButton({
     if (isElectron) {
       setIsLaunching(true);
       try {
+        const resolvedAgentToken =
+          agentToken ??
+          (organizationId
+            ? await ensureAgentTokenAction(organizationId)
+            : (() => {
+                throw new Error('No workspace is available for agent token resolution.');
+              })());
         await launchAgent(
           ticketId,
           agentValue,
           workingDirectory ?? undefined,
-          agentToken ?? undefined,
+          resolvedAgentToken,
           'run',
           agentFlags?.[agentValue]
         );
