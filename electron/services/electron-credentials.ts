@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const OVLD_DIR = path.join(os.homedir(), '.ovld');
 const CREDENTIALS_FILE = path.join(OVLD_DIR, 'electron-credentials.json');
+const CLI_CREDENTIALS_FILE = path.join(OVLD_DIR, 'credentials.json');
 const FILE_MODE = 0o600;
 
 export type ElectronCredentials = {
@@ -69,12 +70,26 @@ export function saveElectronCredentials(credentials: ElectronCredentials): void 
   fs.writeFileSync(tempFile, JSON.stringify(payload, null, 2), { mode: FILE_MODE });
   fs.renameSync(tempFile, CREDENTIALS_FILE);
   fs.chmodSync(CREDENTIALS_FILE, FILE_MODE);
+
+  // Also write plaintext credentials for the CLI (`npx overlord protocol ...`)
+  // so it can pick up the same token without a separate `npx overlord login`.
+  const cliPayload = JSON.stringify(
+    { access_token: credentials.agent_token, platform_url: credentials.platform_url },
+    null,
+    2
+  );
+  const cliTempFile = `${CLI_CREDENTIALS_FILE}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(cliTempFile, cliPayload, { mode: FILE_MODE });
+  fs.renameSync(cliTempFile, CLI_CREDENTIALS_FILE);
+  fs.chmodSync(CLI_CREDENTIALS_FILE, FILE_MODE);
 }
 
 export function clearElectronCredentials(): void {
-  try {
-    fs.unlinkSync(CREDENTIALS_FILE);
-  } catch {
-    // Best-effort
+  for (const file of [CREDENTIALS_FILE, CLI_CREDENTIALS_FILE]) {
+    try {
+      fs.unlinkSync(file);
+    } catch {
+      // Best-effort
+    }
   }
 }

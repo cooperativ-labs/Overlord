@@ -49,10 +49,25 @@ function buildProtocolHeaders(agentToken: string): Record<string, string> {
   return headers;
 }
 
-function getPlatformUrl(): string {
-  // Dev Electron defaults to localhost. Packaged Electron sets OVERLORD_URL explicitly
-  // so agent launches target the hosted platform without falling back to localhost.
-  return process.env.OVERLORD_URL ?? OVERLORD_URL_DEFAULT;
+function getConnectorUrl(): string {
+  const explicitConnectorUrl = process.env.OVERLORD_CONNECTOR_URL?.trim();
+  if (explicitConnectorUrl) {
+    return explicitConnectorUrl;
+  }
+
+  const legacyOverlordUrl = process.env.OVERLORD_URL?.trim();
+  if (legacyOverlordUrl) {
+    try {
+      const parsed = new URL(legacyOverlordUrl);
+      if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+        return parsed.toString().replace(/\/$/, '');
+      }
+    } catch {
+      // Fall through to the default connector URL.
+    }
+  }
+
+  return OVERLORD_URL_DEFAULT;
 }
 
 function normalizeAgentToken(value?: string): string {
@@ -65,7 +80,7 @@ function normalizeAgentToken(value?: string): string {
  * plus env vars for the PTY.
  */
 export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<LaunchAgentResult> {
-  const platformUrl = getPlatformUrl();
+  const connectorUrl = getConnectorUrl();
   // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
   const agentToken =
     normalizeAgentToken(input.agentToken) || normalizeAgentToken(process.env.AGENT_TOKEN);
@@ -75,9 +90,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     );
   }
   const launchMode = input.launchMode ?? 'run';
-  const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
+  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
   const launchEnv = {
-    OVERLORD_URL: platformUrl,
+    OVERLORD_URL: connectorUrl,
+    OVERLORD_CONNECTOR_URL: connectorUrl,
     AGENT_TOKEN: agentToken,
     TICKET_ID: input.ticketId,
     AGENT_IDENTIFIER: agentIdentifierMap[input.agent],
@@ -207,20 +223,37 @@ function writePermissionRequestHookFiles(tag: string): {
 
   fs.writeFileSync(hookScript, scriptLines.join('\n'), { encoding: 'utf-8', mode: 0o755 });
 
-  // Claude settings format: hooks → event name → array of matcher objects,
-  // each with a nested hooks array. ".*" matches all tool names.
-  const settings = {
+  // Read the user's existing Claude settings and merge our hook into them
+  // so we don't clobber their preferences (model, plugins, permissions, etc.).
+  const userSettingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+  let baseSettings: Record<string, unknown> = {};
+  try {
+    const raw = fs.readFileSync(userSettingsPath, 'utf-8');
+    baseSettings = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    // No user settings or invalid JSON — start from scratch
+  }
+
+  const overlordHook = {
+    matcher: '.*',
+    hooks: [{ type: 'command', command: hookScript }]
+  };
+
+  // Merge into existing hooks.PermissionRequest array (if any)
+  const existingHooks = (baseSettings.hooks ?? {}) as Record<string, unknown[]>;
+  const existingPermHooks = Array.isArray(existingHooks.PermissionRequest)
+    ? existingHooks.PermissionRequest
+    : [];
+
+  const mergedSettings = {
+    ...baseSettings,
     hooks: {
-      PermissionRequest: [
-        {
-          matcher: '.*',
-          hooks: [{ type: 'command', command: hookScript }]
-        }
-      ]
+      ...existingHooks,
+      PermissionRequest: [...existingPermHooks, overlordHook]
     }
   };
 
-  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf-8');
+  fs.writeFileSync(settingsFile, JSON.stringify(mergedSettings, null, 2), 'utf-8');
 
   return { hookScript, settingsFile };
 }

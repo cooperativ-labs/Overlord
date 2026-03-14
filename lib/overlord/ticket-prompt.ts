@@ -62,7 +62,7 @@ export function buildTicketPromptMarkdown({
       platformUrl.startsWith('http://0.0.0.0');
 
   const protocolSection = isLocal
-    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs)
+    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs, context)
     : buildRemoteProtocolSection(ticket.id, platformUrl, options);
   const { promptContext } = buildPromptContext({
     ticket,
@@ -93,8 +93,14 @@ function buildResumeCommandWithFlags(
 function buildLocalProtocolSection(
   ticketId: string,
   platformUrl: string,
-  agentConfigs?: Record<string, AgentConfig>
+  agentConfigs?: Record<string, AgentConfig>,
+  context?: PromptContext
 ): string {
+  const baseUrlLabel = context === 'electron' ? 'Connector URL' : 'Base URL';
+  const launchNote =
+    context === 'electron'
+      ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
+      : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
   const claudeResumeCommand = buildResumeCommandWithFlags(
     `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume claude`,
     'claude',
@@ -108,10 +114,10 @@ function buildLocalProtocolSection(
 
   return `## Overlord Protocol
 
-- **Base URL:** ${platformUrl}/api/protocol
+- **${baseUrlLabel}:** ${platformUrl}/api/protocol
 - **Ticket ID:** ${ticketId}
 
-> **Running locally.** Assume no environment variables are set. Use only \`npx overlord protocol\` commands and pass required flags explicitly.
+${launchNote}
 
 ### 1 — Attach (always first)
 

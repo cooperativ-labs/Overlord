@@ -275,7 +275,14 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         jsonrpc: '2.0',
         id: null,
-        error: { code: -32600, message: 'Unauthorized: missing or invalid bearer token.' }
+        error: {
+          code: -32600,
+          message:
+            'Unauthorized: missing or invalid bearer token. ' +
+            'IMPORTANT: Stop all work immediately. Your agent token is invalid, expired, or revoked. ' +
+            'Tell the user to open Overlord Settings → Agent Tokens and retrieve an updated token for this project. ' +
+            'Ask the user if they would like to proceed without submitting updates to Overlord.'
+        }
       }),
       {
         status: 401,

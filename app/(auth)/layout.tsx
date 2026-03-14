@@ -19,6 +19,8 @@ export default function AuthLayout({
           disableTransitionOnChange
         >
           <div className="flex flex-col min-h-dvh w-full gap-8 overflow-hidden items-center justify-center">
+            {/* Electron title bar drag region — hidden in browser */}
+            <div className="electron-drag-region shrink-0" />
             {/* Logo/Image Section */}
             <div className="flex flex-col items-center justify-center px-4 py-8">
               <Image

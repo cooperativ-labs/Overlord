@@ -64,7 +64,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       searchParams.get('mode') === 'ask'
         ? ('ask' as PromptLaunchMode)
         : ('run' as PromptLaunchMode);
-    const platformUrl = getPlatformUrl();
+    const requestOrigin = new URL(request.url).origin;
+    const platformUrl = getPlatformUrl(requestOrigin);
 
     if (!draftObjective || !draftObjective.objective || draftObjective.objective.trim() === '') {
       return NextResponse.json({ error: 'No objective found for this ticket.' }, { status: 404 });
@@ -152,7 +153,8 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
   }
 
-  const platformUrl = getPlatformUrl();
+  const requestOrigin = new URL(request.url).origin;
+  const platformUrl = getPlatformUrl(requestOrigin);
   const { claudeCode, codex, cursor, gemini, contextUrl } = buildLaunchCommands({
     platformUrl,
     ticketId,

@@ -203,16 +203,29 @@ export function buildAuthHeaders(token, localSecret) {
  */
 export function resolveAuth() {
   const creds = loadCredentials();
+  const connectorUrlFromEnv = normalizeAgentToken(process.env.OVERLORD_CONNECTOR_URL);
   const overlordUrlFromEnv = process.env.OVERLORD_URL;
   const overlordUrlFromCreds = creds?.platform_url;
 
-  // If OVERLORD_URL is set, look only at the runtime file for that specific port.
-  // Otherwise scan all runtime.*.json files and pick the first valid running instance.
-  const runtime = loadRuntime(overlordUrlFromEnv ?? null);
+  const runtimeTarget =
+    connectorUrlFromEnv || isLocalhostUrl(overlordUrlFromEnv ?? '') ? (connectorUrlFromEnv || overlordUrlFromEnv) : null;
+  const targetedRuntime = loadRuntime(runtimeTarget ?? null);
+  const fallbackRuntime = targetedRuntime ?? loadRuntime(null);
+  const runtime =
+    targetedRuntime && isLocalhostUrl(targetedRuntime.platform_url)
+      ? targetedRuntime
+      : fallbackRuntime && isLocalhostUrl(fallbackRuntime.platform_url)
+        ? fallbackRuntime
+        : targetedRuntime;
   const runtimeOverlordUrl = runtime?.platform_url;
 
   const platformUrl =
-    overlordUrlFromEnv ?? runtimeOverlordUrl ?? overlordUrlFromCreds ?? DEFAULT_OVERLORD_URL;
+    connectorUrlFromEnv ??
+    (overlordUrlFromEnv && isLocalhostUrl(overlordUrlFromEnv) ? overlordUrlFromEnv : undefined) ??
+    runtimeOverlordUrl ??
+    overlordUrlFromEnv ??
+    overlordUrlFromCreds ??
+    DEFAULT_OVERLORD_URL;
   const localSecret =
     runtime &&
     runtime.local_secret &&
@@ -224,7 +237,15 @@ export function resolveAuth() {
 
   return {
     platformUrl,
-    agentToken: creds?.access_token ?? process.env.AGENT_TOKEN ?? 'overlord-local-dev-token',
+    agentToken:
+      normalizeAgentToken(creds?.access_token) ||
+      normalizeAgentToken(process.env.AGENT_TOKEN) ||
+      'overlord-local-dev-token',
     localSecret
   };
+}
+
+function normalizeAgentToken(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
 }

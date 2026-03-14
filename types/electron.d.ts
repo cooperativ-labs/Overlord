@@ -76,6 +76,7 @@ interface ElectronAPI {
     set: (key: string, value: unknown) => Promise<void>;
   };
   app: {
+    getConnectorUrl: () => Promise<string>;
     getPlatformUrl: () => Promise<string>;
     notify: (title: string, body: string) => Promise<boolean>;
   };

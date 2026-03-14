@@ -93,6 +93,15 @@ async function apiPost(platformUrl, token, localSecret, path, body, timeoutMs = 
 
   const data = await res.json().catch(() => ({}));
 
+  if (res.status === 401) {
+    throw new Error(
+      `Authentication failed (401): ${data.error ?? 'Invalid or missing token.'}\n` +
+      `IMPORTANT: Stop all work immediately. Your agent token is invalid, expired, or revoked.\n` +
+      `The user should open Overlord Settings → Agent Tokens and retrieve an updated token for this project.\n` +
+      `Ask the user if they would like to proceed without submitting updates to Overlord.`
+    );
+  }
+
   if (!res.ok) {
     throw new Error(`API error (${res.status}): ${data.error ?? JSON.stringify(data)}`);
   }

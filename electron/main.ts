@@ -24,6 +24,7 @@ const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let unsubscribeAppMenu: (() => void) | null = null;
 let platformUrl = '';
+let connectorUrl = '';
 const supabaseManager = new SupabaseManager();
 const appUpdater = new AppUpdaterService({
   isPackaged: app.isPackaged,
@@ -117,25 +118,55 @@ function loadLocalEnvForPackagedRuns() {
   }
 }
 
-function resolveProductionPlatformUrl(): string {
-  const configuredUrl =
-    process.env.OVERLORD_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!configuredUrl) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SITE_URL (or OVERLORD_URL override) for packaged Electron startup.'
-    );
+function normalizeConfiguredUrl(value: string, label: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${label} is missing.`);
   }
 
-  const parsed = new URL(configuredUrl);
-  if (
-    parsed.protocol !== 'https:' &&
-    parsed.hostname !== 'localhost' &&
-    parsed.hostname !== '127.0.0.1'
-  ) {
-    throw new Error(`Packaged Electron requires an https platform URL. Received: ${configuredUrl}`);
+  const parsed = new URL(trimmed);
+  const isLoopbackHost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHost)) {
+    throw new Error(`${label} must use https:// or a localhost http:// URL. Received: ${value}`);
   }
 
   return parsed.toString().replace(/\/$/, '');
+}
+
+function isLoopbackUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function resolveProductionPlatformUrl(): string {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.OVERLORD_PLATFORM_URL?.trim() ||
+    process.env.OVERLORD_URL?.trim();
+  if (!configuredUrl) {
+    throw new Error(
+      'Missing NEXT_PUBLIC_SITE_URL (or OVERLORD_PLATFORM_URL / OVERLORD_URL override) for packaged Electron startup.'
+    );
+  }
+
+  return normalizeConfiguredUrl(configuredUrl, 'Packaged Electron platform URL');
+}
+
+function resolveConnectorUrl(fallbackUrl: string): string {
+  const explicitConnectorUrl = process.env.OVERLORD_CONNECTOR_URL?.trim();
+  if (explicitConnectorUrl) {
+    return normalizeConfiguredUrl(explicitConnectorUrl, 'Electron connector URL');
+  }
+
+  const legacyOverlordUrl = process.env.OVERLORD_URL?.trim();
+  const configuredUrl =
+    legacyOverlordUrl && isLoopbackUrl(legacyOverlordUrl) ? legacyOverlordUrl : fallbackUrl;
+  return normalizeConfiguredUrl(configuredUrl, 'Electron connector URL');
 }
 
 function createWindow(targetUrl: string) {
@@ -228,13 +259,16 @@ app.whenReady().then(async () => {
     }
   }
 
-  let localSecret = '';
+  let localSecret = process.env.OVERLORD_LOCAL_SECRET?.trim() || '';
 
   if (isDev) {
     platformUrl = 'http://localhost:3000';
-    localSecret = generateLocalSecret();
   } else {
     platformUrl = resolveProductionPlatformUrl();
+  }
+  connectorUrl = resolveConnectorUrl(platformUrl);
+  if (!localSecret && isLoopbackUrl(connectorUrl)) {
+    localSecret = generateLocalSecret();
   }
 
   // Always open to /u — the middleware will redirect to /electron-login if not authenticated.
@@ -245,15 +279,16 @@ app.whenReady().then(async () => {
   } else {
     delete process.env.OVERLORD_LOCAL_SECRET;
   }
-  process.env.OVERLORD_URL = platformUrl;
+  process.env.OVERLORD_PLATFORM_URL = platformUrl;
+  process.env.OVERLORD_CONNECTOR_URL = connectorUrl;
 
-  writeLocalRuntime(platformUrl, localSecret);
+  writeLocalRuntime(connectorUrl, localSecret);
 
   // Register IPC handlers
   registerTerminalIpc();
   registerFilesystemIpc();
   registerSupabaseIpc(supabaseManager);
-  registerAppIpc({ appUpdater, platformUrl });
+  registerAppIpc({ appUpdater, platformUrl, connectorUrl });
   registerAuthIpc({ getPlatformUrl: () => platformUrl });
 
   createWindow(windowUrl);
@@ -276,7 +311,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   unsubscribeAppMenu?.();
   unsubscribeAppMenu = null;
-  clearLocalRuntime(platformUrl);
+  clearLocalRuntime(connectorUrl);
 
   if (isDev) {
     try {

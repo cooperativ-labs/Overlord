@@ -47,6 +47,7 @@ const electronAPI = {
     set: (key: string, value: unknown) => ipcRenderer.invoke('settings:set', key, value)
   },
   app: {
+    getConnectorUrl: () => ipcRenderer.invoke('app:get-connector-url'),
     getPlatformUrl: () => ipcRenderer.invoke('app:get-platform-url'),
     notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body })
   },
