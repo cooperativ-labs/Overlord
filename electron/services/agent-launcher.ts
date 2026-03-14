@@ -49,9 +49,9 @@ function buildProtocolHeaders(agentToken: string): Record<string, string> {
   return headers;
 }
 
-function getPlatformUrl(): string {
-  // Dev Electron defaults to localhost. Packaged Electron sets OVERLORD_URL explicitly
-  // so agent launches target the hosted platform without falling back to localhost.
+function getConnectorUrl(): string {
+  // Electron exports OVERLORD_URL as the protocol connector target. In thin-wrapper
+  // runs this can differ from the hosted web app origin loaded in the BrowserWindow.
   return process.env.OVERLORD_URL ?? OVERLORD_URL_DEFAULT;
 }
 
@@ -65,7 +65,7 @@ function normalizeAgentToken(value?: string): string {
  * plus env vars for the PTY.
  */
 export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<LaunchAgentResult> {
-  const platformUrl = getPlatformUrl();
+  const connectorUrl = getConnectorUrl();
   // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
   const agentToken =
     normalizeAgentToken(input.agentToken) || normalizeAgentToken(process.env.AGENT_TOKEN);
@@ -75,9 +75,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     );
   }
   const launchMode = input.launchMode ?? 'run';
-  const contextUrl = `${platformUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
+  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
   const launchEnv = {
-    OVERLORD_URL: platformUrl,
+    OVERLORD_URL: connectorUrl,
     AGENT_TOKEN: agentToken,
     TICKET_ID: input.ticketId,
     AGENT_IDENTIFIER: agentIdentifierMap[input.agent],

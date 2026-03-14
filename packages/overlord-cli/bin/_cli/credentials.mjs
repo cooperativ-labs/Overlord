@@ -206,7 +206,7 @@ export function resolveAuth() {
   const overlordUrlFromEnv = process.env.OVERLORD_URL;
   const overlordUrlFromCreds = creds?.platform_url;
 
-  // If OVERLORD_URL is set, look only at the runtime file for that specific port.
+  // If OVERLORD_URL is set, look only at the runtime file for that specific origin.
   // Otherwise scan all runtime.*.json files and pick the first valid running instance.
   const runtime = loadRuntime(overlordUrlFromEnv ?? null);
   const runtimeOverlordUrl = runtime?.platform_url;
@@ -224,7 +224,15 @@ export function resolveAuth() {
 
   return {
     platformUrl,
-    agentToken: creds?.access_token ?? process.env.AGENT_TOKEN ?? 'overlord-local-dev-token',
+    agentToken:
+      normalizeAgentToken(creds?.access_token) ||
+      normalizeAgentToken(process.env.AGENT_TOKEN) ||
+      'overlord-local-dev-token',
     localSecret
   };
+}
+
+function normalizeAgentToken(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
 }

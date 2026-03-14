@@ -33,6 +33,7 @@ export function AboutPage({ open }: { open: boolean }) {
     useState<ButtonLoadingState>('default');
   const [installWarningOpen, setInstallWarningOpen] = useState(false);
   const [runningAgentCount, setRunningAgentCount] = useState(0);
+  const [connectorUrl, setConnectorUrl] = useState<string | null>(null);
   const [platformUrl, setPlatformUrl] = useState<string | null>(null);
 
   const canShowDownloadUpdate = updateStatus?.phase === 'available';
@@ -58,13 +59,23 @@ export function AboutPage({ open }: { open: boolean }) {
   }, [api, open]);
 
   useEffect(() => {
-    if (!open) return;
-    if (typeof window !== 'undefined' && window.electronAPI?.app?.getPlatformUrl) {
-      void window.electronAPI.app.getPlatformUrl().then(url => {
-        if (url) setPlatformUrl(url);
-      });
-    }
-  }, [open]);
+    if (!open || !api) return;
+
+    let cancelled = false;
+
+    void Promise.all([
+      api.app.getConnectorUrl().catch(() => null),
+      api.app.getPlatformUrl().catch(() => null)
+    ]).then(([nextConnectorUrl, nextPlatformUrl]) => {
+      if (cancelled) return;
+      setConnectorUrl(nextConnectorUrl);
+      setPlatformUrl(nextPlatformUrl);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, open]);
 
   async function handleCheckForUpdates() {
     if (!api) return;
@@ -121,6 +132,11 @@ export function AboutPage({ open }: { open: boolean }) {
     }
   }
 
+  const resolvedConnectorUrl = connectorUrl ?? platformUrl;
+  const showPlatformUrl = Boolean(
+    platformUrl && resolvedConnectorUrl && platformUrl !== resolvedConnectorUrl
+  );
+
   return (
     <>
       <div className="grid gap-4">
@@ -136,7 +152,12 @@ export function AboutPage({ open }: { open: boolean }) {
             Version {updateStatus?.currentVersion ?? 'unknown'}
             {updateStatus?.availableVersion ? ` • Latest ${updateStatus.availableVersion}` : ''}
           </p>
-          {platformUrl ? (
+          {resolvedConnectorUrl ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Connector URL: {resolvedConnectorUrl}
+            </p>
+          ) : null}
+          {showPlatformUrl ? (
             <p className="mt-1 text-xs text-muted-foreground">Platform URL: {platformUrl}</p>
           ) : null}
         </div>

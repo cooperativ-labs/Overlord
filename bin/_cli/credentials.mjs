@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
+/* global process, URL */
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 const CREDENTIALS_DIR = path.join(os.homedir(), '.ovld');
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
-const RUNTIME_FILE_PATTERN = /^runtime\.\d+\.json$/;
+const RUNTIME_FILE_PATTERN = /^runtime\..+\.json$/;
 const DEFAULT_OVERLORD_URL = 'http://localhost:3000';
 const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
 
@@ -40,6 +42,19 @@ export function clearCredentials() {
 
 function getRuntimeFilePath(targetUrl) {
   try {
+    const parsed = new URL(targetUrl);
+    const normalized = parsed.origin
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    return path.join(CREDENTIALS_DIR, `runtime.${normalized || 'unknown'}.json`);
+  } catch {
+    return null;
+  }
+}
+
+function getLegacyRuntimeFilePath(targetUrl) {
+  try {
     const port = new URL(targetUrl).port || '80';
     return path.join(CREDENTIALS_DIR, `runtime.${port}.json`);
   } catch {
@@ -52,7 +67,14 @@ function getAllRuntimeFiles() {
     return fs
       .readdirSync(CREDENTIALS_DIR)
       .filter(f => RUNTIME_FILE_PATTERN.test(f))
-      .map(f => path.join(CREDENTIALS_DIR, f));
+      .map(f => path.join(CREDENTIALS_DIR, f))
+      .sort((left, right) => {
+        try {
+          return fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs;
+        } catch {
+          return 0;
+        }
+      });
   } catch {
     return [];
   }
@@ -89,7 +111,7 @@ function loadRuntimeFromFile(filePath) {
       typeof parsed.platform_url !== 'string' ||
       typeof parsed.pid !== 'number' ||
       !isRunningPid(parsed.pid) ||
-      !isLocalhostUrl(parsed.platform_url)
+      !isSupportedPlatformUrl(parsed.platform_url)
     ) {
       return null;
     }
@@ -117,6 +139,16 @@ function isLocalhostUrl(value) {
   }
 }
 
+function isSupportedPlatformUrl(value) {
+  try {
+    const parsed = new URL(value);
+    if (isLocalhostUrl(value)) return true;
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function isRunningPid(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -130,9 +162,13 @@ function isRunningPid(pid) {
 /** @returns {{ platform_url?: string, local_secret?: string } | null} */
 export function loadRuntime(targetUrl) {
   if (targetUrl) {
-    const filePath = getRuntimeFilePath(targetUrl);
-    if (!filePath) return null;
-    return loadRuntimeFromFile(filePath);
+    const candidatePaths = [getRuntimeFilePath(targetUrl), getLegacyRuntimeFilePath(targetUrl)]
+      .filter(Boolean);
+    for (const filePath of candidatePaths) {
+      const runtime = loadRuntimeFromFile(filePath);
+      if (runtime) return runtime;
+    }
+    return null;
   }
 
   for (const filePath of getAllRuntimeFiles()) {
@@ -171,7 +207,7 @@ export function resolveAuth() {
   const overlordUrlFromEnv = process.env.OVERLORD_URL;
   const overlordUrlFromCreds = creds?.platform_url;
 
-  // If OVERLORD_URL is set, look only at the runtime file for that specific port.
+  // If OVERLORD_URL is set, look only at the runtime file for that specific origin.
   // Otherwise scan all runtime.*.json files and pick the first valid running instance.
   const runtime = loadRuntime(overlordUrlFromEnv ?? null);
   const runtimeOverlordUrl = runtime?.platform_url;
@@ -189,7 +225,15 @@ export function resolveAuth() {
 
   return {
     platformUrl,
-    agentToken: creds?.access_token ?? process.env.AGENT_TOKEN ?? 'overlord-local-dev-token',
+    agentToken:
+      normalizeAgentToken(creds?.access_token) ||
+      normalizeAgentToken(process.env.AGENT_TOKEN) ||
+      'overlord-local-dev-token',
     localSecret
   };
+}
+
+function normalizeAgentToken(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
 }
