@@ -84,10 +84,21 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET ?? ''
   };
 
-  // Fetch context from the API (runs in the main process — no shell needed)
-  const response = await fetch(contextUrl, {
-    headers: buildProtocolHeaders(agentToken)
-  });
+  // Fetch context from the API (runs in the main process — no shell needed).
+  // Use redirect: 'manual' so that cross-origin redirects don't strip the
+  // Authorization header (Node fetch drops auth headers on redirect per spec).
+  const headers = buildProtocolHeaders(agentToken);
+  let response = await fetch(contextUrl, { headers, redirect: 'manual' });
+
+  // Follow up to 5 redirects manually, preserving the Authorization header.
+  let redirectCount = 0;
+  while (response.status >= 300 && response.status < 400 && redirectCount < 5) {
+    const location = response.headers.get('location');
+    if (!location) break;
+    const redirectUrl = new URL(location, contextUrl).toString();
+    response = await fetch(redirectUrl, { headers, redirect: 'manual' });
+    redirectCount++;
+  }
 
   if (!response.ok) {
     const fallback = await fetchContextCommandFallback(contextUrl, agentToken, input.agent);
@@ -242,10 +253,24 @@ async function fetchContextCommandFallback(
   agent: AgentType
 ): Promise<string | null> {
   try {
-    const response = await fetch(contextUrl, {
+    const headers = buildProtocolHeaders(agentToken);
+    let response = await fetch(contextUrl, {
       method: 'POST',
-      headers: buildProtocolHeaders(agentToken)
+      headers,
+      redirect: 'manual'
     });
+    // Follow redirects manually to preserve Authorization header
+    let redirects = 0;
+    while (response.status >= 300 && response.status < 400 && redirects < 5) {
+      const location = response.headers.get('location');
+      if (!location) break;
+      response = await fetch(new URL(location, contextUrl).toString(), {
+        method: 'POST',
+        headers,
+        redirect: 'manual'
+      });
+      redirects++;
+    }
     if (!response.ok) return null;
 
     const payload = (await response.json()) as Partial<ContextCommandsResponse>;
