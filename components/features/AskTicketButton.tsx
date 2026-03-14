@@ -7,6 +7,7 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketDiscussionPromptForCopy } from '@/lib/actions/tickets';
+import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import {
   getLaunchAgentTypeByIdentifier,
   type LaunchAgentTypeValue
@@ -49,8 +50,9 @@ export function AskTicketButton({
       const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
 
       if (isElectron) {
+        const providedAgentToken = normalizeAgentToken(agentToken);
         const resolvedAgentToken =
-          agentToken ??
+          providedAgentToken ??
           (organizationId
             ? await ensureAgentTokenAction(organizationId)
             : (() => {

@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
   AGENT_SELECTOR_VALUES,
@@ -162,8 +163,9 @@ export function AgentSplitButton({
     if (isElectron) {
       setIsLaunching(true);
       try {
+        const providedAgentToken = normalizeAgentToken(agentToken);
         const resolvedAgentToken =
-          agentToken ??
+          providedAgentToken ??
           (organizationId
             ? await ensureAgentTokenAction(organizationId)
             : (() => {

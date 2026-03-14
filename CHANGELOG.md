@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-03-14:09:47
+
+### Added
+- None.
+
+### Fixed
+- Normalize agent token handling so whitespace-trimmed or missing tokens always fall back to the organization-scoped key before launching agents, preventing blank bearer tokens from hitting the protocol API.
+
+### Changed
+- Introduce a shared `normalizeAgentToken` helper and use it in `AgentSplitButton`, `AskTicketButton`, and Electron’s launch preparation so every launch path trims and validates the provided token consistently.
+
+### Security
+- None.
+
+### Documentation
+- Add the agent launch reliability testing engineering plan to clarify the testing goals and coverage needed around tokens, flags, and Electron contracts.
+
+### Chore
+- Bump the package version to `1.1.0` to align with this release.
+
 ## [1.0.0] - 2026-03-14:08:53
 
 ### Added

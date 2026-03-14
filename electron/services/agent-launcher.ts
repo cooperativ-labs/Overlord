@@ -55,6 +55,10 @@ function getPlatformUrl(): string {
   return process.env.OVERLORD_URL ?? OVERLORD_URL_DEFAULT;
 }
 
+function normalizeAgentToken(value?: string): string {
+  return value?.trim() ?? '';
+}
+
 /**
  * Fetches the ticket context markdown from the protocol API,
  * writes it to a temp file, and returns a clean shell command
@@ -63,8 +67,9 @@ function getPlatformUrl(): string {
 export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<LaunchAgentResult> {
   const platformUrl = getPlatformUrl();
   // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
-  const agentToken = input.agentToken ?? process.env.AGENT_TOKEN ?? '';
-  if (!agentToken.trim()) {
+  const agentToken =
+    normalizeAgentToken(input.agentToken) || normalizeAgentToken(process.env.AGENT_TOKEN);
+  if (!agentToken) {
     throw new Error(
       'No agent token is available for this workspace. Open Settings > Agents & MCP and refresh the token.'
     );
