@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { isWorkingDirectoryNone } from '@/lib/actions/projects';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { cn } from '@/lib/utils';
 
 export function DefaultProjectChooser({ className }: { className?: string }) {

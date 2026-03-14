@@ -12,11 +12,11 @@ import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
-  isWorkingDirectoryNone,
   updateProjectColorAction,
   updateProjectNameAction,
   updateProjectWorkingDirectoryAction
 } from '@/lib/actions/projects';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 

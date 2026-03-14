@@ -36,7 +36,8 @@ import {
 } from '@/components/ui/sidebar';
 import type { UserOrganization } from '@/lib/actions/organizations';
 import type { SidebarProject } from '@/lib/actions/projects';
-import { isWorkingDirectoryNone, updateProjectColorAction } from '@/lib/actions/projects';
+import { updateProjectColorAction } from '@/lib/actions/projects';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 
 type AppSidebarUser = {
   name: string;

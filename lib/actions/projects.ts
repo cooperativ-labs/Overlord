@@ -151,12 +151,6 @@ export async function deleteProjectAction(input: { projectId: string }): Promise
   revalidatePath('/u');
 }
 
-export const WORKING_DIRECTORY_NONE = '__none__';
-
-export function isWorkingDirectoryNone(value: string | null): boolean {
-  return value === WORKING_DIRECTORY_NONE;
-}
-
 export async function createProject(input: {
   organizationId: number;
   name: string;

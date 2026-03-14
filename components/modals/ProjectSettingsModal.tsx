@@ -26,12 +26,14 @@ import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import {
   deleteProjectAction,
   disconnectProjectFromEverhourAction,
-  isWorkingDirectoryNone,
   updateProjectColorAction,
   updateProjectNameAction,
-  updateProjectWorkingDirectoryAction,
-  WORKING_DIRECTORY_NONE
+  updateProjectWorkingDirectoryAction
 } from '@/lib/actions/projects';
+import {
+  isWorkingDirectoryNone,
+  WORKING_DIRECTORY_NONE
+} from '@/lib/helpers/project-working-directory';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 

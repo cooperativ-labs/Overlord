@@ -15,10 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import {
-  updateProjectWorkingDirectoryAction,
-  WORKING_DIRECTORY_NONE
-} from '@/lib/actions/projects';
+import { updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
+import { WORKING_DIRECTORY_NONE } from '@/lib/helpers/project-working-directory';
 
 type ProjectWorkingDirectoryRequiredModalProps = {
   open: boolean;
@@ -101,9 +99,7 @@ export function ProjectWorkingDirectoryRequiredModal({
       router.refresh();
     } catch (updateError) {
       setSkipState('error');
-      setError(
-        updateError instanceof Error ? updateError.message : 'Failed to save preference.'
-      );
+      setError(updateError instanceof Error ? updateError.message : 'Failed to save preference.');
     }
   }
 
