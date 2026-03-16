@@ -10,6 +10,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/oauth/consent',
   '/oauth/confirmation',
   '/auth',
+  '/.well-known/',
   '/privacy',
   '/terms',
   '/api/auth',

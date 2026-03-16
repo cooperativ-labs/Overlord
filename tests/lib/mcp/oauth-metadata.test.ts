@@ -29,7 +29,7 @@ describe('MCP OAuth metadata helpers', () => {
 
   it('points resource metadata discovery at the public MCP route', () => {
     expect(getAppMcpResourceMetadataUrl()).toBe(
-      'https://www.ovld.ai/api/mcp/.well-known/oauth-protected-resource'
+      'https://www.ovld.ai/.well-known/oauth-protected-resource/api/mcp'
     );
   });
 
@@ -37,10 +37,10 @@ describe('MCP OAuth metadata helpers', () => {
     expect(
       rewriteBearerResourceMetadata(
         'Bearer resource_metadata="https://zitmmhvbilhjjdwgxlfm.supabase.co/functions/v1/mcp/.well-known/oauth-protected-resource"',
-        'https://www.ovld.ai/api/mcp/.well-known/oauth-protected-resource'
+        'https://www.ovld.ai/.well-known/oauth-protected-resource/api/mcp'
       )
     ).toBe(
-      'Bearer resource_metadata="https://www.ovld.ai/api/mcp/.well-known/oauth-protected-resource"'
+      'Bearer resource_metadata="https://www.ovld.ai/.well-known/oauth-protected-resource/api/mcp"'
     );
   });
 
@@ -48,10 +48,10 @@ describe('MCP OAuth metadata helpers', () => {
     expect(
       rewriteBearerResourceMetadata(
         'Bearer error="invalid_token"',
-        'https://www.ovld.ai/api/mcp/.well-known/oauth-protected-resource'
+        'https://www.ovld.ai/.well-known/oauth-protected-resource/api/mcp'
       )
     ).toBe(
-      'Bearer error="invalid_token", resource_metadata="https://www.ovld.ai/api/mcp/.well-known/oauth-protected-resource"'
+      'Bearer error="invalid_token", resource_metadata="https://www.ovld.ai/.well-known/oauth-protected-resource/api/mcp"'
     );
   });
 });

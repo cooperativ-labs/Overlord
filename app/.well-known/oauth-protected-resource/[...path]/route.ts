@@ -1,17 +1,14 @@
-import {
-  buildAppMcpProtectedResourceMetadata,
-  MCP_RESOURCE_METADATA_LEGACY_PATH
-} from '@/lib/mcp/oauth-metadata';
+import { buildAppMcpProtectedResourceMetadata } from '@/lib/mcp/oauth-metadata';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers':
     'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id'
 };
 
-function isProtectedResourceMetadataPath(path: string[]): boolean {
-  return `/${path.join('/')}` === MCP_RESOURCE_METADATA_LEGACY_PATH.replace('/api/mcp', '');
+function isMcpProtectedResourcePath(path: string[]): boolean {
+  return path.join('/') === 'api/mcp';
 }
 
 export async function OPTIONS() {
@@ -21,7 +18,7 @@ export async function OPTIONS() {
 export async function GET(request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
 
-  if (!isProtectedResourceMetadataPath(path)) {
+  if (!isMcpProtectedResourcePath(path)) {
     return new Response('Not Found', { status: 404, headers: CORS_HEADERS });
   }
 

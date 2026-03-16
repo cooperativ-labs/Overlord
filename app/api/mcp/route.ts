@@ -26,10 +26,14 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   return new Response('Method not allowed', {
     status: 405,
-    headers: { ...CORS_HEADERS, Allow: 'POST, OPTIONS', 'Content-Type': 'text/plain; charset=utf-8' }
+    headers: {
+      ...CORS_HEADERS,
+      Allow: 'POST, OPTIONS',
+      'Content-Type': 'text/plain; charset=utf-8'
+    }
   });
 }
 

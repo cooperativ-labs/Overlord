@@ -1,7 +1,8 @@
 import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
 
 export const MCP_RESOURCE_PATH = '/api/mcp';
-export const MCP_RESOURCE_METADATA_PATH = '/api/mcp/.well-known/oauth-protected-resource';
+export const MCP_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource/api/mcp';
+export const MCP_RESOURCE_METADATA_LEGACY_PATH = '/api/mcp/.well-known/oauth-protected-resource';
 
 type ProtectedResourceMetadata = {
   resource: string;
