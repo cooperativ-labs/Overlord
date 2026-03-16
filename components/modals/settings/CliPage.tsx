@@ -1,10 +1,11 @@
 'use client';
 
-import { Check, Copy, X } from 'lucide-react';
+import { Check, Copy, Download, RefreshCw, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
+import { Badge } from '@/components/ui/badge';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
@@ -344,6 +345,13 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
 
 export function CliPage({ open }: { open: boolean }) {
   const { isElectron, api } = useElectron();
+  type BundleStatusEntry = {
+    agent: 'claude' | 'codex';
+    status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
+    version: string | null;
+    installedVersion: string | null;
+    details: string;
+  };
 
   const [selectedDefaultAgentTrigger, setSelectedDefaultAgentTrigger] =
     useState<AgentSelectorValue>('claude');
@@ -361,6 +369,18 @@ export function CliPage({ open }: { open: boolean }) {
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
   const [cliVersion, setCliVersion] = useState<string | null>(null);
   const [cliIsStale, setCliIsStale] = useState(false);
+  const [bundleStatuses, setBundleStatuses] = useState<BundleStatusEntry[]>([]);
+  const [bundleActionLoading, setBundleActionLoading] = useState<string | null>(null);
+
+  const loadBundleStatuses = useCallback(async () => {
+    if (!isElectron || !window.electronAPI?.agentBundle) return;
+    try {
+      const statuses = await window.electronAPI.agentBundle.getAllStatuses();
+      setBundleStatuses(statuses);
+    } catch {
+      // Agent bundle API not available
+    }
+  }, [isElectron]);
 
   useEffect(() => {
     if (!open) return;
@@ -392,6 +412,11 @@ export function CliPage({ open }: { open: boolean }) {
       setCliVersion(version);
     });
   }, [api, isElectron, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadBundleStatuses();
+  }, [open, loadBundleStatuses]);
 
   async function handleCopySlashInstall() {
     const config = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
@@ -469,6 +494,93 @@ export function CliPage({ open }: { open: boolean }) {
       setCliInstallMessage(error instanceof Error ? error.message : 'Install failed');
     }
   }
+
+  async function handleInstallBundle(agent: 'claude' | 'codex') {
+    if (!window.electronAPI?.agentBundle) return;
+    setBundleActionLoading(agent);
+    try {
+      await window.electronAPI.agentBundle.install(agent);
+      await loadBundleStatuses();
+    } catch {
+      // Handled by status refresh
+    } finally {
+      setBundleActionLoading(null);
+    }
+  }
+
+  async function handleInstallAllBundles() {
+    if (!window.electronAPI?.agentBundle) return;
+    setBundleActionLoading('all');
+    try {
+      await window.electronAPI.agentBundle.installAll();
+      await loadBundleStatuses();
+    } catch {
+      // Handled by status refresh
+    } finally {
+      setBundleActionLoading(null);
+    }
+  }
+
+  async function handleRepairBundle(agent: 'claude' | 'codex') {
+    if (!window.electronAPI?.agentBundle) return;
+    setBundleActionLoading(`repair-${agent}`);
+    try {
+      await window.electronAPI.agentBundle.repair(agent);
+      await loadBundleStatuses();
+    } catch {
+      // Handled by status refresh
+    } finally {
+      setBundleActionLoading(null);
+    }
+  }
+
+  async function handleUninstallBundle(agent: 'claude' | 'codex') {
+    if (!window.electronAPI?.agentBundle) return;
+    setBundleActionLoading(`uninstall-${agent}`);
+    try {
+      await window.electronAPI.agentBundle.uninstall(agent);
+      await loadBundleStatuses();
+    } catch {
+      // Handled by status refresh
+    } finally {
+      setBundleActionLoading(null);
+    }
+  }
+
+  const bundleStatusBadge = (status: BundleStatusEntry['status']) => {
+    switch (status) {
+      case 'installed':
+        return (
+          <Badge variant="default" className="bg-green-600 text-xs">
+            Installed
+          </Badge>
+        );
+      case 'stale':
+        return (
+          <Badge variant="secondary" className="text-xs">
+            Update available
+          </Badge>
+        );
+      case 'partial':
+        return (
+          <Badge variant="secondary" className="text-xs">
+            Partial
+          </Badge>
+        );
+      case 'not_installed':
+        return (
+          <Badge variant="outline" className="text-xs">
+            Not installed
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="destructive" className="text-xs">
+            Error
+          </Badge>
+        );
+    }
+  };
 
   return (
     <div className="grid gap-6">
@@ -607,6 +719,84 @@ export function CliPage({ open }: { open: boolean }) {
               </div>
             </div>
           </div>
+
+          {bundleStatuses.length > 0 && (
+            <div className="grid gap-4">
+              <div className="grid gap-1">
+                <p className="text-sm font-medium">Agent plugins</p>
+                <p className="text-xs text-muted-foreground">
+                  Install Overlord workflow instructions directly into your local agent config. This
+                  enables shorter prompts and a durable permission notification hook.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {bundleStatuses.map(entry => (
+                  <div
+                    key={entry.agent}
+                    className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3"
+                  >
+                    <div className="grid gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-medium capitalize">{entry.agent}</p>
+                        {bundleStatusBadge(entry.status)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{entry.details}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {(entry.status === 'not_installed' || entry.status === 'stale') && (
+                        <button
+                          type="button"
+                          disabled={bundleActionLoading !== null}
+                          onClick={() => void handleInstallBundle(entry.agent)}
+                          className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
+                          title={entry.status === 'stale' ? 'Update' : 'Install'}
+                        >
+                          <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      {(entry.status === 'partial' || entry.status === 'error') && (
+                        <button
+                          type="button"
+                          disabled={bundleActionLoading !== null}
+                          onClick={() => void handleRepairBundle(entry.agent)}
+                          className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
+                          title="Repair"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      {entry.status === 'installed' && (
+                        <button
+                          type="button"
+                          disabled={bundleActionLoading !== null}
+                          onClick={() => void handleUninstallBundle(entry.agent)}
+                          className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
+                          title="Uninstall"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <LoadingButton
+                buttonState={bundleActionLoading === 'all' ? 'loading' : 'default'}
+                setButtonState={() => {}}
+                text="Install all"
+                loadingText="Installing..."
+                successText="Installed"
+                errorText="Retry"
+                size="sm"
+                variant="outline"
+                onClick={() => void handleInstallAllBundles()}
+                disabled={
+                  bundleActionLoading !== null ||
+                  bundleStatuses.every(s => s.status === 'installed')
+                }
+              />
+            </div>
+          )}
         </>
       ) : null}
 
