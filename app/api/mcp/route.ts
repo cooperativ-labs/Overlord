@@ -27,14 +27,10 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: Request) {
-  // Proxy the GET request to the edge function for MCP instructions
-  const edgeUrl = `${getSupabaseUrl()}/functions/v1/mcp`;
-  const upstreamRes = await fetch(edgeUrl, {
-    method: 'GET',
-    headers: forwardHeaders(request)
+  return new Response('Method not allowed', {
+    status: 405,
+    headers: { ...CORS_HEADERS, Allow: 'POST, OPTIONS', 'Content-Type': 'text/plain; charset=utf-8' }
   });
-
-  return proxyResponse(upstreamRes, request);
 }
 
 export async function POST(request: Request) {
