@@ -5,10 +5,14 @@ import { isPublicRoute } from '@/lib/auth/public-routes';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/env';
 
 export async function updateSession(request: NextRequest) {
-  // Protocol endpoints are authenticated via bearer token, not Supabase session cookies.
-  // Bypass auth session refresh entirely to avoid turning protocol calls into 500s
-  // when local auth/session checks fail.
-  if (request.nextUrl.pathname.startsWith('/api/protocol')) {
+  // Protocol and MCP endpoints are authenticated via bearer token, not
+  // Supabase session cookies. Bypass auth session refresh entirely so these
+  // routes can return their own auth challenges instead of being redirected
+  // to the web login screen.
+  if (
+    request.nextUrl.pathname.startsWith('/api/protocol') ||
+    request.nextUrl.pathname.startsWith('/api/mcp')
+  ) {
     return NextResponse.next({ request });
   }
 
