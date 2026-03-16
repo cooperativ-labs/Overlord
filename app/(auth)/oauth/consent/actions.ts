@@ -23,7 +23,7 @@ export async function approveAuthorization(authorizationId: string): Promise<voi
     redirect('/oauth/consent?error=approval_failed');
   }
 
-  redirect(`/oauth/confirmation?redirect_url=${encodeURIComponent(data.redirect_url)}`);
+  redirect(data.redirect_url);
 }
 
 export async function denyAuthorization(authorizationId: string): Promise<void> {
