@@ -57,9 +57,9 @@ type NavItem = {
 
 const workflowNavItems: NavItem[] = [
   { name: 'Terminal', icon: Monitor, electronOnly: true },
-  { name: 'Agents & MCP', icon: Bot },
-  { name: 'Customization', icon: Edit3 },
-  { name: 'CLI', icon: Terminal }
+  { name: 'MCP & Cloud Agents', icon: Bot },
+  { name: 'Terminal Agents & CLI', icon: Terminal },
+  { name: 'Customization', icon: Edit3 }
 ];
 
 const appNavItems: NavItem[] = [
@@ -92,7 +92,7 @@ export function SettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[700px] md:max-w-[900px] lg:max-w-[1000px]">
+      <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[780px] md:max-w-[1000px] lg:max-w-[1200px]">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Customize your settings here.</DialogDescription>
         <SidebarProvider className="items-start">
@@ -182,7 +182,7 @@ export function SettingsModal({
             </header>
             <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
               {activeNav === 'Integrations' && <IntegrationsPage open={open} />}
-              {activeNav === 'Agents & MCP' && (
+              {activeNav === 'MCP & Cloud Agents' && (
                 <AgentsAndMcpPage
                   open={open}
                   organizations={organizations}
@@ -190,7 +190,7 @@ export function SettingsModal({
                 />
               )}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
-              {activeNav === 'CLI' && <CliPage open={open} />}
+              {activeNav === 'Terminal Agents & CLI' && <CliPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Terminal' && isElectron && <TerminalPage open={open} />}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -14,6 +14,16 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { getAllAgentConfigsAction, updateAgentFlagsAction } from '@/lib/actions/agent-config';
+import {
+  DEFAULT_AGENT_TRIGGER_STORAGE_KEY,
+  readDefaultAgentTriggerFromStorage
+} from '@/lib/helpers/agent-trigger';
+import {
+  AGENT_SELECTOR_VALUES,
+  type AgentSelectorValue,
+  getAgentTypeByValue
+} from '@/lib/helpers/agent-types';
 
 type SlashCommandConfig = {
   label: string;
@@ -28,6 +38,20 @@ type SlashCommandFile = {
   path: string;
   content: string;
 };
+
+const AGENTS = ['claude', 'cursor', 'codex'] as const;
+
+const AGENT_LABELS: Record<string, string> = {
+  claude: 'Claude',
+  cursor: 'Cursor',
+  codex: 'Codex'
+};
+
+function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
+  if (agentValue === 'copy-local') return 'Copy Local';
+  if (agentValue === 'copy-cloud') return 'Copy Cloud';
+  return getAgentTypeByValue(agentValue).label;
+}
 
 function parentDir(path: string): string | null {
   const index = path.lastIndexOf('/');
@@ -321,6 +345,13 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
 export function CliPage({ open }: { open: boolean }) {
   const { isElectron, api } = useElectron();
 
+  const [selectedDefaultAgentTrigger, setSelectedDefaultAgentTrigger] =
+    useState<AgentSelectorValue>('claude');
+  const [selectedLocalAgent, setSelectedLocalAgent] = useState<string>('claude');
+  const [agentFlags, setAgentFlags] = useState<Record<string, string[]>>({});
+  const [flagInput, setFlagInput] = useState('');
+  const [commandCopied, setCommandCopied] = useState(false);
+
   const [selectedSlashAgent, setSelectedSlashAgent] = useState('claude');
   const [slashCommandCopied, setSlashCommandCopied] = useState(false);
 
@@ -330,6 +361,27 @@ export function CliPage({ open }: { open: boolean }) {
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
   const [cliVersion, setCliVersion] = useState<string | null>(null);
   const [cliIsStale, setCliIsStale] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedDefaultAgentTrigger(readDefaultAgentTriggerFromStorage());
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !isElectron) return;
+    void (async () => {
+      try {
+        const configs = await getAllAgentConfigsAction();
+        const flags: Record<string, string[]> = {};
+        Object.entries(configs).forEach(([agentType, config]) => {
+          flags[agentType] = config.flags ?? [];
+        });
+        setAgentFlags(flags);
+      } catch (error) {
+        console.error('Failed to load agent configs:', error);
+      }
+    })();
+  }, [isElectron, open]);
 
   useEffect(() => {
     if (!open || !isElectron || !api?.cli) return;
@@ -347,6 +399,53 @@ export function CliPage({ open }: { open: boolean }) {
     await navigator.clipboard.writeText(config.installCmd);
     setSlashCommandCopied(true);
     setTimeout(() => setSlashCommandCopied(false), 2000);
+  }
+
+  async function handleAddFlag() {
+    if (!flagInput.trim()) return;
+
+    const newFlags = { ...agentFlags };
+    if (!newFlags[selectedLocalAgent]) {
+      newFlags[selectedLocalAgent] = [];
+    }
+
+    const flag = flagInput.trim();
+    if (!newFlags[selectedLocalAgent].includes(flag)) {
+      newFlags[selectedLocalAgent].push(flag);
+      setAgentFlags(newFlags);
+      try {
+        await updateAgentFlagsAction(selectedLocalAgent, newFlags[selectedLocalAgent]);
+      } catch (error) {
+        console.error('Failed to save agent flags:', error);
+      }
+    }
+    setFlagInput('');
+  }
+
+  async function handleRemoveFlag(agent: string, index: number) {
+    const newFlags = { ...agentFlags };
+    newFlags[agent] = (newFlags[agent] ?? []).filter((_, i) => i !== index);
+    setAgentFlags(newFlags);
+    try {
+      await updateAgentFlagsAction(agent, newFlags[agent]);
+    } catch (error) {
+      console.error('Failed to save agent flags:', error);
+    }
+  }
+
+  async function handleCopyCommand() {
+    const flags = (agentFlags[selectedLocalAgent] ?? []).join(' ');
+    const command = `npx overlord resume ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
+    await navigator.clipboard.writeText(command);
+    setCommandCopied(true);
+    setTimeout(() => setCommandCopied(false), 2000);
+  }
+
+  function handleDefaultAgentTriggerChange(value: string) {
+    const nextValue = value as AgentSelectorValue;
+    if (!AGENT_SELECTOR_VALUES.includes(nextValue)) return;
+    setSelectedDefaultAgentTrigger(nextValue);
+    window.localStorage.setItem(DEFAULT_AGENT_TRIGGER_STORAGE_KEY, nextValue);
   }
 
   async function handleInstallCli() {
@@ -372,7 +471,145 @@ export function CliPage({ open }: { open: boolean }) {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
+      <div className="grid gap-1">
+        <p className="text-sm font-medium">Terminal agents & CLI</p>
+        <p className="text-xs text-muted-foreground">
+          Agents running in your terminal communicate with the Overlord Desktop App via CLI.
+        </p>
+      </div>
+
+      {!isElectron ? (
+        <div className="rounded-md border border-yellow-500/40 bg-yellow-50/50 p-3 dark:bg-yellow-900/10">
+          <p className="text-sm text-muted-foreground">
+            Terminal agent controls are only available in the Overlord desktop app.
+          </p>
+        </div>
+      ) : null}
+
+      {isElectron ? (
+        <>
+          <div className="grid gap-4">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">Agent trigger</p>
+              <p className="text-xs text-muted-foreground">
+                Choose which action appears as the default option in the agent split button.
+              </p>
+            </div>
+            <Select
+              value={selectedDefaultAgentTrigger}
+              onValueChange={handleDefaultAgentTriggerChange}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select default option" />
+              </SelectTrigger>
+              <SelectContent>
+                {AGENT_SELECTOR_VALUES.map(agentValue => (
+                  <SelectItem key={agentValue} value={agentValue}>
+                    {getAgentSelectorLabel(agentValue)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-4">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">Local agent configuration</p>
+              <p className="text-xs text-muted-foreground">
+                Add custom flags to the agent command when running locally. Claude has
+                --enable-auto-mode enabled by default.
+              </p>
+            </div>
+            <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select agent" />
+              </SelectTrigger>
+              <SelectContent>
+                {AGENTS.map(agent => (
+                  <SelectItem key={agent} value={agent}>
+                    {AGENT_LABELS[agent]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-foreground">Command flags</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g., --enable-auto-mode"
+                    value={flagInput}
+                    onChange={e => setFlagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleAddFlag();
+                      }
+                    }}
+                    className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddFlag()}
+                    className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              {(agentFlags[selectedLocalAgent] ?? []).length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {(agentFlags[selectedLocalAgent] ?? []).map((flag, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
+                      >
+                        <code className="text-xs font-medium">{flag}</code>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
+                          className="rounded p-0.5 hover:bg-muted-foreground/20"
+                          title="Remove flag"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-foreground">Command</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyCommand()}
+                    className="shrink-0 rounded p-1 hover:bg-muted"
+                    title="Copy command"
+                  >
+                    {commandCopied ? (
+                      <Check className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
+                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                  {`npx overlord resume ${selectedLocalAgent}${
+                    (agentFlags[selectedLocalAgent] ?? []).length > 0
+                      ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                      : ''
+                  }`}
+                </pre>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
       <div className="grid gap-1">
         <p className="text-sm font-medium">Overlord CLI (ovld)</p>
         <p className="text-xs text-muted-foreground">
