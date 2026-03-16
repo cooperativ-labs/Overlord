@@ -8,9 +8,7 @@ import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'npm:jose@6.1.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_AUTH_ISSUER = `${SUPABASE_URL}/auth/v1`;
-const SUPABASE_JWKS = createRemoteJWKSet(
-  new URL(`${SUPABASE_AUTH_ISSUER}/.well-known/jwks.json`)
-);
+const SUPABASE_JWKS = createRemoteJWKSet(new URL(`${SUPABASE_AUTH_ISSUER}/.well-known/jwks.json`));
 
 export type TokenContext = {
   userId: string;
@@ -114,7 +112,10 @@ async function resolveOAuthJwt(
     } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      console.warn('[mcp] oauth token validation failed', summarizeJwtValidationFailure(token, error));
+      console.warn(
+        '[mcp] oauth token validation failed',
+        summarizeJwtValidationFailure(token, error)
+      );
       return null;
     }
 
@@ -122,13 +123,9 @@ async function resolveOAuthJwt(
   }
 
   const userId = typeof payload.sub === 'string' ? payload.sub : null;
-  const clientId = typeof payload.client_id === 'string' ? payload.client_id.trim() : '';
 
-  if (!userId || !clientId) {
-    console.warn('[mcp] oauth token missing required claims', {
-      hasSub: Boolean(userId),
-      hasClientId: clientId.length > 0
-    });
+  if (!userId) {
+    console.warn('[mcp] oauth token missing sub claim');
     return null;
   }
 
