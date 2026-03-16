@@ -1,9 +1,16 @@
 // deno-lint-ignore-file no-explicit-any
 import { type SupabaseClient } from '@supabase/supabase-js';
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'npm:jose@6.1.0';
 
 // ---------------------------------------------------------------------------
 // Auth — supports both legacy agent_tokens and Supabase OAuth JWTs
 // ---------------------------------------------------------------------------
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_AUTH_ISSUER = `${SUPABASE_URL}/auth/v1`;
+const SUPABASE_JWKS = createRemoteJWKSet(
+  new URL(`${SUPABASE_AUTH_ISSUER}/.well-known/jwks.json`)
+);
 
 export type TokenContext = {
   userId: string;
@@ -92,26 +99,51 @@ async function resolveOAuthJwt(
   supabase: SupabaseClient,
   organizationIdHint: number | null = null
 ): Promise<TokenContext | null> {
-  // Validate the JWT via Supabase Auth — this checks signature, expiry, etc.
-  const {
-    data: { user },
-    error: userError
-  } = await supabase.auth.getUser(token);
+  let payload: Record<string, unknown>;
+  try {
+    const verified = await jwtVerify(token, SUPABASE_JWKS, {
+      issuer: SUPABASE_AUTH_ISSUER,
+      audience: 'authenticated'
+    });
+    payload = verified.payload as Record<string, unknown>;
+  } catch (error) {
+    // Fallback for projects still using HS256 or non-JWKS-compatible tokens.
+    const {
+      data: { user },
+      error: userError
+    } = await supabase.auth.getUser(token);
 
-  if (userError || !user) return null;
+    if (userError || !user) {
+      console.warn('[mcp] oauth token validation failed', summarizeJwtValidationFailure(token, error));
+      return null;
+    }
+
+    payload = decodeJwt(token) as Record<string, unknown>;
+  }
+
+  const userId = typeof payload.sub === 'string' ? payload.sub : null;
+  const clientId = typeof payload.client_id === 'string' ? payload.client_id.trim() : '';
+
+  if (!userId || !clientId) {
+    console.warn('[mcp] oauth token missing required claims', {
+      hasSub: Boolean(userId),
+      hasClientId: clientId.length > 0
+    });
+    return null;
+  }
 
   // If caller specified an organization, verify membership in that org
   if (organizationIdHint && !isNaN(organizationIdHint)) {
     const { data: targetMember } = await supabase
       .from('members')
       .select('organization_id')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('organization_id', organizationIdHint)
       .single();
 
     if (targetMember) {
       return {
-        userId: user.id,
+        userId,
         organizationId: targetMember.organization_id,
         tokenId: null,
         tokenValue: token,
@@ -125,7 +157,7 @@ async function resolveOAuthJwt(
   const { data: member } = await supabase
     .from('members')
     .select('organization_id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('organization_id', { ascending: true })
     .limit(1)
     .single();
@@ -133,10 +165,29 @@ async function resolveOAuthJwt(
   if (!member) return null;
 
   return {
-    userId: user.id,
+    userId,
     organizationId: member.organization_id,
     tokenId: null,
     tokenValue: token,
     authMethod: 'oauth_jwt'
   };
+}
+
+function summarizeJwtValidationFailure(token: string, error: unknown) {
+  const decoded = safeDecodeJwt(token);
+
+  return {
+    reason: error instanceof Error ? error.message : String(error),
+    iss: typeof decoded?.iss === 'string' ? decoded.iss : null,
+    aud: decoded?.aud ?? null,
+    hasClientId: typeof decoded?.client_id === 'string' && decoded.client_id.trim().length > 0
+  };
+}
+
+function safeDecodeJwt(token: string): Record<string, unknown> | null {
+  try {
+    return decodeJwt(token) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
