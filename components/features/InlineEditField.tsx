@@ -297,11 +297,11 @@ export function InlineEditField({
         displayClassName,
         isTextareaVariant
           ? [
-              'px-2 py-1',
-              isEmpty
-                ? 'min-h-[200px] hover:ring-1 hover:ring-muted-foreground/60'
-                : 'hover:ring-1 hover:ring-muted-foreground/60  '
-            ]
+            'px-2 py-1',
+            isEmpty
+              ? 'min-h-[200px] hover:ring-1 hover:ring-muted-foreground/60'
+              : 'hover:ring-1 hover:ring-muted-foreground/60  '
+          ]
           : ['-mx-2 -my-1 px-2 py-1', 'hover:bg-muted/50']
       )}
       role="button"

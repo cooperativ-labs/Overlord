@@ -4,6 +4,45 @@
 
 export const TOOLS = [
   {
+    name: 'create_ticket_draft',
+    description:
+      'Turn conversation context into a structured Overlord ticket draft and open an inline editable ticket card.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        conversationContext: {
+          type: 'string',
+          description: 'The relevant chat or conversation context to turn into a ticket draft.'
+        },
+        title: {
+          type: 'string',
+          description: 'Optional title override if you already know the best title.'
+        },
+        description: {
+          type: 'string',
+          description: 'Optional description/objective override.'
+        },
+        priority: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'urgent'],
+          description: 'Optional priority override.'
+        },
+        projectId: {
+          type: 'string',
+          description: 'Optional project UUID. Defaults to the first project in your organization.'
+        }
+      },
+      required: ['conversationContext']
+    },
+    _meta: {
+      ui: {
+        resourceUri: 'ui://overlord/ticket-card',
+        visibility: ['model', 'app']
+      },
+      'openai/outputTemplate': 'ui://overlord/ticket-card'
+    }
+  },
+  {
     name: 'attach',
     description:
       'Attach to an Overlord ticket session. Call this FIRST before any other tool. Returns session.sessionKey, the full ticket record, a preassembled promptContext string, prior delivery history, artifacts, and shared state.',
@@ -269,6 +308,29 @@ export const TOOLS = [
         }
       },
       required: ['sessionKey', 'ticketId', 'summary']
+    }
+  },
+  {
+    name: 'save_ticket_draft',
+    description:
+      'Persist an edited ticket draft to Overlord. Intended to be called from the inline ticket card app.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Ticket title.' },
+        description: { type: 'string', description: 'Ticket description / objective.' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        projectId: {
+          type: 'string',
+          description: 'Optional destination project UUID. Defaults to the first available project.'
+        }
+      },
+      required: ['description']
+    },
+    _meta: {
+      ui: {
+        visibility: ['app']
+      }
     }
   },
   {

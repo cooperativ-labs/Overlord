@@ -65,7 +65,12 @@ export function rpcError(id: unknown, code: number, message: string): Response {
   return jsonResponse({ jsonrpc: '2.0', id, error: { code, message } });
 }
 
-export type ToolResponse = { content: { type: string; text: string }[]; isError: boolean };
+export type ToolResponse = {
+  content: { type: string; text: string }[];
+  isError?: boolean;
+  structuredContent?: Record<string, unknown>;
+  _meta?: Record<string, unknown>;
+};
 
 export function toolResult(text: string, isError = false): ToolResponse {
   return { content: [{ type: 'text', text }], isError };
@@ -77,4 +82,16 @@ export function toolOk(data: unknown): ToolResponse {
 
 export function toolErr(message: string): ToolResponse {
   return toolResult(message, true);
+}
+
+export function appToolOk(
+  text: string,
+  structuredContent: Record<string, unknown>,
+  meta?: Record<string, unknown>
+): ToolResponse {
+  return {
+    content: [{ type: 'text', text }],
+    structuredContent,
+    ...(meta ? { _meta: meta } : {})
+  };
 }

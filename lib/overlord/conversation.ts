@@ -5,6 +5,7 @@ type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 export type ConversationEntryType = 'question' | 'answer' | 'follow_up' | 'event';
 
 type EventPayload = Record<string, unknown>;
+const USER_FOLLOW_UP_PREFIX = /^User message \(verbatim\):\s*/u;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -29,6 +30,25 @@ export function getConversationEntryType(event: TicketEvent): ConversationEntryT
   if (event.event_type === 'question') return 'question';
   if (event.event_type === 'answer') return 'answer';
   return 'event';
+}
+
+export function isUserFollowUpEvent(event: TicketEvent): boolean {
+  return getConversationEntryType(event) === 'follow_up' || event.event_type === 'user_follow_up';
+}
+
+export function getEventDisplayLabel(event: TicketEvent): string {
+  if (isUserFollowUpEvent(event)) return 'user_follow_up';
+  if (getConversationEntryType(event) === 'answer') return 'answer';
+  if (event.event_type === 'alert') return 'notification';
+  return event.event_type;
+}
+
+export function getEventDisplaySummary(event: TicketEvent): string | null {
+  if (!event.summary) return null;
+  if (isUserFollowUpEvent(event)) {
+    return event.summary.replace(USER_FOLLOW_UP_PREFIX, '');
+  }
+  return event.summary;
 }
 
 export function isBlockingQuestion(event: TicketEvent): boolean {

@@ -6,7 +6,7 @@
  * Exposes Overlord protocol operations as MCP tools so that cloud-based agents
  * (Claude Code, Codex, etc.) can interact with tickets natively.
  *
- * Protocol: JSON-RPC 2.0 / MCP 2024-11-05
+ * Protocol: JSON-RPC 2.0 / MCP 2026-01-26
  * Auth: OAuth 2.1 JWT (primary) or legacy agent_token bearer
  */
 
@@ -19,10 +19,13 @@ import { handleArtifactPrepareUpload } from './handlers/artifact-prepare-upload.
 import { handleAsk } from './handlers/ask.ts';
 import { handleAttach } from './handlers/attach.ts';
 import { handleCreateTicket } from './handlers/create-ticket.ts';
+import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
 import { handleDeliver } from './handlers/deliver.ts';
 import { handleReadContext } from './handlers/read-context.ts';
+import { handleSaveTicketDraft } from './handlers/save-ticket-draft.ts';
 import { handleUpdate } from './handlers/update.ts';
 import { handleWriteContext } from './handlers/write-context.ts';
+import { getUiResourceByUri, listUiResources } from './ui/resources.ts';
 import { resolveToken } from './auth.ts';
 import { buildCorsHeaders, rpcError, rpcResult } from './rpc.ts';
 import { TOOLS } from './tools.ts';
@@ -310,8 +313,8 @@ Deno.serve(async (req: Request) => {
 
   if (method === 'initialize') {
     return rpcResult(id, {
-      protocolVersion: '2024-11-05',
-      capabilities: { tools: {} },
+      protocolVersion: '2026-01-26',
+      capabilities: { tools: {}, resources: {} },
       serverInfo: { name: 'overlord', version: '1.0.0' }
     });
   }
@@ -332,6 +335,29 @@ Deno.serve(async (req: Request) => {
     return rpcResult(id, { tools: TOOLS });
   }
 
+  if (method === 'resources/list') {
+    return rpcResult(id, { resources: listUiResources() });
+  }
+
+  if (method === 'resources/read') {
+    const resourceUri = params?.uri;
+    const resource = typeof resourceUri === 'string' ? getUiResourceByUri(resourceUri) : null;
+    if (!resource) {
+      return rpcError(id, -32602, `Unknown resource: ${resourceUri ?? 'undefined'}`);
+    }
+
+    return rpcResult(id, {
+      contents: [
+        {
+          uri: resource.uri,
+          mimeType: resource.mimeType,
+          text: resource.text,
+          _meta: resource._meta
+        }
+      ]
+    });
+  }
+
   if (method === 'tools/call') {
     const toolName: string = params?.name;
     const toolArgs: any = params?.arguments ?? {};
@@ -350,12 +376,16 @@ Deno.serve(async (req: Request) => {
 
       if (toolName === 'attach') {
         result = await handleAttach(supabase, toolArgs, tokenCtx);
+      } else if (toolName === 'create_ticket_draft') {
+        result = await handleCreateTicketDraft(supabase, toolArgs, tokenCtx);
       } else if (toolName === 'artifact_prepare_upload') {
         result = await handleArtifactPrepareUpload(supabase, toolArgs, tokenCtx);
       } else if (toolName === 'artifact_finalize_upload') {
         result = await handleArtifactFinalizeUpload(supabase, toolArgs, tokenCtx);
       } else if (toolName === 'artifact_get_download_url') {
         result = await handleArtifactGetDownloadUrl(supabase, toolArgs, tokenCtx);
+      } else if (toolName === 'save_ticket_draft') {
+        result = await handleSaveTicketDraft(supabase, toolArgs, tokenCtx);
       } else if (toolName === 'update') {
         result = await handleUpdate(supabase, toolArgs, tokenCtx);
       } else if (toolName === 'ask') {

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { isPublicRoute } from '@/lib/auth/public-routes';
 import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/env';
 
 export async function updateSession(request: NextRequest) {
@@ -52,24 +53,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const publicExactPaths = ['/'];
-  const publicPathPrefixes = [
-    '/login',
-    '/electron-login',
-    '/confirm-email',
-    '/onboarding',
-    '/oauth/',
-    '/auth',
-    '/privacy',
-    '/terms',
-    '/api/auth',
-    '/callback'
-  ];
-  const isPublic =
-    publicExactPaths.includes(request.nextUrl.pathname) ||
-    publicPathPrefixes.some(path => request.nextUrl.pathname.startsWith(path));
-
-  if (!user && !isPublic) {
+  if (!user && !isPublicRoute(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
     const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
     url.pathname = isElectron ? '/electron-login' : '/login';

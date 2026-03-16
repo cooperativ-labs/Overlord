@@ -1,5 +1,6 @@
 'use client';
 
+import { MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useTransition } from 'react';
 
@@ -11,7 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
-import { getConversationEntryType } from '@/lib/overlord/conversation';
+import {
+  getEventDisplayLabel,
+  getEventDisplaySummary,
+  isUserFollowUpEvent
+} from '@/lib/overlord/conversation';
+import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
@@ -63,41 +69,65 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
     return <p className="text-sm italic text-muted-foreground">No events yet.</p>;
   }
 
-  function getEventLabel(event: TicketEvent): string {
-    const entryType = getConversationEntryType(event);
-    if (entryType === 'follow_up') return 'follow_up';
-    if (entryType === 'answer') return 'answer';
-    if (event.event_type === 'alert') return 'notification';
-    return event.event_type;
-  }
-
   return (
     <div className="grid gap-3">
-      {visibleEvents.map(event => (
-        <article className="flex gap-3" key={event.id}>
-          <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/30" />
-          <div className="grid gap-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium">{getEventLabel(event)}</span>
-              {event.phase ? (
-                <Badge className="h-5 rounded-full px-2 text-xs" variant="secondary">
-                  {event.phase}
-                </Badge>
-              ) : null}
-              <span className="text-xs text-muted-foreground">
-                {new Date(event.created_at).toLocaleString()}
-              </span>
+      {visibleEvents.map(event => {
+        const isUserFollowUp = isUserFollowUpEvent(event);
+        const summary = getEventDisplaySummary(event);
+
+        return (
+          <article className="flex gap-3" key={event.id}>
+            <div
+              className={cn(
+                'mt-1.5 h-2 w-2 shrink-0 rounded-full',
+                isUserFollowUp ? 'bg-sky-500/80' : 'bg-muted-foreground/30'
+              )}
+            />
+            <div className="grid gap-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 text-xs font-medium',
+                    isUserFollowUp && 'text-sky-700 dark:text-sky-400'
+                  )}
+                >
+                  {isUserFollowUp ? <MessageSquare className="h-3.5 w-3.5" /> : null}
+                  {getEventDisplayLabel(event)}
+                </span>
+                {event.phase ? (
+                  <Badge className="h-5 rounded-full px-2 text-xs" variant="secondary">
+                    {event.phase}
+                  </Badge>
+                ) : null}
+                <span className="text-xs text-muted-foreground">
+                  {new Date(event.created_at).toLocaleString()}
+                </span>
+              </div>
+              {summary ? (
+                <MarkdownContent
+                  compact
+                  className={cn(
+                    'text-sm',
+                    isUserFollowUp
+                      ? [
+                          'text-sky-700 dark:text-sky-300',
+                          'prose-p:text-sky-700 dark:prose-p:text-sky-300',
+                          'prose-li:text-sky-700 dark:prose-li:text-sky-300',
+                          'prose-strong:text-sky-800 dark:prose-strong:text-sky-200',
+                          'prose-code:text-sky-800 dark:prose-code:text-sky-200'
+                        ]
+                      : 'text-muted-foreground'
+                  )}
+                >
+                  {summary}
+                </MarkdownContent>
+              ) : (
+                <p className="text-sm italic text-muted-foreground">No summary.</p>
+              )}
             </div>
-            {event.summary ? (
-              <MarkdownContent compact className="text-sm text-muted-foreground">
-                {event.summary}
-              </MarkdownContent>
-            ) : (
-              <p className="text-sm italic text-muted-foreground">No summary.</p>
-            )}
-          </div>
-        </article>
-      ))}
+          </article>
+        );
+      })}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
+import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
 import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
 import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { TutorialProvider } from '@/components/features/onboarding/TutorialWizardContext';
@@ -115,6 +116,7 @@ export default async function RootLayout({
         >
           <ElectronDetector />
           <ServiceWorkerRegister />
+          <WebAuthGate />
           <ElectronAuthGate />
           <ElectronOfflineGate>
             <TerminalProvider>

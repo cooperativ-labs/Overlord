@@ -60,7 +60,14 @@ export function validateToolInput(
 
     // String length limits (prevent abuse)
     if (prop.type === 'string' && typeof value === 'string') {
-      const maxLen = key === 'summary' || key === 'objective' || key === 'question' ? 10000 : 2000;
+      const maxLen =
+        key === 'summary' ||
+        key === 'objective' ||
+        key === 'question' ||
+        key === 'description' ||
+        key === 'conversationContext'
+          ? 20000
+          : 2000;
       if (value.length > maxLen) {
         return `Field "${key}" exceeds maximum length of ${maxLen} characters.`;
       }
