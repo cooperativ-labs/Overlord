@@ -99,27 +99,37 @@ async function resolveOAuthJwt(
 ): Promise<TokenContext | null> {
   let payload: Record<string, unknown>;
   try {
+    // First try with audience: 'authenticated' (standard Supabase tokens)
     const verified = await jwtVerify(token, SUPABASE_JWKS, {
       issuer: SUPABASE_AUTH_ISSUER,
       audience: 'authenticated'
     });
     payload = verified.payload as Record<string, unknown>;
-  } catch (error) {
-    // Fallback for projects still using HS256 or non-JWKS-compatible tokens.
-    const {
-      data: { user },
-      error: userError
-    } = await supabase.auth.getUser(token);
+  } catch {
+    // OAuth provider tokens have aud = client_id (not 'authenticated').
+    // Retry JWKS verification without an audience constraint.
+    try {
+      const verified = await jwtVerify(token, SUPABASE_JWKS, {
+        issuer: SUPABASE_AUTH_ISSUER
+      });
+      payload = verified.payload as Record<string, unknown>;
+    } catch (error) {
+      // Final fallback for HS256 or non-JWKS-compatible tokens.
+      const {
+        data: { user },
+        error: userError
+      } = await supabase.auth.getUser(token);
 
-    if (userError || !user) {
-      console.warn(
-        '[mcp] oauth token validation failed',
-        summarizeJwtValidationFailure(token, error)
-      );
-      return null;
+      if (userError || !user) {
+        console.warn(
+          '[mcp] oauth token validation failed',
+          summarizeJwtValidationFailure(token, error)
+        );
+        return null;
+      }
+
+      payload = decodeJwt(token) as Record<string, unknown>;
     }
-
-    payload = decodeJwt(token) as Record<string, unknown>;
   }
 
   const userId = typeof payload.sub === 'string' ? payload.sub : null;

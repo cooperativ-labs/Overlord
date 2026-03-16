@@ -1,0 +1,455 @@
+#!/usr/bin/env node
+
+/**
+ * Agent bundle setup commands (setup / doctor).
+ *
+ * Installs durable Overlord workflow configuration for Claude Code and Codex
+ * into their respective config directories (~/.claude/, ~/.codex/).
+ */
+
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const BUNDLE_VERSION = '1.0.0';
+const MD_MARKER_START = '<!-- overlord:managed:start -->';
+const MD_MARKER_END = '<!-- overlord:managed:end -->';
+const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
+const MANIFEST_FILE = path.join(MANIFEST_DIR, 'bundle-manifest.json');
+
+const supportedAgents = ['claude', 'codex'];
+
+// ---------------------------------------------------------------------------
+// Templates (same content as electron/services/agent-bundle/templates.ts)
+// ---------------------------------------------------------------------------
+
+const CLAUDE_SKILL_CONTENT = `---
+name: overlord-local
+description: Overlord local workflow protocol — attach, update, deliver lifecycle for ticket-driven work.
+---
+
+# Overlord Local Workflow
+
+You are working on a ticket managed by Overlord. Follow these rules for every session.
+
+## Lifecycle
+
+1. **Attach first** — Always call attach before doing any work:
+   \`\`\`bash
+   npx overlord protocol attach --ticket-id $TICKET_ID
+   \`\`\`
+   Store \`session.sessionKey\` from the response — it is required for all subsequent calls.
+
+2. **Update during work** — Post at least one progress update before delivering:
+   \`\`\`bash
+   npx overlord protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
+   \`\`\`
+   Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`.
+   Use \`execute\` while working.
+
+   Pass \`--event-type <type>\` to publish a specific activity event (default: \`update\`):
+   - \`update\` — standard progress update (default)
+   - \`user_follow_up\` — a message or question from the human user
+   - \`alert\` — surface a warning or non-blocking alert
+
+3. **Ask when blocked** — Stop working after calling:
+   \`\`\`bash
+   npx overlord protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
+   \`\`\`
+
+4. **Deliver last** — Always deliver when done:
+   \`\`\`bash
+   npx overlord protocol deliver --session-key <sessionKey> \\\\
+     --ticket-id $TICKET_ID \\\\
+     --summary "Narrative: what you did, next steps." \\\\
+     --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\\\
+     --change-rationales-file /tmp/rationales.json
+   \`\`\`
+
+## Change Rationales
+
+Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
+
+Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
+
+## Context & Artifacts
+
+\`\`\`bash
+npx overlord protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
+npx overlord protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
+npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+\`\`\`
+
+## Rules
+
+- Always attach first; always deliver when done.
+- Post at least one update before delivering.
+- If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
+- The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
+- Use \`write-context\` for facts a future agent session should know.
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+`;
+
+const CODEX_AGENTS_SECTION = `# Overlord Local Workflow
+
+You are working on a ticket managed by Overlord. Follow these rules for every session.
+
+## Lifecycle
+
+1. **Attach first** — Always call attach before doing any work:
+   \`\`\`bash
+   npx overlord protocol attach --ticket-id $TICKET_ID
+   \`\`\`
+   Store \`session.sessionKey\` from the response — it is required for all subsequent calls.
+
+2. **Update during work** — Post at least one progress update before delivering:
+   \`\`\`bash
+   npx overlord protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
+   \`\`\`
+   Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`.
+   Use \`execute\` while working.
+
+   Pass \`--event-type <type>\` for activity events: \`update\`, \`user_follow_up\`, \`alert\`.
+
+3. **Ask when blocked** — Stop working after calling:
+   \`\`\`bash
+   npx overlord protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
+   \`\`\`
+
+4. **Deliver last** — Always deliver when done:
+   \`\`\`bash
+   npx overlord protocol deliver --session-key <sessionKey> \\\\
+     --ticket-id $TICKET_ID \\\\
+     --summary "Narrative: what you did, next steps." \\\\
+     --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\\\
+     --change-rationales-file /tmp/rationales.json
+   \`\`\`
+
+## Change Rationales
+
+Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes.
+
+## Context & Artifacts
+
+\`\`\`bash
+npx overlord protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
+npx overlord protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
+npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+\`\`\`
+
+## Rules
+
+- Always attach first; always deliver when done.
+- Post at least one update before delivering.
+- If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
+- The \`summary\` in deliver is what the PM reads first — write it as a narrative.
+- Use \`write-context\` for facts a future agent session should know.
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+`;
+
+const PERMISSION_HOOK_SCRIPT = `#!/bin/bash
+# Overlord PermissionRequest notification hook (managed by Overlord)
+BODY=$(cat -)
+if [ -n "$OVERLORD_URL" ] && [ -n "$AGENT_TOKEN" ] && [ -n "$TICKET_ID" ]; then
+  curl -sf -m 5 \\
+    -X POST "$OVERLORD_URL/api/protocol/permission-request?ticketId=$TICKET_ID" \\
+    -H "Authorization: Bearer $AGENT_TOKEN" \\
+    -H "X-Overlord-Local-Secret: $OVERLORD_LOCAL_SECRET" \\
+    -H "Content-Type: application/json" \\
+    -d "$BODY" \\
+    >/dev/null 2>&1 &
+  disown
+fi
+exit 0
+`;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function contentHash(content) {
+  return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
+}
+
+function backupFile(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  const dir = path.dirname(filePath);
+  const ext = path.extname(filePath);
+  const base = path.basename(filePath, ext);
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(dir, `${base}.backup-${ts}${ext}`);
+  fs.copyFileSync(filePath, backupPath);
+  return backupPath;
+}
+
+function readJsonFile(filePath) {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+function writeJsonFile(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+}
+
+function readTextFile(filePath) {
+  try { return fs.readFileSync(filePath, 'utf-8'); } catch { return ''; }
+}
+
+function writeTextFile(filePath, content, mode) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const options = { encoding: 'utf-8' };
+  if (mode !== undefined) options.mode = mode;
+  fs.writeFileSync(filePath, content, options);
+}
+
+function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+function deepMerge(target, source) {
+  for (const key of Object.keys(source)) {
+    const targetVal = target[key];
+    const sourceVal = source[key];
+    if (Array.isArray(sourceVal)) {
+      const existing = Array.isArray(targetVal) ? targetVal : [];
+      const existingStrings = new Set(existing.map(v => JSON.stringify(v)));
+      const newItems = sourceVal.filter(v => !existingStrings.has(JSON.stringify(v)));
+      target[key] = [...existing, ...newItems];
+    } else if (sourceVal !== null && typeof sourceVal === 'object' && !Array.isArray(sourceVal)) {
+      if (targetVal !== null && typeof targetVal === 'object' && !Array.isArray(targetVal)) {
+        deepMerge(targetVal, sourceVal);
+      } else {
+        target[key] = deepClone(sourceVal);
+      }
+    } else {
+      if (!(key in target)) target[key] = sourceVal;
+    }
+  }
+}
+
+function mergeMarkdownSection(existing, newContent) {
+  const wrappedContent = `${MD_MARKER_START}\n${newContent.trim()}\n${MD_MARKER_END}`;
+  const startIdx = existing.indexOf(MD_MARKER_START);
+  const endIdx = existing.indexOf(MD_MARKER_END);
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const before = existing.slice(0, startIdx);
+    const after = existing.slice(endIdx + MD_MARKER_END.length);
+    return `${before}${wrappedContent}${after}`;
+  }
+  const trimmed = existing.trimEnd();
+  if (trimmed.length === 0) return wrappedContent + '\n';
+  return `${trimmed}\n\n${wrappedContent}\n`;
+}
+
+function readManifest() { return readJsonFile(MANIFEST_FILE); }
+function writeManifest(manifest) { writeJsonFile(MANIFEST_FILE, manifest); }
+
+// ---------------------------------------------------------------------------
+// Install
+// ---------------------------------------------------------------------------
+
+function claudePaths() {
+  const base = path.join(os.homedir(), '.claude');
+  return {
+    skillDir: path.join(base, 'skills', 'overlord-local'),
+    skillFile: path.join(base, 'skills', 'overlord-local', 'SKILL.md'),
+    settingsFile: path.join(base, 'settings.json'),
+    hookScript: path.join(base, 'overlord-permission-hook.sh')
+  };
+}
+
+function codexPaths() {
+  const base = path.join(os.homedir(), '.codex');
+  return {
+    agentsFile: path.join(base, 'AGENTS.md')
+  };
+}
+
+function installClaude() {
+  const paths = claudePaths();
+  const backups = [];
+
+  // 1. Install skill file
+  writeTextFile(paths.skillFile, CLAUDE_SKILL_CONTENT);
+  console.log(`  ✓ Installed skill: ${paths.skillFile}`);
+
+  // 2. Install permission hook
+  writeTextFile(paths.hookScript, PERMISSION_HOOK_SCRIPT, 0o755);
+  console.log(`  ✓ Installed hook: ${paths.hookScript}`);
+
+  // 3. Merge hook into settings.json
+  const backup = backupFile(paths.settingsFile);
+  if (backup) {
+    backups.push(backup);
+    console.log(`  ✓ Backed up: ${paths.settingsFile} → ${path.basename(backup)}`);
+  }
+
+  const existingSettings = readJsonFile(paths.settingsFile);
+  const overlordHook = {
+    matcher: '.*',
+    hooks: [{ type: 'command', command: paths.hookScript }]
+  };
+
+  const existingHooks = existingSettings.hooks ?? {};
+  const existingPermHooks = Array.isArray(existingHooks.PermissionRequest)
+    ? existingHooks.PermissionRequest
+    : [];
+
+  // Remove existing Overlord hooks
+  const filteredPermHooks = existingPermHooks.filter(hook => {
+    if (hook && typeof hook === 'object' && hook.hooks) {
+      return !hook.hooks.some(
+        inner => typeof inner.command === 'string' && inner.command.includes('overlord-permission-hook')
+      );
+    }
+    return true;
+  });
+
+  const merged = deepClone(existingSettings);
+  merged.hooks = { ...existingHooks, PermissionRequest: [...filteredPermHooks, overlordHook] };
+  merged.__overlord_managed = {
+    version: BUNDLE_VERSION,
+    paths: ['hooks.PermissionRequest'],
+    updatedAt: new Date().toISOString()
+  };
+  writeJsonFile(paths.settingsFile, merged);
+  console.log(`  ✓ Merged hook into: ${paths.settingsFile}`);
+
+  // 4. Update manifest
+  const manifest = readManifest();
+  manifest.claude = {
+    version: BUNDLE_VERSION,
+    contentHash: contentHash(CLAUDE_SKILL_CONTENT),
+    installedAt: new Date().toISOString(),
+    files: [paths.skillFile, paths.hookScript, paths.settingsFile]
+  };
+  writeManifest(manifest);
+
+  return { ok: true, backups };
+}
+
+function installCodex() {
+  const paths = codexPaths();
+  const backups = [];
+
+  const backup = backupFile(paths.agentsFile);
+  if (backup) {
+    backups.push(backup);
+    console.log(`  ✓ Backed up: ${paths.agentsFile} → ${path.basename(backup)}`);
+  }
+
+  const existing = readTextFile(paths.agentsFile);
+  const merged = mergeMarkdownSection(existing, CODEX_AGENTS_SECTION);
+  writeTextFile(paths.agentsFile, merged);
+  console.log(`  ✓ Installed agents config: ${paths.agentsFile}`);
+
+  const manifest = readManifest();
+  manifest.codex = {
+    version: BUNDLE_VERSION,
+    contentHash: contentHash(CODEX_AGENTS_SECTION),
+    installedAt: new Date().toISOString(),
+    files: [paths.agentsFile]
+  };
+  writeManifest(manifest);
+
+  return { ok: true, backups };
+}
+
+// ---------------------------------------------------------------------------
+// Doctor
+// ---------------------------------------------------------------------------
+
+function doctorAgent(agent) {
+  const manifest = readManifest();
+  const entry = manifest[agent];
+
+  if (!entry) {
+    console.log(`  ✗ ${agent}: not installed`);
+    return false;
+  }
+
+  if (entry.version !== BUNDLE_VERSION) {
+    console.log(`  ⚠ ${agent}: stale (installed v${entry.version}, current v${BUNDLE_VERSION})`);
+    return false;
+  }
+
+  const missingFiles = entry.files.filter(f => !fs.existsSync(f));
+  if (missingFiles.length > 0) {
+    console.log(`  ⚠ ${agent}: partial — missing files:`);
+    for (const f of missingFiles) console.log(`      ${f}`);
+    return false;
+  }
+
+  console.log(`  ✓ ${agent}: installed (v${entry.version})`);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export async function runSetupCommand(args) {
+  const agent = args[0];
+
+  if (agent === '--help' || agent === '-h' || agent === 'help') {
+    console.log(`Usage:
+  ovld setup claude    Install Overlord bundle for Claude Code
+  ovld setup codex     Install Overlord bundle for Codex
+  ovld setup all       Install for all supported agents
+  ovld doctor          Validate installed bundles`);
+    return;
+  }
+
+  if (agent === 'all') {
+    console.log('Installing Overlord agent bundle for all supported agents...\n');
+    for (const a of supportedAgents) {
+      console.log(`[${a}]`);
+      try {
+        if (a === 'claude') installClaude();
+        else installCodex();
+      } catch (err) {
+        console.error(`  ✗ Failed: ${err.message}`);
+      }
+      console.log();
+    }
+    console.log('Done.');
+    return;
+  }
+
+  if (!supportedAgents.includes(agent)) {
+    console.error(`Unknown agent: ${agent ?? '(none)'}. Supported: ${supportedAgents.join(', ')}, all`);
+    process.exit(1);
+  }
+
+  console.log(`Installing Overlord agent bundle for ${agent}...\n`);
+  try {
+    if (agent === 'claude') installClaude();
+    else installCodex();
+    console.log('\nDone.');
+  } catch (err) {
+    console.error(`\nFailed: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+export async function runDoctorCommand() {
+  console.log('Overlord agent bundle status:\n');
+  let allOk = true;
+  for (const agent of supportedAgents) {
+    if (!doctorAgent(agent)) allOk = false;
+  }
+  console.log();
+  if (allOk) {
+    console.log('All bundles are up to date.');
+  } else {
+    console.log('Run `ovld setup <agent>` or `ovld setup all` to install/repair.');
+  }
+}

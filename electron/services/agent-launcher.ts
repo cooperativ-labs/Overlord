@@ -2,6 +2,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
+
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
 
 export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini';
@@ -90,7 +92,12 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     );
   }
   const launchMode = input.launchMode ?? 'run';
-  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}`;
+  // Check if the Overlord local bundle is installed for this agent
+  const bundleAgent =
+    input.agent === 'claude' || input.agent === 'codex' ? (input.agent as AgentBundleAgent) : null;
+  const bundleInstalled = bundleAgent ? isBundleInstalled(bundleAgent) : false;
+  const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
+  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}`;
   const launchEnv = {
     OVERLORD_URL: connectorUrl,
     OVERLORD_CONNECTOR_URL: connectorUrl,
@@ -145,7 +152,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const contextFile = path.join(os.tmpdir(), `${tag}-ctx.md`);
   fs.writeFileSync(contextFile, contextMarkdown, 'utf-8');
 
-  // Write PermissionRequest hook script so Claude notifies Overlord when awaiting tool permission
+  // Write PermissionRequest hook script so Claude notifies Overlord when awaiting tool permission.
+  // When the bundle is installed for Claude, the durable hook is already in ~/.claude/settings.json,
+  // so we still write a temp settings file as a fallback but prefer the installed one.
   const { hookScript, settingsFile } = writePermissionRequestHookFiles(tag);
 
   // Schedule cleanup after 30 minutes
@@ -167,7 +176,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const extraFlags = (input.flags ?? []).map(f => shellQuote(f)).join(' ');
 
   if (input.agent === 'claude') {
-    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})" --settings ${shellQuote(settingsFile)}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
+    // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
+    // so we don't need to pass a temporary --settings file.
+    const settingsArg = bundleInstalled ? '' : ` --settings ${shellQuote(settingsFile)}`;
+    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})"${settingsArg}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
     command = `codex${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'cursor') {

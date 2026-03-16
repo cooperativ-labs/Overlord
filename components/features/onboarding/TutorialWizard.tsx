@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
+import { InstallAgentBundlesStep } from '@/components/features/onboarding/steps/InstallAgentBundlesStep';
 import { TicketFlowStep } from '@/components/features/onboarding/steps/TicketFlowStep';
 import {
   DEFAULT_PROJECT_COLOR,
@@ -27,7 +28,8 @@ import { cn } from '@/lib/utils';
 
 const TOTAL_STEPS = 4;
 
-const STEP_LABELS = ['Organization', 'Project', 'Desktop App', 'How it works'];
+const STEP_LABELS = ['Organization', 'Project', 'Desktop App', 'How it works'] as const;
+const ELECTRON_STEP_LABELS = ['Organization', 'Project', 'Agent plugins', 'How it works'] as const;
 
 const TUTORIAL_ONLY_START_STEP = 3;
 
@@ -41,6 +43,7 @@ type TutorialWizardProps = {
 export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialWizardProps) {
   const router = useRouter();
   const { api, isElectron } = useElectron();
+  const stepLabels = isElectron ? ELECTRON_STEP_LABELS : STEP_LABELS;
 
   const isTutorialOnlyFlow = startAtStep >= TUTORIAL_ONLY_START_STEP;
   const effectiveStart = isTutorialOnlyFlow
@@ -196,7 +199,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Get started</h1>
             <p className="text-muted-foreground text-sm">
-              {`Step ${currentVisibleStepNumber} of ${totalVisibleSteps} — ${STEP_LABELS[currentStep - 1]}`}
+              {`Step ${currentVisibleStepNumber} of ${totalVisibleSteps} — ${stepLabels[currentStep - 1]}`}
             </p>
           </div>
           {canSkip && (
@@ -227,7 +230,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
                   currentStep === step ? 'text-foreground font-medium' : 'text-muted-foreground'
                 )}
               >
-                {STEP_LABELS[step - 1]}
+                {stepLabels[step - 1]}
               </span>
             ))}
           </div>
@@ -428,7 +431,12 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
           </div>
         )}
 
-        {currentStep === 3 && <DownloadAppStep onContinue={() => void handleStepComplete(3)} />}
+        {currentStep === 3 &&
+          (isElectron ? (
+            <InstallAgentBundlesStep onContinue={() => void handleStepComplete(3)} />
+          ) : (
+            <DownloadAppStep onContinue={() => void handleStepComplete(3)} />
+          ))}
 
         {currentStep === 4 && <TicketFlowStep onContinue={() => void handleStepComplete(4)} />}
 

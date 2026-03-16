@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2026-03-16:14:52
+
+### Added
+- Add a managed Claude/Codex bundle installer (shared service, IPC hooks, preload bindings, onboarding step, and settings controls) so the desktop app can merge the Overlord skill/hook content, track a versioned manifest, and repair or uninstall the durable configuration without overwriting user files.
+- Add `ovld setup <agent|all>` and `ovld doctor` commands that reuse the same bundle manifest so standalone CLI users can install or validate the agent bundles exactly like the Electron flow.
+
+### Fixed
+- Retry JWKS verification without the `authenticated` audience before falling back to `supabase.auth.getUser()` so MCP OAuth JWTs issued to custom client IDs still resolve correctly.
+
+### Changed
+- Introduce an `agent-capabilities` resolver, have Electron/CLI detect the bundle manifest, pass an `instructionMode` flag to `/api/protocol/context`, and emit the slim bundle prompt when that mode is requested so the reusable workflow guidance lives in the installed skill or AGENTS.md while remaining compatible with legacy requests.
+
+### Security
+- None.
+
+### Documentation
+- Add annotation metadata (titles, hints, visibility) to every MCP tool plus the refreshed ticket-card UI resource so hosts and clients can describe each tool and UI snippet more clearly.
+
+### Chore
+- Bump the package version to `1.7.0` to align the release with this changelog entry.
+
 ## [1.6.0] - 2026-03-14:12:45
 
 ### Added

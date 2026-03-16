@@ -6,10 +6,33 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 
-async function fetchContext(platformUrl, agentToken, localSecret, ticketId) {
-  const url = `${platformUrl}/api/protocol/context/${ticketId}?context=cli`;
+/**
+ * Check if the Overlord bundle manifest records a valid install for the given agent.
+ */
+function isBundleInstalled(agent) {
+  const MANIFEST_FILE = path.join(os.homedir(), '.ovld', 'bundle-manifest.json');
+  try {
+    const raw = fs.readFileSync(MANIFEST_FILE, 'utf-8');
+    const manifest = JSON.parse(raw);
+    const entry = manifest[agent];
+    if (!entry || !entry.version) return false;
+    // Verify all files still exist
+    return Array.isArray(entry.files) && entry.files.every(f => fs.existsSync(f));
+  } catch {
+    return false;
+  }
+}
+
+async function fetchContext(platformUrl, agentToken, localSecret, ticketId, agent) {
+  const bundleInstalled = (agent === 'claude' || agent === 'codex') && isBundleInstalled(agent);
+  const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
+  const url = `${platformUrl}/api/protocol/context/${ticketId}?context=cli&instructionMode=${instructionMode}`;
   const response = await fetch(url, {
     headers: buildAuthHeaders(agentToken, localSecret)
   });
@@ -47,7 +70,7 @@ async function runAgent(agent, mode = 'run') {
   }
 
   const { platformUrl, agentToken, localSecret } = resolveAuth();
-  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId);
+  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId, agent);
 
   const childEnv = { ...process.env, AGENT_IDENTIFIER: agentIdentifierMap[agent] };
 
@@ -114,7 +137,7 @@ async function printContext() {
   }
 
   const { platformUrl, agentToken, localSecret } = resolveAuth();
-  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId);
+  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId, null);
   process.stdout.write(context);
 }
 

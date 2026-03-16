@@ -1,5 +1,14 @@
 import { ipcMain, Notification } from 'electron';
 
+import {
+  type AgentBundleAgent,
+  getAgentBundleStatus,
+  getAllBundleStatuses,
+  installAgentBundle,
+  installAllBundles,
+  repairAgentBundle,
+  uninstallAgentBundle
+} from '../services/agent-bundle';
 import { AppUpdaterService } from '../services/app-updater';
 import { type CliInstallResult, getCliInstallStatus, installCli } from '../services/cli-installer';
 import { store } from '../services/settings-store';
@@ -63,5 +72,31 @@ export function registerAppIpc({
 
   ipcMain.handle('cli:install', async (): Promise<CliInstallResult> => {
     return installCli();
+  });
+
+  // --- Agent Bundle IPC ---
+
+  ipcMain.handle('agent-bundle:get-all-statuses', () => {
+    return getAllBundleStatuses();
+  });
+
+  ipcMain.handle('agent-bundle:get-status', (_event, agent: AgentBundleAgent) => {
+    return getAgentBundleStatus(agent);
+  });
+
+  ipcMain.handle('agent-bundle:install', (_event, agent: AgentBundleAgent) => {
+    return installAgentBundle(agent);
+  });
+
+  ipcMain.handle('agent-bundle:install-all', () => {
+    return installAllBundles();
+  });
+
+  ipcMain.handle('agent-bundle:repair', (_event, agent: AgentBundleAgent) => {
+    return repairAgentBundle(agent);
+  });
+
+  ipcMain.handle('agent-bundle:uninstall', (_event, agent: AgentBundleAgent) => {
+    return uninstallAgentBundle(agent);
   });
 }

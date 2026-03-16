@@ -4,6 +4,7 @@ import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
+import type { InstructionMode } from '@/lib/overlord/agent-capabilities';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
@@ -64,6 +65,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       searchParams.get('mode') === 'ask'
         ? ('ask' as PromptLaunchMode)
         : ('run' as PromptLaunchMode);
+    const instructionMode = (searchParams.get('instructionMode') ?? 'legacy') as InstructionMode;
     const requestOrigin = new URL(request.url).origin;
     const platformUrl = getPlatformUrl(requestOrigin);
 
@@ -112,7 +114,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { mcpUrl, customInstructions, launchMode, agentConfigs }
+      options: { mcpUrl, customInstructions, launchMode, agentConfigs, instructionMode }
     });
 
     const headers: Record<string, string> = {

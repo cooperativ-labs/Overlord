@@ -55,6 +55,14 @@ const electronAPI = {
     getInstallStatus: () => ipcRenderer.invoke('cli:get-install-status'),
     install: () => ipcRenderer.invoke('cli:install')
   },
+  agentBundle: {
+    getAllStatuses: () => ipcRenderer.invoke('agent-bundle:get-all-statuses'),
+    getStatus: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:get-status', agent),
+    install: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:install', agent),
+    installAll: () => ipcRenderer.invoke('agent-bundle:install-all'),
+    repair: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:repair', agent),
+    uninstall: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:uninstall', agent)
+  },
   appUpdate: {
     getStatus: () => ipcRenderer.invoke('app-update:get-status'),
     checkForUpdates: () => ipcRenderer.invoke('app-update:check'),

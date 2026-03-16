@@ -91,6 +91,45 @@ interface ElectronAPI {
       { ok: true; installPath: string; pathInstruction: string } | { ok: false; error: string }
     >;
   };
+  agentBundle?: {
+    getAllStatuses: () => Promise<
+      Array<{
+        agent: 'claude' | 'codex';
+        status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
+        version: string | null;
+        installedVersion: string | null;
+        details: string;
+      }>
+    >;
+    getStatus: (agent: 'claude' | 'codex') => Promise<{
+      agent: 'claude' | 'codex';
+      status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
+      version: string | null;
+      installedVersion: string | null;
+      details: string;
+    }>;
+    install: (agent: 'claude' | 'codex') => Promise<{
+      ok: boolean;
+      agent: 'claude' | 'codex';
+      backups: string[];
+      error?: string;
+    }>;
+    installAll: () => Promise<
+      Array<{
+        ok: boolean;
+        agent: 'claude' | 'codex';
+        backups: string[];
+        error?: string;
+      }>
+    >;
+    repair: (agent: 'claude' | 'codex') => Promise<{
+      ok: boolean;
+      agent: 'claude' | 'codex';
+      backups: string[];
+      error?: string;
+    }>;
+    uninstall: (agent: 'claude' | 'codex') => Promise<{ ok: boolean; error?: string }>;
+  };
   appUpdate: {
     getStatus: () => Promise<AppUpdateStatus>;
     checkForUpdates: () => Promise<boolean>;

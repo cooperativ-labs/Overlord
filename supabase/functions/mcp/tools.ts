@@ -5,6 +5,13 @@
 export const TOOLS = [
   {
     name: 'create_ticket_draft',
+    annotations: {
+      title: 'Create Ticket Draft',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Turn conversation context into a structured Overlord ticket draft and open an inline editable ticket card.',
     inputSchema: {
@@ -44,6 +51,12 @@ export const TOOLS = [
   },
   {
     name: 'attach',
+    annotations: {
+      title: 'Attach To Ticket',
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    },
     description:
       'Attach to an Overlord ticket session. Call this FIRST before any other tool. Returns session.sessionKey, the full ticket record, a preassembled promptContext string, prior delivery history, artifacts, and shared state.',
     inputSchema: {
@@ -70,6 +83,13 @@ export const TOOLS = [
   },
   {
     name: 'update',
+    annotations: {
+      title: 'Post Ticket Update',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Post a progress update to the ticket. Call after each meaningful step. Use phase "execute" while working.',
     inputSchema: {
@@ -130,6 +150,13 @@ export const TOOLS = [
   },
   {
     name: 'artifact_prepare_upload',
+    annotations: {
+      title: 'Prepare Artifact Upload',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Create a signed upload URL for a ticket artifact in Supabase Storage. Requires AGENT+ org role.',
     inputSchema: {
@@ -149,6 +176,13 @@ export const TOOLS = [
   },
   {
     name: 'artifact_finalize_upload',
+    annotations: {
+      title: 'Finalize Artifact Upload',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Create the public.artifacts row after the storage upload succeeds, associating storage_path to ticket_id.',
     inputSchema: {
@@ -168,6 +202,12 @@ export const TOOLS = [
   },
   {
     name: 'artifact_get_download_url',
+    annotations: {
+      title: 'Get Artifact Download URL',
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    },
     description:
       'Create a signed download URL for an existing ticket artifact storage object. Org member access required.',
     inputSchema: {
@@ -187,6 +227,13 @@ export const TOOLS = [
   },
   {
     name: 'ask',
+    annotations: {
+      title: 'Ask Blocking Question',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Ask a blocking question. Ticket moves to review until a human responds. Stop working after calling this.',
     inputSchema: {
@@ -206,6 +253,12 @@ export const TOOLS = [
   },
   {
     name: 'read_context',
+    annotations: {
+      title: 'Read Shared Context',
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    },
     description: 'Read shared context / state from previous sessions.',
     inputSchema: {
       type: 'object',
@@ -220,6 +273,13 @@ export const TOOLS = [
   },
   {
     name: 'write_context',
+    annotations: {
+      title: 'Write Shared Context',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description: 'Write a key/value entry to shared context that future agent sessions can read.',
     inputSchema: {
       type: 'object',
@@ -235,6 +295,13 @@ export const TOOLS = [
   },
   {
     name: 'deliver',
+    annotations: {
+      title: 'Deliver Ticket Work',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Deliver your completed work. Always call last. Moves ticket to review. Do not call if you used ask and have not received an answer.',
     inputSchema: {
@@ -312,6 +379,13 @@ export const TOOLS = [
   },
   {
     name: 'save_ticket_draft',
+    annotations: {
+      title: 'Save Ticket Draft',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Persist an edited ticket draft to Overlord. Intended to be called from the inline ticket card app.',
     inputSchema: {
@@ -335,6 +409,13 @@ export const TOOLS = [
   },
   {
     name: 'create_ticket',
+    annotations: {
+      title: 'Create Follow-Up Ticket',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
     description:
       'Create a follow-up ticket in the same project. Use when blocked by a human-only action.',
     inputSchema: {

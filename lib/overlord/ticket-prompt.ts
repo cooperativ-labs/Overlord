@@ -1,3 +1,4 @@
+import type { InstructionMode } from '@/lib/overlord/agent-capabilities';
 import { buildPromptContext } from '@/lib/overlord/prompt-context';
 import {
   generateAskPayloadExample,
@@ -19,6 +20,8 @@ export type PromptOptions = {
   launchMode?: PromptLaunchMode;
   /** Optional agent configurations (flags, preferences) keyed by agent type. */
   agentConfigs?: Record<string, AgentConfig>;
+  /** Instruction mode: 'bundle' emits a slim prompt, 'legacy' emits the full protocol walkthrough. */
+  instructionMode?: InstructionMode;
 };
 
 /**
@@ -54,6 +57,7 @@ export function buildTicketPromptMarkdown({
 }: BuildTicketPromptMarkdownInput): string {
   const ref = ticket.id;
   const launchMode = options?.launchMode ?? 'run';
+  const instructionMode = options?.instructionMode ?? 'legacy';
 
   const isLocal = context
     ? context === 'electron' || context === 'cli'
@@ -61,14 +65,29 @@ export function buildTicketPromptMarkdown({
       platformUrl.startsWith('http://127.0.0.1') ||
       platformUrl.startsWith('http://0.0.0.0');
 
-  const protocolSection = isLocal
-    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs, context)
-    : buildRemoteProtocolSection(ticket.id, platformUrl, options);
   const { promptContext } = buildPromptContext({
     ticket,
     customInstructions: options?.customInstructions,
     launchMode
   });
+
+  // Bundle-backed agents get a slim prompt — protocol details are in their installed config
+  if (isLocal && instructionMode === 'bundle') {
+    const protocolSection = buildSlimLocalProtocolSection(ticket.id, platformUrl, context);
+    return `# Overlord — Agent Instructions
+
+You are an AI coding agent working on ticket **${ref}** via Overlord.
+Complete the work described below, then deliver a summary back to the platform.
+
+${promptContext}
+---
+
+${protocolSection}`;
+  }
+
+  const protocolSection = isLocal
+    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs, context)
+    : buildRemoteProtocolSection(ticket.id, platformUrl, options);
 
   return `# Overlord — Agent Instructions
 
@@ -79,6 +98,37 @@ ${promptContext}
 ---
 
 ${protocolSection}`;
+}
+
+/**
+ * Slim protocol section for agents with the Overlord local bundle installed.
+ * Protocol details live in the agent's installed config (Claude skill / Codex AGENTS.md),
+ * so we only include ticket-specific identifiers and a short directive.
+ */
+function buildSlimLocalProtocolSection(
+  ticketId: string,
+  platformUrl: string,
+  context?: PromptContext
+): string {
+  const baseUrlLabel = context === 'electron' ? 'Connector URL' : 'Base URL';
+  const launchNote =
+    context === 'electron'
+      ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
+      : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
+
+  return `## Overlord Protocol
+
+- **${baseUrlLabel}:** ${platformUrl}/api/protocol
+- **Ticket ID:** ${ticketId}
+
+${launchNote}
+
+Use your installed Overlord local workflow instructions. Start by attaching to this ticket.
+
+\`\`\`bash
+npx overlord protocol attach --ticket-id ${ticketId}
+\`\`\`
+`;
 }
 
 function buildResumeCommandWithFlags(
