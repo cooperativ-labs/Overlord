@@ -1,11 +1,15 @@
-import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
+import { getSupabaseUrl } from '@/lib/env';
+import {
+  getAppMcpResourceMetadataUrl,
+  rewriteBearerResourceMetadata
+} from '@/lib/mcp/oauth-metadata';
 
 /**
  * MCP proxy — customer-facing MCP endpoint.
  *
  * Proxies requests to the Supabase Edge Function while keeping the MCP URL
- * on our domain so that OAuth discovery (/.well-known/oauth-protected-resource)
- * works from the same origin.
+ * on our domain. The protected-resource metadata lives on a sibling catch-all
+ * route so OAuth-capable clients can discover auth from the public MCP URL.
  *
  * GET  /api/mcp — returns MCP instructions or protected resource metadata
  * POST /api/mcp — proxies MCP JSON-RPC calls to the edge function
@@ -22,27 +26,6 @@ export async function OPTIONS() {
 }
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-
-  // Serve Protected Resource Metadata inline when requested via subpath
-  if (url.pathname.endsWith('/.well-known/oauth-protected-resource')) {
-    const supabaseUrl = getSupabaseUrl();
-    const platformUrl = getPlatformUrl();
-
-    return new Response(
-      JSON.stringify({
-        resource: `${platformUrl}/api/mcp`,
-        authorization_servers: [`${supabaseUrl}/auth/v1`],
-        scopes_supported: ['openid', 'email', 'profile'],
-        bearer_methods_supported: ['header']
-      }),
-      {
-        status: 200,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
-      }
-    );
-  }
-
   // Proxy the GET request to the edge function for MCP instructions
   const edgeUrl = `${getSupabaseUrl()}/functions/v1/mcp`;
   const upstreamRes = await fetch(edgeUrl, {
@@ -50,7 +33,7 @@ export async function GET(request: Request) {
     headers: forwardHeaders(request)
   });
 
-  return proxyResponse(upstreamRes);
+  return proxyResponse(upstreamRes, request);
 }
 
 export async function POST(request: Request) {
@@ -63,7 +46,7 @@ export async function POST(request: Request) {
     body
   });
 
-  return proxyResponse(upstreamRes);
+  return proxyResponse(upstreamRes, request);
 }
 
 /** Forward relevant headers to the upstream edge function. */
@@ -82,7 +65,7 @@ function forwardHeaders(request: Request): HeadersInit {
 }
 
 /** Relay the upstream response back to the client with CORS headers. */
-async function proxyResponse(upstream: Response): Promise<Response> {
+async function proxyResponse(upstream: Response, request: Request): Promise<Response> {
   const body = await upstream.text();
   const headers: Record<string, string> = { ...CORS_HEADERS };
 
@@ -91,7 +74,12 @@ async function proxyResponse(upstream: Response): Promise<Response> {
   if (ct) headers['Content-Type'] = ct;
 
   const wwwAuth = upstream.headers.get('www-authenticate');
-  if (wwwAuth) headers['WWW-Authenticate'] = wwwAuth;
+  if (wwwAuth) {
+    headers['WWW-Authenticate'] = rewriteBearerResourceMetadata(
+      wwwAuth,
+      getAppMcpResourceMetadataUrl(new URL(request.url).origin)
+    );
+  }
 
   return new Response(body, {
     status: upstream.status,
