@@ -6,3 +6,6 @@
 .env.keys
 .env.local
 .env.*.local
+
+functions/node_modules
+functions/deno.lock

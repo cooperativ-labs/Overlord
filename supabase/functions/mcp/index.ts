@@ -6,7 +6,7 @@
  * Exposes Overlord protocol operations as MCP tools so that cloud-based agents
  * (Claude Code, Codex, etc.) can interact with tickets natively.
  *
- * Protocol: JSON-RPC 2.0 / MCP 2026-01-26
+ * Protocol: JSON-RPC 2.0 / MCP Streamable HTTP
  * Auth: OAuth 2.1 JWT (primary) or legacy agent_token bearer
  */
 
@@ -33,6 +33,7 @@ import { validateToolInput } from './validate.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-05', '2025-06-18', '2025-03-26', '2024-11-05'];
 
 /**
  * Build the Protected Resource Metadata document (RFC 9728).
@@ -45,6 +46,14 @@ function buildProtectedResourceMetadata() {
     scopes_supported: ['openid', 'email', 'profile'],
     bearer_methods_supported: ['header']
   };
+}
+
+function negotiateProtocolVersion(requested: unknown): string | null {
+  if (typeof requested !== 'string') {
+    return SUPPORTED_PROTOCOL_VERSIONS[0];
+  }
+
+  return SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : null;
 }
 
 const MCP_INSTRUCTIONS = `# Overlord MCP Server
@@ -312,11 +321,34 @@ Deno.serve(async (req: Request) => {
   // ---------------------------------------------------------------------------
 
   if (method === 'initialize') {
-    return rpcResult(id, {
-      protocolVersion: '2026-01-26',
-      capabilities: { tools: {}, resources: {} },
-      serverInfo: { name: 'overlord', version: '1.0.0' }
-    });
+    const protocolVersion = negotiateProtocolVersion(params?.protocolVersion);
+    if (!protocolVersion) {
+      return rpcError(
+        id,
+        -32602,
+        `Unsupported protocol version: ${String(params?.protocolVersion ?? 'undefined')}`
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          protocolVersion,
+          capabilities: { tools: {}, resources: {} },
+          serverInfo: { name: 'overlord', version: '1.0.0' }
+        }
+      }),
+      {
+        status: 200,
+        headers: {
+          ...cors,
+          'Content-Type': 'application/json',
+          'MCP-Protocol-Version': protocolVersion
+        }
+      }
+    );
   }
 
   if (method === 'notifications/initialized') {

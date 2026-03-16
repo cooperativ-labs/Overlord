@@ -34,7 +34,7 @@ export function buildCorsHeaders(origin: string | null): Record<string, string> 
     'Access-Control-Allow-Origin': allowed ?? '',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers':
-      'authorization, content-type, mcp-session-id, x-organization-id, x-request-id',
+      'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id',
     ...(allowed ? { Vary: 'Origin' } : {})
   };
 }
@@ -47,7 +47,7 @@ export const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'authorization, content-type, mcp-session-id, x-organization-id, x-request-id'
+    'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id'
 };
 
 export function jsonResponse(body: unknown, status = 200): Response {

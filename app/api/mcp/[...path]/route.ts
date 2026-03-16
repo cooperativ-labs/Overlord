@@ -6,7 +6,8 @@ import {
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, content-type, mcp-session-id'
+  'Access-Control-Allow-Headers':
+    'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id'
 };
 
 function isProtectedResourceMetadataPath(path: string[]): boolean {

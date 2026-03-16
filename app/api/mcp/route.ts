@@ -18,7 +18,8 @@ import {
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, content-type, mcp-session-id'
+  'Access-Control-Allow-Headers':
+    'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id'
 };
 
 export async function OPTIONS() {
@@ -61,6 +62,15 @@ function forwardHeaders(request: Request): HeadersInit {
   const sessionId = request.headers.get('mcp-session-id');
   if (sessionId) headers['mcp-session-id'] = sessionId;
 
+  const protocolVersion = request.headers.get('mcp-protocol-version');
+  if (protocolVersion) headers['mcp-protocol-version'] = protocolVersion;
+
+  const organizationId = request.headers.get('x-organization-id');
+  if (organizationId) headers['x-organization-id'] = organizationId;
+
+  const requestId = request.headers.get('x-request-id');
+  if (requestId) headers['x-request-id'] = requestId;
+
   return headers;
 }
 
@@ -72,6 +82,9 @@ async function proxyResponse(upstream: Response, request: Request): Promise<Resp
   // Preserve content-type and auth challenge headers
   const ct = upstream.headers.get('content-type');
   if (ct) headers['Content-Type'] = ct;
+
+  const protocolVersion = upstream.headers.get('mcp-protocol-version');
+  if (protocolVersion) headers['MCP-Protocol-Version'] = protocolVersion;
 
   const wwwAuth = upstream.headers.get('www-authenticate');
   if (wwwAuth) {
