@@ -1,8 +1,8 @@
 'use client';
 
-import { MessageSquare } from 'lucide-react';
+import { Check, Copy, MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
@@ -11,7 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
-import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import {
+  getAgentTypeByIdentifier,
+  getAgentTypeByValue,
+  LAUNCH_AGENT_VALUES,
+  type LaunchAgentTypeValue
+} from '@/lib/helpers/agent-types';
 import {
   getEventDisplayLabel,
   getEventDisplaySummary,
@@ -25,6 +30,7 @@ type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type SessionState = Database['public']['Enums']['session_state'];
+type QuickstartCommands = Record<LaunchAgentTypeValue, string>;
 
 // --- AgentSessionBadge ---
 
@@ -132,6 +138,44 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
   );
 }
 
+function CommandCopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <Button className="h-7 gap-1.5 px-2 text-xs" size="sm" variant="outline" onClick={handleCopy}>
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? 'Copied' : 'Copy'}
+    </Button>
+  );
+}
+
+function CommandRow({ label, command }: { label: string; command: string }) {
+  return (
+    <div className="rounded-md border bg-background/80 p-2.5">
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <div className="flex items-center gap-2">
+        <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded bg-muted/60 px-2 py-1.5 text-xs">
+          {command}
+        </code>
+        <CommandCopyButton value={command} />
+      </div>
+    </div>
+  );
+}
+
 // --- LiveArtifacts ---
 
 function LiveArtifacts({
@@ -200,6 +244,10 @@ type TicketPanelLiveProps = {
   codexCommand?: string;
   cursorCommand?: string;
   geminiCommand?: string;
+  claudeResumeCommand?: string;
+  codexResumeCommand?: string;
+  cursorResumeCommand?: string;
+  geminiResumeCommand?: string;
 };
 
 export function TicketPanelLive({
@@ -213,7 +261,11 @@ export function TicketPanelLive({
   claudeCommand: _claudeCommand,
   codexCommand: _codexCommand,
   cursorCommand: _cursorCommand,
-  geminiCommand: _geminiCommand
+  geminiCommand: _geminiCommand,
+  claudeResumeCommand: _claudeResumeCommand,
+  codexResumeCommand: _codexResumeCommand,
+  cursorResumeCommand: _cursorResumeCommand,
+  geminiResumeCommand: _geminiResumeCommand
 }: TicketPanelLiveProps) {
   const router = useRouter();
   const { events, artifacts, session, sharedState } = useTicketLive();
@@ -238,6 +290,42 @@ export function TicketPanelLive({
 
   const isRunning = session?.session_state === 'attached';
   const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);
+  const [selectedAgent, setSelectedAgent] = useState<LaunchAgentTypeValue>('claude');
+
+  useEffect(() => {
+    if (!activeAgentType) return;
+    if (LAUNCH_AGENT_VALUES.includes(activeAgentType.value as LaunchAgentTypeValue)) {
+      setSelectedAgent(activeAgentType.value as LaunchAgentTypeValue);
+    }
+  }, [activeAgentType]);
+
+  const connectCommands = useMemo<QuickstartCommands>(
+    () => ({
+      claude: _claudeCommand ?? 'npx overlord run claude',
+      codex: _codexCommand ?? 'npx overlord run codex',
+      cursor: _cursorCommand ?? 'npx overlord run cursor',
+      gemini: _geminiCommand ?? 'npx overlord run gemini'
+    }),
+    [_claudeCommand, _codexCommand, _cursorCommand, _geminiCommand]
+  );
+
+  const overlordResumeCommands = useMemo<QuickstartCommands>(
+    () => ({
+      claude: _claudeResumeCommand ?? 'npx overlord resume claude',
+      codex: _codexResumeCommand ?? 'npx overlord resume codex',
+      cursor: _cursorResumeCommand ?? 'npx overlord resume cursor',
+      gemini: _geminiResumeCommand ?? 'npx overlord resume gemini'
+    }),
+    [_claudeResumeCommand, _codexResumeCommand, _cursorResumeCommand, _geminiResumeCommand]
+  );
+
+  const nativeResumeCommands: Partial<QuickstartCommands> = useMemo(
+    () => ({
+      claude: 'claude --resume <claude-session-id>',
+      codex: 'codex resume <codex-session-id>'
+    }),
+    []
+  );
 
   function handleForceDisconnect() {
     if (!session) return;
@@ -265,6 +353,42 @@ export function TicketPanelLive({
       ) : null} */}
 
       {/* <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} /> */}
+
+      <section className="mb-6 rounded-lg border bg-muted/20 p-3">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          CLI Quickstart
+        </h2>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {LAUNCH_AGENT_VALUES.map(agentValue => {
+            const agent = getAgentTypeByValue(agentValue);
+            const isSelected = selectedAgent === agentValue;
+            return (
+              <Button
+                key={agent.value}
+                className="h-7 px-2 text-xs"
+                size="sm"
+                variant={isSelected ? 'default' : 'outline'}
+                onClick={() => setSelectedAgent(agentValue)}
+              >
+                {agent.label}
+              </Button>
+            );
+          })}
+        </div>
+        <div className="grid gap-2.5">
+          <CommandRow label="Connect to this ticket" command={connectCommands[selectedAgent]} />
+          <CommandRow
+            label="Restart session"
+            command={nativeResumeCommands[selectedAgent] ?? overlordResumeCommands[selectedAgent]}
+          />
+          {nativeResumeCommands[selectedAgent] ? (
+            <CommandRow
+              label="Restart session (Overlord wrapper)"
+              command={overlordResumeCommands[selectedAgent]}
+            />
+          ) : null}
+        </div>
+      </section>
 
       <section className="mb-6">
         <div className="mb-4 flex items-center gap-2">

@@ -1037,11 +1037,13 @@ export async function getTicketDiscussionPromptForCopy(
 
   const prompt = `You are helping me discuss an Overlord ticket before implementation. First, consider the following:
 
-Your job is to act as a collaborative planning partner:
-- Ask clarifying questions when requirements are ambiguous.
-- Help me reason about scope, risks, edge cases, and tradeoffs.
-- Propose implementation options and testing ideas.
-- Coding should not start until I explicitly ask.
+Your job is to act as a collaborative exploration partner:
+- Start by reading the ticket details carefully.
+- Then say exactly: "I understand the ticket. What would you like to discuss?"
+- Keep the conversation focused on open-ended exploration: scope, risks, tradeoffs, edge cases, and options.
+- Do not implement or change any code unless I explicitly ask you to implement.
+- Do not publish user_follow_up activity events for normal discussion turns.
+- Only save notes when I explicitly ask. Save them as ticket artifacts, and as Markdown files only when I request Markdown.
 
 ## Ticket
 - Reference: ${ticketReference}
@@ -1053,8 +1055,6 @@ Your job is to act as a collaborative planning partner:
 - Project ID: ${source.ticket.project_id}
 
 ${section('Objective', source.latestObjective)}${section('Acceptance Criteria', source.ticket.acceptance_criteria)}${section('Available Tools / Constraints', source.ticket.available_tools)}
-
-Once you have a clear understanding of the ticket, say "I understand the ticket. What would you like to discuss?" and wait for the user to respond.
 `;
 
   return { prompt };

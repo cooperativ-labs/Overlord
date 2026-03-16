@@ -31,7 +31,7 @@ description: Overlord local workflow protocol — attach, update, deliver lifecy
 
 # Overlord Local Workflow
 
-You are working on a ticket managed by Overlord. Follow these rules for every session.
+If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
 
 ## Lifecycle
 
@@ -93,7 +93,7 @@ npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-i
 
 const CODEX_AGENTS_SECTION = `# Overlord Local Workflow
 
-You are working on a ticket managed by Overlord. Follow these rules for every session.
+If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
 
 ## Lifecycle
 
@@ -201,7 +201,11 @@ function writeJsonFile(filePath, data) {
 }
 
 function readTextFile(filePath) {
-  try { return fs.readFileSync(filePath, 'utf-8'); } catch { return ''; }
+  try {
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return '';
+  }
 }
 
 function writeTextFile(filePath, content, mode) {
@@ -212,7 +216,9 @@ function writeTextFile(filePath, content, mode) {
   fs.writeFileSync(filePath, content, options);
 }
 
-function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+function deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
 
 function deepMerge(target, source) {
   for (const key of Object.keys(source)) {
@@ -249,8 +255,12 @@ function mergeMarkdownSection(existing, newContent) {
   return `${trimmed}\n\n${wrappedContent}\n`;
 }
 
-function readManifest() { return readJsonFile(MANIFEST_FILE); }
-function writeManifest(manifest) { writeJsonFile(MANIFEST_FILE, manifest); }
+function readManifest() {
+  return readJsonFile(MANIFEST_FILE);
+}
+function writeManifest(manifest) {
+  writeJsonFile(MANIFEST_FILE, manifest);
+}
 
 // ---------------------------------------------------------------------------
 // Install
@@ -307,7 +317,8 @@ function installClaude() {
   const filteredPermHooks = existingPermHooks.filter(hook => {
     if (hook && typeof hook === 'object' && hook.hooks) {
       return !hook.hooks.some(
-        inner => typeof inner.command === 'string' && inner.command.includes('overlord-permission-hook')
+        inner =>
+          typeof inner.command === 'string' && inner.command.includes('overlord-permission-hook')
       );
     }
     return true;
@@ -425,7 +436,9 @@ export async function runSetupCommand(args) {
   }
 
   if (!supportedAgents.includes(agent)) {
-    console.error(`Unknown agent: ${agent ?? '(none)'}. Supported: ${supportedAgents.join(', ')}, all`);
+    console.error(
+      `Unknown agent: ${agent ?? '(none)'}. Supported: ${supportedAgents.join(', ')}, all`
+    );
     process.exit(1);
   }
 

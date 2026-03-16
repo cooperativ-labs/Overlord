@@ -42,7 +42,7 @@ import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpe
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
-import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
+import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -207,6 +207,16 @@ export async function TicketPanelContent({
   const workspaceRoot = getWorkspaceRoot();
   const editorScheme = getEditorScheme();
   const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
+    platformUrl,
+    ticketId,
+    token: agentToken ?? ''
+  });
+  const {
+    claudeCode: claudeResume,
+    codex: codexResume,
+    cursor: cursorResume,
+    gemini: geminiResume
+  } = buildResumeCommands({
     platformUrl,
     ticketId,
     token: agentToken ?? ''
@@ -532,6 +542,10 @@ export async function TicketPanelContent({
                 codexCommand={codex}
                 cursorCommand={cursor}
                 geminiCommand={gemini}
+                claudeResumeCommand={claudeResume}
+                codexResumeCommand={codexResume}
+                cursorResumeCommand={cursorResume}
+                geminiResumeCommand={geminiResume}
               />
             </ErrorBoundary>
           </section>

@@ -123,9 +123,14 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
     if (guidanceLines.length > 0) guidanceLines.push('');
     guidanceLines.push('### Ask Mode');
     guidanceLines.push('');
-    guidanceLines.push('- Attach first and read the ticket context.');
-    guidanceLines.push('- Ask one focused blocking question.');
-    guidanceLines.push('- Stop after asking. Do not implement or deliver.');
+    guidanceLines.push('- Attach first and read the ticket context before responding.');
+    guidanceLines.push('- Start with: "I understand the ticket. What would you like to discuss?"');
+    guidanceLines.push('- Focus on open-ended exploration of ideas related to the ticket.');
+    guidanceLines.push('- Do not change code unless the user explicitly asks for implementation.');
+    guidanceLines.push(
+      '- If the user explicitly asks to save notes, save them as artifacts (Markdown files only when requested).'
+    );
+    guidanceLines.push('- Do not publish user_follow_up activity events for normal Ask turns.');
   }
 
   const recentEventLines = recentEvents

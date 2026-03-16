@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0] - 2026-03-16:16:01
+
+### Added
+- Replace the old Ask button with a multi-agent Discuss button so tickets can launch the ask flow with the preferred agent, showing agent-specific loading states in Electron and copying the right prompt when running in the browser.
+- Add a CLI Quickstart section inside the Ticket Live panel that lists per-agent connect and restart commands (including native resume snippets when available) with easy copy buttons so human agents can reconnect or resume a session without leaving the ticket UI.
+- Make agent less priggish.
+
+### Fixed
+- None.
+
+### Changed
+- Rework the CLI settings page into an agent plugin chooser that groups prompt/skill bundles and slash-command installers, surfaces bundle install/repair/uninstall actions, and keeps the per-agent slash-command docs/copy buttons handy for each option.
+- Clarify ask-mode guidance across the bundle templates, prompt-context builder, and protocol prompts by introducing the new opening phrase, explaining when to save notes, and spelling out the expected user_follow_up event behavior depending on whether the session is in Ask mode or regular work.
+
+### Security
+- None.
+
+### Documentation
+- Rewrite the MCP Authentication & Client Integration guide around the current surface matrix, describe the OAuth-protected `/api/mcp` proxy plus the `/api/auth/token` exchange, document the device-code endpoints, and call out the expected environment variables so teams know which flows apply to OAuth-capable clients versus headless runtimes.
+
 ## [1.7.0] - 2026-03-16:14:52
 
 ### Added

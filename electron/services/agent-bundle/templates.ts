@@ -27,11 +27,11 @@ description: Overlord local workflow protocol — attach, update, deliver lifecy
 
 # Overlord Local Workflow
 
-You are working on a ticket managed by Overlord. Follow these rules for every session.
+If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
 
 ## Lifecycle
 
-1. **Attach first** — Always call attach before doing any work:
+1. **Attach first** — If there is a TICKET_ID, always call attach before doing any work:
    \`\`\`bash
    npx overlord protocol attach --ticket-id $TICKET_ID
    \`\`\`
@@ -46,7 +46,7 @@ You are working on a ticket managed by Overlord. Follow these rules for every se
 
    Pass \`--event-type <type>\` to publish a specific activity event (default: \`update\`):
    - \`update\` — standard progress update (default)
-   - \`user_follow_up\` — a message or question from the human user
+   - \`user_follow_up\` — a message or question from the human user (EXCLUDING THE INITIAL TICKET)
    - \`alert\` — surface a warning or non-blocking alert
 
 3. **Ask when blocked** — Stop working after calling:
@@ -86,11 +86,11 @@ npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-i
 ## Rules
 
 - Always attach first; always deliver when done.
-- Post at least one update before delivering.
+- Post any substantial updates about your decisions or progress
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
 `;
 
 /**
@@ -101,11 +101,12 @@ npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-i
  */
 export const CODEX_AGENTS_SECTION = `# Overlord Local Workflow
 
-You are working on a ticket managed by Overlord. Follow these rules for every session.
+
+If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
 
 ## Lifecycle
 
-1. **Attach first** — Always call attach before doing any work:
+1. **Attach first** — If there is a TICKET_ID, always call attach before doing any work:
    \`\`\`bash
    npx overlord protocol attach --ticket-id $TICKET_ID
    \`\`\`
@@ -155,11 +156,11 @@ npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-i
 ## Rules
 
 - Always attach first; always deliver when done.
-- Post at least one update before delivering.
+- Post any substantial updates about your decisions or progress
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket**
 `;
 
 /**

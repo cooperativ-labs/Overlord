@@ -6,8 +6,8 @@ import {
 } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
-import { AskTicketButton } from './AskTicketButton';
 import { CopyTicketPromptButton } from './CopyTicketPromptButton';
+import { DiscussTicketButton } from './DiscussTicketButton';
 import { AgentSplitButtonLive } from './TicketLiveProvider';
 
 type TicketHeaderActionProps = {
@@ -42,7 +42,7 @@ export function TicketHeaderAction({
   if (!isElectron) {
     return (
       <div className="flex items-center gap-2">
-        <AskTicketButton
+        <DiscussTicketButton
           ticketId={ticketId}
           organizationId={organizationId}
           agentIdentifier={agentIdentifier}
@@ -58,7 +58,7 @@ export function TicketHeaderAction({
 
   return (
     <div className="flex items-center gap-2">
-      <AskTicketButton
+      <DiscussTicketButton
         ticketId={ticketId}
         organizationId={organizationId}
         agentIdentifier={agentIdentifier}

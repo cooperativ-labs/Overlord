@@ -86,8 +86,8 @@ ${protocolSection}`;
   }
 
   const protocolSection = isLocal
-    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs, context)
-    : buildRemoteProtocolSection(ticket.id, platformUrl, options);
+    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs, context, launchMode)
+    : buildRemoteProtocolSection(ticket.id, platformUrl, options, launchMode);
 
   return `# Overlord — Agent Instructions
 
@@ -144,7 +144,8 @@ function buildLocalProtocolSection(
   ticketId: string,
   platformUrl: string,
   agentConfigs?: Record<string, AgentConfig>,
-  context?: PromptContext
+  context?: PromptContext,
+  launchMode: PromptLaunchMode = 'run'
 ): string {
   const baseUrlLabel = context === 'electron' ? 'Connector URL' : 'Base URL';
   const launchNote =
@@ -161,6 +162,14 @@ function buildLocalProtocolSection(
     'codex',
     agentConfigs
   );
+  const eventTypeHelp =
+    launchMode === 'ask'
+      ? 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types: `update`, `alert`. Do not post `user_follow_up` events during normal Ask-mode discussion.'
+      : 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types:\n- `update` — standard progress update (default)\n- `user_follow_up` — a message or question from the human user\n- `alert` — surface a warning or non-blocking alert';
+  const askModeRule =
+    launchMode === 'ask'
+      ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
+      : "- **If the user sends you a message during your session, immediately publish a `user_follow_up` activity event with the user's message recorded verbatim in the summary before doing anything else.**";
 
   return `## Overlord Protocol
 
@@ -186,10 +195,7 @@ npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} 
 
 Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI. Use \`--external-url https://...\` when you want Overlord to store a deep link back to the live agent session.
 
-Pass \`--event-type <type>\` to publish a specific activity event (default: \`update\`). Available event types:
-- \`update\` — standard progress update (default)
-- \`user_follow_up\` — a message or question from the human user
-- \`alert\` — surface a warning or non-blocking alert
+${eventTypeHelp}
 
 #### Change rationales (optional on updates)
 
@@ -290,7 +296,7 @@ ${codexResumeCommand}
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+${askModeRule}
 `;
 }
 
@@ -339,10 +345,19 @@ ${settingsJson}
 function buildRemoteProtocolSection(
   ticketId: string,
   _platformUrl: string,
-  options?: PromptOptions
+  options?: PromptOptions,
+  launchMode: PromptLaunchMode = 'run'
 ): string {
   const mcpUrl = options?.mcpUrl;
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, ticketId) : '';
+  const eventTypeHelp =
+    launchMode === 'ask'
+      ? 'Optional: `eventType`: "update" | "alert" (do not use `user_follow_up` for normal Ask-mode discussion)'
+      : 'Optional: `eventType`: "update" | "user_follow_up" | "alert"';
+  const askModeRules =
+    launchMode === 'ask'
+      ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
+      : '- If user sends a message, publish `user_follow_up` event immediately with message verbatim.';
 
   return `## Overlord Protocol (MCP)
 
@@ -367,7 +382,7 @@ ${generateAttachPayloadExample(ticketId)}
 ${generateUpdatePayloadExample(ticketId)}
 \`\`\`
 
-Optional: \`eventType\`: "update" | "user_follow_up" | "alert"
+${eventTypeHelp}
 
 ### 3 — ask (when blocked)
 
@@ -402,6 +417,6 @@ ${generateDeliverPayloadExample(ticketId)}
 - Post ≥1 update before delivering.
 - Only include \`changeRationales\` for meaningful behavioral changes.
 - If blocked, create a follow-up ticket.
-- If user sends a message, publish \`user_follow_up\` event immediately with message verbatim.
+${askModeRules}
 `;
 }

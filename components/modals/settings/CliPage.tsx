@@ -40,6 +40,36 @@ type SlashCommandFile = {
   content: string;
 };
 
+type BundleAgent = 'claude' | 'codex';
+
+type BundleStatusEntry = {
+  agent: BundleAgent;
+  status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
+  version: string | null;
+  installedVersion: string | null;
+  details: string;
+};
+
+type AgentPluginInstallOption =
+  | {
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'bundle';
+      bundleAgent: BundleAgent;
+      supportNote?: string;
+    }
+  | {
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
+      kind: 'slash';
+      slashAgent: string;
+      supportNote?: string;
+    };
+
 const AGENTS = ['claude', 'cursor', 'codex'] as const;
 
 const AGENT_LABELS: Record<string, string> = {
@@ -343,15 +373,74 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
   }
 };
 
+const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
+  {
+    key: 'claude:bundle',
+    agentKey: 'claude',
+    label: 'Prompt / skills',
+    description:
+      'Installs the durable Overlord workflow bundle, including the Claude skill and permission hook integration.',
+    kind: 'bundle',
+    bundleAgent: 'claude',
+    supportNote: 'Managed by the desktop app in your local ~/.claude configuration.'
+  },
+  {
+    key: 'claude:slash',
+    agentKey: 'claude',
+    label: '/connect /load /spawn',
+    description: SLASH_COMMAND_CONFIGS.claude.description,
+    kind: 'slash',
+    slashAgent: 'claude',
+    supportNote: SLASH_COMMAND_CONFIGS.claude.supportNote
+  },
+  {
+    key: 'codex:bundle',
+    agentKey: 'codex',
+    label: 'Prompt / skills',
+    description:
+      'Installs durable Overlord workflow instructions into Codex so ticket lifecycle rules live in local config instead of repeated prompts.',
+    kind: 'bundle',
+    bundleAgent: 'codex',
+    supportNote: 'Managed by the desktop app in your local ~/.codex configuration.'
+  },
+  {
+    key: 'codex:slash',
+    agentKey: 'codex',
+    label: '/connect /load /spawn',
+    description: SLASH_COMMAND_CONFIGS.codex.description,
+    kind: 'slash',
+    slashAgent: 'codex',
+    supportNote: SLASH_COMMAND_CONFIGS.codex.supportNote
+  },
+  {
+    key: 'cursor:slash',
+    agentKey: 'cursor',
+    label: '/connect /load /spawn',
+    description: SLASH_COMMAND_CONFIGS.cursor.description,
+    kind: 'slash',
+    slashAgent: 'cursor',
+    supportNote: SLASH_COMMAND_CONFIGS.cursor.supportNote
+  },
+  {
+    key: 'gemini:slash',
+    agentKey: 'gemini',
+    label: '/connect /load /spawn',
+    description: SLASH_COMMAND_CONFIGS.gemini.description,
+    kind: 'slash',
+    slashAgent: 'gemini',
+    supportNote: SLASH_COMMAND_CONFIGS.gemini.supportNote
+  }
+];
+
+const AGENT_PLUGIN_GROUPS = [
+  { key: 'claude', label: 'Claude Code' },
+  { key: 'codex', label: 'Codex CLI' },
+  { key: 'cursor', label: 'Cursor' },
+  { key: 'gemini', label: 'Gemini CLI' }
+] as const;
+
 export function CliPage({ open }: { open: boolean }) {
   const { isElectron, api } = useElectron();
-  type BundleStatusEntry = {
-    agent: 'claude' | 'codex';
-    status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
-    version: string | null;
-    installedVersion: string | null;
-    details: string;
-  };
 
   const [selectedDefaultAgentTrigger, setSelectedDefaultAgentTrigger] =
     useState<AgentSelectorValue>('claude');
@@ -360,7 +449,7 @@ export function CliPage({ open }: { open: boolean }) {
   const [flagInput, setFlagInput] = useState('');
   const [commandCopied, setCommandCopied] = useState(false);
 
-  const [selectedSlashAgent, setSelectedSlashAgent] = useState('claude');
+  const [selectedAgentPluginKey, setSelectedAgentPluginKey] = useState('claude:bundle');
   const [slashCommandCopied, setSlashCommandCopied] = useState(false);
 
   const [cliInstallButtonState, setCliInstallButtonState] = useState<ButtonLoadingState>('default');
@@ -418,10 +507,8 @@ export function CliPage({ open }: { open: boolean }) {
     void loadBundleStatuses();
   }, [open, loadBundleStatuses]);
 
-  async function handleCopySlashInstall() {
-    const config = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
-    if (!config) return;
-    await navigator.clipboard.writeText(config.installCmd);
+  async function handleCopySlashInstall(installCmd: string) {
+    await navigator.clipboard.writeText(installCmd);
     setSlashCommandCopied(true);
     setTimeout(() => setSlashCommandCopied(false), 2000);
   }
@@ -582,6 +669,10 @@ export function CliPage({ open }: { open: boolean }) {
     }
   };
 
+  const selectedAgentPlugin =
+    AGENT_PLUGIN_OPTIONS.find(option => option.key === selectedAgentPluginKey) ??
+    AGENT_PLUGIN_OPTIONS[0];
+
   return (
     <div className="grid gap-6">
       <div className="grid gap-1">
@@ -719,84 +810,6 @@ export function CliPage({ open }: { open: boolean }) {
               </div>
             </div>
           </div>
-
-          {bundleStatuses.length > 0 && (
-            <div className="grid gap-4">
-              <div className="grid gap-1">
-                <p className="text-sm font-medium">Agent plugins</p>
-                <p className="text-xs text-muted-foreground">
-                  Install Overlord workflow instructions directly into your local agent config. This
-                  enables shorter prompts and a durable permission notification hook.
-                </p>
-              </div>
-              <div className="space-y-2">
-                {bundleStatuses.map(entry => (
-                  <div
-                    key={entry.agent}
-                    className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3"
-                  >
-                    <div className="grid gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-medium capitalize">{entry.agent}</p>
-                        {bundleStatusBadge(entry.status)}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{entry.details}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {(entry.status === 'not_installed' || entry.status === 'stale') && (
-                        <button
-                          type="button"
-                          disabled={bundleActionLoading !== null}
-                          onClick={() => void handleInstallBundle(entry.agent)}
-                          className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
-                          title={entry.status === 'stale' ? 'Update' : 'Install'}
-                        >
-                          <Download className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      )}
-                      {(entry.status === 'partial' || entry.status === 'error') && (
-                        <button
-                          type="button"
-                          disabled={bundleActionLoading !== null}
-                          onClick={() => void handleRepairBundle(entry.agent)}
-                          className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
-                          title="Repair"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      )}
-                      {entry.status === 'installed' && (
-                        <button
-                          type="button"
-                          disabled={bundleActionLoading !== null}
-                          onClick={() => void handleUninstallBundle(entry.agent)}
-                          className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
-                          title="Uninstall"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <LoadingButton
-                buttonState={bundleActionLoading === 'all' ? 'loading' : 'default'}
-                setButtonState={() => {}}
-                text="Install all"
-                loadingText="Installing..."
-                successText="Installed"
-                errorText="Retry"
-                size="sm"
-                variant="outline"
-                onClick={() => void handleInstallAllBundles()}
-                disabled={
-                  bundleActionLoading !== null ||
-                  bundleStatuses.every(s => s.status === 'installed')
-                }
-              />
-            </div>
-          )}
         </>
       ) : null}
 
@@ -861,63 +874,175 @@ export function CliPage({ open }: { open: boolean }) {
         </p>
       </div>
 
-      <div className="grid gap-2">
-        <p className="text-sm font-medium">Agent ticket commands</p>
-        <p className="text-xs text-muted-foreground">
-          Install mid-session ticket commands so your agent can handle{' '}
-          <code className="rounded bg-muted px-1">/connect</code>,{' '}
-          <code className="rounded bg-muted px-1">/load</code>, and{' '}
-          <code className="rounded bg-muted px-1">/spawn</code> without relying on Overlord launch
-          context alone. Select your agent for setup instructions.
-        </p>
-        <Select value={selectedSlashAgent} onValueChange={setSelectedSlashAgent}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select agent" />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(SLASH_COMMAND_CONFIGS).map(([key, cfg]) => (
-              <SelectItem key={key} value={key}>
-                {cfg.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {(() => {
-          const cfg = SLASH_COMMAND_CONFIGS[selectedSlashAgent];
-          if (!cfg) return null;
-          return (
-            <div className="rounded-md border bg-muted/30 p-3 text-xs">
-              <p className="mb-1 font-sans text-muted-foreground">{cfg.description}</p>
-              {cfg.supportNote ? (
-                <p className="mb-2 font-sans text-muted-foreground">{cfg.supportNote}</p>
-              ) : null}
-              <p className="mb-2 break-all font-sans text-muted-foreground">
-                Files: <code className="rounded bg-muted px-1">{cfg.filePaths.join(', ')}</code>
-              </p>
-              <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
-                {cfg.fileContent}
-              </pre>
-              <div className="flex items-center gap-2">
-                <p className="shrink-0 font-sans text-muted-foreground">Install command:</p>
-                <code className="min-w-0 flex-1 break-all rounded bg-muted px-1">
-                  {cfg.installCmd}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void handleCopySlashInstall()}
-                  className="shrink-0 rounded p-1 hover:bg-muted"
-                  title="Copy install command"
-                >
-                  {slashCommandCopied ? (
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                </button>
+      <div className="grid gap-4">
+        <div className="grid gap-1">
+          <p className="text-sm font-medium">Agent plugins</p>
+          <p className="text-xs text-muted-foreground">
+            Install durable prompt and skill config where supported, plus mid-session ticket
+            commands for agents that can handle{' '}
+            <code className="rounded bg-muted px-1">/connect</code>,{' '}
+            <code className="rounded bg-muted px-1">/load</code>, and{' '}
+            <code className="rounded bg-muted px-1">/spawn</code>.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {AGENT_PLUGIN_GROUPS.map(group => {
+            const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
+            const bundleOption = options.find(
+              (option): option is Extract<AgentPluginInstallOption, { kind: 'bundle' }> =>
+                option.kind === 'bundle'
+            );
+            const bundleStatus = bundleOption
+              ? bundleStatuses.find(status => status.agent === bundleOption.bundleAgent)
+              : null;
+
+            return (
+              <div
+                key={group.key}
+                className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3 md:flex-row md:items-start md:justify-between"
+              >
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-medium">{group.label}</p>
+                    {bundleStatus ? bundleStatusBadge(bundleStatus.status) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {options.map(option => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setSelectedAgentPluginKey(option.key)}
+                        className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          selectedAgentPluginKey === option.key
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-border bg-background text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedAgentPlugin?.agentKey === group.key
+                      ? selectedAgentPlugin.description
+                      : options.map(option => option.label).join(' • ')}
+                  </p>
+                </div>
+                {bundleStatus ? (
+                  <div className="flex items-center gap-1.5 self-start">
+                    {(bundleStatus.status === 'not_installed' ||
+                      bundleStatus.status === 'stale') && (
+                      <button
+                        type="button"
+                        disabled={bundleActionLoading !== null}
+                        onClick={() => void handleInstallBundle(bundleStatus.agent)}
+                        className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
+                        title={
+                          bundleStatus.status === 'stale'
+                            ? 'Update prompt / skills'
+                            : 'Install prompt / skills'
+                        }
+                      >
+                        <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                    {(bundleStatus.status === 'partial' || bundleStatus.status === 'error') && (
+                      <button
+                        type="button"
+                        disabled={bundleActionLoading !== null}
+                        onClick={() => void handleRepairBundle(bundleStatus.agent)}
+                        className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
+                        title="Repair prompt / skills"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                    {bundleStatus.status === 'installed' && (
+                      <button
+                        type="button"
+                        disabled={bundleActionLoading !== null}
+                        onClick={() => void handleUninstallBundle(bundleStatus.agent)}
+                        className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
+                        title="Uninstall prompt / skills"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                ) : null}
               </div>
-            </div>
-          );
-        })()}
+            );
+          })}
+        </div>
+        {selectedAgentPlugin?.kind === 'slash' ? (
+          (() => {
+            const cfg = SLASH_COMMAND_CONFIGS[selectedAgentPlugin.slashAgent];
+            if (!cfg) return null;
+            return (
+              <div className="rounded-md border bg-muted/30 p-3 text-xs">
+                <p className="mb-1 font-sans text-muted-foreground">{cfg.description}</p>
+                {cfg.supportNote ? (
+                  <p className="mb-2 font-sans text-muted-foreground">{cfg.supportNote}</p>
+                ) : null}
+                <p className="mb-2 break-all font-sans text-muted-foreground">
+                  Files: <code className="rounded bg-muted px-1">{cfg.filePaths.join(', ')}</code>
+                </p>
+                <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
+                  {cfg.fileContent}
+                </pre>
+                <div className="flex items-center gap-2">
+                  <p className="shrink-0 font-sans text-muted-foreground">Install command:</p>
+                  <code className="min-w-0 flex-1 break-all rounded bg-muted px-1">
+                    {cfg.installCmd}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopySlashInstall(cfg.installCmd)}
+                    className="shrink-0 rounded p-1 hover:bg-muted"
+                    title="Copy install command"
+                  >
+                    {slashCommandCopied ? (
+                      <Check className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            );
+          })()
+        ) : selectedAgentPlugin?.kind === 'bundle' ? (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs">
+            <p className="mb-1 font-sans text-muted-foreground">
+              {selectedAgentPlugin.description}
+            </p>
+            {selectedAgentPlugin.supportNote ? (
+              <p className="mb-2 font-sans text-muted-foreground">
+                {selectedAgentPlugin.supportNote}
+              </p>
+            ) : null}
+            <p className="font-sans text-muted-foreground">
+              {bundleStatuses.find(status => status.agent === selectedAgentPlugin.bundleAgent)
+                ?.details ?? 'Prompt and skill bundle details are available in the desktop app.'}
+            </p>
+          </div>
+        ) : null}
+        {isElectron && bundleStatuses.length > 0 ? (
+          <LoadingButton
+            buttonState={bundleActionLoading === 'all' ? 'loading' : 'default'}
+            setButtonState={() => {}}
+            text="Install all prompt / skills"
+            loadingText="Installing..."
+            successText="Installed"
+            errorText="Retry"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleInstallAllBundles()}
+            disabled={
+              bundleActionLoading !== null || bundleStatuses.every(s => s.status === 'installed')
+            }
+          />
+        ) : null}
       </div>
 
       {isElectron && api?.cli ? (
