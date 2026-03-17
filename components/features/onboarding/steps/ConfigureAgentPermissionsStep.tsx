@@ -58,8 +58,8 @@ export function ConfigureAgentPermissionsStep({ onContinue, projectDirectory }: 
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Configure agent permissions</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Overlord can pre-approve `ovld protocol` and `curl -sS -X POST` protocol calls so
-          agents can sync ticket state without repeated prompts.
+          Overlord can pre-approve `ovld protocol` and `curl -sS -X POST` protocol calls so agents
+          can sync ticket state without repeated prompts.
         </p>
       </div>
 

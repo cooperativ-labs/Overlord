@@ -175,6 +175,14 @@ async function protocolAttach(args) {
     ticketId,
     agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
     connectionMethod: String(flags.method ?? 'cli'),
+    ...(flags['external-session-id']
+      ? {
+          externalSessionId:
+            String(flags['external-session-id']).trim().toLowerCase() === 'null'
+              ? null
+              : String(flags['external-session-id'])
+        }
+      : {}),
     metadata: {}
   };
 
@@ -691,8 +699,10 @@ Common flags (all subcommands):
   --timeout <ms>          Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS}).
                           Also: OVERLORD_TIMEOUT env var.
 
-Update-specific flags:
+Attach/update-specific flags:
   --external-session-id <id>  Store or clear ('null') the agent's native session id for resume.
+
+Update-specific flags:
   --external-url <url>   Store or refresh a deep link to the current agent session.
 
 Deliver-specific flags:

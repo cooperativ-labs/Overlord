@@ -25,6 +25,7 @@ import {
   writeJsonFile,
   writeTextFile
 } from './merge-helpers';
+import { installSlashCommands, uninstallSlashCommands } from './slash-commands';
 import {
   BUNDLE_VERSION,
   CLAUDE_SKILL_CONTENT,
@@ -238,13 +239,20 @@ function installClaude(): InstallResult {
     const merged = mergeJsonSettings(existingSettings, hookAdditions, ['hooks.PermissionRequest']);
     writeJsonFile(paths.settingsFile, merged);
 
-    // 4. Update manifest
+    // 4. Install Claude slash commands alongside the durable bundle.
+    const slashResult = installSlashCommands('claude');
+    if (!slashResult.ok) {
+      return { ok: false, agent: 'claude', backups, error: slashResult.error };
+    }
+    backups.push(...slashResult.backups);
+
+    // 5. Update manifest
     const manifest = readManifest();
     manifest.claude = {
       version: BUNDLE_VERSION,
       contentHash: contentHash(CLAUDE_SKILL_CONTENT),
       installedAt: new Date().toISOString(),
-      files: [paths.skillFile, paths.hookScript, paths.settingsFile]
+      files: [paths.skillFile, paths.hookScript, paths.settingsFile, ...slashResult.managedFiles]
     };
     writeManifest(manifest);
 
@@ -363,6 +371,11 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
           settings.hooks = hooks;
         }
         writeJsonFile(paths.settingsFile, settings);
+      }
+
+      const slashUninstall = uninstallSlashCommands('claude');
+      if (!slashUninstall.ok) {
+        return { ok: false, error: slashUninstall.error };
       }
     } else if (agent === 'codex') {
       const paths = codexPaths();

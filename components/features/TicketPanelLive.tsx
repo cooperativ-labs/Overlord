@@ -1,34 +1,23 @@
 'use client';
 
-import { Check, Copy, MessageSquare } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 
+import { CliQuickstart } from '@/components/features/CliQuickstart';
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { useTicketLive } from '@/components/features/TicketLiveProvider';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
-import {
-  getAgentTypeByIdentifier,
-  getAgentTypeByValue,
-  LAUNCH_AGENT_VALUES,
-  type LaunchAgentTypeValue
-} from '@/lib/helpers/agent-types';
+import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import {
   getEventDisplayLabel,
   getEventDisplaySummary,
   isUserFollowUpEvent
 } from '@/lib/overlord/conversation';
-import { buildNativeResumeCommand } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
@@ -37,7 +26,6 @@ type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type SessionState = Database['public']['Enums']['session_state'];
-type QuickstartCommands = Record<LaunchAgentTypeValue, string>;
 
 // --- AgentSessionBadge ---
 
@@ -145,56 +133,16 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
   );
 }
 
-function CommandCopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  return (
-    <Button className="h-7 gap-1.5 px-2 text-xs" size="sm" variant="outline" onClick={handleCopy}>
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? 'Copied' : 'Copy'}
-    </Button>
-  );
-}
-
-function CommandRow({ label, command }: { label: string; command: string }) {
-  return (
-    <div className="rounded-md border bg-background/80 p-2.5">
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 whitespace-pre-wrap break-words rounded bg-muted/60 px-2 py-1.5 text-xs">
-          {command}
-        </code>
-        <CommandCopyButton value={command} />
-      </div>
-    </div>
-  );
-}
-
 // --- LiveArtifacts ---
 
 function LiveArtifacts({
   artifacts,
   editorScheme,
-  workspaceRoot,
-  projectId
+  workspaceRoot
 }: {
   artifacts: Artifact[];
   editorScheme: string;
   workspaceRoot: string;
-  projectId: string;
 }) {
   if (!artifacts.length) return null;
 
@@ -222,7 +170,6 @@ function LiveArtifacts({
                   content={artifact.content}
                   editorScheme={editorScheme}
                   workspaceRoot={workspaceRoot}
-                  projectId={projectId}
                 />
               ) : (
                 <MarkdownContent compact className="mt-1 text-xs text-muted-foreground">
@@ -297,49 +244,6 @@ export function TicketPanelLive({
 
   const isRunning = session?.session_state === 'attached';
   const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);
-  const [selectedAgent, setSelectedAgent] = useState<LaunchAgentTypeValue>('claude');
-
-  useEffect(() => {
-    if (!activeAgentType) return;
-    if (LAUNCH_AGENT_VALUES.includes(activeAgentType.value as LaunchAgentTypeValue)) {
-      setSelectedAgent(activeAgentType.value as LaunchAgentTypeValue);
-    }
-  }, [activeAgentType]);
-
-  const connectCommands = useMemo<QuickstartCommands>(
-    () => ({
-      claude: _claudeCommand ?? 'ovld run claude',
-      codex: _codexCommand ?? 'ovld run codex',
-      cursor: _cursorCommand ?? 'ovld run cursor',
-      gemini: _geminiCommand ?? 'ovld run gemini'
-    }),
-    [_claudeCommand, _codexCommand, _cursorCommand, _geminiCommand]
-  );
-
-  const overlordResumeCommands = useMemo<QuickstartCommands>(
-    () => ({
-      claude: _claudeResumeCommand ?? 'ovld resume claude',
-      codex: _codexResumeCommand ?? 'ovld resume codex',
-      cursor: _cursorResumeCommand ?? 'ovld resume cursor',
-      gemini: _geminiResumeCommand ?? 'ovld resume gemini'
-    }),
-    [_claudeResumeCommand, _codexResumeCommand, _cursorResumeCommand, _geminiResumeCommand]
-  );
-
-  const nativeResumeCommands: Partial<QuickstartCommands> = useMemo(() => {
-    const sessionId = session?.external_session_id ?? null;
-    const claudeResume = buildNativeResumeCommand('claude', sessionId);
-    const codexResume = buildNativeResumeCommand('codex', sessionId);
-    const cursorResume = buildNativeResumeCommand('cursor', sessionId);
-    const geminiResume = buildNativeResumeCommand('gemini', sessionId);
-
-    return {
-      claude: claudeResume ?? 'claude --resume <claude-session-id>',
-      codex: codexResume ?? 'codex resume <codex-session-id>',
-      ...(cursorResume ? { cursor: cursorResume } : {}),
-      ...(geminiResume ? { gemini: geminiResume } : {})
-    };
-  }, [session?.external_session_id]);
 
   function handleForceDisconnect() {
     if (!session) return;
@@ -368,54 +272,18 @@ export function TicketPanelLive({
 
       {/* <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} /> */}
 
-      <section className="mb-6">
-        <Accordion type="single" collapsible>
-          <AccordionItem value="cli-quickstart">
-            <AccordionTrigger className="text-xs font-semibold uppercase tracking-widest text-muted-foreground py-3 hover:no-underline">
-              CLI Quickstart
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {LAUNCH_AGENT_VALUES.map(agentValue => {
-                    const agent = getAgentTypeByValue(agentValue);
-                    const isSelected = selectedAgent === agentValue;
-                    return (
-                      <Button
-                        key={agent.value}
-                        className="h-7 px-2 text-xs"
-                        size="sm"
-                        variant={isSelected ? 'default' : 'outline'}
-                        onClick={() => setSelectedAgent(agentValue)}
-                      >
-                        {agent.label}
-                      </Button>
-                    );
-                  })}
-                </div>
-                <div className="grid gap-2.5">
-                  <CommandRow
-                    label="Connect to this ticket"
-                    command={connectCommands[selectedAgent]}
-                  />
-                  <CommandRow
-                    label="Restart session"
-                    command={
-                      nativeResumeCommands[selectedAgent] ?? overlordResumeCommands[selectedAgent]
-                    }
-                  />
-                  {nativeResumeCommands[selectedAgent] ? (
-                    <CommandRow
-                      label="Restart session (Overlord wrapper)"
-                      command={overlordResumeCommands[selectedAgent]}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </section>
+      <CliQuickstart
+        activeAgentValue={activeAgentType?.value}
+        externalSessionId={session?.external_session_id}
+        claudeCommand={_claudeCommand}
+        codexCommand={_codexCommand}
+        cursorCommand={_cursorCommand}
+        geminiCommand={_geminiCommand}
+        claudeResumeCommand={_claudeResumeCommand}
+        codexResumeCommand={_codexResumeCommand}
+        cursorResumeCommand={_cursorResumeCommand}
+        geminiResumeCommand={_geminiResumeCommand}
+      />
 
       <section className="mb-6">
         <div className="mb-4 flex items-center gap-2">
@@ -470,7 +338,6 @@ export function TicketPanelLive({
               artifacts={artifacts}
               editorScheme={editorScheme}
               workspaceRoot={workspaceRoot}
-              projectId={projectId}
             />
           </div>
         </>

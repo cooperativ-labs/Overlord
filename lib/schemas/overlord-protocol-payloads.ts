@@ -47,6 +47,11 @@ export const AttachPayloadSchema = z.object({
   ticketId: z.string().describe('Target ticket ID'),
   agentIdentifier: z.string().describe('Agent name or identifier, e.g. "claude-code", "codex"'),
   connectionMethod: z.string().describe('How the agent is connecting: "mcp", "cli", "rest", etc.'),
+  externalSessionId: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Optional native session id returned by the agent runtime for resume support'),
   metadata: z.record(z.string(), z.any()).optional().describe('Optional agent-specific metadata')
 });
 export type AttachPayload = z.infer<typeof AttachPayloadSchema>;

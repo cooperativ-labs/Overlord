@@ -20,6 +20,7 @@ export type AttachParams = {
   ticketId: string;
   agentIdentifier: string;
   connectionMethod: ConnectionMethod;
+  externalSessionId?: string | null;
   metadata: Json;
   organizationId: number;
   userId: string;
@@ -34,7 +35,15 @@ export type AttachParams = {
  * MUST be mirrored there.
  */
 export async function runAttachProtocol(supabase: AttachClient, params: AttachParams) {
-  const { ticketId, agentIdentifier, connectionMethod, metadata, organizationId, userId } = params;
+  const {
+    ticketId,
+    agentIdentifier,
+    connectionMethod,
+    externalSessionId,
+    metadata,
+    organizationId,
+    userId
+  } = params;
   const sessionKey = randomUUID();
 
   const { data: ticket, error: ticketError } = await supabase
@@ -62,6 +71,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     .insert({
       agent_identifier: agentIdentifier,
       connection_method: connectionMethod,
+      external_session_id: externalSessionId?.trim() || null,
       metadata,
       session_key: sessionKey,
       ticket_id: ticketId

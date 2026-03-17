@@ -76,6 +76,11 @@ export const TOOLS = [
           description: 'How you are connecting. Use "mcp" for this endpoint.',
           default: 'mcp'
         },
+        externalSessionId: {
+          type: ['string', 'null'],
+          description:
+            'Optional native session id returned by the agent runtime (for example Claude/Codex resume ids).'
+        },
         metadata: { type: 'object', description: 'Optional extra metadata about this session.' }
       },
       required: ['ticketId', 'agentIdentifier']

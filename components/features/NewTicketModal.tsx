@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import {
   createBlankTicketAction,
   deleteTicketAction,
+  setTicketProjectAction,
   updateTicketFieldAction
 } from '@/lib/actions/tickets';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
@@ -184,8 +185,11 @@ export function NewTicketModal({
     setSubmitButtonState('loading');
 
     try {
-      const ticket = projects.find(p => p.id === selectedProjectId);
-      if (!ticket) throw new Error('Selected project not found');
+      const selectedProject = projects.find(p => p.id === selectedProjectId);
+      if (!selectedProject) throw new Error('Selected project not found');
+
+      // The draft ticket is created when the modal opens. Persist the final project selection.
+      await setTicketProjectAction(ticketId, selectedProjectId);
 
       // Set the title from the first 60 characters of the description
       if (objective.trim()) {
@@ -266,10 +270,10 @@ export function NewTicketModal({
                 }}
                 placeholder="Describe what needs to be done…"
                 className={cn(
-                  'w-full min-h-48 flex-1 rounded-md border border-border/40 bg-background px-3 py-2 text-sm',
+                  'w-full min-h-24 flex-1 rounded-md border border-border/40 bg-background px-3 py-2 text-sm',
                   'focus:outline-none focus:ring-1 focus:ring-ring/40',
                   'resize-none leading-relaxed',
-                  'sm:min-h-64'
+                  'sm:min-h-32'
                 )}
                 disabled={isCreating || isSubmitting}
               />

@@ -4,10 +4,15 @@ import {
   type AgentBundleAgent,
   getAgentBundleStatus,
   getAllBundleStatuses,
+  getAllSlashCommandStatuses,
+  getSlashCommandStatus,
   installAgentBundle,
   installAllBundles,
+  installSlashCommands,
   repairAgentBundle,
-  uninstallAgentBundle
+  type SlashCommandAgent,
+  uninstallAgentBundle,
+  uninstallSlashCommands
 } from '../services/agent-bundle';
 import { configureAgentPermissions } from '../services/agent-permissions';
 import { AppUpdaterService } from '../services/app-updater';
@@ -99,6 +104,23 @@ export function registerAppIpc({
 
   ipcMain.handle('agent-bundle:uninstall', (_event, agent: AgentBundleAgent) => {
     return uninstallAgentBundle(agent);
+  });
+
+  // --- Agent Slash Command IPC ---
+  ipcMain.handle('agent-slash:get-all-statuses', () => {
+    return getAllSlashCommandStatuses();
+  });
+
+  ipcMain.handle('agent-slash:get-status', (_event, agent: SlashCommandAgent) => {
+    return getSlashCommandStatus(agent);
+  });
+
+  ipcMain.handle('agent-slash:install', (_event, agent: SlashCommandAgent) => {
+    return installSlashCommands(agent);
+  });
+
+  ipcMain.handle('agent-slash:uninstall', (_event, agent: SlashCommandAgent) => {
+    return uninstallSlashCommands(agent);
   });
 
   // --- Agent Permission Setup IPC ---

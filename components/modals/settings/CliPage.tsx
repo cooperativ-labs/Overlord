@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, Download, RefreshCw, Trash2, X } from 'lucide-react';
+import { Check, Copy, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -31,16 +31,10 @@ type SlashCommandConfig = {
   description: string;
   supportNote?: string;
   filePaths: string[];
-  fileContent: string;
-  installCmd: string;
-};
-
-type SlashCommandFile = {
-  path: string;
-  content: string;
 };
 
 type BundleAgent = 'claude' | 'codex';
+type SlashAgent = 'claude' | 'cursor' | 'gemini';
 
 type BundleStatusEntry = {
   agent: BundleAgent;
@@ -48,6 +42,15 @@ type BundleStatusEntry = {
   version: string | null;
   installedVersion: string | null;
   details: string;
+};
+
+type SlashStatusEntry = {
+  agent: SlashAgent;
+  status: 'installed' | 'partial' | 'not_installed';
+  details: string;
+  managedFiles: string[];
+  existingManagedFiles: string[];
+  missingManagedFiles: string[];
 };
 
 type AgentPluginInstallOption =
@@ -66,7 +69,7 @@ type AgentPluginInstallOption =
       label: string;
       description: string;
       kind: 'slash';
-      slashAgent: string;
+      slashAgent: SlashAgent;
       supportNote?: string;
     };
 
@@ -84,260 +87,48 @@ function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
   return getAgentTypeByValue(agentValue).label;
 }
 
-function parentDir(path: string): string | null {
-  const index = path.lastIndexOf('/');
-  return index > 0 ? path.slice(0, index) : null;
-}
-
-function buildInstallCommand(files: SlashCommandFile[]): string {
-  const directories = Array.from(
-    new Set(
-      files.map(file => parentDir(file.path)).filter((value): value is string => Boolean(value))
-    )
-  );
-
-  return [
-    ...directories.map(directory => `mkdir -p ${directory}`),
-    ...files.map(file => `cat > ${file.path} << 'EOF'\n${file.content}\nEOF`)
-  ].join('\n\n');
-}
-
-const CLAUDE_FILES: SlashCommandFile[] = [
-  {
-    path: '~/.claude/commands/connect.md',
-    content: `---
-description: Connect this session to another Overlord ticket by ticket ID
-argument-hint: <ticket-id>
-disable-model-invocation: true
----
-
-Connect this session to another Overlord ticket.
-
-Treat \`$ARGUMENTS\` as the target ticket ID.
-If no ticket ID was provided, ask the user for one and stop.
-
-Run:
-\`ovld protocol connect --ticket-id <ticketId>\`
-
-Rules:
-- Use \`connect\`, not \`attach\`.
-- Do not load extra ticket context unless the user explicitly asks for it.
-- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
-  },
-  {
-    path: '~/.claude/commands/load.md',
-    content: `---
-description: Load Overlord ticket context without creating a new session
-argument-hint: <ticket-id>
-disable-model-invocation: true
----
-
-Load Overlord ticket context without attaching to the ticket.
-
-Treat \`$ARGUMENTS\` as the target ticket ID.
-If no ticket ID was provided, ask the user for one and stop.
-
-Run:
-\`ovld protocol load-context --ticket-id <ticketId>\`
-
-Rules:
-- Use \`load-context\`, not \`attach\`.
-- Do not create or switch sessions.
-- Summarize the returned ticket details, history, artifacts, and shared context for the user.`
-  },
-  {
-    path: '~/.claude/commands/spawn.md',
-    content: `---
-description: Create a new Overlord ticket from the current conversation
-argument-hint: <objective or raw flags>
-disable-model-invocation: true
----
-
-Create a new Overlord ticket from the user's request.
-
-Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn\`.
-Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
-\`ovld protocol spawn --objective "<objective>"\`
-
-If no objective was provided, ask the user for one and stop.
-
-After the command succeeds, report the new \`TICKET_ID\` and \`SESSION_KEY\`.`
-  }
-];
-
-const CURSOR_FILES: SlashCommandFile[] = [
-  {
-    path: '.cursor/commands/connect.md',
-    content: `Connect this session to another Overlord ticket.
-
-The text after \`/connect\` is the target ticket ID.
-If no ticket ID was provided, ask the user for one and stop.
-
-Run:
-\`ovld protocol connect --ticket-id <ticketId>\`
-
-Rules:
-- Use \`connect\`, not \`attach\`.
-- Do not load extra ticket context unless the user explicitly asks for it.
-- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
-  },
-  {
-    path: '.cursor/commands/load.md',
-    content: `Load Overlord ticket context without creating a new session.
-
-The text after \`/load\` is the target ticket ID.
-If no ticket ID was provided, ask the user for one and stop.
-
-Run:
-\`ovld protocol load-context --ticket-id <ticketId>\`
-
-Rules:
-- Use \`load-context\`, not \`attach\`.
-- Do not create or switch sessions.
-- Summarize the returned ticket details, history, artifacts, and shared context for the user.`
-  },
-  {
-    path: '.cursor/commands/spawn.md',
-    content: `Create a new Overlord ticket from the user's request.
-
-The text after \`/spawn\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
-
-If raw flags are present, run:
-\`ovld protocol spawn <raw arguments>\`
-
-Otherwise, run:
-\`ovld protocol spawn --objective "<objective>"\`
-
-If no objective was provided, ask the user for one and stop.
-
-After the command succeeds, report the new \`TICKET_ID\` and \`SESSION_KEY\`.`
-  }
-];
-
-const GEMINI_FILES: SlashCommandFile[] = [
-  {
-    path: '~/.gemini/commands/connect.toml',
-    content:
-      `description = "Connect this session to another Overlord ticket by ticket ID."
-prompt = """
-Connect this session to another Overlord ticket.
-
-Treat ` +
-      '`{{args}}`' +
-      ` as the target ticket ID.
-If no ticket ID was provided, ask the user for one and stop.
-
-Run:
-` +
-      '`ovld protocol connect --ticket-id <ticketId>`' +
-      `
-
-Rules:
-- Use ` +
-      '`connect`' +
-      `, not ` +
-      '`attach`' +
-      `.
-- Do not load extra ticket context unless the user explicitly asks for it.
-- After the command succeeds, report the returned ` +
-      '`SESSION_KEY`' +
-      ` and confirm that future updates should use that ticket.
-"""`
-  },
-  {
-    path: '~/.gemini/commands/load.toml',
-    content:
-      `description = "Load Overlord ticket context without creating a new session."
-prompt = """
-Load Overlord ticket context without attaching to the ticket.
-
-Treat ` +
-      '`{{args}}`' +
-      ` as the target ticket ID.
-If no ticket ID was provided, ask the user for one and stop.
-
-Run:
-` +
-      '`ovld protocol load-context --ticket-id <ticketId>`' +
-      `
-
-Rules:
-- Use ` +
-      '`load-context`' +
-      `, not ` +
-      '`attach`' +
-      `.
-- Do not create or switch sessions.
-- Summarize the returned ticket details, history, artifacts, and shared context for the user.
-"""`
-  },
-  {
-    path: '~/.gemini/commands/spawn.toml',
-    content:
-      `description = "Create a new Overlord ticket from the current conversation."
-prompt = """
-Create a new Overlord ticket from the user's request.
-
-Use ` +
-      '`{{args}}`' +
-      ` as the input.
-If it already contains flags such as ` +
-      '`--title`' +
-      `, ` +
-      '`--priority`' +
-      `, ` +
-      '`--project-id`' +
-      `, or ` +
-      '`--execution-target`' +
-      `, pass those flags through after ` +
-      '`ovld protocol spawn`' +
-      `.
-Otherwise, treat ` +
-      '`{{args}}`' +
-      ` as the objective text and run:
-` +
-      '`ovld protocol spawn --objective "<objective>"`' +
-      `
-
-If no objective was provided, ask the user for one and stop.
-
-After the command succeeds, report the new ` +
-      '`TICKET_ID`' +
-      ` and ` +
-      '`SESSION_KEY`' +
-      `.
-"""`
-  }
-];
-
 const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
   claude: {
     label: 'Claude Code',
     description: 'Installs global slash commands for mid-session Overlord ticket operations.',
     supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `~/.claude/commands/`.',
-    filePaths: CLAUDE_FILES.map(file => file.path),
-    fileContent: CLAUDE_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
-    installCmd: buildInstallCommand(CLAUDE_FILES)
+    filePaths: [
+      '~/.claude/commands/connect.md',
+      '~/.claude/commands/load.md',
+      '~/.claude/commands/spawn.md'
+    ]
   },
   cursor: {
     label: 'Cursor',
-    description:
-      'Installs native project slash commands for mid-session Overlord ticket operations.',
-    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `.cursor/commands/`.',
-    filePaths: CURSOR_FILES.map(file => file.path),
-    fileContent: CURSOR_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
-    installCmd: buildInstallCommand(CURSOR_FILES)
+    description: 'Installs global slash commands for mid-session Overlord ticket operations.',
+    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `~/.cursor/commands/`.',
+    filePaths: [
+      '~/.cursor/commands/connect.md',
+      '~/.cursor/commands/load.md',
+      '~/.cursor/commands/spawn.md'
+    ]
   },
   gemini: {
     label: 'Gemini CLI',
     description: 'Installs global slash commands for mid-session Overlord ticket operations.',
     supportNote:
       'Creates `/connect`, `/load`, and `/spawn` in `~/.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
-    filePaths: GEMINI_FILES.map(file => file.path),
-    fileContent: GEMINI_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
-    installCmd: buildInstallCommand(GEMINI_FILES)
+    filePaths: [
+      '~/.gemini/commands/connect.toml',
+      '~/.gemini/commands/load.toml',
+      '~/.gemini/commands/spawn.toml'
+    ]
   }
+};
+
+const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
+  claude: [
+    '~/.claude/skills/overlord-local/SKILL.md',
+    '~/.claude/overlord-permission-hook.sh',
+    '~/.claude/settings.json',
+    ...SLASH_COMMAND_CONFIGS.claude.filePaths
+  ],
+  codex: ['~/.codex/AGENTS.md']
 };
 
 const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
@@ -408,7 +199,9 @@ export function CliPage({ open }: { open: boolean }) {
   const [commandCopied, setCommandCopied] = useState(false);
 
   const [selectedAgentPluginKey, setSelectedAgentPluginKey] = useState('claude:bundle');
-  const [slashCommandCopied, setSlashCommandCopied] = useState(false);
+  const [slashStatuses, setSlashStatuses] = useState<SlashStatusEntry[]>([]);
+  const [pluginActionButtonState, setPluginActionButtonState] =
+    useState<ButtonLoadingState>('default');
 
   const [cliInstallButtonState, setCliInstallButtonState] = useState<ButtonLoadingState>('default');
   const [cliInstalled, setCliInstalled] = useState(false);
@@ -426,6 +219,16 @@ export function CliPage({ open }: { open: boolean }) {
       setBundleStatuses(statuses);
     } catch {
       // Agent bundle API not available
+    }
+  }, [isElectron]);
+
+  const loadSlashStatuses = useCallback(async () => {
+    if (!isElectron || !window.electronAPI?.agentSlash) return;
+    try {
+      const statuses = await window.electronAPI.agentSlash.getAllStatuses();
+      setSlashStatuses(statuses);
+    } catch {
+      // Slash command API not available
     }
   }, [isElectron]);
 
@@ -463,13 +266,12 @@ export function CliPage({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return;
     void loadBundleStatuses();
-  }, [open, loadBundleStatuses]);
+    void loadSlashStatuses();
+  }, [open, loadBundleStatuses, loadSlashStatuses]);
 
-  async function handleCopySlashInstall(installCmd: string) {
-    await navigator.clipboard.writeText(installCmd);
-    setSlashCommandCopied(true);
-    setTimeout(() => setSlashCommandCopied(false), 2000);
-  }
+  useEffect(() => {
+    setPluginActionButtonState('default');
+  }, [selectedAgentPluginKey]);
 
   async function handleAddFlag() {
     if (!flagInput.trim()) return;
@@ -505,7 +307,7 @@ export function CliPage({ open }: { open: boolean }) {
 
   async function handleCopyCommand() {
     const flags = (agentFlags[selectedLocalAgent] ?? []).join(' ');
-    const command = `ovld resume ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
+    const command = `ovld restart ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
     await navigator.clipboard.writeText(command);
     setCommandCopied(true);
     setTimeout(() => setCommandCopied(false), 2000);
@@ -543,11 +345,17 @@ export function CliPage({ open }: { open: boolean }) {
   async function handleInstallBundle(agent: 'claude' | 'codex') {
     if (!window.electronAPI?.agentBundle) return;
     setBundleActionLoading(agent);
+    setPluginActionButtonState('loading');
     try {
       await window.electronAPI.agentBundle.install(agent);
       await loadBundleStatuses();
+      if (agent === 'claude') {
+        await loadSlashStatuses();
+      }
+      setPluginActionButtonState('success');
     } catch {
       // Handled by status refresh
+      setPluginActionButtonState('error');
     } finally {
       setBundleActionLoading(null);
     }
@@ -569,11 +377,17 @@ export function CliPage({ open }: { open: boolean }) {
   async function handleRepairBundle(agent: 'claude' | 'codex') {
     if (!window.electronAPI?.agentBundle) return;
     setBundleActionLoading(`repair-${agent}`);
+    setPluginActionButtonState('loading');
     try {
       await window.electronAPI.agentBundle.repair(agent);
       await loadBundleStatuses();
+      if (agent === 'claude') {
+        await loadSlashStatuses();
+      }
+      setPluginActionButtonState('success');
     } catch {
       // Handled by status refresh
+      setPluginActionButtonState('error');
     } finally {
       setBundleActionLoading(null);
     }
@@ -582,13 +396,43 @@ export function CliPage({ open }: { open: boolean }) {
   async function handleUninstallBundle(agent: 'claude' | 'codex') {
     if (!window.electronAPI?.agentBundle) return;
     setBundleActionLoading(`uninstall-${agent}`);
+    setPluginActionButtonState('loading');
     try {
       await window.electronAPI.agentBundle.uninstall(agent);
       await loadBundleStatuses();
+      if (agent === 'claude') {
+        await loadSlashStatuses();
+      }
+      setPluginActionButtonState('success');
     } catch {
       // Handled by status refresh
+      setPluginActionButtonState('error');
     } finally {
       setBundleActionLoading(null);
+    }
+  }
+
+  async function handleInstallSlashCommands(agent: SlashAgent) {
+    if (!window.electronAPI?.agentSlash) return;
+    setPluginActionButtonState('loading');
+    try {
+      await window.electronAPI.agentSlash.install(agent);
+      await loadSlashStatuses();
+      setPluginActionButtonState('success');
+    } catch {
+      setPluginActionButtonState('error');
+    }
+  }
+
+  async function handleUninstallSlashCommands(agent: SlashAgent) {
+    if (!window.electronAPI?.agentSlash) return;
+    setPluginActionButtonState('loading');
+    try {
+      await window.electronAPI.agentSlash.uninstall(agent);
+      await loadSlashStatuses();
+      setPluginActionButtonState('success');
+    } catch {
+      setPluginActionButtonState('error');
     }
   }
 
@@ -627,9 +471,104 @@ export function CliPage({ open }: { open: boolean }) {
     }
   };
 
+  const slashStatusBadge = (status: SlashStatusEntry['status']) => {
+    switch (status) {
+      case 'installed':
+        return (
+          <Badge variant="default" className="bg-green-600 text-xs">
+            Installed
+          </Badge>
+        );
+      case 'partial':
+        return (
+          <Badge variant="secondary" className="text-xs">
+            Partial
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="text-xs">
+            Not installed
+          </Badge>
+        );
+    }
+  };
+
   const selectedAgentPlugin =
     AGENT_PLUGIN_OPTIONS.find(option => option.key === selectedAgentPluginKey) ??
     AGENT_PLUGIN_OPTIONS[0];
+  const selectedSlashStatus =
+    selectedAgentPlugin.kind === 'slash'
+      ? slashStatuses.find(status => status.agent === selectedAgentPlugin.slashAgent)
+      : null;
+  const selectedBundleStatus =
+    selectedAgentPlugin.kind === 'bundle'
+      ? bundleStatuses.find(status => status.agent === selectedAgentPlugin.bundleAgent)
+      : null;
+  const installFilesForSelectedSlash =
+    selectedAgentPlugin.kind === 'slash'
+      ? (selectedSlashStatus?.managedFiles ??
+        SLASH_COMMAND_CONFIGS[selectedAgentPlugin.slashAgent].filePaths)
+      : [];
+  const removableFilesForSelectedSlash = selectedSlashStatus?.existingManagedFiles ?? [];
+  const isPluginActionBusy = pluginActionButtonState === 'loading' || bundleActionLoading !== null;
+  const pluginActionLabel =
+    selectedAgentPlugin.kind === 'bundle'
+      ? selectedBundleStatus?.status === 'installed'
+        ? 'Remove'
+        : selectedBundleStatus?.status === 'partial' || selectedBundleStatus?.status === 'error'
+          ? 'Repair'
+          : selectedBundleStatus?.status === 'stale'
+            ? 'Update'
+            : 'Install'
+      : selectedSlashStatus?.status === 'installed' || selectedSlashStatus?.status === 'partial'
+        ? 'Remove'
+        : 'Install';
+  const pluginActionLoadingText =
+    pluginActionLabel === 'Remove'
+      ? 'Removing...'
+      : pluginActionLabel === 'Install'
+        ? 'Installing...'
+        : pluginActionLabel === 'Update'
+          ? 'Updating...'
+          : 'Repairing...';
+  const pluginActionSuccessText =
+    pluginActionLabel === 'Remove'
+      ? 'Removed'
+      : pluginActionLabel === 'Install'
+        ? 'Installed'
+        : pluginActionLabel === 'Update'
+          ? 'Updated'
+          : 'Repaired';
+  const pluginActionErrorText = `${pluginActionLabel} failed`;
+  const canRunPluginAction =
+    selectedAgentPlugin.kind === 'bundle'
+      ? Boolean(selectedBundleStatus)
+      : Boolean(selectedSlashStatus);
+
+  async function handleSelectedPluginAction() {
+    setPluginActionButtonState('default');
+    if (selectedAgentPlugin.kind === 'bundle') {
+      if (!selectedBundleStatus) return;
+      if (selectedBundleStatus.status === 'installed') {
+        await handleUninstallBundle(selectedBundleStatus.agent);
+        return;
+      }
+      if (selectedBundleStatus.status === 'partial' || selectedBundleStatus.status === 'error') {
+        await handleRepairBundle(selectedBundleStatus.agent);
+        return;
+      }
+      await handleInstallBundle(selectedBundleStatus.agent);
+      return;
+    }
+
+    if (!selectedSlashStatus || selectedSlashStatus.status === 'not_installed') {
+      await handleInstallSlashCommands(selectedAgentPlugin.slashAgent);
+      return;
+    }
+
+    await handleUninstallSlashCommands(selectedAgentPlugin.slashAgent);
+  }
 
   return (
     <div className="grid gap-6">
@@ -759,7 +698,7 @@ export function CliPage({ open }: { open: boolean }) {
                   </button>
                 </div>
                 <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                  {`ovld resume ${selectedLocalAgent}${
+                  {`ovld restart ${selectedLocalAgent}${
                     (agentFlags[selectedLocalAgent] ?? []).length > 0
                       ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
                       : ''
@@ -770,6 +709,168 @@ export function CliPage({ open }: { open: boolean }) {
           </div>
         </>
       ) : null}
+
+      <div className="grid gap-4">
+        <div className="grid gap-1">
+          <p className="text-sm font-medium">Agent plugins</p>
+          <p className="text-xs text-muted-foreground">
+            Install durable prompt and skill config where supported, plus mid-session ticket
+            commands for agents that can handle{' '}
+            <code className="rounded bg-muted px-1">/connect</code>,{' '}
+            <code className="rounded bg-muted px-1">/load</code>, and{' '}
+            <code className="rounded bg-muted px-1">/spawn</code>.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {AGENT_PLUGIN_GROUPS.map(group => {
+            const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
+            const bundleOption = options.find(
+              (option): option is Extract<AgentPluginInstallOption, { kind: 'bundle' }> =>
+                option.kind === 'bundle'
+            );
+            const bundleStatus = bundleOption
+              ? bundleStatuses.find(status => status.agent === bundleOption.bundleAgent)
+              : null;
+            const slashOption = options.find(
+              (option): option is Extract<AgentPluginInstallOption, { kind: 'slash' }> =>
+                option.kind === 'slash'
+            );
+            const slashStatus = slashOption
+              ? slashStatuses.find(status => status.agent === slashOption.slashAgent)
+              : null;
+
+            return (
+              <div
+                key={group.key}
+                className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3"
+              >
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-medium">{group.label}</p>
+                    {bundleStatus
+                      ? bundleStatusBadge(bundleStatus.status)
+                      : slashStatus
+                        ? slashStatusBadge(slashStatus.status)
+                        : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {options.map(option => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setSelectedAgentPluginKey(option.key)}
+                        className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+                          selectedAgentPluginKey === option.key
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-border bg-background text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedAgentPlugin?.agentKey === group.key
+                      ? selectedAgentPlugin.description
+                      : options.map(option => option.label).join(' • ')}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {selectedAgentPlugin?.kind === 'slash' ? (
+          (() => {
+            const cfg = SLASH_COMMAND_CONFIGS[selectedAgentPlugin.slashAgent];
+            if (!cfg) return null;
+            return (
+              <div className="rounded-md border bg-muted/30 p-3 text-xs">
+                <p className="mb-1 font-sans text-muted-foreground">{cfg.description}</p>
+                {cfg.supportNote ? (
+                  <p className="mb-2 font-sans text-muted-foreground">{cfg.supportNote}</p>
+                ) : null}
+                {selectedSlashStatus ? (
+                  <p className="mb-2 font-sans text-muted-foreground">
+                    {selectedSlashStatus.details}
+                  </p>
+                ) : null}
+                <p className="mb-2 break-all font-sans text-muted-foreground">
+                  Install updates:{' '}
+                  <code className="rounded bg-muted px-1">
+                    {installFilesForSelectedSlash.join(', ')}
+                  </code>
+                </p>
+                <p className="break-all font-sans text-muted-foreground">
+                  Remove currently affects:{' '}
+                  <code className="rounded bg-muted px-1">
+                    {removableFilesForSelectedSlash.length > 0
+                      ? removableFilesForSelectedSlash.join(', ')
+                      : 'No managed files found yet.'}
+                  </code>
+                </p>
+              </div>
+            );
+          })()
+        ) : selectedAgentPlugin?.kind === 'bundle' ? (
+          <div className="rounded-md border bg-muted/30 p-3 text-xs">
+            <p className="mb-1 font-sans text-muted-foreground">
+              {selectedAgentPlugin.description}
+            </p>
+            {selectedAgentPlugin.supportNote ? (
+              <p className="mb-2 font-sans text-muted-foreground">
+                {selectedAgentPlugin.supportNote}
+              </p>
+            ) : null}
+            <p className="mb-2 break-all font-sans text-muted-foreground">
+              Install updates:{' '}
+              <code className="rounded bg-muted px-1">
+                {BUNDLE_FILE_PATHS[selectedAgentPlugin.bundleAgent].join(', ')}
+              </code>
+            </p>
+            <p className="mb-2 break-all font-sans text-muted-foreground">
+              Remove currently affects:{' '}
+              <code className="rounded bg-muted px-1">
+                {BUNDLE_FILE_PATHS[selectedAgentPlugin.bundleAgent].join(', ')}
+              </code>
+            </p>
+            <p className="font-sans text-muted-foreground">
+              {bundleStatuses.find(status => status.agent === selectedAgentPlugin.bundleAgent)
+                ?.details ?? 'Prompt and skill bundle details are available in the desktop app.'}
+            </p>
+          </div>
+        ) : null}
+        {isElectron ? (
+          <LoadingButton
+            buttonState={pluginActionButtonState}
+            setButtonState={setPluginActionButtonState}
+            text={pluginActionLabel}
+            loadingText={pluginActionLoadingText}
+            successText={pluginActionSuccessText}
+            errorText={pluginActionErrorText}
+            size="sm"
+            variant="outline"
+            reset={true}
+            onClick={() => void handleSelectedPluginAction()}
+            disabled={!canRunPluginAction || isPluginActionBusy}
+          />
+        ) : null}
+        {isElectron && bundleStatuses.length > 0 ? (
+          <LoadingButton
+            buttonState={bundleActionLoading === 'all' ? 'loading' : 'default'}
+            setButtonState={() => {}}
+            text="Install all prompt / skills"
+            loadingText="Installing..."
+            successText="Installed"
+            errorText="Retry"
+            size="sm"
+            variant="outline"
+            onClick={() => void handleInstallAllBundles()}
+            disabled={
+              bundleActionLoading !== null || bundleStatuses.every(s => s.status === 'installed')
+            }
+          />
+        ) : null}
+      </div>
 
       <div className="grid gap-1">
         <p className="text-sm font-medium">Overlord CLI (ovld)</p>
@@ -796,12 +897,23 @@ export function CliPage({ open }: { open: boolean }) {
             <code className="rounded bg-muted px-1">ovld ticket</code> context
           </li>
           <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">ovld run &lt;agent&gt;</code> launch
-            agent (requires TICKET_ID)
+            <code className="rounded bg-muted px-1 break-all">
+              ovld protocol &lt;subcommand&gt;
+            </code>{' '}
+            attach, connect, load-context, spawn, update, ask, read-context, write-context, deliver,
+            artifact-upload-file
           </li>
           <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">ovld resume &lt;agent&gt;</code>{' '}
+            <code className="rounded bg-muted px-1 break-all">ovld connect &lt;agent&gt;</code>{' '}
+            launch agent on a ticket
+          </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1 break-all">ovld restart &lt;agent&gt;</code>{' '}
             resume an agent session
+          </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1">ovld context</code> print ticket context
+            (requires TICKET_ID)
           </li>
         </ul>
         <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
@@ -811,18 +923,27 @@ export function CliPage({ open }: { open: boolean }) {
             tickets, pick agent
           </li>
           <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">ovld attach &lt;ticketId&gt;</code> —
-            skip search, pick agent
-          </li>
-          <li className="break-words">
             <code className="rounded bg-muted px-1 break-all">
-              ovld attach &lt;ticketId&gt; claude
+              ovld protocol connect --ticket-id &lt;ticketId&gt;
             </code>{' '}
-            — fully non-interactive
+            — connect to an existing ticket without loading full context
           </li>
           <li className="break-words">
             <code className="rounded bg-muted px-1 break-all">
-              ovld tickets create --objective &quot;...&quot; --execution-target agent
+              ovld protocol load-context --ticket-id &lt;ticketId&gt;
+            </code>{' '}
+            — read-only ticket context fetch
+          </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1 break-all">
+              ovld protocol spawn --objective &quot;...&quot; --execution-target agent
+            </code>{' '}
+            — create and connect to a ticket in one call
+          </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1 break-all">
+              ovld protocol artifact-upload-file --session-key &lt;key&gt; --ticket-id &lt;id&gt;
+              --file ./spec.pdf --content-type application/pdf
             </code>
           </li>
         </ul>
@@ -830,177 +951,6 @@ export function CliPage({ open }: { open: boolean }) {
           Run <code className="rounded bg-muted px-1 break-all">ovld &lt;command&gt; --help</code>{' '}
           for more detail.
         </p>
-      </div>
-
-      <div className="grid gap-4">
-        <div className="grid gap-1">
-          <p className="text-sm font-medium">Agent plugins</p>
-          <p className="text-xs text-muted-foreground">
-            Install durable prompt and skill config where supported, plus mid-session ticket
-            commands for agents that can handle{' '}
-            <code className="rounded bg-muted px-1">/connect</code>,{' '}
-            <code className="rounded bg-muted px-1">/load</code>, and{' '}
-            <code className="rounded bg-muted px-1">/spawn</code>.
-          </p>
-        </div>
-        <div className="space-y-2">
-          {AGENT_PLUGIN_GROUPS.map(group => {
-            const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
-            const bundleOption = options.find(
-              (option): option is Extract<AgentPluginInstallOption, { kind: 'bundle' }> =>
-                option.kind === 'bundle'
-            );
-            const bundleStatus = bundleOption
-              ? bundleStatuses.find(status => status.agent === bundleOption.bundleAgent)
-              : null;
-
-            return (
-              <div
-                key={group.key}
-                className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3 md:flex-row md:items-start md:justify-between"
-              >
-                <div className="grid gap-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-medium">{group.label}</p>
-                    {bundleStatus ? bundleStatusBadge(bundleStatus.status) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {options.map(option => (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => setSelectedAgentPluginKey(option.key)}
-                        className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          selectedAgentPluginKey === option.key
-                            ? 'border-foreground bg-foreground text-background'
-                            : 'border-border bg-background text-foreground hover:bg-muted'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedAgentPlugin?.agentKey === group.key
-                      ? selectedAgentPlugin.description
-                      : options.map(option => option.label).join(' • ')}
-                  </p>
-                </div>
-                {bundleStatus ? (
-                  <div className="flex items-center gap-1.5 self-start">
-                    {(bundleStatus.status === 'not_installed' ||
-                      bundleStatus.status === 'stale') && (
-                      <button
-                        type="button"
-                        disabled={bundleActionLoading !== null}
-                        onClick={() => void handleInstallBundle(bundleStatus.agent)}
-                        className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
-                        title={
-                          bundleStatus.status === 'stale'
-                            ? 'Update prompt / skills'
-                            : 'Install prompt / skills'
-                        }
-                      >
-                        <Download className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    )}
-                    {(bundleStatus.status === 'partial' || bundleStatus.status === 'error') && (
-                      <button
-                        type="button"
-                        disabled={bundleActionLoading !== null}
-                        onClick={() => void handleRepairBundle(bundleStatus.agent)}
-                        className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
-                        title="Repair prompt / skills"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    )}
-                    {bundleStatus.status === 'installed' && (
-                      <button
-                        type="button"
-                        disabled={bundleActionLoading !== null}
-                        onClick={() => void handleUninstallBundle(bundleStatus.agent)}
-                        className="rounded p-1.5 hover:bg-muted disabled:opacity-50"
-                        title="Uninstall prompt / skills"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-        {selectedAgentPlugin?.kind === 'slash' ? (
-          (() => {
-            const cfg = SLASH_COMMAND_CONFIGS[selectedAgentPlugin.slashAgent];
-            if (!cfg) return null;
-            return (
-              <div className="rounded-md border bg-muted/30 p-3 text-xs">
-                <p className="mb-1 font-sans text-muted-foreground">{cfg.description}</p>
-                {cfg.supportNote ? (
-                  <p className="mb-2 font-sans text-muted-foreground">{cfg.supportNote}</p>
-                ) : null}
-                <p className="mb-2 break-all font-sans text-muted-foreground">
-                  Files: <code className="rounded bg-muted px-1">{cfg.filePaths.join(', ')}</code>
-                </p>
-                <pre className="mb-3 overflow-x-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-foreground">
-                  {cfg.fileContent}
-                </pre>
-                <div className="flex items-center gap-2">
-                  <p className="shrink-0 font-sans text-muted-foreground">Install command:</p>
-                  <code className="min-w-0 flex-1 break-all rounded bg-muted px-1">
-                    {cfg.installCmd}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => void handleCopySlashInstall(cfg.installCmd)}
-                    className="shrink-0 rounded p-1 hover:bg-muted"
-                    title="Copy install command"
-                  >
-                    {slashCommandCopied ? (
-                      <Check className="h-3.5 w-3.5 text-green-500" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })()
-        ) : selectedAgentPlugin?.kind === 'bundle' ? (
-          <div className="rounded-md border bg-muted/30 p-3 text-xs">
-            <p className="mb-1 font-sans text-muted-foreground">
-              {selectedAgentPlugin.description}
-            </p>
-            {selectedAgentPlugin.supportNote ? (
-              <p className="mb-2 font-sans text-muted-foreground">
-                {selectedAgentPlugin.supportNote}
-              </p>
-            ) : null}
-            <p className="font-sans text-muted-foreground">
-              {bundleStatuses.find(status => status.agent === selectedAgentPlugin.bundleAgent)
-                ?.details ?? 'Prompt and skill bundle details are available in the desktop app.'}
-            </p>
-          </div>
-        ) : null}
-        {isElectron && bundleStatuses.length > 0 ? (
-          <LoadingButton
-            buttonState={bundleActionLoading === 'all' ? 'loading' : 'default'}
-            setButtonState={() => {}}
-            text="Install all prompt / skills"
-            loadingText="Installing..."
-            successText="Installed"
-            errorText="Retry"
-            size="sm"
-            variant="outline"
-            onClick={() => void handleInstallAllBundles()}
-            disabled={
-              bundleActionLoading !== null || bundleStatuses.every(s => s.status === 'installed')
-            }
-          />
-        ) : null}
       </div>
 
       {isElectron && api?.cli ? (

@@ -33,6 +33,7 @@ export const attachSchema = z.object({
   ticketId: ticketIdSchema,
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
+  externalSessionId: z.string().trim().max(2_048).nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({})
 });
 

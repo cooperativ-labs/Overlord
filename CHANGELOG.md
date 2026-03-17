@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.0] - 2026-03-17:11:02
+
+### Added
+- Add the reusable `CliQuickstart` section inside the Ticket Live panel so agents can copy `ovld connect` and `ovld restart` commands for their preferred agent (including native resume snippets when a session ID is available) without leaving the ticket view.
+- Expose a managed Slash Command installer from the CLI settings modal by wiring an `agentSlash` IPC service, status tracking, and action button so Claude, Cursor, and Gemini can add or remove durable `/connect`, `/load`, and `/spawn` helpers with one click alongside the prompt bundle installer.
+
+### Fixed
+- None.
+
+### Changed
+- Rebuild the CLI settings content around the published `ovld` alias: list the new `ovld protocol` and `ovld restart` commands, show exact file paths touched by each plugin, and tie the plugin action button to the revised status badges so the settings guidance now matches the shipped binary and install layout.
+- Install and manage the slash-command files together with the Claude bundle manifest so the button in Settings, the installer service, and the Electron bundle remain in sync about which files are deployed.
+- Move the CLI quickstart into an accordion-backed component and refresh the ticket live commands to rely on `ovld connect`/`ovld restart` plus the native resume helper so human agents always see the most accurate restart instructions.
+
+### Security
+- None.
+
 ## [1.9.0] - 2026-03-17:10:06
 
 ### Added

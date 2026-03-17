@@ -19,8 +19,8 @@ Usage:
   ${primaryCommand} tickets <subcommand>       Create or list tickets
   ${primaryCommand} ticket <subcommand>        Work with a single ticket
   ${primaryCommand} protocol <subcommand>      Post protocol events (attach, update, deliver, …)
-  ${primaryCommand} run <agent>                Launch an agent on a ticket (requires TICKET_ID)
-  ${primaryCommand} resume <agent>             Resume an agent session
+  ${primaryCommand} connect <agent>            Launch an agent on a ticket
+  ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
   ${primaryCommand} setup <agent|all>           Install Overlord agent bundle
   ${primaryCommand} doctor                     Validate installed agent bundles
@@ -100,8 +100,14 @@ export async function runCli({ primaryCommand }) {
     return;
   }
 
-  // Legacy launcher commands
-  if (command === 'run' || command === 'resume' || command === 'context') {
+  // Launcher commands (`run` / `resume` kept as legacy aliases)
+  if (
+    command === 'connect' ||
+    command === 'restart' ||
+    command === 'run' ||
+    command === 'resume' ||
+    command === 'context'
+  ) {
     await runLauncherCommand(command, rest);
     return;
   }

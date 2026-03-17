@@ -55,10 +55,39 @@ const agentIdentifierMap = {
 
 const supportedAgents = ['claude', 'codex', 'cursor', 'gemini'];
 
+function parseLauncherArgs(args) {
+  const positionals = [];
+  const flags = {};
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg.startsWith('--')) {
+      positionals.push(arg);
+      continue;
+    }
+
+    const eqIdx = arg.indexOf('=');
+    if (eqIdx !== -1) {
+      flags[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
+      continue;
+    }
+
+    const key = arg.slice(2);
+    if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+      flags[key] = args[i + 1];
+      i++;
+    } else {
+      flags[key] = true;
+    }
+  }
+
+  return { positionals, flags };
+}
+
 async function runAgent(agent, mode = 'run') {
   if (!agent || !supportedAgents.includes(agent)) {
     console.error(
-      `Usage: ovld run <agent> | ovld resume <agent>  (agent must be one of: ${supportedAgents.join(', ')})`
+      `Usage: ovld connect <agent> [--ticket-id <id>] | ovld restart <agent> [--ticket-id <id>]  (agent must be one of: ${supportedAgents.join(', ')})`
     );
     process.exit(1);
   }
@@ -112,9 +141,9 @@ async function runAgent(agent, mode = 'run') {
     const isResume = mode === 'resume';
     const noSessionHint =
       agent === 'claude'
-        ? `No prior Claude session was found. Start one with \`ovld run claude\` first.`
+        ? `No prior Claude session was found. Start one with \`ovld connect claude --ticket-id <ticket-id>\` first.`
         : agent === 'codex'
-          ? `No prior Codex session was found. Start one with \`ovld run codex\` first.`
+          ? `No prior Codex session was found. Start one with \`ovld connect codex --ticket-id <ticket-id>\` first.`
           : '';
     const message = error instanceof Error ? error.message : String(error);
 
@@ -142,17 +171,25 @@ async function printContext() {
 }
 
 export async function runLauncherCommand(command, args) {
-  if (command === 'run') {
-    await runAgent(args[0]);
+  const normalizedCommand = command === 'connect' ? 'run' : command === 'restart' ? 'resume' : command;
+  const { positionals, flags } = parseLauncherArgs(args);
+  const ticketId = typeof flags['ticket-id'] === 'string' ? flags['ticket-id'].trim() : '';
+
+  if (ticketId) {
+    process.env.TICKET_ID = ticketId;
+  }
+
+  if (normalizedCommand === 'run') {
+    await runAgent(positionals[0]);
     return;
   }
 
-  if (command === 'resume') {
-    await runAgent(args[0], 'resume');
+  if (normalizedCommand === 'resume') {
+    await runAgent(positionals[0], 'resume');
     return;
   }
 
-  if (command === 'context') {
+  if (normalizedCommand === 'context') {
     await printContext();
     return;
   }

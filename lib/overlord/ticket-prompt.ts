@@ -153,12 +153,12 @@ function buildLocalProtocolSection(
       ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
       : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
   const claudeResumeCommand = buildResumeCommandWithFlags(
-    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} ovld resume claude`,
+    `ovld restart claude --ticket-id ${ticketId}`,
     'claude',
     agentConfigs
   );
   const codexResumeCommand = buildResumeCommandWithFlags(
-    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} ovld resume codex`,
+    `ovld restart codex --ticket-id ${ticketId}`,
     'codex',
     agentConfigs
   );

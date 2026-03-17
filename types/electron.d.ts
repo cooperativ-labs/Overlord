@@ -130,6 +130,39 @@ interface ElectronAPI {
     }>;
     uninstall: (agent: 'claude' | 'codex') => Promise<{ ok: boolean; error?: string }>;
   };
+  agentSlash?: {
+    getAllStatuses: () => Promise<
+      Array<{
+        agent: 'claude' | 'cursor' | 'gemini';
+        status: 'installed' | 'partial' | 'not_installed';
+        details: string;
+        managedFiles: string[];
+        existingManagedFiles: string[];
+        missingManagedFiles: string[];
+      }>
+    >;
+    getStatus: (agent: 'claude' | 'cursor' | 'gemini') => Promise<{
+      agent: 'claude' | 'cursor' | 'gemini';
+      status: 'installed' | 'partial' | 'not_installed';
+      details: string;
+      managedFiles: string[];
+      existingManagedFiles: string[];
+      missingManagedFiles: string[];
+    }>;
+    install: (agent: 'claude' | 'cursor' | 'gemini') => Promise<{
+      ok: boolean;
+      agent: 'claude' | 'cursor' | 'gemini';
+      managedFiles: string[];
+      backups: string[];
+      error?: string;
+    }>;
+    uninstall: (agent: 'claude' | 'cursor' | 'gemini') => Promise<{
+      ok: boolean;
+      agent: 'claude' | 'cursor' | 'gemini';
+      removedFiles: string[];
+      error?: string;
+    }>;
+  };
   agentPermissions?: {
     configure: (options?: { projectDirectory?: string }) => Promise<{
       ok: boolean;

@@ -34,14 +34,32 @@ function buildEditorHref(path: string, workspaceRoot: string, editorScheme: stri
   return `${editorScheme}/${fullPath}`;
 }
 
+/**
+ * Build a URL that opens the working-tree diff for a file in the editor.
+ * VS Code / Cursor: vscode://vscode.git/diff?left=git%3A...&right=file%3A...
+ * Falls back to the plain file URL for unsupported editors.
+ */
+function buildDiffHref(path: string, workspaceRoot: string, editorScheme: string): string {
+  const fullPath = workspaceRoot ? `${workspaceRoot.replace(/\/$/, '')}/${path}` : path;
+  const scheme = editorScheme.split('://')[0]; // e.g. "vscode" or "cursor"
+
+  if (scheme === 'vscode' || scheme === 'cursor') {
+    // vscode.git "open change" URL: shows working-tree diff
+    const fileUri = encodeURIComponent(`file://${fullPath}`);
+    return `${scheme}://vscode.git/openChange?path=${fileUri}`;
+  }
+
+  // JetBrains and custom schemes: fall back to plain file open
+  return buildEditorHref(path, workspaceRoot, editorScheme);
+}
+
 type Props = {
   content: string;
   workspaceRoot: string;
   editorScheme: string;
-  projectId?: string;
 };
 
-export function FileChangesArtifact({ content, workspaceRoot, editorScheme, projectId }: Props) {
+export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Props) {
   const files = parseFileChanges(content);
 
   if (!files.length) {
@@ -59,11 +77,7 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme, proj
       {files.map(({ path, note }) => {
         const filename = path.split('/').pop() ?? path;
         const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-        const currentChangesHref = projectId
-          ? `/projects/${projectId}/current-changes?file=${encodeURIComponent(path)}`
-          : undefined;
-        const editorHref = canLink ? buildEditorHref(path, workspaceRoot, editorScheme) : undefined;
-        const href = currentChangesHref ?? editorHref;
+        const href = canLink ? buildDiffHref(path, workspaceRoot, editorScheme) : undefined;
 
         return (
           <li className="text-xs" key={path}>
@@ -71,9 +85,7 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme, proj
               <a
                 className="inline-flex flex-wrap items-baseline gap-1 rounded hover:underline underline-offset-4 text-primary"
                 href={href}
-                title={
-                  currentChangesHref ? `View ${path} in Current Changes` : `Open ${path} in editor`
-                }
+                title={`Open diff for ${path} in editor`}
               >
                 <span className="font-medium">{filename}</span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}

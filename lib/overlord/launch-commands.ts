@@ -29,17 +29,15 @@ export type ResumeCommands = {
  */
 export function buildLaunchCommands({
   ticketId,
-  platformUrl,
-  token
+  platformUrl
 }: BuildLaunchCommandsInput): LaunchCommands {
   const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
-  const envBlock = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
 
   return {
-    claudeCode: `${envBlock} ovld run claude`,
-    codex: `${envBlock} ovld run codex`,
-    cursor: `${envBlock} ovld run cursor`,
-    gemini: `${envBlock} ovld run gemini`,
+    claudeCode: `ovld connect claude --ticket-id ${ticketId}`,
+    codex: `ovld connect codex --ticket-id ${ticketId}`,
+    cursor: `ovld connect cursor --ticket-id ${ticketId}`,
+    gemini: `ovld connect gemini --ticket-id ${ticketId}`,
     contextUrl
   };
 }
@@ -49,18 +47,12 @@ export function buildLaunchCommands({
  * The `overlord resume` subcommand fetches latest ticket context and
  * passes it as the first resumed prompt so new system messages are included.
  */
-export function buildResumeCommands({
-  ticketId,
-  platformUrl,
-  token
-}: BuildLaunchCommandsInput): ResumeCommands {
-  const envBlock = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
-
+export function buildResumeCommands({ ticketId }: BuildLaunchCommandsInput): ResumeCommands {
   return {
-    claudeCode: `${envBlock} ovld resume claude`,
-    codex: `${envBlock} ovld resume codex`,
-    cursor: `${envBlock} ovld resume cursor`,
-    gemini: `${envBlock} ovld resume gemini`
+    claudeCode: `ovld restart claude --ticket-id ${ticketId}`,
+    codex: `ovld restart codex --ticket-id ${ticketId}`,
+    cursor: `ovld restart cursor --ticket-id ${ticketId}`,
+    gemini: `ovld restart gemini --ticket-id ${ticketId}`
   };
 }
 

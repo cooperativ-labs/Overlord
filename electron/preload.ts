@@ -63,6 +63,15 @@ const electronAPI = {
     repair: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:repair', agent),
     uninstall: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:uninstall', agent)
   },
+  agentSlash: {
+    getAllStatuses: () => ipcRenderer.invoke('agent-slash:get-all-statuses'),
+    getStatus: (agent: 'claude' | 'cursor' | 'gemini') =>
+      ipcRenderer.invoke('agent-slash:get-status', agent),
+    install: (agent: 'claude' | 'cursor' | 'gemini') =>
+      ipcRenderer.invoke('agent-slash:install', agent),
+    uninstall: (agent: 'claude' | 'cursor' | 'gemini') =>
+      ipcRenderer.invoke('agent-slash:uninstall', agent)
+  },
   agentPermissions: {
     configure: (options?: { projectDirectory?: string }) =>
       ipcRenderer.invoke('agent-permissions:configure', options)
