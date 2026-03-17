@@ -7,7 +7,13 @@ import { resolveSession } from '../session.ts';
 
 export async function handleAsk(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const { sessionKey, ticketId: rawTicketId, question, phase, payload = {} } = args;
-  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
+  const resolved = await resolveSession(
+    supabase,
+    sessionKey,
+    rawTicketId,
+    ctx.organizationId,
+    ctx.mcpSessionId
+  );
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
 

@@ -103,6 +103,11 @@ export const TOOLS = [
           description:
             'Optional agent dashboard URL for this session. Pass null to clear a previously stored link.'
         },
+        externalSessionId: {
+          type: ['string', 'null'],
+          description:
+            'Optional native session id returned by the agent runtime (for example Claude/Codex resume ids). Pass null to clear.'
+        },
         phase: {
           type: 'string',
           enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'],

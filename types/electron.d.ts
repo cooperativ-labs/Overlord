@@ -130,6 +130,19 @@ interface ElectronAPI {
     }>;
     uninstall: (agent: 'claude' | 'codex') => Promise<{ ok: boolean; error?: string }>;
   };
+  agentPermissions?: {
+    configure: (options?: { projectDirectory?: string }) => Promise<{
+      ok: boolean;
+      results: Array<{
+        agent: 'claude' | 'codex' | 'cursor' | 'gemini';
+        ok: boolean;
+        filePath: string;
+        details: string;
+        backups: string[];
+        error?: string;
+      }>;
+    }>;
+  };
   appUpdate: {
     getStatus: () => Promise<AppUpdateStatus>;
     checkForUpdates: () => Promise<boolean>;

@@ -173,7 +173,7 @@ Recommended installed assets:
   - post updates during work
   - deliver last
   - publish `user_follow_up` immediately when the human replies
-  - use `ovld` or `npx overlord` commands for local protocol communication
+  - use `ovld` or `overlord` commands for local protocol communication
 - `~/.claude/skills/overlord-ticket-ops/SKILL.md`
   Optional helper for `/connect`, `/load`, `/spawn` equivalents if those should become personal rather than project-local
 - merged hook entry in `~/.claude/settings.json`

@@ -22,10 +22,10 @@ Treat this table as the default architecture unless the task explicitly changes 
 
 | Surface | Transport | Auth | Notes |
 |---|---|---|---|
-| Electron app | Local terminal + local `ovld`/`npx overlord` CLI | `AGENT_TOKEN` | Overlord desktop pre-fills `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID`. |
+| Electron app | Local terminal + local `ovld` CLI | `AGENT_TOKEN` | Overlord desktop pre-fills `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID`. |
 | Web-based agent interfaces | MCP at `/api/mcp` | OAuth 2.1 / OIDC | Prefer direct OAuth with the MCP protected-resource flow. No agent-token exchange by default. |
 | Cloud agents configured by env vars | MCP at `/api/mcp` | `AGENT_TOKEN` | These agents usually cannot complete an interactive browser login, so they use env-provided credentials. |
-| Human-facing CLI (`ovld`, `npx overlord`) | Local CLI commands | OAuth login for the human, then stored credentials | CLI login uses Supabase OAuth PKCE and may exchange the OAuth session for an agent token for protocol/MCP access. |
+| Human-facing CLI (`ovld`) | Local CLI commands | OAuth login for the human, then stored credentials | CLI login uses Supabase OAuth PKCE and may exchange the OAuth session for an agent token for protocol/MCP access. |
 
 ## Non-negotiable rules
 

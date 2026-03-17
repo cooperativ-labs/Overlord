@@ -126,7 +126,7 @@ ${launchNote}
 Use your installed Overlord local workflow instructions. Start by attaching to this ticket.
 
 \`\`\`bash
-npx overlord protocol attach --ticket-id ${ticketId}
+ovld protocol attach --ticket-id ${ticketId}
 \`\`\`
 `;
 }
@@ -153,12 +153,12 @@ function buildLocalProtocolSection(
       ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
       : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
   const claudeResumeCommand = buildResumeCommandWithFlags(
-    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume claude`,
+    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} ovld resume claude`,
     'claude',
     agentConfigs
   );
   const codexResumeCommand = buildResumeCommandWithFlags(
-    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} npx overlord resume codex`,
+    `OVERLORD_URL=${platformUrl} AGENT_TOKEN=<agent-token> TICKET_ID=${ticketId} ovld resume codex`,
     'codex',
     agentConfigs
   );
@@ -181,7 +181,7 @@ ${launchNote}
 ### 1 — Attach (always first)
 
 \`\`\`bash
-npx overlord protocol attach --ticket-id ${ticketId}
+ovld protocol attach --ticket-id ${ticketId}
 \`\`\`
 
 Prints response JSON to stdout. Store \`session.sessionKey\` — required for every subsequent call. Response also includes \`ticket\`, \`history\` (deliver events), \`artifacts\`, and \`sharedState\`.
@@ -190,10 +190,10 @@ Prints response JSON to stdout. Store \`session.sessionKey\` — required for ev
 ### 2 — Update (after each meaningful step)
 
 \`\`\`bash
-npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} --summary "What you did and why." --phase execute
+ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} --summary "What you did and why." --phase execute
 \`\`\`
 
-Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI. Use \`--external-url https://...\` when you want Overlord to store a deep link back to the live agent session.
+Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI. Use \`--external-url https://...\` to store a deep link back to the live agent session. Use \`--external-session-id <id>\` when the agent runtime exposes a native resume/session id.
 
 ${eventTypeHelp}
 
@@ -202,7 +202,7 @@ ${eventTypeHelp}
 Record \`changeRationales\` for meaningful behavioral changes during long-running work. Write the JSON array to a temp file and pass it:
 
 \`\`\`bash
-npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
+ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
   --summary "Added retry logic to API client." --phase execute \\
   --change-rationales-file /tmp/rationales.json
 \`\`\`
@@ -210,7 +210,7 @@ npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} 
 Or inline for a single rationale:
 
 \`\`\`bash
-npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
+ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
   --summary "Added retry logic to API client." --phase execute \\
   --change-rationales-json '[{"label":"Add exponential backoff","file_path":"lib/api-client.ts","summary":"Added retry with backoff.","why":"Transient failures caused data loss.","impact":"Requests retry up to 3 times before failing.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
@@ -218,7 +218,7 @@ npx overlord protocol update --session-key <sessionKey> --ticket-id ${ticketId} 
 ### 4 — Ask (blocking question — stop working after calling)
 
 \`\`\`bash
-npx overlord protocol ask --session-key <sessionKey> --ticket-id ${ticketId} --question "Specific question for the PM."
+ovld protocol ask --session-key <sessionKey> --ticket-id ${ticketId} --question "Specific question for the PM."
 \`\`\`
 
 Ticket moves to \`review\` until a human responds. Do not guess.
@@ -226,8 +226,8 @@ Ticket moves to \`review\` until a human responds. Do not guess.
 ### 5 — Context (optional, persist across sessions)
 
 \`\`\`bash
-npx overlord protocol read-context --session-key <sessionKey> --ticket-id ${ticketId}
-npx overlord protocol write-context --session-key <sessionKey> --ticket-id ${ticketId} --key "descriptive-key" --value '"json-value"'
+ovld protocol read-context --session-key <sessionKey> --ticket-id ${ticketId}
+ovld protocol write-context --session-key <sessionKey> --ticket-id ${ticketId} --key "descriptive-key" --value '"json-value"'
 \`\`\`
 
 ### 6 — Human-only blockers
@@ -237,14 +237,14 @@ If you are blocked by human-only work, call \`ask\` with a precise blocker descr
 ### 7 — Storage artifacts (optional upload/download)
 
 \`\`\`bash
-npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-id ${ticketId} --file ./spec.pdf --content-type application/pdf
-npx overlord protocol artifact-download-url --session-key <sessionKey> --ticket-id ${ticketId} --artifact-id <artifact-id>
+ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id ${ticketId} --file ./spec.pdf --content-type application/pdf
+ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id ${ticketId} --artifact-id <artifact-id>
 \`\`\`
 
 ### 8 — Deliver (always last)
 
 \`\`\`bash
-npx overlord protocol deliver --session-key <sessionKey> \\
+ovld protocol deliver --session-key <sessionKey> \\
   --ticket-id ${ticketId} \\
   --summary "Narrative: what you did, next steps." \\
   --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."},{"type":"next_steps","label":"Next steps","content":"..."}]' \\

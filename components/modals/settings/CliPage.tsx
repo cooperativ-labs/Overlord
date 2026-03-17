@@ -104,7 +104,7 @@ function buildInstallCommand(files: SlashCommandFile[]): string {
 
 const CLAUDE_FILES: SlashCommandFile[] = [
   {
-    path: '.claude/commands/connect.md',
+    path: '~/.claude/commands/connect.md',
     content: `---
 description: Connect this session to another Overlord ticket by ticket ID
 argument-hint: <ticket-id>
@@ -117,7 +117,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`npx overlord protocol connect --ticket-id <ticketId>\`
+\`ovld protocol connect --ticket-id <ticketId>\`
 
 Rules:
 - Use \`connect\`, not \`attach\`.
@@ -125,7 +125,7 @@ Rules:
 - After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
   },
   {
-    path: '.claude/commands/load.md',
+    path: '~/.claude/commands/load.md',
     content: `---
 description: Load Overlord ticket context without creating a new session
 argument-hint: <ticket-id>
@@ -138,7 +138,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`npx overlord protocol load-context --ticket-id <ticketId>\`
+\`ovld protocol load-context --ticket-id <ticketId>\`
 
 Rules:
 - Use \`load-context\`, not \`attach\`.
@@ -146,7 +146,7 @@ Rules:
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.`
   },
   {
-    path: '.claude/commands/spawn.md',
+    path: '~/.claude/commands/spawn.md',
     content: `---
 description: Create a new Overlord ticket from the current conversation
 argument-hint: <objective or raw flags>
@@ -156,9 +156,9 @@ disable-model-invocation: true
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`npx overlord protocol spawn\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
-\`npx overlord protocol spawn --objective "<objective>"\`
+\`ovld protocol spawn --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 
@@ -175,7 +175,7 @@ The text after \`/connect\` is the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`npx overlord protocol connect --ticket-id <ticketId>\`
+\`ovld protocol connect --ticket-id <ticketId>\`
 
 Rules:
 - Use \`connect\`, not \`attach\`.
@@ -190,7 +190,7 @@ The text after \`/load\` is the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`npx overlord protocol load-context --ticket-id <ticketId>\`
+\`ovld protocol load-context --ticket-id <ticketId>\`
 
 Rules:
 - Use \`load-context\`, not \`attach\`.
@@ -204,10 +204,10 @@ Rules:
 The text after \`/spawn\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
 
 If raw flags are present, run:
-\`npx overlord protocol spawn <raw arguments>\`
+\`ovld protocol spawn <raw arguments>\`
 
 Otherwise, run:
-\`npx overlord protocol spawn --objective "<objective>"\`
+\`ovld protocol spawn --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 
@@ -217,7 +217,7 @@ After the command succeeds, report the new \`TICKET_ID\` and \`SESSION_KEY\`.`
 
 const GEMINI_FILES: SlashCommandFile[] = [
   {
-    path: '.gemini/commands/connect.toml',
+    path: '~/.gemini/commands/connect.toml',
     content:
       `description = "Connect this session to another Overlord ticket by ticket ID."
 prompt = """
@@ -230,7 +230,7 @@ If no ticket ID was provided, ask the user for one and stop.
 
 Run:
 ` +
-      '`npx overlord protocol connect --ticket-id <ticketId>`' +
+      '`ovld protocol connect --ticket-id <ticketId>`' +
       `
 
 Rules:
@@ -246,7 +246,7 @@ Rules:
 """`
   },
   {
-    path: '.gemini/commands/load.toml',
+    path: '~/.gemini/commands/load.toml',
     content:
       `description = "Load Overlord ticket context without creating a new session."
 prompt = """
@@ -259,7 +259,7 @@ If no ticket ID was provided, ask the user for one and stop.
 
 Run:
 ` +
-      '`npx overlord protocol load-context --ticket-id <ticketId>`' +
+      '`ovld protocol load-context --ticket-id <ticketId>`' +
       `
 
 Rules:
@@ -273,7 +273,7 @@ Rules:
 """`
   },
   {
-    path: '.gemini/commands/spawn.toml',
+    path: '~/.gemini/commands/spawn.toml',
     content:
       `description = "Create a new Overlord ticket from the current conversation."
 prompt = """
@@ -291,13 +291,13 @@ If it already contains flags such as ` +
       `, or ` +
       '`--execution-target`' +
       `, pass those flags through after ` +
-      '`npx overlord protocol spawn`' +
+      '`ovld protocol spawn`' +
       `.
 Otherwise, treat ` +
       '`{{args}}`' +
       ` as the objective text and run:
 ` +
-      '`npx overlord protocol spawn --objective "<objective>"`' +
+      '`ovld protocol spawn --objective "<objective>"`' +
       `
 
 If no objective was provided, ask the user for one and stop.
@@ -311,46 +311,14 @@ After the command succeeds, report the new ` +
   }
 ];
 
-const CODEX_APPENDIX = `## Overlord mid-session ticket commands
-
-When the user types a slash-style command for Overlord work, interpret it as follows:
-
-- \`/connect <ticket-id>\`:
-  Run \`npx overlord protocol connect --ticket-id <ticket-id>\`.
-  Use this instead of \`attach\` when the user wants to start updating another ticket without loading its full context.
-  After success, report the returned \`SESSION_KEY\`.
-
-- \`/load <ticket-id>\`:
-  Run \`npx overlord protocol load-context --ticket-id <ticket-id>\`.
-  Do not create a session.
-  Summarize the returned ticket details, history, artifacts, and shared context.
-
-- \`/spawn <objective>\`:
-  If the text after \`/spawn\` already contains raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, run \`npx overlord protocol spawn <raw arguments>\`.
-  Otherwise run \`npx overlord protocol spawn --objective "<objective>"\`.
-  After success, report the new \`TICKET_ID\` and \`SESSION_KEY\`.
-
-If a required argument is missing, ask the user for it before running any command.`;
-
 const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
   claude: {
     label: 'Claude Code',
-    description:
-      'Installs native project slash commands for mid-session Overlord ticket operations.',
-    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `.claude/commands/`.',
+    description: 'Installs global slash commands for mid-session Overlord ticket operations.',
+    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `~/.claude/commands/`.',
     filePaths: CLAUDE_FILES.map(file => file.path),
     fileContent: CLAUDE_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
     installCmd: buildInstallCommand(CLAUDE_FILES)
-  },
-  codex: {
-    label: 'Codex CLI',
-    description:
-      'Adds slash-style Overlord command instructions to AGENTS.md so Codex can interpret `/connect`, `/load`, and `/spawn` during a session.',
-    supportNote:
-      'Uses AGENTS.md guidance instead of native project command files, so Codex understands the slash forms even when Overlord was not the original launcher.',
-    filePaths: ['AGENTS.md'],
-    fileContent: CODEX_APPENDIX,
-    installCmd: `cat >> AGENTS.md << 'EOF'\n\n${CODEX_APPENDIX}\nEOF`
   },
   cursor: {
     label: 'Cursor',
@@ -363,10 +331,9 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
   },
   gemini: {
     label: 'Gemini CLI',
-    description:
-      'Installs native project slash commands for mid-session Overlord ticket operations.',
+    description: 'Installs global slash commands for mid-session Overlord ticket operations.',
     supportNote:
-      'Creates `/connect`, `/load`, and `/spawn` in `.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
+      'Creates `/connect`, `/load`, and `/spawn` in `~/.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
     filePaths: GEMINI_FILES.map(file => file.path),
     fileContent: GEMINI_FILES.map(file => `# ${file.path}\n\n${file.content}`).join('\n\n'),
     installCmd: buildInstallCommand(GEMINI_FILES)
@@ -402,15 +369,6 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     kind: 'bundle',
     bundleAgent: 'codex',
     supportNote: 'Managed by the desktop app in your local ~/.codex configuration.'
-  },
-  {
-    key: 'codex:slash',
-    agentKey: 'codex',
-    label: '/connect /load /spawn',
-    description: SLASH_COMMAND_CONFIGS.codex.description,
-    kind: 'slash',
-    slashAgent: 'codex',
-    supportNote: SLASH_COMMAND_CONFIGS.codex.supportNote
   },
   {
     key: 'cursor:slash',
@@ -547,7 +505,7 @@ export function CliPage({ open }: { open: boolean }) {
 
   async function handleCopyCommand() {
     const flags = (agentFlags[selectedLocalAgent] ?? []).join(' ');
-    const command = `npx overlord resume ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
+    const command = `ovld resume ${selectedLocalAgent}${flags ? ` ${flags}` : ''}`;
     await navigator.clipboard.writeText(command);
     setCommandCopied(true);
     setTimeout(() => setCommandCopied(false), 2000);
@@ -801,7 +759,7 @@ export function CliPage({ open }: { open: boolean }) {
                   </button>
                 </div>
                 <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                  {`npx overlord resume ${selectedLocalAgent}${
+                  {`ovld resume ${selectedLocalAgent}${
                     (agentFlags[selectedLocalAgent] ?? []).length > 0
                       ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
                       : ''
@@ -1099,7 +1057,7 @@ export function CliPage({ open }: { open: boolean }) {
               desktop app
             </Link>{' '}
             to install the CLI with one click. Or run{' '}
-            <code className="rounded bg-muted px-1">npx overlord</code> from the project directory.
+            <code className="rounded bg-muted px-1">ovld</code> from the project directory.
           </p>
         </div>
       )}

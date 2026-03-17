@@ -7,6 +7,12 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { useTicketLive } from '@/components/features/TicketLiveProvider';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -22,6 +28,7 @@ import {
   getEventDisplaySummary,
   isUserFollowUpEvent
 } from '@/lib/overlord/conversation';
+import { buildNativeResumeCommand } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
@@ -167,7 +174,7 @@ function CommandRow({ label, command }: { label: string; command: string }) {
         {label}
       </p>
       <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded bg-muted/60 px-2 py-1.5 text-xs">
+        <code className="min-w-0 flex-1 whitespace-pre-wrap break-words rounded bg-muted/60 px-2 py-1.5 text-xs">
           {command}
         </code>
         <CommandCopyButton value={command} />
@@ -301,31 +308,38 @@ export function TicketPanelLive({
 
   const connectCommands = useMemo<QuickstartCommands>(
     () => ({
-      claude: _claudeCommand ?? 'npx overlord run claude',
-      codex: _codexCommand ?? 'npx overlord run codex',
-      cursor: _cursorCommand ?? 'npx overlord run cursor',
-      gemini: _geminiCommand ?? 'npx overlord run gemini'
+      claude: _claudeCommand ?? 'ovld run claude',
+      codex: _codexCommand ?? 'ovld run codex',
+      cursor: _cursorCommand ?? 'ovld run cursor',
+      gemini: _geminiCommand ?? 'ovld run gemini'
     }),
     [_claudeCommand, _codexCommand, _cursorCommand, _geminiCommand]
   );
 
   const overlordResumeCommands = useMemo<QuickstartCommands>(
     () => ({
-      claude: _claudeResumeCommand ?? 'npx overlord resume claude',
-      codex: _codexResumeCommand ?? 'npx overlord resume codex',
-      cursor: _cursorResumeCommand ?? 'npx overlord resume cursor',
-      gemini: _geminiResumeCommand ?? 'npx overlord resume gemini'
+      claude: _claudeResumeCommand ?? 'ovld resume claude',
+      codex: _codexResumeCommand ?? 'ovld resume codex',
+      cursor: _cursorResumeCommand ?? 'ovld resume cursor',
+      gemini: _geminiResumeCommand ?? 'ovld resume gemini'
     }),
     [_claudeResumeCommand, _codexResumeCommand, _cursorResumeCommand, _geminiResumeCommand]
   );
 
-  const nativeResumeCommands: Partial<QuickstartCommands> = useMemo(
-    () => ({
-      claude: 'claude --resume <claude-session-id>',
-      codex: 'codex resume <codex-session-id>'
-    }),
-    []
-  );
+  const nativeResumeCommands: Partial<QuickstartCommands> = useMemo(() => {
+    const sessionId = session?.external_session_id ?? null;
+    const claudeResume = buildNativeResumeCommand('claude', sessionId);
+    const codexResume = buildNativeResumeCommand('codex', sessionId);
+    const cursorResume = buildNativeResumeCommand('cursor', sessionId);
+    const geminiResume = buildNativeResumeCommand('gemini', sessionId);
+
+    return {
+      claude: claudeResume ?? 'claude --resume <claude-session-id>',
+      codex: codexResume ?? 'codex resume <codex-session-id>',
+      ...(cursorResume ? { cursor: cursorResume } : {}),
+      ...(geminiResume ? { gemini: geminiResume } : {})
+    };
+  }, [session?.external_session_id]);
 
   function handleForceDisconnect() {
     if (!session) return;
@@ -354,40 +368,53 @@ export function TicketPanelLive({
 
       {/* <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} /> */}
 
-      <section className="mb-6 rounded-lg border bg-muted/20 p-3">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          CLI Quickstart
-        </h2>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {LAUNCH_AGENT_VALUES.map(agentValue => {
-            const agent = getAgentTypeByValue(agentValue);
-            const isSelected = selectedAgent === agentValue;
-            return (
-              <Button
-                key={agent.value}
-                className="h-7 px-2 text-xs"
-                size="sm"
-                variant={isSelected ? 'default' : 'outline'}
-                onClick={() => setSelectedAgent(agentValue)}
-              >
-                {agent.label}
-              </Button>
-            );
-          })}
-        </div>
-        <div className="grid gap-2.5">
-          <CommandRow label="Connect to this ticket" command={connectCommands[selectedAgent]} />
-          <CommandRow
-            label="Restart session"
-            command={nativeResumeCommands[selectedAgent] ?? overlordResumeCommands[selectedAgent]}
-          />
-          {nativeResumeCommands[selectedAgent] ? (
-            <CommandRow
-              label="Restart session (Overlord wrapper)"
-              command={overlordResumeCommands[selectedAgent]}
-            />
-          ) : null}
-        </div>
+      <section className="mb-6">
+        <Accordion type="single" collapsible>
+          <AccordionItem value="cli-quickstart">
+            <AccordionTrigger className="text-xs font-semibold uppercase tracking-widest text-muted-foreground py-3 hover:no-underline">
+              CLI Quickstart
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {LAUNCH_AGENT_VALUES.map(agentValue => {
+                    const agent = getAgentTypeByValue(agentValue);
+                    const isSelected = selectedAgent === agentValue;
+                    return (
+                      <Button
+                        key={agent.value}
+                        className="h-7 px-2 text-xs"
+                        size="sm"
+                        variant={isSelected ? 'default' : 'outline'}
+                        onClick={() => setSelectedAgent(agentValue)}
+                      >
+                        {agent.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <div className="grid gap-2.5">
+                  <CommandRow
+                    label="Connect to this ticket"
+                    command={connectCommands[selectedAgent]}
+                  />
+                  <CommandRow
+                    label="Restart session"
+                    command={
+                      nativeResumeCommands[selectedAgent] ?? overlordResumeCommands[selectedAgent]
+                    }
+                  />
+                  {nativeResumeCommands[selectedAgent] ? (
+                    <CommandRow
+                      label="Restart session (Overlord wrapper)"
+                      command={overlordResumeCommands[selectedAgent]}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </section>
 
       <section className="mb-6">

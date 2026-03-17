@@ -33,13 +33,13 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 1. **Attach first** — If there is a TICKET_ID, always call attach before doing any work:
    \`\`\`bash
-   npx overlord protocol attach --ticket-id $TICKET_ID
+   ovld protocol attach --ticket-id $TICKET_ID
    \`\`\`
    Store \`session.sessionKey\` from the response — it is required for all subsequent calls.
 
 2. **Update during work** — Post at least one progress update before delivering:
    \`\`\`bash
-   npx overlord protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
+   ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
    \`\`\`
    Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`.
    Use \`execute\` while working.
@@ -51,12 +51,12 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 3. **Ask when blocked** — Stop working after calling:
    \`\`\`bash
-   npx overlord protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
+   ovld protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
    \`\`\`
 
 4. **Deliver last** — Always deliver when done:
    \`\`\`bash
-   npx overlord protocol deliver --session-key <sessionKey> \\
+   ovld protocol deliver --session-key <sessionKey> \\
      --ticket-id $TICKET_ID \\
      --summary "Narrative: what you did, next steps." \\
      --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\
@@ -68,7 +68,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
 
 \`\`\`bash
-npx overlord protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
+ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
   --summary "Added retry logic." --phase execute \\
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
@@ -78,9 +78,9 @@ Record only meaningful behavioral changes — skip formatting-only noise. Prefer
 ## Context & Artifacts
 
 \`\`\`bash
-npx overlord protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
-npx overlord protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
+ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
+ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
 \`\`\`
 
 ## Rules
@@ -108,13 +108,13 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 1. **Attach first** — If there is a TICKET_ID, always call attach before doing any work:
    \`\`\`bash
-   npx overlord protocol attach --ticket-id $TICKET_ID
+   ovld protocol attach --ticket-id $TICKET_ID
    \`\`\`
    Store \`session.sessionKey\` from the response — it is required for all subsequent calls.
 
 2. **Update during work** — Post at least one progress update before delivering:
    \`\`\`bash
-   npx overlord protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
+   ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
    \`\`\`
    Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`.
    Use \`execute\` while working.
@@ -123,12 +123,12 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 3. **Ask when blocked** — Stop working after calling:
    \`\`\`bash
-   npx overlord protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
+   ovld protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
    \`\`\`
 
 4. **Deliver last** — Always deliver when done:
    \`\`\`bash
-   npx overlord protocol deliver --session-key <sessionKey> \\
+   ovld protocol deliver --session-key <sessionKey> \\
      --ticket-id $TICKET_ID \\
      --summary "Narrative: what you did, next steps." \\
      --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\
@@ -140,7 +140,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes.
 
 \`\`\`bash
-npx overlord protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
+ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
   --summary "Added retry logic." --phase execute \\
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
@@ -148,9 +148,9 @@ npx overlord protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \
 ## Context & Artifacts
 
 \`\`\`bash
-npx overlord protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
-npx overlord protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-npx overlord protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
+ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
+ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
 \`\`\`
 
 ## Rules

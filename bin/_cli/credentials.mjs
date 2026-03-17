@@ -204,12 +204,14 @@ export function buildAuthHeaders(token, localSecret) {
  */
 export function resolveAuth() {
   const creds = loadCredentials();
-  const connectorUrlFromEnv = normalizeAgentToken(process.env.OVERLORD_CONNECTOR_URL);
-  const overlordUrlFromEnv = process.env.OVERLORD_URL;
-  const overlordUrlFromCreds = creds?.platform_url;
+  const connectorUrlFromEnv = normalizePlatformUrl(process.env.OVERLORD_CONNECTOR_URL);
+  const overlordUrlFromEnv = normalizePlatformUrl(process.env.OVERLORD_URL);
+  const overlordUrlFromCreds = normalizePlatformUrl(creds?.platform_url);
 
   const runtimeTarget =
-    connectorUrlFromEnv || isLocalhostUrl(overlordUrlFromEnv ?? '') ? (connectorUrlFromEnv || overlordUrlFromEnv) : null;
+    connectorUrlFromEnv || isLocalhostUrl(overlordUrlFromEnv)
+      ? (connectorUrlFromEnv || overlordUrlFromEnv)
+      : null;
   const targetedRuntime = loadRuntime(runtimeTarget ?? null);
   const fallbackRuntime = targetedRuntime ?? loadRuntime(null);
   const runtime =
@@ -249,4 +251,17 @@ export function resolveAuth() {
 function normalizeAgentToken(value) {
   if (typeof value !== 'string') return '';
   return value.trim();
+}
+
+function normalizePlatformUrl(value) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    if (!isSupportedPlatformUrl(parsed.toString())) return undefined;
+    return parsed.origin;
+  } catch {
+    return undefined;
+  }
 }

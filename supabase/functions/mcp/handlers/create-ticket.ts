@@ -17,7 +17,13 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     priority = 'medium'
   } = args;
   const { organizationId, userId } = ctx;
-  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, organizationId);
+  const resolved = await resolveSession(
+    supabase,
+    sessionKey,
+    rawTicketId,
+    organizationId,
+    ctx.mcpSessionId
+  );
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
 

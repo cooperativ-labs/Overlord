@@ -2,12 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0] - 2026-03-17:10:06
+
+### Added
+- Persist the native MCP `external_session_id` across the stack (database migration, Supabase functions, update/deliver routes, and the MCP proxy header) and add the `--external-session-id` flag so agents can store the native session identifier and show precise `ovld resume`/native restart commands.
+- Introduce the Configure Agent Permissions onboarding step plus the Electron `agentPermissions` service/IPC so Claude, Codex, Cursor, and Gemini can install persistent allow rules for `ovld protocol` and `curl -sS -X POST` without repeated prompts.
+
+### Fixed
+- None.
+
+### Changed
+- Switch every user-facing instruction (ticket prompts, onboarding steps, CLI guides, AGENTS templates, and slash-command installers) to mention the `ovld` CLI alias and the new home-directory-based command files so the docs match the published binary and install locations.
+- Rework the Ticket Live CLI quickstart to live inside an accordion, default to `ovld` commands, and leverage the new native resume helper plus `mcp-session-id` so the panel shows the correct restart command for the current agent session.
+
+### Security
+- None.
+
 ## [1.8.0] - 2026-03-16:16:01
 
 ### Added
 - Replace the old Ask button with a multi-agent Discuss button so tickets can launch the ask flow with the preferred agent, showing agent-specific loading states in Electron and copying the right prompt when running in the browser.
 - Add a CLI Quickstart section inside the Ticket Live panel that lists per-agent connect and restart commands (including native resume snippets when available) with easy copy buttons so human agents can reconnect or resume a session without leaving the ticket UI.
-- Make agent less priggish.
 
 ### Fixed
 - None.

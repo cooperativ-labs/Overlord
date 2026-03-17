@@ -238,6 +238,14 @@ async function protocolUpdate(args) {
     sessionKey,
     ticketId,
     summary,
+    ...(flags['external-session-id']
+      ? {
+          externalSessionId:
+            String(flags['external-session-id']).trim().toLowerCase() === 'null'
+              ? null
+              : String(flags['external-session-id'])
+        }
+      : {}),
     ...(flags['external-url']
       ? {
           externalUrl:
@@ -720,6 +728,7 @@ Change rationale flags (update & deliver):
   --change-rationales-file <path>  Path to a JSON file containing change rationales.
 
 Update-specific flags:
+  --external-session-id <id>  Store or clear ('null') the agent's native session id for resume.
   --external-url <url>   Store or refresh a deep link to the current agent session.
 
 Deliver-specific flags:

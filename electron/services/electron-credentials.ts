@@ -71,8 +71,8 @@ export function saveElectronCredentials(credentials: ElectronCredentials): void 
   fs.renameSync(tempFile, CREDENTIALS_FILE);
   fs.chmodSync(CREDENTIALS_FILE, FILE_MODE);
 
-  // Also write plaintext credentials for the CLI (`npx overlord protocol ...`)
-  // so it can pick up the same token without a separate `npx overlord login`.
+  // Also write plaintext credentials for the CLI (`ovld protocol ...`)
+  // so it can pick up the same token without a separate `ovld login`.
   const cliPayload = JSON.stringify(
     { access_token: credentials.agent_token, platform_url: credentials.platform_url },
     null,

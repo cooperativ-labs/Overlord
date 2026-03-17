@@ -35,6 +35,7 @@ export type Database = {
           connection_method: Database['public']['Enums']['connection_method'];
           created_at: string;
           detached_at: string | null;
+          external_session_id: string | null;
           external_url: string | null;
           heartbeat_at: string;
           id: string;
@@ -50,6 +51,7 @@ export type Database = {
           connection_method?: Database['public']['Enums']['connection_method'];
           created_at?: string;
           detached_at?: string | null;
+          external_session_id?: string | null;
           external_url?: string | null;
           heartbeat_at?: string;
           id?: string;
@@ -65,6 +67,7 @@ export type Database = {
           connection_method?: Database['public']['Enums']['connection_method'];
           created_at?: string;
           detached_at?: string | null;
+          external_session_id?: string | null;
           external_url?: string | null;
           heartbeat_at?: string;
           id?: string;

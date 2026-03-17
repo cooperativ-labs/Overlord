@@ -92,7 +92,7 @@ export default async function RootLayout({
       // Existing user — check tutorial progress
       const progress = await getOnboardingState();
       onboardingState = progress;
-      const hasCompletedTutorial = progress.onboardingCompletedStep >= 4;
+      const hasCompletedTutorial = progress.onboardingCompletedStep >= 5;
       const hasSkipped = progress.onboardingSkipped;
       if (!hasCompletedTutorial && !hasSkipped) {
         tutorialAutoOpen = true;

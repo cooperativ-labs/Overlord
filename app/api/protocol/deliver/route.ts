@@ -86,12 +86,16 @@ export async function POST(request: Request) {
       ticketId,
       token: tokenValue
     });
-    const restartCommand = selectRestartSessionCommand(resolved.session.agent_identifier, {
-      claudeCode,
-      codex,
-      cursor,
-      gemini
-    });
+    const restartCommand = selectRestartSessionCommand(
+      resolved.session.agent_identifier,
+      {
+        claudeCode,
+        codex,
+        cursor,
+        gemini
+      },
+      resolved.session.external_session_id
+    );
     const hasRestartArtifact = artifacts.some(
       artifact => artifact.label.trim().toLowerCase() === 'restart session command'
     );

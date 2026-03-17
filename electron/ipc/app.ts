@@ -9,6 +9,7 @@ import {
   repairAgentBundle,
   uninstallAgentBundle
 } from '../services/agent-bundle';
+import { configureAgentPermissions } from '../services/agent-permissions';
 import { AppUpdaterService } from '../services/app-updater';
 import { type CliInstallResult, getCliInstallStatus, installCli } from '../services/cli-installer';
 import { store } from '../services/settings-store';
@@ -99,4 +100,12 @@ export function registerAppIpc({
   ipcMain.handle('agent-bundle:uninstall', (_event, agent: AgentBundleAgent) => {
     return uninstallAgentBundle(agent);
   });
+
+  // --- Agent Permission Setup IPC ---
+  ipcMain.handle(
+    'agent-permissions:configure',
+    (_event, options?: { projectDirectory?: string }) => {
+      return configureAgentPermissions(options ?? {});
+    }
+  );
 }

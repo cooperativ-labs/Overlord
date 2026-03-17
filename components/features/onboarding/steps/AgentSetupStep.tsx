@@ -28,28 +28,28 @@ const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
   claude: {
     installCommand: 'npm install -g @anthropic-ai/claude-code',
     installLabel: 'Install Claude Code CLI',
-    overlordSetupCommand: 'npx overlord setup claude',
+    overlordSetupCommand: 'ovld setup claude',
     overlordSetupDescription:
       'Registers Overlord as an MCP server in Claude Code so it can update ticket status and link file changes automatically.'
   },
   codex: {
     installCommand: 'npm install -g @openai/codex',
     installLabel: 'Install Codex CLI',
-    overlordSetupCommand: 'npx overlord setup codex',
+    overlordSetupCommand: 'ovld setup codex',
     overlordSetupDescription:
       'Injects the Overlord context command into Codex so it picks up your ticket prompt and posts progress back.'
   },
   cursor: {
     installCommand: 'https://cursor.sh',
     installLabel: 'Download Cursor',
-    overlordSetupCommand: 'npx overlord setup cursor',
+    overlordSetupCommand: 'ovld setup cursor',
     overlordSetupDescription:
       'Writes a .cursorrules file and MCP config that give Cursor access to your Overlord ticket context.'
   },
   gemini: {
     installCommand: 'npm install -g @google/gemini-cli',
     installLabel: 'Install Gemini CLI',
-    overlordSetupCommand: 'npx overlord setup gemini',
+    overlordSetupCommand: 'ovld setup gemini',
     overlordSetupDescription:
       'Adds the Overlord tool extension to Gemini CLI so it can read and update tickets as it works.'
   }

@@ -4,6 +4,7 @@ import { Building2, FolderKanban, FolderSearch } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
+import { ConfigureAgentPermissionsStep } from '@/components/features/onboarding/steps/ConfigureAgentPermissionsStep';
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
 import { InstallAgentBundlesStep } from '@/components/features/onboarding/steps/InstallAgentBundlesStep';
 import { TicketFlowStep } from '@/components/features/onboarding/steps/TicketFlowStep';
@@ -26,10 +27,7 @@ import {
 } from '@/lib/actions/onboarding';
 import { cn } from '@/lib/utils';
 
-const TOTAL_STEPS = 4;
-
-const STEP_LABELS = ['Organization', 'Project', 'Desktop App', 'How it works'] as const;
-const ELECTRON_STEP_LABELS = ['Organization', 'Project', 'Agent plugins', 'How it works'] as const;
+const TOTAL_STEPS = 5;
 
 const TUTORIAL_ONLY_START_STEP = 3;
 
@@ -43,16 +41,39 @@ type TutorialWizardProps = {
 export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialWizardProps) {
   const router = useRouter();
   const { api, isElectron } = useElectron();
-  const stepLabels = isElectron ? ELECTRON_STEP_LABELS : STEP_LABELS;
+  const stepLabels: Record<number, string> = isElectron
+    ? {
+        1: 'Organization',
+        2: 'Project',
+        3: 'Agent plugins',
+        4: 'Permissions',
+        5: 'How it works'
+      }
+    : {
+        1: 'Organization',
+        2: 'Project',
+        3: 'Desktop App',
+        5: 'How it works'
+      };
+  const fullVisibleSteps = isElectron ? [1, 2, 3, 4, 5] : [1, 2, 3, 5];
+  const tutorialVisibleSteps = isElectron ? [3, 4, 5] : [3, 5];
+  const visibleSteps =
+    startAtStep >= TUTORIAL_ONLY_START_STEP ? tutorialVisibleSteps : fullVisibleSteps;
+
+  function normalizeStep(step: number) {
+    if (visibleSteps.includes(step)) return step;
+    const next = visibleSteps.find(candidate => candidate > step);
+    return next ?? visibleSteps[visibleSteps.length - 1];
+  }
 
   const isTutorialOnlyFlow = startAtStep >= TUTORIAL_ONLY_START_STEP;
   const effectiveStart = isTutorialOnlyFlow
-    ? Math.min(Math.max(startAtStep, TUTORIAL_ONLY_START_STEP), TOTAL_STEPS)
+    ? normalizeStep(Math.min(Math.max(startAtStep, TUTORIAL_ONLY_START_STEP), TOTAL_STEPS))
     : !initialState.hasOrganizations
       ? 1
       : !initialState.hasProjects
         ? 2
-        : Math.min(Math.max(startAtStep, TUTORIAL_ONLY_START_STEP), TOTAL_STEPS);
+        : normalizeStep(Math.min(Math.max(startAtStep, TUTORIAL_ONLY_START_STEP), TOTAL_STEPS));
 
   const [currentStep, setCurrentStep] = useState(effectiveStart);
 
@@ -74,8 +95,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   const [projectButtonState, setProjectButtonState] = useState<ButtonLoadingState>('default');
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
-  const canSkip = currentStep >= 3;
-  const visibleSteps = isTutorialOnlyFlow ? [3, 4] : [1, 2, 3, 4];
+  const canSkip = currentStep >= TUTORIAL_ONLY_START_STEP;
   const currentVisibleIndex = visibleSteps.indexOf(currentStep);
   const currentVisibleStepNumber = currentVisibleIndex + 1;
   const totalVisibleSteps = visibleSteps.length;
@@ -87,23 +107,17 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     onClose();
   }
 
-  async function advanceTo(step: number) {
-    if (step > TOTAL_STEPS) {
-      await updateOnboardingProgressAction({ completedStep: TOTAL_STEPS });
-      onClose();
-    } else {
-      setCurrentStep(step);
-    }
-  }
-
   async function handleStepComplete(completedStepNumber: number) {
     if (completedStepNumber >= 3) {
       await updateOnboardingProgressAction({ completedStep: completedStepNumber });
     }
-    if (completedStepNumber === TOTAL_STEPS) {
+    const completedIndex = visibleSteps.indexOf(completedStepNumber);
+    const nextStep = completedIndex >= 0 ? visibleSteps[completedIndex + 1] : undefined;
+    if (!nextStep) {
+      await updateOnboardingProgressAction({ completedStep: TOTAL_STEPS });
       onClose();
     } else {
-      await advanceTo(completedStepNumber + 1);
+      setCurrentStep(nextStep);
     }
   }
 
@@ -120,7 +134,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
       const result = await createFirstOrganization({ name: trimmed });
       setOrganizationId(result.organizationId);
       setOrgButtonState('success');
-      await advanceTo(2);
+      setCurrentStep(2);
     } catch (error) {
       setOrgButtonState('error');
       setOrgError(error instanceof Error ? error.message : 'Failed to create organization.');
@@ -185,7 +199,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
       setProjectButtonState('success');
       // Advance to step 3 (tutorial) — router.refresh so layout picks up new org/project
       router.refresh();
-      await advanceTo(3);
+      setCurrentStep(3);
     } catch (error) {
       setProjectButtonState('error');
       setProjectError(error instanceof Error ? error.message : 'Failed to create project.');
@@ -199,7 +213,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Get started</h1>
             <p className="text-muted-foreground text-sm">
-              {`Step ${currentVisibleStepNumber} of ${totalVisibleSteps} — ${stepLabels[currentStep - 1]}`}
+              {`Step ${currentVisibleStepNumber} of ${totalVisibleSteps} — ${stepLabels[currentStep]}`}
             </p>
           </div>
           {canSkip && (
@@ -230,7 +244,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
                   currentStep === step ? 'text-foreground font-medium' : 'text-muted-foreground'
                 )}
               >
-                {stepLabels[step - 1]}
+                {stepLabels[step]}
               </span>
             ))}
           </div>
@@ -438,7 +452,14 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
             <DownloadAppStep onContinue={() => void handleStepComplete(3)} />
           ))}
 
-        {currentStep === 4 && <TicketFlowStep onContinue={() => void handleStepComplete(4)} />}
+        {isElectron && currentStep === 4 && (
+          <ConfigureAgentPermissionsStep
+            projectDirectory={workingDirectory.trim() || undefined}
+            onContinue={() => void handleStepComplete(4)}
+          />
+        )}
+
+        {currentStep === 5 && <TicketFlowStep onContinue={() => void handleStepComplete(5)} />}
 
         {/* CLI setup is intentionally disabled until the commands shown here are real. */}
       </div>

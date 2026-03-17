@@ -86,6 +86,9 @@ async function proxyResponse(upstream: Response, request: Request): Promise<Resp
   const protocolVersion = upstream.headers.get('mcp-protocol-version');
   if (protocolVersion) headers['MCP-Protocol-Version'] = protocolVersion;
 
+  const sessionId = upstream.headers.get('mcp-session-id');
+  if (sessionId) headers['mcp-session-id'] = sessionId;
+
   const wwwAuth = upstream.headers.get('www-authenticate');
   if (wwwAuth) {
     headers['WWW-Authenticate'] = rewriteBearerResourceMetadata(

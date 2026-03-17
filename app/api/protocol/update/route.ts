@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     const {
       changeRationales,
       eventType,
+      externalSessionId,
       externalUrl,
       payload,
       phase,
@@ -88,10 +89,14 @@ export async function POST(request: Request) {
       }
     }
 
-    if (externalUrl !== undefined) {
+    if (externalUrl !== undefined || externalSessionId !== undefined) {
+      const sessionUpdate: Record<string, string | null> = {};
+      if (externalUrl !== undefined) sessionUpdate.external_url = externalUrl;
+      if (externalSessionId !== undefined) sessionUpdate.external_session_id = externalSessionId;
+
       const { error: sessionUpdateError } = await supabase
         .from('agent_sessions')
-        .update({ external_url: externalUrl })
+        .update(sessionUpdate)
         .eq('id', resolved.session.id);
       if (sessionUpdateError) {
         return NextResponse.json({ error: sessionUpdateError.message }, { status: 500 });

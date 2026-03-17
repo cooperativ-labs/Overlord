@@ -19,6 +19,8 @@ export type TokenContext = {
   tokenValue: string;
   /** 'agent_token' or 'oauth_jwt' — identifies how the caller authenticated. */
   authMethod: 'agent_token' | 'oauth_jwt';
+  /** Streamable HTTP session id when provided by MCP clients. */
+  mcpSessionId?: string | null;
 };
 
 /**

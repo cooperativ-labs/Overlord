@@ -21,7 +21,7 @@ The attach protocol already supports `metadata: Record<string, unknown>`. Agents
 **File:** `lib/overlord/ticket-prompt.ts` (or wherever the prompt template is built)
 - Add a line to the system prompt instructing agents to pass `--metadata-json '{"model":"<model-id>"}'` when calling attach. Alternatively, this can be injected by the CLI tooling.
 
-**File:** `npx overlord protocol attach` CLI
+**File:** `ovld protocol attach` CLI
 - If the CLI already forwards `--metadata-json`, no change needed — agents just need to include it. Check if the CLI supports a `--metadata-json` flag; if not, add one.
 
 **No schema migration needed** — the `metadata` JSONB column already exists on `agent_sessions`.
@@ -84,13 +84,13 @@ Currently `KanbanBoard.tsx` only picks `ticket_id`, `session_state`, and `agent_
 
 The system prompt template injected by Overlord already tells agents their model (e.g., "You are powered by the model named Opus 4.6"). We need agents to forward this when attaching.
 
-**Option A (recommended):** Have the `npx overlord resume` / `npx overlord protocol attach` CLI automatically detect the model from the environment or agent config, and inject it into metadata. This is the cleanest approach since agents don't need to do it manually.
+**Option A (recommended):** Have the `ovld resume` / `ovld protocol attach` CLI automatically detect the model from the environment or agent config, and inject it into metadata. This is the cleanest approach since agents don't need to do it manually.
 
 **Option B:** Update the ticket prompt template to instruct agents to pass metadata with the model. Less reliable since it depends on agent compliance.
 
 **Preferred approach:** Option A — modify the CLI `attach` command to accept a `--model` flag that gets merged into metadata automatically.
 
-**File:** CLI source (wherever `npx overlord protocol attach` is implemented)
+**File:** CLI source (wherever `ovld protocol attach` is implemented)
 - Add `--model <string>` flag
 - Merge into metadata: `metadata = { ...metadata, model: modelFlag }`
 

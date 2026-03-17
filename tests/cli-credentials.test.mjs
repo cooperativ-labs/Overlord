@@ -19,6 +19,7 @@ async function withTempHome(callback) {
   const previousHome = process.env.HOME;
   const previousAgentToken = process.env.AGENT_TOKEN;
   const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousConnectorUrl = process.env.OVERLORD_CONNECTOR_URL;
 
   try {
     process.env.HOME = tempHome;
@@ -32,6 +33,9 @@ async function withTempHome(callback) {
 
     if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
     else process.env.OVERLORD_URL = previousOverlordUrl;
+
+    if (previousConnectorUrl === undefined) delete process.env.OVERLORD_CONNECTOR_URL;
+    else process.env.OVERLORD_CONNECTOR_URL = previousConnectorUrl;
 
     fs.rmSync(tempHome, { force: true, recursive: true });
   }
@@ -84,6 +88,7 @@ for (const modulePath of [
 
         process.env.AGENT_TOKEN = 'env-agent-token';
         delete process.env.OVERLORD_URL;
+        delete process.env.OVERLORD_CONNECTOR_URL;
 
         const { resolveAuth } = await importFresh(modulePath);
         const result = resolveAuth();
@@ -91,6 +96,43 @@ for (const modulePath of [
         assert.equal(result.platformUrl, 'http://localhost:65475');
         assert.equal(result.agentToken, 'env-agent-token');
         assert.equal(result.localSecret, 'local-secret');
+      });
+    }
+  );
+
+  test(
+    `${modulePath} resolveAuth ignores invalid stored platform URLs and normalizes env URLs`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        const credentialsPath = path.join(ovldDir, 'credentials.json');
+        fs.writeFileSync(
+          credentialsPath,
+          JSON.stringify(
+            {
+              access_token: 'cred-token',
+              platform_url: '/api/protocol'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+        fs.chmodSync(credentialsPath, 0o600);
+
+        process.env.OVERLORD_CONNECTOR_URL = 'https://www.ovld.ai/api/protocol';
+        delete process.env.OVERLORD_URL;
+        delete process.env.AGENT_TOKEN;
+
+        const { resolveAuth } = await importFresh(modulePath);
+        const result = resolveAuth();
+
+        assert.equal(result.platformUrl, 'https://www.ovld.ai');
+        assert.equal(result.agentToken, 'cred-token');
       });
     }
   );

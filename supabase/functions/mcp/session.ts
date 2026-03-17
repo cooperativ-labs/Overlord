@@ -39,7 +39,8 @@ export async function resolveSession(
   supabase: SupabaseClient,
   sessionKey: string,
   ticketId: string,
-  organizationId: number
+  organizationId: number,
+  externalSessionId?: string | null
 ) {
   const resolvedId = await resolveTicketId(supabase, ticketId, organizationId);
   if (!resolvedId) {
@@ -85,11 +86,15 @@ export async function resolveSession(
     }
   }
 
-  // Update heartbeat
-  await supabase
-    .from('agent_sessions')
-    .update({ heartbeat_at: new Date().toISOString() })
-    .eq('id', session.id);
+  const sessionUpdate: Record<string, string> = {
+    heartbeat_at: new Date().toISOString()
+  };
+  if (typeof externalSessionId === 'string' && externalSessionId.trim().length > 0) {
+    sessionUpdate.external_session_id = externalSessionId.trim();
+  }
+
+  // Update heartbeat and opportunistically persist the native MCP session id.
+  await supabase.from('agent_sessions').update(sessionUpdate).eq('id', session.id);
 
   return { error: null, session, resolvedTicketId: resolvedId };
 }

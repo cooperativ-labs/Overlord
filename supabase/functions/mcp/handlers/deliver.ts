@@ -10,6 +10,33 @@ import { insertChangeRationales, resolveTicketProjectContext } from './_change-r
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 
+function buildMcpRestartCommand(
+  ticketId: string,
+  agentIdentifier: string | null | undefined,
+  externalSessionId: string | null | undefined
+) {
+  const normalized = agentIdentifier?.trim().toLowerCase() ?? '';
+  const nativeSessionId = externalSessionId?.trim();
+
+  if (nativeSessionId) {
+    if (normalized.includes('claude')) return `claude --resume ${nativeSessionId}`;
+    if (normalized.includes('codex')) return `codex resume ${nativeSessionId}`;
+    if (normalized.includes('cursor')) return `cursor --resume ${nativeSessionId}`;
+    if (normalized.includes('gemini')) return `gemini --resume ${nativeSessionId}`;
+  }
+
+  if (normalized.includes('cursor')) {
+    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume cursor`;
+  }
+  if (normalized.includes('gemini')) {
+    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume gemini`;
+  }
+  if (normalized.includes('codex')) {
+    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume codex`;
+  }
+  return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume claude`;
+}
+
 export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     sessionKey,
@@ -18,7 +45,13 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     artifacts = [],
     changeRationales = []
   } = args;
-  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
+  const resolved = await resolveSession(
+    supabase,
+    sessionKey,
+    rawTicketId,
+    ctx.organizationId,
+    ctx.mcpSessionId
+  );
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
 
@@ -52,7 +85,11 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
   }
 
   const mcpFunctionsUrl = `${SUPABASE_URL}/functions/v1/mcp`;
-  const restartCommand = `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} npx overlord resume claude`;
+  const restartCommand = buildMcpRestartCommand(
+    ticketId,
+    resolved.session.agent_identifier,
+    resolved.session.external_session_id
+  );
   const hasRestartArtifact = artifacts.some(
     (a: any) => a.label?.trim().toLowerCase() === 'restart session command'
   );

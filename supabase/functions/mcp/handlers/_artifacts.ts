@@ -62,7 +62,8 @@ export async function resolveArtifactAccess(
     supabase,
     args.sessionKey,
     args.ticketId,
-    ctx.organizationId
+    ctx.organizationId,
+    ctx.mcpSessionId
   );
   if (!resolved.session) {
     return {

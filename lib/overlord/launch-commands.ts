@@ -36,10 +36,10 @@ export function buildLaunchCommands({
   const envBlock = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
 
   return {
-    claudeCode: `${envBlock} npx overlord run claude`,
-    codex: `${envBlock} npx overlord run codex`,
-    cursor: `${envBlock} npx overlord run cursor`,
-    gemini: `${envBlock} npx overlord run gemini`,
+    claudeCode: `${envBlock} ovld run claude`,
+    codex: `${envBlock} ovld run codex`,
+    cursor: `${envBlock} ovld run cursor`,
+    gemini: `${envBlock} ovld run gemini`,
     contextUrl
   };
 }
@@ -57,10 +57,10 @@ export function buildResumeCommands({
   const envBlock = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
 
   return {
-    claudeCode: `${envBlock} npx overlord resume claude`,
-    codex: `${envBlock} npx overlord resume codex`,
-    cursor: `${envBlock} npx overlord resume cursor`,
-    gemini: `${envBlock} npx overlord resume gemini`
+    claudeCode: `${envBlock} ovld resume claude`,
+    codex: `${envBlock} ovld resume codex`,
+    cursor: `${envBlock} ovld resume cursor`,
+    gemini: `${envBlock} ovld resume gemini`
   };
 }
 
@@ -90,9 +90,13 @@ export function buildRawLaunchCommand(
 
 export function selectRestartSessionCommand(
   agentIdentifier: string | null | undefined,
-  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini'>
+  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini'>,
+  externalSessionId?: string | null
 ): string {
   const normalized = agentIdentifier?.trim().toLowerCase() ?? '';
+  const native = buildNativeResumeCommand(normalized, externalSessionId);
+  if (native) return native;
+
   if (normalized.includes('claude')) {
     return commands.claudeCode;
   }
@@ -103,4 +107,28 @@ export function selectRestartSessionCommand(
     return commands.gemini;
   }
   return commands.codex;
+}
+
+export function buildNativeResumeCommand(
+  agentIdentifier: string | null | undefined,
+  externalSessionId: string | null | undefined
+): string | null {
+  if (!externalSessionId) return null;
+  const sessionId = externalSessionId.trim();
+  if (!sessionId) return null;
+
+  const normalized = agentIdentifier?.trim().toLowerCase() ?? '';
+  if (normalized.includes('claude')) {
+    return `claude --resume ${sessionId}`;
+  }
+  if (normalized.includes('codex')) {
+    return `codex resume ${sessionId}`;
+  }
+  if (normalized.includes('cursor')) {
+    return `cursor --resume ${sessionId}`;
+  }
+  if (normalized.includes('gemini')) {
+    return `gemini --resume ${sessionId}`;
+  }
+  return null;
 }

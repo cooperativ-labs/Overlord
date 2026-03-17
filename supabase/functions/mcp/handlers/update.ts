@@ -13,11 +13,18 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     ticketId: rawTicketId,
     summary,
     phase,
+    externalSessionId,
     externalUrl,
     payload = {},
     changeRationales = []
   } = args;
-  const resolved = await resolveSession(supabase, sessionKey, rawTicketId, ctx.organizationId);
+  const resolved = await resolveSession(
+    supabase,
+    sessionKey,
+    rawTicketId,
+    ctx.organizationId,
+    ctx.mcpSessionId
+  );
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
 
@@ -51,10 +58,14 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     if (rationaleResult.error) return toolErr(rationaleResult.error);
   }
 
-  if (externalUrl !== undefined) {
+  if (externalUrl !== undefined || externalSessionId !== undefined) {
+    const sessionUpdate: Record<string, string | null> = {};
+    if (externalUrl !== undefined) sessionUpdate.external_url = externalUrl;
+    if (externalSessionId !== undefined) sessionUpdate.external_session_id = externalSessionId;
+
     const { error: sessionErr } = await supabase
       .from('agent_sessions')
-      .update({ external_url: externalUrl })
+      .update(sessionUpdate)
       .eq('id', resolved.session.id);
     if (sessionErr) return toolErr(sessionErr.message);
   }

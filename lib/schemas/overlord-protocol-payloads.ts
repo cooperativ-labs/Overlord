@@ -55,6 +55,8 @@ export const UpdatePayloadSchema = z.object({
   sessionKey: z.string().describe('Session key from attach response'),
   ticketId: z.string().describe('Target ticket ID'),
   summary: z.string().describe('Human-readable summary of what was done'),
+  externalUrl: z.string().url().nullable().optional(),
+  externalSessionId: z.string().nullable().optional(),
   phase: Phase.optional(),
   eventType: EventType.optional(),
   changeRationales: z

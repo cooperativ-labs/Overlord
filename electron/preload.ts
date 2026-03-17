@@ -63,6 +63,10 @@ const electronAPI = {
     repair: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:repair', agent),
     uninstall: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:uninstall', agent)
   },
+  agentPermissions: {
+    configure: (options?: { projectDirectory?: string }) =>
+      ipcRenderer.invoke('agent-permissions:configure', options)
+  },
   appUpdate: {
     getStatus: () => ipcRenderer.invoke('app-update:get-status'),
     checkForUpdates: () => ipcRenderer.invoke('app-update:check'),

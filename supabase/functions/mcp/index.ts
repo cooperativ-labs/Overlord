@@ -120,6 +120,11 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  const requestContext = {
+    ...tokenCtx,
+    mcpSessionId: req.headers.get('mcp-session-id')?.trim() || null
+  };
+
   let body: any;
   try {
     body = await req.json();
@@ -220,29 +225,29 @@ Deno.serve(async (req: Request) => {
       let result: ReturnType<typeof import('./rpc.ts').toolOk>;
 
       if (toolName === 'attach') {
-        result = await handleAttach(supabase, toolArgs, tokenCtx);
+        result = await handleAttach(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket_draft') {
-        result = await handleCreateTicketDraft(supabase, toolArgs, tokenCtx);
+        result = await handleCreateTicketDraft(supabase, toolArgs, requestContext);
       } else if (toolName === 'artifact_prepare_upload') {
-        result = await handleArtifactPrepareUpload(supabase, toolArgs, tokenCtx);
+        result = await handleArtifactPrepareUpload(supabase, toolArgs, requestContext);
       } else if (toolName === 'artifact_finalize_upload') {
-        result = await handleArtifactFinalizeUpload(supabase, toolArgs, tokenCtx);
+        result = await handleArtifactFinalizeUpload(supabase, toolArgs, requestContext);
       } else if (toolName === 'artifact_get_download_url') {
-        result = await handleArtifactGetDownloadUrl(supabase, toolArgs, tokenCtx);
+        result = await handleArtifactGetDownloadUrl(supabase, toolArgs, requestContext);
       } else if (toolName === 'save_ticket_draft') {
-        result = await handleSaveTicketDraft(supabase, toolArgs, tokenCtx);
+        result = await handleSaveTicketDraft(supabase, toolArgs, requestContext);
       } else if (toolName === 'update') {
-        result = await handleUpdate(supabase, toolArgs, tokenCtx);
+        result = await handleUpdate(supabase, toolArgs, requestContext);
       } else if (toolName === 'ask') {
-        result = await handleAsk(supabase, toolArgs, tokenCtx);
+        result = await handleAsk(supabase, toolArgs, requestContext);
       } else if (toolName === 'read_context') {
-        result = await handleReadContext(supabase, toolArgs, tokenCtx);
+        result = await handleReadContext(supabase, toolArgs, requestContext);
       } else if (toolName === 'write_context') {
-        result = await handleWriteContext(supabase, toolArgs, tokenCtx);
+        result = await handleWriteContext(supabase, toolArgs, requestContext);
       } else if (toolName === 'deliver') {
-        result = await handleDeliver(supabase, toolArgs, tokenCtx);
+        result = await handleDeliver(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket') {
-        result = await handleCreateTicket(supabase, toolArgs, tokenCtx);
+        result = await handleCreateTicket(supabase, toolArgs, requestContext);
       } else {
         return rpcError(id, -32601, `Unknown tool: ${toolName}`);
       }
