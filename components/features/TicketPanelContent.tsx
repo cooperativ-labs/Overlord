@@ -1,19 +1,16 @@
-import { ArrowRightToLine, ChevronDown, EllipsisVertical } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { headers } from 'next/headers';
 import Image from 'next/image';
-import Link from 'next/link';
 import fs from 'node:fs/promises';
 
-import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
-import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { InlineEditField } from '@/components/features/InlineEditField';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { TicketDocumentUpload } from '@/components/features/TicketDocumentUpload';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
-import { TicketHeaderAction } from '@/components/features/TicketHeaderAction';
 import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
+import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
@@ -24,13 +21,7 @@ import {
   AccordionTrigger
 } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Separator } from '@/components/ui/separator';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
@@ -294,54 +285,22 @@ export async function TicketPanelContent({
       initialSharedState={state ?? []}
     >
       <div className="flex h-full flex-col bg-background">
-        <div className="flex items-center gap-2 border-b px-4 py-3 justify-between">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button aria-label="Ticket actions" className="h-8 w-8" size="icon" variant="ghost">
-                <EllipsisVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
-                <span>Copy ticket ID</span>
-                <CopyTicketIdentifierButton
-                  value={ticket.id}
-                  ariaLabel="Copy full ticket identifier"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-accent"
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
-                <span>Delete ticket</span>
-                <DeleteTicketButton
-                  ticketId={ticketId}
-                  ticketLabel={ticketIdentifier}
-                  className="inline-flex h-7 w-7 items-center justify-center"
-                />
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <div className="flex items-center gap-2 justify-end">
-            <TicketHeaderAction
-              ticketId={ticketId}
-              organizationId={organizationId}
-              agentToken={agentToken}
-              agentFlags={agentFlags}
-              agentIdentifier={agentSession?.agent_identifier ?? null}
-              claudeCommand={claudeCode}
-              codexCommand={codex}
-              cursorCommand={cursor}
-              geminiCommand={gemini}
-              workingDirectory={workingDirectory}
-              hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-            />
-
-            <Button asChild size="icon" variant="ghost" className="h-8 w-10 ml-2">
-              <Link href={closePath} aria-label="Close panel">
-                <ArrowRightToLine className="h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
+        <TicketPanelHeader
+          ticketId={ticketId}
+          ticketIdentifier={ticketIdentifier}
+          organizationId={organizationId}
+          agentToken={agentToken}
+          agentFlags={agentFlags}
+          agentIdentifier={agentSession?.agent_identifier ?? null}
+          claudeCommand={claudeCode}
+          codexCommand={codex}
+          cursorCommand={cursor}
+          geminiCommand={gemini}
+          workingDirectory={workingDirectory}
+          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+          closePath={closePath}
+          isAgentRunning={agentSession?.session_state === 'attached'}
+        />
 
         <TimerWithTimeEntries
           initialTaskId={ticket.everhour_task_id ?? null}
