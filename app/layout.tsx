@@ -86,13 +86,14 @@ export default async function RootLayout({
         hasProjects: projects.length > 0,
         firstOrganizationId: null,
         onboardingCompletedStep: 0,
-        onboardingSkipped: false
+        onboardingSkipped: false,
+        desktopSetupDone: false
       };
     } else {
       // Existing user — check tutorial progress
       const progress = await getOnboardingState();
       onboardingState = progress;
-      const hasCompletedTutorial = progress.onboardingCompletedStep >= 5;
+      const hasCompletedTutorial = progress.onboardingCompletedStep >= 4;
       const hasSkipped = progress.onboardingSkipped;
       if (!hasCompletedTutorial && !hasSkipped) {
         tutorialAutoOpen = true;

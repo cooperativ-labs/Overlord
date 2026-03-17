@@ -4,9 +4,8 @@ import { Building2, FolderKanban, FolderSearch } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
-import { ConfigureAgentPermissionsStep } from '@/components/features/onboarding/steps/ConfigureAgentPermissionsStep';
+import { ConnectorSetupStep } from '@/components/features/onboarding/steps/ConnectorSetupStep';
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
-import { InstallAgentBundlesStep } from '@/components/features/onboarding/steps/InstallAgentBundlesStep';
 import { TicketFlowStep } from '@/components/features/onboarding/steps/TicketFlowStep';
 import {
   DEFAULT_PROJECT_COLOR,
@@ -27,9 +26,21 @@ import {
 } from '@/lib/actions/onboarding';
 import { cn } from '@/lib/utils';
 
-const TOTAL_STEPS = 5;
+/**
+ * Unified onboarding wizard.
+ *
+ * Steps:
+ *   1 — Create organization  (skipped if exists)
+ *   2 — Create first project (skipped if exists)
+ *   3 — Desktop: Agent connectors | Web: Download app
+ *   4 — How tickets work
+ *
+ * Desktop steps (3) appear even if the user already completed the web flow,
+ * because `desktopSetupDone` is tracked independently.
+ */
 
-const TUTORIAL_ONLY_START_STEP = 3;
+const TOTAL_STEPS = 4;
+const CONNECTOR_STEP = 3;
 
 type TutorialWizardProps = {
   initialState: OnboardingState;
@@ -41,24 +52,16 @@ type TutorialWizardProps = {
 export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialWizardProps) {
   const router = useRouter();
   const { api, isElectron } = useElectron();
+
   const stepLabels: Record<number, string> = isElectron
-    ? {
-        1: 'Organization',
-        2: 'Project',
-        3: 'Agent plugins',
-        4: 'Permissions',
-        5: 'How it works'
-      }
-    : {
-        1: 'Organization',
-        2: 'Project',
-        3: 'Desktop App',
-        5: 'How it works'
-      };
-  const fullVisibleSteps = isElectron ? [1, 2, 3, 4, 5] : [1, 2, 3, 5];
-  const tutorialVisibleSteps = isElectron ? [3, 4, 5] : [3, 5];
-  const visibleSteps =
-    startAtStep >= TUTORIAL_ONLY_START_STEP ? tutorialVisibleSteps : fullVisibleSteps;
+    ? { 1: 'Organization', 2: 'Project', 3: 'Agent connectors', 4: 'How it works' }
+    : { 1: 'Organization', 2: 'Project', 3: 'Desktop App', 4: 'How it works' };
+
+  const fullVisibleSteps = [1, 2, 3, 4];
+  const tutorialVisibleSteps = isElectron ? [3, 4] : [3, 4];
+
+  const isTutorialOnlyFlow = startAtStep >= CONNECTOR_STEP;
+  const visibleSteps = isTutorialOnlyFlow ? tutorialVisibleSteps : fullVisibleSteps;
 
   function normalizeStep(step: number) {
     if (visibleSteps.includes(step)) return step;
@@ -66,14 +69,13 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     return next ?? visibleSteps[visibleSteps.length - 1];
   }
 
-  const isTutorialOnlyFlow = startAtStep >= TUTORIAL_ONLY_START_STEP;
   const effectiveStart = isTutorialOnlyFlow
-    ? normalizeStep(Math.min(Math.max(startAtStep, TUTORIAL_ONLY_START_STEP), TOTAL_STEPS))
+    ? normalizeStep(Math.min(Math.max(startAtStep, CONNECTOR_STEP), TOTAL_STEPS))
     : !initialState.hasOrganizations
       ? 1
       : !initialState.hasProjects
         ? 2
-        : normalizeStep(Math.min(Math.max(startAtStep, TUTORIAL_ONLY_START_STEP), TOTAL_STEPS));
+        : normalizeStep(Math.min(Math.max(startAtStep, CONNECTOR_STEP), TOTAL_STEPS));
 
   const [currentStep, setCurrentStep] = useState(effectiveStart);
 
@@ -95,7 +97,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   const [projectButtonState, setProjectButtonState] = useState<ButtonLoadingState>('default');
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
-  const canSkip = currentStep >= TUTORIAL_ONLY_START_STEP;
+  const canSkip = currentStep >= CONNECTOR_STEP;
   const currentVisibleIndex = visibleSteps.indexOf(currentStep);
   const currentVisibleStepNumber = currentVisibleIndex + 1;
   const totalVisibleSteps = visibleSteps.length;
@@ -108,8 +110,12 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   }
 
   async function handleStepComplete(completedStepNumber: number) {
-    if (completedStepNumber >= 3) {
+    if (completedStepNumber >= CONNECTOR_STEP) {
       await updateOnboardingProgressAction({ completedStep: completedStepNumber });
+      // Mark desktop setup done when completing the connector step on desktop
+      if (completedStepNumber === CONNECTOR_STEP && isElectron) {
+        await updateOnboardingProgressAction({ desktopSetupDone: true });
+      }
     }
     const completedIndex = visibleSteps.indexOf(completedStepNumber);
     const nextStep = completedIndex >= 0 ? visibleSteps[completedIndex + 1] : undefined;
@@ -197,7 +203,6 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
         workingDirectory: workingDirectory.trim() || null
       });
       setProjectButtonState('success');
-      // Advance to step 3 (tutorial) — router.refresh so layout picks up new org/project
       router.refresh();
       setCurrentStep(3);
     } catch (error) {
@@ -447,21 +452,15 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
 
         {currentStep === 3 &&
           (isElectron ? (
-            <InstallAgentBundlesStep onContinue={() => void handleStepComplete(3)} />
+            <ConnectorSetupStep
+              onContinue={() => void handleStepComplete(3)}
+              projectDirectory={workingDirectory.trim() || undefined}
+            />
           ) : (
             <DownloadAppStep onContinue={() => void handleStepComplete(3)} />
           ))}
 
-        {isElectron && currentStep === 4 && (
-          <ConfigureAgentPermissionsStep
-            projectDirectory={workingDirectory.trim() || undefined}
-            onContinue={() => void handleStepComplete(4)}
-          />
-        )}
-
-        {currentStep === 5 && <TicketFlowStep onContinue={() => void handleStepComplete(5)} />}
-
-        {/* CLI setup is intentionally disabled until the commands shown here are real. */}
+        {currentStep === 4 && <TicketFlowStep onContinue={() => void handleStepComplete(4)} />}
       </div>
     </div>
   );

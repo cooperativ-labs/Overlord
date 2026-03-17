@@ -1,6 +1,6 @@
 'use client';
 
-import { OnboardingWizard } from '@/components/features/onboarding/OnboardingWizard';
+import { TutorialWizard } from '@/components/features/onboarding/TutorialWizard';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { OnboardingState } from '@/lib/actions/onboarding';
 
@@ -12,7 +12,7 @@ export function OrganizationOnboardingModal({ initialState }: OrganizationOnboar
   return (
     <Dialog open onOpenChange={() => undefined}>
       <DialogContent
-        className="max-h-[90dvh] overflow-y-auto p-0 sm:max-w-2xl"
+        className="max-h-[90dvh] overflow-y-auto p-0 sm:max-w-xl"
         onPointerDownOutside={event => event.preventDefault()}
         onEscapeKeyDown={event => event.preventDefault()}
       >
@@ -20,7 +20,14 @@ export function OrganizationOnboardingModal({ initialState }: OrganizationOnboar
         <DialogDescription className="sr-only">
           Create your organization and first project to continue.
         </DialogDescription>
-        <OnboardingWizard initialState={initialState} />
+        <TutorialWizard
+          initialState={initialState}
+          startAtStep={1}
+          onClose={() => {
+            // Force full page reload to pick up new org/project state
+            window.location.href = '/u';
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

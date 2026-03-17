@@ -50,6 +50,23 @@ export function TutorialProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpen]);
 
+  // Desktop-specific: if the user completed the web flow but hasn't done desktop
+  // connector setup, auto-open at the connector step on Electron.
+  useEffect(() => {
+    if (!initialState) return;
+    const onElectron = !!window.electronAPI?.isElectron;
+    if (!onElectron) return;
+
+    const webDone = initialState.onboardingCompletedStep >= 4 || initialState.onboardingSkipped;
+    const desktopPending = !initialState.desktopSetupDone;
+
+    if (webDone && desktopPending && !isOpen) {
+      setStartAtStep(3);
+      setIsOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialState]);
+
   function openTutorial(opts?: { startAtStep?: number }) {
     setStartAtStep(opts?.startAtStep ?? 3);
     setIsOpen(true);

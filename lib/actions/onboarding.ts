@@ -11,6 +11,7 @@ export type OnboardingProgress = {
   completedStep: number;
   skipped: boolean;
   preferredAgent?: AgentTypeValue;
+  desktopSetupDone?: boolean;
 };
 
 export type OnboardingState = {
@@ -21,6 +22,7 @@ export type OnboardingState = {
   onboardingCompletedStep: number;
   onboardingSkipped: boolean;
   preferredAgent?: AgentTypeValue;
+  desktopSetupDone: boolean;
 };
 
 function parseOnboardingProgress(raw: unknown): OnboardingProgress {
@@ -34,7 +36,9 @@ function parseOnboardingProgress(raw: unknown): OnboardingProgress {
     preferredAgent:
       typeof obj['preferred_agent'] === 'string'
         ? (obj['preferred_agent'] as AgentTypeValue)
-        : undefined
+        : undefined,
+    desktopSetupDone:
+      typeof obj['desktop_setup_done'] === 'boolean' ? obj['desktop_setup_done'] : false
   };
 }
 
@@ -71,7 +75,8 @@ export async function getOnboardingState(): Promise<OnboardingState> {
       firstOrganizationId: null,
       onboardingCompletedStep: progress.completedStep,
       onboardingSkipped: progress.skipped,
-      preferredAgent: progress.preferredAgent
+      preferredAgent: progress.preferredAgent,
+      desktopSetupDone: progress.desktopSetupDone ?? false
     };
   }
 
@@ -86,7 +91,8 @@ export async function getOnboardingState(): Promise<OnboardingState> {
       firstOrganizationId: null,
       onboardingCompletedStep: progress.completedStep,
       onboardingSkipped: progress.skipped,
-      preferredAgent: progress.preferredAgent
+      preferredAgent: progress.preferredAgent,
+      desktopSetupDone: progress.desktopSetupDone ?? false
     };
   }
 
@@ -105,7 +111,8 @@ export async function getOnboardingState(): Promise<OnboardingState> {
     firstOrganizationId,
     onboardingCompletedStep: progress.completedStep,
     onboardingSkipped: progress.skipped,
-    preferredAgent: progress.preferredAgent
+    preferredAgent: progress.preferredAgent,
+    desktopSetupDone: progress.desktopSetupDone ?? false
   };
 }
 
@@ -113,6 +120,7 @@ export async function updateOnboardingProgressAction(update: {
   completedStep?: number;
   skipped?: boolean;
   preferredAgent?: AgentTypeValue;
+  desktopSetupDone?: boolean;
 }): Promise<void> {
   const supabase = await createClient();
   const {
@@ -139,7 +147,11 @@ export async function updateOnboardingProgressAction(update: {
         : current.completedStep,
     skipped: update.skipped !== undefined ? update.skipped : current.skipped,
     preferred_agent:
-      update.preferredAgent !== undefined ? update.preferredAgent : current.preferredAgent
+      update.preferredAgent !== undefined ? update.preferredAgent : current.preferredAgent,
+    desktop_setup_done:
+      update.desktopSetupDone !== undefined
+        ? update.desktopSetupDone
+        : (current.desktopSetupDone ?? false)
   };
 
   const { error } = await supabase.from('profiles').update({ onboarding: next }).eq('id', user.id);
