@@ -15,6 +15,7 @@ type AuthErrorLike = {
 function isNetworkError(error: AuthErrorLike | null): boolean {
   if (!error) return false;
 
+  if (error.status === 429) return true;
   if (typeof error.status === 'number' && error.status >= 500) return true;
 
   const message = `${error.name ?? ''} ${error.message ?? ''}`.toLowerCase();
@@ -30,6 +31,8 @@ export function WebAuthGate() {
   const pathname = usePathname();
   const router = useRouter();
   const redirectingRef = useRef(false);
+  const lastValidationAtRef = useRef(0);
+  const validationInFlightRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -60,56 +63,70 @@ export function WebAuthGate() {
       router.replace(`/login?${params.toString()}`);
     };
 
-    const validateSession = async () => {
+    const validateSession = async (reason: 'focus' | 'visibility' | 'sign-out') => {
       if (document.hidden) return;
+      if (validationInFlightRef.current) return;
 
-      const {
-        data: { session }
-      } = await client.auth.getSession();
+      const now = Date.now();
+      const minValidationIntervalMs = reason === 'sign-out' ? 5_000 : 30_000;
+      if (now - lastValidationAtRef.current < minValidationIntervalMs) return;
 
-      if (disposed) return;
+      validationInFlightRef.current = true;
+      lastValidationAtRef.current = now;
 
-      if (!session) {
-        redirectToLogin();
-        return;
+      try {
+        const {
+          data: { session },
+          error: sessionError
+        } = await client.auth.getSession();
+
+        if (disposed) return;
+
+        if (!session) {
+          if (!isNetworkError(sessionError)) {
+            redirectToLogin();
+          }
+          return;
+        }
+
+        const {
+          data: { user },
+          error
+        } = await client.auth.getUser();
+
+        if (disposed || user) return;
+
+        if (!isNetworkError(error)) {
+          redirectToLogin();
+          return;
+        }
+
+        console.warn('Unable to validate session state after tab focus.', error);
+      } finally {
+        validationInFlightRef.current = false;
       }
-
-      const {
-        data: { user },
-        error
-      } = await client.auth.getUser();
-
-      if (disposed || user) return;
-
-      if (!isNetworkError(error)) {
-        redirectToLogin();
-        return;
-      }
-
-      console.warn('Unable to validate session state after tab focus.', error);
     };
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        void validateSession();
+        void validateSession('visibility');
       }
     };
 
     const handleWindowFocus = () => {
-      void validateSession();
+      void validateSession('focus');
     };
 
     const {
       data: { subscription }
     } = client.auth.onAuthStateChange(event => {
       if (event === 'SIGNED_OUT') {
-        redirectToLogin();
+        void validateSession('sign-out');
       }
     });
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleWindowFocus);
-    void validateSession();
 
     return () => {
       disposed = true;
