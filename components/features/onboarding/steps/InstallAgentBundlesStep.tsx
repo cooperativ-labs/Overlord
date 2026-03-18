@@ -12,14 +12,14 @@ type Props = {
 };
 
 type BundleStatusEntry = {
-  agent: 'claude' | 'codex';
+  agent: 'claude' | 'codex' | 'opencode';
   status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
   version: string | null;
   installedVersion: string | null;
   details: string;
 };
 
-const AGENTS: Array<BundleStatusEntry['agent']> = ['claude', 'codex'];
+const AGENTS: Array<BundleStatusEntry['agent']> = ['claude', 'codex', 'opencode'];
 
 function statusBadge(status: BundleStatusEntry['status']) {
   if (status === 'installed') {

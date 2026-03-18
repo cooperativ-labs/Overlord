@@ -1115,7 +1115,7 @@ function mapBoardTicket(raw: RawBoardTicket) {
   };
 }
 
-export async function loadMoreCompleteTicketsAction({
+export async function loadMoreTicketsAction({
   status,
   organizationId,
   projectId,
@@ -1134,7 +1134,7 @@ export async function loadMoreCompleteTicketsAction({
     .eq('status', status)
     .lt('updated_at', beforeDate)
     .order('updated_at', { ascending: false })
-    .limit(100);
+    .limit(20);
 
   if (organizationId !== undefined) {
     query = query.eq('organization_id', organizationId);

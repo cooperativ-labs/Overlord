@@ -23,6 +23,7 @@ type TicketPanelHeaderProps = {
   codexCommand: string;
   cursorCommand: string;
   geminiCommand: string;
+  opencodeCommand: string;
   workingDirectory: string | null;
   hasProjectWorkingDirectory: boolean;
   closePath: string;
@@ -40,6 +41,7 @@ export function TicketPanelHeader({
   codexCommand,
   cursorCommand,
   geminiCommand,
+  opencodeCommand,
   workingDirectory,
   hasProjectWorkingDirectory,
   closePath,
@@ -86,6 +88,7 @@ export function TicketPanelHeader({
           codexCommand={codexCommand}
           cursorCommand={cursorCommand}
           geminiCommand={geminiCommand}
+          opencodeCommand={opencodeCommand}
           workingDirectory={workingDirectory}
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         />

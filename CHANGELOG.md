@@ -2,9 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.13.0] - 2026-03-18:15:50
+## [1.14.0] - 2026-03-18:16:49
 
 ### Added
+- Add a dedicated OAuth callback API endpoint to connect Claude Code integrations, allowing users to securely authenticate and store session tokens.
+- Add ticket search capabilities to the protocol API, enabling external agents to discover relevant work items.
+- Implement file change parsing and direct diff link generation to provide smoother reviewing experiences in the UI.
+
+### Fixed
+- Prevent CLI configuration errors by cleanly closing active OAuth callback servers, avoiding EADDRINUSE conflicts.
+
+### Changed
+- Soften global white color styling and add a drop shadow to the left side panel for improved visual separation and a more premium aesthetic.
+- Auto-focus the organization name input field when the component loads so new users can begin setup immediately without extra clicks.
+- Refactor font loading and update the settings modal dimensions/navigation for a cleaner layout.
+
+### Security
+- None.
+
+## [1.13.0] - 2026-03-18:15:50### Added
 - Add a user-selectable editor scheme preference (VS Code, Cursor, Zed, Windsurf, or custom) in the Appearance settings so file links across the app open in your preferred editor.
 - Add an Electron drag region to the authentication layout so the login window can be moved by its header when running in the desktop app.
 

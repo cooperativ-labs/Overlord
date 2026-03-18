@@ -122,6 +122,7 @@ app-downloads/
       Overlord-0.1.3-mac-arm64.zip
       Overlord-0.1.3-mac-arm64.dmg
       Overlord-0.1.3-linux-x64.AppImage
+      Overlord-0.1.3-linux-amd64.deb
 ```
 
 Important:
@@ -130,6 +131,20 @@ Important:
 - Bucket must be publicly readable for direct updater downloads.
 - Artifact filenames are generated from Electron Builder using:
   `artifactName: "${productName}-${version}-${os}-${arch}.${ext}"`.
+- `scripts/upload-electron-release.mjs` treats `latest-mac.yml`, `latest-linux.yml`, the macOS DMG/ZIP, and the Linux AppImage as required release artifacts. The Linux `.deb` is uploaded when present but currently logs a warning instead of blocking the release.
+
+### Manual release checklist
+
+1. Build macOS artifacts on a macOS machine and Linux artifacts on a Linux machine.
+2. Confirm `release/` contains:
+   - `Overlord-<version>-mac-arm64.dmg`
+   - `Overlord-<version>-mac-arm64.zip`
+   - `latest-mac.yml`
+   - `Overlord-<version>-linux-x64.AppImage`
+   - `latest-linux.yml`
+   - `Overlord-<version>-linux-amd64.deb` when shipping the Debian package
+3. Run `node scripts/upload-electron-release.mjs --no-bump` from the build output you intend to publish.
+4. Verify the public URLs under `app-downloads/electron/<version>/` and the root manifests at `app-downloads/electron/latest-mac.yml` and `app-downloads/electron/latest-linux.yml`.
 
 ### App configuration
 

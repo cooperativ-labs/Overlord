@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, CheckCircle2, CircleAlert, Download, Loader2, Shield } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,16 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { AgentTypeValue } from '@/lib/helpers/agent-types';
-import { AGENT_TYPES, getAgentTypeByValue } from '@/lib/helpers/agent-types';
+import { AGENT_TYPES } from '@/lib/helpers/agent-types';
 
 type Props = {
   onContinue: () => void;
   projectDirectory?: string;
 };
 
-type BundleAgent = 'claude' | 'codex';
-type SlashAgent = 'claude' | 'cursor' | 'gemini';
-type PermissionAgent = AgentTypeValue;
+type BundleAgent = 'claude' | 'codex' | 'opencode';
+type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 /** What each agent connector includes. */
 const AGENT_CONNECTOR_FEATURES: Record<
@@ -60,6 +59,16 @@ const AGENT_CONNECTOR_FEATURES: Record<
       'Slash commands (/connect, /load, /spawn)',
       'TOML policy rules for ovld protocol & curl'
     ]
+  },
+  opencode: {
+    bundle: true,
+    slashCommands: true,
+    permissions: true,
+    details: [
+      'AGENTS.md workflow instructions',
+      'Slash commands (/connect, /load, /spawn)',
+      'OpenCode config merge (instructions + bash permissions)'
+    ]
   }
 };
 
@@ -76,7 +85,7 @@ type AgentInstallState = {
 export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
   const { isElectron } = useElectron();
   const [selectedAgents, setSelectedAgents] = useState<Set<AgentTypeValue>>(
-    new Set(['claude', 'codex', 'cursor', 'gemini'])
+    new Set(['claude', 'codex', 'cursor', 'gemini', 'opencode'])
   );
   const [agentStates, setAgentStates] = useState<Record<AgentTypeValue, AgentInstallState>>({
     claude: {
@@ -98,6 +107,12 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
       installStatus: 'idle'
     },
     gemini: {
+      bundleStatus: 'idle',
+      slashStatus: 'idle',
+      permissionsConfigured: false,
+      installStatus: 'idle'
+    },
+    opencode: {
       bundleStatus: 'idle',
       slashStatus: 'idle',
       permissionsConfigured: false,
@@ -256,7 +271,6 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
     setHasInstalled(true);
   }
 
-  const allSelected = selectedAgents.size === AGENT_TYPES.length;
   const anySelected = selectedAgents.size > 0;
 
   if (!isElectron) return null;

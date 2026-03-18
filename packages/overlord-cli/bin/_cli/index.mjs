@@ -22,8 +22,8 @@ Usage:
   ${primaryCommand} connect <agent>            Launch an agent on a ticket
   ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
-  ${primaryCommand} setup <agent|all>           Install Overlord agent bundle
-  ${primaryCommand} doctor                     Validate installed agent bundles
+  ${primaryCommand} setup <agent|all>          Install Overlord agent connector
+  ${primaryCommand} doctor                     Validate installed agent connectors
   ${primaryCommand} help                       Show this help message
 
 Auth:

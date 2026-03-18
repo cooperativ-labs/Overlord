@@ -18,12 +18,11 @@ export type AgentCapability = {
 /**
  * Resolves the instruction mode for a given agent launch.
  *
- * @param agent - The agent type (claude, codex, cursor, gemini)
+ * @param agent - The agent type (claude, codex, cursor, gemini, opencode)
  * @param bundleInstalled - Whether the Overlord local bundle is installed for this agent
  */
 export function resolveAgentCapabilities(agent: string, bundleInstalled: boolean): AgentCapability {
-  // Only Claude and Codex support the bundle today
-  const bundleSupported = agent === 'claude' || agent === 'codex';
+  const bundleSupported = agent === 'claude' || agent === 'codex' || agent === 'opencode';
 
   return {
     agent,

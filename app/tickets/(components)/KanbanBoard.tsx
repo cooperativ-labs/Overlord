@@ -37,7 +37,7 @@ import {
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import {
   createTicketInColumnAction,
-  loadMoreCompleteTicketsAction,
+  loadMoreTicketsAction,
   markTicketReadAction,
   markTicketsReadAction,
   markTicketUnreadAction,
@@ -66,6 +66,7 @@ const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
 const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
 const USER_HIDDEN_COLUMNS_KEY = 'overlord:user-board:hidden-columns';
+const TICKETS_PAGE_SIZE = 20;
 
 type StatusColumn = {
   id: string;
@@ -129,8 +130,7 @@ export default function KanbanBoard({
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
   workingDirectory = null,
   initialView,
-  initialHiddenColumns = [],
-  initialCutoffDate
+  initialHiddenColumns = []
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number; status_type?: string }>;
@@ -141,7 +141,6 @@ export default function KanbanBoard({
   workingDirectory?: string | null;
   initialView: string;
   initialHiddenColumns?: string[];
-  initialCutoffDate?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -234,7 +233,6 @@ export default function KanbanBoard({
     const hiddenSet = new Set(hidden);
     return new Set(allColumnSlugs.filter(slug => !hiddenSet.has(slug)));
   });
-  // Per-column load-more state for complete columns
   type ColumnLoadMoreState = { cutoff: string; hasMore: boolean; isLoading: boolean };
   const [columnLoadMoreStates, setColumnLoadMoreStates] = useState<
     Map<string, ColumnLoadMoreState>
@@ -313,6 +311,13 @@ export default function KanbanBoard({
   );
 
   const columnById = useMemo(() => new Map(columns.map(c => [c.id, c])), [columns]);
+  const initialHasMoreByColumn = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ticket of initialTickets) {
+      counts.set(ticket.status, (counts.get(ticket.status) ?? 0) + 1);
+    }
+    return counts;
+  }, [initialTickets]);
 
   function groupTickets(tickets: Ticket[]) {
     const groups = new Map<string, Ticket[]>();
@@ -414,9 +419,7 @@ export default function KanbanBoard({
       colTickets
         .map(t => t.updated_at)
         .filter(Boolean)
-        .sort()[0] ??
-      initialCutoffDate ??
-      new Date().toISOString();
+        .sort()[0] ?? new Date().toISOString();
 
     const cutoff = state?.cutoff ?? colOldestUpdatedAt;
 
@@ -427,7 +430,7 @@ export default function KanbanBoard({
     });
 
     try {
-      const { tickets: loaded } = await loadMoreCompleteTicketsAction({
+      const { tickets: loaded } = await loadMoreTicketsAction({
         status: columnId,
         organizationId,
         projectId,
@@ -443,7 +446,7 @@ export default function KanbanBoard({
         const next = new Map(prev);
         next.set(columnId, {
           cutoff: newCutoff,
-          hasMore: loaded.length === 100,
+          hasMore: loaded.length === TICKETS_PAGE_SIZE,
           isLoading: false
         });
         return next;
@@ -1069,9 +1072,10 @@ export default function KanbanBoard({
             <div className="inline-flex flex-nowrap gap-3 px-4 md:px-6">
               {visibleSortedColumns.map(col => {
                 const colTickets = columnTickets.get(col.id) ?? [];
-                const isComplete = col.statusType === 'complete';
                 const loadMoreState = columnLoadMoreStates.get(col.id);
-                const hasMore = isComplete && loadMoreState?.hasMore !== false;
+                const hasMore =
+                  loadMoreState?.hasMore ??
+                  (initialHasMoreByColumn.get(col.id) ?? 0) >= TICKETS_PAGE_SIZE;
                 const isLoadingMore = loadMoreState?.isLoading ?? false;
                 return (
                   <KanbanColumn
@@ -1085,7 +1089,7 @@ export default function KanbanBoard({
                     onCreateTicket={handleCreateTicket}
                     onMarkUnread={handleMarkUnread}
                     onMarkAllRead={() => handleMarkColumnRead(colTickets.map(t => t.id))}
-                    isCompleteColumn={isComplete}
+                    isCompleteColumn={col.statusType === 'complete'}
                     hasMore={hasMore}
                     isLoadingMore={isLoadingMore}
                     onLoadMore={() => void handleLoadMore(col.id)}

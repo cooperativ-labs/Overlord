@@ -14,7 +14,7 @@ type Props = {
 };
 
 type PermissionResult = {
-  agent: 'claude' | 'codex' | 'cursor' | 'gemini';
+  agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
   ok: boolean;
   filePath: string;
   details: string;
@@ -26,7 +26,8 @@ const AGENT_LABELS: Record<PermissionResult['agent'], string> = {
   claude: 'Claude',
   codex: 'Codex',
   cursor: 'Cursor',
-  gemini: 'Gemini'
+  gemini: 'Gemini',
+  opencode: 'OpenCode'
 };
 
 export function ConfigureAgentPermissionsStep({ onContinue, projectDirectory }: Props) {

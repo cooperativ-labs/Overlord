@@ -20,6 +20,7 @@ type TicketHeaderActionProps = {
   codexCommand: string;
   cursorCommand: string;
   geminiCommand: string;
+  opencodeCommand: string;
   workingDirectory: string | null;
   hasProjectWorkingDirectory: boolean;
 };
@@ -34,6 +35,7 @@ export function TicketHeaderAction({
   codexCommand,
   cursorCommand,
   geminiCommand,
+  opencodeCommand,
   workingDirectory,
   hasProjectWorkingDirectory
 }: TicketHeaderActionProps) {
@@ -77,7 +79,8 @@ export function TicketHeaderAction({
           claude: claudeCommand,
           codex: codexCommand,
           cursor: cursorCommand,
-          gemini: geminiCommand
+          gemini: geminiCommand,
+          opencode: opencodeCommand
         }}
         workingDirectory={workingDirectory}
         hasProjectWorkingDirectory={hasProjectWorkingDirectory}

@@ -9,7 +9,7 @@ import {
   writeTextFile
 } from './agent-bundle/merge-helpers';
 
-export type AgentPermissionAgent = 'claude' | 'codex' | 'cursor' | 'gemini';
+export type AgentPermissionAgent = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 
 export type AgentPermissionResult = {
   agent: AgentPermissionAgent;
@@ -253,6 +253,60 @@ function configureGemini(): AgentPermissionResult {
   }
 }
 
+function configureOpenCode(): AgentPermissionResult {
+  const backups: string[] = [];
+  const filePath = path.join(os.homedir(), '.config', 'opencode', 'opencode.json');
+
+  try {
+    withOptionalBackup(filePath, backups);
+
+    const settings = readJsonFile(filePath);
+    const permission =
+      settings.permission && typeof settings.permission === 'object'
+        ? (settings.permission as Record<string, unknown>)
+        : {};
+    const bashPermission =
+      permission.bash && typeof permission.bash === 'object'
+        ? (permission.bash as Record<string, unknown>)
+        : {};
+
+    const next = {
+      ...settings,
+      $schema: 'https://opencode.ai/config.json',
+      permission: {
+        ...permission,
+        bash: {
+          '*': 'ask',
+          ...bashPermission,
+          'ovld protocol *': 'allow',
+          'curl -sS -X POST *': 'allow',
+          'curl -s -X POST *': 'allow'
+        }
+      }
+    };
+
+    writeJsonFile(filePath, next);
+
+    return {
+      agent: 'opencode',
+      ok: true,
+      filePath,
+      backups,
+      details: 'Updated OpenCode bash permissions for ovld protocol and curl POST.'
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      agent: 'opencode',
+      ok: false,
+      filePath,
+      backups,
+      details: 'Failed to update OpenCode permissions.',
+      error: message
+    };
+  }
+}
+
 export function configureAgentPermissions(
   options: ConfigureAgentPermissionsOptions = {}
 ): ConfigureAgentPermissionsResult {
@@ -260,7 +314,8 @@ export function configureAgentPermissions(
     configureClaude(options.projectDirectory),
     configureCodex(),
     configureCursor(options.projectDirectory),
-    configureGemini()
+    configureGemini(),
+    configureOpenCode()
   ];
 
   return {

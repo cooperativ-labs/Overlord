@@ -10,7 +10,7 @@
  *   node scripts/verify-agent-permissions.mjs [options]
  *
  * Options:
- *   --agent=claude|codex|all   Target agent runtime (default: claude)
+ *   --agent=claude|codex|opencode|all   Target agent runtime (default: claude)
  *   --platform-url=<url>       Platform URL (default: http://localhost:3000)
  *   --help                     Show usage
  *
@@ -20,6 +20,7 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -63,7 +64,7 @@ function printUsage() {
 Usage: node scripts/verify-agent-permissions.mjs [options]
 
 Options:
-  --agent=claude|codex|all   Target agent runtime (default: claude)
+  --agent=claude|codex|opencode|all   Target agent runtime (default: claude)
   --platform-url=<url>       Platform URL (default: http://localhost:3000)
   --help                     Show this help message
 `);
@@ -141,6 +142,42 @@ function verifyCodex() {
   return true; // non-blocking — informational only
 }
 
+function verifyOpenCode() {
+  console.log(`\n--- OpenCode ---`);
+  const configPath = path.join(os.homedir(), ".config", "opencode", "opencode.json");
+  console.log(`Config file: ${configPath}`);
+
+  if (!fs.existsSync(configPath)) {
+    console.log("  FAIL: Config file not found.");
+    console.log("  Run: node scripts/install-agent-permissions.mjs --agent=opencode");
+    return false;
+  }
+
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  } catch (e) {
+    console.log(`  FAIL: Could not parse config file: ${e.message}`);
+    return false;
+  }
+
+  const bash = config?.permission?.bash ?? {};
+  const expected = ["ovld protocol *", "curl -sS -X POST *", "curl -s -X POST *"];
+  const missing = expected.filter((entry) => bash[entry] !== "allow");
+
+  if (missing.length === 0) {
+    console.log(`  OK: All ${expected.length} required bash permissions are present.`);
+    return true;
+  }
+
+  console.log(`  FAIL: Missing ${missing.length} required OpenCode bash permissions:`);
+  for (const entry of missing) {
+    console.log(`    - ${entry}`);
+  }
+  console.log(`\n  Run: node scripts/install-agent-permissions.mjs --agent=opencode`);
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -164,6 +201,10 @@ function main() {
 
   if (opts.agent === "codex" || opts.agent === "all") {
     ok = verifyCodex() && ok;
+  }
+
+  if (opts.agent === "opencode" || opts.agent === "all") {
+    ok = verifyOpenCode() && ok;
   }
 
   console.log();

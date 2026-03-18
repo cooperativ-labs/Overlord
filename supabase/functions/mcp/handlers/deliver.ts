@@ -23,6 +23,9 @@ function buildMcpRestartCommand(
     if (normalized.includes('codex')) return `codex resume ${nativeSessionId}`;
     if (normalized.includes('cursor')) return `cursor --resume ${nativeSessionId}`;
     if (normalized.includes('gemini')) return `gemini --resume ${nativeSessionId}`;
+    if (normalized.includes('opencode')) {
+      return `opencode --continue --session ${nativeSessionId}`;
+    }
   }
 
   if (normalized.includes('cursor')) {
@@ -30,6 +33,9 @@ function buildMcpRestartCommand(
   }
   if (normalized.includes('gemini')) {
     return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume gemini`;
+  }
+  if (normalized.includes('opencode')) {
+    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume opencode`;
   }
   if (normalized.includes('codex')) {
     return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume codex`;

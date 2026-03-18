@@ -177,7 +177,7 @@ export default function KanbanColumn({
                   Add ticket
                 </button>
               )}
-              {isCompleteColumn && (hasMore || isLoadingMore) && onLoadMore ? (
+              {(hasMore || isLoadingMore) && onLoadMore ? (
                 <Button
                   variant="ghost"
                   size="sm"

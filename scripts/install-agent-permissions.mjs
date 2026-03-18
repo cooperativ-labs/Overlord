@@ -11,7 +11,7 @@
  *   node scripts/install-agent-permissions.mjs [options]
  *
  * Options:
- *   --agent=claude|codex|all   Target agent runtime (default: all)
+ *   --agent=claude|codex|opencode|all   Target agent runtime (default: all)
  *   --platform-url=<url>       Platform URL (default: http://localhost:3000)
  *   --dry-run                  Preview changes without writing
  *   --help                     Show usage
@@ -55,8 +55,8 @@ function parseArgs() {
     }
   }
 
-  if (!["claude", "codex", "all"].includes(opts.agent)) {
-    console.error(`Invalid --agent value: ${opts.agent}. Must be claude, codex, or all.`);
+  if (!["claude", "codex", "opencode", "all"].includes(opts.agent)) {
+    console.error(`Invalid --agent value: ${opts.agent}. Must be claude, codex, opencode, or all.`);
     process.exit(1);
   }
 
@@ -68,7 +68,7 @@ function printUsage() {
 Usage: node scripts/install-agent-permissions.mjs [options]
 
 Options:
-  --agent=claude|codex|all   Target agent runtime (default: all)
+  --agent=claude|codex|opencode|all   Target agent runtime (default: all)
   --platform-url=<url>       Platform URL override (default: http://localhost:3000)
   --dry-run                  Preview changes without writing files
   --help                     Show this help message
@@ -169,7 +169,7 @@ function installClaude(platformUrl, dryRun) {
 // Codex permissions
 // ---------------------------------------------------------------------------
 
-function installCodex(platformUrl, dryRun) {
+function installCodex(platformUrl, _dryRun) {
   console.log(`\n--- Codex ---`);
 
   // Codex does not currently support file-based permission pre-configuration.
@@ -183,6 +183,61 @@ function installCodex(platformUrl, dryRun) {
   }
   console.log(`  curl -s -H "Authorization: Bearer \\$AGENT_TOKEN" "${platformUrl}/api/protocol/context/test"`);
   console.log();
+  return true;
+}
+
+function installOpenCode(_platformUrl, dryRun) {
+  console.log(`\n--- OpenCode ---`);
+  const configPath = path.join(os.homedir(), ".config", "opencode", "opencode.json");
+  console.log(`Config file: ${configPath}`);
+
+  let config = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    } catch (e) {
+      console.error(`  ERROR: Could not parse ${configPath}: ${e.message}`);
+      return false;
+    }
+  }
+
+  const existingPermission =
+    config.permission && typeof config.permission === "object" ? config.permission : {};
+  const existingBash =
+    existingPermission.bash && typeof existingPermission.bash === "object"
+      ? existingPermission.bash
+      : {};
+
+  const next = {
+    ...config,
+    $schema: "https://opencode.ai/config.json",
+    permission: {
+      ...existingPermission,
+      bash: {
+        "*": "ask",
+        ...existingBash,
+        "ovld protocol *": "allow",
+        "curl -sS -X POST *": "allow",
+        "curl -s -X POST *": "allow",
+      },
+    },
+  };
+
+  if (dryRun) {
+    console.log("  Would write OpenCode permission rules for ovld protocol and curl POST.");
+    return true;
+  }
+
+  if (fs.existsSync(configPath)) {
+    const backupPath = `${configPath}.backup-${timestamp()}`;
+    fs.copyFileSync(configPath, backupPath);
+    console.log(`  Backup: ${backupPath}`);
+  }
+
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(next, null, 2) + "\n");
+  console.log("  Config updated.");
   return true;
 }
 
@@ -211,6 +266,10 @@ function main() {
 
   if (opts.agent === "codex" || opts.agent === "all") {
     ok = installCodex(opts.platformUrl, opts.dryRun) && ok;
+  }
+
+  if (opts.agent === "opencode" || opts.agent === "all") {
+    ok = installOpenCode(opts.platformUrl, opts.dryRun) && ok;
   }
 
   console.log();

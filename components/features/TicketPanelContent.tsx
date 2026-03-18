@@ -196,11 +196,12 @@ export async function TicketPanelContent({
     claude: agentConfigs.claude?.flags ?? [],
     codex: agentConfigs.codex?.flags ?? [],
     cursor: agentConfigs.cursor?.flags ?? [],
-    gemini: agentConfigs.gemini?.flags ?? []
+    gemini: agentConfigs.gemini?.flags ?? [],
+    opencode: agentConfigs.opencode?.flags ?? []
   };
   const workspaceRoot = getWorkspaceRoot();
   const editorScheme = getEditorScheme(profileSettings?.editor_scheme);
-  const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
+  const { claudeCode, codex, cursor, gemini, opencode } = buildLaunchCommands({
     platformUrl,
     ticketId,
     token: agentToken ?? ''
@@ -209,7 +210,8 @@ export async function TicketPanelContent({
     claudeCode: claudeResume,
     codex: codexResume,
     cursor: cursorResume,
-    gemini: geminiResume
+    gemini: geminiResume,
+    opencode: opencodeResume
   } = buildResumeCommands({
     platformUrl,
     ticketId,
@@ -299,6 +301,7 @@ export async function TicketPanelContent({
           codexCommand={codex}
           cursorCommand={cursor}
           geminiCommand={gemini}
+          opencodeCommand={opencode}
           workingDirectory={workingDirectory}
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
           closePath={closePath}
@@ -504,10 +507,12 @@ export async function TicketPanelContent({
                 codexCommand={codex}
                 cursorCommand={cursor}
                 geminiCommand={gemini}
+                opencodeCommand={opencode}
                 claudeResumeCommand={claudeResume}
                 codexResumeCommand={codexResume}
                 cursorResumeCommand={cursorResume}
                 geminiResumeCommand={geminiResume}
+                opencodeResumeCommand={opencodeResume}
               />
             </ErrorBoundary>
           </section>

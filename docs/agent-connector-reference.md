@@ -106,6 +106,37 @@ Gemini does not have a plugin/bundle system. Connector functionality is provided
 
 ---
 
+## OpenCode
+
+### Plugins (Bundle)
+
+| Item | File | Action |
+|------|------|--------|
+| Workflow instructions | `~/.config/opencode/AGENTS.md` | Appended — Overlord section inserted within managed markers (`<!-- overlord:managed:start -->` / `<!-- overlord:managed:end -->`) |
+| Config merge | `~/.config/opencode/opencode.json` | Merged — adds `instructions` entry and bash permission rules |
+
+### Slash Commands
+
+| Command | File | Format |
+|---------|------|--------|
+| `/connect <ticket-id>` | `~/.config/opencode/commands/connect.md` | Markdown |
+| `/load <ticket-id>` | `~/.config/opencode/commands/load.md` | Markdown |
+| `/spawn <objective>` | `~/.config/opencode/commands/spawn.md` | Markdown |
+
+### Permissions
+
+| File | Changes |
+|------|---------|
+| `~/.config/opencode/opencode.json` | Adds `permission.bash` allow rules for `ovld protocol *` and curl POST requests |
+
+### Manifest
+
+| File | Purpose |
+|------|---------|
+| `~/.ovld/bundle-manifest.json` | Tracks bundle version, content hash, installation time, managed files |
+
+---
+
 ## Summary Table
 
 | Agent | Plugins/Bundle | Slash Commands | Permissions | Config Files Modified |
@@ -114,13 +145,14 @@ Gemini does not have a plugin/bundle system. Connector functionality is provided
 | Codex | AGENTS.md instructions | None | default.rules prefix rules | `~/.codex/AGENTS.md`, `~/.codex/rules/default.rules` |
 | Cursor | None | /connect, /load, /spawn | settings.json allow rules | `~/.cursor/commands/{connect,load,spawn}.md`, `~/.cursor/settings.json` |
 | Gemini | None | /connect, /load, /spawn | TOML policy rules | `~/.gemini/commands/{connect,load,spawn}.toml`, `~/.gemini/policies/overlord-protocol.toml` |
+| OpenCode | AGENTS.md instructions, opencode.json merge | /connect, /load, /spawn | opencode.json bash allow rules | `~/.config/opencode/AGENTS.md`, `~/.config/opencode/opencode.json`, `~/.config/opencode/commands/{connect,load,spawn}.md` |
 
 ---
 
 ## Notes
 
 - **Non-destructive**: All connector installations create backups of existing files before modification.
-- **Append-only**: Overlord appends its additions to existing config files (e.g., `settings.json`, `AGENTS.md`) rather than overwriting them. Managed sections are marked with `<!-- OVERLORD:BEGIN -->` / `<!-- OVERLORD:END -->` comments where applicable.
+- **Append-only**: Overlord appends its additions to existing config files (e.g., `settings.json`, `AGENTS.md`) rather than overwriting them. Managed sections are marked with `<!-- overlord:managed:start -->` / `<!-- overlord:managed:end -->` comments where applicable.
 - **Repair**: If managed files are partially missing, connectors can be repaired (reinstalled) without affecting user-owned config.
 - **Uninstall**: Only Overlord-owned files and managed sections are removed during uninstall; user config is preserved.
 - **Bundle manifest**: Tracked in `~/.ovld/bundle-manifest.json` for version detection and stale/partial install identification.

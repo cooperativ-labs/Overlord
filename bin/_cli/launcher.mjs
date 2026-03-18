@@ -27,10 +27,11 @@ const agentIdentifierMap = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
-  gemini: 'gemini'
+  gemini: 'gemini',
+  opencode: 'opencode'
 };
 
-const supportedAgents = ['claude', 'codex', 'cursor', 'gemini'];
+const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
 
 function parseLauncherArgs(args) {
   const positionals = [];
@@ -111,6 +112,16 @@ async function runAgent(agent, mode = 'run') {
       }
     } else if (agent === 'cursor') {
       execFileSync('agent', [context], { stdio: 'inherit', env: childEnv });
+    } else if (agent === 'opencode') {
+      if (mode === 'resume') {
+        const openCodeSessionId = process.env.OPENCODE_SESSION_ID?.trim();
+        const args = openCodeSessionId
+          ? ['--continue', '--session', openCodeSessionId, '--prompt', context]
+          : ['--continue', '--prompt', context];
+        execFileSync('opencode', args, { stdio: 'inherit', env: childEnv });
+      } else {
+        execFileSync('opencode', ['--prompt', context], { stdio: 'inherit', env: childEnv });
+      }
     } else {
       execFileSync('gemini', [context], { stdio: 'inherit', env: childEnv });
     }
@@ -121,6 +132,8 @@ async function runAgent(agent, mode = 'run') {
         ? `No prior Claude session was found. Start one with \`ovld connect claude --ticket-id <ticket-id>\` first.`
         : agent === 'codex'
           ? `No prior Codex session was found. Start one with \`ovld connect codex --ticket-id <ticket-id>\` first.`
+          : agent === 'opencode'
+            ? `No prior OpenCode session was found. Start one with \`ovld connect opencode --ticket-id <ticket-id>\` first.`
           : '';
     const message = error instanceof Error ? error.message : String(error);
 

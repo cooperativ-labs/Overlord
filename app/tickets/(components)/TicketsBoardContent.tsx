@@ -89,6 +89,7 @@ type WaitingQuestionForBoard = Pick<
   Database['public']['Tables']['ticket_events']['Row'],
   'ticket_id' | 'created_at'
 >;
+const INITIAL_TICKETS_PER_STATUS = 20;
 
 export default async function TicketsBoardContent({
   organizationId,
@@ -123,25 +124,29 @@ export default async function TicketsBoardContent({
   const statusesResult = await statusesQuery;
   const allStatuses = dedupeStatuses(statusesResult.data ?? []);
 
-  // Load the 80 most recently updated tickets per project
-  let ticketsQuery = supabase
-    .from('tickets')
-    .select(
-      'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
-    )
-    .order('updated_at', { ascending: false })
-    .limit(80);
+  const ticketQueries = allStatuses.map(async status => {
+    let query = supabase
+      .from('tickets')
+      .select(
+        'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+      )
+      .eq('status', status.name)
+      .order('updated_at', { ascending: false })
+      .limit(INITIAL_TICKETS_PER_STATUS);
 
-  if (organizationId !== undefined) {
-    ticketsQuery = ticketsQuery.eq('organization_id', organizationId);
-  }
+    if (organizationId !== undefined) {
+      query = query.eq('organization_id', organizationId);
+    }
 
-  if (projectId !== undefined) {
-    ticketsQuery = ticketsQuery.eq('project_id', projectId);
-  }
+    if (projectId !== undefined) {
+      query = query.eq('project_id', projectId);
+    }
 
-  const [ticketsResult, everhourIntegrationResult] = await Promise.all([
-    ticketsQuery,
+    return query;
+  });
+
+  const [ticketResults, everhourIntegrationResult] = await Promise.all([
+    Promise.all(ticketQueries),
     supabase
       .from('user_integrations')
       .select('api_key')
@@ -157,7 +162,8 @@ export default async function TicketsBoardContent({
       : '';
   const hasEverhourApiKey = everhourApiKey.length > 0;
 
-  const rawTickets = (ticketsResult.data ?? []) as RawTicket[];
+  const ticketLoadError = ticketResults.find(result => result.error)?.error ?? null;
+  const rawTickets = ticketResults.flatMap(result => (result.data ?? []) as RawTicket[]);
   const ticketIds = rawTickets.map(ticket => ticket.id);
   const latestSessionByTicket = new Map<
     string,
@@ -237,15 +243,7 @@ export default async function TicketsBoardContent({
       };
     });
   const statuses = allStatuses;
-  const loadError = ticketsResult.error ?? statusesResult.error;
-  // Cursor for "load more": the oldest updated_at from the initial 80 tickets
-  const initialCutoffDate =
-    rawTickets.length > 0
-      ? rawTickets.reduce(
-          (min, t) => (t.updated_at < min ? t.updated_at : min),
-          rawTickets[0]!.updated_at
-        )
-      : undefined;
+  const loadError = ticketLoadError ?? statusesResult.error;
   let objectiveFileMentionPaths: string[] = [];
   let kanbanWorkingDirectory: string | null = null;
 
@@ -302,7 +300,6 @@ export default async function TicketsBoardContent({
           workingDirectory={kanbanWorkingDirectory}
           initialView={view}
           initialHiddenColumns={initialHiddenColumns}
-          initialCutoffDate={initialCutoffDate}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">

@@ -42,7 +42,8 @@ const defaultAgentButtonStates: Record<LaunchAgentTypeValue, ButtonLoadingState>
   claude: 'default',
   codex: 'default',
   cursor: 'default',
-  gemini: 'default'
+  gemini: 'default',
+  opencode: 'default'
 };
 
 export function DiscussTicketButton({

@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { claudeCode, codex, cursor, gemini } = buildResumeCommands({
+    const { claudeCode, codex, cursor, gemini, opencode } = buildResumeCommands({
       platformUrl: getPlatformUrl(),
       ticketId,
       token: tokenValue
@@ -92,7 +92,8 @@ export async function POST(request: Request) {
         claudeCode,
         codex,
         cursor,
-        gemini
+        gemini,
+        opencode
       },
       resolved.session.external_session_id
     );

@@ -33,8 +33,8 @@ type SlashCommandConfig = {
   filePaths: string[];
 };
 
-type BundleAgent = 'claude' | 'codex';
-type SlashAgent = 'claude' | 'cursor' | 'gemini';
+type BundleAgent = 'claude' | 'codex' | 'opencode';
+type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 type BundleStatusEntry = {
   agent: BundleAgent;
@@ -73,12 +73,20 @@ type AgentPluginInstallOption =
       supportNote?: string;
     };
 
-const AGENTS = ['claude', 'cursor', 'codex'] as const;
+type PluginActionMeta = {
+  label: 'Install' | 'Update' | 'Repair' | 'Remove';
+  loadingText: string;
+  successText: string;
+  errorText: string;
+};
+
+const AGENTS = ['claude', 'cursor', 'codex', 'opencode'] as const;
 
 const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude',
   cursor: 'Cursor',
-  codex: 'Codex'
+  codex: 'Codex',
+  opencode: 'OpenCode'
 };
 
 function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
@@ -118,6 +126,16 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
       '~/.gemini/commands/load.toml',
       '~/.gemini/commands/spawn.toml'
     ]
+  },
+  opencode: {
+    label: 'OpenCode',
+    description: 'Installs global slash commands for mid-session Overlord ticket operations.',
+    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `~/.config/opencode/commands/`.',
+    filePaths: [
+      '~/.config/opencode/commands/connect.md',
+      '~/.config/opencode/commands/load.md',
+      '~/.config/opencode/commands/spawn.md'
+    ]
   }
 };
 
@@ -128,7 +146,12 @@ const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
     '~/.claude/settings.json',
     ...SLASH_COMMAND_CONFIGS.claude.filePaths
   ],
-  codex: ['~/.codex/AGENTS.md']
+  codex: ['~/.codex/AGENTS.md'],
+  opencode: [
+    '~/.config/opencode/AGENTS.md',
+    '~/.config/opencode/opencode.json',
+    ...SLASH_COMMAND_CONFIGS.opencode.filePaths
+  ]
 };
 
 const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
@@ -178,6 +201,25 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     kind: 'slash',
     slashAgent: 'gemini',
     supportNote: SLASH_COMMAND_CONFIGS.gemini.supportNote
+  },
+  {
+    key: 'opencode:bundle',
+    agentKey: 'opencode',
+    label: 'Prompt / skills',
+    description:
+      'Installs durable Overlord workflow instructions and OpenCode config so ticket lifecycle rules, permissions, and slash commands live in local config.',
+    kind: 'bundle',
+    bundleAgent: 'opencode',
+    supportNote: 'Managed by the desktop app in your local ~/.config/opencode configuration.'
+  },
+  {
+    key: 'opencode:slash',
+    agentKey: 'opencode',
+    label: '/connect /load /spawn',
+    description: SLASH_COMMAND_CONFIGS.opencode.description,
+    kind: 'slash',
+    slashAgent: 'opencode',
+    supportNote: SLASH_COMMAND_CONFIGS.opencode.supportNote
   }
 ];
 
@@ -185,8 +227,52 @@ const AGENT_PLUGIN_GROUPS = [
   { key: 'claude', label: 'Claude Code' },
   { key: 'codex', label: 'Codex CLI' },
   { key: 'cursor', label: 'Cursor' },
-  { key: 'gemini', label: 'Gemini CLI' }
+  { key: 'gemini', label: 'Gemini CLI' },
+  { key: 'opencode', label: 'OpenCode' }
 ] as const;
+
+function getBundleActionMeta(status: BundleStatusEntry['status'] | undefined): PluginActionMeta {
+  const label =
+    status === 'installed'
+      ? 'Remove'
+      : status === 'partial' || status === 'error'
+        ? 'Repair'
+        : status === 'stale'
+          ? 'Update'
+          : 'Install';
+
+  return {
+    label,
+    loadingText:
+      label === 'Remove'
+        ? 'Removing...'
+        : label === 'Install'
+          ? 'Installing...'
+          : label === 'Update'
+            ? 'Updating...'
+            : 'Repairing...',
+    successText:
+      label === 'Remove'
+        ? 'Removed'
+        : label === 'Install'
+          ? 'Installed'
+          : label === 'Update'
+            ? 'Updated'
+            : 'Repaired',
+    errorText: `${label} failed`
+  };
+}
+
+function getSlashActionMeta(status: SlashStatusEntry['status'] | undefined): PluginActionMeta {
+  const label = status === 'installed' || status === 'partial' ? 'Remove' : 'Install';
+
+  return {
+    label,
+    loadingText: label === 'Remove' ? 'Removing...' : 'Installing...',
+    successText: label === 'Remove' ? 'Removed' : 'Installed',
+    errorText: `${label} failed`
+  };
+}
 
 export function CliPage({ open }: { open: boolean }) {
   const { isElectron, api } = useElectron();
@@ -198,10 +284,11 @@ export function CliPage({ open }: { open: boolean }) {
   const [flagInput, setFlagInput] = useState('');
   const [commandCopied, setCommandCopied] = useState(false);
 
-  const [selectedAgentPluginKey, setSelectedAgentPluginKey] = useState('claude:bundle');
   const [slashStatuses, setSlashStatuses] = useState<SlashStatusEntry[]>([]);
-  const [pluginActionButtonState, setPluginActionButtonState] =
-    useState<ButtonLoadingState>('default');
+  const [pluginActionButtonStates, setPluginActionButtonStates] = useState<
+    Record<string, ButtonLoadingState>
+  >({});
+  const [activePluginActionKey, setActivePluginActionKey] = useState<string | null>(null);
 
   const [cliInstallButtonState, setCliInstallButtonState] = useState<ButtonLoadingState>('default');
   const [cliInstalled, setCliInstalled] = useState(false);
@@ -210,7 +297,8 @@ export function CliPage({ open }: { open: boolean }) {
   const [cliVersion, setCliVersion] = useState<string | null>(null);
   const [cliIsStale, setCliIsStale] = useState(false);
   const [bundleStatuses, setBundleStatuses] = useState<BundleStatusEntry[]>([]);
-  const [bundleActionLoading, setBundleActionLoading] = useState<string | null>(null);
+  const [installAllBundlesButtonState, setInstallAllBundlesButtonState] =
+    useState<ButtonLoadingState>('default');
 
   const loadBundleStatuses = useCallback(async () => {
     if (!isElectron || !window.electronAPI?.agentBundle) return;
@@ -269,9 +357,9 @@ export function CliPage({ open }: { open: boolean }) {
     void loadSlashStatuses();
   }, [open, loadBundleStatuses, loadSlashStatuses]);
 
-  useEffect(() => {
-    setPluginActionButtonState('default');
-  }, [selectedAgentPluginKey]);
+  const setPluginActionButtonState = useCallback((key: string, state: ButtonLoadingState) => {
+    setPluginActionButtonStates(current => ({ ...current, [key]: state }));
+  }, []);
 
   async function handleAddFlag() {
     if (!flagInput.trim()) return;
@@ -342,97 +430,103 @@ export function CliPage({ open }: { open: boolean }) {
     }
   }
 
-  async function handleInstallBundle(agent: 'claude' | 'codex') {
+  async function handleInstallBundle(agent: BundleAgent, optionKey: string) {
     if (!window.electronAPI?.agentBundle) return;
-    setBundleActionLoading(agent);
-    setPluginActionButtonState('loading');
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
     try {
       await window.electronAPI.agentBundle.install(agent);
       await loadBundleStatuses();
-      if (agent === 'claude') {
+      if (agent === 'claude' || agent === 'opencode') {
         await loadSlashStatuses();
       }
-      setPluginActionButtonState('success');
+      setPluginActionButtonState(optionKey, 'success');
     } catch {
       // Handled by status refresh
-      setPluginActionButtonState('error');
+      setPluginActionButtonState(optionKey, 'error');
     } finally {
-      setBundleActionLoading(null);
+      setActivePluginActionKey(null);
     }
   }
 
   async function handleInstallAllBundles() {
     if (!window.electronAPI?.agentBundle) return;
-    setBundleActionLoading('all');
+    setInstallAllBundlesButtonState('loading');
     try {
       await window.electronAPI.agentBundle.installAll();
       await loadBundleStatuses();
+      await loadSlashStatuses();
+      setInstallAllBundlesButtonState('success');
     } catch {
-      // Handled by status refresh
-    } finally {
-      setBundleActionLoading(null);
+      setInstallAllBundlesButtonState('error');
     }
   }
 
-  async function handleRepairBundle(agent: 'claude' | 'codex') {
+  async function handleRepairBundle(agent: BundleAgent, optionKey: string) {
     if (!window.electronAPI?.agentBundle) return;
-    setBundleActionLoading(`repair-${agent}`);
-    setPluginActionButtonState('loading');
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
     try {
       await window.electronAPI.agentBundle.repair(agent);
       await loadBundleStatuses();
-      if (agent === 'claude') {
+      if (agent === 'claude' || agent === 'opencode') {
         await loadSlashStatuses();
       }
-      setPluginActionButtonState('success');
+      setPluginActionButtonState(optionKey, 'success');
     } catch {
       // Handled by status refresh
-      setPluginActionButtonState('error');
+      setPluginActionButtonState(optionKey, 'error');
     } finally {
-      setBundleActionLoading(null);
+      setActivePluginActionKey(null);
     }
   }
 
-  async function handleUninstallBundle(agent: 'claude' | 'codex') {
+  async function handleUninstallBundle(agent: BundleAgent, optionKey: string) {
     if (!window.electronAPI?.agentBundle) return;
-    setBundleActionLoading(`uninstall-${agent}`);
-    setPluginActionButtonState('loading');
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
     try {
       await window.electronAPI.agentBundle.uninstall(agent);
       await loadBundleStatuses();
-      if (agent === 'claude') {
+      if (agent === 'claude' || agent === 'opencode') {
         await loadSlashStatuses();
       }
-      setPluginActionButtonState('success');
+      setPluginActionButtonState(optionKey, 'success');
     } catch {
       // Handled by status refresh
-      setPluginActionButtonState('error');
+      setPluginActionButtonState(optionKey, 'error');
     } finally {
-      setBundleActionLoading(null);
+      setActivePluginActionKey(null);
     }
   }
 
-  async function handleInstallSlashCommands(agent: SlashAgent) {
+  async function handleInstallSlashCommands(agent: SlashAgent, optionKey: string) {
     if (!window.electronAPI?.agentSlash) return;
-    setPluginActionButtonState('loading');
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
     try {
       await window.electronAPI.agentSlash.install(agent);
       await loadSlashStatuses();
-      setPluginActionButtonState('success');
+      setPluginActionButtonState(optionKey, 'success');
     } catch {
-      setPluginActionButtonState('error');
+      setPluginActionButtonState(optionKey, 'error');
+    } finally {
+      setActivePluginActionKey(null);
     }
   }
 
-  async function handleUninstallSlashCommands(agent: SlashAgent) {
+  async function handleUninstallSlashCommands(agent: SlashAgent, optionKey: string) {
     if (!window.electronAPI?.agentSlash) return;
-    setPluginActionButtonState('loading');
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
     try {
       await window.electronAPI.agentSlash.uninstall(agent);
       await loadSlashStatuses();
-      setPluginActionButtonState('success');
+      setPluginActionButtonState(optionKey, 'success');
     } catch {
-      setPluginActionButtonState('error');
+      setPluginActionButtonState(optionKey, 'error');
+    } finally {
+      setActivePluginActionKey(null);
     }
   }
 
@@ -493,82 +587,6 @@ export function CliPage({ open }: { open: boolean }) {
         );
     }
   };
-
-  const selectedAgentPlugin =
-    AGENT_PLUGIN_OPTIONS.find(option => option.key === selectedAgentPluginKey) ??
-    AGENT_PLUGIN_OPTIONS[0];
-  const selectedSlashStatus =
-    selectedAgentPlugin.kind === 'slash'
-      ? slashStatuses.find(status => status.agent === selectedAgentPlugin.slashAgent)
-      : null;
-  const selectedBundleStatus =
-    selectedAgentPlugin.kind === 'bundle'
-      ? bundleStatuses.find(status => status.agent === selectedAgentPlugin.bundleAgent)
-      : null;
-  const installFilesForSelectedSlash =
-    selectedAgentPlugin.kind === 'slash'
-      ? (selectedSlashStatus?.managedFiles ??
-        SLASH_COMMAND_CONFIGS[selectedAgentPlugin.slashAgent].filePaths)
-      : [];
-  const removableFilesForSelectedSlash = selectedSlashStatus?.existingManagedFiles ?? [];
-  const isPluginActionBusy = pluginActionButtonState === 'loading' || bundleActionLoading !== null;
-  const pluginActionLabel =
-    selectedAgentPlugin.kind === 'bundle'
-      ? selectedBundleStatus?.status === 'installed'
-        ? 'Remove'
-        : selectedBundleStatus?.status === 'partial' || selectedBundleStatus?.status === 'error'
-          ? 'Repair'
-          : selectedBundleStatus?.status === 'stale'
-            ? 'Update'
-            : 'Install'
-      : selectedSlashStatus?.status === 'installed' || selectedSlashStatus?.status === 'partial'
-        ? 'Remove'
-        : 'Install';
-  const pluginActionLoadingText =
-    pluginActionLabel === 'Remove'
-      ? 'Removing...'
-      : pluginActionLabel === 'Install'
-        ? 'Installing...'
-        : pluginActionLabel === 'Update'
-          ? 'Updating...'
-          : 'Repairing...';
-  const pluginActionSuccessText =
-    pluginActionLabel === 'Remove'
-      ? 'Removed'
-      : pluginActionLabel === 'Install'
-        ? 'Installed'
-        : pluginActionLabel === 'Update'
-          ? 'Updated'
-          : 'Repaired';
-  const pluginActionErrorText = `${pluginActionLabel} failed`;
-  const canRunPluginAction =
-    selectedAgentPlugin.kind === 'bundle'
-      ? Boolean(selectedBundleStatus)
-      : Boolean(selectedSlashStatus);
-
-  async function handleSelectedPluginAction() {
-    setPluginActionButtonState('default');
-    if (selectedAgentPlugin.kind === 'bundle') {
-      if (!selectedBundleStatus) return;
-      if (selectedBundleStatus.status === 'installed') {
-        await handleUninstallBundle(selectedBundleStatus.agent);
-        return;
-      }
-      if (selectedBundleStatus.status === 'partial' || selectedBundleStatus.status === 'error') {
-        await handleRepairBundle(selectedBundleStatus.agent);
-        return;
-      }
-      await handleInstallBundle(selectedBundleStatus.agent);
-      return;
-    }
-
-    if (!selectedSlashStatus || selectedSlashStatus.status === 'not_installed') {
-      await handleInstallSlashCommands(selectedAgentPlugin.slashAgent);
-      return;
-    }
-
-    await handleUninstallSlashCommands(selectedAgentPlugin.slashAgent);
-  }
 
   return (
     <div className="grid gap-6">
@@ -724,149 +742,139 @@ export function CliPage({ open }: { open: boolean }) {
         <div className="space-y-2">
           {AGENT_PLUGIN_GROUPS.map(group => {
             const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
-            const bundleOption = options.find(
-              (option): option is Extract<AgentPluginInstallOption, { kind: 'bundle' }> =>
-                option.kind === 'bundle'
-            );
-            const bundleStatus = bundleOption
-              ? bundleStatuses.find(status => status.agent === bundleOption.bundleAgent)
-              : null;
-            const slashOption = options.find(
-              (option): option is Extract<AgentPluginInstallOption, { kind: 'slash' }> =>
-                option.kind === 'slash'
-            );
-            const slashStatus = slashOption
-              ? slashStatuses.find(status => status.agent === slashOption.slashAgent)
-              : null;
 
             return (
               <div
                 key={group.key}
                 className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3"
               >
-                <div className="grid gap-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-medium">{group.label}</p>
-                    {bundleStatus
-                      ? bundleStatusBadge(bundleStatus.status)
-                      : slashStatus
-                        ? slashStatusBadge(slashStatus.status)
-                        : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {options.map(option => (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => setSelectedAgentPluginKey(option.key)}
-                        className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          selectedAgentPluginKey === option.key
-                            ? 'border-foreground bg-foreground text-background'
-                            : 'border-border bg-background text-foreground hover:bg-muted'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
+                <div className="grid gap-1">
+                  <p className="text-xs font-medium">{group.label}</p>
                   <p className="text-xs text-muted-foreground">
-                    {selectedAgentPlugin?.agentKey === group.key
-                      ? selectedAgentPlugin.description
-                      : options.map(option => option.label).join(' • ')}
+                    {options.map(option => option.label).join(' • ')}
                   </p>
+                </div>
+                <div className="grid gap-3">
+                  {options.map(option => {
+                    const bundleStatus =
+                      option.kind === 'bundle'
+                        ? bundleStatuses.find(status => status.agent === option.bundleAgent)
+                        : null;
+                    const slashStatus =
+                      option.kind === 'slash'
+                        ? slashStatuses.find(status => status.agent === option.slashAgent)
+                        : null;
+                    const actionMeta =
+                      option.kind === 'bundle'
+                        ? getBundleActionMeta(bundleStatus?.status)
+                        : getSlashActionMeta(slashStatus?.status);
+                    const installFiles =
+                      option.kind === 'bundle'
+                        ? BUNDLE_FILE_PATHS[option.bundleAgent]
+                        : (slashStatus?.managedFiles ??
+                          SLASH_COMMAND_CONFIGS[option.slashAgent].filePaths);
+                    const removeFiles =
+                      option.kind === 'bundle'
+                        ? BUNDLE_FILE_PATHS[option.bundleAgent]
+                        : (slashStatus?.existingManagedFiles ?? []);
+                    const details =
+                      option.kind === 'bundle'
+                        ? (bundleStatus?.details ??
+                          'Prompt and skill bundle details are available in the desktop app.')
+                        : slashStatus?.details;
+                    const canRunAction =
+                      option.kind === 'bundle' ? Boolean(bundleStatus) : Boolean(slashStatus);
+                    const buttonState = pluginActionButtonStates[option.key] ?? 'default';
+
+                    return (
+                      <div key={option.key} className="rounded-md border bg-background p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="grid gap-2">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-medium">{option.label}</p>
+                              {option.kind === 'bundle'
+                                ? bundleStatus
+                                  ? bundleStatusBadge(bundleStatus.status)
+                                  : null
+                                : slashStatus
+                                  ? slashStatusBadge(slashStatus.status)
+                                  : null}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{option.description}</p>
+                            {option.supportNote ? (
+                              <p className="text-xs text-muted-foreground">{option.supportNote}</p>
+                            ) : null}
+                            {details ? (
+                              <p className="text-xs text-muted-foreground">{details}</p>
+                            ) : null}
+                            <p className="break-all text-xs text-muted-foreground">
+                              Install updates:{' '}
+                              <code className="rounded bg-muted px-1">
+                                {installFiles.join(', ')}
+                              </code>
+                            </p>
+                            <p className="break-all text-xs text-muted-foreground">
+                              Remove currently affects:{' '}
+                              <code className="rounded bg-muted px-1">
+                                {removeFiles.length > 0
+                                  ? removeFiles.join(', ')
+                                  : 'No managed files found yet.'}
+                              </code>
+                            </p>
+                          </div>
+                          {isElectron ? (
+                            <LoadingButton
+                              buttonState={buttonState}
+                              setButtonState={state =>
+                                setPluginActionButtonState(option.key, state)
+                              }
+                              text={actionMeta.label}
+                              loadingText={actionMeta.loadingText}
+                              successText={actionMeta.successText}
+                              errorText={actionMeta.errorText}
+                              size="sm"
+                              variant="outline"
+                              reset={true}
+                              onClick={() =>
+                                void (option.kind === 'bundle'
+                                  ? bundleStatus?.status === 'installed'
+                                    ? handleUninstallBundle(bundleStatus.agent, option.key)
+                                    : bundleStatus?.status === 'partial' ||
+                                        bundleStatus?.status === 'error'
+                                      ? handleRepairBundle(bundleStatus.agent, option.key)
+                                      : handleInstallBundle(option.bundleAgent, option.key)
+                                  : !slashStatus || slashStatus.status === 'not_installed'
+                                    ? handleInstallSlashCommands(option.slashAgent, option.key)
+                                    : handleUninstallSlashCommands(option.slashAgent, option.key))
+                              }
+                              disabled={!canRunAction || activePluginActionKey !== null}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
         </div>
-        {selectedAgentPlugin?.kind === 'slash' ? (
-          (() => {
-            const cfg = SLASH_COMMAND_CONFIGS[selectedAgentPlugin.slashAgent];
-            if (!cfg) return null;
-            return (
-              <div className="rounded-md border bg-muted/30 p-3 text-xs">
-                <p className="mb-1 font-sans text-muted-foreground">{cfg.description}</p>
-                {cfg.supportNote ? (
-                  <p className="mb-2 font-sans text-muted-foreground">{cfg.supportNote}</p>
-                ) : null}
-                {selectedSlashStatus ? (
-                  <p className="mb-2 font-sans text-muted-foreground">
-                    {selectedSlashStatus.details}
-                  </p>
-                ) : null}
-                <p className="mb-2 break-all font-sans text-muted-foreground">
-                  Install updates:{' '}
-                  <code className="rounded bg-muted px-1">
-                    {installFilesForSelectedSlash.join(', ')}
-                  </code>
-                </p>
-                <p className="break-all font-sans text-muted-foreground">
-                  Remove currently affects:{' '}
-                  <code className="rounded bg-muted px-1">
-                    {removableFilesForSelectedSlash.length > 0
-                      ? removableFilesForSelectedSlash.join(', ')
-                      : 'No managed files found yet.'}
-                  </code>
-                </p>
-              </div>
-            );
-          })()
-        ) : selectedAgentPlugin?.kind === 'bundle' ? (
-          <div className="rounded-md border bg-muted/30 p-3 text-xs">
-            <p className="mb-1 font-sans text-muted-foreground">
-              {selectedAgentPlugin.description}
-            </p>
-            {selectedAgentPlugin.supportNote ? (
-              <p className="mb-2 font-sans text-muted-foreground">
-                {selectedAgentPlugin.supportNote}
-              </p>
-            ) : null}
-            <p className="mb-2 break-all font-sans text-muted-foreground">
-              Install updates:{' '}
-              <code className="rounded bg-muted px-1">
-                {BUNDLE_FILE_PATHS[selectedAgentPlugin.bundleAgent].join(', ')}
-              </code>
-            </p>
-            <p className="mb-2 break-all font-sans text-muted-foreground">
-              Remove currently affects:{' '}
-              <code className="rounded bg-muted px-1">
-                {BUNDLE_FILE_PATHS[selectedAgentPlugin.bundleAgent].join(', ')}
-              </code>
-            </p>
-            <p className="font-sans text-muted-foreground">
-              {bundleStatuses.find(status => status.agent === selectedAgentPlugin.bundleAgent)
-                ?.details ?? 'Prompt and skill bundle details are available in the desktop app.'}
-            </p>
-          </div>
-        ) : null}
-        {isElectron ? (
-          <LoadingButton
-            buttonState={pluginActionButtonState}
-            setButtonState={setPluginActionButtonState}
-            text={pluginActionLabel}
-            loadingText={pluginActionLoadingText}
-            successText={pluginActionSuccessText}
-            errorText={pluginActionErrorText}
-            size="sm"
-            variant="outline"
-            reset={true}
-            onClick={() => void handleSelectedPluginAction()}
-            disabled={!canRunPluginAction || isPluginActionBusy}
-          />
-        ) : null}
         {isElectron && bundleStatuses.length > 0 ? (
           <LoadingButton
-            buttonState={bundleActionLoading === 'all' ? 'loading' : 'default'}
-            setButtonState={() => {}}
+            buttonState={installAllBundlesButtonState}
+            setButtonState={setInstallAllBundlesButtonState}
             text="Install all prompt / skills"
             loadingText="Installing..."
             successText="Installed"
             errorText="Retry"
             size="sm"
             variant="outline"
+            reset
             onClick={() => void handleInstallAllBundles()}
             disabled={
-              bundleActionLoading !== null || bundleStatuses.every(s => s.status === 'installed')
+              activePluginActionKey !== null ||
+              installAllBundlesButtonState === 'loading' ||
+              bundleStatuses.every(s => s.status === 'installed')
             }
           />
         ) : null}
@@ -875,8 +883,8 @@ export function CliPage({ open }: { open: boolean }) {
       <div className="grid gap-1">
         <p className="text-sm font-medium">Overlord CLI (ovld)</p>
         <p className="text-xs text-muted-foreground">
-          The CLI lets agents in Claude Code, Codex, Cursor, and Gemini work with Overlord tickets.
-          Available commands:
+          The CLI lets agents in Claude Code, Codex, Cursor, Gemini, and OpenCode work with Overlord
+          tickets. Available commands:
         </p>
       </div>
 

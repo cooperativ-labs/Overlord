@@ -35,6 +35,7 @@ type Props = {
   codexCommand: string;
   cursorCommand: string;
   geminiCommand: string;
+  opencodeCommand: string;
   workingDirectory?: string | null;
   className?: string;
   activeAgentIdentifier?: string | null;
@@ -68,19 +69,22 @@ function CopyAgentCommandButton({
   claudeCommand,
   codexCommand,
   cursorCommand,
-  geminiCommand
+  geminiCommand,
+  opencodeCommand
 }: {
   claudeCommand: string;
   codexCommand: string;
   cursorCommand: string;
   geminiCommand: string;
+  opencodeCommand: string;
 }) {
   async function handleCopy({ agent }: { agent: CopyPromptAgentTypeValue }) {
     const commandsByAgent: Record<CopyPromptAgentTypeValue, string> = {
       claude: claudeCommand,
       codex: codexCommand,
       cursor: cursorCommand,
-      gemini: geminiCommand
+      gemini: geminiCommand,
+      opencode: opencodeCommand
     };
 
     await navigator.clipboard.writeText(commandsByAgent[agent]);
@@ -120,6 +124,7 @@ export function LaunchCommandBar({
   codexCommand,
   cursorCommand,
   geminiCommand,
+  opencodeCommand,
   workingDirectory,
   className,
   activeAgentIdentifier,
@@ -134,7 +139,8 @@ export function LaunchCommandBar({
     claude: claudeCommand,
     codex: codexCommand,
     cursor: cursorCommand,
-    gemini: geminiCommand
+    gemini: geminiCommand,
+    opencode: opencodeCommand
   };
 
   return (
@@ -165,6 +171,7 @@ export function LaunchCommandBar({
         codexCommand={codexCommand}
         cursorCommand={cursorCommand}
         geminiCommand={geminiCommand}
+        opencodeCommand={opencodeCommand}
       />
     </div>
   );

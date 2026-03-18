@@ -29,6 +29,12 @@ export const listTicketsSchema = z.object({
   statuses: z.array(ticketStatusSchema).optional()
 });
 
+export const searchTicketsSchema = z.object({
+  query: z.string().trim().max(120).optional().default(''),
+  includeCompleted: z.boolean().optional().default(false),
+  limit: z.number().int().min(1).max(20).optional().default(8)
+});
+
 export const attachSchema = z.object({
   ticketId: ticketIdSchema,
   agentIdentifier: z.string().trim().min(1).max(120),

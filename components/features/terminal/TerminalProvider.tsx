@@ -8,7 +8,7 @@ type TerminalContextValue = {
   isElectron: boolean;
   launchAgent: (
     ticketId: string,
-    agent: 'claude' | 'codex' | 'cursor' | 'gemini',
+    agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
     cwd?: string,
     agentToken?: string,
     launchMode?: 'run' | 'ask',
@@ -24,7 +24,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const launchAgent = useCallback(
     async (
       ticketId: string,
-      agent: 'claude' | 'codex' | 'cursor' | 'gemini',
+      agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
       cwd?: string,
       agentToken?: string,
       launchMode: 'run' | 'ask' = 'run',

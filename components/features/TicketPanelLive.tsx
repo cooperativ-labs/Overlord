@@ -198,15 +198,17 @@ type TicketPanelLiveProps = {
   codexCommand?: string;
   cursorCommand?: string;
   geminiCommand?: string;
+  opencodeCommand?: string;
   claudeResumeCommand?: string;
   codexResumeCommand?: string;
   cursorResumeCommand?: string;
   geminiResumeCommand?: string;
+  opencodeResumeCommand?: string;
 };
 
 export function TicketPanelLive({
   ticketId,
-  projectId,
+  projectId: _projectId,
   editorScheme,
   workspaceRoot,
   workingDirectory: _workingDirectory,
@@ -216,10 +218,12 @@ export function TicketPanelLive({
   codexCommand: _codexCommand,
   cursorCommand: _cursorCommand,
   geminiCommand: _geminiCommand,
+  opencodeCommand: _opencodeCommand,
   claudeResumeCommand: _claudeResumeCommand,
   codexResumeCommand: _codexResumeCommand,
   cursorResumeCommand: _cursorResumeCommand,
-  geminiResumeCommand: _geminiResumeCommand
+  geminiResumeCommand: _geminiResumeCommand,
+  opencodeResumeCommand: _opencodeResumeCommand
 }: TicketPanelLiveProps) {
   const router = useRouter();
   const { events, artifacts, session, sharedState } = useTicketLive();
@@ -279,10 +283,12 @@ export function TicketPanelLive({
         codexCommand={_codexCommand}
         cursorCommand={_cursorCommand}
         geminiCommand={_geminiCommand}
+        opencodeCommand={_opencodeCommand}
         claudeResumeCommand={_claudeResumeCommand}
         codexResumeCommand={_codexResumeCommand}
         cursorResumeCommand={_cursorResumeCommand}
         geminiResumeCommand={_geminiResumeCommand}
+        opencodeResumeCommand={_opencodeResumeCommand}
       />
 
       <section className="mb-6">

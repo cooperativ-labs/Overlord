@@ -3,7 +3,8 @@
 /**
  * Agent bundle setup commands (setup / doctor).
  *
- * Installs durable Overlord workflow configuration for Claude Code and Codex
+ * Installs durable Overlord workflow configuration for Claude Code, Codex,
+ * and OpenCode into their respective config directories.
  * into their respective config directories (~/.claude/, ~/.codex/).
  */
 
@@ -12,13 +13,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const BUNDLE_VERSION = '1.0.0';
+const BUNDLE_VERSION = '1.3.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
 const MANIFEST_FILE = path.join(MANIFEST_DIR, 'bundle-manifest.json');
 
-const supportedAgents = ['claude', 'codex'];
+const supportedAgents = ['claude', 'codex', 'opencode'];
 
 // ---------------------------------------------------------------------------
 // Templates (same content as electron/services/agent-bundle/templates.ts)
@@ -148,6 +149,63 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
 `;
 
+const OPENCODE_AGENTS_SECTION = `# Overlord Local Workflow
+
+If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
+
+## Lifecycle
+
+1. **Attach first** — Always call attach before doing any work:
+   \`\`\`bash
+   ovld protocol attach --ticket-id $TICKET_ID
+   \`\`\`
+   Store \`session.sessionKey\` from the response — it is required for all subsequent calls.
+
+2. **Update during work** — Post at least one progress update before delivering:
+   \`\`\`bash
+   ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
+   \`\`\`
+   Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`.
+   Use \`execute\` while working.
+
+   Pass \`--event-type <type>\` for activity events: \`update\`, \`user_follow_up\`, \`alert\`.
+
+3. **Ask when blocked** — Stop working after calling:
+   \`\`\`bash
+   ovld protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
+   \`\`\`
+
+4. **Deliver last** — Always deliver when done:
+   \`\`\`bash
+   ovld protocol deliver --session-key <sessionKey> \\\\
+     --ticket-id $TICKET_ID \\\\
+     --summary "Narrative: what you did, next steps." \\\\
+     --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\\\
+     --change-rationales-file /tmp/rationales.json
+   \`\`\`
+
+## Change Rationales
+
+Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes.
+
+## Context & Artifacts
+
+\`\`\`bash
+ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
+ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
+ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+\`\`\`
+
+## Rules
+
+- Always attach first; always deliver when done.
+- Post at least one update before delivering.
+- If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
+- The \`summary\` in deliver is what the PM reads first — write it as a narrative.
+- Use \`write-context\` for facts a future agent session should know.
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+`;
+
 const PERMISSION_HOOK_SCRIPT = `#!/bin/bash
 # Overlord PermissionRequest notification hook (managed by Overlord)
 BODY=$(cat -)
@@ -220,27 +278,6 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
-function deepMerge(target, source) {
-  for (const key of Object.keys(source)) {
-    const targetVal = target[key];
-    const sourceVal = source[key];
-    if (Array.isArray(sourceVal)) {
-      const existing = Array.isArray(targetVal) ? targetVal : [];
-      const existingStrings = new Set(existing.map(v => JSON.stringify(v)));
-      const newItems = sourceVal.filter(v => !existingStrings.has(JSON.stringify(v)));
-      target[key] = [...existing, ...newItems];
-    } else if (sourceVal !== null && typeof sourceVal === 'object' && !Array.isArray(sourceVal)) {
-      if (targetVal !== null && typeof targetVal === 'object' && !Array.isArray(targetVal)) {
-        deepMerge(targetVal, sourceVal);
-      } else {
-        target[key] = deepClone(sourceVal);
-      }
-    } else {
-      if (!(key in target)) target[key] = sourceVal;
-    }
-  }
-}
-
 function mergeMarkdownSection(existing, newContent) {
   const wrappedContent = `${MD_MARKER_START}\n${newContent.trim()}\n${MD_MARKER_END}`;
   const startIdx = existing.indexOf(MD_MARKER_START);
@@ -280,6 +317,15 @@ function codexPaths() {
   const base = path.join(os.homedir(), '.codex');
   return {
     agentsFile: path.join(base, 'AGENTS.md')
+  };
+}
+
+function openCodePaths() {
+  const base = path.join(os.homedir(), '.config', 'opencode');
+  return {
+    agentsFile: path.join(base, 'AGENTS.md'),
+    configFile: path.join(base, 'opencode.json'),
+    commandsDir: path.join(base, 'commands')
   };
 }
 
@@ -374,6 +420,109 @@ function installCodex() {
   return { ok: true, backups };
 }
 
+function installOpenCode() {
+  const paths = openCodePaths();
+  const backups = [];
+
+  const agentsBackup = backupFile(paths.agentsFile);
+  if (agentsBackup) {
+    backups.push(agentsBackup);
+    console.log(`  ✓ Backed up: ${paths.agentsFile} → ${path.basename(agentsBackup)}`);
+  }
+
+  const existingAgents = readTextFile(paths.agentsFile);
+  const mergedAgents = mergeMarkdownSection(existingAgents, OPENCODE_AGENTS_SECTION);
+  writeTextFile(paths.agentsFile, mergedAgents);
+  console.log(`  ✓ Installed agents config: ${paths.agentsFile}`);
+
+  const configBackup = backupFile(paths.configFile);
+  if (configBackup) {
+    backups.push(configBackup);
+    console.log(`  ✓ Backed up: ${paths.configFile} → ${path.basename(configBackup)}`);
+  }
+
+  const existingConfig = readJsonFile(paths.configFile);
+  const existingInstructions = Array.isArray(existingConfig.instructions)
+    ? existingConfig.instructions.filter(v => typeof v === 'string' && v.trim())
+    : [];
+  const existingPermission =
+    existingConfig.permission && typeof existingConfig.permission === 'object'
+      ? existingConfig.permission
+      : {};
+  const existingBash =
+    existingPermission.bash && typeof existingPermission.bash === 'object'
+      ? existingPermission.bash
+      : {};
+
+  writeJsonFile(paths.configFile, {
+    ...existingConfig,
+    $schema: 'https://opencode.ai/config.json',
+    instructions: Array.from(new Set([...existingInstructions, paths.agentsFile])),
+    permission: {
+      ...existingPermission,
+      bash: {
+        '*': 'ask',
+        ...existingBash,
+        'ovld protocol *': 'allow',
+        'curl -sS -X POST *': 'allow',
+        'curl -s -X POST *': 'allow'
+      }
+    }
+  });
+  console.log(`  ✓ Updated config: ${paths.configFile}`);
+
+  const commandFiles = [
+    {
+      file: path.join(paths.commandsDir, 'connect.md'),
+      content: `---
+description: Connect this session to another Overlord ticket by ticket ID
+agent: build
+---
+
+Run \`ovld protocol connect --ticket-id <ticketId>\` using \`$ARGUMENTS\` as the ticket ID. If no ticket ID was provided, ask the user for one and stop.`
+    },
+    {
+      file: path.join(paths.commandsDir, 'load.md'),
+      content: `---
+description: Load Overlord ticket context without creating a new session
+agent: build
+---
+
+Run \`ovld protocol load-context --ticket-id <ticketId>\` using \`$ARGUMENTS\` as the ticket ID. If no ticket ID was provided, ask the user for one and stop.`
+    },
+    {
+      file: path.join(paths.commandsDir, 'spawn.md'),
+      content: `---
+description: Create a new Overlord ticket from the current conversation
+agent: build
+---
+
+Run \`ovld protocol spawn\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol spawn --objective "<objective>"\`.`
+    }
+  ];
+
+  for (const commandFile of commandFiles) {
+    const commandBackup = backupFile(commandFile.file);
+    if (commandBackup) {
+      backups.push(commandBackup);
+      console.log(`  ✓ Backed up: ${commandFile.file} → ${path.basename(commandBackup)}`);
+    }
+    writeTextFile(commandFile.file, `${commandFile.content.trim()}\n`);
+    console.log(`  ✓ Installed slash command: ${commandFile.file}`);
+  }
+
+  const manifest = readManifest();
+  manifest.opencode = {
+    version: BUNDLE_VERSION,
+    contentHash: contentHash(OPENCODE_AGENTS_SECTION),
+    installedAt: new Date().toISOString(),
+    files: [paths.agentsFile, paths.configFile, ...commandFiles.map(entry => entry.file)]
+  };
+  writeManifest(manifest);
+
+  return { ok: true, backups };
+}
+
 // ---------------------------------------------------------------------------
 // Doctor
 // ---------------------------------------------------------------------------
@@ -414,8 +563,9 @@ export async function runSetupCommand(args) {
     console.log(`Usage:
   ovld setup claude    Install Overlord bundle for Claude Code
   ovld setup codex     Install Overlord bundle for Codex
+  ovld setup opencode  Install Overlord connector for OpenCode
   ovld setup all       Install for all supported agents
-  ovld doctor          Validate installed bundles`);
+  ovld doctor          Validate installed connectors`);
     return;
   }
 
@@ -425,7 +575,8 @@ export async function runSetupCommand(args) {
       console.log(`[${a}]`);
       try {
         if (a === 'claude') installClaude();
-        else installCodex();
+        else if (a === 'codex') installCodex();
+        else installOpenCode();
       } catch (err) {
         console.error(`  ✗ Failed: ${err.message}`);
       }
@@ -445,7 +596,8 @@ export async function runSetupCommand(args) {
   console.log(`Installing Overlord agent bundle for ${agent}...\n`);
   try {
     if (agent === 'claude') installClaude();
-    else installCodex();
+    else if (agent === 'codex') installCodex();
+    else installOpenCode();
     console.log('\nDone.');
   } catch (err) {
     console.error(`\nFailed: ${err.message}`);

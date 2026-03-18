@@ -1,6 +1,6 @@
 /**
  * Agent bundle installer — installs and manages durable Overlord workflow
- * configuration for Claude Code and Codex.
+ * configuration for Claude Code, Codex, and OpenCode.
  *
  * Responsibilities:
  * - Detect current install status per agent
@@ -31,6 +31,7 @@ import {
   CLAUDE_SKILL_CONTENT,
   CODEX_AGENTS_SECTION,
   JSON_MARKER_KEY,
+  OPENCODE_AGENTS_SECTION,
   PERMISSION_HOOK_SCRIPT
 } from './templates';
 
@@ -38,7 +39,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-export type AgentBundleAgent = 'claude' | 'codex';
+export type AgentBundleAgent = 'claude' | 'codex' | 'opencode';
 
 export type BundleStatus = 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
 
@@ -67,6 +68,7 @@ type ManifestEntry = {
 type BundleManifest = {
   claude?: ManifestEntry;
   codex?: ManifestEntry;
+  opencode?: ManifestEntry;
 };
 
 // ---------------------------------------------------------------------------
@@ -90,6 +92,14 @@ function codexPaths() {
   const base = path.join(os.homedir(), '.codex');
   return {
     agentsFile: path.join(base, 'AGENTS.md')
+  };
+}
+
+function openCodePaths() {
+  const base = path.join(os.homedir(), '.config', 'opencode');
+  return {
+    agentsFile: path.join(base, 'AGENTS.md'),
+    configFile: path.join(base, 'opencode.json')
   };
 }
 
@@ -119,7 +129,12 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
 
   if (!entry) {
     // Check if files exist anyway (manual install or pre-manifest)
-    const filesExist = agent === 'claude' ? checkClaudeFilesExist() : checkCodexFilesExist();
+    const filesExist =
+      agent === 'claude'
+        ? checkClaudeFilesExist()
+        : agent === 'codex'
+          ? checkCodexFilesExist()
+          : checkOpenCodeFilesExist();
     if (filesExist) {
       return {
         agent,
@@ -170,7 +185,11 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
 }
 
 export function getAllBundleStatuses(): AgentBundleStatus[] {
-  return [getAgentBundleStatus('claude'), getAgentBundleStatus('codex')];
+  return [
+    getAgentBundleStatus('claude'),
+    getAgentBundleStatus('codex'),
+    getAgentBundleStatus('opencode')
+  ];
 }
 
 function checkClaudeFilesExist(): boolean {
@@ -180,6 +199,13 @@ function checkClaudeFilesExist(): boolean {
 
 function checkCodexFilesExist(): boolean {
   const paths = codexPaths();
+  if (!fs.existsSync(paths.agentsFile)) return false;
+  const content = readTextFile(paths.agentsFile);
+  return hasOverlordSection(content);
+}
+
+function checkOpenCodeFilesExist(): boolean {
+  const paths = openCodePaths();
   if (!fs.existsSync(paths.agentsFile)) return false;
   const content = readTextFile(paths.agentsFile);
   return hasOverlordSection(content);
@@ -298,6 +324,74 @@ function installCodex(): InstallResult {
   }
 }
 
+function installOpenCode(): InstallResult {
+  const paths = openCodePaths();
+  const backups: string[] = [];
+
+  try {
+    const agentsBackup = backupFile(paths.agentsFile);
+    if (agentsBackup) backups.push(agentsBackup);
+
+    const existingAgents = readTextFile(paths.agentsFile);
+    const mergedAgents = mergeMarkdownSection(existingAgents, OPENCODE_AGENTS_SECTION);
+    writeTextFile(paths.agentsFile, mergedAgents);
+
+    const configBackup = backupFile(paths.configFile);
+    if (configBackup) backups.push(configBackup);
+
+    const existingConfig = readJsonFile(paths.configFile);
+    const existingInstructions = Array.isArray(existingConfig.instructions)
+      ? existingConfig.instructions.filter(
+          (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0
+        )
+      : [];
+    const existingPermission =
+      existingConfig.permission && typeof existingConfig.permission === 'object'
+        ? (existingConfig.permission as Record<string, unknown>)
+        : {};
+    const existingBash =
+      existingPermission.bash && typeof existingPermission.bash === 'object'
+        ? (existingPermission.bash as Record<string, unknown>)
+        : {};
+
+    writeJsonFile(paths.configFile, {
+      ...existingConfig,
+      $schema: 'https://opencode.ai/config.json',
+      instructions: Array.from(new Set([...existingInstructions, paths.agentsFile])),
+      permission: {
+        ...existingPermission,
+        bash: {
+          '*': 'ask',
+          ...existingBash,
+          'ovld protocol *': 'allow',
+          'curl -sS -X POST *': 'allow',
+          'curl -s -X POST *': 'allow'
+        }
+      }
+    });
+
+    const slashResult = installSlashCommands('opencode');
+    if (!slashResult.ok) {
+      return { ok: false, agent: 'opencode', backups, error: slashResult.error };
+    }
+    backups.push(...slashResult.backups);
+
+    const manifest = readManifest();
+    manifest.opencode = {
+      version: BUNDLE_VERSION,
+      contentHash: contentHash(OPENCODE_AGENTS_SECTION),
+      installedAt: new Date().toISOString(),
+      files: [paths.agentsFile, paths.configFile, ...slashResult.managedFiles]
+    };
+    writeManifest(manifest);
+
+    return { ok: true, agent: 'opencode', backups };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, agent: 'opencode', backups, error: message };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -309,6 +403,7 @@ function installCodex(): InstallResult {
 export function installAgentBundle(agent: AgentBundleAgent): InstallResult {
   if (agent === 'claude') return installClaude();
   if (agent === 'codex') return installCodex();
+  if (agent === 'opencode') return installOpenCode();
   return { ok: false, agent, backups: [], error: `Unknown agent: ${agent}` };
 }
 
@@ -316,7 +411,11 @@ export function installAgentBundle(agent: AgentBundleAgent): InstallResult {
  * Install bundles for all supported agents.
  */
 export function installAllBundles(): InstallResult[] {
-  return [installAgentBundle('claude'), installAgentBundle('codex')];
+  return [
+    installAgentBundle('claude'),
+    installAgentBundle('codex'),
+    installAgentBundle('opencode')
+  ];
 }
 
 /**
@@ -395,6 +494,74 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
             fs.unlinkSync(paths.agentsFile);
           }
         }
+      }
+    } else if (agent === 'opencode') {
+      const paths = openCodePaths();
+      if (fs.existsSync(paths.agentsFile)) {
+        const existing = readTextFile(paths.agentsFile);
+        const startIdx = existing.indexOf('<!-- overlord:managed:start -->');
+        const endIdx = existing.indexOf('<!-- overlord:managed:end -->');
+        if (startIdx !== -1 && endIdx !== -1) {
+          const before = existing.slice(0, startIdx).trimEnd();
+          const after = existing.slice(endIdx + '<!-- overlord:managed:end -->'.length).trimStart();
+          const cleaned = before + (before && after ? '\n\n' : '') + after;
+          if (cleaned.trim()) {
+            writeTextFile(paths.agentsFile, cleaned.trim() + '\n');
+          } else {
+            fs.unlinkSync(paths.agentsFile);
+          }
+        }
+      }
+
+      if (fs.existsSync(paths.configFile)) {
+        const config = readJsonFile(paths.configFile);
+        const instructions = Array.isArray(config.instructions)
+          ? config.instructions.filter(
+              (entry: unknown) => typeof entry === 'string' && entry !== paths.agentsFile
+            )
+          : [];
+        const permission =
+          config.permission && typeof config.permission === 'object'
+            ? (config.permission as Record<string, unknown>)
+            : {};
+        const bash =
+          permission.bash && typeof permission.bash === 'object'
+            ? { ...(permission.bash as Record<string, unknown>) }
+            : null;
+
+        if (bash) {
+          delete bash['ovld protocol *'];
+          delete bash['curl -sS -X POST *'];
+          delete bash['curl -s -X POST *'];
+        }
+
+        const nextConfig: Record<string, unknown> = { ...config };
+        if (instructions.length > 0) {
+          nextConfig.instructions = instructions;
+        } else {
+          delete nextConfig.instructions;
+        }
+
+        if (bash && Object.keys(bash).length > 0) {
+          nextConfig.permission = { ...permission, bash };
+        } else if (Object.keys(permission).length > 0) {
+          const nextPermission = { ...permission };
+          delete nextPermission.bash;
+          if (Object.keys(nextPermission).length > 0) {
+            nextConfig.permission = nextPermission;
+          } else {
+            delete nextConfig.permission;
+          }
+        } else {
+          delete nextConfig.permission;
+        }
+
+        writeJsonFile(paths.configFile, nextConfig);
+      }
+
+      const slashUninstall = uninstallSlashCommands('opencode');
+      if (!slashUninstall.ok) {
+        return { ok: false, error: slashUninstall.error };
       }
     }
 

@@ -6,14 +6,15 @@ import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
 
-export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini';
+export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 type AgentLaunchMode = 'run' | 'ask';
 
 const agentIdentifierMap: Record<AgentType, string> = {
   claude: 'claude-code',
   codex: 'codex',
   cursor: 'cursor',
-  gemini: 'gemini'
+  gemini: 'gemini',
+  opencode: 'opencode'
 };
 
 type LaunchAgentInput = {
@@ -38,6 +39,7 @@ type ContextCommandsResponse = {
   codex: string;
   cursor: string;
   gemini: string;
+  opencode: string;
 };
 
 function buildProtocolHeaders(agentToken: string): Record<string, string> {
@@ -94,7 +96,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchMode = input.launchMode ?? 'run';
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
-    input.agent === 'claude' || input.agent === 'codex' ? (input.agent as AgentBundleAgent) : null;
+    input.agent === 'claude' || input.agent === 'codex' || input.agent === 'opencode'
+      ? (input.agent as AgentBundleAgent)
+      : null;
   const bundleInstalled = bundleAgent ? isBundleInstalled(bundleAgent) : false;
   const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
   const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}`;
@@ -186,6 +190,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     command = `agent${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'gemini') {
     command = `gemini${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
+  } else if (input.agent === 'opencode') {
+    command = `opencode${extraFlags ? ` ${extraFlags}` : ''} --prompt "$(cat ${shellQuote(contextFile)})"`;
   } else {
     throw new Error(`Unknown agent type: ${input.agent}`);
   }

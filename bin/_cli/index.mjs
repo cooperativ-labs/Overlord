@@ -4,6 +4,7 @@ import { runAttachCommand } from './attach.mjs';
 import { runAuthCommand } from './auth.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 import { runProtocolCommand } from './protocol.mjs';
+import { runDoctorCommand, runSetupCommand } from './setup.mjs';
 import { runTicketCommand } from './ticket.mjs';
 import { runTicketsCommand } from './tickets.mjs';
 
@@ -21,6 +22,8 @@ Usage:
   ${primaryCommand} connect <agent>            Launch an agent on a ticket
   ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
+  ${primaryCommand} setup <agent|all>          Install Overlord agent connector
+  ${primaryCommand} doctor                     Validate installed agent connectors
   ${primaryCommand} help                       Show this help message
 
 Auth:
@@ -83,6 +86,16 @@ export async function runCli({ primaryCommand }) {
   // Protocol group
   if (command === 'protocol') {
     await runProtocolCommand(rest[0], rest.slice(1));
+    return;
+  }
+
+  if (command === 'setup') {
+    await runSetupCommand(rest);
+    return;
+  }
+
+  if (command === 'doctor') {
+    await runDoctorCommand();
     return;
   }
 

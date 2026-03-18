@@ -53,7 +53,8 @@ const FLOW_NODES: FlowNode[] = [
   {
     icon: <Play className="h-5 w-5" />,
     label: 'Launch the agent',
-    description: 'Pick your agent (Claude, Codex, Cursor…) and launch it from the ticket:',
+    description:
+      'Pick your agent (Claude, Codex, Cursor, OpenCode…) and launch it from the ticket:',
     screenshotSrc: '/images/onboarding/launch-screenshot.png'
   },
   {

@@ -14,6 +14,7 @@ import { runLauncherCommand } from './launcher.mjs';
 
 const AGENTS = ['claude', 'cursor', 'codex', 'gemini'];
 const MAX_VISIBLE = 8;
+const SEARCH_DEBOUNCE_MS = 120;
 
 // ─── ANSI helpers ─────────────────────────────────────────────────────────────
 
@@ -57,18 +58,22 @@ function statusColor(status) {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-async function fetchTickets(platformUrl, agentToken, localSecret) {
-  const res = await fetch(`${platformUrl}/api/protocol/list-tickets`, {
+async function searchTickets(platformUrl, agentToken, localSecret, query) {
+  const res = await fetch(`${platformUrl}/api/protocol/search-tickets`, {
     method: 'POST',
     headers: {
       ...buildAuthHeaders(agentToken, localSecret),
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ includeCompleted: false })
+    body: JSON.stringify({
+      includeCompleted: false,
+      query,
+      limit: MAX_VISIBLE
+    })
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to fetch tickets (${res.status}): ${await res.text()}`);
+    throw new Error(`Failed to search tickets (${res.status}): ${await res.text()}`);
   }
 
   const data = await res.json();
@@ -80,32 +85,30 @@ async function fetchTickets(platformUrl, agentToken, localSecret) {
 /**
  * Run an interactive list selector.
  *
- * In ticket mode (tickets array provided), shows a search-as-you-type menu.
+ * In ticket mode (search callback provided), shows a search-as-you-type menu.
  * In items mode (items array provided), shows a fixed list selector.
  *
  * @param {object}   opts
  * @param {string}   opts.label    - Label shown before the search input
  * @param {string[]} [opts.items]  - Fixed list of choices (agent picker)
- * @param {object[]} [opts.tickets] - Ticket objects for ticket search mode
+ * @param {(query: string) => Promise<object[]>} [opts.search] - Ticket search callback
  * @param {string}   [opts.prefix] - Text prepended to the input line (for UX context)
- * @returns {Promise<string|null>} - Selected id/value, or null if cancelled
+ * @returns {Promise<string|object|null>} - Selected item/value, or null if cancelled
  */
-function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
+function runInteractivePrompt({ label, items = [], search, prefix = '' }) {
   return new Promise(resolve => {
-    const isTicketMode = Boolean(tickets);
+    const isTicketMode = typeof search === 'function';
     let query = '';
     let selectedIdx = 0;
     let linesRendered = 0;
+    let loading = isTicketMode;
+    let errorMessage = '';
+    let filteredItems = isTicketMode ? [] : items;
+    let activeRequestId = 0;
+    let debounceTimer = null;
 
     function getFiltered() {
-      if (!isTicketMode) return items;
-      if (!query.trim()) return tickets.slice(0, MAX_VISIBLE * 3);
-      const q = query.toLowerCase();
-      return tickets.filter(t => {
-        const title = (t.title || t.objective || '').toLowerCase();
-        const ref = (t.id || '').toLowerCase();
-        return title.includes(q) || ref.includes(q);
-      });
+      return filteredItems;
     }
 
     function renderTicketRow(t, active) {
@@ -137,7 +140,11 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
       }
       lines.push('');
 
-      if (filtered.length === 0) {
+      if (loading) {
+        lines.push(gray('  Searching tickets…'));
+      } else if (errorMessage) {
+        lines.push(red(`  ${errorMessage}`));
+      } else if (filtered.length === 0) {
         lines.push(gray('  No matches'));
       } else {
         for (let i = 0; i < count; i++) {
@@ -162,7 +169,42 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
       linesRendered = lines.length;
     }
 
+    async function loadMatches(nextQuery) {
+      if (!isTicketMode) return;
+      const requestId = ++activeRequestId;
+      loading = true;
+      errorMessage = '';
+      render();
+
+      try {
+        const nextItems = await search(nextQuery);
+        if (requestId !== activeRequestId) return;
+        filteredItems = nextItems;
+      } catch (error) {
+        if (requestId !== activeRequestId) return;
+        filteredItems = [];
+        errorMessage = error instanceof Error ? error.message : 'Ticket search failed.';
+      } finally {
+        if (requestId !== activeRequestId) return;
+        loading = false;
+        render();
+      }
+    }
+
+    function scheduleLoad() {
+      if (!isTicketMode) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        void loadMatches(query);
+      }, SEARCH_DEBOUNCE_MS);
+    }
+
     function cleanup() {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
       if (linesRendered > 0) {
         process.stdout.write(clearLines(linesRendered));
       }
@@ -176,6 +218,7 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
     process.stdin.setEncoding('utf8');
     process.stdout.write(hide);
     render();
+    scheduleLoad();
 
     process.stdin.on('data', key => {
       const filtered = getFiltered();
@@ -196,10 +239,10 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
 
       // Enter → confirm selection
       if (key === '\r' || key === '\n') {
-        if (filtered.length === 0) return;
+        if (loading || filtered.length === 0) return;
         const item = filtered[selectedIdx] ?? filtered[0];
         cleanup();
-        resolve(isTicketMode ? item.id : item);
+        resolve(item);
         return;
       }
 
@@ -222,7 +265,8 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
         if (query.length > 0) {
           query = query.slice(0, -1);
           selectedIdx = 0;
-          render();
+          if (isTicketMode) scheduleLoad();
+          else render();
         }
         return;
       }
@@ -231,7 +275,8 @@ function runInteractivePrompt({ label, items = [], tickets, prefix = '' }) {
       if (key.length === 1 && key >= ' ') {
         query += key;
         selectedIdx = 0;
-        render();
+        if (isTicketMode) scheduleLoad();
+        else render();
       }
     });
   });
@@ -250,37 +295,22 @@ export async function runAttachCommand(args) {
   let ticketTitle = '';
 
   if (!ticketId) {
-    let tickets;
-    try {
-      process.stdout.write(gray('  Loading tickets…\n'));
-      tickets = await fetchTickets(platformUrl, agentToken, localSecret);
-      // Clear the loading line
-      process.stdout.write(clearLines(1));
-    } catch (err) {
-      console.error(`\nError: ${err.message}`);
-      process.exit(1);
-    }
-
-    if (tickets.length === 0) {
-      console.error(
-        '  No tickets found. Create one with:\n    ovld tickets create --objective "..."'
-      );
-      process.exit(1);
-    }
-
     process.stdout.write('\n');
     process.stdout.write(bold('  ovld attach\n'));
     process.stdout.write('\n');
 
-    ticketId = await runInteractivePrompt({ label: 'Search tickets', tickets });
+    const selectedTicket = await runInteractivePrompt({
+      label: 'Search tickets',
+      search: nextQuery => searchTickets(platformUrl, agentToken, localSecret, nextQuery)
+    });
 
-    if (!ticketId) {
+    if (!selectedTicket) {
       process.stdout.write(dim('\n  Cancelled.\n\n'));
       process.exit(0);
     }
 
-    const found = tickets.find(t => t.id === ticketId);
-    ticketTitle = found?.title || found?.objective || '';
+    ticketId = selectedTicket.id;
+    ticketTitle = selectedTicket.title || selectedTicket.objective || '';
   }
 
   // ── Phase 2: Agent selection ───────────────────────────────────────────────

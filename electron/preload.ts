@@ -4,7 +4,7 @@ const electronAPI = {
   terminal: {
     launchAgent: (
       ticketId: string,
-      agent: 'claude' | 'codex' | 'cursor' | 'gemini',
+      agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
       cwd?: string,
       agentToken?: string,
       launchMode?: 'run' | 'ask',
@@ -57,19 +57,23 @@ const electronAPI = {
   },
   agentBundle: {
     getAllStatuses: () => ipcRenderer.invoke('agent-bundle:get-all-statuses'),
-    getStatus: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:get-status', agent),
-    install: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:install', agent),
+    getStatus: (agent: 'claude' | 'codex' | 'opencode') =>
+      ipcRenderer.invoke('agent-bundle:get-status', agent),
+    install: (agent: 'claude' | 'codex' | 'opencode') =>
+      ipcRenderer.invoke('agent-bundle:install', agent),
     installAll: () => ipcRenderer.invoke('agent-bundle:install-all'),
-    repair: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:repair', agent),
-    uninstall: (agent: 'claude' | 'codex') => ipcRenderer.invoke('agent-bundle:uninstall', agent)
+    repair: (agent: 'claude' | 'codex' | 'opencode') =>
+      ipcRenderer.invoke('agent-bundle:repair', agent),
+    uninstall: (agent: 'claude' | 'codex' | 'opencode') =>
+      ipcRenderer.invoke('agent-bundle:uninstall', agent)
   },
   agentSlash: {
     getAllStatuses: () => ipcRenderer.invoke('agent-slash:get-all-statuses'),
-    getStatus: (agent: 'claude' | 'cursor' | 'gemini') =>
+    getStatus: (agent: 'claude' | 'cursor' | 'gemini' | 'opencode') =>
       ipcRenderer.invoke('agent-slash:get-status', agent),
-    install: (agent: 'claude' | 'cursor' | 'gemini') =>
+    install: (agent: 'claude' | 'cursor' | 'gemini' | 'opencode') =>
       ipcRenderer.invoke('agent-slash:install', agent),
-    uninstall: (agent: 'claude' | 'cursor' | 'gemini') =>
+    uninstall: (agent: 'claude' | 'cursor' | 'gemini' | 'opencode') =>
       ipcRenderer.invoke('agent-slash:uninstall', agent)
   },
   agentPermissions: {

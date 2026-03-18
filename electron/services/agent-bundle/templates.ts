@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.2.0';
+export const BUNDLE_VERSION = '1.3.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -160,6 +160,66 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 
 - Always attach first; always deliver when done.
 _ Always communicate with Overlord using the ovld protocol cli commands.
+- Post any substantial updates about your decisions or progress
+- If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
+- The \`summary\` in deliver is what the PM reads first — write it as a narrative.
+- Use \`write-context\` for facts a future agent session should know.
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket**
+- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
+`;
+
+export const OPENCODE_AGENTS_SECTION = `# Overlord Local Workflow
+
+If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
+
+## Lifecycle
+
+1. **Attach first** — If there is a TICKET_ID, always call attach before doing any work:
+   \`\`\`bash
+   ovld protocol attach --ticket-id $TICKET_ID
+   \`\`\`
+   Store \`session.sessionKey\` from the response — it is required for all subsequent calls.
+
+2. **Update during work** — Post at least one progress update before delivering:
+   \`\`\`bash
+   ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
+   \`\`\`
+   Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`.
+   Use \`execute\` while working.
+
+   Pass \`--event-type <type>\` for activity events: \`update\`, \`user_follow_up\`, \`alert\`.
+
+3. **Ask when blocked** — Stop working after calling:
+   \`\`\`bash
+   ovld protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
+   \`\`\`
+
+4. **Deliver last** — Always deliver when done:
+   \`\`\`bash
+   ovld protocol deliver --session-key <sessionKey> \\
+     --ticket-id $TICKET_ID \\
+     --summary "Narrative: what you did, next steps." \\
+     --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\
+     --change-rationales-file /tmp/rationales.json
+   \`\`\`
+
+## Change Rationales
+
+Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes.
+
+## Context & Artifacts
+
+\`\`\`bash
+ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
+ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
+ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+\`\`\`
+
+## Rules
+
+- Always attach first; always deliver when done.
+- Always communicate with Overlord using the ovld protocol cli commands.
 - Post any substantial updates about your decisions or progress
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.

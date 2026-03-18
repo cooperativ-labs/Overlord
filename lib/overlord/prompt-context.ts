@@ -58,10 +58,8 @@ function formatJsonInline(value: Json): string {
 function formatTicketMetadata(ticket: TicketLike): string {
   const lines = [
     `- **Title:** ${ticket.title?.trim() || '(Untitled)'}`,
-    `- **Reference:** ${ticket.id}`,
+    `- **Ticket ID:** ${ticket.id}`,
     `- **Status:** ${ticket.status ?? 'unknown'}`,
-    `- **Priority:** ${ticket.priority ?? 'unspecified'}`,
-    `- **Execution Target:** ${ticket.execution_target ?? 'agent'}`,
     `- **Project ID:** ${ticket.project_id}`
   ];
 

@@ -157,7 +157,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const requestOrigin = new URL(request.url).origin;
   const platformUrl = getPlatformUrl(requestOrigin);
-  const { claudeCode, codex, cursor, gemini, contextUrl } = buildLaunchCommands({
+  const { claudeCode, codex, cursor, gemini, opencode, contextUrl } = buildLaunchCommands({
     platformUrl,
     ticketId,
     token: tokenValue
@@ -176,6 +176,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     codex,
     cursor,
     gemini,
+    opencode,
     contextUrl,
     ...(mcpUrl ? { mcpUrl } : {})
   });

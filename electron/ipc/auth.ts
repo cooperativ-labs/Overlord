@@ -77,7 +77,7 @@ function parseLoopbackRedirectUri(rawValue: string): LoopbackRedirect {
 }
 
 function closeActiveCallbackServer(): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     if (activeCallbackServer) {
       const server = activeCallbackServer;
       activeCallbackServer = null;

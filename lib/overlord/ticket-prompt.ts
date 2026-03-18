@@ -102,7 +102,7 @@ ${protocolSection}`;
 
 /**
  * Slim protocol section for agents with the Overlord local bundle installed.
- * Protocol details live in the agent's installed config (Claude skill / Codex AGENTS.md),
+ * Protocol details live in the agent's installed config (Claude skill / Codex or OpenCode AGENTS.md),
  * so we only include ticket-specific identifiers and a short directive.
  */
 function buildSlimLocalProtocolSection(
@@ -160,6 +160,11 @@ function buildLocalProtocolSection(
   const codexResumeCommand = buildResumeCommandWithFlags(
     `ovld restart codex --ticket-id ${ticketId}`,
     'codex',
+    agentConfigs
+  );
+  const opencodeResumeCommand = buildResumeCommandWithFlags(
+    `ovld restart opencode --ticket-id ${ticketId}`,
+    'opencode',
     agentConfigs
   );
   const eventTypeHelp =
@@ -282,6 +287,8 @@ Include in your deliver artifacts. If omitted, \`/api/protocol/deliver\` appends
 ${claudeResumeCommand}
 # or for Codex:
 ${codexResumeCommand}
+# or for OpenCode:
+${opencodeResumeCommand}
 \`\`\`
 
 ---

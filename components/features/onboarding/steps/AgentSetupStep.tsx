@@ -52,6 +52,13 @@ const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
     overlordSetupCommand: 'ovld setup gemini',
     overlordSetupDescription:
       'Adds the Overlord tool extension to Gemini CLI so it can read and update tickets as it works.'
+  },
+  opencode: {
+    installCommand: 'npm install -g opencode-ai',
+    installLabel: 'Install OpenCode',
+    overlordSetupCommand: 'ovld setup opencode',
+    overlordSetupDescription:
+      'Installs the Overlord workflow instructions, slash commands, and local permission rules into your OpenCode config.'
   }
 };
 

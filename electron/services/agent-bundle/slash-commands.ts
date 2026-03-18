@@ -4,7 +4,7 @@ import path from 'path';
 
 import { backupFile, writeTextFile } from './merge-helpers';
 
-export type SlashCommandAgent = 'claude' | 'cursor' | 'gemini';
+export type SlashCommandAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 export type SlashCommandStatus = 'installed' | 'partial' | 'not_installed';
 
@@ -255,10 +255,75 @@ After the command succeeds, report the new ` +
   ];
 }
 
+function openCodeCommandFiles(): ManagedFile[] {
+  const base = path.join(os.homedir(), '.config', 'opencode', 'commands');
+  return [
+    {
+      path: path.join(base, 'connect.md'),
+      content: `---
+description: Connect this session to another Overlord ticket by ticket ID
+agent: build
+---
+
+Connect this session to another Overlord ticket.
+
+Treat \`$ARGUMENTS\` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol connect --ticket-id <ticketId>\`
+
+Rules:
+- Use \`connect\`, not \`attach\`.
+- Do not load extra ticket context unless the user explicitly asks for it.
+- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
+    },
+    {
+      path: path.join(base, 'load.md'),
+      content: `---
+description: Load Overlord ticket context without creating a new session
+agent: build
+---
+
+Load Overlord ticket context without attaching to the ticket.
+
+Treat \`$ARGUMENTS\` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol load-context --ticket-id <ticketId>\`
+
+Rules:
+- Use \`load-context\`, not \`attach\`.
+- Do not create or switch sessions.
+- Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+    },
+    {
+      path: path.join(base, 'spawn.md'),
+      content: `---
+description: Create a new Overlord ticket from the current conversation
+agent: build
+---
+
+Create a new Overlord ticket from the user's request.
+
+Use \`$ARGUMENTS\` as the input.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn\`.
+Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
+\`ovld protocol spawn --objective "<objective>"\`
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new \`TICKET_ID\` and \`SESSION_KEY\`.`
+    }
+  ];
+}
+
 function slashCommandFiles(agent: SlashCommandAgent): ManagedFile[] {
   if (agent === 'claude') return claudeCommandFiles();
   if (agent === 'cursor') return cursorCommandFiles();
-  return geminiCommandFiles();
+  if (agent === 'gemini') return geminiCommandFiles();
+  return openCodeCommandFiles();
 }
 
 function removeEmptyParents(filePath: string, stopAt: string): void {
@@ -317,7 +382,8 @@ export function getAllSlashCommandStatuses(): SlashCommandStatusEntry[] {
   return [
     getSlashCommandStatus('claude'),
     getSlashCommandStatus('cursor'),
-    getSlashCommandStatus('gemini')
+    getSlashCommandStatus('gemini'),
+    getSlashCommandStatus('opencode')
   ];
 }
 

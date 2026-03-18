@@ -9,6 +9,7 @@ export type LaunchCommands = {
   codex: string;
   cursor: string;
   gemini: string;
+  opencode: string;
   contextUrl: string;
 };
 
@@ -17,6 +18,7 @@ export type ResumeCommands = {
   codex: string;
   cursor: string;
   gemini: string;
+  opencode: string;
 };
 
 /**
@@ -38,6 +40,7 @@ export function buildLaunchCommands({
     codex: `ovld connect codex --ticket-id ${ticketId}`,
     cursor: `ovld connect cursor --ticket-id ${ticketId}`,
     gemini: `ovld connect gemini --ticket-id ${ticketId}`,
+    opencode: `ovld connect opencode --ticket-id ${ticketId}`,
     contextUrl
   };
 }
@@ -52,7 +55,8 @@ export function buildResumeCommands({ ticketId }: BuildLaunchCommandsInput): Res
     claudeCode: `ovld restart claude --ticket-id ${ticketId}`,
     codex: `ovld restart codex --ticket-id ${ticketId}`,
     cursor: `ovld restart cursor --ticket-id ${ticketId}`,
-    gemini: `ovld restart gemini --ticket-id ${ticketId}`
+    gemini: `ovld restart gemini --ticket-id ${ticketId}`,
+    opencode: `ovld restart opencode --ticket-id ${ticketId}`
   };
 }
 
@@ -61,7 +65,7 @@ export function buildResumeCommands({ ticketId }: BuildLaunchCommandsInput): Res
  * Uses $(curl ...) to fetch context inline — works in standard shells.
  */
 export function buildRawLaunchCommand(
-  agent: 'claude' | 'codex' | 'cursor' | 'gemini',
+  agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
   { ticketId, platformUrl, token }: BuildLaunchCommandsInput
 ): string {
   const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
@@ -77,12 +81,15 @@ export function buildRawLaunchCommand(
   if (agent === 'cursor') {
     return `${envPrefix} agent ${curlFragment}`;
   }
+  if (agent === 'opencode') {
+    return `${envPrefix} opencode --prompt ${curlFragment}`;
+  }
   return `${envPrefix} gemini ${curlFragment}`;
 }
 
 export function selectRestartSessionCommand(
   agentIdentifier: string | null | undefined,
-  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini'>,
+  commands: Pick<LaunchCommands, 'claudeCode' | 'codex' | 'cursor' | 'gemini' | 'opencode'>,
   externalSessionId?: string | null
 ): string {
   const normalized = agentIdentifier?.trim().toLowerCase() ?? '';
@@ -97,6 +104,9 @@ export function selectRestartSessionCommand(
   }
   if (normalized.includes('gemini')) {
     return commands.gemini;
+  }
+  if (normalized.includes('opencode')) {
+    return commands.opencode;
   }
   return commands.codex;
 }
@@ -121,6 +131,9 @@ export function buildNativeResumeCommand(
   }
   if (normalized.includes('gemini')) {
     return `gemini --resume ${sessionId}`;
+  }
+  if (normalized.includes('opencode')) {
+    return `opencode --continue --session ${sessionId}`;
   }
   return null;
 }

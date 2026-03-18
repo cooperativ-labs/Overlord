@@ -26,10 +26,12 @@ type CliQuickstartProps = {
   codexCommand?: string;
   cursorCommand?: string;
   geminiCommand?: string;
+  opencodeCommand?: string;
   claudeResumeCommand?: string;
   codexResumeCommand?: string;
   cursorResumeCommand?: string;
   geminiResumeCommand?: string;
+  opencodeResumeCommand?: string;
 };
 
 function CommandCopyButton({ value }: { value: string }) {
@@ -77,10 +79,12 @@ export function CliQuickstart({
   codexCommand,
   cursorCommand,
   geminiCommand,
+  opencodeCommand,
   claudeResumeCommand,
   codexResumeCommand,
   cursorResumeCommand,
-  geminiResumeCommand
+  geminiResumeCommand,
+  opencodeResumeCommand
 }: CliQuickstartProps) {
   const defaultSelectedAgent: LaunchAgentTypeValue =
     activeAgentValue && LAUNCH_AGENT_VALUES.includes(activeAgentValue as LaunchAgentTypeValue)
@@ -97,9 +101,10 @@ export function CliQuickstart({
       claude: claudeCommand ?? 'ovld connect claude',
       codex: codexCommand ?? 'ovld connect codex',
       cursor: cursorCommand ?? 'ovld connect cursor',
-      gemini: geminiCommand ?? 'ovld connect gemini'
+      gemini: geminiCommand ?? 'ovld connect gemini',
+      opencode: opencodeCommand ?? 'ovld connect opencode'
     }),
-    [claudeCommand, codexCommand, cursorCommand, geminiCommand]
+    [claudeCommand, codexCommand, cursorCommand, geminiCommand, opencodeCommand]
   );
 
   const overlordResumeCommands = useMemo<QuickstartCommands>(
@@ -107,9 +112,16 @@ export function CliQuickstart({
       claude: claudeResumeCommand ?? 'ovld restart claude',
       codex: codexResumeCommand ?? 'ovld restart codex',
       cursor: cursorResumeCommand ?? 'ovld restart cursor',
-      gemini: geminiResumeCommand ?? 'ovld restart gemini'
+      gemini: geminiResumeCommand ?? 'ovld restart gemini',
+      opencode: opencodeResumeCommand ?? 'ovld restart opencode'
     }),
-    [claudeResumeCommand, codexResumeCommand, cursorResumeCommand, geminiResumeCommand]
+    [
+      claudeResumeCommand,
+      codexResumeCommand,
+      cursorResumeCommand,
+      geminiResumeCommand,
+      opencodeResumeCommand
+    ]
   );
 
   const nativeResumeCommands: Partial<QuickstartCommands> = useMemo(() => {
@@ -117,12 +129,14 @@ export function CliQuickstart({
     const codexResume = buildNativeResumeCommand('codex', externalSessionId);
     const cursorResume = buildNativeResumeCommand('cursor', externalSessionId);
     const geminiResume = buildNativeResumeCommand('gemini', externalSessionId);
+    const openCodeResume = buildNativeResumeCommand('opencode', externalSessionId);
 
     return {
       claude: claudeResume ?? 'claude --resume <claude-session-id>',
       codex: codexResume ?? 'codex resume <codex-session-id>',
       ...(cursorResume ? { cursor: cursorResume } : {}),
-      ...(geminiResume ? { gemini: geminiResume } : {})
+      ...(geminiResume ? { gemini: geminiResume } : {}),
+      opencode: openCodeResume ?? 'opencode --continue --session <opencode-session-id>'
     };
   }, [externalSessionId]);
 

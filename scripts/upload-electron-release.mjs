@@ -23,6 +23,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const BUCKET = 'app-downloads';
 const PREFIX = 'electron';
+const REQUIRED_ARTIFACT_PATTERNS = [
+  { label: 'macOS DMG', pattern: /^Overlord-.*-mac-arm64\.dmg$/ },
+  { label: 'macOS ZIP', pattern: /^Overlord-.*-mac-arm64\.zip$/ },
+  { label: 'latest-mac.yml', pattern: /^latest-mac\.yml$/ },
+  { label: 'Linux AppImage', pattern: /^Overlord-.*-linux-x64\.AppImage$/ },
+  { label: 'latest-linux.yml', pattern: /^latest-linux\.yml$/ }
+];
+const OPTIONAL_ARTIFACT_PATTERNS = [
+  { label: 'Linux .deb', pattern: /^Overlord-.*-linux-amd64\.deb$/ }
+];
 
 const VERSION_BUMP = {
   patch: (v) => {
@@ -94,6 +104,27 @@ function getReleaseArtifacts() {
 function cleanLocalReleaseDir() {
   const releaseDir = join(ROOT, 'release');
   rmSync(releaseDir, { recursive: true, force: true });
+}
+
+function validateArtifacts(artifacts) {
+  const artifactNames = artifacts.map(artifact => artifact.name);
+  const missingRequired = REQUIRED_ARTIFACT_PATTERNS.filter(
+    ({ pattern }) => !artifactNames.some(name => pattern.test(name))
+  );
+
+  if (missingRequired.length > 0) {
+    console.error('[upload] Release artifacts are incomplete.');
+    for (const artifact of missingRequired) {
+      console.error(`  Missing required artifact: ${artifact.label}`);
+    }
+    process.exit(1);
+  }
+
+  for (const artifact of OPTIONAL_ARTIFACT_PATTERNS) {
+    if (!artifactNames.some(name => artifact.pattern.test(name))) {
+      console.warn(`[upload] Optional artifact missing: ${artifact.label}`);
+    }
+  }
 }
 
 async function uploadFile(supabase, filePath, storagePath) {
@@ -274,6 +305,7 @@ async function main() {
     console.error('[upload] No files found in release/.');
     process.exit(1);
   }
+  validateArtifacts(artifacts);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }
