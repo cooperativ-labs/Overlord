@@ -177,7 +177,7 @@ export default async function HomePage() {
               size="lg"
               className="rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100"
             >
-              <Link href="/login">
+              <Link href="/signup">
                 Create account
                 <ArrowRight />
               </Link>
@@ -206,7 +206,7 @@ export default async function HomePage() {
                 size="lg"
                 className="h-12 rounded-full bg-white px-6 text-base text-slate-950 hover:bg-slate-100"
               >
-                <Link href="/login">
+                <Link href="/signup">
                   Create account
                   <ArrowRight />
                 </Link>
@@ -527,7 +527,7 @@ export default async function HomePage() {
                 size="lg"
                 className="h-12 rounded-full bg-white px-6 text-base text-slate-950 hover:bg-slate-100"
               >
-                <Link href="/login">
+                <Link href="/signup">
                   Create account
                   <ArrowRight />
                 </Link>

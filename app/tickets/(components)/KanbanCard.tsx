@@ -166,20 +166,13 @@ export default function KanbanCard({
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
-            hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25',
-            isHighPriority && 'border-l-2 border-l-orange-500'
+            hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
           )}
           style={style}
           onClick={handleCardClick}
           {...listeners}
           {...attributes}
         >
-          {isHighPriority && (
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-y-0 left-4 w-0 border-l-2 border-orange-500"
-            />
-          )}
           {hasUnopenedWaitingResponse || hasUnopenedReview ? (
             <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1">
               {hasUnopenedWaitingResponse ? (

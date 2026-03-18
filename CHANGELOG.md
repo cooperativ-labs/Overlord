@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.0] - 2026-03-18:12:10
+
+### Added
+- Launch a dedicated full-page onboarding experience for web signups that walks new visitors through workspace creation, a desktop download/skip step, and first-project setup (including project color and working-directory guidance) before redirecting to `/u`, keeping the modal-based tutorial reserved for Electron sessions.
+- Add a CLI-install checkpoint and a visual ticket-flow explainer to the desktop wizard so Electron users can install `ovld` in-app and see how tickets progress from creation to terminal launches before they start working.
+
+### Fixed
+- None.
+
+### Changed
+- Auto-redirect web visitors who lack an organization or project to `/onboarding`, keep electron clients on the modal flow, and point homepage CTAs plus auth links at `/signup` so new accounts go through the guided setup.
+- Align the authentication actions so login/signup share the `next` parameter, sign-outs return to `/login`, and email confirmation flows now reroute new users to onboarding after verifying their address.
+- Make `ovld protocol spawn` create tickets in `draft` status by default to keep spawned work awaiting review.
+
+### Security
+- None.
+
+### Documentation
+- Update AGENTS.md and the ticket prompt guidance to spell out the new “no git commits unless explicitly requested” rule and reinforce that delivering a ticket closes the work, matching the updated tutorial expectations.
+
 ## [1.10.0] - 2026-03-17:11:02
 
 ### Added

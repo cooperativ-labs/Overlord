@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.0.0';
+export const BUNDLE_VERSION = '1.1.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -91,6 +91,8 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
 - **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
+- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
 `;
 
 /**
@@ -161,6 +163,8 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.
 - Use \`write-context\` for facts a future agent session should know.
 - **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket**
+- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
 `;
 
 /**

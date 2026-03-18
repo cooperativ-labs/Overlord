@@ -16,6 +16,7 @@ export default async function OnboardingPage() {
 
   const state = await getOnboardingState();
 
+  // If user already has both org and project, send them to the dashboard
   if (state.hasOrganizations && state.hasProjects) {
     redirect('/u');
   }

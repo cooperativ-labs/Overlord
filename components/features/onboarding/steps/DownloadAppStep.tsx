@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 
 type Props = {
   onContinue: () => void;
+  /** Override the default heading text. */
+  title?: string;
 };
 
 const STORAGE_BASE =
@@ -39,14 +41,14 @@ const BENEFITS = [
   }
 ];
 
-export function DownloadAppStep({ onContinue }: Props) {
+export function DownloadAppStep({ onContinue, title }: Props) {
   const { isElectron } = useElectron();
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">
-          {isElectron ? 'You have the full experience' : 'Unlock the full Overlord experience'}
+          {title ?? (isElectron ? 'You have the full experience' : 'Download the Desktop App')}
         </h2>
         <p className="text-muted-foreground mt-1 text-sm">
           {isElectron

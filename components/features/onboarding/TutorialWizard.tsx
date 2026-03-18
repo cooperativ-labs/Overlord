@@ -4,6 +4,7 @@ import { Building2, FolderKanban, FolderSearch } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
+import { CliInstallStep } from '@/components/features/onboarding/steps/CliInstallStep';
 import { ConnectorSetupStep } from '@/components/features/onboarding/steps/ConnectorSetupStep';
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
 import { TicketFlowStep } from '@/components/features/onboarding/steps/TicketFlowStep';
@@ -32,15 +33,18 @@ import { cn } from '@/lib/utils';
  * Steps:
  *   1 — Create organization  (skipped if exists)
  *   2 — Create first project (skipped if exists)
- *   3 — Desktop: Agent connectors | Web: Download app
- *   4 — How tickets work
+ *   3 — Desktop: Install CLI | Web: Download app
+ *   4 — Desktop: Agent connectors | Web: How tickets work
+ *   5 — Desktop only: How tickets work
  *
  * Desktop steps (3) appear even if the user already completed the web flow,
  * because `desktopSetupDone` is tracked independently.
  */
 
-const TOTAL_STEPS = 4;
-const CONNECTOR_STEP = 3;
+const WEB_TOTAL_STEPS = 4;
+const DESKTOP_TOTAL_STEPS = 5;
+const TUTORIAL_START_STEP = 3;
+const DESKTOP_CONNECTOR_STEP = 4;
 
 type TutorialWizardProps = {
   initialState: OnboardingState;
@@ -52,15 +56,22 @@ type TutorialWizardProps = {
 export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialWizardProps) {
   const router = useRouter();
   const { api, isElectron } = useElectron();
+  const totalSteps = isElectron ? DESKTOP_TOTAL_STEPS : WEB_TOTAL_STEPS;
 
   const stepLabels: Record<number, string> = isElectron
-    ? { 1: 'Organization', 2: 'Project', 3: 'Agent connectors', 4: 'How it works' }
+    ? {
+        1: 'Organization',
+        2: 'Project',
+        3: 'Install CLI',
+        4: 'Agent connectors',
+        5: 'How it works'
+      }
     : { 1: 'Organization', 2: 'Project', 3: 'Desktop App', 4: 'How it works' };
 
-  const fullVisibleSteps = [1, 2, 3, 4];
-  const tutorialVisibleSteps = isElectron ? [3, 4] : [3, 4];
+  const fullVisibleSteps = isElectron ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
+  const tutorialVisibleSteps = isElectron ? [3, 4, 5] : [3, 4];
 
-  const isTutorialOnlyFlow = startAtStep >= CONNECTOR_STEP;
+  const isTutorialOnlyFlow = startAtStep >= TUTORIAL_START_STEP;
   const visibleSteps = isTutorialOnlyFlow ? tutorialVisibleSteps : fullVisibleSteps;
 
   function normalizeStep(step: number) {
@@ -70,12 +81,12 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   }
 
   const effectiveStart = isTutorialOnlyFlow
-    ? normalizeStep(Math.min(Math.max(startAtStep, CONNECTOR_STEP), TOTAL_STEPS))
+    ? normalizeStep(Math.min(Math.max(startAtStep, TUTORIAL_START_STEP), totalSteps))
     : !initialState.hasOrganizations
       ? 1
       : !initialState.hasProjects
         ? 2
-        : normalizeStep(Math.min(Math.max(startAtStep, CONNECTOR_STEP), TOTAL_STEPS));
+        : normalizeStep(Math.min(Math.max(startAtStep, TUTORIAL_START_STEP), totalSteps));
 
   const [currentStep, setCurrentStep] = useState(effectiveStart);
 
@@ -97,7 +108,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   const [projectButtonState, setProjectButtonState] = useState<ButtonLoadingState>('default');
   const directoryInputRef = useRef<HTMLInputElement>(null);
 
-  const canSkip = currentStep >= CONNECTOR_STEP;
+  const canSkip = currentStep >= TUTORIAL_START_STEP;
   const currentVisibleIndex = visibleSteps.indexOf(currentStep);
   const currentVisibleStepNumber = currentVisibleIndex + 1;
   const totalVisibleSteps = visibleSteps.length;
@@ -110,17 +121,17 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
   }
 
   async function handleStepComplete(completedStepNumber: number) {
-    if (completedStepNumber >= CONNECTOR_STEP) {
+    if (completedStepNumber >= TUTORIAL_START_STEP) {
       await updateOnboardingProgressAction({ completedStep: completedStepNumber });
       // Mark desktop setup done when completing the connector step on desktop
-      if (completedStepNumber === CONNECTOR_STEP && isElectron) {
+      if (completedStepNumber === DESKTOP_CONNECTOR_STEP && isElectron) {
         await updateOnboardingProgressAction({ desktopSetupDone: true });
       }
     }
     const completedIndex = visibleSteps.indexOf(completedStepNumber);
     const nextStep = completedIndex >= 0 ? visibleSteps[completedIndex + 1] : undefined;
     if (!nextStep) {
-      await updateOnboardingProgressAction({ completedStep: TOTAL_STEPS });
+      await updateOnboardingProgressAction({ completedStep: totalSteps });
       onClose();
     } else {
       setCurrentStep(nextStep);
@@ -452,15 +463,24 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
 
         {currentStep === 3 &&
           (isElectron ? (
-            <ConnectorSetupStep
-              onContinue={() => void handleStepComplete(3)}
-              projectDirectory={workingDirectory.trim() || undefined}
-            />
+            <CliInstallStep onContinue={() => void handleStepComplete(3)} />
           ) : (
             <DownloadAppStep onContinue={() => void handleStepComplete(3)} />
           ))}
 
-        {currentStep === 4 && <TicketFlowStep onContinue={() => void handleStepComplete(4)} />}
+        {currentStep === 4 &&
+          (isElectron ? (
+            <ConnectorSetupStep
+              onContinue={() => void handleStepComplete(4)}
+              projectDirectory={workingDirectory.trim() || undefined}
+            />
+          ) : (
+            <TicketFlowStep onContinue={() => void handleStepComplete(4)} />
+          ))}
+
+        {currentStep === 5 && isElectron && (
+          <TicketFlowStep onContinue={() => void handleStepComplete(5)} />
+        )}
       </div>
     </div>
   );

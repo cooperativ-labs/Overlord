@@ -39,7 +39,7 @@ export function TutorialProvider({
   const [isOpen, setIsOpen] = useState(autoOpen);
   const [startAtStep, setStartAtStep] = useState(autoOpenStep);
   // Keep a mutable copy of state so the wizard can update it mid-flow
-  const [state, setState] = useState<OnboardingState | null>(initialState);
+  const [state] = useState<OnboardingState | null>(initialState);
 
   // If the server says we should auto-open but state changes (e.g. fast-nav), sync
   useEffect(() => {
@@ -51,7 +51,7 @@ export function TutorialProvider({
   }, [autoOpen]);
 
   // Desktop-specific: if the user completed the web flow but hasn't done desktop
-  // connector setup, auto-open at the connector step on Electron.
+  // CLI + connector setup, auto-open at the desktop onboarding step on Electron.
   useEffect(() => {
     if (!initialState) return;
     const onElectron = !!window.electronAPI?.isElectron;

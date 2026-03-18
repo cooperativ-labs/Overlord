@@ -3,6 +3,7 @@ export const SESSION_ENDED_MESSAGE = 'You have been signed out. Please sign in a
 const PUBLIC_EXACT_PATHS = new Set(['/']);
 const PUBLIC_PATH_PREFIXES = [
   '/login',
+  '/signup',
   '/electron-login',
   '/confirm-email',
   '/onboarding',

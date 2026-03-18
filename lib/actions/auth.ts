@@ -19,6 +19,12 @@ function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): s
   }
 }
 
+function authRedirectPath(path: '/login' | '/signup', error: string, nextPath: string): string {
+  const params = new URLSearchParams({ error });
+  if (nextPath !== '/u') params.set('next', nextPath);
+  return `${path}?${params.toString()}`;
+}
+
 export async function signIn(formData: FormData) {
   const supabase = await createClient();
   const nextPath = sanitizeNextPath(formData.get('next'), '/u');
@@ -29,7 +35,7 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
-    redirect('/(auth)/login?error=' + encodeURIComponent(error.message));
+    redirect(authRedirectPath('/login', error.message, nextPath));
   }
 
   redirect(nextPath);
@@ -45,7 +51,7 @@ export async function signUp(formData: FormData) {
   const name = rawName.trim();
 
   if (!name) {
-    redirect('/(auth)/login?error=' + encodeURIComponent('Name is required.'));
+    redirect(authRedirectPath('/signup', 'Name is required.', nextPath));
   }
 
   const { error } = await supabase.auth.signUp({
@@ -56,19 +62,19 @@ export async function signUp(formData: FormData) {
         name,
         full_name: name
       },
-      emailRedirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent(nextPath)}`
+      emailRedirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent('/onboarding')}`
     }
   });
 
   if (error) {
-    redirect('/(auth)/login?error=' + encodeURIComponent(error.message));
+    redirect(authRedirectPath('/signup', error.message, nextPath));
   }
 
-  redirect('/(auth)/confirm-email');
+  redirect('/confirm-email');
 }
 
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect('/(auth)/login');
+  redirect('/login');
 }

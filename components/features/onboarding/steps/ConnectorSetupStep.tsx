@@ -41,10 +41,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
     bundle: true,
     slashCommands: false,
     permissions: true,
-    details: [
-      'AGENTS.md workflow instructions',
-      'Permission prefix rules for ovld protocol & curl'
-    ]
+    details: ['AGENTS.md workflow instructions', 'Permission prefix rules for ovld protocol & curl']
   },
   cursor: {
     bundle: false,
@@ -178,9 +175,7 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
     const errors: string[] = [];
 
     // Install bundles for bundle-capable agents
-    const bundleAgents = agents.filter(
-      (a): a is BundleAgent => AGENT_CONNECTOR_FEATURES[a].bundle
-    );
+    const bundleAgents = agents.filter((a): a is BundleAgent => AGENT_CONNECTOR_FEATURES[a].bundle);
     for (const agent of bundleAgents) {
       try {
         if (api.agentBundle) {
@@ -358,15 +353,16 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
                   </div>
                   <ul className="mt-2 space-y-0.5">
                     {features.details.map(detail => (
-                      <li key={detail} className="text-muted-foreground text-xs flex items-start gap-1.5">
+                      <li
+                        key={detail}
+                        className="text-muted-foreground text-xs flex items-start gap-1.5"
+                      >
                         <span className="text-muted-foreground/60 mt-0.5">·</span>
                         {detail}
                       </li>
                     ))}
                   </ul>
-                  {state.error && (
-                    <p className="text-destructive text-xs mt-1">{state.error}</p>
-                  )}
+                  {state.error && <p className="text-destructive text-xs mt-1">{state.error}</p>}
                 </div>
               </div>
             </div>

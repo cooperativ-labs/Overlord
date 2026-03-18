@@ -78,7 +78,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       organization_id: organizationId,
       priority,
       project_id: resolvedProjectId,
-      status: 'execute',
+      status: 'draft',
       title: nextTitle
     })
     .select('id,organization_id,project_id,execution_target,status,ticket_sequence')

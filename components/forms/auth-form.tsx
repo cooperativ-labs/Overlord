@@ -4,7 +4,6 @@ import { GalleryVerticalEnd } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
@@ -23,20 +22,19 @@ type FormSubmitEvent = { preventDefault: () => void; currentTarget: HTMLFormElem
 
 type AuthFormProps = {
   className?: string;
-  defaultMode?: AuthMode;
+  mode: AuthMode;
   error?: string;
   message?: string;
   next?: string;
 };
 
-export function AuthForm({
-  className,
-  defaultMode = 'login',
-  error,
-  message,
-  next
-}: AuthFormProps) {
-  const [mode, setMode] = React.useState<AuthMode>(defaultMode);
+function withNext(path: string, next?: string): string {
+  if (!next) return path;
+  const params = new URLSearchParams({ next });
+  return `${path}?${params.toString()}`;
+}
+
+export function AuthForm({ className, mode, error, message, next }: AuthFormProps) {
   const [signInButtonState, setSignInButtonState] = React.useState<ButtonLoadingState>('default');
   const [signUpButtonState, setSignUpButtonState] = React.useState<ButtonLoadingState>('default');
 
@@ -83,25 +81,6 @@ export function AuthForm({
         </div>
       ) : null}
 
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant={isLogin ? 'default' : 'outline'}
-          className="flex-1"
-          onClick={() => setMode('login')}
-        >
-          Sign in
-        </Button>
-        <Button
-          type="button"
-          variant={!isLogin ? 'default' : 'outline'}
-          className="flex-1"
-          onClick={() => setMode('signup')}
-        >
-          Create account
-        </Button>
-      </div>
-
       {isLogin ? (
         <form method="post" onSubmit={handleSignIn}>
           {next ? <input type="hidden" name="next" value={next} /> : null}
@@ -116,13 +95,9 @@ export function AuthForm({
               <h1 className="text-xl font-bold">Welcome back</h1>
               <FieldDescription>
                 Don&apos;t have an account?{' '}
-                <button
-                  type="button"
-                  className="underline underline-offset-4 hover:text-foreground"
-                  onClick={() => setMode('signup')}
-                >
+                <Link href={withNext('/signup', next)} className="underline underline-offset-4">
                   Create account
-                </button>
+                </Link>
               </FieldDescription>
             </div>
             <Field>
@@ -165,13 +140,9 @@ export function AuthForm({
               <h1 className="text-xl font-bold">Welcome to Overlord</h1>
               <FieldDescription>
                 Already have an account?{' '}
-                <button
-                  type="button"
-                  className="underline underline-offset-4 hover:text-foreground"
-                  onClick={() => setMode('login')}
-                >
+                <Link href={withNext('/login', next)} className="underline underline-offset-4">
                   Sign in
-                </button>
+                </Link>
               </FieldDescription>
             </div>
             <Field>

@@ -296,6 +296,8 @@ ${codexResumeCommand}
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
+- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
 ${askModeRule}
 `;
 }
@@ -417,6 +419,8 @@ ${generateDeliverPayloadExample(ticketId)}
 - Post ≥1 update before delivering.
 - Only include \`changeRationales\` for meaningful behavioral changes.
 - If blocked, create a follow-up ticket.
+- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
 ${askModeRules}
 `;
 }
