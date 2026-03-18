@@ -219,7 +219,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
                 </p>
               </div>
 
-              <div className="rounded-xl border p-4">
+              {/* <div className="rounded-xl border p-4">
                 <div className="flex items-start gap-3">
                   <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                     <Building2 className="h-5 w-5" />
@@ -232,13 +232,15 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
                     </p>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="onboarding-organization-name">Organization name</FieldLabel>
                   <Input
                     id="onboarding-organization-name"
+                    autoFocus
+                    className="h-12"
                     value={organizationName}
                     onChange={event => {
                       setOrganizationName(event.target.value);
@@ -322,6 +324,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
                   <FieldLabel htmlFor="onboarding-project-name">Project name</FieldLabel>
                   <Input
                     id="onboarding-project-name"
+                    autoFocus
                     value={projectName}
                     onChange={event => {
                       setProjectName(event.target.value);
