@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { toAttributionFilePaths } from '@/lib/helpers/file-changes';
 import { createClient } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -9,27 +10,6 @@ type FileAttribution = {
   ticket_id: string;
   ticket_title: string | null;
 };
-
-/**
- * Parses file paths from a `file_changes` artifact content string.
- * Supports formats: plain paths, bullet lists, git --stat format, em-dash notes.
- */
-function parseFilePaths(content: string): string[] {
-  return content
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
-    .flatMap(line => {
-      if (/^\d+\s+files?\s+changed/.test(line)) return [];
-      const stripped = line.replace(/^[-*]\s+/, '');
-      const gitStat = stripped.match(/^(.+?)\s+\|\s+\d+/);
-      if (gitStat) return [gitStat[1].trim()];
-      const emDash = stripped.match(/^(.+?)\s+[—–]\s+(.+)$/);
-      if (emDash) return [emDash[1].trim()];
-      return [stripped];
-    })
-    .filter(p => p.includes('/') || p.includes('.'));
-}
 
 /**
  * Returns deterministic file-to-ticket attribution for a project.
@@ -117,7 +97,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     for (const artifact of artifacts ?? []) {
       if (!artifact.content || !artifact.ticket_id) continue;
-      const filePaths = parseFilePaths(artifact.content);
+      const filePaths = toAttributionFilePaths(artifact.content);
       const ticket = artifact.tickets as unknown as { id: string; title: string | null };
 
       for (const filePath of filePaths) {

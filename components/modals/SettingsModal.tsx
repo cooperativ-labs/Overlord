@@ -56,9 +56,9 @@ type NavItem = {
 };
 
 const workflowNavItems: NavItem[] = [
-  { name: 'Terminal', icon: Monitor, electronOnly: true },
+  { name: 'Terminal & IDE', icon: Monitor, electronOnly: true },
   { name: 'MCP & Cloud Agents', icon: Bot },
-  { name: 'Terminal Agents & CLI', icon: Terminal },
+  { name: 'CLI & Local Agents', icon: Terminal },
   { name: 'Customization', icon: Edit3 }
 ];
 
@@ -92,7 +92,7 @@ export function SettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[780px] md:max-w-[1000px] lg:max-w-[1200px]">
+      <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[680px] md:max-w-[900px] lg:max-w-[1000px]">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Customize your settings here.</DialogDescription>
         <SidebarProvider className="items-start">
@@ -145,7 +145,7 @@ export function SettingsModal({
               </SidebarGroup>
             </SidebarContent>
           </Sidebar>
-          <main className="flex h-[100dvh] flex-1 flex-col overflow-hidden md:h-[680px]">
+          <main className="flex h-[100dvh] flex-1 flex-col overflow-hidden md:h-[580px]">
             <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
               {/* Mobile: page selector dropdown */}
               <div className="flex w-full items-center md:hidden">
@@ -190,10 +190,10 @@ export function SettingsModal({
                 />
               )}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
-              {activeNav === 'Terminal Agents & CLI' && <CliPage open={open} />}
+              {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
-              {activeNav === 'Terminal' && isElectron && <TerminalPage open={open} />}
+              {activeNav === 'Terminal & IDE' && isElectron && <TerminalPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>
           </main>

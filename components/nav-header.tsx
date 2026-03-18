@@ -16,7 +16,7 @@ export function NavHeader() {
   }, []);
 
   return (
-    <header className=" electron-drag-region flex flex-row justify-between items-center gap-2 border-b bg-card px-4 py-2 text-card-foreground">
+    <header className=" electron-drag-region flex flex-row justify-between dark:rounded-lg items-center gap-2 border-b bg-card px-4 py-2 text-card-foreground">
       <div className="flex shrink-0 items-center">
         <SidebarTrigger className="-ml-1 electron-no-drag" />
       </div>

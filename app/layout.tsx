@@ -1,6 +1,7 @@
 import './globals.css';
 
 import type { Metadata } from 'next';
+import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Toaster } from 'sonner';
@@ -28,6 +29,17 @@ import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 import { createClient } from '@/supabase/utils/server';
+
+const displayFont = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-display'
+});
+
+const monoFont = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-mono'
+});
 
 export const metadata: Metadata = {
   title: 'Overlord',
@@ -112,7 +124,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body>
+      <body className={`${displayFont.variable} ${monoFont.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

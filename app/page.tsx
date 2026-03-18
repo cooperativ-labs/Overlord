@@ -11,24 +11,12 @@ import {
   Workflow
 } from 'lucide-react';
 import type { Metadata } from 'next';
-import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google';
 import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/supabase/utils/server';
-
-const displayFont = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-display'
-});
-
-const monoFont = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  variable: '--font-mono'
-});
 
 export const metadata: Metadata = {
   title: 'Overlord | Agent Work, Organized',
@@ -133,7 +121,7 @@ export default async function HomePage() {
 
   return (
     <div
-      className={`relative overflow-y-auto bg-[#020817] text-white ${displayFont.variable} ${monoFont.variable}`}
+      className="relative overflow-y-auto bg-[#020817] text-white"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[42rem] bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(56,189,248,0.12),_transparent_26%),radial-gradient(circle_at_50%_0%,_rgba(15,23,42,0.6),_transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,8,23,0))]" />
       <div className="pointer-events-none absolute inset-x-0 top-24 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />

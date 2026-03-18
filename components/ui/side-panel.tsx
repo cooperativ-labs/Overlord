@@ -183,8 +183,8 @@ export function SidePanel() {
   return (
     <div
       className={cn(
-        'relative flex h-full shrink-0 border-l bg-transparent transition-[width] duration-200 ease-in-out',
-        !isOpen && 'w-0 overflow-hidden border-l-0'
+        'relative flex h-full shrink-0 border-l transition-[width,box-shadow] duration-200 ease-in-out',
+        isOpen ? 'shadow-side-left' : 'w-0 overflow-hidden border-l-0 shadow-none'
       )}
       style={isOpen ? { width } : undefined}
       onTransitionEnd={onTransitionEnd}

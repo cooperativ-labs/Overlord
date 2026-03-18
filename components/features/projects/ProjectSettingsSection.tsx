@@ -156,7 +156,7 @@ export function ProjectSettingsSection({
   }
 
   return (
-    <section className="px-5 py-5 border-b">
+    <section className="px-5 py-2 border-b">
       {/* Name + color + optional sync */}
       <div className="flex flex-wrap items-center gap-2">
         <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
@@ -175,34 +175,47 @@ export function ProjectSettingsSection({
         </Popover>
 
         <div className="min-w-0 flex-1 items-center gap-3 md:flex">
-          {nameEditing ? (
-            <Input
-              ref={nameInputRef}
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. Mobile App"
-              className="h-7 max-w-xs font-semibold"
-              onBlur={handleSaveName}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleSaveName();
-                if (e.key === 'Escape') cancelNameEdit();
-              }}
-              disabled={nameSaveState === 'loading'}
-            />
-          ) : (
-            <button
-              type="button"
-              className={cn(
-                'rounded px-1.5 py-0.5 text-left text-base font-semibold',
-                'hover:bg-muted/60',
-                '-ml-1.5'
-              )}
-              onClick={() => setNameEditing(true)}
-            >
-              {savedName || 'Untitled project'}
-            </button>
-          )}
-
+          <div className="flex items-center gap-2">
+            {nameEditing ? (
+              <Input
+                ref={nameInputRef}
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Mobile App"
+                className="h-7 max-w-xs font-semibold"
+                onBlur={handleSaveName}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSaveName();
+                  if (e.key === 'Escape') cancelNameEdit();
+                }}
+                disabled={nameSaveState === 'loading'}
+              />
+            ) : (
+              <button
+                type="button"
+                className={cn(
+                  'rounded px-1.5 py-0.5 text-left text-base font-semibold',
+                  'hover:bg-muted/60',
+                  '-ml-1.5'
+                )}
+                onClick={() => setNameEditing(true)}
+              >
+                {savedName || 'Untitled project'}
+              </button>
+            )}
+            {projectSettings ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={projectSettings.openProjectSettings}
+                aria-label="Project settings"
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </div>
           {isElectron ? (
             <>
               <button
@@ -236,19 +249,6 @@ export function ProjectSettingsSection({
                 {currentChangesToggleLabel}
               </Button>
             </>
-          ) : null}
-
-          {projectSettings ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={projectSettings.openProjectSettings}
-              aria-label="Project settings"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
           ) : null}
         </div>
       </div>
