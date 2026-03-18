@@ -27,6 +27,7 @@ import { Separator } from '@/components/ui/separator';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
+import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -92,6 +93,8 @@ export async function TicketPanelContent({
       </div>
     );
   }
+
+  const profileSettings = user ? await fetchProfileSettings(supabase, user.id) : null;
 
   // Fetch all related data in parallel. Individual query failures are
   // handled gracefully — the component still renders with partial data.
@@ -196,7 +199,7 @@ export async function TicketPanelContent({
     gemini: agentConfigs.gemini?.flags ?? []
   };
   const workspaceRoot = getWorkspaceRoot();
-  const editorScheme = getEditorScheme();
+  const editorScheme = getEditorScheme(profileSettings?.editor_scheme);
   const { claudeCode, codex, cursor, gemini } = buildLaunchCommands({
     platformUrl,
     ticketId,

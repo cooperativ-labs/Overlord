@@ -516,6 +516,7 @@ export type Database = {
           created_at: string;
           custom_agent_instructions: string;
           default_project_id: string | null;
+          editor_scheme: string;
           email: string;
           id: string;
           image_url: string;
@@ -527,6 +528,7 @@ export type Database = {
           created_at?: string;
           custom_agent_instructions?: string;
           default_project_id?: string | null;
+          editor_scheme?: string;
           email?: string;
           id: string;
           image_url?: string;
@@ -538,6 +540,7 @@ export type Database = {
           created_at?: string;
           custom_agent_instructions?: string;
           default_project_id?: string | null;
+          editor_scheme?: string;
           email?: string;
           id?: string;
           image_url?: string;

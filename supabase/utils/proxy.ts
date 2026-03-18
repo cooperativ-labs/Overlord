@@ -2,9 +2,25 @@ import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { isPublicRoute } from '@/lib/auth/public-routes';
-import { getSupabasePublishableKey, getSupabaseUrl } from '@/lib/env';
+import {
+  getPlatformUrl,
+  getSupabaseCookieOptions,
+  getSupabasePublishableKey,
+  getSupabaseUrl
+} from '@/lib/env';
+
+const CANONICAL_HOST = 'www.ovld.ai';
 
 export async function updateSession(request: NextRequest) {
+  const hostname = request.nextUrl.hostname;
+  if (hostname === 'ovld.ai') {
+    const url = request.nextUrl.clone();
+    const canonical = new URL(getPlatformUrl());
+    url.protocol = canonical.protocol;
+    url.hostname = CANONICAL_HOST;
+    return NextResponse.redirect(url);
+  }
+
   // Protocol and MCP endpoints are authenticated via bearer token, not
   // Supabase session cookies. Bypass auth session refresh entirely so these
   // routes can return their own auth challenges instead of being redirected
@@ -21,6 +37,7 @@ export async function updateSession(request: NextRequest) {
   });
 
   const supabase = createServerClient(getSupabaseUrl(), getSupabasePublishableKey(), {
+    cookieOptions: getSupabaseCookieOptions(),
     cookies: {
       getAll() {
         return request.cookies.getAll();

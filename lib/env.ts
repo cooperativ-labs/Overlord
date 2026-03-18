@@ -1,3 +1,7 @@
+import type { CookieOptions } from '@supabase/ssr';
+
+import { normalizeEditorScheme } from '@/lib/helpers/editor-scheme';
+
 export function getSupabaseUrl(): string {
   const value = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   if (!value) {
@@ -33,6 +37,18 @@ export function getPlatformUrl(providedURL?: string | null): string {
   return value;
 }
 
+export function getSupabaseCookieOptions(providedURL?: string | null): CookieOptions {
+  const platformUrl = new URL(getPlatformUrl(providedURL));
+  const isOvldHost = platformUrl.hostname === 'ovld.ai' || platformUrl.hostname === 'www.ovld.ai';
+
+  return {
+    path: '/',
+    sameSite: 'lax',
+    secure: platformUrl.protocol === 'https:',
+    ...(isOvldHost ? { domain: '.ovld.ai' } : {})
+  };
+}
+
 export function getOverlordMcpUrl(providedURL?: string | null): string {
   return new URL('/api/mcp', getPlatformUrl(providedURL)).toString();
 }
@@ -52,23 +68,8 @@ export function getWorkspaceRoot(): string {
 
 /**
  * URI scheme for opening files in the user's code editor.
- * Set CODE_EDITOR env var to: vscode (default), cursor, idea, webstorm, or a full custom scheme.
- * Examples: "vscode://file", "cursor://file", "idea://open?file="
+ * Set CODE_EDITOR env var to vscode (default), cursor, jetbrains, or a full custom scheme.
  */
-export function getEditorScheme(): string {
-  const editor = process.env.CODE_EDITOR ?? 'vscode';
-  switch (editor.toLowerCase()) {
-    case 'cursor':
-      return 'cursor://file';
-    case 'idea':
-    case 'webstorm':
-    case 'phpstorm':
-    case 'intellij':
-      return 'idea://open?file=';
-    case 'vscode':
-      return 'vscode://file';
-    default:
-      // Allow a fully custom scheme like "mine://open?path="
-      return editor;
-  }
+export function getEditorScheme(preferredScheme?: string | null): string {
+  return normalizeEditorScheme(preferredScheme ?? process.env.CODE_EDITOR ?? null);
 }

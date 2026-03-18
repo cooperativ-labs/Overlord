@@ -22,7 +22,7 @@ export default async function OnboardingPage() {
   // }
 
   return (
-    <div className="w-full m">
+    <div className="w-full">
       <OnboardingWizard initialState={state} />
     </div>
   );

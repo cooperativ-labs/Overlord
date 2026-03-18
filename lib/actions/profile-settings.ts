@@ -11,10 +11,11 @@ export async function fetchProfileSettings(
 ): Promise<{
   custom_agent_instructions: string | null;
   default_project_id: string | null;
+  editor_scheme: string | null;
 } | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('custom_agent_instructions, default_project_id')
+    .select('custom_agent_instructions, default_project_id, editor_scheme')
     .eq('id', userId)
     .maybeSingle();
 
@@ -81,6 +82,30 @@ export async function upsertProfileCustomInstructions(
   return data?.custom_agent_instructions ?? customAgentInstructions;
 }
 
+export async function upsertProfileEditorScheme(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  editorScheme: string
+): Promise<string> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        editor_scheme: editorScheme
+      },
+      { onConflict: 'id' }
+    )
+    .select('editor_scheme')
+    .single();
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to save profile settings.');
+  }
+
+  return data?.editor_scheme ?? editorScheme;
+}
+
 export async function getCustomInstructionsAction(): Promise<string> {
   const supabase = await createClient();
   const {
@@ -106,6 +131,31 @@ export async function saveCustomInstructionsAction(
   }
 
   return upsertProfileCustomInstructions(supabase, user.id, customAgentInstructions);
+}
+
+export async function getEditorSchemeAction(): Promise<string | null> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const settings = await fetchProfileSettings(supabase, user.id);
+  return settings?.editor_scheme ?? null;
+}
+
+export async function saveEditorSchemeAction(editorScheme: string): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  return upsertProfileEditorScheme(supabase, user.id, editorScheme);
 }
 
 export async function getDefaultProjectAction(): Promise<string | null> {
