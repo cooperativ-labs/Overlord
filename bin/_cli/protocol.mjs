@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 
 /**
@@ -162,6 +166,62 @@ function requireFlag(flags, name, envAlias) {
 }
 
 // ---------------------------------------------------------------------------
+// Auto-detect Claude Code session ID
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempt to detect the current Claude Code session ID by finding the most
+ * recently modified .jsonl conversation file in ~/.claude/projects/<project>/.
+ * Returns the UUID or null if detection fails.
+ */
+function detectClaudeSessionId() {
+  try {
+    const cwd = process.cwd();
+    const projectDir = cwd.replace(/\//g, '-');
+    const sessionsDir = path.join(os.homedir(), '.claude', 'projects', projectDir);
+
+    if (!fs.existsSync(sessionsDir)) return null;
+
+    const files = fs.readdirSync(sessionsDir)
+      .filter(f => f.endsWith('.jsonl'))
+      .map(f => ({
+        name: f,
+        mtime: fs.statSync(path.join(sessionsDir, f)).mtimeMs
+      }))
+      .sort((a, b) => b.mtime - a.mtime);
+
+    if (files.length === 0) return null;
+
+    const uuid = files[0].name.replace('.jsonl', '');
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuid)) {
+      return uuid;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the external session ID from flags, env, or auto-detection.
+ * Priority: explicit flag > env var > auto-detect (Claude Code only).
+ */
+function resolveExternalSessionId(flags) {
+  if (flags['external-session-id']) {
+    const val = String(flags['external-session-id']).trim();
+    return val.toLowerCase() === 'null' ? null : val;
+  }
+
+  const agentId = String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? '').toLowerCase();
+  if (agentId.includes('claude') || agentId === '' || agentId === 'claude-code') {
+    const detected = detectClaudeSessionId();
+    if (detected) return detected;
+  }
+
+  return undefined; // undefined = omit from payload
+}
+
+// ---------------------------------------------------------------------------
 // attach
 // ---------------------------------------------------------------------------
 
@@ -171,18 +231,13 @@ async function protocolAttach(args) {
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
+  const externalSessionId = resolveExternalSessionId(flags);
+
   const body = {
     ticketId,
     agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
     connectionMethod: String(flags.method ?? 'cli'),
-    ...(flags['external-session-id']
-      ? {
-          externalSessionId:
-            String(flags['external-session-id']).trim().toLowerCase() === 'null'
-              ? null
-              : String(flags['external-session-id'])
-        }
-      : {}),
+    ...(externalSessionId !== undefined ? { externalSessionId } : {}),
     metadata: {}
   };
 
@@ -219,18 +274,13 @@ async function protocolUpdate(args) {
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
+  const externalSessionId = resolveExternalSessionId(flags);
+
   const body = {
     sessionKey,
     ticketId,
     summary,
-    ...(flags['external-session-id']
-      ? {
-          externalSessionId:
-            String(flags['external-session-id']).trim().toLowerCase() === 'null'
-              ? null
-              : String(flags['external-session-id'])
-        }
-      : {}),
+    ...(externalSessionId !== undefined ? { externalSessionId } : {}),
     ...(flags['external-url']
       ? {
           externalUrl:

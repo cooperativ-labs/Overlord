@@ -62,6 +62,7 @@ export function generateAttachPayloadExample(ticketId: string): string {
       ticketId,
       agentIdentifier: '<your-agent-id>',
       connectionMethod: 'mcp',
+      externalSessionId: '<optional-native-session-id>',
       metadata: {}
     },
     null,

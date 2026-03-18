@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.1.0';
+export const BUNDLE_VERSION = '1.2.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -86,6 +86,7 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 ## Rules
 
 - Always attach first; always deliver when done.
+_ Always communicate with Overlord using the ovld protocol cli commands.
 - Post any substantial updates about your decisions or progress
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
@@ -158,6 +159,7 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 ## Rules
 
 - Always attach first; always deliver when done.
+_ Always communicate with Overlord using the ovld protocol cli commands.
 - Post any substantial updates about your decisions or progress
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.

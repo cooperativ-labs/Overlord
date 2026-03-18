@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.12.0] - 2026-03-18:12:51
+
+### Added
+- Auto-detect the active Claude Code session ID for `ovld protocol attach` and `ovld protocol update` so native session tracking works without manually passing `--external-session-id`.
+
+### Fixed
+- None.
+
+### Changed
+- Update the managed agent-bundle instructions and protocol payload guidance to include `externalSessionId` and the current `ovld protocol` workflow.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `1.12.0` and the managed bundle version to `1.2.0`.
+
 ## [1.11.0] - 2026-03-18:12:10
 
 ### Added
