@@ -162,11 +162,11 @@ export default function KanbanCard({
           ref={setNodeRef}
           aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
           className={cn(
-            'relative cursor-grab border-gray-300/40 dark:border-gray-700/40 bg-linear-to-br from-gray-300/10 to-transparent overflow-hidden transition-all hover:shadow-md rounded-md',
+            'relative cursor-grab border-gray-300/40 dark:border-gray-700/40 bg-linear-to-br from-blue-300/10 to-transparent overflow-hidden transition-all hover:shadow-md rounded-md',
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected &&
-              'border-gray-400/40 dark:border-gray-600/70 bg-gray-100/70 dark:bg-gray-950/25',
+              'border-gray-400/60 dark:border-gray-500/70 bg-gray-100/70 dark:bg-gray-950/25',
             hasUnopenedReview &&
               'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
           )}
