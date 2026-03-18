@@ -16,13 +16,13 @@ export default async function OnboardingPage() {
 
   const state = await getOnboardingState();
 
-  // If user already has both org and project, send them to the dashboard
-  if (state.hasOrganizations && state.hasProjects) {
-    redirect('/u');
-  }
+  // // If user already has both org and project, send them to the dashboard
+  // if (state.hasOrganizations && state.hasProjects) {
+  //   redirect('/u');
+  // }
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full m">
       <OnboardingWizard initialState={state} />
     </div>
   );
