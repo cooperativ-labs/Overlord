@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.15.0] - 2026-03-18:19:23
+
+### Added
+- Ship `packages/overlord-cli` with the Electron build (include it in both `files` and `asarUnpack`) so the desktop release bundles the `overlord`/`ovld` CLI helpers.
+
+### Fixed
+- None.
+
+### Changed
+- Load Space Grotesk and IBM Plex Mono from the bundled `public/fonts` assets so the UI no longer depends on remote Google Font downloads and renders consistently offline.
+- Tidy the ticket prompt protocol sections by removing the redundant base URL line, keeping the instructions focused on attaching, updating, and the ticket ID itself.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `1.15.0` to align the release metadata with this changelog entry.
+
 ## [1.14.0] - 2026-03-18:16:49
 
 ### Added

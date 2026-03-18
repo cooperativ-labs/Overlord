@@ -1,7 +1,7 @@
 import './globals.css';
 
 import type { Metadata } from 'next';
-import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google';
+import localFont from 'next/font/local';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Toaster } from 'sonner';
@@ -30,15 +30,20 @@ import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 import { createClient } from '@/supabase/utils/server';
 
-const displayFont = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-display'
+const displayFont = localFont({
+  src: '../public/fonts/SpaceGrotesk-Variable.woff2',
+  variable: '--font-display',
+  display: 'swap',
+  weight: '300 700'
 });
 
-const monoFont = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  variable: '--font-mono'
+const monoFont = localFont({
+  src: [
+    { path: '../public/fonts/IBMPlexMono-Regular.woff2', weight: '400', style: 'normal' },
+    { path: '../public/fonts/IBMPlexMono-Medium.woff2', weight: '500', style: 'normal' }
+  ],
+  variable: '--font-mono',
+  display: 'swap'
 });
 
 export const metadata: Metadata = {

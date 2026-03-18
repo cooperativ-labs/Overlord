@@ -118,7 +118,6 @@ function buildSlimLocalProtocolSection(
 
   return `## Overlord Protocol
 
-- **${baseUrlLabel}:** ${platformUrl}/api/protocol
 - **Ticket ID:** ${ticketId}
 
 ${launchNote}
@@ -178,7 +177,6 @@ function buildLocalProtocolSection(
 
   return `## Overlord Protocol
 
-- **${baseUrlLabel}:** ${platformUrl}/api/protocol
 - **Ticket ID:** ${ticketId}
 
 ${launchNote}
