@@ -30,6 +30,10 @@ function generateState(): string {
 
 const DEFAULT_ELECTRON_REDIRECT_URI = 'http://127.0.0.1:45620/callback';
 
+// Track the active callback server so we can close it before starting a new one.
+// This prevents EADDRINUSE when Electron hot-reloads or the user retries login.
+let activeCallbackServer: http.Server | null = null;
+
 type LoopbackRedirect = {
   callbackPath: string;
   host: string;
@@ -72,6 +76,20 @@ function parseLoopbackRedirectUri(rawValue: string): LoopbackRedirect {
   };
 }
 
+function closeActiveCallbackServer(): Promise<void> {
+  return new Promise((resolve) => {
+    if (activeCallbackServer) {
+      const server = activeCallbackServer;
+      activeCallbackServer = null;
+      server.close(() => resolve());
+      // Force-close open connections so .close() doesn't hang
+      server.closeAllConnections?.();
+    } else {
+      resolve();
+    }
+  });
+}
+
 function waitForOAuthCallback(
   host: string,
   port: number,
@@ -98,6 +116,7 @@ function waitForOAuthCallback(
 
       if (errorParam) {
         res.end(html('Authorization Denied', 'You can close this window and return to Overlord.'));
+        activeCallbackServer = null;
         server.close();
         reject(new Error(`Authorization denied: ${errorParam}`));
         return;
@@ -105,6 +124,7 @@ function waitForOAuthCallback(
 
       if (returnedState !== expectedState) {
         res.end(html('Error', 'State mismatch. Please try again.'));
+        activeCallbackServer = null;
         server.close();
         reject(new Error('State mismatch — possible CSRF. Please try again.'));
         return;
@@ -112,18 +132,22 @@ function waitForOAuthCallback(
 
       if (!code) {
         res.end(html('Error', 'No authorization code received.'));
+        activeCallbackServer = null;
         server.close();
         reject(new Error('No authorization code in callback.'));
         return;
       }
 
       res.end(html('Authorization Complete', 'You can close this window and return to Overlord.'));
+      activeCallbackServer = null;
       server.close();
       resolve(code);
     });
 
+    activeCallbackServer = server;
     server.listen(port, host);
     server.on('error', (err: NodeJS.ErrnoException) => {
+      activeCallbackServer = null;
       if (err.code === 'EADDRINUSE') {
         reject(
           new Error(
@@ -250,6 +274,9 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
     configuredRedirectUri ?? DEFAULT_ELECTRON_REDIRECT_URI
   );
 
+  // 3b. Close any leftover callback server from a previous attempt or hot-reload
+  await closeActiveCallbackServer();
+
   // 4. Build the Supabase OAuth authorization URL
   const authorizeUrl = new URL(`${supabaseUrl}/auth/v1/oauth/authorize`);
   authorizeUrl.searchParams.set('response_type', 'code');
@@ -260,16 +287,31 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   authorizeUrl.searchParams.set('state', state);
   authorizeUrl.searchParams.set('scope', 'openid email');
 
-  // 5. Start listener before opening browser
+  // 5. Pre-flight the authorize request from Node.js (cookie-free) to get
+  //    the consent page redirect URL. When the browser opens the authorize
+  //    URL directly, Kong may reject it due to stale cookies from Supabase
+  //    Studio on the same localhost domain.
+  let browserUrl = authorizeUrl.toString();
+  try {
+    const authorizeRes = await fetch(browserUrl, { redirect: 'manual' });
+    const location = authorizeRes.headers.get('location');
+    if (authorizeRes.status >= 300 && authorizeRes.status < 400 && location) {
+      browserUrl = location;
+    }
+  } catch {
+    // Fall back to opening the authorize URL directly
+  }
+
+  // 6. Start listener before opening browser
   const callbackPromise = waitForOAuthCallback(host, port, callbackPath, state);
 
-  // 6. Open browser
-  await shell.openExternal(authorizeUrl.toString());
+  // 7. Open browser to the consent page (or authorize URL as fallback)
+  await shell.openExternal(browserUrl);
 
-  // 7. Wait for the auth code
+  // 8. Wait for the auth code
   const authCode = await callbackPromise;
 
-  // 8. Exchange auth code → Supabase tokens
+  // 9. Exchange auth code → Supabase tokens
   const supabaseTokens = await exchangeCodeForSupabaseTokens(
     supabaseUrl,
     clientId,
@@ -278,13 +320,13 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
     redirectUri
   );
 
-  // 9. Exchange Supabase access token → Overlord agent_token
+  // 10. Exchange Supabase access token → Overlord agent_token
   const agentTokenData = await exchangeForAgentToken(
     resolvedPlatformUrl,
     supabaseTokens.access_token
   );
 
-  // 10. Persist credentials including refresh token for session renewal
+  // 11. Persist credentials including refresh token for session renewal
   // The refresh_token allows the browser session to automatically refresh the Supabase access token
   saveElectronCredentials({
     agent_token: agentTokenData.access_token,

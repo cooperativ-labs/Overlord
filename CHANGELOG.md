@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.13.0] - 2026-03-18:15:50
+
+### Added
+- Add a user-selectable editor scheme preference (VS Code, Cursor, Zed, Windsurf, or custom) in the Appearance settings so file links across the app open in your preferred editor.
+- Add an Electron drag region to the authentication layout so the login window can be moved by its header when running in the desktop app.
+
+### Changed
+- Refine the onboarding wizard UX with smoother transitions and cleaner state management when creating workspaces and projects.
+- Relocate and separate the web onboarding flow to a dedicated route to ensure a consistent experience across web and desktop clients.
+
+### Removed
+- Clean up unused API routes and legacy engineering templates for old Claude Code and Codex integrations.
+
+### Chore
+- Bump the package version to `1.13.0`.
+
 ## [1.12.0] - 2026-03-18:12:51
 
 ### Added
