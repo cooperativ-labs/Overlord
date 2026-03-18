@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,11 +13,22 @@ type PasswordFormProps = {
 };
 
 export function PasswordForm({ hasPassword }: PasswordFormProps) {
+  const router = useRouter();
+  const [hasSavedPassword, setHasSavedPassword] = useState(hasPassword);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [buttonState, setButtonState] = useState<ButtonLoadingState>('default');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setHasSavedPassword(hasPassword);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setButtonState('default');
+    setErrorMessage(null);
+  }, [hasPassword]);
 
   const handleSubmit = async () => {
     setErrorMessage(null);
@@ -34,15 +46,17 @@ export function PasswordForm({ hasPassword }: PasswordFormProps) {
     setButtonState('loading');
 
     try {
-      if (hasPassword) {
+      if (hasSavedPassword) {
         await updatePasswordAction(currentPassword, newPassword);
       } else {
         await setPasswordAction(newPassword);
       }
+      setHasSavedPassword(true);
       setButtonState('success');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      router.refresh();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to update password.');
       setButtonState('error');
@@ -52,11 +66,11 @@ export function PasswordForm({ hasPassword }: PasswordFormProps) {
   const isValid =
     newPassword.length >= 8 &&
     newPassword === confirmPassword &&
-    (!hasPassword || currentPassword.length > 0);
+    (!hasSavedPassword || currentPassword.length > 0);
 
   return (
     <div className="space-y-3">
-      {hasPassword && (
+      {hasSavedPassword && (
         <div className="space-y-1.5">
           <Label htmlFor="current-password">Current password</Label>
           <Input
@@ -71,7 +85,7 @@ export function PasswordForm({ hasPassword }: PasswordFormProps) {
         </div>
       )}
       <div className="space-y-1.5">
-        <Label htmlFor="new-password">{hasPassword ? 'New password' : 'Password'}</Label>
+        <Label htmlFor="new-password">{hasSavedPassword ? 'New password' : 'Password'}</Label>
         <Input
           id="new-password"
           type="password"
@@ -98,7 +112,7 @@ export function PasswordForm({ hasPassword }: PasswordFormProps) {
       <LoadingButton
         buttonState={buttonState}
         setButtonState={setButtonState}
-        text={hasPassword ? 'Update password' : 'Set password'}
+        text={hasSavedPassword ? 'Update password' : 'Set password'}
         loadingText="Saving..."
         successText="Password updated"
         errorText="Retry"

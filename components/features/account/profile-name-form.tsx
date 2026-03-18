@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,17 +13,31 @@ type ProfileNameFormProps = {
 };
 
 export function ProfileNameForm({ initialName }: ProfileNameFormProps) {
+  const router = useRouter();
   const [name, setName] = useState(initialName);
+  const [savedName, setSavedName] = useState(initialName);
   const [buttonState, setButtonState] = useState<ButtonLoadingState>('default');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    setName(initialName);
+    setSavedName(initialName);
+    setButtonState('default');
+    setErrorMessage(null);
+  }, [initialName]);
+
   const handleSave = async () => {
+    const trimmed = name.trim();
+
     setButtonState('loading');
     setErrorMessage(null);
 
     try {
-      await updateProfileNameAction(name);
+      await updateProfileNameAction(trimmed);
+      setName(trimmed);
+      setSavedName(trimmed);
       setButtonState('success');
+      router.refresh();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to update name.');
       setButtonState('error');
@@ -50,7 +65,7 @@ export function ProfileNameForm({ initialName }: ProfileNameFormProps) {
         successText="Saved"
         errorText="Retry"
         onClick={handleSave}
-        disabled={!name.trim() || name.trim() === initialName}
+        disabled={!name.trim() || name.trim() === savedName}
       />
     </div>
   );

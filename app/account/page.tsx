@@ -1,4 +1,5 @@
 import { PasswordForm } from '@/components/features/account/password-form';
+import { ProfileImageForm } from '@/components/features/account/profile-image-form';
 import { ProfileNameForm } from '@/components/features/account/profile-name-form';
 import { Separator } from '@/components/ui/separator';
 import { getProfileDataAction } from '@/lib/actions/account';
@@ -11,9 +12,16 @@ export default async function AccountPage() {
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Profile</h2>
-          <p className="text-muted-foreground text-sm">Update your display name.</p>
+          <p className="text-muted-foreground text-sm">
+            Update your display name and profile image.
+          </p>
         </div>
-        <div className="rounded-lg border p-4">
+        <div className="space-y-4 rounded-lg border p-4">
+          <ProfileImageForm
+            initialImageUrl={profile.imageUrl}
+            fallbackName={profile.name || profile.email}
+          />
+          <Separator />
           <ProfileNameForm initialName={profile.name} />
         </div>
       </div>

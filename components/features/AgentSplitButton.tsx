@@ -214,7 +214,7 @@ export function AgentSplitButton({
       ) : isCopySelected ? (
         <Copy className={styles.icon} />
       ) : (
-        <span className="flex items-center justify-center dark:rounded-full dark:bg-white/10 dark:p-0.5">
+        <span className="flex items-center justify-center dark:rounded-full dark:bg-white/40 dark:p-1">
           <Image
             src={agentDetails!.icon}
             alt={`${agentDetails!.label} icon`}

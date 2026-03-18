@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { type AgentTokenListItem, revokeAgentTokenAction } from '@/lib/actions/agent-tokens';
@@ -17,6 +17,11 @@ function formatDateTime(value: string | null): string {
 export function AgentTokenList({ initialTokens }: AgentTokenListProps) {
   const [tokens, setTokens] = useState(initialTokens);
   const [revokeStates, setRevokeStates] = useState<Record<string, ButtonLoadingState>>({});
+
+  useEffect(() => {
+    setTokens(initialTokens);
+    setRevokeStates({});
+  }, [initialTokens]);
 
   const setTokenState = (tokenId: string, state: ButtonLoadingState) => {
     setRevokeStates(prev => ({ ...prev, [tokenId]: state }));

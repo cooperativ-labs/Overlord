@@ -1,6 +1,18 @@
 'use client';
 
-import { Bot, Edit3, Info, Keyboard, Link2, Monitor, Palette, Terminal } from 'lucide-react';
+import {
+  Bot,
+  Edit3,
+  Info,
+  Keyboard,
+  KeyRound,
+  Link2,
+  Monitor,
+  Palette,
+  Shield,
+  Terminal,
+  User
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -41,6 +53,9 @@ import { CustomizationPage } from './settings/CustomizationPage';
 import { HotkeysPage } from './settings/HotkeysPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
 import { TerminalPage } from './settings/TerminalPage';
+import { UserProfilePage } from './settings/UserProfilePage';
+import { UserSessionsPage } from './settings/UserSessionsPage';
+import { UserTokensPage } from './settings/UserTokensPage';
 
 type SettingsModalProps = {
   open: boolean;
@@ -65,12 +80,17 @@ const workflowNavItems: NavItem[] = [
 const appNavItems: NavItem[] = [
   { name: 'Appearance', icon: Palette },
   { name: 'Hotkeys', icon: Keyboard },
-  { name: 'Integrations', icon: Link2 }
+  { name: 'Integrations', icon: Link2 },
+  { name: 'About', icon: Info }
 ];
 
-const aboutNavItem: NavItem = { name: 'About', icon: Info };
+const userNavItems: NavItem[] = [
+  { name: 'Profile', icon: User },
+  { name: 'Sessions', icon: Shield },
+  { name: 'Agent tokens', icon: KeyRound }
+];
 
-const navItems: NavItem[] = [...workflowNavItems, ...appNavItems, aboutNavItem];
+const navItems: NavItem[] = [...workflowNavItems, ...appNavItems, ...userNavItems];
 
 export function SettingsModal({
   open,
@@ -82,6 +102,7 @@ export function SettingsModal({
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const visibleWorkflowNavItems = workflowNavItems.filter(item => !item.electronOnly || isElectron);
   const visibleAppNavItems = appNavItems.filter(item => !item.electronOnly || isElectron);
+  const visibleUserNavItems = userNavItems.filter(item => !item.electronOnly || isElectron);
   const [activeNav, setActiveNav] = useState<string>('Integrations');
 
   useEffect(() => {
@@ -92,7 +113,7 @@ export function SettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[680px] md:max-w-[900px] lg:max-w-[1000px]">
+      <DialogContent className="h-dvh max-h-dvh w-full max-w-full overflow-hidden p-0 md:h-auto md:max-h-[680px] md:max-w-[900px] lg:max-w-[1000px]">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Customize your settings here.</DialogDescription>
         <SidebarProvider className="items-start">
@@ -131,21 +152,30 @@ export function SettingsModal({
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     ))}
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        isActive={aboutNavItem.name === activeNav}
-                        onClick={() => setActiveNav(aboutNavItem.name)}
-                      >
-                        <aboutNavItem.icon />
-                        <span>{aboutNavItem.name}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+              <SidebarGroup>
+                <SidebarGroupLabel>User</SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {visibleUserNavItems.map(item => (
+                      <SidebarMenuItem key={item.name}>
+                        <SidebarMenuButton
+                          isActive={item.name === activeNav}
+                          onClick={() => setActiveNav(item.name)}
+                        >
+                          <item.icon />
+                          <span>{item.name}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
           </Sidebar>
-          <main className="flex h-[100dvh] flex-1 flex-col overflow-hidden md:h-[580px]">
+          <main className="flex h-dvh flex-1 flex-col overflow-hidden md:max-h-[680px]">
             <header className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
               {/* Mobile: page selector dropdown */}
               <div className="flex w-full items-center md:hidden">
@@ -193,6 +223,9 @@ export function SettingsModal({
               {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
+              {activeNav === 'Profile' && <UserProfilePage open={open} />}
+              {activeNav === 'Sessions' && <UserSessionsPage open={open} />}
+              {activeNav === 'Agent tokens' && <UserTokensPage open={open} />}
               {activeNav === 'Terminal & IDE' && isElectron && <TerminalPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>

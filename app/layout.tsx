@@ -161,7 +161,10 @@ export default async function RootLayout({
                                   user.email?.split('@')[0] ??
                                   'User',
                                 email: user.email ?? '',
-                                avatar: user.user_metadata?.avatar_url ?? ''
+                                avatar:
+                                  user.user_metadata?.picture ??
+                                  user.user_metadata?.avatar_url ??
+                                  ''
                               }}
                               projects={projects}
                               organizations={organizations}

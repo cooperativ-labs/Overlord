@@ -16,8 +16,10 @@
  *   production Supabase URL and keys compiled in.
  *
  * Usage:
- *   node scripts/electron-build.mjs          → full build + electron-builder (DMG/pkg)
- *   node scripts/electron-build.mjs --dir    → build + unpackaged app dir only (faster, for testing)
+ *   node scripts/electron-build.mjs                       → build for the current host platform
+ *   node scripts/electron-build.mjs --platform mac       → build macOS artifacts
+ *   node scripts/electron-build.mjs --platform linux     → build Linux artifacts
+ *   node scripts/electron-build.mjs --dir                → build + unpackaged app dir only
  */
 
 import { spawnSync } from 'node:child_process';
@@ -30,6 +32,30 @@ import { pickRuntimeEnv } from './electron-runtime-allowlist.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const isDirMode = process.argv.includes('--dir');
+
+function readFlagValue(flagName) {
+  const args = process.argv.slice(2);
+  const inline = args.find((arg) => arg.startsWith(`${flagName}=`));
+  if (inline) {
+    return inline.slice(flagName.length + 1);
+  }
+
+  const index = args.indexOf(flagName);
+  if (index === -1) return null;
+  return args[index + 1] ?? null;
+}
+
+function getElectronBuilderTargetFlag() {
+  const requestedPlatform = readFlagValue('--platform');
+  if (!requestedPlatform) return '';
+
+  if (requestedPlatform === 'mac') return ' --mac';
+  if (requestedPlatform === 'linux') return ' --linux';
+
+  console.error(`\x1b[31m[build] Unsupported --platform value: ${requestedPlatform}\x1b[0m`);
+  console.error('       Expected one of: mac, linux');
+  process.exit(1);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,4 +175,4 @@ run(
 // Step 5.5 — electron-builder
 // ---------------------------------------------------------------------------
 
-run(`yarn electron-builder${isDirMode ? ' --dir' : ''}`);
+run(`yarn electron-builder${isDirMode ? ' --dir' : ''}${getElectronBuilderTargetFlag()}`);

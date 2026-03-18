@@ -7,13 +7,16 @@
  * (or SUPABASE_SECRET_KEY). Load from .env.prod or set in the environment.
  *
  * Usage:
- *   node scripts/upload-electron-release.mjs           # bump patch, build, upload
- *   node scripts/upload-electron-release.mjs --minor   # bump minor
- *   node scripts/upload-electron-release.mjs --major   # bump major
- *   node scripts/upload-electron-release.mjs --no-bump # use current version, build, upload
+ *   node scripts/upload-electron-release.mjs                  # bump patch, build host platform, upload
+ *   node scripts/upload-electron-release.mjs --minor          # bump minor
+ *   node scripts/upload-electron-release.mjs --major          # bump major
+ *   node scripts/upload-electron-release.mjs --no-bump        # use current version
+ *   node scripts/upload-electron-release.mjs --platform mac   # only require/upload macOS artifacts
+ *   node scripts/upload-electron-release.mjs --platform linux # only require/upload Linux artifacts
  */
 
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
@@ -23,16 +26,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const BUCKET = 'app-downloads';
 const PREFIX = 'electron';
-const REQUIRED_ARTIFACT_PATTERNS = [
-  { label: 'macOS DMG', pattern: /^Overlord-.*-mac-arm64\.dmg$/ },
-  { label: 'macOS ZIP', pattern: /^Overlord-.*-mac-arm64\.zip$/ },
-  { label: 'latest-mac.yml', pattern: /^latest-mac\.yml$/ },
-  { label: 'Linux AppImage', pattern: /^Overlord-.*-linux-x64\.AppImage$/ },
-  { label: 'latest-linux.yml', pattern: /^latest-linux\.yml$/ }
-];
-const OPTIONAL_ARTIFACT_PATTERNS = [
-  { label: 'Linux .deb', pattern: /^Overlord-.*-linux-amd64\.deb$/ }
-];
+const ARTIFACT_PATTERNS = {
+  mac: {
+    required: [
+      { label: 'macOS DMG', pattern: /^Overlord-.*-mac-arm64\.dmg$/ },
+      { label: 'macOS ZIP', pattern: /^Overlord-.*-mac-arm64\.zip$/ },
+      { label: 'latest-mac.yml', pattern: /^latest-mac\.yml$/ }
+    ],
+    optional: []
+  },
+  linux: {
+    required: [
+      { label: 'Linux AppImage', pattern: /^Overlord-.*-linux-x64\.AppImage$/ },
+      { label: 'latest-linux.yml', pattern: /^latest-linux\.yml$/ }
+    ],
+    optional: [{ label: 'Linux .deb', pattern: /^Overlord-.*-linux-amd64\.deb$/ }]
+  }
+};
 
 const VERSION_BUMP = {
   patch: (v) => {
@@ -85,6 +95,40 @@ function getPackageVersion() {
   return pkg.version;
 }
 
+function readFlagValue(args, flagName) {
+  const inline = args.find(arg => arg.startsWith(`${flagName}=`));
+  if (inline) {
+    return inline.slice(flagName.length + 1);
+  }
+
+  const index = args.indexOf(flagName);
+  if (index === -1) return null;
+  return args[index + 1] ?? null;
+}
+
+function detectDefaultPlatform() {
+  const hostPlatform = os.platform();
+  if (hostPlatform === 'darwin') return 'mac';
+  if (hostPlatform === 'linux') return 'linux';
+
+  console.error(`[upload] Unsupported host platform: ${hostPlatform}`);
+  console.error('         Pass --platform mac or --platform linux explicitly.');
+  process.exit(1);
+}
+
+function parsePlatform(args) {
+  const explicitPlatform = readFlagValue(args, '--platform');
+  if (!explicitPlatform) return detectDefaultPlatform();
+
+  if (explicitPlatform === 'mac' || explicitPlatform === 'linux') {
+    return explicitPlatform;
+  }
+
+  console.error(`[upload] Unsupported --platform value: ${explicitPlatform}`);
+  console.error('         Expected one of: mac, linux');
+  process.exit(1);
+}
+
 function getReleaseArtifacts() {
   const releaseDir = join(ROOT, 'release');
   const files = [];
@@ -106,21 +150,22 @@ function cleanLocalReleaseDir() {
   rmSync(releaseDir, { recursive: true, force: true });
 }
 
-function validateArtifacts(artifacts) {
+function validateArtifacts(artifacts, platform) {
+  const artifactConfig = ARTIFACT_PATTERNS[platform];
   const artifactNames = artifacts.map(artifact => artifact.name);
-  const missingRequired = REQUIRED_ARTIFACT_PATTERNS.filter(
+  const missingRequired = artifactConfig.required.filter(
     ({ pattern }) => !artifactNames.some(name => pattern.test(name))
   );
 
   if (missingRequired.length > 0) {
-    console.error('[upload] Release artifacts are incomplete.');
+    console.error(`[upload] Release artifacts are incomplete for platform "${platform}".`);
     for (const artifact of missingRequired) {
       console.error(`  Missing required artifact: ${artifact.label}`);
     }
     process.exit(1);
   }
 
-  for (const artifact of OPTIONAL_ARTIFACT_PATTERNS) {
+  for (const artifact of artifactConfig.optional) {
     if (!artifactNames.some(name => artifact.pattern.test(name))) {
       console.warn(`[upload] Optional artifact missing: ${artifact.label}`);
     }
@@ -255,6 +300,7 @@ async function main() {
   const args = process.argv.slice(2);
   const noBump = args.includes('--no-bump');
   const bumpType = args.includes('--major') ? 'major' : args.includes('--minor') ? 'minor' : 'patch';
+  const targetPlatform = parsePlatform(args);
 
   loadEnv();
 
@@ -270,6 +316,8 @@ async function main() {
     console.error('         Set in .env.prod or the environment.');
     process.exit(1);
   }
+
+  console.log(`[upload] Target platform: ${targetPlatform}`);
 
   let version = getPackageVersion();
 
@@ -290,7 +338,7 @@ async function main() {
 
   console.log('[upload] Running Electron build...');
   const { spawnSync } = await import('node:child_process');
-  const buildResult = spawnSync('node', ['scripts/electron-build.mjs'], {
+  const buildResult = spawnSync('node', ['scripts/electron-build.mjs', '--platform', targetPlatform], {
     stdio: 'inherit',
     cwd: ROOT,
     env: process.env
@@ -305,7 +353,7 @@ async function main() {
     console.error('[upload] No files found in release/.');
     process.exit(1);
   }
-  validateArtifacts(artifacts);
+  validateArtifacts(artifacts, targetPlatform);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }
@@ -328,7 +376,9 @@ async function main() {
   }
 
   // Upload latest*.yml to electron/ (no version prefix) for electron-updater
-  const latestYml = artifacts.filter((a) => a.name.startsWith('latest') && a.name.endsWith('.yml'));
+  const latestManifestPattern =
+    targetPlatform === 'mac' ? /^latest-mac\.yml$/ : /^latest-linux\.yml$/;
+  const latestYml = artifacts.filter((artifact) => latestManifestPattern.test(artifact.name));
   for (const { path: filePath, name } of latestYml) {
     const storagePath = `${PREFIX}/${name}`;
     const latestYml = readFileSync(filePath, 'utf8');
