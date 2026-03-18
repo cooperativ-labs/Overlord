@@ -1,7 +1,5 @@
 'use server';
 
-import { redirect } from 'next/navigation';
-
 import { getPlatformUrl } from '@/lib/env';
 import { createClient } from '@/supabase/utils/server';
 
@@ -19,13 +17,9 @@ function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): s
   }
 }
 
-function authRedirectPath(path: '/login' | '/signup', error: string, nextPath: string): string {
-  const params = new URLSearchParams({ error });
-  if (nextPath !== '/u') params.set('next', nextPath);
-  return `${path}?${params.toString()}`;
-}
+export type AuthResult = { error?: string; redirect?: string };
 
-export async function signIn(formData: FormData) {
+export async function signIn(formData: FormData): Promise<AuthResult> {
   const supabase = await createClient();
   const nextPath = sanitizeNextPath(formData.get('next'), '/u');
 
@@ -35,13 +29,13 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
-    redirect(authRedirectPath('/login', error.message, nextPath));
+    return { error: error.message };
   }
 
-  redirect(nextPath);
+  return { redirect: nextPath };
 }
 
-export async function signUp(formData: FormData) {
+export async function signUp(formData: FormData): Promise<AuthResult> {
   const supabase = await createClient();
   const nextPath = sanitizeNextPath(formData.get('next'), '/u');
 
@@ -51,7 +45,7 @@ export async function signUp(formData: FormData) {
   const name = rawName.trim();
 
   if (!name) {
-    redirect(authRedirectPath('/signup', 'Name is required.', nextPath));
+    return { error: 'Name is required.' };
   }
 
   const { error } = await supabase.auth.signUp({
@@ -67,14 +61,14 @@ export async function signUp(formData: FormData) {
   });
 
   if (error) {
-    redirect(authRedirectPath('/signup', error.message, nextPath));
+    return { error: error.message };
   }
 
-  redirect('/confirm-email');
+  return { redirect: '/confirm-email' };
 }
 
-export async function signOut() {
+export async function signOut(): Promise<AuthResult> {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect('/login');
+  return { redirect: '/login' };
 }

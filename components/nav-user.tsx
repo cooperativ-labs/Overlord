@@ -2,6 +2,7 @@
 
 import { BadgeCheck, Bell, ChevronsUpDown, CreditCard, Download, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,6 +34,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const { isElectron } = useElectron();
+  const router = useRouter();
 
   return (
     <SidebarMenu>
@@ -103,7 +105,12 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut()}>
+            <DropdownMenuItem
+              onClick={async () => {
+                const result = await signOut();
+                if (result.redirect) router.push(result.redirect);
+              }}
+            >
               <LogOut />
               Log out
             </DropdownMenuItem>

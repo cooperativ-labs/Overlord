@@ -2,6 +2,7 @@
 
 import { GalleryVerticalEnd } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
@@ -9,12 +10,6 @@ import { Input } from '@/components/ui/input';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { signIn, signUp } from '@/lib/actions/auth';
 import { cn } from '@/lib/utils';
-
-const isRedirectError = (err: unknown): boolean =>
-  typeof err === 'object' &&
-  err !== null &&
-  typeof (err as { digest?: unknown }).digest === 'string' &&
-  (err as { digest: string }).digest.startsWith('NEXT_REDIRECT');
 
 type AuthMode = 'login' | 'signup';
 
@@ -34,22 +29,30 @@ function withNext(path: string, next?: string): string {
   return `${path}?${params.toString()}`;
 }
 
-export function AuthForm({ className, mode, error, message, next }: AuthFormProps) {
+export function AuthForm({ className, mode, error: initialError, message, next }: AuthFormProps) {
+  const router = useRouter();
   const [signInButtonState, setSignInButtonState] = React.useState<ButtonLoadingState>('default');
   const [signUpButtonState, setSignUpButtonState] = React.useState<ButtonLoadingState>('default');
+  const [formError, setFormError] = React.useState<string | undefined>(initialError);
 
   const isLogin = mode === 'login';
 
   const handleSignIn = async (e: FormSubmitEvent) => {
     e.preventDefault();
     setSignInButtonState('loading');
+    setFormError(undefined);
     const form = e.currentTarget;
     const formData = new FormData(form);
     try {
-      await signIn(formData);
-      setSignInButtonState('success');
-    } catch (err) {
-      if (isRedirectError(err)) throw err;
+      const result = await signIn(formData);
+      if (result.error) {
+        setFormError(result.error);
+        setSignInButtonState('error');
+      } else if (result.redirect) {
+        setSignInButtonState('success');
+        router.push(result.redirect);
+      }
+    } catch {
       setSignInButtonState('error');
     }
   };
@@ -57,22 +60,28 @@ export function AuthForm({ className, mode, error, message, next }: AuthFormProp
   const handleSignUp = async (e: FormSubmitEvent) => {
     e.preventDefault();
     setSignUpButtonState('loading');
+    setFormError(undefined);
     const form = e.currentTarget;
     const formData = new FormData(form);
     try {
-      await signUp(formData);
-      setSignUpButtonState('success');
-    } catch (err) {
-      if (isRedirectError(err)) throw err;
+      const result = await signUp(formData);
+      if (result.error) {
+        setFormError(result.error);
+        setSignUpButtonState('error');
+      } else if (result.redirect) {
+        setSignUpButtonState('success');
+        router.push(result.redirect);
+      }
+    } catch {
       setSignUpButtonState('error');
     }
   };
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
-      {error ? (
+      {formError ? (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
+          {formError}
         </div>
       ) : null}
       {message ? (
