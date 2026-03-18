@@ -59,23 +59,23 @@ async function main() {
   ]);
 
   // Insert Jake; trigger creates org 1 for first user
-  await seed.users([
-    {
-      instance_id: '00000000-0000-0000-0000-000000000000',
-      id: jakeId,
-      email: 'jake@c.com',
-      encrypted_password: jakeHashedPassword,
-      role: 'authenticated',
-      aud: 'authenticated',
-      is_super_admin: false,
-      raw_app_meta_data: { provider: 'email', providers: ['email'] },
-      raw_user_meta_data: {
-        name: 'Jake',
-        email: 'jake@c.com',
-        username: 'jchaselubitz'
-      }
-    }
-  ]);
+  // await seed.users([
+  //   {
+  //     instance_id: '00000000-0000-0000-0000-000000000000',
+  //     id: jakeId,
+  //     email: 'jake@c.com',
+  //     encrypted_password: jakeHashedPassword,
+  //     role: 'authenticated',
+  //     aud: 'authenticated',
+  //     is_super_admin: false,
+  //     raw_app_meta_data: { provider: 'email', providers: ['email'] },
+  //     raw_user_meta_data: {
+  //       name: 'Jake',
+  //       email: 'jake@c.com',
+  //       username: 'jchaselubitz'
+  //     }
+  //   }
+  // ]);
 
   process.exit(0);
 }

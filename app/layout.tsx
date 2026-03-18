@@ -77,37 +77,35 @@ export default async function RootLayout({
     const headersList = await headers();
     const userAgent = headersList.get('user-agent') ?? '';
     const isElectronRequest = userAgent.toLowerCase().includes('electron');
-
-    if (organizations.length === 0 || projects.length === 0) {
-      if (!isElectronRequest) {
-        // Web users without org/project → redirect to full-page onboarding
-        redirect('/onboarding');
-      }
-      // Electron users → show modal
-      tutorialAutoOpen = true;
-      tutorialAutoStep = organizations.length === 0 ? 1 : 2;
-      onboardingState = {
-        userName:
-          (user.user_metadata as { name?: string; full_name?: string })?.name ??
-          (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
-          user.email?.split('@')[0] ??
-          null,
-        hasOrganizations: organizations.length > 0,
-        hasProjects: projects.length > 0,
-        firstOrganizationId: organizations[0]?.id ?? null,
-        onboardingCompletedStep: 0,
-        onboardingSkipped: false,
-        desktopSetupDone: false
-      };
-    } else {
-      // Existing user with org+project — check tutorial progress
-      const progress = await getOnboardingState();
-      onboardingState = progress;
-      const hasCompletedTutorial = progress.onboardingCompletedStep >= 4;
-      const hasSkipped = progress.onboardingSkipped;
-      if (!hasCompletedTutorial && !hasSkipped) {
+    if (isElectronRequest) {
+      // Web users without org/project → redirect to full-page onboarding
+      if (organizations.length === 0 || projects.length === 0) {
+        // Electron users → show modal
         tutorialAutoOpen = true;
-        tutorialAutoStep = Math.max(3, progress.onboardingCompletedStep + 1);
+        tutorialAutoStep = organizations.length === 0 ? 1 : 2;
+        onboardingState = {
+          userName:
+            (user.user_metadata as { name?: string; full_name?: string })?.name ??
+            (user.user_metadata as { name?: string; full_name?: string })?.full_name ??
+            user.email?.split('@')[0] ??
+            null,
+          hasOrganizations: organizations.length > 0,
+          hasProjects: projects.length > 0,
+          firstOrganizationId: organizations[0]?.id ?? null,
+          onboardingCompletedStep: 0,
+          onboardingSkipped: false,
+          desktopSetupDone: false
+        };
+      } else {
+        // Existing user with org+project — check tutorial progress
+        const progress = await getOnboardingState();
+        onboardingState = progress;
+        const hasCompletedTutorial = progress.onboardingCompletedStep >= 4;
+        const hasSkipped = progress.onboardingSkipped;
+        if (!hasCompletedTutorial && !hasSkipped) {
+          tutorialAutoOpen = true;
+          tutorialAutoStep = Math.max(3, progress.onboardingCompletedStep + 1);
+        }
       }
     }
   }
