@@ -122,9 +122,17 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
     guidanceLines.push('### Ask Mode');
     guidanceLines.push('');
     guidanceLines.push('- Attach first and read the ticket context before responding.');
-    guidanceLines.push('- Start with: "I understand the ticket. What would you like to discuss?"');
+    guidanceLines.push(
+      '- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms the directory.'
+    );
+    guidanceLines.push(
+      '- Start with: "I understand the ticket. My current working directory is `<cwd>`. Is this the correct project directory? What would you like to discuss?"'
+    );
     guidanceLines.push('- Focus on open-ended exploration of ideas related to the ticket.');
     guidanceLines.push('- Do not change code unless the user explicitly asks for implementation.');
+    guidanceLines.push(
+      '- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.'
+    );
     guidanceLines.push(
       '- If the user explicitly asks to save notes, save them as artifacts (Markdown files only when requested).'
     );

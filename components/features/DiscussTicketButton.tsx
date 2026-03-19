@@ -26,7 +26,6 @@ import {
 } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
-import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
 
 type DiscussTicketButtonProps = {
   ticketId: string;
@@ -35,7 +34,6 @@ type DiscussTicketButtonProps = {
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   workingDirectory?: string | null;
-  hasProjectWorkingDirectory?: boolean;
 };
 
 const defaultAgentButtonStates: Record<LaunchAgentTypeValue, ButtonLoadingState> = {
@@ -52,14 +50,12 @@ export function DiscussTicketButton({
   agentIdentifier,
   agentToken,
   agentFlags,
-  workingDirectory,
-  hasProjectWorkingDirectory
+  workingDirectory
 }: DiscussTicketButtonProps) {
   const { isElectron, launchAgent } = useTerminal();
   const [isOpen, setIsOpen] = useState(false);
   const [agentButtonStates, setAgentButtonStates] =
     useState<Record<LaunchAgentTypeValue, ButtonLoadingState>>(defaultAgentButtonStates);
-  const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
   const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
   const launchAgents = [
     preferredAgent,
@@ -74,10 +70,6 @@ export function DiscussTicketButton({
   }
 
   async function handleDiscuss(agentValue: LaunchAgentTypeValue) {
-    if (isElectron && !canRunAgent) {
-      return;
-    }
-
     setAgentButtonState(agentValue, 'loading');
 
     try {
@@ -123,12 +115,7 @@ export function DiscussTicketButton({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button
-          className="h-8 px-3 text-xs"
-          disabled={isElectron && !canRunAgent}
-          size="sm"
-          variant="outline"
-        >
+        <Button className="h-8 px-3 text-xs" size="sm" variant="outline">
           Discuss
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>

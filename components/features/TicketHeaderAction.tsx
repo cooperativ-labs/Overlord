@@ -51,7 +51,6 @@ export function TicketHeaderAction({
           agentToken={agentToken}
           agentFlags={agentFlags}
           workingDirectory={workingDirectory}
-          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         />
         <CopyTicketPromptButton ticketId={ticketId} variant="default" />
       </div>
@@ -67,7 +66,6 @@ export function TicketHeaderAction({
         agentToken={agentToken}
         agentFlags={agentFlags}
         workingDirectory={workingDirectory}
-        hasProjectWorkingDirectory={hasProjectWorkingDirectory}
       />
       <AgentSplitButtonLive
         defaultAgent={agentIdentifier ? getLaunchAgentTypeByIdentifier(agentIdentifier) : undefined}

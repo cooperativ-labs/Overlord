@@ -55,6 +55,8 @@ async function refreshViaIpc(): Promise<{
 const REFRESH_MARGIN_MS = 5 * 60 * 1000; // 5 minutes
 /** Minimum delay for the timer (prevents tight loops on very short-lived tokens). */
 const MIN_DELAY_MS = 10_000; // 10 seconds
+/** Minimum interval between agent-token health checks (prevents hammering on rapid focus changes). */
+const AGENT_TOKEN_CHECK_INTERVAL_MS = 60_000; // 1 minute
 
 export function ElectronAuthGate() {
   const router = useRouter();
@@ -166,9 +168,38 @@ export function ElectronAuthGate() {
 
     restoreSession();
 
+    // -----------------------------------------------------------------------
+    // Agent-token health check on window focus
+    // -----------------------------------------------------------------------
+    // When the window regains focus, verify the stored agent token is still
+    // valid. If it has been revoked or expired (e.g. rotated from another
+    // device or the settings UI), silently re-exchange for a fresh one using
+    // the current Supabase session.
+    // -----------------------------------------------------------------------
+    let lastAgentTokenCheck = 0;
+
+    const handleFocus = async () => {
+      if (!window.electronAPI?.auth?.checkAgentToken) return;
+
+      const now = Date.now();
+      if (now - lastAgentTokenCheck < AGENT_TOKEN_CHECK_INTERVAL_MS) return;
+      lastAgentTokenCheck = now;
+
+      const { valid } = await window.electronAPI.auth.checkAgentToken();
+      if (valid) return;
+
+      const result = await window.electronAPI.auth.refreshAgentToken();
+      if (!result.ok) {
+        console.warn('Agent token refresh failed on focus:', result.error);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       data?.subscription?.unsubscribe();
       if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [pathname, router]);
 

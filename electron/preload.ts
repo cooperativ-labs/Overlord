@@ -115,6 +115,19 @@ const electronAPI = {
         ok: boolean;
         session?: { access_token: string; refresh_token: string };
         error?: string;
+      }>,
+    // Check if the stored agent token is still valid (not revoked/expired).
+    checkAgentToken: () =>
+      ipcRenderer.invoke('auth:checkAgentToken') as Promise<{
+        valid: boolean;
+        reason?: string;
+      }>,
+    // Re-exchange Supabase session for a fresh agent token when the current one is stale.
+    refreshAgentToken: () =>
+      ipcRenderer.invoke('auth:refreshAgentToken') as Promise<{
+        ok: boolean;
+        agentToken?: string;
+        error?: string;
       }>
   },
   isElectron: true as const

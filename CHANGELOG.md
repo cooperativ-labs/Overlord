@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.0] - 2026-03-19:08:13
+
+### Added
+- Implement user profile image management and expand settings with dedicated user pages for profile, sessions, and agent tokens.
+
+### Fixed
+- Prevent spurious auto-logouts during tab switching by rate-limiting session validation.
+- Resolve login stuck at "signing in" by replacing server action `redirect()` with client-side navigation.
+
+### Changed
+- Update the default Kanban card background gradient and selected state border styles.
+
+### Security
+- None.
+
+### Refactor
+- Consolidate Kanban board ticket state management to a single source of truth, removing `useOptimistic` and `realtimeOverrides`.
+
+### Chore
+- Bump the package version to `1.16.0` to align the release metadata with this changelog entry.
+
 ## [1.15.0] - 2026-03-18:19:23
 
 ### Added

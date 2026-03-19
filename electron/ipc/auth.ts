@@ -419,6 +419,66 @@ export function registerAuthIpc({ getPlatformUrl }: RegisterAuthIpcOptions): voi
     return { ok: true };
   });
 
+  // Check whether the stored agent token is still valid (not revoked/expired).
+  // Called by ElectronAuthGate on window focus to detect stale tokens.
+  ipcMain.handle('auth:checkAgentToken', async () => {
+    const credentials = loadElectronCredentials();
+    if (!credentials?.agent_token) {
+      return { valid: false, reason: 'no_token' };
+    }
+
+    try {
+      const res = await fetch(`${credentials.platform_url}/api/auth/check-token`, {
+        headers: { Authorization: `Bearer ${credentials.agent_token}` }
+      });
+      if (res.ok) {
+        return { valid: true };
+      }
+      const data = await res.json().catch(() => ({}));
+      return { valid: false, reason: data.reason ?? 'invalid' };
+    } catch {
+      // Network error — don't treat as invalid (user may be offline)
+      return { valid: true, reason: 'network_error' };
+    }
+  });
+
+  // Re-exchange the current Supabase session for a fresh agent token.
+  // Called when checkAgentToken detects a revoked/expired token.
+  ipcMain.handle('auth:refreshAgentToken', async () => {
+    const credentials = loadElectronCredentials();
+    if (!credentials?.supabase_refresh_token) {
+      return { ok: false, error: 'No refresh token available' };
+    }
+
+    try {
+      // First, get a fresh Supabase access token
+      const session = await refreshOAuthTokens(
+        credentials.platform_url,
+        credentials.supabase_refresh_token
+      );
+
+      // Exchange the fresh Supabase token for a new agent token
+      const agentTokenData = await exchangeForAgentToken(
+        credentials.platform_url,
+        session.access_token
+      );
+
+      // Persist both the rotated refresh token and the new agent token
+      saveElectronCredentials({
+        agent_token: agentTokenData.access_token,
+        platform_url: agentTokenData.platform_url ?? credentials.platform_url,
+        supabase_refresh_token: session.refresh_token
+      });
+
+      return { ok: true, agentToken: agentTokenData.access_token };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Agent token refresh failed'
+      };
+    }
+  });
+
   // Refresh the Supabase session via the OAuth token endpoint.
   // Called by ElectronAuthGate to proactively renew tokens before expiry.
   ipcMain.handle('auth:refreshSession', async () => {
