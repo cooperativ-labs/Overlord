@@ -56,6 +56,29 @@ export function generateDeliverPayloadExample(ticketId: string): string {
   );
 }
 
+export function generateRecordChangeRationalesPayloadExample(ticketId: string): string {
+  return JSON.stringify(
+    {
+      sessionKey: '<from-attach>',
+      ticketId,
+      summary: 'Recorded rationale details for the latest code changes.',
+      phase: 'execute',
+      changeRationales: [
+        {
+          label: 'Short title',
+          file_path: 'path/to/file.ts',
+          summary: 'What changed.',
+          why: 'Why it changed.',
+          impact: 'Behavioral impact.',
+          hunks: [{ header: '@@ -10,6 +10,14 @@' }]
+        }
+      ]
+    },
+    null,
+    2
+  );
+}
+
 export function generateAttachPayloadExample(ticketId: string): string {
   return JSON.stringify(
     {

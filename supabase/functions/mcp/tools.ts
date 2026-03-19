@@ -121,7 +121,7 @@ export const TOOLS = [
         changeRationales: {
           type: 'array',
           description:
-            'Optional structured rationale records for meaningful code changes. Prefer 1-5 concise entries per ticket.',
+            'Optional structured rationale records for meaningful code changes. These are stored in the change_rationales table. Prefer 1-5 concise entries per ticket.',
           items: {
             type: 'object',
             properties: {
@@ -156,6 +156,67 @@ export const TOOLS = [
         }
       },
       required: ['sessionKey', 'ticketId', 'summary']
+    }
+  },
+  {
+    name: 'record_change_rationales',
+    annotations: {
+      title: 'Record Change Rationales',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
+    description:
+      'Persist structured change rationale records to Overlord. These are stored in the change_rationales table and linked to the current ticket/session/event.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string', description: 'Session key from attach.' },
+        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        summary: {
+          type: 'string',
+          description: 'Optional summary for the associated ticket event.'
+        },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'],
+          description: 'Optional phase for the associated ticket event.'
+        },
+        changeRationales: {
+          type: 'array',
+          description:
+            'Structured rationale records to persist in the change_rationales table. Prefer this tool or the update/deliver changeRationales fields over free-form text.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              file_path: { type: 'string' },
+              summary: { type: 'string' },
+              why: { type: 'string' },
+              impact: { type: 'string' },
+              change_kind: { type: 'string' },
+              attribution_source: { type: 'string' },
+              confidence: { type: 'string' },
+              hunks: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    header: { type: 'string' },
+                    old_start: { type: 'number' },
+                    old_lines: { type: 'number' },
+                    new_start: { type: 'number' },
+                    new_lines: { type: 'number' }
+                  }
+                }
+              }
+            },
+            required: ['label', 'file_path', 'summary', 'why', 'impact', 'hunks']
+          }
+        }
+      },
+      required: ['sessionKey', 'ticketId', 'changeRationales']
     }
   },
   {
@@ -327,7 +388,7 @@ export const TOOLS = [
         changeRationales: {
           type: 'array',
           description:
-            'Optional structured rationale records for meaningful code changes. Prefer 1-5 concise entries per ticket.',
+            'Optional structured rationale records for meaningful code changes. These are stored in the change_rationales table. Prefer 1-5 concise entries per ticket.',
           items: {
             type: 'object',
             properties: {

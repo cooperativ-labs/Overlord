@@ -33,7 +33,7 @@ import { createClient } from '@/supabase/utils/server';
 const displayFont = localFont({
   src: '../public/fonts/SpaceGrotesk-Variable.woff2',
   variable: '--font-display',
-  display: 'swap',
+  display: 'block',
   weight: '300 700'
 });
 
@@ -43,7 +43,7 @@ const monoFont = localFont({
     { path: '../public/fonts/IBMPlexMono-Medium.woff2', weight: '500', style: 'normal' }
   ],
   variable: '--font-mono',
-  display: 'swap'
+  display: 'block'
 });
 
 export const metadata: Metadata = {

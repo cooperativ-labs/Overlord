@@ -1,8 +1,25 @@
 import '../globals.css';
 
+import localFont from 'next/font/local';
 import Image from 'next/image';
 
 import { ThemeProvider } from '@/components/theme-provider';
+
+const displayFont = localFont({
+  src: '../../public/fonts/SpaceGrotesk-Variable.woff2',
+  variable: '--font-display',
+  display: 'block',
+  weight: '300 700'
+});
+
+const monoFont = localFont({
+  src: [
+    { path: '../../public/fonts/IBMPlexMono-Regular.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/IBMPlexMono-Medium.woff2', weight: '500', style: 'normal' }
+  ],
+  variable: '--font-mono',
+  display: 'block'
+});
 
 export default function AuthLayout({
   children
@@ -11,7 +28,7 @@ export default function AuthLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className={`${displayFont.variable} ${monoFont.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

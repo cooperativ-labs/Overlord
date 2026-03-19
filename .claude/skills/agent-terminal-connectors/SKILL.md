@@ -36,6 +36,7 @@ All local agents (Electron and CLI-launched) use `ovld protocol` commands to com
 ```
 ovld protocol attach   → get sessionKey, ticket data, history, artifacts
 ovld protocol update   → post progress (phase: draft/execute/review/deliver/complete/blocked)
+ovld protocol record-change-rationales → persist structured change rationales to the DB
 ovld protocol ask      → ask a blocking question (ticket moves to review)
 ovld protocol deliver  → submit completed work with artifacts and change rationales
 ```
@@ -59,6 +60,7 @@ ovld protocol artifact-get-download-url → get signed download URL
 - All protocol commands POST to `/api/protocol/<endpoint>` with `Authorization: Bearer <AGENT_TOKEN>`.
 - `attach` returns a `sessionKey` that must be passed to all subsequent commands via `--session-key`.
 - `update` accepts `--phase`, `--summary`, `--change-rationales-json`, and `--change-rationales-file`.
+- `record-change-rationales` accepts `--summary`, `--phase`, and `--change-rationales-json`/`--change-rationales-file`, and persists those records to the `change_rationales` table.
 - `deliver` accepts `--summary`, `--artifacts-json`/`--artifacts-file`, and `--change-rationales-json`/`--change-rationales-file`.
 - `ask` sets the ticket to review status and the agent should stop and wait for a response.
 
@@ -146,7 +148,7 @@ Protected-resource metadata at `/.well-known/oauth-protected-resource/api/mcp` d
 
 ### MCP tools available
 
-MCP exposes the same operations as the CLI protocol commands: `attach`, `update`, `ask`, `deliver`, `read_context`, `write_context`, `create_ticket`, `artifact_prepare_upload`, `artifact_finalize_upload`, `artifact_get_download_url`.
+MCP exposes the same operations as the CLI protocol commands: `attach`, `update`, `record_change_rationales`, `ask`, `deliver`, `read_context`, `write_context`, `create_ticket`, `artifact_prepare_upload`, `artifact_finalize_upload`, `artifact_get_download_url`.
 
 ### MCP config example (for remote agents)
 

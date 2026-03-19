@@ -157,6 +157,21 @@ export const DeliverPayloadSchema = z.object({
 });
 export type DeliverPayload = z.infer<typeof DeliverPayloadSchema>;
 
+export const RecordChangeRationalesPayloadSchema = z.object({
+  sessionKey: z.string().describe('Session key from attach response'),
+  ticketId: z.string().describe('Target ticket ID'),
+  summary: z
+    .string()
+    .optional()
+    .describe('Optional update summary for the rationale-recording event'),
+  phase: Phase.optional(),
+  changeRationales: z
+    .array(ChangeRationaleSchema)
+    .min(1)
+    .describe('Structured rationale rows to persist to the change_rationales table')
+});
+export type RecordChangeRationalesPayload = z.infer<typeof RecordChangeRationalesPayloadSchema>;
+
 // Union of all protocol payloads for validation
 export const ProtocolPayloadSchema = z.union([
   AttachPayloadSchema,
@@ -168,6 +183,7 @@ export const ProtocolPayloadSchema = z.union([
   ArtifactFinalizeUploadPayloadSchema,
   ArtifactGetDownloadUrlPayloadSchema,
   CreateTicketPayloadSchema,
-  DeliverPayloadSchema
+  DeliverPayloadSchema,
+  RecordChangeRationalesPayloadSchema
 ]);
 export type ProtocolPayload = z.infer<typeof ProtocolPayloadSchema>;

@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.19.0] - 2026-03-19:15:37
+
+### Added
+- Introduce the `record_change_rationales` MCP tool and protocol action so agents can persist structured, hunk-level rationale records for meaningful code changes during a session.
+- Add a centralized `agent-model-catalog` and `agent-models.json` to manage supported AI providers and models across the stack, replacing hardcoded lists in the UI.
+- Implement server-side logic in the `mcp-server` Edge Function and `record-change-rationales` handler to store structured rationales in the database.
+- Wire up local font loading in the `(auth)` layout to ensure consistent typography during login and signup flows when offline.
+
+### Fixed
+- None.
+
+### Changed
+- Update `update` and `deliver` protocol handlers to accept optional `changeRationales` payloads, allowing agents to submit rationales alongside their regular progress reports.
+- Refine the `AgentSplitButton` and CLI settings to consume the new dynamic model catalog for provider and model selection.
+- Update `bin/ovld` CLI commands (`attach`, `protocol`, `setup`) to support the revised protocol schemas and model data.
+- Update agent instructions in the ticket prompt to treat `changeRationales` as structured ticket content persisted in the `change_rationales` table, rather than just local file references.
+- Force `display: block` for local fonts in both main and auth layouts to ensure text renders immediately with the correct typography.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `1.19.0`.
+
 ## [1.18.0] - 2026-03-19:14:38
 
 ### Added

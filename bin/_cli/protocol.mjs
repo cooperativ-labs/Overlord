@@ -166,6 +166,36 @@ function requireFlag(flags, name, envAlias) {
 }
 
 // ---------------------------------------------------------------------------
+// changeRationales helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve changeRationales from --change-rationales-json or --change-rationales-file flags.
+ * @param {Record<string, string | boolean>} flags
+ * @returns {Promise<Array<object>>}
+ */
+async function resolveChangeRationales(flags) {
+  if (flags['change-rationales-file']) {
+    const { readFileSync } = await import('node:fs');
+    try {
+      return JSON.parse(readFileSync(String(flags['change-rationales-file']), 'utf8'));
+    } catch (err) {
+      throw new Error(
+        `--change-rationales-file: could not read or parse "${flags['change-rationales-file']}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+  if (flags['change-rationales-json']) {
+    try {
+      return JSON.parse(String(flags['change-rationales-json']));
+    } catch {
+      throw new Error('--change-rationales-json must be valid JSON');
+    }
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Auto-detect Claude Code session ID
 // ---------------------------------------------------------------------------
 
@@ -273,6 +303,7 @@ async function protocolUpdate(args) {
 
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
+  const changeRationales = await resolveChangeRationales(flags);
 
   const externalSessionId = resolveExternalSessionId(flags);
 
@@ -291,7 +322,8 @@ async function protocolUpdate(args) {
       : {}),
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
     ...(flags['event-type'] ? { eventType: String(flags['event-type']) } : {}),
-    ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {})
+    ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {}),
+    ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
 
   const data = await apiPost(
@@ -299,6 +331,45 @@ async function protocolUpdate(args) {
     agentToken,
     localSecret,
     '/api/protocol/update',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// record-change-rationales
+// ---------------------------------------------------------------------------
+
+async function protocolRecordChangeRationales(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+
+  const changeRationales = await resolveChangeRationales(flags);
+  if (changeRationales.length === 0) {
+    throw new Error(
+      'Provide at least one rationale with --change-rationales-json or --change-rationales-file'
+    );
+  }
+
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    changeRationales,
+    ...(flags.summary ? { summary: String(flags.summary) } : {}),
+    ...(flags.phase ? { phase: String(flags.phase) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/change-rationales',
     body,
     timeoutMs
   );
@@ -439,7 +510,15 @@ async function protocolDeliver(args) {
     }
   }
 
-  const body = { sessionKey, ticketId, summary, artifacts };
+  const changeRationales = await resolveChangeRationales(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    summary,
+    artifacts,
+    ...(changeRationales.length > 0 ? { changeRationales } : {})
+  };
 
   const data = await apiPost(
     platformUrl,
@@ -733,6 +812,7 @@ Subcommands:
   load-context    Fetch ticket details read-only (no session created)
   spawn           Create a new ticket and connect to it immediately
   update          Post a progress update
+  record-change-rationales  Persist structured change rationales
   ask             Post a blocking question
   read-context    Retrieve shared context
   write-context   Store a key/value in shared context
@@ -754,11 +834,21 @@ Attach/update-specific flags:
 
 Update-specific flags:
   --external-url <url>   Store or refresh a deep link to the current agent session.
+  --change-rationales-json <json>  Inline JSON array of change rationale objects.
+  --change-rationales-file <path>  Path to a JSON file containing change rationales.
+
+Record-change-rationales flags:
+  --summary <text>        Optional ticket-event summary for this rationale submission.
+  --phase <status>        Optional phase for the rationale event (for example: execute).
+  --change-rationales-json <json>  Inline JSON array of change rationale objects.
+  --change-rationales-file <path>  Path to a JSON file containing change rationales.
 
 Deliver-specific flags:
   --artifacts-json <json> Inline JSON array of artifact objects.
   --artifacts-file <path> Path to a JSON file containing artifacts (avoids shell-escaping issues
                           with large payloads).
+  --change-rationales-json <json>  Inline JSON array of change rationale objects.
+  --change-rationales-file <path>  Path to a JSON file containing change rationales.
 
 Spawn-specific flags:
   --objective <text>      Ticket objective (required)
@@ -773,6 +863,7 @@ Examples:
   ovld protocol load-context --ticket-id abc-123
   ovld protocol spawn --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X"
+  ovld protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
   ovld protocol ask --session-key <key> --ticket-id <id> --question "Which approach?"
   ovld protocol read-context --session-key <key> --ticket-id <id>
   ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"'
@@ -794,6 +885,7 @@ Examples:
   if (subcommand === 'artifact-download-url') { await protocolArtifactGetDownloadUrl(args); return; }
   if (subcommand === 'artifact-upload-file') { await protocolArtifactUploadFile(args); return; }
   if (subcommand === 'update') { await protocolUpdate(args); return; }
+  if (subcommand === 'record-change-rationales') { await protocolRecordChangeRationales(args); return; }
   if (subcommand === 'ask') { await protocolAsk(args); return; }
   if (subcommand === 'read-context') { await protocolReadContext(args); return; }
   if (subcommand === 'write-context') { await protocolWriteContext(args); return; }

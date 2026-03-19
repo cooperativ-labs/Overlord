@@ -110,7 +110,6 @@ function buildSlimLocalProtocolSection(
   platformUrl: string,
   context?: PromptContext
 ): string {
-  const baseUrlLabel = context === 'electron' ? 'Connector URL' : 'Base URL';
   const launchNote =
     context === 'electron'
       ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
@@ -146,7 +145,6 @@ function buildLocalProtocolSection(
   context?: PromptContext,
   launchMode: PromptLaunchMode = 'run'
 ): string {
-  const baseUrlLabel = context === 'electron' ? 'Connector URL' : 'Base URL';
   const launchNote =
     context === 'electron'
       ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
@@ -202,15 +200,15 @@ ${eventTypeHelp}
 
 #### Change rationales (optional on updates)
 
-Record \`changeRationales\` for meaningful behavioral changes during long-running work. Write the JSON array to a temp file and pass it:
+Record \`changeRationales\` for meaningful behavioral changes during long-running work. These are structured protocol payloads that Overlord persists to the \`change_rationales\` table. Prefer inline JSON or the dedicated rationale command. Use a JSON file only as a transport convenience for large payloads.
 
 \`\`\`bash
-ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
-  --summary "Added retry logic to API client." --phase execute \\
-  --change-rationales-file /tmp/rationales.json
+ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id ${ticketId} \\
+  --summary "Recorded rationale details for the retry change." --phase execute \\
+  --change-rationales-json '[{"label":"Add exponential backoff","file_path":"lib/api-client.ts","summary":"Added retry with backoff.","why":"Transient failures caused data loss.","impact":"Requests retry up to 3 times before failing.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
-Or inline for a single rationale:
+Or attach them directly to an update:
 
 \`\`\`bash
 ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
@@ -251,14 +249,14 @@ ovld protocol deliver --session-key <sessionKey> \\
   --ticket-id ${ticketId} \\
   --summary "Narrative: what you did, next steps." \\
   --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."},{"type":"next_steps","label":"Next steps","content":"..."}]' \\
-  --change-rationales-file /tmp/rationales.json
+  --change-rationales-json '[{"label":"Add exponential backoff","file_path":"lib/api-client.ts","summary":"Added retry with backoff.","why":"Transient failures caused data loss.","impact":"Requests retry up to 3 times before failing.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
 Artifact types: \`file_changes\`, \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`.
 
 #### Change rationales (expected on deliver)
 
-Always include \`changeRationales\` when delivering. Write a JSON file with one entry per meaningful file change:
+Always include \`changeRationales\` when delivering. Overlord saves them in the \`change_rationales\` table; they are not just local file content. Each entry should describe one meaningful file change:
 
 \`\`\`json
 [
@@ -273,7 +271,7 @@ Always include \`changeRationales\` when delivering. Write a JSON file with one 
 ]
 \`\`\`
 
-Save to a temp file and pass via \`--change-rationales-file\`, or use \`--change-rationales-json\` inline for small payloads. Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
+Prefer \`--change-rationales-json\` inline or \`ovld protocol record-change-rationales\`. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file. Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
 Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
 
@@ -295,8 +293,9 @@ ${opencodeResumeCommand}
 
 - Always attach first; always deliver when done.
 - Post at least one update before delivering.
-- Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
+- Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work or via \`ovld protocol record-change-rationales\`.
 - Record \`changeRationales\` only for meaningful behavioral changes. Skip formatting-only noise.
+- Treat \`changeRationales\` as structured ticket content that Overlord persists in the \`change_rationales\` table. A file path is only an optional way to pass the JSON payload.
 - Prefer 1–5 concise \`changeRationales\` for a typical ticket, each tied to a specific file and diff hunk.
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
@@ -343,6 +342,7 @@ ${settingsJson}
 - \`artifact_prepare_upload\` / \`artifact_finalize_upload\` — upload and associate storage artifacts
 - \`artifact_get_download_url\` — signed read URL for storage artifacts
 - \`update\` — post progress updates
+- \`record_change_rationales\` — persist structured change rationales to the \`change_rationales\` table
 - \`ask\` — ask a blocking question
 - \`read_context\` / \`write_context\` — persist findings across sessions
 - \`deliver\` — deliver completed work
@@ -391,6 +391,8 @@ ${generateUpdatePayloadExample(ticketId)}
 
 ${eventTypeHelp}
 
+Use \`changeRationales\` on \`update\` or \`deliver\`, or call \`record_change_rationales\` directly when you want to persist rationale rows separately. Those records are stored in Overlord's \`change_rationales\` table.
+
 ### 3 — ask (when blocked)
 
 \`\`\`json
@@ -423,6 +425,7 @@ ${generateDeliverPayloadExample(ticketId)}
 - Always attach first; always deliver when done.
 - Post ≥1 update before delivering.
 - Only include \`changeRationales\` for meaningful behavioral changes.
+- Treat \`changeRationales\` as structured ticket content persisted in the \`change_rationales\` table, not as free-form notes.
 - If blocked, create a follow-up ticket.
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.

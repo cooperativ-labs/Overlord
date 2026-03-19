@@ -22,6 +22,7 @@ import { handleCreateTicket } from './handlers/create-ticket.ts';
 import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
 import { handleDeliver } from './handlers/deliver.ts';
 import { handleReadContext } from './handlers/read-context.ts';
+import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
 import { handleSaveTicketDraft } from './handlers/save-ticket-draft.ts';
 import { handleUpdate } from './handlers/update.ts';
 import { handleWriteContext } from './handlers/write-context.ts';
@@ -242,6 +243,8 @@ Deno.serve(async (req: Request) => {
         result = await handleAsk(supabase, toolArgs, requestContext);
       } else if (toolName === 'read_context') {
         result = await handleReadContext(supabase, toolArgs, requestContext);
+      } else if (toolName === 'record_change_rationales') {
+        result = await handleRecordChangeRationales(supabase, toolArgs, requestContext);
       } else if (toolName === 'write_context') {
         result = await handleWriteContext(supabase, toolArgs, requestContext);
       } else if (toolName === 'deliver') {

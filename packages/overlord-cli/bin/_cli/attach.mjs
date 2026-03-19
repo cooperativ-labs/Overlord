@@ -22,8 +22,10 @@ const hide = '\x1b[?25l';
 const show = '\x1b[?25h';
 
 function clearLines(n) {
-  // Move cursor up n lines, then erase from cursor to end of screen
-  return n > 0 ? `\x1b[${n}A\x1b[J` : '';
+  // After rendering N lines without a trailing newline, the cursor sits on the
+  // last rendered line. Move back to column 1, then up N-1 lines so erasing
+  // starts at the first prompt line instead of the line above it.
+  return n > 0 ? `\r\x1b[${Math.max(0, n - 1)}A\x1b[J` : '';
 }
 
 const dim = s => `\x1b[2m${s}\x1b[0m`;

@@ -1,18 +1,13 @@
 'use server';
 
+import {
+  type AgentModel,
+  applyAgentModelCatalog,
+  readAgentModelCatalog
+} from '@/lib/helpers/agent-model-catalog';
 import { createClient } from '@/supabase/utils/server';
 
-export type AgentModel = {
-  id: string;
-  agent_type: string;
-  model_id: string;
-  display_name: string;
-  thinking_options: string[];
-  capabilities: Record<string, unknown>;
-  is_recommended: boolean;
-  sort_order: number;
-  updated_at: string;
-};
+export type { AgentModel } from '@/lib/helpers/agent-model-catalog';
 
 export async function getAgentModelsAction(agentType?: string): Promise<AgentModel[]> {
   const supabase = await createClient();
@@ -34,5 +29,6 @@ export async function getAgentModelsAction(agentType?: string): Promise<AgentMod
     return [];
   }
 
-  return (data ?? []) as AgentModel[];
+  const catalog = await readAgentModelCatalog();
+  return applyAgentModelCatalog((data ?? []) as AgentModel[], catalog, agentType);
 }

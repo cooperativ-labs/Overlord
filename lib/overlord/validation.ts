@@ -132,6 +132,14 @@ export const deliverSchema = z.object({
     .default([])
 });
 
+export const recordChangeRationalesSchema = z.object({
+  changeRationales: z.array(changeRationaleSchema).min(1).max(50),
+  sessionKey: z.string().uuid(),
+  ticketId: ticketIdSchema,
+  summary: z.string().trim().min(1).max(20_000).optional(),
+  phase: ticketStatusSchema.optional()
+});
+
 export const createStandaloneTicketSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
   objective: z.string().trim().min(1).max(20_000),

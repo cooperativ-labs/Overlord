@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const BUNDLE_VERSION = '1.3.0';
+const BUNDLE_VERSION = '1.4.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
@@ -65,12 +65,20 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
      --ticket-id $TICKET_ID \\\\
      --summary "Narrative: what you did, next steps." \\\\
      --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\\\
-     --change-rationales-file /tmp/rationales.json
+     --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
 ## Change Rationales
 
 Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
+
+These are structured protocol payloads that Overlord stores in the \`change_rationales\` table. Prefer inline JSON or the dedicated command below. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file.
+
+\`\`\`bash
+ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\
+  --summary "Recorded rationale details for the latest code changes." --phase execute \\\\
+  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+\`\`\`
 
 Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
@@ -124,12 +132,18 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
      --ticket-id $TICKET_ID \\\\
      --summary "Narrative: what you did, next steps." \\\\
      --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\\\
-     --change-rationales-file /tmp/rationales.json
+     --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
 ## Change Rationales
 
-Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes.
+Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes. Overlord stores these in the \`change_rationales\` table.
+
+\`\`\`bash
+ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\
+  --summary "Recorded rationale details for the latest code changes." --phase execute \\\\
+  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+\`\`\`
 
 ## Context & Artifacts
 
@@ -181,12 +195,18 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
      --ticket-id $TICKET_ID \\\\
      --summary "Narrative: what you did, next steps." \\\\
      --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\\\
-     --change-rationales-file /tmp/rationales.json
+     --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
 ## Change Rationales
 
-Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes.
+Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes. Overlord stores these in the \`change_rationales\` table.
+
+\`\`\`bash
+ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\
+  --summary "Recorded rationale details for the latest code changes." --phase execute \\\\
+  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+\`\`\`
 
 ## Context & Artifacts
 

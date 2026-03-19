@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "description": "Per-agent model catalog overrides. A null agent value means use the current model list from the database.",
+  "agents": {
+    "claude": null,
+    "codex": [
+      {
+        "id": "gpt-5.4",
+        "label": "5.4",
+        "thinkingLevels": ["minimal", "low", "medium", "high"]
+      },
+      {
+        "id": "gpt-5.4-mini",
+        "label": "5.4 mini",
+        "thinkingLevels": ["minimal", "low", "medium", "high"]
+      },
+      {
+        "id": "gpt-5.3-codex",
+        "label": "5.3-codex",
+        "thinkingLevels": ["low", "medium", "high", "xhigh"]
+      },
+      {
+        "id": "gpt-5.2-codex",
+        "label": "5.2-codex",
+        "thinkingLevels": ["low", "medium", "high", "xhigh"]
+      },
+      {
+        "id": "gpt-5.1-codex-max",
+        "label": "5.1-codex max",
+        "thinkingLevels": ["medium", "high", "xhigh"]
+      },
+      {
+        "id": "gpt-5.1-codex-mini",
+        "label": "5.1-codex mini",
+        "thinkingLevels": ["low", "medium", "high", "xhigh"]
+      }
+    ],
+    "cursor": null,
+    "gemini": null,
+    "opencode": null
+  }
+}

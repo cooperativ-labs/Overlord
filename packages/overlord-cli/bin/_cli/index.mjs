@@ -41,6 +41,7 @@ Ticket:
 Protocol:
   ${primaryCommand} protocol attach --ticket-id <id>
   ${primaryCommand} protocol update --session-key <key> --ticket-id <id> --summary "..."
+  ${primaryCommand} protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json "[...]"
   ${primaryCommand} protocol decision --session-key <key> --ticket-id <id> --title "..." --rationale "..."
   ${primaryCommand} protocol ask --session-key <key> --ticket-id <id> --question "..."
   ${primaryCommand} protocol read-context --session-key <key> --ticket-id <id>
