@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.18.0] - 2026-03-19:14:38
+
+### Added
+- Add a tooltip to the Default model selector so the “Default” option explains it reflects the last model used in the terminal.
+
+### Fixed
+- Port the file mention dropdown into `document.body` so it floats above overflowing Kanban columns instead of being clipped.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Documentation
+- Reinforce the AGENT instructions by explicitly forbidding agents from creating a new branch before they start work or commit.
+
+### Chore
+- Bump the package version to `1.18.0` so the release metadata matches this changelog entry.
+
 ## [1.17.0] - 2026-03-19:09:37
 
 ### Added
