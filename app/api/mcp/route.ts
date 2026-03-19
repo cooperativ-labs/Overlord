@@ -1,5 +1,6 @@
 import { getSupabaseUrl } from '@/lib/env';
 import {
+  buildAppMcpProtectedResourceMetadata,
   getAppMcpResourceMetadataUrl,
   rewriteBearerResourceMetadata
 } from '@/lib/mcp/oauth-metadata';
@@ -11,28 +12,41 @@ import {
  * on our domain. The protected-resource metadata lives on a sibling catch-all
  * route so OAuth-capable clients can discover auth from the public MCP URL.
  *
- * GET  /api/mcp — returns MCP instructions or protected resource metadata
+ * GET  /api/mcp — returns protected-resource metadata for OAuth discovery
  * POST /api/mcp — proxies MCP JSON-RPC calls to the edge function
  */
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
-    'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id'
+    'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id',
+  'Access-Control-Expose-Headers':
+    'www-authenticate, mcp-protocol-version, mcp-session-id, x-request-id'
 };
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-export async function GET(_request: Request) {
-  return new Response('Method not allowed', {
-    status: 405,
+/**
+ * GET /api/mcp — OAuth discovery helper.
+ *
+ * Claude Connectors and other MCP clients may send GET to the MCP endpoint
+ * before POST. Instead of returning 405, we return the protected-resource
+ * metadata (RFC 9728) so clients can discover authentication requirements
+ * directly from the resource URL.
+ */
+export async function GET(request: Request) {
+  const { origin } = new URL(request.url);
+  const metadata = buildAppMcpProtectedResourceMetadata(origin);
+
+  return new Response(JSON.stringify(metadata), {
+    status: 200,
     headers: {
       ...CORS_HEADERS,
-      Allow: 'POST, OPTIONS',
-      'Content-Type': 'text/plain; charset=utf-8'
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=3600'
     }
   });
 }
@@ -45,6 +59,23 @@ export async function POST(request: Request) {
     method: 'POST',
     headers: forwardHeaders(request),
     body
+  });
+
+  return proxyResponse(upstreamRes, request);
+}
+
+/**
+ * DELETE /api/mcp — session termination (MCP Streamable HTTP).
+ *
+ * Proxies DELETE requests to the upstream edge function. Claude and other
+ * MCP clients send DELETE to close sessions gracefully.
+ */
+export async function DELETE(request: Request) {
+  const edgeUrl = `${getSupabaseUrl()}/functions/v1/mcp`;
+
+  const upstreamRes = await fetch(edgeUrl, {
+    method: 'DELETE',
+    headers: forwardHeaders(request)
   });
 
   return proxyResponse(upstreamRes, request);

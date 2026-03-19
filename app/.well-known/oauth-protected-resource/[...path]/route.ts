@@ -4,7 +4,9 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers':
-    'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id'
+    'authorization, content-type, mcp-protocol-version, mcp-session-id, x-organization-id, x-request-id',
+  'Access-Control-Expose-Headers':
+    'www-authenticate, mcp-protocol-version, mcp-session-id, x-request-id'
 };
 
 function isMcpProtectedResourcePath(path: string[]): boolean {
