@@ -7,6 +7,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
+import { runAttachCommand } from './attach.mjs';
 
 async function fetchContext(platformUrl, agentToken, localSecret, ticketId) {
   const url = `${platformUrl}/api/protocol/context/${ticketId}?context=cli`;
@@ -170,6 +171,11 @@ export async function runLauncherCommand(command, args) {
   }
 
   if (normalizedCommand === 'run') {
+    // If no ticket-id flag and no TICKET_ID env var, present interactive ticket search
+    if (!ticketId && !process.env.TICKET_ID) {
+      await runAttachCommand([undefined, positionals[0]]);
+      return;
+    }
     await runAgent(positionals[0]);
     return;
   }
