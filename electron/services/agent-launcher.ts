@@ -26,6 +26,10 @@ type LaunchAgentInput = {
   launchMode?: AgentLaunchMode;
   /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
   flags?: string[];
+  /** Preferred model ID (e.g. 'claude-opus-4-6'). Passed as --model flag. */
+  model?: string;
+  /** Preferred thinking/effort level (e.g. 'high', 'max'). Passed as agent-specific flag. */
+  thinking?: string;
 };
 
 type LaunchAgentResult = {
@@ -76,6 +80,36 @@ function getConnectorUrl(): string {
 
 function normalizeAgentToken(value?: string): string {
   return value?.trim() ?? '';
+}
+
+/**
+ * Builds CLI flags for model and thinking/effort selection per agent type.
+ */
+function buildModelThinkingFlags(agent: AgentType, model?: string, thinking?: string): string {
+  const parts: string[] = [];
+
+  switch (agent) {
+    case 'claude':
+      if (model) parts.push(`--model ${shellQuote(model)}`);
+      if (thinking) parts.push(`--effort ${shellQuote(thinking)}`);
+      break;
+    case 'codex':
+      if (model) parts.push(`--model ${shellQuote(model)}`);
+      if (thinking) parts.push(`--reasoning-effort ${shellQuote(thinking)}`);
+      break;
+    case 'cursor':
+      if (model) parts.push(`--model ${shellQuote(model)}`);
+      break;
+    case 'gemini':
+      if (model) parts.push(`--model ${shellQuote(model)}`);
+      if (thinking) parts.push(`--thinking-level ${shellQuote(thinking)}`);
+      break;
+    case 'opencode':
+      if (model) parts.push(`--model ${shellQuote(model)}`);
+      break;
+  }
+
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
 }
 
 /**
@@ -179,19 +213,22 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   const extraFlags = (input.flags ?? []).map(f => shellQuote(f)).join(' ');
 
+  // Build model/thinking flags per agent
+  const modelThinkingFlags = buildModelThinkingFlags(input.agent, input.model, input.thinking);
+
   if (input.agent === 'claude') {
     // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
     // so we don't need to pass a temporary --settings file.
     const settingsArg = bundleInstalled ? '' : ` --settings ${shellQuote(settingsFile)}`;
-    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})"${settingsArg}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
+    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})"${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
-    command = `codex${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
+    command = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'cursor') {
-    command = `agent${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
+    command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'gemini') {
-    command = `gemini${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
+    command = `gemini${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
   } else if (input.agent === 'opencode') {
-    command = `opencode${extraFlags ? ` ${extraFlags}` : ''} --prompt "$(cat ${shellQuote(contextFile)})"`;
+    command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt "$(cat ${shellQuote(contextFile)})"`;
   } else {
     throw new Error(`Unknown agent type: ${input.agent}`);
   }

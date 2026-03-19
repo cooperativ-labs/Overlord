@@ -24,7 +24,9 @@ interface ElectronAPI {
       cwd?: string,
       agentToken?: string,
       launchMode?: 'run' | 'ask',
-      flags?: string[]
+      flags?: string[],
+      model?: string,
+      thinking?: string
     ) => Promise<void>;
     chooseDirectory: () => Promise<string | null>;
   };

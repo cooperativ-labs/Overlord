@@ -8,7 +8,9 @@ const electronAPI = {
       cwd?: string,
       agentToken?: string,
       launchMode?: 'run' | 'ask',
-      flags?: string[]
+      flags?: string[],
+      model?: string,
+      thinking?: string
     ) =>
       ipcRenderer.invoke('terminal:launch-agent', {
         ticketId,
@@ -16,7 +18,9 @@ const electronAPI = {
         cwd,
         agentToken,
         launchMode,
-        flags
+        flags,
+        model,
+        thinking
       }),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },

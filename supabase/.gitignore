@@ -3,8 +3,10 @@
 .temp
 
 # dotenvx
+.env
 .env.keys
 .env.local
+.env.prod
 .env.*.local
 
 functions/node_modules

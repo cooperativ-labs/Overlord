@@ -4,6 +4,10 @@ import { Check, Copy, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import {
+  AgentModelSelector,
+  useAgentModelPreference
+} from '@/components/features/AgentModelSelector';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Badge } from '@/components/ui/badge';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -272,6 +276,16 @@ function getSlashActionMeta(status: SlashStatusEntry['status'] | undefined): Plu
     successText: label === 'Remove' ? 'Removed' : 'Installed',
     errorText: `${label} failed`
   };
+}
+
+function DefaultAgentSelector() {
+  const { selection, setSelection } = useAgentModelPreference();
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <AgentModelSelector value={selection} onChange={setSelection} inline />
+    </div>
+  );
 }
 
 export function CliPage({ open }: { open: boolean }) {
@@ -609,26 +623,12 @@ export function CliPage({ open }: { open: boolean }) {
         <>
           <div className="grid gap-4">
             <div className="grid gap-1">
-              <p className="text-sm font-medium">Agent trigger</p>
+              <p className="text-sm font-medium">Default agent</p>
               <p className="text-xs text-muted-foreground">
-                Choose which action appears as the default option in the agent split button.
+                Choose your default agent, model, and thinking level for launching tasks.
               </p>
             </div>
-            <Select
-              value={selectedDefaultAgentTrigger}
-              onValueChange={handleDefaultAgentTriggerChange}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select default option" />
-              </SelectTrigger>
-              <SelectContent>
-                {AGENT_SELECTOR_VALUES.map(agentValue => (
-                  <SelectItem key={agentValue} value={agentValue}>
-                    {getAgentSelectorLabel(agentValue)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <DefaultAgentSelector />
           </div>
 
           <div className="grid gap-4">

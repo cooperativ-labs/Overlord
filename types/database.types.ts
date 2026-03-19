@@ -28,6 +28,42 @@ export type Database = {
   };
   public: {
     Tables: {
+      agent_models: {
+        Row: {
+          agent_type: string;
+          capabilities: Json | null;
+          display_name: string;
+          id: string;
+          is_recommended: boolean | null;
+          model_id: string;
+          sort_order: number | null;
+          thinking_options: Json | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          agent_type: string;
+          capabilities?: Json | null;
+          display_name: string;
+          id?: string;
+          is_recommended?: boolean | null;
+          model_id: string;
+          sort_order?: number | null;
+          thinking_options?: Json | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          agent_type?: string;
+          capabilities?: Json | null;
+          display_name?: string;
+          id?: string;
+          is_recommended?: boolean | null;
+          model_id?: string;
+          sort_order?: number | null;
+          thinking_options?: Json | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       agent_sessions: {
         Row: {
           agent_identifier: string;

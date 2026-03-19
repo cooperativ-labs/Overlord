@@ -136,6 +136,17 @@ export async function updateAgentFlagsAction(
   return upsertAgentConfigAction(agentType, { flags });
 }
 
+export async function updateAgentModelPreferenceAction(
+  agentType: string,
+  model: string | null,
+  thinking: string | null
+): Promise<AgentConfig> {
+  return upsertAgentConfigAction(agentType, {
+    defaultModel: model ?? undefined,
+    defaultThinking: thinking ?? undefined
+  });
+}
+
 export async function deleteAgentConfigAction(agentType: string): Promise<void> {
   const supabase = await createClient();
   const {

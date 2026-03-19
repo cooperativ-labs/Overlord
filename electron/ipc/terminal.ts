@@ -358,6 +358,8 @@ export function registerTerminalIpc(): void {
         agentToken?: string;
         launchMode?: 'run' | 'ask';
         flags?: string[];
+        model?: string;
+        thinking?: string;
       }
     ) => {
       const { command, cwd, env } = await prepareAgentLaunch({
@@ -366,7 +368,9 @@ export function registerTerminalIpc(): void {
         cwd: payload.cwd,
         agentToken: payload.agentToken,
         launchMode: payload.launchMode,
-        flags: payload.flags
+        flags: payload.flags,
+        model: payload.model,
+        thinking: payload.thinking
       });
 
       const scriptPath = writeLaunchScript(command, cwd, env);

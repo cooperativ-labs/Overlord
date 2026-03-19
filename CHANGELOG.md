@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.17.0] - 2026-03-19:09:37
+
+### Added
+- Ship the new `AgentModelSelector` UI inside the AgentSplitButton and CLI settings so agents can pick their preferred provider, model, and thinking/effort level before launching work.
+- Add an `agent_models` catalog plus the `sync-agent-models` Supabase Edge Function that refreshes Anthropic, OpenAI, and Gemini model lists (and prunes stale entries) for the selector to consume.
+
+### Fixed
+- None.
+
+### Changed
+- Pass the selected model and thinking flags through the launch helpers so desktop/WebCLIs launch the agent binary with the same preferences that are stored in the CLI settings and user config.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `1.17.0` so the release metadata matches this changelog entry.
+- Seed scripts now insert the default `jake@c.com` user in auth so local environments start with a known account.
+
 ## [1.16.0] - 2026-03-19:08:13
 
 ### Added

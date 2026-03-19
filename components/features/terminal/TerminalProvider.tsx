@@ -12,7 +12,9 @@ type TerminalContextValue = {
     cwd?: string,
     agentToken?: string,
     launchMode?: 'run' | 'ask',
-    flags?: string[]
+    flags?: string[],
+    model?: string,
+    thinking?: string
   ) => Promise<void>;
 };
 
@@ -28,10 +30,21 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       cwd?: string,
       agentToken?: string,
       launchMode: 'run' | 'ask' = 'run',
-      flags?: string[]
+      flags?: string[],
+      model?: string,
+      thinking?: string
     ) => {
       if (!api) return;
-      await api.terminal.launchAgent(ticketId, agent, cwd, agentToken, launchMode, flags);
+      await api.terminal.launchAgent(
+        ticketId,
+        agent,
+        cwd,
+        agentToken,
+        launchMode,
+        flags,
+        model,
+        thinking
+      );
     },
     [api]
   );
