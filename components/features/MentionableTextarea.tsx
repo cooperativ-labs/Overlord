@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 
 import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
@@ -48,6 +49,10 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       'bottom'
     );
     const [mentionMenuMaxHeight, setMentionMenuMaxHeight] = React.useState(224);
+    const [menuPosition, setMenuPosition] = React.useState<{ top: number; left: number }>({
+      top: 0,
+      left: 0,
+    });
 
     const mentionResults = React.useMemo(
       () =>
@@ -117,6 +122,10 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       setMentionMenuMaxHeight(
         Math.max(minMenuHeight, Math.min(preferredMaxHeight, Math.floor(availableSpace)))
       );
+      setMenuPosition({
+        top: shouldOpenAbove ? rect.top - gap : rect.bottom + gap,
+        left: rect.left,
+      });
     }, []);
 
     const insertMentionAtCursor = React.useCallback(
@@ -220,33 +229,45 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
           }}
           {...props}
         />
-        {mentionMenuOpen ? (
-          <div
-            className={cn(
-              'absolute left-0 z-20 w-max min-w-full max-w-[min(64rem,calc(100vw-1rem))] overflow-x-auto overflow-y-auto rounded-md border bg-popover p-1 shadow-md',
-              mentionMenuPlacement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1',
-              menuClassName
-            )}
-            style={{ maxHeight: mentionMenuMaxHeight }}
-          >
-            {mentionResults.map((filePath, index) => (
-              <button
-                key={filePath}
+        {mentionMenuOpen
+          ? createPortal(
+              <div
                 className={cn(
-                  'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm',
-                  index === mentionIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'
+                  'fixed z-50 w-max max-w-[min(64rem,calc(100vw-1rem))] overflow-x-auto overflow-y-auto rounded-md border bg-popover p-1 shadow-md',
+                  menuClassName
                 )}
-                type="button"
-                onMouseDown={event => {
-                  event.preventDefault();
-                  insertMentionAtCursor(filePath);
+                style={{
+                  top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
+                  bottom:
+                    mentionMenuPlacement === 'top'
+                      ? window.innerHeight - menuPosition.top
+                      : undefined,
+                  left: menuPosition.left,
+                  maxHeight: mentionMenuMaxHeight,
                 }}
               >
-                @{filePath}
-              </button>
-            ))}
-          </div>
-        ) : null}
+                {mentionResults.map((filePath, index) => (
+                  <button
+                    key={filePath}
+                    className={cn(
+                      'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm',
+                      index === mentionIndex
+                        ? 'bg-accent text-accent-foreground'
+                        : 'hover:bg-accent/60'
+                    )}
+                    type="button"
+                    onMouseDown={event => {
+                      event.preventDefault();
+                      insertMentionAtCursor(filePath);
+                    }}
+                  >
+                    @{filePath}
+                  </button>
+                ))}
+              </div>,
+              document.body
+            )
+          : null}
       </div>
     );
   }
