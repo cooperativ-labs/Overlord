@@ -64,7 +64,27 @@ The metadata body looks like:
 }
 ```
 
+Additionally, `GET /api/mcp` returns the same protected-resource metadata so MCP clients that probe the resource URL directly can discover auth without a separate `.well-known` fetch.
+
 When the upstream MCP handler returns a bearer challenge, the platform proxy rewrites `resource_metadata="..."` so clients discover the platform-hosted metadata URL, not the raw edge-function origin.
+
+### Authorization Server Metadata (RFC 8414) Proxy
+
+MCP clients using the older 2025-03-26 spec look for authorization server metadata at the MCP server's own origin:
+
+```text
+{PLATFORM_URL}/.well-known/oauth-authorization-server
+```
+
+Since Overlord delegates authentication to Supabase Auth (an external authorization server), this route proxies the metadata from:
+
+```text
+{SUPABASE_URL}/.well-known/oauth-authorization-server/auth/v1
+```
+
+This ensures compatibility with both MCP spec versions:
+- **2025-03-26**: Client discovers auth at the MCP server's origin
+- **2025-06-18+**: Client uses protected-resource metadata to find the external authorization server
 
 ## OAuth MCP Flow
 
@@ -405,8 +425,11 @@ Check:
 
 - The client is using `{PLATFORM_URL}/api/mcp`
 - The platform serves `/.well-known/oauth-protected-resource/api/mcp`
+- The platform serves `/.well-known/oauth-authorization-server` (proxied from Supabase)
+- `GET /api/mcp` returns protected-resource metadata (not 405)
 - The `WWW-Authenticate` challenge contains `resource_metadata="..."`
 - Supabase OAuth server and dynamic registration are enabled
+- Supabase Auth is using asymmetric JWT signing keys (RS256/ES256) for JWKS compatibility
 
 ### Wrong organization in MCP requests
 
@@ -423,6 +446,9 @@ Otherwise the MCP auth layer falls back to the first membership by ascending org
 - `lib/mcp/oauth-metadata.ts`
 - `app/api/mcp/route.ts`
 - `app/api/mcp/[...path]/route.ts`
+- `app/.well-known/oauth-authorization-server/route.ts`
+- `app/.well-known/oauth-protected-resource/route.ts`
+- `app/.well-known/oauth-protected-resource/[...path]/route.ts`
 - `supabase/functions/mcp/auth.ts`
 - `app/api/auth/config/route.ts`
 - `app/api/auth/token/route.ts`
