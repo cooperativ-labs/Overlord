@@ -117,7 +117,7 @@ export function SettingsModal({
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Customize your settings here.</DialogDescription>
         <SidebarProvider className="items-start">
-          <Sidebar collapsible="none" className="hidden md:flex">
+          <Sidebar collapsible="none" className="hidden md:flex md:w-52">
             <SidebarContent>
               <SidebarGroup>
                 <SidebarGroupLabel>Workflow</SidebarGroupLabel>
