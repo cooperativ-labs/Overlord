@@ -37,6 +37,20 @@ export function AuthForm({ className, mode, error: initialError, message, next }
 
   const isLogin = mode === 'login';
 
+  const navigateAfterAuth = React.useCallback(
+    (redirectPath: string) => {
+      router.replace(redirectPath);
+      // Safari can occasionally fail to complete client-side navigation
+      // immediately after auth cookie writes, so force a document navigation fallback.
+      setTimeout(() => {
+        if (globalThis.location.pathname !== redirectPath) {
+          globalThis.location.assign(redirectPath);
+        }
+      }, 350);
+    },
+    [router]
+  );
+
   const handleSignIn = async (e: FormSubmitEvent) => {
     e.preventDefault();
     setSignInButtonState('loading');
@@ -50,7 +64,7 @@ export function AuthForm({ className, mode, error: initialError, message, next }
         setSignInButtonState('error');
       } else if (result.redirect) {
         setSignInButtonState('success');
-        router.push(result.redirect);
+        navigateAfterAuth(result.redirect);
       }
     } catch {
       setSignInButtonState('error');
