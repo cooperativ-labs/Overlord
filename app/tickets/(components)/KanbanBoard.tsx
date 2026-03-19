@@ -14,15 +14,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import { Check, Columns3, Eye, EyeOff, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useOptimistic,
-  useRef,
-  useState,
-  useTransition
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { Button } from '@/components/ui/button';
@@ -77,12 +69,6 @@ type StatusColumn = {
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
-type RealtimeTicketPatch = Partial<
-  Pick<
-    Ticket,
-    'status' | 'title' | 'agent_session_state' | 'running_agent' | 'recent_agent' | 'is_read'
-  >
->;
 
 function toColumnTitle(status: string): string {
   return status
@@ -158,9 +144,10 @@ export default function KanbanBoard({
     () => getWaitingRaisedWhileOpenMap()
   );
 
-  const [realtimeOverrides, setRealtimeOverrides] = useState<Map<string, RealtimeTicketPatch>>(
-    () => new Map()
-  );
+  // Single source of truth for ticket data after mount.
+  // Seeded from server props, updated directly by real-time events, polling, and user actions.
+  const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
+
   // Tracks the column a card is being dragged into, for immediate synchronous
   // re-render of SortableContext items (shows the insertion gap in the target column).
   const [activeDragStatus, setActiveDragStatus] = useState<{
@@ -180,7 +167,9 @@ export default function KanbanBoard({
     waitingByTicketRef.current = waitingByTicket;
   }, [waitingByTicket]);
 
+  // Reconcile when server delivers new data (navigation, router.refresh()).
   useEffect(() => {
+    setTickets(initialTickets);
     setWaitingByTicket(toWaitingByTicket(initialTickets));
   }, [initialTickets]);
 
@@ -239,30 +228,23 @@ export default function KanbanBoard({
   >(() => new Map());
   const [extraTickets, setExtraTickets] = useState<Ticket[]>([]);
 
-  const [optimisticTickets, applyOptimistic] = useOptimistic(
-    initialTickets,
-    (_current: Ticket[], next: Ticket[]) => next
-  );
-
   // Apply the in-flight drag column override so the target column's SortableContext
   // includes the dragged card immediately (no startTransition deferral).
   const dragAdjustedTickets = activeDragStatus
-    ? optimisticTickets.map(t =>
+    ? tickets.map(t =>
         t.id === activeDragStatus.ticketId ? { ...t, status: activeDragStatus.status } : t
       )
-    : optimisticTickets;
+    : tickets;
 
   const ticketsWithIndicators = dragAdjustedTickets.map(ticket => {
-    const override = realtimeOverrides.get(ticket.id);
-    const merged = override ? { ...ticket, ...override } : ticket;
     const waitingForResponseAt =
-      waitingByTicket[merged.id] ?? merged.waiting_for_response_at ?? null;
+      waitingByTicket[ticket.id] ?? ticket.waiting_for_response_at ?? null;
     return {
-      ...merged,
+      ...ticket,
       waiting_for_response_at: waitingForResponseAt,
       has_unopened_waiting_response:
-        waitingRaisedWhileOpen[merged.id] === true ||
-        hasUnopenedTimestamp(waitingForResponseAt, openedWaitingTimestamps[merged.id])
+        waitingRaisedWhileOpen[ticket.id] === true ||
+        hasUnopenedTimestamp(waitingForResponseAt, openedWaitingTimestamps[ticket.id])
     };
   });
 
@@ -271,7 +253,7 @@ export default function KanbanBoard({
   workingTickets.current = dragAdjustedTickets;
 
   const ticketIdsRef = useRef<Set<string>>(new Set());
-  ticketIdsRef.current = new Set(optimisticTickets.map(ticket => ticket.id));
+  ticketIdsRef.current = new Set(tickets.map(ticket => ticket.id));
 
   const ticketsByIdRef = useRef<Map<string, Ticket>>(new Map());
   ticketsByIdRef.current = new Map(ticketsWithIndicators.map(ticket => [ticket.id, ticket]));
@@ -319,7 +301,7 @@ export default function KanbanBoard({
     return counts;
   }, [initialTickets]);
 
-  function groupTickets(tickets: Ticket[]) {
+  function groupTickets(ticketList: Ticket[]) {
     const groups = new Map<string, Ticket[]>();
     const uncategorized: Ticket[] = [];
     const getUpdatedAtMs = (ticket: Ticket) => {
@@ -331,7 +313,7 @@ export default function KanbanBoard({
       groups.set(col.id, []);
     }
 
-    for (const ticket of tickets) {
+    for (const ticket of ticketList) {
       if (groups.has(ticket.status)) {
         groups.get(ticket.status)!.push(ticket);
       } else {
@@ -339,19 +321,19 @@ export default function KanbanBoard({
       }
     }
 
-    for (const [slug, columnTickets] of groups) {
+    for (const [slug, colTickets] of groups) {
       if (!visibleSlugs.has(slug)) {
         continue;
       }
       const isCompleteColumn = columnById.get(slug)?.statusType === 'complete';
       if (isCompleteColumn) {
-        columnTickets.sort((a, b) => {
+        colTickets.sort((a, b) => {
           const updatedAtDiff = getUpdatedAtMs(b) - getUpdatedAtMs(a);
           if (updatedAtDiff !== 0) return updatedAtDiff;
           return a.board_position - b.board_position;
         });
       } else {
-        columnTickets.sort((a, b) => a.board_position - b.board_position);
+        colTickets.sort((a, b) => a.board_position - b.board_position);
       }
     }
 
@@ -377,18 +359,15 @@ export default function KanbanBoard({
       }
       if (ticket.is_read === false) {
         unreadIds.push(id);
-        setRealtimeOverrides(prev => {
-          const next = new Map(prev);
-          next.set(id, { ...next.get(id), is_read: true });
-          return next;
-        });
       }
+    }
+    if (unreadIds.length > 0) {
+      const unreadSet = new Set(unreadIds);
+      setTickets(prev => prev.map(t => (unreadSet.has(t.id) ? { ...t, is_read: true } : t)));
+      startTransition(() => markTicketsReadAction(unreadIds));
     }
     setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
     setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-    if (unreadIds.length > 0) {
-      startTransition(() => markTicketsReadAction(unreadIds));
-    }
   }
 
   function handleMarkUnread(ticketId: string) {
@@ -400,12 +379,7 @@ export default function KanbanBoard({
       setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
     }
 
-    // Optimistically mark as unread in realtimeOverrides, then persist to server.
-    setRealtimeOverrides(prev => {
-      const next = new Map(prev);
-      next.set(ticketId, { ...next.get(ticketId), is_read: false });
-      return next;
-    });
+    setTickets(prev => prev.map(t => (t.id === ticketId ? { ...t, is_read: false } : t)));
     startTransition(() => markTicketUnreadAction(ticketId));
   }
 
@@ -487,11 +461,7 @@ export default function KanbanBoard({
     // Mark the ticket as read when the user navigates to it.
     const ticket = ticketsByIdRef.current.get(pathTicketId);
     if (ticket?.is_read === false) {
-      setRealtimeOverrides(prev => {
-        const next = new Map(prev);
-        next.set(pathTicketId, { ...next.get(pathTicketId), is_read: true });
-        return next;
-      });
+      setTickets(prev => prev.map(t => (t.id === pathTicketId ? { ...t, is_read: true } : t)));
       startTransition(() => markTicketReadAction(pathTicketId));
     }
   }, [pathname]);
@@ -504,19 +474,17 @@ export default function KanbanBoard({
       session: Pick<AgentSession, 'ticket_id' | 'session_state' | 'agent_identifier'>
     ) => {
       const isAttached = session.session_state === 'attached';
-      setRealtimeOverrides(prev => {
-        const next = new Map(prev);
-        const patch: RealtimeTicketPatch = {
-          ...next.get(session.ticket_id),
-          agent_session_state: session.session_state,
-          running_agent: isAttached ? session.agent_identifier : null
-        };
-        if (!isAttached) {
-          patch.recent_agent = session.agent_identifier;
-        }
-        next.set(session.ticket_id, patch);
-        return next;
-      });
+      setTickets(prev =>
+        prev.map(t => {
+          if (t.id !== session.ticket_id) return t;
+          return {
+            ...t,
+            agent_session_state: session.session_state,
+            running_agent: isAttached ? session.agent_identifier : null,
+            ...(!isAttached ? { recent_agent: session.agent_identifier } : {})
+          };
+        })
+      );
     };
 
     const syncBoardData = async () => {
@@ -558,29 +526,40 @@ export default function KanbanBoard({
         }
       }
 
-      setRealtimeOverrides(prev => {
-        const next = new Map(prev);
-        for (const t of ticketUpdates ?? []) {
-          const patch: RealtimeTicketPatch = {
-            ...next.get(t.id),
-            status: t.status ?? undefined,
-            title: t.title,
-            is_read: (t as { is_read?: boolean }).is_read ?? undefined,
-            recent_agent: (t as { recent_agent?: string | null }).recent_agent ?? undefined
-          };
+      const ticketUpdateMap = new Map(
+        (
+          (ticketUpdates ?? []) as Array<{
+            id: string;
+            status: string | null;
+            title: string | null;
+            recent_agent: string | null;
+            is_read: boolean;
+          }>
+        ).map(t => [t.id, t])
+      );
+
+      setTickets(prev =>
+        prev.map(t => {
+          const update = ticketUpdateMap.get(t.id);
+          if (!update) return t;
           const session = sessionByTicket.get(t.id);
-          if (session) {
-            const isAttached = session.session_state === 'attached';
-            patch.agent_session_state = session.session_state;
-            patch.running_agent = isAttached ? session.agent_identifier : null;
-            if (!isAttached) {
-              patch.recent_agent = session.agent_identifier;
-            }
-          }
-          next.set(t.id, patch);
-        }
-        return next;
-      });
+          const isAttached = session?.session_state === 'attached';
+          return {
+            ...t,
+            status: update.status ?? t.status,
+            title: update.title ?? t.title,
+            is_read: update.is_read ?? t.is_read,
+            recent_agent: update.recent_agent ?? t.recent_agent,
+            ...(session
+              ? {
+                  agent_session_state: session.session_state,
+                  running_agent: isAttached ? session.agent_identifier : null,
+                  ...(!isAttached ? { recent_agent: session.agent_identifier } : {})
+                }
+              : {})
+          };
+        })
+      );
 
       const nextWaitingByTicket = { ...waitingByTicketRef.current };
       const raisedWaitingTicketIds: string[] = [];
@@ -656,18 +635,25 @@ export default function KanbanBoard({
         },
         payload => {
           const event = payload.new;
-          if (event.phase !== 'review') return;
+          if (!event.phase) return;
           if (!ticketIdsRef.current.has(event.ticket_id)) return;
 
-          // Mark as unread in realtimeOverrides so the indicator shows immediately.
-          // The DB is already updated by the API route that triggered this event.
-          if (openTicketIdRef.current !== event.ticket_id) {
-            setRealtimeOverrides(prev => {
-              const next = new Map(prev);
-              next.set(event.ticket_id, { ...next.get(event.ticket_id), is_read: false });
-              return next;
-            });
-          }
+          // Move the card to the target column and mark unread.
+          // This is the authoritative signal — it fires after the ticket row
+          // has been committed, so it is reliable even when the tickets UPDATE
+          // real-time event is missed (e.g. due to after() timing on Vercel).
+          setTickets(prev =>
+            prev.map(t => {
+              if (t.id !== event.ticket_id) return t;
+              return {
+                ...t,
+                status: event.phase!,
+                ...(openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
+              };
+            })
+          );
+
+          if (event.phase !== 'review') return;
 
           const reviewSound = reviewSoundRef.current;
           if (reviewSound) {
@@ -693,16 +679,17 @@ export default function KanbanBoard({
         payload => {
           const updated = payload.new;
           if (!ticketIdsRef.current.has(updated.id)) return;
-          setRealtimeOverrides(prev => {
-            const next = new Map(prev);
-            next.set(updated.id, {
-              ...next.get(updated.id),
-              status: updated.status ?? undefined,
-              title: updated.title,
-              is_read: updated.is_read
-            });
-            return next;
-          });
+          setTickets(prev =>
+            prev.map(t => {
+              if (t.id !== updated.id) return t;
+              return {
+                ...t,
+                status: updated.status ?? t.status,
+                title: updated.title ?? t.title,
+                is_read: updated.is_read ?? t.is_read
+              };
+            })
+          );
         }
       )
       .on<AgentSession>(
@@ -825,7 +812,7 @@ export default function KanbanBoard({
     const columnSlug = resolveOverColumn(overId) ?? findColumnSlug(activeId);
     if (!columnSlug) return;
 
-    const originalSlug = initialTickets.find(t => t.id === activeId)?.status;
+    const originalSlug = tickets.find(t => t.id === activeId)?.status;
     const statusChanged = originalSlug !== undefined && originalSlug !== columnSlug;
 
     // Use the captured snapshot (which includes the drag-adjusted status) so that
@@ -851,29 +838,18 @@ export default function KanbanBoard({
     const orderedIds = reordered.map(t => t.id);
     const col = columnById.get(columnSlug);
 
-    // Pre-commit the new status into realtimeOverrides BEFORE starting the transition.
-    // This persists the column assignment beyond the useOptimistic lifetime — when the
-    // transition ends, useOptimistic reverts to initialTickets (old status), but the
-    // realtimeOverrides entry keeps the card in the correct column until router.refresh()
-    // delivers fresh initialTickets from the server.
-    if (statusChanged && col) {
-      setRealtimeOverrides(prev => {
-        const next = new Map(prev);
-        next.set(activeId, { ...next.get(activeId), status: col.id });
-        return next;
-      });
-    }
-
-    startTransition(async () => {
-      const positionMap = new Map(orderedIds.map((id, i) => [id, i]));
-      const updated = effectiveTickets.map(t => {
+    // Update tickets state directly with new positions and status.
+    const positionMap = new Map(orderedIds.map((id, i) => [id, i]));
+    setTickets(prev =>
+      prev.map(t => {
         let next = t;
         if (positionMap.has(t.id)) next = { ...next, board_position: positionMap.get(t.id)! };
         if (statusChanged && t.id === activeId && col) next = { ...next, status: col.id };
         return next;
-      });
-      applyOptimistic(updated);
+      })
+    );
 
+    startTransition(async () => {
       await reorderTicketsAction(
         orderedIds,
         statusChanged && col ? { ticketId: activeId, newStatus: col.id } : undefined
@@ -937,9 +913,7 @@ export default function KanbanBoard({
       is_read: true
     };
 
-    const optimisticNext = [...previous, optimisticTicket];
-    workingTickets.current = optimisticNext;
-    startTransition(() => applyOptimistic(optimisticNext));
+    setTickets(prev => [...prev, optimisticTicket]);
 
     try {
       await createTicketInColumnAction(
@@ -951,8 +925,7 @@ export default function KanbanBoard({
         position
       );
     } catch {
-      workingTickets.current = previous;
-      startTransition(() => applyOptimistic(previous));
+      setTickets(prev => prev.filter(t => t.id !== clientTicketId));
     }
   }
 
