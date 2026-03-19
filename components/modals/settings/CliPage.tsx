@@ -634,6 +634,26 @@ export function CliPage({ open }: { open: boolean }) {
               </p>
             </div>
             <DefaultAgentSelector />
+            <div className="grid gap-2">
+              <p className="text-xs text-muted-foreground">
+                Default quick-launch target for the Run menu.
+              </p>
+              <Select
+                value={selectedDefaultAgentTrigger}
+                onValueChange={handleDefaultAgentTriggerChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select default agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AGENT_SELECTOR_VALUES.map(agentValue => (
+                    <SelectItem key={agentValue} value={agentValue}>
+                      {getAgentSelectorLabel(agentValue)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid gap-4">

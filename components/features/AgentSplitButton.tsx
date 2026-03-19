@@ -1,18 +1,23 @@
 'use client';
 
-import { ChevronDown, Copy, Loader2 } from 'lucide-react';
+import { Bot, Check, ChevronDown, Copy, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
-import { type AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
+  AGENT_SELECTOR_VALUES,
   type AgentSelectorValue,
   getAgentTypeByValue,
   isAgentIdentifierMatch,
@@ -23,7 +28,7 @@ import type { Database } from '@/types/database.types';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
-import { AgentModelSelector, useAgentModelPreference } from './AgentModelSelector';
+import { useAgentModelPreference } from './AgentModelSelector';
 
 type SessionState = Database['public']['Enums']['session_state'];
 
@@ -105,22 +110,16 @@ export function AgentSplitButton({
 }: AgentSplitButtonProps) {
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
-  const { selection, setSelection, selectAgent, loaded } = useAgentModelPreference();
+  const { selection } = useAgentModelPreference();
   const { isElectron, launchAgent } = useTerminal();
-  const isCopyLocalSelected = selectedAgent === 'copy-local';
-  const isCopyCloudSelected = selectedAgent === 'copy-cloud';
-  const isCopySelected = isCopyLocalSelected || isCopyCloudSelected;
-  const agentDetails = isCopySelected ? null : getAgentTypeByValue(selectedAgent);
-  const copyLabel = isCopyLocalSelected ? 'Copy Local' : 'Copy Cloud';
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
 
   const isActive =
-    !isCopySelected &&
-    isAgentIdentifierMatch(selectedAgent, activeAgentIdentifier) &&
+    isAgentIdentifierMatch(selection.agent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
-  const isDisabled = !isCopySelected && !canRunAgent;
+  const isDisabled = !canRunAgent;
   const styles = sizeStyles[size];
 
   const appliedStoredDefaultRef = useRef(false);
@@ -137,22 +136,10 @@ export function AgentSplitButton({
     }
   }, [activeAgentIdentifier, onSelectAgent, selectedAgent]);
 
-  useEffect(() => {
-    if (!loaded) return;
-    if (activeAgentIdentifier) return;
-    if (selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud') return;
-    if (selectedAgent === selection.agent) return;
-    onSelectAgent(selection.agent);
-  }, [activeAgentIdentifier, loaded, onSelectAgent, selection.agent, selectedAgent]);
-
-  function handleSelectionChange(newSelection: AgentModelSelection): void {
-    setSelection(newSelection);
-    if (newSelection.agent !== selectedAgent) {
-      onSelectAgent(newSelection.agent);
-    }
-  }
-
-  async function handleLaunch(agentValue: AgentSelectorValue = selectedAgent): Promise<void> {
+  async function handleLaunch(
+    agentValue: AgentSelectorValue = selection.agent,
+    options?: { useStoredModelPreference?: boolean }
+  ): Promise<void> {
     const isCopyLocalValue = agentValue === 'copy-local';
     const isCopyCloudValue = agentValue === 'copy-cloud';
     const isCopyValue = isCopyLocalValue || isCopyCloudValue;
@@ -190,8 +177,8 @@ export function AgentSplitButton({
           resolvedAgentToken,
           'run',
           agentFlags?.[agentValue],
-          selection.model ?? undefined,
-          selection.thinking ?? undefined
+          options?.useStoredModelPreference ? (selection.model ?? undefined) : undefined,
+          options?.useStoredModelPreference ? (selection.thinking ?? undefined) : undefined
         );
       } catch (error) {
         console.error('Failed to launch agent:', error);
@@ -220,23 +207,13 @@ export function AgentSplitButton({
         styles.runButton,
         isDisabled && 'cursor-not-allowed opacity-60'
       )}
-      onClick={() => void handleLaunch()}
+      onClick={() => void handleLaunch(selection.agent, { useStoredModelPreference: true })}
       disabled={isDisabled}
     >
       {isLaunching ? (
         <Loader2 className={cn(styles.loader, 'animate-spin')} />
-      ) : isCopySelected ? (
-        <Copy className={styles.icon} />
       ) : (
-        <span className="flex items-center justify-center dark:rounded-full dark:bg-white/40 dark:p-1">
-          <Image
-            src={agentDetails!.icon}
-            alt={`${agentDetails!.label} icon`}
-            width={16}
-            height={16}
-            className={styles.icon}
-          />
-        </span>
+        <Bot className={styles.icon} />
       )}
       <span
         className={cn(
@@ -245,11 +222,7 @@ export function AgentSplitButton({
           isActive && 'text-emerald-600 animate-pulse'
         )}
       >
-        {copied
-          ? `${isCopySelected ? copyLabel : agentDetails!.label} ✓`
-          : isCopySelected
-            ? copyLabel
-            : agentDetails!.label}
+        {copied ? 'Run ✓' : 'Run'}
       </span>
     </button>
   );
@@ -265,43 +238,79 @@ export function AgentSplitButton({
     </Tooltip>
   );
 
+  const activeDropdownAgent =
+    activeAgentIdentifier !== null
+      ? (AGENT_SELECTOR_VALUES.find(
+          agentValue =>
+            agentValue !== 'copy-local' &&
+            agentValue !== 'copy-cloud' &&
+            isAgentIdentifierMatch(agentValue, activeAgentIdentifier)
+        ) ?? null)
+      : null;
+
   return (
     <div
       className={cn(
-        'inline-flex items-stretch rounded-md border bg-background text-sm transition-all border-input shadow-sm hover:bg-accent hover:text-accent-foreground',
+        'inline-flex items-stretch rounded-md border border-input bg-background text-sm shadow-sm transition-all hover:bg-accent hover:text-accent-foreground',
         isActive &&
-          'border-emerald-600/80 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)] ring-1 ring-emerald-600/70 animate-pulse'
+          'animate-pulse border-emerald-600/80 ring-1 ring-emerald-600/70 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)]'
       )}
     >
       {runButtonWithTooltip}
 
-      <Popover>
-        <PopoverTrigger asChild>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <button
             type="button"
             className={cn(
               'inline-flex cursor-pointer items-center rounded-r-md border-l transition-colors',
               'hover:bg-accent hover:text-accent-foreground',
-
               styles.caretButton
             )}
           >
             <ChevronDown className={cn(styles.chevron, 'text-muted-foreground')} />
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-auto min-w-[400px] p-3">
-          <AgentModelSelector
-            value={selection}
-            onChange={handleSelectionChange}
-            onAgentSelect={agent => {
-              selectAgent(agent);
-              if (agent !== selectedAgent) {
-                onSelectAgent(agent);
-              }
-            }}
-          />
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[170px]">
+          {AGENT_SELECTOR_VALUES.map(agentValue => {
+            const isCopyValue = agentValue === 'copy-local' || agentValue === 'copy-cloud';
+            const agent = isCopyValue ? null : getAgentTypeByValue(agentValue);
+            const agentIsActive = activeDropdownAgent === agentValue;
+            const label = agent
+              ? agent.label
+              : agentValue === 'copy-local'
+                ? 'Copy Local'
+                : 'Copy Cloud';
+
+            return (
+              <DropdownMenuItem
+                key={agentValue}
+                className="gap-2 text-xs"
+                onClick={() => {
+                  onSelectAgent(agentValue);
+                  void handleLaunch(agentValue);
+                }}
+              >
+                {agent ? (
+                  <Image
+                    src={agent.icon}
+                    alt={`${agent.label} icon`}
+                    width={14}
+                    height={14}
+                    className="h-3.5 w-3.5"
+                  />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                <span className={cn(agentIsActive && 'text-emerald-600')}>{label}</span>
+                {agentValue === selectedAgent && (
+                  <Check className="ml-auto h-3 w-3 text-muted-foreground" />
+                )}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

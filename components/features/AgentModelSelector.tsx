@@ -31,6 +31,31 @@ type AgentModelSelectorProps = {
   inline?: boolean;
 };
 
+const AGENT_MODEL_SELECTION_EVENT = 'overlord:agent-model-selection-changed';
+
+function syncConfigsForSelection(
+  current: Record<string, AgentConfig>,
+  nextSelection: AgentModelSelection
+): Record<string, AgentConfig> {
+  return {
+    ...current,
+    [nextSelection.agent]: {
+      ...(current[nextSelection.agent] ?? { flags: [] }),
+      defaultModel: nextSelection.model ?? undefined,
+      defaultThinking: nextSelection.model ? (nextSelection.thinking ?? undefined) : undefined
+    }
+  };
+}
+
+function broadcastAgentModelSelection(selection: AgentModelSelection): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent<AgentModelSelection>(AGENT_MODEL_SELECTION_EVENT, {
+      detail: selection
+    })
+  );
+}
+
 export function AgentModelSelector({
   value,
   onChange,
@@ -267,27 +292,35 @@ export function useAgentModelPreference(): {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    function handleSelectionChange(event: Event) {
+      const nextSelection = (event as CustomEvent<AgentModelSelection>).detail;
+      setSelection(nextSelection);
+      setConfigs(current => syncConfigsForSelection(current, nextSelection));
+      setLaunchPreference(nextSelection);
+    }
+
+    window.addEventListener(AGENT_MODEL_SELECTION_EVENT, handleSelectionChange);
+    return () => {
+      window.removeEventListener(AGENT_MODEL_SELECTION_EVENT, handleSelectionChange);
+    };
+  }, []);
+
   const updateSelection = useCallback((nextSelection: AgentModelSelection) => {
     setSelection(nextSelection);
-    setConfigs(current => ({
-      ...current,
-      [nextSelection.agent]: {
-        ...(current[nextSelection.agent] ?? { flags: [] }),
-        defaultModel: nextSelection.model ?? undefined,
-        defaultThinking: nextSelection.model ? (nextSelection.thinking ?? undefined) : undefined
-      }
-    }));
+    setConfigs(current => syncConfigsForSelection(current, nextSelection));
+    setLaunchPreference(nextSelection);
+    broadcastAgentModelSelection(nextSelection);
   }, []);
 
   const selectAgent = useCallback(
     (agent: AgentTypeValue) => {
       const nextSelection = resolveAgentSelectionForAgent(configs, agent, launchPreference);
       setSelection(nextSelection);
-      setLaunchPreference({
-        agent,
-        model: null,
-        thinking: null
-      });
+      setLaunchPreference(nextSelection);
+      broadcastAgentModelSelection(nextSelection);
       void updateUserLaunchAgentPreferenceAction(agent);
     },
     [configs, launchPreference]

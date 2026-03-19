@@ -6,6 +6,7 @@ import {
 } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
+import { AgentModelChooserButton } from './AgentModelChooserButton';
 import { CopyTicketPromptButton } from './CopyTicketPromptButton';
 import { DiscussTicketButton } from './DiscussTicketButton';
 import { AgentSplitButtonLive } from './TicketLiveProvider';
@@ -59,6 +60,7 @@ export function TicketHeaderAction({
 
   return (
     <div className="flex items-center gap-2">
+      <AgentModelChooserButton />
       <DiscussTicketButton
         ticketId={ticketId}
         organizationId={organizationId}
