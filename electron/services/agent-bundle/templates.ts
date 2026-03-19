@@ -165,7 +165,7 @@ _ Always communicate with Overlord using the ovld protocol cli commands.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.
 - Use \`write-context\` for facts a future agent session should know.
 - **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket**
-- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Do not create a new branch and do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
 `;
 
@@ -225,7 +225,7 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.
 - Use \`write-context\` for facts a future agent session should know.
 - **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket**
-- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Do not create a new branch and do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
 `;
 

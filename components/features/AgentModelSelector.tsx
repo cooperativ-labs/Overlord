@@ -1,9 +1,10 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import { Check, Info } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getAllAgentConfigsAction,
   updateAgentModelPreferenceAction
@@ -32,6 +33,20 @@ type AgentModelSelectorProps = {
 };
 
 const AGENT_MODEL_SELECTION_EVENT = 'overlord:agent-model-selection-changed';
+
+function DefaultTooltipLabel() {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <span className="truncate">Default</span>
+          <Info aria-hidden className="h-3 w-3 shrink-0" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">Last used in terminal</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function syncConfigsForSelection(
   current: Record<string, AgentConfig>,
@@ -179,7 +194,7 @@ export function AgentModelSelector({
             value.model === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
           )}
         >
-          <span className="truncate text-muted-foreground">Default</span>
+          <DefaultTooltipLabel />
           {value.model === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
         </button>
         {loading ? (
