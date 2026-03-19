@@ -33,6 +33,29 @@ type AgentModelRow = {
   updated_at: string;
 };
 
+const CLAUDE_LATEST_MAJOR_PATTERN = /(opus|sonnet|haiku)-4([-.]|$)/;
+const OPENAI_LATEST_MAJOR_PREFIXES = ['gpt-5', 'codex-5'];
+
+function buildCapabilities(compatibleAgents: string[]): Record<string, unknown> {
+  return {
+    compatible_agents: compatibleAgents
+  };
+}
+
+function isClaudeCodeCompatibleModel(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  if (id.includes('embed') || id.includes('legacy')) return false;
+  return CLAUDE_LATEST_MAJOR_PATTERN.test(id);
+}
+
+function isCodexCompatibleModel(modelId: string): boolean {
+  const id = modelId.toLowerCase();
+  if (!OPENAI_LATEST_MAJOR_PREFIXES.some(prefix => id.startsWith(prefix))) return false;
+  if (id.includes('audio') || id.includes('realtime') || id.includes('embed')) return false;
+  if (id.includes(':ft-') || id.includes('ft:')) return false;
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Provider: Anthropic (Claude)
 // ---------------------------------------------------------------------------
@@ -75,9 +98,8 @@ async function fetchClaudeModels(): Promise<AgentModelRow[]> {
       // Filter to chat/text models only
       if (m.type !== 'model') continue;
 
-      // Skip non-coding-relevant models (embeddings, legacy, etc.)
       const id = m.id.toLowerCase();
-      if (id.includes('embed') || id.includes('legacy')) continue;
+      if (!isClaudeCodeCompatibleModel(id)) continue;
 
       const thinkingOptions = extractClaudeThinkingOptions(id);
       const isRecommended = id.includes('opus') || id.includes('sonnet');
@@ -87,7 +109,7 @@ async function fetchClaudeModels(): Promise<AgentModelRow[]> {
         model_id: m.id,
         display_name: m.display_name || formatModelName(m.id),
         thinking_options: thinkingOptions,
-        capabilities: {},
+        capabilities: buildCapabilities(['claude']),
         is_recommended: isRecommended,
         sort_order: getClaudeSortOrder(id),
         updated_at: new Date().toISOString()
@@ -102,7 +124,7 @@ async function fetchClaudeModels(): Promise<AgentModelRow[]> {
 }
 
 function extractClaudeThinkingOptions(modelId: string): string[] {
-  // Claude 4.x and 3.5+ models support extended thinking with budget levels
+  // Claude 4.x models support extended thinking with budget levels.
   if (modelId.includes('opus') || modelId.includes('sonnet') || modelId.includes('haiku')) {
     return ['low', 'medium', 'high', 'max'];
   }
@@ -132,8 +154,6 @@ const OPENAI_REASONING_MODELS: Record<string, string[]> = {
   o4: ['low', 'medium', 'high']
 };
 
-const OPENAI_MODEL_FILTER = ['gpt-5', 'gpt-4', 'o3', 'o4', 'codex'];
-
 async function fetchOpenAIModels(): Promise<AgentModelRow[]> {
   if (!OPENAI_API_KEY) return [];
 
@@ -155,22 +175,18 @@ async function fetchOpenAIModels(): Promise<AgentModelRow[]> {
   for (const m of body.data) {
     const id = m.id.toLowerCase();
 
-    // Filter to coding-relevant models
-    if (!OPENAI_MODEL_FILTER.some(prefix => id.startsWith(prefix))) continue;
-    // Skip fine-tuned, audio, realtime, embedding variants
-    if (id.includes('audio') || id.includes('realtime') || id.includes('embed')) continue;
-    if (id.includes(':ft-') || id.includes('ft:')) continue;
+    if (!isCodexCompatibleModel(id)) continue;
 
     // Check if this is a reasoning model
     const thinkingOptions = getOpenAIThinkingOptions(id);
-    const isRecommended = id.startsWith('o4') || id.startsWith('gpt-5') || id.startsWith('codex');
+    const isRecommended = id.startsWith('gpt-5') || id.startsWith('codex-5');
 
     models.push({
       agent_type: 'codex',
       model_id: m.id,
       display_name: formatModelName(m.id),
       thinking_options: thinkingOptions,
-      capabilities: {},
+      capabilities: buildCapabilities(['codex']),
       is_recommended: isRecommended,
       sort_order: getOpenAISortOrder(id),
       updated_at: new Date().toISOString()
@@ -248,7 +264,7 @@ async function fetchGeminiModels(): Promise<AgentModelRow[]> {
         model_id: modelId,
         display_name: m.displayName || formatModelName(modelId),
         thinking_options: thinkingOptions,
-        capabilities: {},
+        capabilities: buildCapabilities(['gemini']),
         is_recommended: id.includes('pro') || id.includes('flash'),
         sort_order: getGeminiSortOrder(id),
         updated_at: new Date().toISOString()

@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import { type AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
@@ -22,11 +23,7 @@ import type { Database } from '@/types/database.types';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import { useLocalDirectoryAccess } from './terminal/useLocalDirectoryAccess';
-import {
-  type AgentModelSelection,
-  AgentModelSelector,
-  useAgentModelPreference
-} from './AgentModelSelector';
+import { AgentModelSelector, useAgentModelPreference } from './AgentModelSelector';
 
 type SessionState = Database['public']['Enums']['session_state'];
 
@@ -108,7 +105,7 @@ export function AgentSplitButton({
 }: AgentSplitButtonProps) {
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
-  const { selection, setSelection } = useAgentModelPreference();
+  const { selection, setSelection, selectAgent, loaded } = useAgentModelPreference();
   const { isElectron, launchAgent } = useTerminal();
   const isCopyLocalSelected = selectedAgent === 'copy-local';
   const isCopyCloudSelected = selectedAgent === 'copy-cloud';
@@ -139,6 +136,14 @@ export function AgentSplitButton({
       onSelectAgent(configuredDefault);
     }
   }, [activeAgentIdentifier, onSelectAgent, selectedAgent]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (activeAgentIdentifier) return;
+    if (selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud') return;
+    if (selectedAgent === selection.agent) return;
+    onSelectAgent(selection.agent);
+  }, [activeAgentIdentifier, loaded, onSelectAgent, selection.agent, selectedAgent]);
 
   function handleSelectionChange(newSelection: AgentModelSelection): void {
     setSelection(newSelection);
@@ -285,7 +290,16 @@ export function AgentSplitButton({
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-auto min-w-[400px] p-3">
-          <AgentModelSelector value={selection} onChange={handleSelectionChange} />
+          <AgentModelSelector
+            value={selection}
+            onChange={handleSelectionChange}
+            onAgentSelect={agent => {
+              selectAgent(agent);
+              if (agent !== selectedAgent) {
+                onSelectAgent(agent);
+              }
+            }}
+          />
         </PopoverContent>
       </Popover>
     </div>

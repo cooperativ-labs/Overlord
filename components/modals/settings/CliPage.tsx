@@ -279,11 +279,16 @@ function getSlashActionMeta(status: SlashStatusEntry['status'] | undefined): Plu
 }
 
 function DefaultAgentSelector() {
-  const { selection, setSelection } = useAgentModelPreference();
+  const { selection, setSelection, selectAgent } = useAgentModelPreference();
 
   return (
     <div className="rounded-md border bg-muted/30 p-3">
-      <AgentModelSelector value={selection} onChange={setSelection} inline />
+      <AgentModelSelector
+        value={selection}
+        onChange={setSelection}
+        onAgentSelect={selectAgent}
+        inline
+      />
     </div>
   );
 }

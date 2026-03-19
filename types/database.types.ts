@@ -964,6 +964,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_launch_preferences: {
+        Row: {
+          agent_type: string;
+          created_at: string | null;
+          id: string;
+          model_id: string | null;
+          thinking: string | null;
+          updated_at: string | null;
+          user_id: string;
+        };
+        Insert: {
+          agent_type: string;
+          created_at?: string | null;
+          id?: string;
+          model_id?: string | null;
+          thinking?: string | null;
+          updated_at?: string | null;
+          user_id: string;
+        };
+        Update: {
+          agent_type?: string;
+          created_at?: string | null;
+          id?: string;
+          model_id?: string | null;
+          thinking?: string | null;
+          updated_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

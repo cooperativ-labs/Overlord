@@ -9,24 +9,34 @@ import {
   updateAgentModelPreferenceAction
 } from '@/lib/actions/agent-config';
 import { type AgentModel, getAgentModelsAction } from '@/lib/actions/agent-models';
+import {
+  getUserLaunchPreferenceAction,
+  updateUserLaunchAgentPreferenceAction
+} from '@/lib/actions/user-launch-preference';
+import {
+  type AgentModelSelection,
+  resolveAgentModelSelection,
+  resolveAgentSelectionForAgent,
+  type UserLaunchPreference
+} from '@/lib/helpers/agent-model-preference';
 import { AGENT_TYPES, type AgentTypeValue, LAUNCH_AGENT_VALUES } from '@/lib/helpers/agent-types';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { cn } from '@/lib/utils';
 
-export type AgentModelSelection = {
-  agent: AgentTypeValue;
-  model: string | null;
-  thinking: string | null;
-};
-
 type AgentModelSelectorProps = {
   value: AgentModelSelection;
   onChange: (selection: AgentModelSelection) => void;
+  onAgentSelect?: (agent: AgentTypeValue) => void;
   /** When true, renders inline (for settings page). When false, renders compact (for popover). */
   inline?: boolean;
 };
 
-export function AgentModelSelector({ value, onChange, inline = false }: AgentModelSelectorProps) {
+export function AgentModelSelector({
+  value,
+  onChange,
+  onAgentSelect,
+  inline = false
+}: AgentModelSelectorProps) {
   const [models, setModels] = useState<AgentModel[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,11 +73,16 @@ export function AgentModelSelector({ value, onChange, inline = false }: AgentMod
 
   const handleAgentChange = useCallback(
     (agent: AgentTypeValue) => {
+      if (onAgentSelect) {
+        onAgentSelect(agent);
+        return;
+      }
+
       const newSelection: AgentModelSelection = { agent, model: null, thinking: null };
       onChange(newSelection);
-      void updateAgentModelPreferenceAction(agent, null, null);
+      void updateUserLaunchAgentPreferenceAction(agent);
     },
-    [onChange]
+    [onAgentSelect, onChange]
   );
 
   const handleModelChange = useCallback(
@@ -218,6 +233,7 @@ export function AgentModelSelector({ value, onChange, inline = false }: AgentMod
 export function useAgentModelPreference(): {
   selection: AgentModelSelection;
   setSelection: (s: AgentModelSelection) => void;
+  selectAgent: (agent: AgentTypeValue) => void;
   loaded: boolean;
 } {
   const [selection, setSelection] = useState<AgentModelSelection>({
@@ -225,48 +241,57 @@ export function useAgentModelPreference(): {
     model: null,
     thinking: null
   });
+  const [configs, setConfigs] = useState<Record<string, AgentConfig>>({});
+  const [launchPreference, setLaunchPreference] = useState<UserLaunchPreference | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getAllAgentConfigsAction()
-      .then(configs => {
+    Promise.allSettled([getAllAgentConfigsAction(), getUserLaunchPreferenceAction()]).then(
+      results => {
         if (cancelled) return;
-        // Find the first config with a defaultModel set, or use the first agent
-        const agents = Object.keys(configs) as AgentTypeValue[];
-        for (const agent of agents) {
-          const config = configs[agent];
-          if (config?.defaultModel) {
-            setSelection({
-              agent,
-              model: config.defaultModel ?? null,
-              thinking: config.defaultThinking ?? null
-            });
-            setLoaded(true);
-            return;
-          }
-        }
-        // No explicit model preference — check if there's a default agent config
-        if (agents.length > 0) {
-          const firstAgent = agents[0];
-          const config = configs[firstAgent];
-          setSelection({
-            agent: LAUNCH_AGENT_VALUES.includes(firstAgent as AgentTypeValue)
-              ? (firstAgent as AgentTypeValue)
-              : 'claude',
-            model: config?.defaultModel ?? null,
-            thinking: config?.defaultThinking ?? null
-          });
-        }
+
+        const configs =
+          results[0].status === 'fulfilled'
+            ? results[0].value
+            : ({} as Record<string, AgentConfig>);
+        const launchPreference = results[1].status === 'fulfilled' ? results[1].value : null;
+        setConfigs(configs);
+        setLaunchPreference(launchPreference);
+        setSelection(resolveAgentModelSelection(configs, launchPreference));
         setLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setLoaded(true);
-      });
+      }
+    );
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return { selection, setSelection, loaded };
+  const updateSelection = useCallback((nextSelection: AgentModelSelection) => {
+    setSelection(nextSelection);
+    setConfigs(current => ({
+      ...current,
+      [nextSelection.agent]: {
+        ...(current[nextSelection.agent] ?? { flags: [] }),
+        defaultModel: nextSelection.model ?? undefined,
+        defaultThinking: nextSelection.model ? (nextSelection.thinking ?? undefined) : undefined
+      }
+    }));
+  }, []);
+
+  const selectAgent = useCallback(
+    (agent: AgentTypeValue) => {
+      const nextSelection = resolveAgentSelectionForAgent(configs, agent, launchPreference);
+      setSelection(nextSelection);
+      setLaunchPreference({
+        agent,
+        model: null,
+        thinking: null
+      });
+      void updateUserLaunchAgentPreferenceAction(agent);
+    },
+    [configs, launchPreference]
+  );
+
+  return { selection, setSelection: updateSelection, selectAgent, loaded };
 }
