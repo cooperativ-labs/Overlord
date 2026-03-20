@@ -81,6 +81,10 @@ export async function DELETE(request: Request) {
   return proxyResponse(upstreamRes, request);
 }
 
+export function responseStatusDisallowsBody(status: number): boolean {
+  return status === 204 || status === 205 || status === 304;
+}
+
 /** Forward relevant headers to the upstream edge function. */
 function forwardHeaders(request: Request): HeadersInit {
   const headers: Record<string, string> = {
@@ -108,11 +112,14 @@ function forwardHeaders(request: Request): HeadersInit {
 /** Relay the upstream response back to the client with CORS headers. */
 async function proxyResponse(upstream: Response, request: Request): Promise<Response> {
   const body = await upstream.text();
+  const disallowBody = responseStatusDisallowsBody(upstream.status);
   const headers: Record<string, string> = { ...CORS_HEADERS };
 
   // Preserve content-type and auth challenge headers
-  const ct = upstream.headers.get('content-type');
-  if (ct) headers['Content-Type'] = ct;
+  if (!disallowBody) {
+    const ct = upstream.headers.get('content-type');
+    if (ct) headers['Content-Type'] = ct;
+  }
 
   const protocolVersion = upstream.headers.get('mcp-protocol-version');
   if (protocolVersion) headers['MCP-Protocol-Version'] = protocolVersion;
@@ -128,7 +135,7 @@ async function proxyResponse(upstream: Response, request: Request): Promise<Resp
     );
   }
 
-  return new Response(body, {
+  return new Response(disallowBody ? null : body, {
     status: upstream.status,
     headers
   });

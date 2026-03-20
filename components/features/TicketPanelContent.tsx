@@ -14,16 +14,10 @@ import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from '@/components/ui/accordion';
+import { TicketToolsAndCriteria } from '@/components/features/TicketToolsAndCriteria';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
-import { Separator } from '@/components/ui/separator';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
@@ -314,8 +308,8 @@ export async function TicketPanelContent({
           everhourIntegration={everhourIntegration ?? null}
         />
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden  bg-muted/50">
-          <section className="bg-background pt-5">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden  bg-muted/50 ">
+          <section className="bg-background py-5">
             <div className="px-5">
               <div className="mb-4">
                 <InlineEditField
@@ -378,10 +372,10 @@ export async function TicketPanelContent({
                 })()}
               </div>
             </div>
-            <div className="my-5 pt-7 py-5 ">
+            <div className="flex flex-col pb-5">
               {/* <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Objectives
-            </h2> */}
+             </h2> */}
               <div className="px-5">
                 {orderedExecutedObjectives.length > 0 ? (
                   <div className="mb-3 space-y-2 bg-background rounded-md border">
@@ -417,7 +411,7 @@ export async function TicketPanelContent({
                   </div>
                 ) : null}
 
-                <div className="flex items-start gap-1 w-full">
+                <div className="flex items-start gap-1 w-full border rounded-md">
                   <InlineEditField
                     key={draftObjective?.id ?? 'current-objective'}
                     displayClassName="text-base leading-relaxed"
@@ -447,52 +441,15 @@ export async function TicketPanelContent({
               </div>
             </div>
           </section>
-          <section className="flex flex-col px-5 gap-3">
-            <Accordion type="single" collapsible>
-              <AccordionItem value="tools-criteria">
-                <AccordionTrigger className="text-xs font-semibold uppercase tracking-widest text-muted-foreground py-3 hover:no-underline">
-                  Tools and Acceptance Criteria
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="flex flex-col gap-4 pb-2 pl-2">
-                    <div>
-                      <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                        Available Tools
-                      </h2>
-                      <InlineEditField
-                        displayClassName="text-sm leading-relaxed"
-                        field="available_tools"
-                        organizationId={organizationId}
-                        initialValue={ticket.available_tools ?? ''}
-                        multiline
-                        placeholder="None specified — click to add."
-                        ticketId={ticketId}
-                      />
-                    </div>
-                    <div>
-                      <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                        Acceptance Criteria
-                      </h2>
-                      <InlineEditField
-                        displayClassName="text-sm leading-relaxed"
-                        field="acceptance_criteria"
-                        organizationId={organizationId}
-                        initialValue={ticket.acceptance_criteria ?? ''}
-                        multiline
-                        placeholder="None specified — click to add."
-                        ticketId={ticketId}
-                      />
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+          <section className="flex flex-col px-5 pt-5 ">
+            {/* <TicketToolsAndCriteria
+              organizationId={organizationId}
+              ticketId={ticketId}
+              availableTools={ticket.available_tools}
+              acceptanceCriteria={ticket.acceptance_criteria}
+            /> */}
 
-            <div className="mb-6">
-              <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
-            </div>
-
-            <Separator className="mb-6" />
+            <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
 
             <ErrorBoundary>
               <TicketPanelLive

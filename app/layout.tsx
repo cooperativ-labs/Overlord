@@ -1,7 +1,6 @@
 import './globals.css';
 
 import type { Metadata } from 'next';
-import localFont from 'next/font/local';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Toaster } from 'sonner';
@@ -27,24 +26,9 @@ import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
+import { displayFont, monoFont } from '@/lib/fonts';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 import { createClient } from '@/supabase/utils/server';
-
-const displayFont = localFont({
-  src: '../public/fonts/SpaceGrotesk-Variable.woff2',
-  variable: '--font-display',
-  display: 'block',
-  weight: '300 700'
-});
-
-const monoFont = localFont({
-  src: [
-    { path: '../public/fonts/IBMPlexMono-Regular.woff2', weight: '400', style: 'normal' },
-    { path: '../public/fonts/IBMPlexMono-Medium.woff2', weight: '500', style: 'normal' }
-  ],
-  variable: '--font-mono',
-  display: 'block'
-});
 
 export const metadata: Metadata = {
   title: 'Overlord',

@@ -290,6 +290,7 @@ export function TicketPanelLive({
         geminiResumeCommand={_geminiResumeCommand}
         opencodeResumeCommand={_opencodeResumeCommand}
       />
+      <Separator className="mb-10" />
 
       <section className="mb-6">
         <div className="mb-4 flex items-center gap-2">

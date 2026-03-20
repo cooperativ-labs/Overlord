@@ -5,6 +5,8 @@ import { useTransition } from 'react';
 import { updateTicketStatusAction } from '@/lib/actions/tickets';
 import { capitalizeFirst } from '@/lib/options';
 
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select';
+
 type Props = {
   ticketId: string;
   currentStatus: string;
@@ -14,25 +16,28 @@ type Props = {
 export function TicketStatusSelect({ ticketId, currentStatus, statusOptions }: Props) {
   const [pending, startTransition] = useTransition();
 
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const nextStatus = e.target.value;
+  function handleChange(value: string) {
     startTransition(async () => {
-      await updateTicketStatusAction(ticketId, nextStatus);
+      await updateTicketStatusAction(ticketId, value);
     });
   }
 
   return (
-    <select
-      className="h-7 cursor-pointer rounded-full border border-dashed bg-transparent px-3 text-xs font-medium hover:bg-muted disabled:opacity-50"
-      defaultValue={currentStatus}
-      disabled={pending}
-      onChange={handleChange}
-    >
-      {statusOptions.map(status => (
-        <option key={status} value={status}>
-          {capitalizeFirst(status)}
-        </option>
-      ))}
-    </select>
+    <Select value={currentStatus} disabled={pending} onValueChange={handleChange}>
+      <SelectTrigger
+        id="ticket-status-select"
+        aria-label="Select status"
+        className="h-6 w-auto rounded-lg border bg-transparent px-3 text-xs font-base hover:bg-muted"
+      >
+        {capitalizeFirst(currentStatus)}
+      </SelectTrigger>
+      <SelectContent>
+        {statusOptions.map(status => (
+          <SelectItem key={status} value={status}>
+            {capitalizeFirst(status)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

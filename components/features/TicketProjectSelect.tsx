@@ -57,7 +57,6 @@ export function TicketProjectSelect({
   const [isSavingProject, startSavingProject] = useTransition();
   const [updateError, setUpdateError] = useState<string | null>(null);
 
-  const [isSelectOpen, setIsSelectOpen] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState('');
   const [colorInput, setColorInput] = useState(DEFAULT_PROJECT_COLOR);
@@ -134,8 +133,6 @@ export function TicketProjectSelect({
   return (
     <>
       <Select
-        open={isSelectOpen}
-        onOpenChange={setIsSelectOpen}
         value={selectedProjectId}
         onValueChange={(value: string | undefined) => handleProjectChange(value ?? '')}
         disabled={isSavingProject}
@@ -143,7 +140,7 @@ export function TicketProjectSelect({
         <SelectTrigger
           id="ticket-project-select"
           aria-label="Select project"
-          className="h-7 w-auto rounded-full border border-dashed bg-transparent px-3 text-xs font-medium hover:bg-muted"
+          className="h-6 w-auto rounded-lg border bg-transparent px-3 text-xs font-base hover:bg-muted"
         >
           <span className="flex items-center gap-1.5">
             {selectedProject ? (
@@ -171,7 +168,6 @@ export function TicketProjectSelect({
               size="sm"
               className="w-full"
               onClick={() => {
-                setIsSelectOpen(false);
                 handleCreateDialogOpenChange(true);
               }}
             >

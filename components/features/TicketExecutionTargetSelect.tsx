@@ -3,8 +3,10 @@
 import { useTransition } from 'react';
 
 import { updateTicketExecutionTargetAction } from '@/lib/actions/tickets';
-import { ticketExecutionTargetOptions } from '@/lib/options';
+import { capitalizeFirst, ticketExecutionTargetOptions } from '@/lib/options';
 import type { Database } from '@/types/database.types';
+
+import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select';
 
 type ExecutionTarget = Database['public']['Enums']['ticket_execution_target'];
 
@@ -16,26 +18,34 @@ type Props = {
 export function TicketExecutionTargetSelect({ ticketId, currentExecutionTarget }: Props) {
   const [pending, startTransition] = useTransition();
 
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const nextExecutionTarget = e.target.value as ExecutionTarget;
+  function handleChange(value: string) {
+    const nextExecutionTarget = value as ExecutionTarget;
     startTransition(async () => {
       await updateTicketExecutionTargetAction(ticketId, nextExecutionTarget);
     });
   }
 
   return (
-    <select
-      className="h-7 cursor-pointer rounded-full border border-dashed bg-transparent px-3 text-xs font-medium hover:bg-muted disabled:opacity-50"
-      defaultValue={currentExecutionTarget}
+    <Select
+      value={currentExecutionTarget}
       disabled={pending}
-      onChange={handleChange}
+      onValueChange={handleChange}
       aria-label="Execution target"
     >
-      {ticketExecutionTargetOptions.map(({ value, label }) => (
-        <option key={value} value={value}>
-          {label}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger
+        id="ticket-execution-target-select"
+        aria-label="Select execution target"
+        className="h-6 w-auto rounded-lg border bg-transparent px-3 text-xs font-base hover:bg-muted"
+      >
+        {capitalizeFirst(currentExecutionTarget)}
+      </SelectTrigger>
+      <SelectContent>
+        {ticketExecutionTargetOptions.map(({ value, label }) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

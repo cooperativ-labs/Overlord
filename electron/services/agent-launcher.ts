@@ -95,7 +95,9 @@ function buildModelThinkingFlags(agent: AgentType, model?: string, thinking?: st
       break;
     case 'codex':
       if (model) parts.push(`--model ${shellQuote(model)}`);
-      if (thinking) parts.push(`--reasoning-effort ${shellQuote(thinking)}`);
+      if (thinking) {
+        parts.push(`-c ${shellQuote(`model_reasoning_effort=${toTomlString(thinking)}`)}`);
+      }
       break;
     case 'cursor':
       if (model) parts.push(`--model ${shellQuote(model)}`);
@@ -315,6 +317,10 @@ function writePermissionRequestHookFiles(tag: string): {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function toTomlString(value: string): string {
+  return JSON.stringify(value);
 }
 
 async function readErrorBody(response: Response): Promise<string> {
