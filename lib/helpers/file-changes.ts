@@ -12,13 +12,22 @@ function stripLocationSuffix(path: string): string {
   return path.replace(/#L\d+(?:C\d+)?$/i, '').replace(/:(\d+)(?::\d+)?$/, '');
 }
 
+function stripTrailingFileAnnotation(path: string): string {
+  const trailingAnnotation = path.match(/^(.+\.[^\s()]+)\s+\([^)]+\)$/);
+  return trailingAnnotation ? trailingAnnotation[1] : path;
+}
+
+function normalizeFilePath(path: string): string {
+  return stripTrailingFileAnnotation(stripLocationSuffix(path.trim()));
+}
+
 function parseMarkdownLink(line: string): FileChangeEntry | null {
   const markdownLink = line.match(/^\[([^\]]+)\]\(([^)]+)\)(?:\s+[—–-]\s+(.+))?$/);
   if (!markdownLink) return null;
 
   return {
     label: markdownLink[1].trim() || null,
-    path: stripLocationSuffix(markdownLink[2].trim()),
+    path: normalizeFilePath(markdownLink[2]),
     note: markdownLink[3]?.trim() || null
   };
 }
@@ -34,19 +43,19 @@ function parseFileChangeLine(line: string): FileChangeEntry | null {
 
   const gitStat = stripped.match(/^(.+?)\s+\|\s+\d+/);
   if (gitStat) {
-    return { path: stripLocationSuffix(gitStat[1].trim()), note: null, label: null };
+    return { path: normalizeFilePath(gitStat[1]), note: null, label: null };
   }
 
   const emDash = stripped.match(/^(.+?)\s+[—–]\s+(.+)$/);
   if (emDash) {
     return {
-      path: stripLocationSuffix(emDash[1].trim()),
+      path: normalizeFilePath(emDash[1]),
       note: emDash[2].trim(),
       label: null
     };
   }
 
-  return { path: stripLocationSuffix(stripped), note: null, label: null };
+  return { path: normalizeFilePath(stripped), note: null, label: null };
 }
 
 export function parseFileChanges(content: string): FileChangeEntry[] {

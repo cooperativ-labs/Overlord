@@ -27,6 +27,13 @@ describe('file change helpers', () => {
     ]);
   });
 
+  it('strips trailing file annotations from plain file lines', () => {
+    expect(parseFileChanges('layout.tsx (new)\npage.tsx (deleted)')).toEqual([
+      { label: null, note: null, path: 'layout.tsx' },
+      { label: null, note: null, path: 'page.tsx' }
+    ]);
+  });
+
   it('keeps diff links for VS Code on relative workspace files', () => {
     expect(
       buildDiffHref(
