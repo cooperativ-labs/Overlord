@@ -229,9 +229,7 @@ export function TicketDocumentUpload({
                   <span className="flex-1 truncate">{u.name}</span>
                   {u.progress === 'error' && (
                     <>
-                      <span className="text-xs text-destructive">
-                        {u.error ?? 'Upload failed'}
-                      </span>
+                      <span className="text-xs text-destructive">{u.error ?? 'Upload failed'}</span>
                       <Button
                         size="icon"
                         variant="ghost"

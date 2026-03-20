@@ -51,7 +51,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
     const [mentionMenuMaxHeight, setMentionMenuMaxHeight] = React.useState(224);
     const [menuPosition, setMenuPosition] = React.useState<{ top: number; left: number }>({
       top: 0,
-      left: 0,
+      left: 0
     });
 
     const mentionResults = React.useMemo(
@@ -124,7 +124,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       );
       setMenuPosition({
         top: shouldOpenAbove ? rect.top - gap : rect.bottom + gap,
-        left: rect.left,
+        left: rect.left
       });
     }, []);
 
@@ -243,7 +243,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
                       ? window.innerHeight - menuPosition.top
                       : undefined,
                   left: menuPosition.left,
-                  maxHeight: mentionMenuMaxHeight,
+                  maxHeight: mentionMenuMaxHeight
                 }}
               >
                 {mentionResults.map((filePath, index) => (

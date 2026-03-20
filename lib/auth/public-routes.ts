@@ -1,6 +1,6 @@
 export const SESSION_ENDED_MESSAGE = 'You have been signed out. Please sign in again.';
 
-const PUBLIC_EXACT_PATHS = new Set(['/']);
+const PUBLIC_EXACT_PATHS = new Set(['/', '/early-access']);
 const PUBLIC_PATH_PREFIXES = [
   '/login',
   '/signup',
@@ -15,7 +15,8 @@ const PUBLIC_PATH_PREFIXES = [
   '/privacy',
   '/terms',
   '/api/auth',
-  '/callback'
+  '/callback',
+  '/demo'
 ];
 
 export function isPublicRoute(pathname: string): boolean {

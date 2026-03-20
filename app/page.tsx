@@ -1,14 +1,12 @@
-import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
   Bot,
-  Camera,
   CheckCircle2,
-  FolderRoot,
-  PanelsTopLeft,
-  ShieldCheck,
-  TerminalSquare,
-  Workflow
+  ClipboardList,
+  Eye,
+  Play,
+  Rocket,
+  TerminalSquare
 } from 'lucide-react';
 import type { Metadata } from 'next';
 import Image from 'next/image';
@@ -24,76 +22,6 @@ export const metadata: Metadata = {
     'Overlord gives AI-assisted engineering work a shared ticket workflow across the web app, desktop app, CLI, and MCP.'
 };
 
-const platformPillars = [
-  'Keep using Codex, Claude Code, Cursor, Gemini, and your own tools.',
-  'Coordinate local terminal runs, cloud agents, and human review in one ticket.',
-  'Turn prompts, progress, and delivery into a durable system of record.'
-] as const;
-
-const proofPoints = [
-  {
-    label: 'Ticket-first execution',
-    value: 'Prompt, progress, review, and delivery all live in one place.'
-  },
-  {
-    label: 'Local-first boundaries',
-    value: 'Repository contents stay on your machine unless you intentionally share them.'
-  },
-  {
-    label: 'Agent flexibility',
-    value: 'Launch work in the tools your team already uses instead of forcing a new chat UI.'
-  }
-] as const;
-
-const workflowSteps: Array<{
-  title: string;
-  body: string;
-  icon: LucideIcon;
-}> = [
-  {
-    title: 'Write the work once',
-    body: 'Create a ticket with the objective, context, constraints, and acceptance criteria.',
-    icon: PanelsTopLeft
-  },
-  {
-    title: 'Launch in your real environment',
-    body: 'Start an agent from the desktop app or CLI directly inside the repository that matters.',
-    icon: TerminalSquare
-  },
-  {
-    title: 'Track progress without babysitting',
-    body: 'Sessions stream updates, blockers, and structured artifacts back into the ticket.',
-    icon: Workflow
-  },
-  {
-    title: 'Review like engineering work',
-    body: 'Humans answer questions, inspect file changes, and keep a durable record of the result.',
-    icon: CheckCircle2
-  }
-];
-
-const screenshotSuggestions: Array<{
-  title: string;
-  placement: string;
-  body: string;
-}> = [
-  {
-    title: 'Active ticket with live agent updates',
-    placement: 'Hero replacement',
-    body: 'Capture the ticket detail view with progress updates, a structured deliverable, and a visible status badge.'
-  },
-  {
-    title: 'Project board with multiple tickets',
-    placement: 'Workflow section',
-    body: 'Show how work is grouped by project so the page immediately communicates organization and momentum.'
-  },
-  {
-    title: 'Desktop launch or terminal attachment flow',
-    placement: 'Local-first section',
-    body: 'Use a screenshot that proves Overlord connects the web workflow to a real local repository and terminal.'
-  }
-];
-
 const agentIcons = [
   { src: '/images/icons/codex.svg', alt: 'Codex' },
   { src: '/images/icons/claude-code.svg', alt: 'Claude Code' },
@@ -102,10 +30,177 @@ const agentIcons = [
   { src: '/images/icons/opencode.svg', alt: 'OpenCode' }
 ] as const;
 
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
+const workflowSteps = [
+  {
+    step: '01',
+    icon: ClipboardList,
+    title: 'Define the work',
+    description:
+      'Plan and organize future agent jobs while current execution stays in flight, so the next wave of work is ready when you are.',
+    benefits: [
+      'Queue upcoming work without interrupting executing jobs',
+      'Turn waiting time into organized planning instead of idle tabs'
+    ]
+  },
+  {
+    step: '02',
+    icon: Rocket,
+    title: 'Agents execute',
+    description: 'Agents attach to tickets, follow the protocol, and stream live progress updates.',
+    benefits: [
+      'Works with Claude Code, Codex, Cursor, and more',
+      'Real-time visibility into what the agent is doing',
+      'Agents ask for help instead of guessing'
+    ]
+  },
+  {
+    step: '03',
+    icon: Eye,
+    title: 'Review & refine',
+    description:
+      'Review diffs, change rationales, and artifacts before anything lands in your codebase.',
+    benefits: [
+      'Human-in-the-loop at every critical moment',
+      'Structured rationales explain the "why" behind changes',
+      'Send it back with feedback in one click'
+    ]
+  },
+  {
+    step: '04',
+    icon: CheckCircle2,
+    title: 'Current Changes',
+    description:
+      'Use the Current Changes page to review agent work across files with the original human objective, rationales, and artifacts in view.',
+    benefits: [
+      'Review multi-file work in the context of what the human actually asked for',
+      'See why each change happened before you approve or send feedback'
+    ]
+  }
+] as const;
+
+const heroBoardColumns = [
+  {
+    title: 'Draft',
+    count: 2,
+    cards: [
+      { title: 'Add ticket inbox filters', color: '#60a5fa', active: false },
+      { title: 'Refine review summaries', color: '#38bdf8', active: false }
+    ]
+  },
+  {
+    title: 'Execute',
+    count: 1,
+    cards: [{ title: 'Desktop terminal attach flow', color: '#34d399', active: true }]
+  },
+  {
+    title: 'Review',
+    count: 1,
+    cards: [{ title: 'Current Changes annotations', color: '#f59e0b', active: false }]
+  }
+] as const;
+
+const heroTerminalLines = [
+  '$ ovld run ticket-184',
+  'Attaching Codex to ticket...',
+  'Posting progress update...',
+  'Streaming changes back to review'
+] as const;
+
+function HeroDashboardGraphic() {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
-      {children}
+    <div aria-hidden="true" className="relative mx-auto w-full max-w-5xl pt-2">
+      <div className="absolute inset-x-10 top-8 h-40 rounded-full bg-sky-400/12 blur-3xl" />
+      <div className="relative rounded-[2rem] border border-white/10 bg-white/[0.045] p-3 shadow-[0_30px_120px_-60px_rgba(56,189,248,0.55)] backdrop-blur">
+        <div className="grid gap-3 lg:grid-cols-[1.3fr_0.9fr]">
+          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#07101d]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <div className="flex items-center gap-2 border-b border-white/10 bg-white/[0.03] px-4 py-3">
+              <span className="size-2.5 rounded-full bg-[#ff5f57]" />
+              <span className="size-2.5 rounded-full bg-[#febc2e]" />
+              <span className="size-2.5 rounded-full bg-[#28c840]" />
+              <span className="ml-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                Project Board
+              </span>
+            </div>
+
+            <div className="grid gap-3 p-3 sm:grid-cols-3">
+              {heroBoardColumns.map(column => (
+                <div
+                  key={column.title}
+                  className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-2.5 text-left"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                      {column.title}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-500">
+                      {column.count}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {column.cards.map(card => (
+                      <div
+                        key={card.title}
+                        className="relative rounded-xl border border-white/10 bg-slate-950/70 px-3 py-2.5 overflow-hidden"
+                      >
+                        {card.active && (
+                          <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_3s_linear_infinite] bg-linear-to-r from-transparent via-emerald-400/15 to-transparent" />
+                        )}
+                        <div className="relative flex items-start gap-2.5">
+                          <span
+                            className="mt-1 block size-2.5 shrink-0 rounded-[3px]"
+                            style={{ backgroundColor: card.color }}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm leading-snug text-slate-100">{card.title}</p>
+                            <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                              {card.active ? (
+                                <>
+                                  <Bot className="size-3 text-emerald-300" />
+                                  <span>Agent running</span>
+                                </>
+                              ) : (
+                                <span>Ready for handoff</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#050b15]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="flex items-center gap-2">
+                <TerminalSquare className="size-4 text-sky-300" />
+                <span className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                  Terminal
+                </span>
+              </div>
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-emerald-200">
+                Live
+              </span>
+            </div>
+
+            <div className="space-y-3 p-4 text-left font-[family-name:var(--font-mono)] text-[12px] leading-6 text-slate-300">
+              {heroTerminalLines.map((line, index) => (
+                <div key={line} className="flex items-center gap-3">
+                  <span className="w-4 text-right text-slate-600">{index + 1}</span>
+                  <span className={index === 0 ? 'text-sky-300' : ''}>{line}</span>
+                </div>
+              ))}
+
+              <div className="mt-4 rounded-xl border border-sky-400/15 bg-sky-400/10 px-3 py-2 text-[11px] text-sky-100">
+                Ticket status updates and terminal execution stay in sync.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -121,35 +216,25 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="relative overflow-y-auto bg-[#020817] text-white">
+    <div className="relative min-h-dvh overflow-y-auto bg-[#020817] text-white">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[42rem] bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(56,189,248,0.12),_transparent_26%),radial-gradient(circle_at_50%_0%,_rgba(15,23,42,0.6),_transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,8,23,0))]" />
       <div className="pointer-events-none absolute inset-x-0 top-24 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
 
-      <div className="relative mx-auto max-w-[1800px] px-6 pb-20 pt-8 sm:px-8 lg:px-12">
-        <header className="animate-in fade-in slide-in-from-top-4 flex flex-col gap-6 rounded-[2rem] border border-white/10 bg-white/5 px-5 py-4 shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)] backdrop-blur md:flex-row md:items-center md:justify-between">
+      <div className="relative flex flex-col mx-auto max-w-[1800px] px-6 pb-12 sm:px-8 lg:px-12 gap-8">
+        {/* Header */}
+        <header className="animate-in fade-in slide-in-from-top-4 flex items-center justify-between rounded-[2rem] border border-white/10 bg-white/5 px-5 py-4 mt-5 shadow-[0_20px_80px_-48px_rgba(15,23,42,0.75)] backdrop-blur">
           <div className="flex items-center gap-4">
-            <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm font-semibold text-white shadow-sm">
-              OV
+            <div className="flex size-11 items-center justify-center rounded-full overflow-hidden">
+              <Image
+                src="/images/258.png"
+                alt="Overlord logo"
+                width={45}
+                height={50}
+                className="shrink-0 overflow-hidden"
+              />
             </div>
-            <div>
-              <p className="font-[family-name:var(--font-display)] text-lg font-semibold">
-                Overlord
-              </p>
-              <p className="text-sm text-slate-400">Agent work with tickets, not chat sprawl.</p>
-            </div>
+            <p className="font-[family-name:var(--font-display)] text-lg font-semibold">Overlord</p>
           </div>
-
-          <nav className="hidden items-center gap-6 text-sm text-slate-400 md:flex">
-            <Link href="#product" className="transition-colors hover:text-white">
-              Product
-            </Link>
-            <Link href="#workflow" className="transition-colors hover:text-white">
-              Workflow
-            </Link>
-            <Link href="#screenshots" className="transition-colors hover:text-white">
-              Screenshots
-            </Link>
-          </nav>
 
           <div className="flex items-center gap-3">
             <Button
@@ -164,65 +249,59 @@ export default async function HomePage() {
               size="lg"
               className="rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100"
             >
-              <Link href="/signup">
-                Create account
+              <Link href="/early-access">
+                Get Early Access
                 <ArrowRight />
               </Link>
             </Button>
           </div>
         </header>
 
-        <section className="grid gap-12 px-1 pb-16 pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)] lg:items-center lg:gap-16 lg:pt-16">
-          <div className="animate-in fade-in slide-in-from-bottom-6 space-y-8 duration-700">
-            <SectionEyebrow>Web app + desktop + CLI + MCP</SectionEyebrow>
-
-            <div className="space-y-6">
-              <h1 className="max-w-3xl font-[family-name:var(--font-display)] text-5xl font-semibold leading-[0.94] tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">
-                Run agent work like real engineering work.
-              </h1>
-              <p className="max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
-                Overlord gives AI-assisted development a shared operating surface: structured
-                tickets, live progress, human review, and final delivery without asking your team to
-                abandon the tools they already trust.
-              </p>
+        {/* Hero — centered, focused */}
+        <section className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center">
+          <div className="animate-in fade-in slide-in-from-bottom-6 max-w-5xl space-y-8 duration-700">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
+              Web app + Desktop + CLI + MCP
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[0.94] tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">
+              Stop juggling agents.
+            </h1>
+
+            <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
+              Create tickets, run agents, and review changes in one dashboard with deep terminal
+              integration.
+            </p>
+
+            <HeroDashboardGraphic />
+
+            {/* Primary CTA: Demo */}
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <Button
                 asChild
                 size="lg"
-                className="h-12 rounded-full bg-white px-6 text-base text-slate-950 hover:bg-slate-100"
+                className="h-14 rounded-full bg-white px-8 text-base font-semibold text-slate-950 shadow-lg shadow-white/10 hover:bg-slate-100"
               >
-                <Link href="/signup">
-                  Create account
-                  <ArrowRight />
+                <Link href="/demo">
+                  <Play className="size-4" />
+                  Try the interactive demo
                 </Link>
               </Button>
               <Button
                 asChild
                 size="lg"
                 variant="outline"
-                className="h-12 rounded-full border-white/15 bg-white/5 px-6 text-base text-white hover:bg-white/10"
+                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10"
               >
-                <Link href="/downloads">Download desktop app</Link>
+                <Link href="/early-access">
+                  Get Early Access
+                  <ArrowRight className="size-4" />
+                </Link>
               </Button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              {proofPoints.map(point => (
-                <div
-                  key={point.label}
-                  className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.65)] backdrop-blur"
-                >
-                  <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-400">
-                    {point.label}
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-slate-200">{point.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
+            {/* Agent icons */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-sm text-slate-300">
               <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-500">
                 Works with
               </span>
@@ -237,297 +316,47 @@ export default async function HomePage() {
               ))}
             </div>
           </div>
-
-          <div className="animate-in fade-in zoom-in-95 duration-700">
-            <div className="relative overflow-hidden rounded-[2.2rem] border border-white/10 bg-[#0f172a] p-5 text-white shadow-[0_40px_120px_-52px_rgba(15,23,42,0.88)]">
-              <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_240px]">
-                <div className="rounded-[1.7rem] border border-white/10 bg-white/5 p-4">
-                  <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
-                    <div>
-                      <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.24em] text-sky-200/85">
-                        Ticket 183
-                      </p>
-                      <h2 className="mt-2 text-xl font-semibold">Create basic marketing site</h2>
-                      <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">
-                        Ship a concise homepage that pitches Overlord, clarifies the product model,
-                        and drives account creation.
-                      </p>
-                    </div>
-                    <div className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200">
-                      executing
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[1.3rem] border border-white/10 bg-white/5 p-4">
-                      <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-400">
-                        objective
-                      </p>
-                      <p className="mt-3 text-sm leading-6 text-slate-200">
-                        Coordinate public marketing, product screenshots, and signup flow without
-                        inventing a new UI metaphor.
-                      </p>
-                    </div>
-                    <div className="rounded-[1.3rem] border border-white/10 bg-gradient-to-br from-sky-400/15 to-cyan-300/10 p-4">
-                      <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-sky-100/75">
-                        deliverable
-                      </p>
-                      <p className="mt-3 text-sm leading-6 text-slate-100">
-                        Landing page implemented, screenshot placements defined, CTA wired to
-                        account creation.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-[1.5rem] border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-400">
-                          activity stream
-                        </p>
-                        <p className="mt-2 text-sm text-slate-300">
-                          Agents report progress back into the ticket while humans stay in control.
-                        </p>
-                      </div>
-                      <Bot className="size-5 text-sky-200" />
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      {[
-                        'Attached to ticket and loaded project guidance.',
-                        'Replaced the homepage redirect with a public landing page.',
-                        'Added screenshot callouts for the final product captures.'
-                      ].map((line, index) => (
-                        <div
-                          key={line}
-                          className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-3"
-                        >
-                          <div className="mt-0.5 size-2 rounded-full bg-amber-300" />
-                          <div className="space-y-1">
-                            <p className="text-sm text-slate-100">{line}</p>
-                            <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                              step 0{index + 1}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="rounded-[1.7rem] border border-white/10 bg-white/5 p-4">
-                    <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-400">
-                      stack
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      {[
-                        { label: 'Web app', icon: PanelsTopLeft },
-                        { label: 'Desktop app', icon: FolderRoot },
-                        { label: 'CLI protocol', icon: TerminalSquare },
-                        { label: 'MCP server', icon: Bot }
-                      ].map(item => (
-                        <div
-                          key={item.label}
-                          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3"
-                        >
-                          <item.icon className="size-4 text-sky-200" />
-                          <span className="text-sm text-slate-100">{item.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.7rem] border border-amber-300/20 bg-gradient-to-br from-amber-300/18 to-transparent p-4">
-                    <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-amber-100/80">
-                      system record
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-slate-100">
-                      The ticket becomes the place where prompts, updates, blockers, and delivery
-                      all stay attached.
-                    </p>
-                  </div>
-
-                  <div className="rounded-[1.7rem] border border-emerald-300/20 bg-gradient-to-br from-emerald-300/12 to-transparent p-4">
-                    <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-emerald-100/80">
-                      privacy boundary
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-slate-100">
-                      Repository contents are not uploaded just because a project is connected to
-                      Overlord.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </section>
 
-        <section
-          id="product"
-          className="animate-in fade-in slide-in-from-bottom-6 mt-8 grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]"
-        >
-          <div className="space-y-4">
-            <SectionEyebrow>Why it fits</SectionEyebrow>
-            <h2 className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
-              A coordination layer for agent work, not another agent shell.
+        {/* Workflow section */}
+        <section className="mx-auto max-w-6xl pb-24 pt-12 mt-12">
+          <div className="mb-16 text-center">
+            <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
+              How it works
+            </p>
+            <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              From ticket to shipped — with agents in the loop
             </h2>
-            <p className="text-base leading-7 text-slate-300">
-              Overlord is strongest when a team already has tools they like and needs structure
-              around execution, review, and handoffs.
-            </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {platformPillars.map(pillar => (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {workflowSteps.map(step => (
               <div
-                key={pillar}
-                className="rounded-[1.7rem] border border-white/10 bg-white/5 p-5 shadow-[0_20px_50px_-40px_rgba(15,23,42,0.62)]"
+                key={step.step}
+                className="group relative flex flex-col rounded-2xl border border-white/8 bg-white/[0.03] p-6 transition-colors hover:border-white/15 hover:bg-white/[0.06]"
               >
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-white/8 text-white">
-                  <CheckCircle2 className="size-4" />
-                </div>
-                <p className="mt-4 text-base leading-7 text-slate-200">{pillar}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section
-          id="workflow"
-          className="animate-in fade-in slide-in-from-bottom-6 mt-16 rounded-[2.2rem] border border-white/10 bg-[#0f172a] px-6 py-8 shadow-[0_32px_80px_-52px_rgba(15,23,42,0.75)] sm:px-8 lg:px-10"
-        >
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl space-y-4">
-              <SectionEyebrow>Workflow</SectionEyebrow>
-              <h2 className="font-[family-name:var(--font-display)] text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
-                Keep the terminal where it belongs. Keep the coordination where everyone can see it.
-              </h2>
-            </div>
-            <p className="max-w-xl text-base leading-7 text-slate-300">
-              The product model is simple: tickets define the work, agents execute in their normal
-              environment, and humans review outcomes in a shared system instead of private chat
-              tabs.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-4 lg:grid-cols-4">
-            {workflowSteps.map((step, index) => (
-              <div
-                key={step.title}
-                className="rounded-[1.6rem] border border-white/10 bg-white/5 p-5"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex size-11 items-center justify-center rounded-2xl bg-white/8 text-white">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-400">
                     <step.icon className="size-5" />
                   </div>
-                  <span className="font-[family-name:var(--font-mono)] text-xs uppercase tracking-[0.22em] text-slate-500">
-                    0{index + 1}
+                  <span className="font-[family-name:var(--font-mono)] text-xs text-slate-500">
+                    {step.step}
                   </span>
                 </div>
-                <h3 className="mt-5 text-lg font-semibold text-white">{step.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-300">{step.body}</p>
+
+                <h3 className="mb-2 text-lg font-semibold text-white">{step.title}</h3>
+                <p className="mb-5 text-sm leading-relaxed text-slate-400">{step.description}</p>
+
+                <ul className="space-y-2.5">
+                  {step.benefits.map(benefit => (
+                    <li key={benefit} className="flex items-start gap-2 text-sm text-slate-300">
+                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-sky-400/70" />
+                      <span>{benefit}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ))}
-          </div>
-        </section>
-
-        <section
-          id="screenshots"
-          className="animate-in fade-in slide-in-from-bottom-6 mt-16 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]"
-        >
-          <div className="rounded-[2.1rem] border border-dashed border-white/15 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-white/8 text-white">
-                <Camera className="size-5" />
-              </div>
-              <div>
-                <p className="font-[family-name:var(--font-display)] text-xl font-semibold text-white">
-                  Suggested screenshot placements
-                </p>
-                <p className="text-sm text-slate-400">
-                  These placeholders can be swapped with real UI captures later without changing the
-                  page structure.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              {screenshotSuggestions.map(shot => (
-                <div
-                  key={shot.title}
-                  className="rounded-[1.6rem] border border-white/10 bg-white/5 p-5 shadow-[0_18px_45px_-42px_rgba(15,23,42,0.62)]"
-                >
-                  <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                    {shot.placement}
-                  </p>
-                  <h3 className="mt-3 text-lg font-semibold text-white">{shot.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">{shot.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-[2.1rem] border border-white/10 bg-[#0f172a] p-6 text-white shadow-[0_28px_80px_-48px_rgba(15,23,42,0.82)]">
-            <SectionEyebrow>Privacy</SectionEyebrow>
-            <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-[-0.04em]">
-              Local repos stay local.
-            </h2>
-            <p className="mt-4 text-sm leading-7 text-slate-300">
-              Overlord stores ticket content and ticket activity. It does not upload your repository
-              just because you connected a folder or launched an agent from the desktop app.
-            </p>
-            <div className="mt-6 space-y-3">
-              {[
-                'Connect a repository folder to the project',
-                'Launch an agent in that local working directory',
-                'Share only the ticket content and updates you choose to record'
-              ].map(item => (
-                <div
-                  key={item}
-                  className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-                >
-                  <ShieldCheck className="mt-0.5 size-4 text-emerald-200" />
-                  <p className="text-sm leading-6 text-slate-100">{item}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="animate-in fade-in slide-in-from-bottom-6 mt-16 rounded-[2.4rem] border border-white/10 bg-[#0f172a] px-6 py-10 text-white shadow-[0_32px_90px_-54px_rgba(15,23,42,0.92)] sm:px-8 lg:px-10">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <SectionEyebrow>Start with one ticket</SectionEyebrow>
-              <h2 className="mt-4 font-[family-name:var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-white sm:text-5xl">
-                Create an account and give your agent workflow a real home.
-              </h2>
-              <p className="mt-4 max-w-2xl text-base leading-8 text-slate-300">
-                If your team is already using AI coding agents, the missing piece is usually not
-                another model. It is shared coordination, review, and continuity.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                asChild
-                size="lg"
-                className="h-12 rounded-full bg-white px-6 text-base text-slate-950 hover:bg-slate-100"
-              >
-                <Link href="/signup">
-                  Create account
-                  <ArrowRight />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="h-12 rounded-full border-white/20 bg-transparent px-6 text-base text-white hover:bg-white/10"
-              >
-                <Link href="/login">Sign in</Link>
-              </Button>
-            </div>
           </div>
         </section>
       </div>

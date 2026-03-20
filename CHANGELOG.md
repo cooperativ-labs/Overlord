@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.20.0] - 2026-03-20:14:45
+
+### Added
+- Extract the "Tools and Acceptance Criteria" section from `TicketPanelContent` into its own `TicketToolsAndCriteria` component to improve code organization and reusability.
+- Introduce the `TicketStatusSelect` custom UI component to provide a consistent and improved ticket status management interface.
+- Implement an **Early Access** enrollment flow and a dedicated **Product Demo** interactive page.
+- Expose the `/early-access` and `/demo` routes in the public routing configuration so visitors can access landing materials without logging in.
+
+### Fixed
+- Resolve the Safari login stall issue by adding a hard redirect fallback in the authentication form.
+- Address a model reasoning bug in the `agent-launcher` service when preparing Electron launches.
+- Improve the reliability of the MCP protocol route by addressing potential edge-case issues in `app/api/mcp/route.ts` and updating relevant tests.
+- Tweak the `MentionableTextarea` and `MarkdownContent` components to resolve minor rendering and positioning artifacts.
+
+### Changed
+- Major redesign of the landing page (`app/page.tsx`) to introduce the product demo and early access call-to-actions.
+- Refactor the `TicketDocumentUpload` component to use a collapsible Accordion interface, aligning it with other ticket management UI elements.
+- Update `TicketExecutionTargetSelect`, `TicketProjectSelect`, and other ticket management components to use the new custom status and project selectors for a more unified UI.
+- Refine local font loading in `(auth)` and main layouts to ensure stable typography during application transitions.
+
+### Chore
+- Bump the package version to `1.20.0` to reflect the latest refactor, bug fixes, and feature additions.
+
 ## [1.19.0] - 2026-03-19:15:37
 
 ### Added

@@ -12,13 +12,7 @@ export async function handleRecordChangeRationales(
   args: any,
   ctx: TokenContext
 ) {
-  const {
-    sessionKey,
-    ticketId: rawTicketId,
-    summary,
-    phase,
-    changeRationales = []
-  } = args;
+  const { sessionKey, ticketId: rawTicketId, summary, phase, changeRationales = [] } = args;
   const resolved = await resolveSession(
     supabase,
     sessionKey,
