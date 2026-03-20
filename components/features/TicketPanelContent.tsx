@@ -193,8 +193,6 @@ export async function TicketPanelContent({
     gemini: agentConfigs.gemini?.flags ?? [],
     opencode: agentConfigs.opencode?.flags ?? []
   };
-  const workspaceRoot = getWorkspaceRoot();
-  const editorScheme = getEditorScheme(profileSettings?.editor_scheme);
   const { claudeCode, codex, cursor, gemini, opencode } = buildLaunchCommands({
     platformUrl,
     ticketId,
@@ -231,6 +229,8 @@ export async function TicketPanelContent({
     typeof projectWorkingDirectory === 'string' && projectWorkingDirectory.trim().length > 0
       ? projectWorkingDirectory.trim()
       : null;
+  const workspaceRoot = getWorkspaceRoot(configuredProjectDirectory);
+  const editorScheme = getEditorScheme(profileSettings?.editor_scheme);
   const headerStore = await headers();
   const userAgent = headerStore.get('user-agent') ?? '';
   const isElectronRequest = /electron/i.test(userAgent);

@@ -42,7 +42,7 @@ export async function uploadImageArtifactAction(
     throw new Error('Project not found.');
   }
 
-  const workspaceRoot = getWorkspaceRoot();
+  const workspaceRoot = getWorkspaceRoot(project.local_working_directory);
   const projectWorkingDirectory = project.local_working_directory;
   const resolvedProjectDirectory = resolveLinkedDirectory(projectWorkingDirectory);
   const resolvedWorkspaceDirectory = resolveLinkedDirectory(workspaceRoot);

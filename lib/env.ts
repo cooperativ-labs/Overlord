@@ -62,8 +62,14 @@ export function getSupabaseSecretKey(): string {
 }
 
 /** Absolute path to the local workspace root, used to construct editor deep-links. */
-export function getWorkspaceRoot(): string {
-  return process.env.WORKSPACE_ROOT ?? '';
+export function getWorkspaceRoot(fallbackRoot?: string | null): string {
+  const envRoot = process.env.WORKSPACE_ROOT?.trim();
+  if (envRoot) {
+    return envRoot;
+  }
+
+  const fallback = fallbackRoot?.trim();
+  return fallback || '';
 }
 
 /**

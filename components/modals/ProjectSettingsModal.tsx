@@ -272,7 +272,7 @@ export function ProjectSettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto md:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto md:max-w-2xl">
         <DialogTitle>Project settings</DialogTitle>
 
         <div className="grid gap-6 pt-2">
