@@ -1,60 +1,79 @@
 import { cn } from '@/lib/utils';
 
 import { formatStatus, getStatusClasses } from './helpers';
-import type { GitStatusFile } from './types';
+import type { EnrichedCurrentChangeFile } from './types';
 
 type FileListItemProps = {
-  attributionCount: number;
-  file: GitStatusFile;
+  file: EnrichedCurrentChangeFile;
   isSelected: boolean;
   onSelect: () => void;
-  rationaleCount: number;
 };
 
-export function FileListItem({
-  attributionCount,
-  file,
-  isSelected,
-  onSelect,
-  rationaleCount
-}: FileListItemProps) {
+function formatLineDelta(value: number | null | undefined, prefix: '+' | '-') {
+  return `${prefix}${value ?? '?'}`;
+}
+
+export function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
   const fileName = file.path.split('/').pop() ?? file.path;
-  const directory = file.path.includes('/') ? file.path.slice(0, file.path.lastIndexOf('/')) : '';
+  const primaryTicketTitle =
+    file.primaryTicket?.title?.trim() ||
+    (file.primaryTicket ? `Ticket ${file.primaryTicket.id.slice(-8)}` : null);
+  const hasStats = file.file.linesAdded !== null || file.file.linesRemoved !== null;
 
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
-        'w-full rounded-lg border px-3 py-2 text-left transition',
-        isSelected ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-muted/60'
+        'w-full rounded-lg border p-3 text-left transition-colors',
+        isSelected ? 'border-primary/40 bg-primary/5' : 'hover:border-border hover:bg-muted/40'
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
-          {directory ? <p className="truncate text-xs text-muted-foreground">{directory}</p> : null}
+          <p className="truncate text-sm font-medium text-foreground">{file.path}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{file.summary}</p>
+          {file.file.originalPath ? (
+            <p className="mt-2 truncate text-[11px] text-muted-foreground/80">
+              {file.file.originalPath} -&gt; {file.path}
+            </p>
+          ) : null}
         </div>
         <span
           className={cn(
             'shrink-0 rounded-full border px-2 py-0.5 text-[10px]',
-            getStatusClasses(file.status)
+            getStatusClasses(file.file.status)
           )}
         >
-          {formatStatus(file.status)}
+          {formatStatus(file.file.status)}
         </span>
       </div>
-      <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className="truncate">
-          {file.originalPath ? `${file.originalPath} -> ${file.path}` : file.path}
-        </span>
-        {rationaleCount > 0 ? (
-          <span>{rationaleCount} rationale</span>
-        ) : attributionCount > 0 ? (
-          <span>
-            {attributionCount} {attributionCount === 1 ? 'ticket' : 'tickets'}
-          </span>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          {primaryTicketTitle ? (
+            <span className="inline-flex max-w-full truncate rounded-full border bg-muted px-2 py-0.5 text-[10px] text-foreground">
+              {primaryTicketTitle}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">{fileName}</span>
+          )}
+        </div>
+        {hasStats ? (
+          <div className="flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
+            <span className="text-emerald-600">{formatLineDelta(file.file.linesAdded, '+')}</span>
+            <span className="text-rose-600">{formatLineDelta(file.file.linesRemoved, '-')}</span>
+          </div>
         ) : null}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>
+          {file.rationaleCount > 0
+            ? `${file.rationaleCount} rationale${file.rationaleCount === 1 ? '' : 's'}`
+            : file.attributionCount > 0
+              ? `${file.attributionCount} linked ticket${file.attributionCount === 1 ? '' : 's'}`
+              : 'No linked ticket yet'}
+        </span>
+        {file.tickets.length > 1 ? <span>{file.tickets.length} tickets</span> : null}
       </div>
     </button>
   );

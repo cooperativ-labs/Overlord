@@ -2,6 +2,8 @@ import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import type { Json } from '@/types/database.types';
 
 export type GitStatusFile = {
+  linesAdded?: number | null;
+  linesRemoved?: number | null;
   originalPath?: string | null;
   path: string;
   stagedStatus: string;
@@ -56,6 +58,8 @@ export type ChangeRationaleRecord = {
   summary: string;
   ticket: {
     id: string;
+    objective?: string | null;
+    recent_agent?: string | null;
     status: string;
     title: string | null;
   } | null;
@@ -71,6 +75,8 @@ export type DiffState = {
 
 export type TicketSummary = {
   id: string;
+  objective?: string | null;
+  recent_agent?: string | null;
   status: string | null;
   title: string | null;
 };
@@ -79,4 +85,16 @@ export type FileAttribution = {
   file_path: string;
   ticket_id: string;
   ticket_title: string | null;
+};
+
+export type EnrichedCurrentChangeFile = {
+  attributionCount: number;
+  file: GitStatusFile;
+  path: string;
+  primaryRationale: ChangeRationaleRecord | null;
+  primaryTicket: TicketSummary | null;
+  rationaleCount: number;
+  rationales: ChangeRationaleRecord[];
+  summary: string;
+  tickets: TicketSummary[];
 };

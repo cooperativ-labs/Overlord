@@ -237,6 +237,13 @@ export default async function HomePage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* <Button
+              asChild
+              variant="ghost"
+              className="hidden text-slate-300 hover:bg-white/5 hover:text-white sm:inline-flex"
+            >
+              <Link href="/docs">Docs</Link>
+            </Button> */}
             <Button
               asChild
               variant="ghost"
@@ -299,6 +306,14 @@ export default async function HomePage() {
                 </Link>
               </Button>
             </div>
+
+            <p className="text-sm text-slate-400">
+              New to Overlord?{' '}
+              <Link href="/docs" className="text-white underline underline-offset-4">
+                Start with the docs
+              </Link>
+              .
+            </p>
 
             {/* Agent icons */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-sm text-slate-300">

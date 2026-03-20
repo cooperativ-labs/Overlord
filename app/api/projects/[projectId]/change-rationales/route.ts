@@ -87,9 +87,18 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const [ticketsResult, eventsResult, sessionsResult] = await Promise.all([
       ticketIds.length
-        ? supabase.from('tickets').select('id,title,status').in('id', ticketIds)
+        ? supabase
+            .from('tickets')
+            .select('id,title,status,objective,recent_agent')
+            .in('id', ticketIds)
         : Promise.resolve({
-            data: [] as { id: string; title: string | null; status: string }[],
+            data: [] as {
+              id: string;
+              objective: string | null;
+              recent_agent: string | null;
+              status: string;
+              title: string | null;
+            }[],
             error: null
           }),
       eventIds.length

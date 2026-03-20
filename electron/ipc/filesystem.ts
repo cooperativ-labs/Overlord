@@ -40,6 +40,21 @@ function normalizeGitStatus(code: string): string {
   return 'modified';
 }
 
+type GitStatusFile = {
+  linesAdded?: number | null;
+  linesRemoved?: number | null;
+  originalPath?: string | null;
+  path: string;
+  stagedStatus: string;
+  status: string;
+  unstagedStatus: string;
+};
+
+type GitFileStats = {
+  linesAdded: number | null;
+  linesRemoved: number | null;
+};
+
 async function runGitCommand(
   cwd: string,
   args: string[],
@@ -86,21 +101,9 @@ async function resolveGitRepo(directory: string): Promise<{
   };
 }
 
-function parseGitStatus(stdout: string): Array<{
-  originalPath?: string | null;
-  path: string;
-  stagedStatus: string;
-  status: string;
-  unstagedStatus: string;
-}> {
+function parseGitStatus(stdout: string): GitStatusFile[] {
   const entries = stdout.split('\0').filter(Boolean);
-  const files: Array<{
-    originalPath?: string | null;
-    path: string;
-    stagedStatus: string;
-    status: string;
-    unstagedStatus: string;
-  }> = [];
+  const files: GitStatusFile[] = [];
 
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
@@ -128,6 +131,96 @@ function parseGitStatus(stdout: string): Array<{
   return files.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function parseRenameTarget(value: string): { originalPath: string; path: string } | null {
+  const braceMatch = /^(.*)\{(.*) => (.*)\}(.*)$/.exec(value);
+  if (braceMatch) {
+    const [, prefix, originalSegment, nextSegment, suffix] = braceMatch;
+    return {
+      originalPath: `${prefix}${originalSegment}${suffix}`,
+      path: `${prefix}${nextSegment}${suffix}`
+    };
+  }
+
+  const separator = ' => ';
+  const separatorIndex = value.indexOf(separator);
+  if (separatorIndex === -1) return null;
+
+  return {
+    originalPath: value.slice(0, separatorIndex),
+    path: value.slice(separatorIndex + separator.length)
+  };
+}
+
+function parseNumStat(stdout: string): Map<string, GitFileStats> {
+  const stats = new Map<string, GitFileStats>();
+  const lines = stdout
+    .split('\n')
+    .map(line => line.trimEnd())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const [addedRaw, removedRaw, ...pathParts] = line.split('\t');
+    const pathValue = pathParts.join('\t').trim();
+    if (!pathValue) continue;
+
+    const parsedPath = parseRenameTarget(pathValue);
+    const nextPath = parsedPath?.path ?? pathValue;
+
+    stats.set(toPosixPath(nextPath), {
+      linesAdded: addedRaw === '-' ? null : Number.parseInt(addedRaw, 10),
+      linesRemoved: removedRaw === '-' ? null : Number.parseInt(removedRaw, 10)
+    });
+  }
+
+  return stats;
+}
+
+function countLines(value: string): number {
+  if (value.length === 0) return 0;
+  return value.split('\n').length;
+}
+
+async function readUntrackedFileStats(
+  repoRoot: string,
+  relativePath: string
+): Promise<GitFileStats | null> {
+  try {
+    const fullPath = path.join(repoRoot, relativePath);
+    const content = await fs.readFile(fullPath, 'utf8');
+    return {
+      linesAdded: countLines(content),
+      linesRemoved: 0
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getGitFileStats(
+  repoRoot: string,
+  files: GitStatusFile[]
+): Promise<Map<string, GitFileStats>> {
+  const trackedResult = await runGitCommand(
+    repoRoot,
+    ['-c', 'core.quotepath=false', 'diff', '--numstat', '--find-renames', '--find-copies', 'HEAD'],
+    { allowFailure: true }
+  );
+
+  const stats = parseNumStat(trackedResult.output);
+
+  await Promise.all(
+    files.map(async file => {
+      if (file.status !== 'untracked' || stats.has(file.path)) return;
+      const untrackedStats = await readUntrackedFileStats(repoRoot, file.path);
+      if (untrackedStats) {
+        stats.set(file.path, untrackedStats);
+      }
+    })
+  );
+
+  return stats;
+}
+
 async function getGitStatus(directory: string) {
   const { branch, repoRoot } = await resolveGitRepo(directory);
   const statusResult = await runGitCommand(repoRoot, [
@@ -137,9 +230,19 @@ async function getGitStatus(directory: string) {
     '--untracked-files=all'
   ]);
 
+  const files = parseGitStatus(statusResult.output);
+  const fileStats = await getGitFileStats(repoRoot, files);
+
   return {
     branch,
-    files: parseGitStatus(statusResult.output),
+    files: files.map(file => {
+      const stats = fileStats.get(file.path);
+      return {
+        ...file,
+        linesAdded: stats?.linesAdded ?? null,
+        linesRemoved: stats?.linesRemoved ?? null
+      };
+    }),
     repoRoot
   };
 }

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.21.0] - 2026-03-20:15:25
+
+### Added
+- Introduce a dismissible **Announcement Bar** for logged-in users to share timely project updates.
+- Refactor the **Current Changes explorer** (Electron) with added support for line-level addition/deletion statistics (lines added/removed) on each modified file.
+- Add support for viewing untracked file stats in the Electron filesystem IPC.
+
+### Changed
+- Refine the **Landing Page** (`app/page.tsx`) with a more prominent link to the documentation.
+- Optimize the `FileListPane` and `DiffPane` in Current Changes for clearer hunk-level metadata and better rendering.
+- Update the `CliQuickstart` to show the latest `ovld connect` and `ovld restart` commands across different agent types.
+
+### Fixed
+- Resolve the issue where the file attribution and rationale counts in `FileListPane` were incorrectly calculated.
+- Address minor layout flickers in `KanbanBoard` when dragging tickets across columns.
+
+### Chore
+- Bump the package version to `1.21.0` to reflect these updates to the Current Changes explorer and Announcement Bar.
+
 ## [1.20.0] - 2026-03-20:14:45
 
 ### Added

@@ -1,22 +1,12 @@
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 import { FileListItem } from './FileListItem';
-import { countFileRationales } from './helpers';
-import { TicketFilterPopover } from './TicketFilterPopover';
-import type {
-  ChangeRationaleRecord,
-  FileAttribution,
-  GitStatusFile,
-  GitStatusResponse,
-  TicketSummary
-} from './types';
+import type { EnrichedCurrentChangeFile, GitStatusResponse, TicketSummary } from './types';
 
 type FileListPaneProps = {
-  fileAttributions: FileAttribution[];
-  filteredFiles: GitStatusFile[];
-  rationales: ChangeRationaleRecord[];
+  filteredFiles: EnrichedCurrentChangeFile[];
   selectedPath: string | null;
   selectedTicketIds: Set<string>;
   statusLoading: boolean;
@@ -29,9 +19,7 @@ type FileListPaneProps = {
 };
 
 export function FileListPane({
-  fileAttributions,
   filteredFiles,
-  rationales,
   selectedPath,
   selectedTicketIds,
   statusLoading,
@@ -45,37 +33,40 @@ export function FileListPane({
   return (
     <div className="flex min-h-0 flex-col border-r">
       <div className="border-b px-4 py-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-foreground">Uncommitted files</p>
-          <TicketFilterPopover
-            selectedTicketIds={selectedTicketIds}
-            tickets={tickets}
-            onClear={onClearTicketFilter}
-            onToggle={onToggleTicketFilter}
-          />
-        </div>
+        <p className="text-sm font-medium text-foreground">Uncommitted files</p>
         <p className="text-xs text-muted-foreground">{workingDirectory}</p>
       </div>
 
-      {selectedTicketIds.size > 0 ? (
-        <div className="flex flex-wrap items-center gap-1 border-b px-3 py-2">
-          {[...selectedTicketIds].map(id => {
-            const ticket = tickets.find(candidate => candidate.id === id);
+      {tickets.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+          {tickets.map(ticket => {
+            const isActive = selectedTicketIds.has(ticket.id);
             return (
-              <Badge key={id} variant="secondary" className="gap-1 text-[10px]">
-                <span className="max-w-[140px] truncate">
-                  {ticket?.title?.trim() || `Ticket ${id.slice(-8)}`}
+              <Button
+                key={ticket.id}
+                type="button"
+                variant={isActive ? 'default' : 'outline'}
+                size="sm"
+                className="h-7 max-w-full rounded-full px-3 text-xs"
+                onClick={() => onToggleTicketFilter(ticket.id)}
+              >
+                <span className="truncate">
+                  {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onToggleTicketFilter(id)}
-                  className="ml-0.5 hover:text-foreground"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
+              </Button>
             );
           })}
+          {selectedTicketIds.size > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 rounded-full px-2 text-xs"
+              onClick={onClearTicketFilter}
+            >
+              Clear
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -97,17 +88,10 @@ export function FileListPane({
           <div className="space-y-2">
             {filteredFiles.map(file => (
               <FileListItem
-                key={`${file.status}:${file.path}`}
-                attributionCount={
-                  fileAttributions.filter(a => {
-                    const paths = [file.path, file.originalPath].filter(Boolean);
-                    return paths.includes(a.file_path);
-                  }).length
-                }
+                key={`${file.file.status}:${file.path}`}
                 file={file}
                 isSelected={selectedPath === file.path}
                 onSelect={() => onSelectFile(file.path)}
-                rationaleCount={countFileRationales(file, rationales)}
               />
             ))}
           </div>

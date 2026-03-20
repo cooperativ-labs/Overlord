@@ -167,10 +167,10 @@ export function CliQuickstart({
                 })}
               </div>
               <div className="grid gap-2.5">
-                <CommandRow
+                {/* <CommandRow
                   label="Connect to this ticket"
                   command={connectCommands[selectedAgent]}
-                />
+                /> */}
                 <CommandRow
                   label="Restart session"
                   command={

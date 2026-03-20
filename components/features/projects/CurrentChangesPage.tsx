@@ -10,11 +10,13 @@ import { getRationalePaths } from '@/components/features/projects/current-change
 import {
   type ChangeRationaleRecord,
   type DiffState,
+  type EnrichedCurrentChangeFile,
   type FileAttribution,
   type GitDiffResponse,
   type GitStatusResponse
 } from '@/components/features/projects/current-changes/types';
 import { UnavailableStateCard } from '@/components/features/projects/current-changes/UnavailableStateCard';
+import { buildEnrichedCurrentChangeFiles } from '@/components/features/projects/current-changes/view-model';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import { parseUnifiedDiff } from '@/lib/git/unified-diff';
@@ -47,46 +49,34 @@ export function CurrentChangesPage({
   });
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
 
+  const enrichedFiles = useMemo(
+    () =>
+      buildEnrichedCurrentChangeFiles({
+        fileAttributions,
+        files: statusResponse?.files ?? [],
+        rationales
+      }),
+    [fileAttributions, rationales, statusResponse?.files]
+  );
+
   const uniqueTickets = useMemo(() => {
-    const ticketMap = new Map<
-      string,
-      { id: string; status: string | null; title: string | null }
-    >();
-    for (const rationale of rationales) {
-      if (rationale.ticket && !ticketMap.has(rationale.ticket.id)) {
-        ticketMap.set(rationale.ticket.id, rationale.ticket);
-      }
-    }
-    for (const attr of fileAttributions) {
-      if (!ticketMap.has(attr.ticket_id)) {
-        ticketMap.set(attr.ticket_id, {
-          id: attr.ticket_id,
-          status: null,
-          title: attr.ticket_title
-        });
+    const ticketMap = new Map<string, EnrichedCurrentChangeFile['tickets'][number]>();
+    for (const file of enrichedFiles) {
+      for (const ticket of file.tickets) {
+        if (!ticketMap.has(ticket.id)) {
+          ticketMap.set(ticket.id, ticket);
+        }
       }
     }
     return [...ticketMap.values()].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
-  }, [rationales, fileAttributions]);
+  }, [enrichedFiles]);
 
   const filteredFiles = useMemo(() => {
-    const files = statusResponse?.files ?? [];
-    if (selectedTicketIds.size === 0) return files;
-    const filePathsWithMatchingRationales = new Set(
-      rationales.filter(r => r.ticket && selectedTicketIds.has(r.ticket.id)).map(r => r.file_path)
+    if (selectedTicketIds.size === 0) return enrichedFiles;
+    return enrichedFiles.filter(file =>
+      file.tickets.some(ticket => selectedTicketIds.has(ticket.id))
     );
-    const filePathsWithMatchingAttributions = new Set(
-      fileAttributions.filter(a => selectedTicketIds.has(a.ticket_id)).map(a => a.file_path)
-    );
-    return files.filter(
-      file =>
-        filePathsWithMatchingRationales.has(file.path) ||
-        filePathsWithMatchingAttributions.has(file.path) ||
-        (file.originalPath &&
-          (filePathsWithMatchingRationales.has(file.originalPath) ||
-            filePathsWithMatchingAttributions.has(file.originalPath)))
-    );
-  }, [statusResponse?.files, rationales, fileAttributions, selectedTicketIds]);
+  }, [enrichedFiles, selectedTicketIds]);
 
   function toggleTicketFilter(ticketId: string) {
     setSelectedTicketIds(prev => {
@@ -197,6 +187,19 @@ export function CurrentChangesPage({
   }, [isElectron, workingDirectory, projectId, api]);
 
   useEffect(() => {
+    if (filteredFiles.length === 0) {
+      setSelectedPath(null);
+      return;
+    }
+
+    if (selectedPath && filteredFiles.some(file => file.path === selectedPath)) {
+      return;
+    }
+
+    setSelectedPath(filteredFiles[0]?.path ?? null);
+  }, [filteredFiles, selectedPath]);
+
+  useEffect(() => {
     const selectedFile = statusResponse?.files.find(file => file.path === selectedPath);
     if (!isElectron || !api?.filesystem?.getGitDiff || !workingDirectory || !selectedFile) {
       setDiffState({
@@ -254,7 +257,7 @@ export function CurrentChangesPage({
     );
   }
 
-  const selectedFile = statusResponse?.files.find(file => file.path === selectedPath) ?? null;
+  const selectedFile = enrichedFiles.find(file => file.path === selectedPath) ?? null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
@@ -303,9 +306,7 @@ export function CurrentChangesPage({
       <div className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-background">
         <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">
           <FileListPane
-            fileAttributions={fileAttributions}
             filteredFiles={filteredFiles}
-            rationales={rationales}
             selectedPath={selectedPath}
             selectedTicketIds={selectedTicketIds}
             statusLoading={statusLoading}
@@ -328,10 +329,8 @@ export function CurrentChangesPage({
                 diff={diffState.parsed}
                 diffError={diffState.error}
                 file={selectedFile}
-                fileAttributions={fileAttributions}
                 isLoading={diffState.isLoading}
                 projectId={projectId}
-                rationales={rationales}
                 selectedFilePath={selectedFile.path}
               />
             ) : (

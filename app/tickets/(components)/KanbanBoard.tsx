@@ -101,6 +101,21 @@ function toWaitingByTicket(tickets: Ticket[]): Record<string, string> {
   }, {});
 }
 
+function getTopBoardPositionForStatus(
+  tickets: Ticket[],
+  status: string,
+  excludeTicketId?: string
+): number {
+  let minBoardPosition = Number.POSITIVE_INFINITY;
+
+  for (const ticket of tickets) {
+    if (ticket.status !== status || ticket.id === excludeTicketId) continue;
+    minBoardPosition = Math.min(minBoardPosition, ticket.board_position);
+  }
+
+  return Number.isFinite(minBoardPosition) ? minBoardPosition - 1 : 0;
+}
+
 function getPathTicketId(pathname: string): string | null {
   const pathSegments = pathname.split('/').filter(Boolean);
   if (pathSegments.length === 0) return null;
@@ -507,7 +522,7 @@ export default function KanbanBoard({
             .order('created_at', { ascending: false }),
           supabase
             .from('tickets')
-            .select('id,status,title,recent_agent,is_read')
+            .select('id,status,title,recent_agent,is_read,board_position,updated_at')
             .in('id', ticketIds)
         ]);
 
@@ -534,6 +549,8 @@ export default function KanbanBoard({
             title: string | null;
             recent_agent: string | null;
             is_read: boolean;
+            board_position: number;
+            updated_at: string;
           }>
         ).map(t => [t.id, t])
       );
@@ -549,6 +566,8 @@ export default function KanbanBoard({
             status: update.status ?? t.status,
             title: update.title ?? t.title,
             is_read: update.is_read ?? t.is_read,
+            board_position: update.board_position ?? t.board_position,
+            updated_at: update.updated_at ?? t.updated_at,
             recent_agent: update.recent_agent ?? t.recent_agent,
             ...(session
               ? {
@@ -638,6 +657,8 @@ export default function KanbanBoard({
           if (!event.phase) return;
           if (!ticketIdsRef.current.has(event.ticket_id)) return;
 
+          const shouldMoveToTopOfReview = event.phase === 'review' && event.session_id !== null;
+
           // Move the card to the target column and mark unread.
           // This is the authoritative signal — it fires after the ticket row
           // has been committed, so it is reliable even when the tickets UPDATE
@@ -648,6 +669,10 @@ export default function KanbanBoard({
               return {
                 ...t,
                 status: event.phase!,
+                board_position: shouldMoveToTopOfReview
+                  ? getTopBoardPositionForStatus(prev, event.phase!, event.ticket_id)
+                  : t.board_position,
+                updated_at: event.created_at ?? t.updated_at,
                 ...(openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
               };
             })
@@ -686,7 +711,9 @@ export default function KanbanBoard({
                 ...t,
                 status: updated.status ?? t.status,
                 title: updated.title ?? t.title,
-                is_read: updated.is_read ?? t.is_read
+                is_read: updated.is_read ?? t.is_read,
+                board_position: updated.board_position ?? t.board_position,
+                updated_at: updated.updated_at ?? t.updated_at
               };
             })
           );

@@ -187,7 +187,7 @@ async function resolveChangeRationales(flags) {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-detect Claude Code session ID
+// Auto-detect native agent session IDs
 // ---------------------------------------------------------------------------
 
 /**
@@ -224,8 +224,17 @@ function detectClaudeSessionId() {
 }
 
 /**
+ * Codex exposes the active resumable thread id directly in the runtime
+ * environment, so prefer that over filesystem heuristics.
+ */
+function detectCodexSessionId() {
+  const sessionId = process.env.CODEX_THREAD_ID?.trim() || process.env.CODEX_SESSION_ID?.trim();
+  return sessionId || null;
+}
+
+/**
  * Resolve the external session ID from flags, env, or auto-detection.
- * Priority: explicit flag > env var > auto-detect (Claude Code only).
+ * Priority: explicit flag > env var > auto-detect.
  */
 function resolveExternalSessionId(flags) {
   if (flags['external-session-id']) {
@@ -234,6 +243,11 @@ function resolveExternalSessionId(flags) {
   }
 
   const agentId = String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? '').toLowerCase();
+  if (agentId.includes('codex')) {
+    const detected = detectCodexSessionId();
+    if (detected) return detected;
+  }
+
   if (agentId.includes('claude') || agentId === '' || agentId === 'claude-code') {
     const detected = detectClaudeSessionId();
     if (detected) return detected;

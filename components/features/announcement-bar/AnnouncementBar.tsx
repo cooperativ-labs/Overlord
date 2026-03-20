@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
+import { createClient } from '@/supabase/utils/client';
 
 const DISMISSAL_KEY = 'overlord-download-announcement-dismissed';
 
@@ -18,11 +19,24 @@ export function AnnouncementBar() {
       return;
     }
 
-    // 2) Check if dismissed
-    const dismissed = localStorage.getItem(DISMISSAL_KEY);
-    if (!dismissed) {
-      setIsVisible(true);
-    }
+    // 2) Check if user is logged in
+    const client = createClient();
+    const checkSession = async () => {
+      const {
+        data: { session }
+      } = await client.auth.getSession();
+      if (!session) {
+        return;
+      }
+
+      // 3) Check if dismissed
+      const dismissed = localStorage.getItem(DISMISSAL_KEY);
+      if (!dismissed) {
+        setIsVisible(true);
+      }
+    };
+
+    void checkSession();
   }, [isElectron]);
 
   const handleDismiss = () => {

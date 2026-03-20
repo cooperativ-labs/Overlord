@@ -109,7 +109,8 @@ export function AgentModelSelector({
 
   const currentModels = modelsByAgent[value.agent] ?? [];
   const selectedModel = currentModels.find(m => m.model_id === value.model);
-  const thinkingOptions = selectedModel?.thinking_options ?? [];
+  const thinkingEnabled = value.agent !== 'codex';
+  const thinkingOptions = thinkingEnabled ? (selectedModel?.thinking_options ?? []) : [];
 
   const handleAgentChange = useCallback(
     (agent: AgentTypeValue) => {
@@ -230,7 +231,7 @@ export function AgentModelSelector({
       </div>
 
       {/* Thinking column — only shown when a model with thinking options is selected */}
-      {thinkingOptions.length > 0 && (
+      {thinkingEnabled && thinkingOptions.length > 0 && (
         <div className={cn('flex flex-col gap-1', inline ? 'w-full' : 'min-w-[100px]')}>
           <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Thinking

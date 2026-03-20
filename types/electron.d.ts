@@ -47,6 +47,8 @@ interface ElectronAPI {
       branch: string | null;
       error?: string;
       files: Array<{
+        linesAdded?: number | null;
+        linesRemoved?: number | null;
         originalPath?: string | null;
         path: string;
         stagedStatus: string;

@@ -2,7 +2,6 @@ import './globals.css';
 
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { Toaster } from 'sonner';
 
 import { AppSidebar } from '@/components/app-sidebar';
@@ -174,7 +173,6 @@ export default async function RootLayout({
                         </div>
                       ) : (
                         <div className="flex w-full flex-col ">
-                          <AnnouncementBar />
                           <main className="w-full h-full ">{children}</main>
                         </div>
                       )}
