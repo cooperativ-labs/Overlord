@@ -19,7 +19,7 @@ export default async function UserLayout({ children }: LayoutProps) {
   const headersList = await headers();
   const userAgent = headersList.get('user-agent') ?? '';
   const isElectronRequest = userAgent.toLowerCase().includes('electron');
-  if (!isElectronRequest) {
+  if (!isElectronRequest && !selectedOrgId) {
     // Web users without org/project → redirect to full-page onboarding
     redirect('/onboarding');
   }
