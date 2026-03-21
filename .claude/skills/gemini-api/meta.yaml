@@ -1,0 +1,8 @@
+slug: gemini-api
+name: gemini-api
+description: Patterns for using Google Gemini API with structured output, JSON
+  mode, and proper configuration. Apply when implementing AI features, text
+  generation, or working with Gemini models.
+tags: []
+compat: []
+sha256: 5b9ebbded56eccc9e2f6c413ffcde683615895c967aecae184f04c64fc6dc8a0

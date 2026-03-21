@@ -2,7 +2,7 @@
 
 import { ArrowRightToLine, Bot, ChevronDown, MessageSquare } from 'lucide-react';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,11 +48,27 @@ function PhaseIndicator({ phase }: { phase: string }) {
 
 export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicketPanelProps) {
   const [modelOpen, setModelOpen] = useState(false);
+  const [visibleActivityCount, setVisibleActivityCount] = useState(0);
   const ticketShortId = ticket.id.slice(-8);
 
   const agentIcon =
     ticket.recent_agent === 'codex' ? '/images/icons/codex.svg' : '/images/icons/claude-code.svg';
   const agentLabel = ticket.recent_agent === 'codex' ? 'Codex' : 'Claude Code';
+
+  // Animate activity cards appearing one by one
+  useEffect(() => {
+    if (ticket.status !== 'draft' && visibleActivityCount < DEMO_ACTIVITY.length) {
+      const timer = setTimeout(() => {
+        setVisibleActivityCount(prev => prev + 1);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [visibleActivityCount, ticket.status]);
+
+  // Reset animation when ticket changes
+  useEffect(() => {
+    setVisibleActivityCount(0);
+  }, [ticket.id]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden border-l bg-background">
@@ -216,27 +232,43 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Activity
             </p>
-            {ticket.status === 'draft' ? (
+            {ticket.status === 'draft' || visibleActivityCount === 0 ? (
               <p className="text-sm text-muted-foreground">No activity yet.</p>
             ) : (
               <div className="space-y-2">
-                {DEMO_ACTIVITY.map(event => (
-                  <div
-                    key={event.id}
-                    className="flex items-start gap-3 rounded-lg border bg-muted/30 px-3 py-2.5"
-                  >
-                    <PhaseIndicator phase={event.phase} />
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="text-sm leading-snug">{event.summary}</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground">{event.timestamp}</span>
-                        <Badge variant="outline" className="h-4 rounded-full px-1.5 text-[10px]">
-                          {event.phase}
-                        </Badge>
+                {[...DEMO_ACTIVITY]
+                  .reverse()
+                  .slice(-visibleActivityCount)
+                  .map((event, index, array) => {
+                    // Only animate the newest (top) card
+                    const isNewest = index === 0;
+                    return (
+                      <div
+                        key={event.id}
+                        className={cn(
+                          'flex items-start gap-3 rounded-lg border bg-muted/30 px-3 py-2.5',
+                          isNewest && 'animate-in fade-in slide-in-from-top-2 duration-300'
+                        )}
+                        style={{
+                          animationDelay: '0ms',
+                          animationFillMode: 'backwards'
+                        }}
+                      >
+                        <PhaseIndicator phase={event.phase} />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="text-sm leading-snug">{event.summary}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground">
+                              {event.timestamp}
+                            </span>
+                            <Badge variant="outline" className="h-4 rounded-full px-1.5 text-[10px]">
+                              {event.phase}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
             )}
           </div>

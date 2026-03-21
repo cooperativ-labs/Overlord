@@ -350,7 +350,7 @@ export function DemoContent() {
                     )}
                   >
                     {/* Project header */}
-                    <div className="flex items-center gap-3 border-b px-6 py-3">
+                    <div className="flex flex-wrap items-center gap-3 border-b px-6 py-3">
                       <span
                         className="h-3 w-3 rounded-[3px]"
                         style={{ backgroundColor: DEMO_PROJECT.color }}
