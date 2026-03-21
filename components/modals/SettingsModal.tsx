@@ -229,7 +229,12 @@ export function SettingsModal({
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
               {activeNav === 'Sessions' && <UserSessionsPage open={open} />}
-              {activeNav === 'Agent tokens' && <UserTokensPage open={open} />}
+              {activeNav === 'Agent tokens' && (
+                <UserTokensPage
+                  open={open}
+                  onViewAgentsAndMcp={() => setActiveNav('MCP & Cloud Agents')}
+                />
+              )}
               {activeNav === 'Terminal & IDE' && isElectron && <TerminalPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>

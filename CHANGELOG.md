@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.1.0] - 2026-03-21:09:59
+## [2.2.0] - 2026-03-21:11:21
 
 ### Added
 - Add top-level `ovld create` and `ovld prompt` commands with numbered project selection, and let `prompt` launch an agent immediately after ticket creation.

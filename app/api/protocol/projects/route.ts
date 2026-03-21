@@ -21,6 +21,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    if (!data) {
+      return NextResponse.json({ error: 'No projects found' }, { status: 404 });
+    }
+
     return NextResponse.json({
       count: data?.length ?? 0,
       projects:
@@ -28,10 +32,7 @@ export async function GET(request: Request) {
           id: project.id,
           name: project.name,
           organizationId: project.organization_id,
-          organizationName:
-            project.organization && typeof project.organization === 'object'
-              ? (project.organization.name ?? '')
-              : ''
+          organizationName: project.organization[0].name
         })) ?? []
     });
   } catch (error) {
