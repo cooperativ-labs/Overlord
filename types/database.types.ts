@@ -459,6 +459,98 @@ export type Database = {
         };
         Relationships: [];
       };
+      feed_posts: {
+        Row: {
+          agent_type: string | null;
+          body: string;
+          created_at: string;
+          files_touched: string[];
+          human_actions: string[];
+          id: string;
+          impact_level: string;
+          organization_id: number;
+          project_id: string;
+          session_id: string | null;
+          source_event_ids: string[];
+          source_window_end: string | null;
+          source_window_start: string | null;
+          tags: string[];
+          ticket_id: string;
+          title: string;
+          tradeoffs: Json;
+          updated_at: string;
+        };
+        Insert: {
+          agent_type?: string | null;
+          body: string;
+          created_at?: string;
+          files_touched?: string[];
+          human_actions?: string[];
+          id?: string;
+          impact_level?: string;
+          organization_id: number;
+          project_id: string;
+          session_id?: string | null;
+          source_event_ids?: string[];
+          source_window_end?: string | null;
+          source_window_start?: string | null;
+          tags?: string[];
+          ticket_id: string;
+          title: string;
+          tradeoffs?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          agent_type?: string | null;
+          body?: string;
+          created_at?: string;
+          files_touched?: string[];
+          human_actions?: string[];
+          id?: string;
+          impact_level?: string;
+          organization_id?: number;
+          project_id?: string;
+          session_id?: string | null;
+          source_event_ids?: string[];
+          source_window_end?: string | null;
+          source_window_start?: string | null;
+          tags?: string[];
+          ticket_id?: string;
+          title?: string;
+          tradeoffs?: Json;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'feed_posts_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'feed_posts_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'feed_posts_session_id_fkey';
+            columns: ['session_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'feed_posts_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       members: {
         Row: {
           created_at: string;
@@ -529,18 +621,21 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string;
+          feed_retention_days: number;
           id: number;
           name: string;
           updated_at: string;
         };
         Insert: {
           created_at?: string;
+          feed_retention_days?: number;
           id?: number;
           name: string;
           updated_at?: string;
         };
         Update: {
           created_at?: string;
+          feed_retention_days?: number;
           id?: number;
           name?: string;
           updated_at?: string;

@@ -2,7 +2,7 @@
   "name": "overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "main": "dist-electron/main.js",
   "bin": {
@@ -23,7 +23,7 @@
     "ngrok": "ngrok http --domain=romantic-pig-living.ngrok-free.app 3000",
     "ngrok:server": "ngrok http --domain=romantic-pig-living.ngrok-free.app 54321",
     "functions-run": "supabase functions serve --env-file ./supabase/.env.local --no-verify-jwt",
-    "functions-deploy": "supabase functions deploy --project-ref zitmmhvbilhjjdwgxlfm",
+    "functions-deploy": "supabase functions deploy --project-ref zitmmhvbilhjjdwgxlfm --no-verify-jwt",
     "functions-set-secret": "supabase secrets set --env-file ./supabase/.env.prod --project-ref zitmmhvbilhjjdwgxlfm",
     "lint": "yarn run js-lint && yarn run type-check",
     "verify:electron-runtime-env": "node scripts/check-electron-runtime-env.mjs",

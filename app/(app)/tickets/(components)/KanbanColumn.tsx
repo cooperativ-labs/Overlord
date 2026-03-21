@@ -27,9 +27,10 @@ export default function KanbanColumn({
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
   workingDirectory = null,
   onCreateTicket,
+  onMarkRead,
   onMarkUnread,
   onMarkAllRead,
-  isCompleteColumn = false,
+  isCompleteColumn: _isCompleteColumn = false,
   hasMore = false,
   isLoadingMore = false,
   onLoadMore
@@ -45,6 +46,7 @@ export default function KanbanColumn({
     objective: string,
     position: 'top' | 'bottom'
   ) => Promise<void> | void;
+  onMarkRead?: (ticketId: string) => void;
   onMarkUnread?: (ticketId: string) => void;
   onMarkAllRead?: () => void;
   isCompleteColumn?: boolean;
@@ -152,6 +154,7 @@ export default function KanbanColumn({
                   key={ticket.id}
                   ticket={ticket}
                   showOrganizationName={showOrganizationName}
+                  onMarkRead={onMarkRead}
                   onMarkUnread={onMarkUnread}
                 />
               ))}

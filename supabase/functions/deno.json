@@ -1,6 +1,7 @@
 {
   "nodeModulesDir": "auto",
   "imports": {
+    "@google/genai": "npm:@google/genai@^1.29.0",
     "@supabase/supabase-js": "jsr:@supabase/supabase-js@^2"
   }
 }

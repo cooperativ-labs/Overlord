@@ -98,11 +98,13 @@ export default function KanbanCard({
   ticket,
   isDragOverlay,
   showOrganizationName = false,
+  onMarkRead,
   onMarkUnread
 }: {
   ticket: Ticket;
   isDragOverlay?: boolean;
   showOrganizationName?: boolean;
+  onMarkRead?: (ticketId: string) => void;
   onMarkUnread?: (ticketId: string) => void;
 }) {
   const pathname = usePathname();
@@ -154,6 +156,15 @@ export default function KanbanCard({
     if (!onMarkUnread) return;
     onMarkUnread(ticket.id);
   }
+
+  function handleMarkReadClick() {
+    if (!onMarkRead) return;
+    onMarkRead(ticket.id);
+  }
+
+  const isUnread = ticket.is_read === false;
+  const markReadLabel = isUnread ? 'Mark read' : 'Mark unread';
+  const markReadDisabled = isUnread ? !onMarkRead : !onMarkUnread;
 
   return (
     <ContextMenu>
@@ -211,11 +222,15 @@ export default function KanbanCard({
         <ContextMenuSeparator />
         <ContextMenuItem
           onSelect={() => {
-            handleMarkUnreadClick();
+            if (isUnread) {
+              handleMarkReadClick();
+            } else {
+              handleMarkUnreadClick();
+            }
           }}
-          disabled={!onMarkUnread}
+          disabled={markReadDisabled}
         >
-          Mark card unread
+          {markReadLabel}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

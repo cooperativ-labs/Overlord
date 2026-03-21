@@ -47,17 +47,47 @@ export async function POST(request: Request) {
 
     const supabase = createServiceRoleClient();
 
-    // Resolve project_id — use provided projectId or fall back to first project in org
+    // Resolve project_id — use provided projectId or fall back to first project in org.
+    // Ticket organization_id follows the selected project so the CLI can treat
+    // the project choice as the source of truth.
     let resolvedProjectId: string | null = projectId ?? null;
+    let resolvedOrganizationId: number | null = null;
+
+    if (resolvedProjectId) {
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id,organization_id')
+        .eq('id', resolvedProjectId)
+        .single();
+
+      resolvedProjectId = project?.id ?? null;
+      resolvedOrganizationId = project?.organization_id ?? null;
+    }
+
     if (!resolvedProjectId) {
       const { data: project } = await supabase
         .from('projects')
-        .select('id')
+        .select('id,organization_id')
         .eq('organization_id', organizationId)
         .order('id', { ascending: true })
         .limit(1)
         .single();
       resolvedProjectId = project?.id ?? null;
+      resolvedOrganizationId = project?.organization_id ?? null;
+    }
+
+    if (!resolvedProjectId || !resolvedOrganizationId) {
+      return NextResponse.json(
+        { error: 'No project found for this organization.' },
+        { status: 400 }
+      );
+    }
+
+    if (resolvedOrganizationId !== organizationId) {
+      return NextResponse.json(
+        { error: 'Selected project is not available to this token.' },
+        { status: 403 }
+      );
     }
 
     const nextTitle = title.trim() || deriveTitleFromObjective(objective);
@@ -69,7 +99,7 @@ export async function POST(request: Request) {
         available_tools: availableTools,
         execution_target: executionTarget,
         objective,
-        organization_id: organizationId,
+        organization_id: resolvedOrganizationId,
         priority,
         project_id: resolvedProjectId,
         status: 'draft',

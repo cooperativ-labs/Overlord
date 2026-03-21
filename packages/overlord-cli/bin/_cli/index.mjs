@@ -3,6 +3,7 @@
 import { runAttachCommand } from './attach.mjs';
 import { runAuthCommand } from './auth.mjs';
 import { runLauncherCommand } from './launcher.mjs';
+import { runCreateCommand, runPromptCommand } from './new-ticket.mjs';
 import { runProtocolCommand } from './protocol.mjs';
 import { runDoctorCommand, runSetupCommand } from './setup.mjs';
 import { runTicketCommand } from './ticket.mjs';
@@ -15,6 +16,8 @@ Primary command: ${primaryCommand}
 
 Usage:
   ${primaryCommand} attach [ticketId] [agent]  Search tickets and launch an agent (interactive)
+  ${primaryCommand} create "<objective>"       Create a ticket with numbered project selection
+  ${primaryCommand} prompt "<objective>"       Create a ticket, then launch an agent on it
   ${primaryCommand} auth <subcommand>          Login, logout, or check auth status
   ${primaryCommand} tickets <subcommand>       Create or list tickets
   ${primaryCommand} ticket <subcommand>        Work with a single ticket
@@ -32,7 +35,9 @@ Auth:
   ${primaryCommand} auth logout              Remove stored credentials
 
 Tickets:
-  ${primaryCommand} tickets create --objective "..." [options]
+  ${primaryCommand} create "..." [options]
+  ${primaryCommand} prompt "..." [options]
+  ${primaryCommand} tickets create "..." [options]
   ${primaryCommand} tickets list [--status <status>]
 
 Ticket:
@@ -63,6 +68,16 @@ export async function runCli({ primaryCommand }) {
   // Attach command (interactive ticket search + agent launcher)
   if (command === 'attach') {
     await runAttachCommand(rest);
+    return;
+  }
+
+  if (command === 'create') {
+    await runCreateCommand(rest);
+    return;
+  }
+
+  if (command === 'prompt') {
+    await runPromptCommand(rest);
     return;
   }
 

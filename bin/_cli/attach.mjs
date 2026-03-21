@@ -21,11 +21,41 @@ const SEARCH_DEBOUNCE_MS = 120;
 const hide = '\x1b[?25l';
 const show = '\x1b[?25h';
 
-function clearLines(n) {
+function clearLines(rows) {
   // After rendering N lines without a trailing newline, the cursor sits on the
-  // last rendered line. Move back to column 1, then up N-1 lines so erasing
+  // last rendered row. Move back to column 1, then up N-1 rows so erasing
   // starts at the first prompt line instead of the line above it.
-  return n > 0 ? `\r\x1b[${Math.max(0, n - 1)}A\x1b[J` : '';
+  return rows > 0 ? `\r\x1b[${Math.max(0, rows - 1)}A\x1b[J` : '';
+}
+
+function stripAnsi(value) {
+  let result = '';
+
+  for (let idx = 0; idx < value.length; idx++) {
+    const char = value[idx];
+    if (char !== '\x1b' || value[idx + 1] !== '[') {
+      result += char;
+      continue;
+    }
+
+    idx += 2;
+    while (idx < value.length) {
+      const code = value.charCodeAt(idx);
+      if (code >= 0x40 && code <= 0x7e) break;
+      idx += 1;
+    }
+  }
+
+  return result;
+}
+
+function countRenderedRows(lines) {
+  const columns = Math.max(1, process.stdout.columns ?? 80);
+
+  return lines.reduce((rows, line) => {
+    const visibleWidth = stripAnsi(line).length;
+    return rows + Math.max(1, Math.ceil(visibleWidth / columns));
+  }, 0);
 }
 
 const dim = s => `\x1b[2m${s}\x1b[0m`;
@@ -102,7 +132,7 @@ function runInteractivePrompt({ label, items = [], search, prefix = '' }) {
     const isTicketMode = typeof search === 'function';
     let query = '';
     let selectedIdx = 0;
-    let linesRendered = 0;
+    let rowsRendered = 0;
     let loading = isTicketMode;
     let errorMessage = '';
     let filteredItems = isTicketMode ? [] : items;
@@ -164,11 +194,11 @@ function runInteractivePrompt({ label, items = [], search, prefix = '' }) {
       lines.push('');
       lines.push(dim('  ↑↓ navigate · type to filter · Enter select · Esc cancel'));
 
-      if (linesRendered > 0) {
-        process.stdout.write(clearLines(linesRendered));
+      if (rowsRendered > 0) {
+        process.stdout.write(clearLines(rowsRendered));
       }
       process.stdout.write(lines.join('\n'));
-      linesRendered = lines.length;
+      rowsRendered = countRenderedRows(lines);
     }
 
     async function loadMatches(nextQuery) {
@@ -207,8 +237,8 @@ function runInteractivePrompt({ label, items = [], search, prefix = '' }) {
         clearTimeout(debounceTimer);
         debounceTimer = null;
       }
-      if (linesRendered > 0) {
-        process.stdout.write(clearLines(linesRendered));
+      if (rowsRendered > 0) {
+        process.stdout.write(clearLines(rowsRendered));
       }
       process.stdin.setRawMode(false);
       process.stdin.removeAllListeners('data');

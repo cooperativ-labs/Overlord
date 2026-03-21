@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-03-21:09:59
+
+### Added
+- Add top-level `ovld create` and `ovld prompt` commands with numbered project selection, and let `prompt` launch an agent immediately after ticket creation.
+- Add `GET /api/protocol/projects` so protocol clients can enumerate projects for the signed-in organization.
+- Add individual read/unread actions on Kanban cards so ticket notifications can be managed per card.
+
+### Fixed
+- None.
+
+### Changed
+- Resolve ticket creation against the selected project's organization, preventing cross-organization ticket creation and making the project choice the source of truth.
+- Update CLI help, settings guidance, and packaging docs to reflect the new project-selection flow.
+- Improve feed post generation with stricter Gemini JSON handling so titles, bodies, tradeoffs, tags, files, and human action items are normalized before saving.
+
+### Security
+- Reject ticket creation when the chosen project does not belong to the caller's organization.
+
+### Documentation
+- Refresh the packaging guide to describe `ovld create` instead of `ovld tickets create`.
+
+### Chore
+- Bump the package version to `2.1.0` and update the Supabase function deploy command to match the current release flow.
+
 ## [2.0.0] - 2026-03-21:09:55
 
 ### Added

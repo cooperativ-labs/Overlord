@@ -398,6 +398,14 @@ export default function KanbanBoard({
     startTransition(() => markTicketUnreadAction(ticketId));
   }
 
+  function handleMarkRead(ticketId: string) {
+    const ticket = ticketsByIdRef.current.get(ticketId);
+    if (!ticket) return;
+
+    setTickets(prev => prev.map(t => (t.id === ticketId ? { ...t, is_read: true } : t)));
+    startTransition(() => markTicketReadAction(ticketId));
+  }
+
   async function handleLoadMore(columnId: string) {
     const state = columnLoadMoreStates.get(columnId);
     if (state?.isLoading || state?.hasMore === false) return;
@@ -1087,6 +1095,7 @@ export default function KanbanBoard({
                     fileMentionPaths={fileMentionPaths}
                     workingDirectory={workingDirectory}
                     onCreateTicket={handleCreateTicket}
+                    onMarkRead={handleMarkRead}
                     onMarkUnread={handleMarkUnread}
                     onMarkAllRead={() => handleMarkColumnRead(colTickets.map(t => t.id))}
                     isCompleteColumn={col.statusType === 'complete'}
@@ -1105,6 +1114,7 @@ export default function KanbanBoard({
                   fileMentionPaths={fileMentionPaths}
                   workingDirectory={workingDirectory}
                   onCreateTicket={handleCreateTicket}
+                  onMarkRead={handleMarkRead}
                   onMarkUnread={handleMarkUnread}
                   onMarkAllRead={() => handleMarkColumnRead(uncategorized.map(t => t.id))}
                   isCompleteColumn={false}

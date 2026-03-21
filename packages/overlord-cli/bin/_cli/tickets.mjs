@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
+import { runCreateCommand } from './new-ticket.mjs';
 
 /**
  * Parse simple CLI flags: --key value or --key=value
@@ -52,35 +53,7 @@ async function apiPost(url, token, localSecret, body) {
 }
 
 export async function ticketsCreate(args) {
-  const flags = parseFlags(args, [
-    'title', 'objective', 'acceptance-criteria', 'available-tools',
-    'execution-target', 'priority', 'project-id'
-  ]);
-
-  if (!flags.objective && !flags.title) {
-    console.error('Error: --objective (or --title) is required.\n');
-    console.error('Usage: ovld tickets create --objective "..." [--title "..."] [--acceptance-criteria "..."] [--execution-target agent|human] [--project-id <id>]');
-    process.exit(1);
-  }
-
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
-
-  const body = {
-    objective: String(flags.objective ?? flags.title ?? ''),
-    title: String(flags.title ?? ''),
-    acceptanceCriteria: String(flags['acceptance-criteria'] ?? ''),
-    availableTools: String(flags['available-tools'] ?? ''),
-    executionTarget: String(flags['execution-target'] ?? 'agent'),
-    priority: String(flags.priority ?? 'medium'),
-    ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {})
-  };
-
-  const data = await apiPost(`${platformUrl}/api/protocol/tickets`, agentToken, localSecret, body);
-
-  console.log(`Created ticket: ${data.ticket.reference} (${data.ticket.id})`);
-  console.log(`  Title: ${data.ticket.title}`);
-  console.log(`  Status: ${data.ticket.status}`);
-  console.log(`  Execution target: ${data.ticket.executionTarget}`);
+  await runCreateCommand(args);
 }
 
 export async function ticketsList(args) {
@@ -124,7 +97,7 @@ Subcommands:
   list     List tickets
 
 Examples:
-  ovld tickets create --objective "Implement login page" --execution-target agent
+  ovld tickets create "Implement login page"
   ovld tickets list
   ovld tickets list --status draft
 `);

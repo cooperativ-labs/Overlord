@@ -68,7 +68,7 @@ Provider linking becomes valuable later if we want true web-initiated, unattende
 ### A) Brainstorm → create ticket (in Claude Code / Codex)
 
 1. User brainstorms with agent.
-2. Agent runs `ovld tickets create …`.
+2. Agent runs `ovld create "..."` and chooses a project from the numbered list.
 3. Overlord web UI shows the new ticket immediately.
 
 ### B) Work a ticket (in Claude Code / Codex)

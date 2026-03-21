@@ -921,6 +921,14 @@ export function CliPage({ open }: { open: boolean }) {
             interactive ticket picker + agent launcher
           </li>
           <li className="break-words">
+            <code className="rounded bg-muted px-1 break-all">ovld create &lt;objective&gt;</code>{' '}
+            create a ticket after numbered project selection
+          </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1 break-all">ovld prompt &lt;objective&gt;</code>{' '}
+            create a ticket, then pick an agent by number and launch it
+          </li>
+          <li className="break-words">
             <code className="rounded bg-muted px-1">ovld auth</code> login, status, logout
           </li>
           <li className="break-words">
@@ -951,6 +959,18 @@ export function CliPage({ open }: { open: boolean }) {
         </ul>
         <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
         <ul className="grid gap-1 text-muted-foreground">
+          <li className="break-words">
+            <code className="rounded bg-muted px-1 break-all">
+              ovld create &quot;Implement login page&quot;
+            </code>{' '}
+            — prompts for a numbered project choice, then creates the ticket
+          </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1 break-all">
+              ovld prompt &quot;Investigate flaky tests&quot;
+            </code>{' '}
+            — prompts for numbered project and agent choices, then launches the agent
+          </li>
           <li className="break-words">
             <code className="rounded bg-muted px-1">ovld attach</code> — interactive: search
             tickets, pick agent

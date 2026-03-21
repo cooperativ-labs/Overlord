@@ -7,11 +7,13 @@
  * delivery or review-status transitions.
  */
 
+import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +24,16 @@ const CORS_HEADERS = {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false }
 });
+const gemini = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
+
+const FEED_POST_SYSTEM_INSTRUCTION = `You write concise, high-signal feed posts for a developer dashboard tracking AI agent work on code projects.
+
+Priorities:
+- Be specific and technically accurate.
+- Emphasize tradeoffs, risks, and reviewer-relevant context.
+- Keep content concise and useful for humans scanning many updates.
+- Return only valid JSON that matches the requested shape.
+- Include human follow-up items whenever manual review, configuration, deployment, testing, or any other human action is needed.`;
 
 type FeedPostPayload = {
   title: string;
@@ -33,66 +45,96 @@ type FeedPostPayload = {
   files_touched: string[];
 };
 
+function sanitizeStringArray(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(item => String(item).trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function sanitizeTradeoffs(value: unknown): FeedPostPayload['tradeoffs'] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+
+      const tradeoff = item as Record<string, unknown>;
+      const decision = String(tradeoff.decision ?? '').trim();
+      const alternativesConsidered = String(tradeoff.alternatives_considered ?? '').trim();
+      const rationale = String(tradeoff.rationale ?? '').trim();
+
+      if (!decision || !alternativesConsidered || !rationale) return null;
+
+      return {
+        decision,
+        alternatives_considered: alternativesConsidered,
+        rationale
+      };
+    })
+    .filter((tradeoff): tradeoff is FeedPostPayload['tradeoffs'][number] => tradeoff !== null)
+    .slice(0, 10);
+}
+
+function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const parsed = value as Record<string, unknown>;
+  const title = String(parsed.title ?? '')
+    .trim()
+    .slice(0, 200);
+  const body = String(parsed.body ?? '')
+    .trim()
+    .slice(0, 10_000);
+
+  if (!title || !body) {
+    console.error('[generate-feed-post] Gemini response missing title or body');
+    return null;
+  }
+
+  const impactLevel = String(parsed.impact_level ?? '').trim();
+
+  return {
+    title,
+    body,
+    tags: sanitizeStringArray(parsed.tags, 10),
+    impact_level: ['minor', 'notable', 'significant'].includes(impactLevel)
+      ? impactLevel
+      : 'notable',
+    tradeoffs: sanitizeTradeoffs(parsed.tradeoffs),
+    human_actions: sanitizeStringArray(parsed.human_actions, 20),
+    files_touched: sanitizeStringArray(parsed.files_touched, 50)
+  };
+}
+
 async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
-  if (!GEMINI_API_KEY) {
+  if (!gemini) {
     console.error('[generate-feed-post] GEMINI_API_KEY not set');
     return null;
   }
 
-  const url = new URL(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
-  );
-  url.searchParams.set('key', GEMINI_API_KEY);
-
-  const response = await fetch(url.toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.3
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[generate-feed-post] Gemini API error:', response.status, errorText);
-    return null;
-  }
-
-  const result = await response.json();
-  const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    console.error('[generate-feed-post] No text in Gemini response');
-    return null;
-  }
-
   try {
-    const parsed = JSON.parse(text) as FeedPostPayload;
-    // Basic validation
-    if (!parsed.title || !parsed.body) {
-      console.error('[generate-feed-post] Gemini response missing title or body');
+    const response = await gemini.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        systemInstruction: FEED_POST_SYSTEM_INSTRUCTION,
+        responseMimeType: 'application/json',
+        temperature: 0.3,
+        maxOutputTokens: 2048
+      }
+    });
+
+    const text = response.text ?? '';
+    if (!text) {
+      console.error('[generate-feed-post] No text in Gemini response');
       return null;
     }
-    return {
-      title: String(parsed.title).slice(0, 200),
-      body: String(parsed.body).slice(0, 10_000),
-      tags: Array.isArray(parsed.tags) ? parsed.tags.map(String).slice(0, 10) : [],
-      impact_level: ['minor', 'notable', 'significant'].includes(parsed.impact_level)
-        ? parsed.impact_level
-        : 'notable',
-      tradeoffs: Array.isArray(parsed.tradeoffs) ? parsed.tradeoffs.slice(0, 10) : [],
-      human_actions: Array.isArray(parsed.human_actions)
-        ? parsed.human_actions.map(String).slice(0, 20)
-        : [],
-      files_touched: Array.isArray(parsed.files_touched)
-        ? parsed.files_touched.map(String).slice(0, 50)
-        : []
-    };
+
+    return normalizeFeedPostPayload(JSON.parse(text));
   } catch (err) {
-    console.error('[generate-feed-post] Failed to parse Gemini JSON response:', err);
+    console.error('[generate-feed-post] Gemini generation failed:', err);
     return null;
   }
 }
@@ -124,9 +166,7 @@ function buildPrompt(context: {
     ? `\nPREVIOUS POST (merge new information into this, updating where needed):\nTitle: ${context.existingPost.title}\n${context.existingPost.body}\n`
     : '';
 
-  return `You are writing a feed post for a developer dashboard that tracks AI agent work on code projects. Write for a developer audience — be concise, specific, and information-dense.
-
-PROJECT: ${context.projectName}
+  return `PROJECT: ${context.projectName}
 TICKET: ${context.ticketTitle ?? 'Untitled'} — ${context.ticketObjective ?? 'No objective'}
 ${context.acceptanceCriteria ? `ACCEPTANCE CRITERIA: ${context.acceptanceCriteria}` : ''}
 ${context.constraints ? `CONSTRAINTS: ${context.constraints}` : ''}
@@ -152,7 +192,8 @@ IMPORTANT INSTRUCTIONS:
 - Keep the body under 500 words.
 - Surface tradeoffs prominently — they are the most valuable part. If there are no tradeoffs, return an empty array.
 - ALWAYS check for human action items. If the agent's work requires ANY manual follow-up (running migrations, setting env vars, deploying, manual testing, config changes, dependency installs, etc.), these MUST appear in "human_actions". Also include items the agent explicitly flagged as needing human review or attention. This is critical — the human reads the feed to know what THEY need to do next.
-- If the body mentions anything the human should do, it MUST also appear in "human_actions" as a discrete, actionable item.`;
+- If the body mentions anything the human should do, it MUST also appear in "human_actions" as a discrete, actionable item.
+- Do not wrap the JSON in Markdown fences or any explanatory text.`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -328,8 +369,15 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ ok: true, postId: existingPost.id, action: 'updated' }),
-        { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          ok: true,
+          postId: existingPost.id,
+          action: 'updated'
+        }),
+        {
+          status: 200,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+        }
       );
     } else {
       // Create new post
