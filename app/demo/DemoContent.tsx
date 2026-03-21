@@ -328,11 +328,8 @@ export function DemoContent() {
         <TabsContent value="board" className="mt-0 px-6 pb-12">
           <div className="mx-auto mb-6 max-w-[1200px] rounded-2xl  bg-background/80 px-6 py-5 text-center">
             <p className="text-lg font-semibold tracking-tight text-foreground">
-              Overlord sends jobs to agents right in your terminal so you can interact with them the
-              way you like.
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Your agents will report back to the ticket.
+              Click on any task in the draft column to open it, then click the "Run" button to see
+              how Overlord interacts with agents in your terminal
             </p>
           </div>
 
@@ -432,22 +429,24 @@ export function DemoContent() {
           </WindowFrame>
 
           {/* Terminal window — separate, below, not full width */}
-          <div ref={terminalRef}>
-            <WindowFrame
-              title="Terminal"
-              className="mx-auto mt-6 max-w-[800px]"
-              focused={terminalFocused}
-            >
-              <div className="bg-[#0c0c0c]">
-                <DemoTerminal
-                  key={terminalKey}
-                  lines={terminalLines}
-                  isRunning={terminalRunning}
-                  onComplete={() => setTerminalRunning(false)}
-                />
-              </div>
-            </WindowFrame>
-          </div>
+          {terminalLines.length > 0 && (
+            <div ref={terminalRef}>
+              <WindowFrame
+                title="Terminal"
+                className="mx-auto mt-6 max-w-[800px]"
+                focused={terminalFocused}
+              >
+                <div className="bg-[#0c0c0c]">
+                  <DemoTerminal
+                    key={terminalKey}
+                    lines={terminalLines}
+                    isRunning={terminalRunning}
+                    onComplete={() => setTerminalRunning(false)}
+                  />
+                </div>
+              </WindowFrame>
+            </div>
+          )}
         </TabsContent>
 
         {/* Settings tab */}
