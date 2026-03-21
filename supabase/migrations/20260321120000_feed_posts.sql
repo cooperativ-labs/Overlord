@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.feed_posts (
   impact_level text NOT NULL DEFAULT 'notable',
   files_touched text[] NOT NULL DEFAULT '{}',
   tradeoffs jsonb NOT NULL DEFAULT '[]',
+  human_actions text[] NOT NULL DEFAULT '{}',
   source_event_ids uuid[] NOT NULL DEFAULT '{}',
   source_window_start timestamptz,
   source_window_end timestamptz,

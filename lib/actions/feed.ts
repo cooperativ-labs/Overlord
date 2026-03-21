@@ -15,6 +15,7 @@ export type FeedPost = {
   impact_level: string;
   files_touched: string[];
   tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
+  human_actions: string[];
   source_event_ids: string[];
   source_window_start: string | null;
   source_window_end: string | null;
@@ -81,6 +82,7 @@ export async function getFeedPostsAction(options?: {
       impact_level: row.impact_level as string,
       files_touched: row.files_touched as string[],
       tradeoffs: row.tradeoffs as FeedPost['tradeoffs'],
+      human_actions: (row.human_actions as string[]) ?? [],
       source_event_ids: row.source_event_ids as string[],
       source_window_start: row.source_window_start as string | null,
       source_window_end: row.source_window_end as string | null,

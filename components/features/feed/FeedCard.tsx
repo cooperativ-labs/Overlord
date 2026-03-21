@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, ChevronDown, ChevronRight, FileCode2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileCode2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -28,6 +28,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
   const agentType = getAgentTypeByIdentifier(post.agent_type);
   const ticketPath = buildTicketPath({ projectId: post.project_id, ticketId: post.ticket_id });
   const tradeoffs = Array.isArray(post.tradeoffs) ? post.tradeoffs : [];
+  const humanActions = Array.isArray(post.human_actions) ? post.human_actions : [];
   const filesTouched = Array.isArray(post.files_touched) ? post.files_touched : [];
 
   const timestamp = new Date(post.created_at);
@@ -87,10 +88,34 @@ export function FeedCard({ post }: { post: FeedPost }) {
             >
               {post.title}
             </h3>
+            {humanActions.length > 0 && (
+              <Badge className="shrink-0 rounded-full px-2 text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" variant="secondary">
+                {humanActions.length} action{humanActions.length > 1 ? 's' : ''}
+              </Badge>
+            )}
             <Badge className={cn('shrink-0 rounded-full px-2 text-[10px] font-medium', impact.className)} variant="secondary">
               {impact.label}
             </Badge>
           </div>
+
+          {/* Human actions always visible when collapsed */}
+          {!expanded && humanActions.length > 0 && (
+            <div className="mt-2 ml-6 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800/40 dark:bg-blue-950/20">
+              <ul className="space-y-0.5">
+                {humanActions.slice(0, 3).map((action, i) => (
+                  <li key={i} className="flex gap-2 text-xs text-blue-800 dark:text-blue-300">
+                    <span className="shrink-0">&#8226;</span>
+                    <span>{action}</span>
+                  </li>
+                ))}
+                {humanActions.length > 3 && (
+                  <li className="text-xs text-blue-600/60 dark:text-blue-400/50">
+                    +{humanActions.length - 3} more...
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
 
           {/* Expanded body */}
           {expanded && (
@@ -98,6 +123,29 @@ export function FeedCard({ post }: { post: FeedPost }) {
               <MarkdownContent compact className="text-sm text-muted-foreground">
                 {post.body}
               </MarkdownContent>
+
+              {/* Human action items */}
+              {humanActions.length > 0 && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/20">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">
+                      Action required
+                    </span>
+                  </div>
+                  <ul className="space-y-1">
+                    {humanActions.map((action, i) => (
+                      <li
+                        key={i}
+                        className="flex gap-2 text-xs text-blue-800 dark:text-blue-300"
+                      >
+                        <span className="shrink-0 mt-0.5">&#8226;</span>
+                        <span>{action}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Tradeoff callouts */}
               {tradeoffs.length > 0 && (

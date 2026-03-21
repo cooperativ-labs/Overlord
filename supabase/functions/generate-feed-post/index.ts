@@ -29,6 +29,7 @@ type FeedPostPayload = {
   tags: string[];
   impact_level: string;
   tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
+  human_actions: string[];
   files_touched: string[];
 };
 
@@ -83,6 +84,9 @@ async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
         ? parsed.impact_level
         : 'notable',
       tradeoffs: Array.isArray(parsed.tradeoffs) ? parsed.tradeoffs.slice(0, 10) : [],
+      human_actions: Array.isArray(parsed.human_actions)
+        ? parsed.human_actions.map(String).slice(0, 20)
+        : [],
       files_touched: Array.isArray(parsed.files_touched)
         ? parsed.files_touched.map(String).slice(0, 50)
         : [],
@@ -137,13 +141,18 @@ Respond with a single JSON object:
 {
   "title": "One-line action-oriented summary, max 80 characters",
   "body": "2-4 paragraphs in Markdown. Cover: what was done and why; any tradeoffs, compromises, or deviations from the objective; what the human should review or be aware of. Do NOT repeat the title in the body.",
-  "tags": ["array of tags like: bugfix, refactor, new-feature, tradeoff, blocker-resolved, test, docs, config, dependency, performance"],
+  "tags": ["array of tags like: bugfix, refactor, new-feature, tradeoff, blocker-resolved, test, docs, config, dependency, performance, action-required"],
   "impact_level": "minor or notable or significant",
   "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}],
+  "human_actions": ["Any tasks, next steps, or follow-ups the human needs to do — e.g. run a migration, add an env variable, deploy a function, review a specific file, update a config, test a flow manually. Return an empty array if there is nothing for the human to do."],
   "files_touched": ["list/of/files.ts"]
 }
 
-Keep the body under 500 words. Surface tradeoffs prominently — they are the most valuable part. If there are no tradeoffs, return an empty array.`;
+IMPORTANT INSTRUCTIONS:
+- Keep the body under 500 words.
+- Surface tradeoffs prominently — they are the most valuable part. If there are no tradeoffs, return an empty array.
+- ALWAYS check for human action items. If the agent's work requires ANY manual follow-up (running migrations, setting env vars, deploying, manual testing, config changes, dependency installs, etc.), these MUST appear in "human_actions". Also include items the agent explicitly flagged as needing human review or attention. This is critical — the human reads the feed to know what THEY need to do next.
+- If the body mentions anything the human should do, it MUST also appear in "human_actions" as a discrete, actionable item.`;
 }
 
 Deno.serve(async (req: Request) => {
@@ -299,6 +308,7 @@ Deno.serve(async (req: Request) => {
           tags: generated.tags,
           impact_level: generated.impact_level,
           tradeoffs: generated.tradeoffs,
+          human_actions: generated.human_actions,
           files_touched: generated.files_touched,
           source_event_ids: mergedEventIds,
           source_window_end: windowEnd,
@@ -334,6 +344,7 @@ Deno.serve(async (req: Request) => {
           impact_level: generated.impact_level,
           files_touched: generated.files_touched,
           tradeoffs: generated.tradeoffs,
+          human_actions: generated.human_actions,
           source_event_ids: eventIds,
           source_window_start: windowStart,
           source_window_end: windowEnd,
