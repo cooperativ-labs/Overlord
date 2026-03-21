@@ -44,7 +44,7 @@ CREATE POLICY "feed_posts_select"
   AS permissive
   FOR SELECT
   TO authenticated
-  USING (public.is_org_member(organization_id));
+  USING (public.is_org_member(organization_id::integer));
 
 -- Insert/update/delete restricted to service role (edge functions insert via service role key).
 -- No authenticated insert/update/delete policies needed since generation is server-side only.
