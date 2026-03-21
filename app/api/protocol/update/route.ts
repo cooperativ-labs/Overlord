@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import {
@@ -153,6 +153,19 @@ export async function POST(request: Request) {
           .limit(1);
         ticketUpdate.board_position = (headTickets?.[0]?.board_position ?? 0) - 1;
         ticketUpdate.is_read = false;
+
+        // Generate feed post for review transitions (fire-and-forget)
+        const reviewSessionId = resolved.session.id;
+        after(async () => {
+          try {
+            await supabase.functions.invoke('generate-feed-post', {
+              body: { ticketId, sessionId: reviewSessionId, organizationId }
+            });
+          } catch (feedErr) {
+            console.error('[protocol:update] feed post generation error:', feedErr);
+            Sentry.captureException(feedErr, { extra: { ticketId, sessionId: reviewSessionId } });
+          }
+        });
       }
 
       const { error: ticketError } = await supabase

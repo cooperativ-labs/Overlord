@@ -1,6 +1,6 @@
 'use client';
 
-import { GraduationCap, ListChecks, MoreHorizontal, Plus, Settings } from 'lucide-react';
+import { GraduationCap, ListChecks, MoreHorizontal, Newspaper, Plus, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -123,6 +123,7 @@ export function AppSidebar({
   );
 
   // const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
+  const isFeedActive = pathname === '/feed' || pathname.startsWith('/feed/');
   const isMyTasksActive = pathname === '/u' || pathname.startsWith('/u/');
 
   function isProjectActive(project: SidebarProject) {
@@ -173,6 +174,14 @@ export function AppSidebar({
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem> */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={isFeedActive} tooltip="Feed">
+                  <Link href="/feed">
+                    <Newspaper />
+                    <span>Feed</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isMyTasksActive} tooltip="My Tasks">
                   <Link
