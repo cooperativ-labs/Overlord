@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-03-21:09:55
+
+### Added
+- Add a dedicated `/feed` page that displays Gemini-synthesized agent activity posts with actionable follow-ups (`human_actions`).
+- Restructure documentation into a new route group with a dedicated layout and sidebar, allowing for easier navigation and separation from the core application layout.
+- Add an integrated documentation page (`/docs`) and introduce application analytics tracking.
+
+### Changed
+- Improve Demo UX by updating the demo board description and skipping terminal window rendering when no terminal output lines are present.
+- Add an automatic server-side redirect to the onboarding flow if the authenticated user has no organizations or projects.
+- Move the main app out of the shared root layout to properly support the independent documentation design.
+
+### Fixed
+- Unify path normalization in file change parsing by automatically stripping trailing file annotations from paths, ensuring file change links resolve securely.
+
+### Chore
+- Bump the package version to `2.0.0` to reflect these major additions and navigational refactors.
+
 ## [1.21.0] - 2026-03-20:15:25
 
 ### Added
