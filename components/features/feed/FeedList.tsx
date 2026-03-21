@@ -24,7 +24,7 @@ export function FeedList({ posts, projects }: FeedListProps) {
 
   const filteredPosts = useMemo(() => {
     if (selectedProjectId === 'all') return posts;
-    return posts.filter((p) => p.project_id === selectedProjectId);
+    return posts.filter(p => p.project_id === selectedProjectId);
   }, [posts, selectedProjectId]);
 
   return (
@@ -51,7 +51,7 @@ export function FeedList({ posts, projects }: FeedListProps) {
           </div>
         ) : (
           <div className="max-w-2xl mx-auto">
-            {filteredPosts.map((post) => (
+            {filteredPosts.map(post => (
               <FeedCard key={post.id} post={post} />
             ))}
           </div>

@@ -47,11 +47,11 @@ import {
 import type { UserOrganization } from '@/lib/actions/organizations';
 
 import { AboutPage } from './settings/AboutPage';
-import { FeedSettingsPage } from './settings/FeedSettingsPage';
 import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
 import { AppearancePage } from './settings/AppearancePage';
 import { CliPage } from './settings/CliPage';
 import { CustomizationPage } from './settings/CustomizationPage';
+import { FeedSettingsPage } from './settings/FeedSettingsPage';
 import { HotkeysPage } from './settings/HotkeysPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
 import { TerminalPage } from './settings/TerminalPage';

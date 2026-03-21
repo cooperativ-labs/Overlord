@@ -16,11 +16,11 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
+  auth: { persistSession: false }
 });
 
 type FeedPostPayload = {
@@ -51,9 +51,9 @@ async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.3,
-      },
-    }),
+        temperature: 0.3
+      }
+    })
   });
 
   if (!response.ok) {
@@ -89,7 +89,7 @@ async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
         : [],
       files_touched: Array.isArray(parsed.files_touched)
         ? parsed.files_touched.map(String).slice(0, 50)
-        : [],
+        : []
     };
   } catch (err) {
     console.error('[generate-feed-post] Failed to parse Gemini JSON response:', err);
@@ -113,11 +113,11 @@ function buildPrompt(context: {
   existingPost?: { title: string; body: string } | null;
 }): string {
   const eventLines = context.events
-    .map((e) => `[${e.created_at}] ${e.event_type}: ${e.summary ?? '(no summary)'}`)
+    .map(e => `[${e.created_at}] ${e.event_type}: ${e.summary ?? '(no summary)'}`)
     .join('\n');
 
   const rationaleLines = context.rationales
-    .map((r) => `- ${r.file_path}: ${r.summary} (why: ${r.why}, impact: ${r.impact})`)
+    .map(r => `- ${r.file_path}: ${r.summary} (why: ${r.why}, impact: ${r.impact})`)
     .join('\n');
 
   const appendSection = context.existingPost
@@ -163,7 +163,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
     });
   }
 
@@ -173,12 +173,17 @@ Deno.serve(async (req: Request) => {
     if (!ticketId || !organizationId) {
       return new Response(JSON.stringify({ error: 'ticketId and organizationId are required' }), {
         status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
       });
     }
 
     // Check for existing post for this session (dedup / append)
-    let existingPost: { id: string; title: string; body: string; source_event_ids: string[] } | null = null;
+    let existingPost: {
+      id: string;
+      title: string;
+      body: string;
+      source_event_ids: string[];
+    } | null = null;
     if (sessionId) {
       const { data } = await supabase
         .from('feed_posts')
@@ -201,7 +206,7 @@ Deno.serve(async (req: Request) => {
     if (!ticket) {
       return new Response(JSON.stringify({ error: 'Ticket not found' }), {
         status: 404,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
       });
     }
 
@@ -231,14 +236,14 @@ Deno.serve(async (req: Request) => {
     let filteredEvents = events ?? [];
     if (existingPost && existingPost.source_event_ids?.length) {
       const existingIds = new Set(existingPost.source_event_ids);
-      filteredEvents = filteredEvents.filter((e) => !existingIds.has(e.id));
+      filteredEvents = filteredEvents.filter(e => !existingIds.has(e.id));
     }
 
     // Skip if no new events to synthesize
     if (filteredEvents.length === 0 && !existingPost) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'no events' }), {
         status: 200,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
       });
     }
 
@@ -275,30 +280,28 @@ Deno.serve(async (req: Request) => {
       constraints: ticket.constraints,
       events: filteredEvents,
       rationales: rationales ?? [],
-      existingPost: existingPost ? { title: existingPost.title, body: existingPost.body } : null,
+      existingPost: existingPost ? { title: existingPost.title, body: existingPost.body } : null
     });
 
     const generated = await callGemini(prompt);
 
     if (!generated) {
-      return new Response(
-        JSON.stringify({ ok: false, error: 'Gemini generation failed' }),
-        { status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ ok: false, error: 'Gemini generation failed' }), {
+        status: 502,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+      });
     }
 
     // Compute event window
     const allEvents = events ?? [];
-    const eventIds = allEvents.map((e) => e.id);
-    const timestamps = allEvents.map((e) => e.created_at).sort();
+    const eventIds = allEvents.map(e => e.id);
+    const timestamps = allEvents.map(e => e.created_at).sort();
     const windowStart = timestamps[0] ?? new Date().toISOString();
     const windowEnd = timestamps[timestamps.length - 1] ?? new Date().toISOString();
 
     if (existingPost) {
       // Append: update existing post
-      const mergedEventIds = [
-        ...new Set([...(existingPost.source_event_ids ?? []), ...eventIds]),
-      ];
+      const mergedEventIds = [...new Set([...(existingPost.source_event_ids ?? []), ...eventIds])];
 
       const { error: updateError } = await supabase
         .from('feed_posts')
@@ -312,16 +315,16 @@ Deno.serve(async (req: Request) => {
           files_touched: generated.files_touched,
           source_event_ids: mergedEventIds,
           source_window_end: windowEnd,
-          updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
         .eq('id', existingPost.id);
 
       if (updateError) {
         console.error('[generate-feed-post] update error:', updateError);
-        return new Response(
-          JSON.stringify({ ok: false, error: updateError.message }),
-          { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ ok: false, error: updateError.message }), {
+          status: 500,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+        });
       }
 
       return new Response(
@@ -347,29 +350,29 @@ Deno.serve(async (req: Request) => {
           human_actions: generated.human_actions,
           source_event_ids: eventIds,
           source_window_start: windowStart,
-          source_window_end: windowEnd,
+          source_window_end: windowEnd
         })
         .select('id')
         .single();
 
       if (insertError) {
         console.error('[generate-feed-post] insert error:', insertError);
-        return new Response(
-          JSON.stringify({ ok: false, error: insertError.message }),
-          { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ ok: false, error: insertError.message }), {
+          status: 500,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+        });
       }
 
-      return new Response(
-        JSON.stringify({ ok: true, postId: newPost?.id, action: 'created' }),
-        { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ ok: true, postId: newPost?.id, action: 'created' }), {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+      });
     }
   } catch (err) {
     console.error('[generate-feed-post] unexpected error:', err);
-    return new Response(
-      JSON.stringify({ error: 'Internal error', details: String(err) }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify({ error: 'Internal error', details: String(err) }), {
+      status: 500,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+    });
   }
 });

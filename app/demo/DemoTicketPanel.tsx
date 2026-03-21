@@ -261,7 +261,10 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
                             <span className="text-[10px] text-muted-foreground">
                               {event.timestamp}
                             </span>
-                            <Badge variant="outline" className="h-4 rounded-full px-1.5 text-[10px]">
+                            <Badge
+                              variant="outline"
+                              className="h-4 rounded-full px-1.5 text-[10px]"
+                            >
                               {event.phase}
                             </Badge>
                           </div>

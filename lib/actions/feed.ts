@@ -33,7 +33,7 @@ export async function getFeedPostsAction(options?: {
 }): Promise<FeedPost[]> {
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user }
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
@@ -91,7 +91,7 @@ export async function getFeedPostsAction(options?: {
       project_name: projects?.name ?? 'Unknown',
       project_color: projects?.color ?? '#6b7280',
       ticket_title: tickets?.title ?? null,
-      ticket_objective: tickets?.objective ?? null,
+      ticket_objective: tickets?.objective ?? null
     };
   });
 }
@@ -99,7 +99,7 @@ export async function getFeedPostsAction(options?: {
 export async function getFeedRetentionDaysAction(): Promise<number> {
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user }
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
@@ -127,7 +127,7 @@ export async function updateFeedRetentionDaysAction(days: number): Promise<numbe
 
   const supabase = await createClient();
   const {
-    data: { user },
+    data: { user }
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 

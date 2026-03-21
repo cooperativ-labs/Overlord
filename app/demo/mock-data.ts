@@ -1,3 +1,5 @@
+import type { FeedPost } from '@/lib/actions/feed';
+
 export type DemoTicket = {
   id: string;
   title: string;
@@ -35,11 +37,160 @@ export type DemoCurrentChangeFile = {
   lines: DemoCurrentChangeLine[];
 };
 
+export type DemoFeedPost = FeedPost;
+
 export const DEMO_PROJECT = {
   name: 'MyProject',
   color: '#6366f1',
   description: 'A simple 2D video game built with React and Canvas'
 };
+
+export const DEMO_FEED_PROJECTS = [
+  {
+    id: 'demo-overlord',
+    name: 'Overlord Core',
+    color: '#6366f1'
+  },
+  {
+    id: 'demo-product',
+    name: 'Demo Experience',
+    color: '#0f766e'
+  },
+  {
+    id: 'demo-automation',
+    name: 'Workflow Automation',
+    color: '#ea580c'
+  }
+] satisfies Array<{ id: string; name: string; color: string }>;
+
+export const DEMO_FEED_POSTS = [
+  {
+    id: 'feed-001',
+    organization_id: 1,
+    project_id: 'demo-overlord',
+    ticket_id: 'demo-21a7b495',
+    session_id: 'sess-feed-001',
+    agent_type: 'claude-code',
+    title: 'Added a fourth demo tab for the /feed experience',
+    body: 'The demo shell now includes a dedicated feed preview alongside the board, settings, and CLI tabs.\n\n- Reused the same window chrome for visual consistency\n- Added a mock project filter so the feed can be scoped in-demo\n- Kept the content local so the preview loads instantly without auth',
+    tags: ['demo', 'feed', 'tabs'],
+    impact_level: 'notable',
+    files_touched: [
+      'app/demo/DemoContent.tsx',
+      'app/demo/DemoFeedPage.tsx',
+      'app/demo/mock-data.ts'
+    ],
+    tradeoffs: [
+      {
+        decision: 'Use local mock feed data instead of live queries',
+        alternatives_considered: 'Wire the preview to the production feed route',
+        rationale: 'The demo should stay deterministic, fast, and accessible without a login.'
+      }
+    ],
+    human_actions: ['Verify the tab order after the UI refresh.'],
+    source_event_ids: ['evt-demo-feed-001', 'evt-demo-feed-002'],
+    source_window_start: '2026-03-21T08:00:00.000Z',
+    source_window_end: '2026-03-21T08:20:00.000Z',
+    created_at: '2026-03-21T08:18:00.000Z',
+    updated_at: '2026-03-21T08:18:00.000Z',
+    project_name: 'Overlord Core',
+    project_color: '#6366f1',
+    ticket_title: 'Create a 4th demo tab',
+    ticket_objective: 'Illustrate the new /feed feature in the demo shell.'
+  },
+  {
+    id: 'feed-002',
+    organization_id: 1,
+    project_id: 'demo-product',
+    ticket_id: 'demo-21a7b496',
+    session_id: 'sess-feed-002',
+    agent_type: 'codex',
+    title: 'Feed cards now show human actions and tradeoffs inline',
+    body: 'We updated the mock cards to mirror the live feed layout more closely.\n\n1. Human follow-ups stay visible even when the card is collapsed\n2. Tradeoff notes explain why a change was made\n3. File chips make it obvious which surface area changed',
+    tags: ['feed', 'ux', 'review'],
+    impact_level: 'significant',
+    files_touched: [
+      'components/features/feed/FeedCard.tsx',
+      'components/features/feed/FeedList.tsx'
+    ],
+    tradeoffs: [
+      {
+        decision: 'Keep the expanded details behind a click',
+        alternatives_considered: 'Show the entire body by default',
+        rationale: 'Collapsed cards keep the timeline scannable while still inviting inspection.'
+      }
+    ],
+    human_actions: [
+      'Check that the collapsed state still exposes the important review context.',
+      'Confirm the action badge wraps cleanly on smaller screens.'
+    ],
+    source_event_ids: ['evt-demo-feed-003'],
+    source_window_start: '2026-03-20T16:10:00.000Z',
+    source_window_end: '2026-03-20T16:40:00.000Z',
+    created_at: '2026-03-20T16:28:00.000Z',
+    updated_at: '2026-03-20T16:28:00.000Z',
+    project_name: 'Demo Experience',
+    project_color: '#0f766e',
+    ticket_title: 'Add live-looking feed cards',
+    ticket_objective: 'Mirror the real feed layout with mock review content.'
+  },
+  {
+    id: 'feed-003',
+    organization_id: 1,
+    project_id: 'demo-automation',
+    ticket_id: 'demo-21a7b497',
+    session_id: 'sess-feed-003',
+    agent_type: 'opencode',
+    title: 'Review-ready deliverables now generate a clearer activity summary',
+    body: 'The feed now reads more like a product history than a raw event log.\n\n- Added clearer language for what changed\n- Tuned the sample content to feel like real reviewer notes\n- Included short file lists so each post has a concrete trail',
+    tags: ['automation', 'summary', 'history'],
+    impact_level: 'minor',
+    files_touched: ['app/api/protocol/update/route.ts', 'app/api/protocol/deliver/route.ts'],
+    tradeoffs: [],
+    human_actions: [],
+    source_event_ids: ['evt-demo-feed-004', 'evt-demo-feed-005', 'evt-demo-feed-006'],
+    source_window_start: '2026-03-19T09:00:00.000Z',
+    source_window_end: '2026-03-19T09:30:00.000Z',
+    created_at: '2026-03-19T09:22:00.000Z',
+    updated_at: '2026-03-19T09:22:00.000Z',
+    project_name: 'Workflow Automation',
+    project_color: '#ea580c',
+    ticket_title: 'Make feed posts easier to scan',
+    ticket_objective: 'Summarize deliverable context in a readable timeline.'
+  },
+  {
+    id: 'feed-004',
+    organization_id: 1,
+    project_id: 'demo-overlord',
+    ticket_id: 'demo-21a7b498',
+    session_id: 'sess-feed-004',
+    agent_type: 'claude-code',
+    title: 'Kept the demo feed offline-first and self-contained',
+    body: 'This post exists to show the filtering and timeline behavior without reaching out to production data.\n\nIt keeps the preview fast, deterministic, and safe to open during a live walkthrough.',
+    tags: ['offline', 'demo', 'reliable'],
+    impact_level: 'notable',
+    files_touched: ['app/demo/DemoFeedPage.tsx'],
+    tradeoffs: [
+      {
+        decision: 'Avoid live links in the demo feed cards',
+        alternatives_considered: 'Use the production ticket route for every post',
+        rationale: 'The demo is more useful when every interaction stays within the walkthrough.'
+      }
+    ],
+    human_actions: [
+      'Decide whether the final tab label should stay as Feed or become Activity Feed.'
+    ],
+    source_event_ids: ['evt-demo-feed-007'],
+    source_window_start: '2026-03-18T13:20:00.000Z',
+    source_window_end: '2026-03-18T13:35:00.000Z',
+    created_at: '2026-03-18T13:27:00.000Z',
+    updated_at: '2026-03-18T13:27:00.000Z',
+    project_name: 'Overlord Core',
+    project_color: '#6366f1',
+    ticket_title: 'Keep the feed preview self-contained',
+    ticket_objective: 'Ensure the demo does not depend on authentication or remote data.'
+  }
+] satisfies DemoFeedPost[];
 
 export const DEMO_CURRENT_CHANGES_BRANCH = 'demo/review-ready';
 export const DEMO_CURRENT_CHANGES_DIRECTORY = '~/Development/MyProject';

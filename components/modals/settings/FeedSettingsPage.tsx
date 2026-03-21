@@ -71,7 +71,7 @@ export function FeedSettingsPage({ open }: { open: boolean }) {
             max={365}
             className="w-24"
             value={retentionDays}
-            onChange={(e) => setRetentionDays(Number(e.target.value) || 30)}
+            onChange={e => setRetentionDays(Number(e.target.value) || 30)}
             disabled={loading}
           />
           <span className="text-xs text-muted-foreground">days</span>

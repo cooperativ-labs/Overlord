@@ -5,7 +5,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from '@/components/ui/select';
 
 type Project = {
@@ -30,7 +30,7 @@ export function FeedProjectFilter({ projects, value, onChange }: FeedProjectFilt
         <SelectItem value="all">
           <span className="flex items-center gap-2">All Projects</span>
         </SelectItem>
-        {projects.map((project) => (
+        {projects.map(project => (
           <SelectItem key={project.id} value={project.id}>
             <span className="flex items-center gap-2">
               <span

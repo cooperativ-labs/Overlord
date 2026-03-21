@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 import { DemoCurrentChangesPage } from './DemoCurrentChangesPage';
+import { DemoFeedPage } from './DemoFeedPage';
 import { DemoSettings } from './DemoSettings';
 import { DemoTerminal } from './DemoTerminal';
 import { DemoTicketPanel } from './DemoTicketPanel';
@@ -317,6 +318,7 @@ export function DemoContent() {
           <div className="flex items-center gap-3">
             <TabsList>
               <TabsTrigger value="board">Project Board</TabsTrigger>
+              <TabsTrigger value="feed">Feed</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
               <TabsTrigger value="cli">CLI Preview</TabsTrigger>
             </TabsList>
@@ -447,6 +449,11 @@ export function DemoContent() {
               </WindowFrame>
             </div>
           )}
+        </TabsContent>
+
+        {/* Feed tab */}
+        <TabsContent value="feed" className="mt-0 px-6 pb-12">
+          <DemoFeedPage />
         </TabsContent>
 
         {/* Settings tab */}
