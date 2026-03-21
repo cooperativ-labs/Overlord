@@ -41,7 +41,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
   });
 
   return (
-    <article className="group relative flex gap-3">
+    <article className="group relative flex gap-3.5">
       {/* Timeline dot */}
       <div className="flex flex-col items-center pt-1.5">
         <div className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40 group-hover:bg-primary/60 transition-colors" />
@@ -50,7 +50,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
 
       <div className="flex-1 min-w-0 pb-6">
         {/* Meta line */}
-        <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <span>{timeStr}</span>
           <span className="text-muted-foreground/40">&middot;</span>
           <span>{dateStr}</span>
@@ -69,12 +69,12 @@ export function FeedCard({ post }: { post: FeedPost }) {
         </div>
 
         {/* Card */}
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-lg border bg-card p-5">
           {/* Title row */}
-          <div className="flex items-start gap-2 mb-2">
+          <div className="mb-2.5 flex items-start gap-2.5">
             <button
               type="button"
-              className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
               onClick={() => setExpanded(!expanded)}
               aria-label={expanded ? 'Collapse' : 'Expand'}
             >
@@ -85,21 +85,21 @@ export function FeedCard({ post }: { post: FeedPost }) {
               )}
             </button>
             <h3
-              className="flex-1 text-sm font-semibold leading-snug cursor-pointer"
+              className="flex-1 cursor-pointer text-base font-semibold leading-snug"
               onClick={() => setExpanded(!expanded)}
             >
               {post.title}
             </h3>
             {humanActions.length > 0 && (
               <Badge
-                className="shrink-0 rounded-full px-2 text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                className="shrink-0 rounded-full px-2 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                 variant="secondary"
               >
                 {humanActions.length} action{humanActions.length > 1 ? 's' : ''}
               </Badge>
             )}
             <Badge
-              className={cn('shrink-0 rounded-full px-2 text-[10px] font-medium', impact.className)}
+              className={cn('shrink-0 rounded-full px-2 text-xs font-medium', impact.className)}
               variant="secondary"
             >
               {impact.label}
@@ -108,16 +108,16 @@ export function FeedCard({ post }: { post: FeedPost }) {
 
           {/* Human actions always visible when collapsed */}
           {!expanded && humanActions.length > 0 && (
-            <div className="mt-2 ml-6 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800/40 dark:bg-blue-950/20">
-              <ul className="space-y-0.5">
+            <div className="mt-2.5 ml-6 rounded-md border border-blue-200 bg-blue-50 px-3.5 py-2.5 dark:border-blue-800/40 dark:bg-blue-950/20">
+              <ul className="space-y-1">
                 {humanActions.slice(0, 3).map((action, i) => (
-                  <li key={i} className="flex gap-2 text-xs text-blue-800 dark:text-blue-300">
+                  <li key={i} className="flex gap-2 text-[13px] text-blue-800 dark:text-blue-300">
                     <span className="shrink-0">&#8226;</span>
                     <span>{action}</span>
                   </li>
                 ))}
                 {humanActions.length > 3 && (
-                  <li className="text-xs text-blue-600/60 dark:text-blue-400/50">
+                  <li className="text-[13px] text-blue-600/60 dark:text-blue-400/50">
                     +{humanActions.length - 3} more...
                   </li>
                 )}
@@ -127,23 +127,26 @@ export function FeedCard({ post }: { post: FeedPost }) {
 
           {/* Expanded body */}
           {expanded && (
-            <div className="mt-3 space-y-3">
-              <MarkdownContent compact className="text-sm text-muted-foreground">
+            <div className="mt-3.5 space-y-3.5">
+              <MarkdownContent compact className="text-[15px] leading-6 text-muted-foreground">
                 {post.body}
               </MarkdownContent>
 
               {/* Human action items */}
               {humanActions.length > 0 && (
-                <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/20">
-                  <div className="flex items-center gap-1.5 mb-2">
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-3.5 dark:border-blue-800/40 dark:bg-blue-950/20">
+                  <div className="mb-2 flex items-center gap-1.5">
                     <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-xs font-semibold text-blue-800 dark:text-blue-300">
+                    <span className="text-sm font-semibold text-blue-800 dark:text-blue-300">
                       Action required
                     </span>
                   </div>
-                  <ul className="space-y-1">
+                  <ul className="space-y-1.5">
                     {humanActions.map((action, i) => (
-                      <li key={i} className="flex gap-2 text-xs text-blue-800 dark:text-blue-300">
+                      <li
+                        key={i}
+                        className="flex gap-2 text-[13px] text-blue-800 dark:text-blue-300"
+                      >
                         <span className="shrink-0 mt-0.5">&#8226;</span>
                         <span>{action}</span>
                       </li>
@@ -158,10 +161,10 @@ export function FeedCard({ post }: { post: FeedPost }) {
                   {tradeoffs.map((t, i) => (
                     <div
                       key={i}
-                      className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/40 dark:bg-amber-950/20"
+                      className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800/40 dark:bg-amber-950/20"
                     >
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <div className="text-xs">
+                      <div className="text-[13px]">
                         <p className="font-medium text-amber-800 dark:text-amber-300">
                           {t.decision}
                         </p>
@@ -183,11 +186,11 @@ export function FeedCard({ post }: { post: FeedPost }) {
 
               {/* Files touched */}
               {filesTouched.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
                   <FileCode2 className="h-3.5 w-3.5" />
                   <span className="font-medium">Files:</span>
                   {filesTouched.slice(0, 5).map(f => (
-                    <code key={f} className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                    <code key={f} className="rounded bg-muted px-1 py-0.5 text-xs">
                       {f}
                     </code>
                   ))}
@@ -202,7 +205,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
           )}
 
           {/* Tags and agent info */}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
             {agentType && (
               <span className="inline-flex items-center gap-1">
                 <Image src={agentType.icon} alt={agentType.label} width={14} height={14} />
@@ -219,11 +222,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
               <>
                 <span className="text-muted-foreground/40">&middot;</span>
                 {post.tags.slice(0, 4).map(tag => (
-                  <Badge
-                    key={tag}
-                    variant="outline"
-                    className="rounded-full px-1.5 py-0 text-[10px]"
-                  >
+                  <Badge key={tag} variant="outline" className="rounded-full px-1.5 py-0 text-xs">
                     {tag}
                   </Badge>
                 ))}
