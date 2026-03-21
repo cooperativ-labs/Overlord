@@ -195,6 +195,16 @@ export async function POST(request: Request) {
           session_id: sessionId,
           ticket_id: ticketId
         });
+
+        // Generate feed post (fire-and-forget — non-fatal if it fails)
+        try {
+          await supabase.functions.invoke('generate-feed-post', {
+            body: { ticketId, sessionId, organizationId }
+          });
+        } catch (feedErr) {
+          console.error('[protocol:deliver] feed post generation error:', feedErr);
+          Sentry.captureException(feedErr, { extra: { ticketId, sessionId } });
+        }
       } catch (bgErr) {
         console.error('[protocol:deliver] background job error:', bgErr);
         Sentry.captureException(bgErr, { extra: { ticketId, sessionId } });

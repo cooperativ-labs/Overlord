@@ -8,6 +8,7 @@ import {
   KeyRound,
   Link2,
   Monitor,
+  Newspaper,
   Palette,
   Shield,
   Terminal,
@@ -46,6 +47,7 @@ import {
 import type { UserOrganization } from '@/lib/actions/organizations';
 
 import { AboutPage } from './settings/AboutPage';
+import { FeedSettingsPage } from './settings/FeedSettingsPage';
 import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
 import { AppearancePage } from './settings/AppearancePage';
 import { CliPage } from './settings/CliPage';
@@ -78,6 +80,7 @@ const workflowNavItems: NavItem[] = [
 ];
 
 const appNavItems: NavItem[] = [
+  { name: 'Feed', icon: Newspaper },
   { name: 'Appearance', icon: Palette },
   { name: 'Hotkeys', icon: Keyboard },
   { name: 'Integrations', icon: Link2 },
@@ -221,6 +224,7 @@ export function SettingsModal({
               )}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
+              {activeNav === 'Feed' && <FeedSettingsPage open={open} />}
               {activeNav === 'Appearance' && <AppearancePage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
