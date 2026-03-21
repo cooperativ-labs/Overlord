@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 
 import { UserTicketsSettingsPanel } from '@/components/features/UserTicketsSettingsPanel';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { getUserOrganizations } from '@/lib/actions/organizations';
+import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 
 import TicketsBoardContent from '../tickets/(components)/TicketsBoardContent';
@@ -15,12 +17,16 @@ export default async function UserLayout({ children }: LayoutProps) {
   const cookieStore = await cookies();
   const rawOrgId = cookieStore.get(SELECTED_ORG_COOKIE)?.value;
   const selectedOrgId = rawOrgId ? Number(rawOrgId) : undefined;
+  const [organizations, projects] = await Promise.all([
+    getUserOrganizations(),
+    getProjectsForCurrentUser()
+  ]);
 
   const headersList = await headers();
   const userAgent = headersList.get('user-agent') ?? '';
   const isElectronRequest = userAgent.toLowerCase().includes('electron');
-  if (!isElectronRequest && !selectedOrgId) {
-    // Web users without org/project → redirect to full-page onboarding
+  if (!isElectronRequest && (organizations.length === 0 || projects.length === 0)) {
+    // Web users without org/project data still need the onboarding flow.
     redirect('/onboarding');
   }
 
