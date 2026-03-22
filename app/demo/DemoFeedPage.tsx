@@ -91,7 +91,10 @@ function DemoFeedCard({ post }: { post: DemoFeedPost }) {
             {post.project_name}
           </span>
           <span className="text-muted-foreground/40">&middot;</span>
-          <span className="text-primary">{post.ticket_title ?? 'Untitled ticket'}</span>
+          <span className="text-primary">
+            {post.ticket_sequence ? `#${post.ticket_sequence} ` : ''}
+            {post.ticket_title ?? 'Untitled ticket'}
+          </span>
         </div>
 
         <div className="rounded-lg border bg-card p-5">

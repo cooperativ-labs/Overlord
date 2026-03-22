@@ -64,6 +64,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
           </span>
           <span className="text-muted-foreground/40">&middot;</span>
           <Link href={ticketPath} className="hover:underline underline-offset-2 text-primary">
+            {post.ticket_sequence ? `#${post.ticket_sequence} ` : ''}
             {post.ticket_title ?? 'Untitled ticket'}
           </Link>
         </div>

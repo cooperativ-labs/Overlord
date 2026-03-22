@@ -55,6 +55,28 @@ function parseFileChangeLine(line: string): FileChangeEntry | null {
     };
   }
 
+  // Extract a file-path token from lines that mix a path with descriptive text.
+  // Scans tokens left-to-right for the first that looks like a file path
+  // (contains '/' and ends with a file extension), then treats the remainder as a note.
+  const tokens = stripped.split(/\s+/);
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (/\.\w{1,10}$/.test(token) && token.includes('/')) {
+      const rest = tokens
+        .slice(i + 1)
+        .join(' ')
+        .trim();
+      if (rest) {
+        return {
+          path: normalizeFilePath(token),
+          note: rest,
+          label: null
+        };
+      }
+      break; // no trailing text — fall through to default
+    }
+  }
+
   return { path: normalizeFilePath(stripped), note: null, label: null };
 }
 

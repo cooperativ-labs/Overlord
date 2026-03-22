@@ -58,6 +58,38 @@ describe('file change helpers', () => {
     );
   });
 
+  it('extracts file path from line with description text (no delimiter)', () => {
+    expect(
+      parseFileChanges(
+        'Added docs/sunpeak-mcp-gap-analysis.md with a comparison of the current MCP implementation versus Sunpeak recommendations'
+      )
+    ).toEqual([
+      {
+        label: null,
+        note: 'with a comparison of the current MCP implementation versus Sunpeak recommendations',
+        path: 'docs/sunpeak-mcp-gap-analysis.md'
+      }
+    ]);
+  });
+
+  it('extracts file path from bulleted line with trailing description', () => {
+    expect(
+      parseFileChanges('- components/features/FileChangesArtifact.tsx updated rendering logic')
+    ).toEqual([
+      {
+        label: null,
+        note: 'updated rendering logic',
+        path: 'components/features/FileChangesArtifact.tsx'
+      }
+    ]);
+  });
+
+  it('still handles plain file paths without description', () => {
+    expect(parseFileChanges('lib/helpers/file-changes.ts')).toEqual([
+      { label: null, note: null, path: 'lib/helpers/file-changes.ts' }
+    ]);
+  });
+
   it('extracts attribution paths from mixed artifact content', () => {
     expect(
       toAttributionFilePaths(

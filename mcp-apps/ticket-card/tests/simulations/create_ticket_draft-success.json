@@ -1,0 +1,49 @@
+{
+  "tool": "create_ticket_draft",
+  "userMessage": "Create a ticket draft to migrate the MCP ticket card to Sunpeak.",
+  "toolInput": {
+    "conversationContext": "We already compared Overlord's MCP implementation against Sunpeak. Now move the ticket-card UI into a Sunpeak resource and keep the existing production contract unchanged while we validate the simulator workflow.",
+    "title": "Migrate ticket card to Sunpeak",
+    "priority": "high"
+  },
+  "toolResult": {
+    "structuredContent": {
+      "draft": {
+        "title": "Migrate ticket card to Sunpeak",
+        "description": "We already compared Overlord's MCP implementation against Sunpeak. Now move the ticket-card UI into a Sunpeak resource and keep the existing production contract unchanged while we validate the simulator workflow.",
+        "priority": "high",
+        "projectId": null,
+        "projectName": "Default project",
+        "sourceSummary": "We already compared Overlord's MCP implementation against Sunpeak. Now move the ticket-card UI into a Sunpeak resource and keep the..."
+      },
+      "ticketCard": {
+        "saveToolName": "save_ticket_draft",
+        "resourceUri": "ui://overlord/ticket-card"
+      }
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Prepared a draft ticket. Review it in the ticket card before saving."
+      }
+    ]
+  },
+  "serverTools": {
+    "save_ticket_draft": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Created Overlord ticket OVLD-385."
+        }
+      ],
+      "structuredContent": {
+        "ticket": {
+          "id": "37a12488-1fab-4aab-97a2-077025a87a7d",
+          "reference": "OVLD-385",
+          "title": "Migrate ticket card to Sunpeak",
+          "projectName": "Default project"
+        }
+      }
+    }
+  }
+}

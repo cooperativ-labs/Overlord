@@ -1,0 +1,21 @@
+{
+  "title": "Overlord Ticket Card",
+  "description": "Review and edit a drafted Overlord ticket before saving it from chat.",
+  "mimeType": "text/html;profile=mcp-app",
+  "_meta": {
+    "ui": {
+      "csp": {
+        "connectDomains": [],
+        "resourceDomains": []
+      }
+    },
+    "openai/widgetDescription": "Review and edit a drafted Overlord ticket before saving it from chat.",
+    "openai/widgetPrefersBorder": true,
+    "openai/widgetCSP": {
+      "connect_domains": [],
+      "resource_domains": []
+    }
+  },
+  "name": "ticket-card",
+  "uri": "ui://ticket-card-mn1jc6rv"
+}

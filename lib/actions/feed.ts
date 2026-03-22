@@ -25,6 +25,7 @@ export type FeedPost = {
   project_color: string;
   ticket_title: string | null;
   ticket_objective: string | null;
+  ticket_sequence: number | null;
 };
 
 export async function getFeedPostsAction(options?: {
@@ -47,7 +48,7 @@ export async function getFeedPostsAction(options?: {
       `
       *,
       projects!inner(name, color),
-      tickets!inner(title, objective)
+      tickets!inner(title, objective, ticket_sequence)
     `
     )
     .gte('created_at', cutoff.toISOString())
@@ -67,7 +68,11 @@ export async function getFeedPostsAction(options?: {
 
   return (data ?? []).map((row: Record<string, unknown>) => {
     const projects = row.projects as { name: string; color: string } | null;
-    const tickets = row.tickets as { title: string | null; objective: string | null } | null;
+    const tickets = row.tickets as {
+      title: string | null;
+      objective: string | null;
+      ticket_sequence: number | null;
+    } | null;
 
     return {
       id: row.id as string,
@@ -91,7 +96,8 @@ export async function getFeedPostsAction(options?: {
       project_name: projects?.name ?? 'Unknown',
       project_color: projects?.color ?? '#6b7280',
       ticket_title: tickets?.title ?? null,
-      ticket_objective: tickets?.objective ?? null
+      ticket_objective: tickets?.objective ?? null,
+      ticket_sequence: tickets?.ticket_sequence ?? null
     };
   });
 }

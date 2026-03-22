@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "create-sunpeak-app": {
+      "source": "Sunpeak-AI/sunpeak",
+      "sourceType": "github",
+      "computedHash": "bcc5f4ed4f128fbc9d3977431b83dfda8165686c46103aa620204a5a47e836d8"
+    }
+  }
+}

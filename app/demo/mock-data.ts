@@ -96,7 +96,8 @@ export const DEMO_FEED_POSTS = [
     project_name: 'Overlord Core',
     project_color: '#6366f1',
     ticket_title: 'Create a 4th demo tab',
-    ticket_objective: 'Illustrate the new /feed feature in the demo shell.'
+    ticket_objective: 'Illustrate the new /feed feature in the demo shell.',
+    ticket_sequence: 142
   },
   {
     id: 'feed-002',
@@ -132,7 +133,8 @@ export const DEMO_FEED_POSTS = [
     project_name: 'Demo Experience',
     project_color: '#0f766e',
     ticket_title: 'Add live-looking feed cards',
-    ticket_objective: 'Mirror the real feed layout with mock review content.'
+    ticket_objective: 'Mirror the real feed layout with mock review content.',
+    ticket_sequence: 138
   },
   {
     id: 'feed-003',
@@ -156,7 +158,8 @@ export const DEMO_FEED_POSTS = [
     project_name: 'Workflow Automation',
     project_color: '#ea580c',
     ticket_title: 'Make feed posts easier to scan',
-    ticket_objective: 'Summarize deliverable context in a readable timeline.'
+    ticket_objective: 'Summarize deliverable context in a readable timeline.',
+    ticket_sequence: 131
   },
   {
     id: 'feed-004',
@@ -188,7 +191,8 @@ export const DEMO_FEED_POSTS = [
     project_name: 'Overlord Core',
     project_color: '#6366f1',
     ticket_title: 'Keep the feed preview self-contained',
-    ticket_objective: 'Ensure the demo does not depend on authentication or remote data.'
+    ticket_objective: 'Ensure the demo does not depend on authentication or remote data.',
+    ticket_sequence: 127
   }
 ] satisfies DemoFeedPost[];
 

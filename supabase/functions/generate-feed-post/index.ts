@@ -31,9 +31,9 @@ const FEED_POST_SYSTEM_INSTRUCTION = `You write concise, high-signal feed posts 
 Priorities:
 - Be specific and technically accurate.
 - Emphasize tradeoffs, risks, and reviewer-relevant context.
-- Keep content concise and useful for humans scanning many updates.
+- Keep content concise and useful for humans scanning many updates. Use bullet points instead of long paragraphs.
 - Return only valid JSON that matches the requested shape.
-- Include human follow-up items whenever manual review, configuration, deployment, testing, or any other human action is needed.`;
+- Include human follow-up items ONLY for proactive tasks the human must do — e.g. creating an account, setting an API key, running a migration, deploying a function, adding an env variable, or configuring a service. Do NOT include instructions to manually test, verify, review code, or check that things work — those are implied.`;
 
 type FeedPostPayload = {
   title: string;
@@ -180,19 +180,18 @@ ${rationaleLines || '(no code changes recorded)'}
 Respond with a single JSON object:
 {
   "title": "One-line action-oriented summary, max 80 characters",
-  "body": "2-4 paragraphs in Markdown. Cover: what was done and why; any tradeoffs, compromises, or deviations from the objective; what the human should review or be aware of. Do NOT repeat the title in the body.",
+  "body": "Concise Markdown summary using bullet points. Cover: what was done and why; any tradeoffs or deviations from the objective; what the human should be aware of. Do NOT repeat the title. Prefer bullet lists over paragraphs. Keep it scannable.",
   "tags": ["array of tags like: bugfix, refactor, new-feature, tradeoff, blocker-resolved, test, docs, config, dependency, performance, action-required"],
   "impact_level": "minor or notable or significant",
   "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}],
-  "human_actions": ["Any tasks, next steps, or follow-ups the human needs to do — e.g. run a migration, add an env variable, deploy a function, review a specific file, update a config, test a flow manually. Return an empty array if there is nothing for the human to do."],
+  "human_actions": ["ONLY proactive tasks the human must do — e.g. create an account, set an API key, run a migration, add an env variable, deploy a function, configure a third-party service. Return an empty array if none."],
   "files_touched": ["list/of/files.ts"]
 }
 
 IMPORTANT INSTRUCTIONS:
-- Keep the body under 500 words.
+- Keep the body under 300 words. Use bullet points, not paragraphs.
 - Surface tradeoffs prominently — they are the most valuable part. If there are no tradeoffs, return an empty array.
-- ALWAYS check for human action items. If the agent's work requires ANY manual follow-up (running migrations, setting env vars, deploying, manual testing, config changes, dependency installs, etc.), these MUST appear in "human_actions". Also include items the agent explicitly flagged as needing human review or attention. This is critical — the human reads the feed to know what THEY need to do next.
-- If the body mentions anything the human should do, it MUST also appear in "human_actions" as a discrete, actionable item.
+- "human_actions" is ONLY for proactive tasks the human must perform — things like creating accounts, setting API keys, running migrations, adding env variables, deploying functions, or configuring external services. Do NOT include: testing the code, verifying behavior, reviewing files, checking that things work, or any other validation/QA tasks. Those are implied and clutter the feed. If there are no proactive tasks, return an empty array.
 - Do not wrap the JSON in Markdown fences or any explanatory text.`;
 }
 
