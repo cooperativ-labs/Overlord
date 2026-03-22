@@ -51,6 +51,7 @@ type TicketsBoardContentProps = {
   organizationId?: number;
   showOrganizationName?: boolean;
   projectId?: string;
+  mentionProjectId?: string;
 };
 
 type RawTicket = {
@@ -94,7 +95,8 @@ const INITIAL_TICKETS_PER_STATUS = 20;
 export default async function TicketsBoardContent({
   organizationId,
   showOrganizationName = false,
-  projectId
+  projectId,
+  mentionProjectId
 }: TicketsBoardContentProps) {
   const savedView = await getRawViewPreference();
   const headerStore = await headers();
@@ -247,11 +249,12 @@ export default async function TicketsBoardContent({
   let objectiveFileMentionPaths: string[] = [];
   let kanbanWorkingDirectory: string | null = null;
 
-  if (projectId && view === 'board') {
+  const effectiveMentionProjectId = projectId ?? mentionProjectId;
+  if (effectiveMentionProjectId && view === 'board') {
     const { data: projectForMentions } = await supabase
       .from('projects')
       .select('local_working_directory')
-      .eq('id', projectId)
+      .eq('id', effectiveMentionProjectId)
       .limit(1)
       .maybeSingle();
 

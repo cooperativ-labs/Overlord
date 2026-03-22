@@ -5,6 +5,7 @@ import { UserTicketsSettingsPanel } from '@/components/features/UserTicketsSetti
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
+import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 
 import TicketsBoardContent from '../tickets/(components)/TicketsBoardContent';
@@ -17,6 +18,7 @@ export default async function UserLayout({ children }: LayoutProps) {
   const cookieStore = await cookies();
   const rawOrgId = cookieStore.get(SELECTED_ORG_COOKIE)?.value;
   const selectedOrgId = rawOrgId ? Number(rawOrgId) : undefined;
+  const defaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? undefined;
   const [organizations, projects] = await Promise.all([
     getUserOrganizations(),
     getProjectsForCurrentUser()
@@ -34,7 +36,11 @@ export default async function UserLayout({ children }: LayoutProps) {
     <div className="flex min-h-0 flex-1 flex-col gap-5">
       <ErrorBoundary>
         <UserTicketsSettingsPanel selectedOrgId={selectedOrgId} />
-        <TicketsBoardContent organizationId={selectedOrgId} showOrganizationName={!selectedOrgId} />
+        <TicketsBoardContent
+          organizationId={selectedOrgId}
+          showOrganizationName={!selectedOrgId}
+          mentionProjectId={defaultProjectId}
+        />
         {children}
       </ErrorBoundary>
     </div>
