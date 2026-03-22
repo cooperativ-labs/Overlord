@@ -12,11 +12,13 @@ import { AgentSplitButton } from './AgentSplitButton';
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
+type FileChange = Database['public']['Tables']['file_changes']['Row'];
 type SharedState = Database['public']['Tables']['shared_state']['Row'];
 
 type TicketLiveState = {
   events: TicketEvent[];
   artifacts: Artifact[];
+  fileChanges: FileChange[];
   session: AgentSession | null;
   sharedState: SharedState[];
 };
@@ -34,6 +36,7 @@ type TicketLiveProviderProps = {
   ticketId: string;
   initialEvents: TicketEvent[];
   initialArtifacts: Artifact[];
+  initialFileChanges: FileChange[];
   initialSession: AgentSession | null;
   initialSharedState: SharedState[];
 };
@@ -43,6 +46,7 @@ export function TicketLiveProvider({
   ticketId,
   initialEvents,
   initialArtifacts,
+  initialFileChanges,
   initialSession,
   initialSharedState
 }: TicketLiveProviderProps) {
@@ -50,6 +54,7 @@ export function TicketLiveProvider({
     ticketId,
     initialEvents,
     initialArtifacts,
+    initialFileChanges,
     initialSession,
     initialSharedState
   });

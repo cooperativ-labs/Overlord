@@ -5,12 +5,13 @@ import { createClient } from '@/supabase/utils/server';
 
 type PageProps = {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ file?: string }>;
+  searchParams: Promise<{ file?: string | string[] }>;
 };
 
 export default async function ProjectCurrentChangesPage({ params, searchParams }: PageProps) {
   const { projectId } = await params;
   const { file } = await searchParams;
+  const initialFilePath = Array.isArray(file) ? file[0] : file;
   const supabase = await createClient();
 
   const { data: project, error } = await supabase
@@ -28,7 +29,7 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
       projectId={project.id}
       projectName={project.name}
       workingDirectory={project.local_working_directory}
-      initialFilePath={file ?? null}
+      initialFilePath={initialFilePath ?? null}
     />
   );
 }

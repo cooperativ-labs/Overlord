@@ -35,7 +35,7 @@ export type RationaleHunk = {
   old_start?: number;
 };
 
-export type ChangeRationaleRecord = {
+export type FileChangeRecord = {
   attribution_source: string;
   change_kind: string;
   confidence: string;
@@ -46,6 +46,7 @@ export type ChangeRationaleRecord = {
     id: string;
     summary: string | null;
   } | null;
+  file_name: string;
   file_path: string;
   hunks: Json;
   id: string;
@@ -81,20 +82,13 @@ export type TicketSummary = {
   title: string | null;
 };
 
-export type FileAttribution = {
-  file_path: string;
-  ticket_id: string;
-  ticket_title: string | null;
-};
-
 export type EnrichedCurrentChangeFile = {
-  attributionCount: number;
+  fileChangeCount: number;
   file: GitStatusFile;
   path: string;
-  primaryRationale: ChangeRationaleRecord | null;
+  primaryFileChange: FileChangeRecord | null;
   primaryTicket: TicketSummary | null;
-  rationaleCount: number;
-  rationales: ChangeRationaleRecord[];
+  rationales: FileChangeRecord[];
   summary: string;
   tickets: TicketSummary[];
 };

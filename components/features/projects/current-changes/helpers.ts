@@ -1,7 +1,7 @@
 import type { ParsedDiffHunk } from '@/lib/git/unified-diff';
 import type { Json } from '@/types/database.types';
 
-import type { ChangeRationaleRecord, GitStatusFile, RationaleHunk } from './types';
+import type { FileChangeRecord, GitStatusFile, RationaleHunk } from './types';
 
 export function formatStatus(status: string): string {
   switch (status) {
@@ -82,7 +82,7 @@ function rangesOverlap(
   return startA <= bEnd && startB <= aEnd;
 }
 
-function hunkMatchesRationale(hunk: ParsedDiffHunk, rationale: ChangeRationaleRecord): boolean {
+function hunkMatchesRationale(hunk: ParsedDiffHunk, rationale: FileChangeRecord): boolean {
   const rationaleHunks = parseRationaleHunks(rationale.hunks);
   if (rationaleHunks.length === 0) return false;
 
@@ -96,20 +96,17 @@ function hunkMatchesRationale(hunk: ParsedDiffHunk, rationale: ChangeRationaleRe
 }
 
 export function buildHunkMatches(
-  rationales: ChangeRationaleRecord[],
+  rationales: FileChangeRecord[],
   file: GitStatusFile,
   hunk: ParsedDiffHunk
-): ChangeRationaleRecord[] {
+): FileChangeRecord[] {
   const candidatePaths = new Set([file.path, file.originalPath].filter(Boolean));
   return rationales.filter(
     rationale => candidatePaths.has(rationale.file_path) && hunkMatchesRationale(hunk, rationale)
   );
 }
 
-export function countFileRationales(
-  file: GitStatusFile,
-  rationales: ChangeRationaleRecord[]
-): number {
+export function countFileRationales(file: GitStatusFile, rationales: FileChangeRecord[]): number {
   const candidatePaths = new Set([file.path, file.originalPath].filter(Boolean));
   return rationales.filter(rationale => candidatePaths.has(rationale.file_path)).length;
 }

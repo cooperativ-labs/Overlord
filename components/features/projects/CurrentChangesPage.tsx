@@ -8,10 +8,9 @@ import { DiffPane } from '@/components/features/projects/current-changes/DiffPan
 import { FileListPane } from '@/components/features/projects/current-changes/FileListPane';
 import { getRationalePaths } from '@/components/features/projects/current-changes/helpers';
 import {
-  type ChangeRationaleRecord,
   type DiffState,
   type EnrichedCurrentChangeFile,
-  type FileAttribution,
+  type FileChangeRecord,
   type GitDiffResponse,
   type GitStatusResponse
 } from '@/components/features/projects/current-changes/types';
@@ -38,9 +37,8 @@ export function CurrentChangesPage({
   const { api, isElectron } = useElectron();
   const [statusResponse, setStatusResponse] = useState<GitStatusResponse | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
-  const [rationales, setRationales] = useState<ChangeRationaleRecord[]>([]);
+  const [fileChanges, setFileChanges] = useState<FileChangeRecord[]>([]);
   const [rationalesError, setRationalesError] = useState<string | null>(null);
-  const [fileAttributions, setFileAttributions] = useState<FileAttribution[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [diffState, setDiffState] = useState<DiffState>({
     error: null,
@@ -52,11 +50,10 @@ export function CurrentChangesPage({
   const enrichedFiles = useMemo(
     () =>
       buildEnrichedCurrentChangeFiles({
-        fileAttributions,
         files: statusResponse?.files ?? [],
-        rationales
+        rationales: fileChanges
       }),
-    [fileAttributions, rationales, statusResponse?.files]
+    [fileChanges, statusResponse?.files]
   );
 
   const uniqueTickets = useMemo(() => {
@@ -113,38 +110,12 @@ export function CurrentChangesPage({
     return result;
   }
 
-  async function loadFileAttributions(files: GitStatusResponse['files']) {
-    try {
-      const filePaths = getRationalePaths(files);
-      if (filePaths.length === 0) {
-        setFileAttributions([]);
-        return;
-      }
-      const searchParams = new URLSearchParams();
-      for (const filePath of filePaths) {
-        searchParams.append('filePath', filePath);
-      }
-      const response = await fetch(`/api/projects/${projectId}/file-attribution?${searchParams}`, {
-        cache: 'no-store'
-      });
-      const payload = (await response.json()) as {
-        error?: string;
-        attributions?: FileAttribution[];
-      };
-      if (response.ok) {
-        setFileAttributions(payload.attributions ?? []);
-      }
-    } catch {
-      // Non-critical: file attribution is supplementary
-    }
-  }
-
-  async function loadRationales(files: GitStatusResponse['files']) {
+  async function loadFileChanges(files: GitStatusResponse['files']) {
     setRationalesError(null);
     try {
       const filePaths = getRationalePaths(files);
       if (filePaths.length === 0) {
-        setRationales([]);
+        setFileChanges([]);
         return;
       }
 
@@ -153,22 +124,20 @@ export function CurrentChangesPage({
         searchParams.append('filePath', filePath);
       }
 
-      const response = await fetch(`/api/projects/${projectId}/change-rationales?${searchParams}`, {
+      const response = await fetch(`/api/projects/${projectId}/file-changes?${searchParams}`, {
         cache: 'no-store'
       });
       const payload = (await response.json()) as {
         error?: string;
-        rationales?: ChangeRationaleRecord[];
+        fileChanges?: FileChangeRecord[];
       };
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to load change rationales.');
+        throw new Error(payload.error ?? 'Failed to load file changes.');
       }
-      setRationales(payload.rationales ?? []);
+      setFileChanges(payload.fileChanges ?? []);
     } catch (error) {
-      setRationales([]);
-      setRationalesError(
-        error instanceof Error ? error.message : 'Failed to load change rationales.'
-      );
+      setFileChanges([]);
+      setRationalesError(error instanceof Error ? error.message : 'Failed to load file changes.');
     }
   }
 
@@ -181,7 +150,7 @@ export function CurrentChangesPage({
     void (async () => {
       const result = await loadStatus();
       const files = result?.files ?? [];
-      await Promise.all([loadRationales(files), loadFileAttributions(files)]);
+      await loadFileChanges(files);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isElectron, workingDirectory, projectId, api]);
@@ -287,7 +256,7 @@ export function CurrentChangesPage({
               void (async () => {
                 const result = await loadStatus();
                 const files = result?.files ?? [];
-                await Promise.all([loadRationales(files), loadFileAttributions(files)]);
+                await loadFileChanges(files);
               })()
             }
           >

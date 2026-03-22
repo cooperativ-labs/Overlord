@@ -8,6 +8,7 @@ import type { Database } from '@/types/database.types';
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
+type FileChange = Database['public']['Tables']['file_changes']['Row'];
 type SharedState = Database['public']['Tables']['shared_state']['Row'];
 type JsonValue = Database['public']['Tables']['ticket_events']['Row']['payload'];
 
@@ -93,6 +94,7 @@ type UseTicketRealtimeOptions = {
   ticketId: string;
   initialEvents: TicketEvent[];
   initialArtifacts: Artifact[];
+  initialFileChanges: FileChange[];
   initialSession: AgentSession | null;
   initialSharedState: SharedState[];
 };
@@ -101,11 +103,13 @@ export function useTicketRealtime({
   ticketId,
   initialEvents,
   initialArtifacts,
+  initialFileChanges,
   initialSession,
   initialSharedState
 }: UseTicketRealtimeOptions) {
   const [events, setEvents] = useState<TicketEvent[]>(initialEvents);
   const [artifacts, setArtifacts] = useState<Artifact[]>(initialArtifacts);
+  const [fileChanges, setFileChanges] = useState<FileChange[]>(initialFileChanges);
   const [session, setSession] = useState<AgentSession | null>(initialSession);
   const [sharedState, setSharedState] = useState<SharedState[]>(initialSharedState);
   const notifiedEventIdsRef = useRef<Set<string>>(new Set());
@@ -117,42 +121,57 @@ export function useTicketRealtime({
   useEffect(() => {
     setEvents(initialEvents);
     setArtifacts(initialArtifacts);
+    setFileChanges(initialFileChanges);
     setSession(initialSession);
     setSharedState(initialSharedState);
-  }, [initialArtifacts, initialEvents, initialSession, initialSharedState, ticketId]);
+  }, [
+    initialArtifacts,
+    initialEvents,
+    initialFileChanges,
+    initialSession,
+    initialSharedState,
+    ticketId
+  ]);
 
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
 
     const syncTicketData = async () => {
-      const [eventsResult, artifactsResult, sessionResult, stateResult] = await Promise.all([
-        supabase
-          .from('ticket_events')
-          .select('*')
-          .eq('ticket_id', ticketId)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('artifacts')
-          .select('*')
-          .eq('ticket_id', ticketId)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('agent_sessions')
-          .select('*')
-          .eq('ticket_id', ticketId)
-          .order('attached_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('shared_state')
-          .select('*')
-          .eq('ticket_id', ticketId)
-          .order('created_at', { ascending: false })
-          .limit(20)
-      ]);
+      const [eventsResult, artifactsResult, fileChangesResult, sessionResult, stateResult] =
+        await Promise.all([
+          supabase
+            .from('ticket_events')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabase
+            .from('artifacts')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabase
+            .from('file_changes')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: false })
+            .limit(20),
+          supabase
+            .from('agent_sessions')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .order('attached_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase
+            .from('shared_state')
+            .select('*')
+            .eq('ticket_id', ticketId)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        ]);
 
       if (cancelled) return;
 
@@ -164,6 +183,11 @@ export function useTicketRealtime({
       if (artifactsResult.data) {
         setArtifacts(previous =>
           mergeNewestById(artifactsResult.data ?? [], previous, row => row.created_at)
+        );
+      }
+      if (fileChangesResult.data) {
+        setFileChanges(previous =>
+          mergeNewestById(fileChangesResult.data ?? [], previous, row => row.created_at)
         );
       }
       if (stateResult.data) {
@@ -214,6 +238,20 @@ export function useTicketRealtime({
         },
         payload => {
           setArtifacts(previous => mergeNewestById([payload.new], previous, row => row.created_at));
+        }
+      )
+      .on<FileChange>(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'file_changes',
+          filter: `ticket_id=eq.${ticketId}`
+        },
+        payload => {
+          setFileChanges(previous =>
+            mergeNewestById([payload.new], previous, row => row.created_at)
+          );
         }
       )
       .on<AgentSession>(
@@ -273,5 +311,5 @@ export function useTicketRealtime({
     };
   }, [ticketId]);
 
-  return { events, artifacts, session, sharedState };
+  return { events, artifacts, fileChanges, session, sharedState };
 }

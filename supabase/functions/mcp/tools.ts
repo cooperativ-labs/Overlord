@@ -121,7 +121,7 @@ export const TOOLS = [
         changeRationales: {
           type: 'array',
           description:
-            'Optional structured rationale records for meaningful code changes. These are stored in the change_rationales table. Prefer 1-5 concise entries per ticket.',
+            'Optional structured rationale records for meaningful code changes. These are stored as first-class rows in the file_changes table. Prefer 1-5 concise entries per ticket.',
           items: {
             type: 'object',
             properties: {
@@ -168,7 +168,7 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      'Persist structured change rationale records to Overlord. These are stored in the change_rationales table and linked to the current ticket/session/event.',
+      'Persist structured change rationale records to Overlord. These are stored as first-class rows in the file_changes table and linked to the current ticket/session/event.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -186,7 +186,7 @@ export const TOOLS = [
         changeRationales: {
           type: 'array',
           description:
-            'Structured rationale records to persist in the change_rationales table. Prefer this tool or the update/deliver changeRationales fields over free-form text.',
+            'Structured rationale records to persist in the file_changes table. Prefer this tool or the update/deliver changeRationales fields over free-form text.',
           items: {
             type: 'object',
             properties: {
@@ -388,7 +388,7 @@ export const TOOLS = [
         changeRationales: {
           type: 'array',
           description:
-            'Optional structured rationale records for meaningful code changes. These are stored in the change_rationales table. Prefer 1-5 concise entries per ticket.',
+            'Optional structured rationale records for meaningful code changes. These are stored as first-class rows in the file_changes table. Prefer 1-5 concise entries per ticket.',
           items: {
             type: 'object',
             properties: {
@@ -424,15 +424,7 @@ export const TOOLS = [
             properties: {
               type: {
                 type: 'string',
-                enum: [
-                  'file_changes',
-                  'next_steps',
-                  'test_results',
-                  'migration',
-                  'decision',
-                  'note',
-                  'url'
-                ]
+                enum: ['next_steps', 'test_results', 'migration', 'decision', 'note', 'url']
               },
               label: { type: 'string' },
               content: { type: 'string' },
@@ -441,8 +433,7 @@ export const TOOLS = [
             },
             required: ['type', 'label']
           },
-          description:
-            'Artifact types: file_changes, next_steps, test_results, migration, decision, note, url.'
+          description: 'Artifact types: next_steps, test_results, migration, decision, note, url.'
         }
       },
       required: ['sessionKey', 'ticketId', 'summary']

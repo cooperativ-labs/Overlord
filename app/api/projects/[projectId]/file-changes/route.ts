@@ -36,8 +36,6 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
-    // When not including completed tickets, resolve which ticket IDs to exclude
-    // by looking up status names with status_type = 'complete' for this org.
     let excludedTicketIds: string[] = [];
     if (!includeCompleted && project.organization_id) {
       const { data: completeStatuses } = await supabase
@@ -55,11 +53,11 @@ export async function GET(request: Request, { params }: RouteContext) {
           .eq('project_id', projectId)
           .in('status', completeStatusNames);
 
-        excludedTicketIds = (completedTickets ?? []).map((t: { id: string }) => t.id);
+        excludedTicketIds = (completedTickets ?? []).map((ticket: { id: string }) => ticket.id);
       }
     }
 
-    let rationaleQuery = supabase
+    let fileChangeQuery = supabase
       .from('file_changes')
       .select(
         'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,title,status,objective,recent_agent,project_id)'
@@ -68,21 +66,20 @@ export async function GET(request: Request, { params }: RouteContext) {
       .order('created_at', { ascending: false });
 
     if (filePaths.length > 0) {
-      rationaleQuery = rationaleQuery.in('file_path', filePaths);
+      fileChangeQuery = fileChangeQuery.in('file_path', filePaths);
     }
 
     if (excludedTicketIds.length > 0) {
-      // PostgREST `not.in` filter: exclude rationales from completed tickets
-      rationaleQuery = rationaleQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
+      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
     }
 
-    const { data: rationales, error: rationaleError } = await rationaleQuery;
-    if (rationaleError) {
-      return NextResponse.json({ error: rationaleError.message }, { status: 500 });
+    const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;
+    if (fileChangeError) {
+      return NextResponse.json({ error: fileChangeError.message }, { status: 500 });
     }
 
-    const eventIds = [...new Set((rationales ?? []).map(row => row.event_id))];
-    const sessionIds = [...new Set((rationales ?? []).map(row => row.session_id))];
+    const eventIds = [...new Set((fileChanges ?? []).map(row => row.event_id))];
+    const sessionIds = [...new Set((fileChanges ?? []).map(row => row.session_id))];
 
     const [eventsResult, sessionsResult] = await Promise.all([
       eventIds.length
@@ -111,30 +108,27 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
-    const events = eventsResult.data ?? [];
-    const sessions = sessionsResult.data ?? [];
-
-    const eventsById = new Map((events ?? []).map(event => [event.id, event]));
-    const sessionsById = new Map((sessions ?? []).map(session => [session.id, session]));
+    const eventsById = new Map((eventsResult.data ?? []).map(event => [event.id, event]));
+    const sessionsById = new Map((sessionsResult.data ?? []).map(session => [session.id, session]));
 
     return NextResponse.json({
-      rationales: (rationales ?? []).map(rationale => ({
-        attribution_source: rationale.attribution_source,
-        change_kind: rationale.change_kind,
-        confidence: rationale.confidence,
-        created_at: rationale.created_at,
-        event: eventsById.get(rationale.event_id) ?? null,
-        file_name: rationale.file_name,
-        file_path: rationale.file_path,
-        hunks: rationale.hunks,
-        id: rationale.id,
-        impact: rationale.impact,
-        label: rationale.label,
-        session: sessionsById.get(rationale.session_id) ?? null,
-        summary: rationale.summary,
-        ticket: rationale.tickets ?? null,
-        updated_at: rationale.updated_at,
-        why: rationale.why
+      fileChanges: (fileChanges ?? []).map(fileChange => ({
+        attribution_source: fileChange.attribution_source,
+        change_kind: fileChange.change_kind,
+        confidence: fileChange.confidence,
+        created_at: fileChange.created_at,
+        event: eventsById.get(fileChange.event_id) ?? null,
+        file_name: fileChange.file_name,
+        file_path: fileChange.file_path,
+        hunks: fileChange.hunks,
+        id: fileChange.id,
+        impact: fileChange.impact,
+        label: fileChange.label,
+        session: sessionsById.get(fileChange.session_id) ?? null,
+        summary: fileChange.summary,
+        ticket: fileChange.tickets ?? null,
+        updated_at: fileChange.updated_at,
+        why: fileChange.why
       }))
     });
   } catch (error) {

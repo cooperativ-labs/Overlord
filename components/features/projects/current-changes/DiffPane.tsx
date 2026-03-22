@@ -112,19 +112,19 @@ export function DiffPane({
               <div className="rounded-md border bg-background p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Change</p>
                 <p className="mt-1 text-sm text-foreground">
-                  {file.primaryRationale?.label || file.summary}
+                  {file.primaryFileChange?.label || file.summary}
                 </p>
               </div>
               <div className="rounded-md border bg-background p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Why</p>
                 <p className="mt-1 text-sm text-foreground">
-                  {file.primaryRationale?.why || 'No rationale has been linked to this file yet.'}
+                  {file.primaryFileChange?.why || 'No rationale has been linked to this file yet.'}
                 </p>
               </div>
               <div className="rounded-md border bg-background p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Impact</p>
                 <p className="mt-1 text-sm text-foreground">
-                  {file.primaryRationale?.impact ||
+                  {file.primaryFileChange?.impact ||
                     'Review the diff below to confirm the intended impact.'}
                 </p>
               </div>

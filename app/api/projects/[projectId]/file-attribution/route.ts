@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 
-import { toAttributionFilePaths } from '@/lib/helpers/file-changes';
 import { createClient } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -13,7 +12,7 @@ type FileAttribution = {
 
 /**
  * Returns deterministic file-to-ticket attribution for a project.
- * Sources: `file_changes` artifacts from agent deliveries, joined with ticket data.
+ * Source: first-class `file_changes` rows, joined with ticket data.
  * Query params: `filePath` (repeatable) to filter to specific files.
  */
 export async function GET(request: Request, { params }: RouteContext) {
@@ -72,45 +71,38 @@ export async function GET(request: Request, { params }: RouteContext) {
       }
     }
 
-    // Get file_changes artifacts for tickets in this project, joined with ticket data.
-    let artifactQuery = supabase
-      .from('artifacts')
-      .select('content,ticket_id,tickets!inner(id,title,project_id)')
-      .eq('artifact_type', 'file_changes')
+    let fileChangeQuery = supabase
+      .from('file_changes')
+      .select('file_path,ticket_id,tickets!inner(id,title,project_id)')
       .eq('tickets.project_id', projectId)
-      .not('content', 'is', null)
       .order('created_at', { ascending: false })
       .limit(500);
 
     if (excludedTicketIds.length > 0) {
-      artifactQuery = artifactQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
+      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
     }
 
-    const { data: artifacts, error: artifactError } = await artifactQuery;
+    const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;
 
-    if (artifactError) {
-      return NextResponse.json({ error: artifactError.message }, { status: 500 });
+    if (fileChangeError) {
+      return NextResponse.json({ error: fileChangeError.message }, { status: 500 });
     }
 
     const attributions: FileAttribution[] = [];
     const seen = new Set<string>();
 
-    for (const artifact of artifacts ?? []) {
-      if (!artifact.content || !artifact.ticket_id) continue;
-      const filePaths = toAttributionFilePaths(artifact.content);
-      const ticket = artifact.tickets as unknown as { id: string; title: string | null };
-
-      for (const filePath of filePaths) {
-        if (requestedPaths.size > 0 && !requestedPaths.has(filePath)) continue;
-        const key = `${filePath}::${artifact.ticket_id}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        attributions.push({
-          file_path: filePath,
-          ticket_id: ticket.id,
-          ticket_title: ticket.title
-        });
-      }
+    for (const fileChange of fileChanges ?? []) {
+      if (!fileChange.file_path || !fileChange.ticket_id) continue;
+      if (requestedPaths.size > 0 && !requestedPaths.has(fileChange.file_path)) continue;
+      const ticket = fileChange.tickets as unknown as { id: string; title: string | null };
+      const key = `${fileChange.file_path}::${fileChange.ticket_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      attributions.push({
+        file_path: fileChange.file_path,
+        ticket_id: ticket.id,
+        ticket_title: ticket.title
+      });
     }
 
     return NextResponse.json({ attributions });

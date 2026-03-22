@@ -294,102 +294,6 @@ export type Database = {
           }
         ];
       };
-      change_rationales: {
-        Row: {
-          attribution_source: string;
-          change_kind: string;
-          confidence: string;
-          created_at: string;
-          event_id: string;
-          file_path: string;
-          hunks: Json;
-          id: string;
-          impact: string;
-          label: string;
-          organization_id: number;
-          project_id: string;
-          session_id: string;
-          summary: string;
-          ticket_id: string;
-          updated_at: string;
-          why: string;
-        };
-        Insert: {
-          attribution_source?: string;
-          change_kind?: string;
-          confidence?: string;
-          created_at?: string;
-          event_id: string;
-          file_path: string;
-          hunks?: Json;
-          id?: string;
-          impact: string;
-          label: string;
-          organization_id: number;
-          project_id: string;
-          session_id: string;
-          summary: string;
-          ticket_id: string;
-          updated_at?: string;
-          why: string;
-        };
-        Update: {
-          attribution_source?: string;
-          change_kind?: string;
-          confidence?: string;
-          created_at?: string;
-          event_id?: string;
-          file_path?: string;
-          hunks?: Json;
-          id?: string;
-          impact?: string;
-          label?: string;
-          organization_id?: number;
-          project_id?: string;
-          session_id?: string;
-          summary?: string;
-          ticket_id?: string;
-          updated_at?: string;
-          why?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: 'change_rationales_event_id_fkey';
-            columns: ['event_id'];
-            isOneToOne: false;
-            referencedRelation: 'ticket_events';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'change_rationales_organization_id_fkey';
-            columns: ['organization_id'];
-            isOneToOne: false;
-            referencedRelation: 'organizations';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'change_rationales_project_id_fkey';
-            columns: ['project_id'];
-            isOneToOne: false;
-            referencedRelation: 'projects';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'change_rationales_session_id_fkey';
-            columns: ['session_id'];
-            isOneToOne: false;
-            referencedRelation: 'agent_sessions';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'change_rationales_ticket_id_fkey';
-            columns: ['ticket_id'];
-            isOneToOne: false;
-            referencedRelation: 'tickets';
-            referencedColumns: ['id'];
-          }
-        ];
-      };
       connections: {
         Row: {
           config: Json;
@@ -544,6 +448,85 @@ export type Database = {
           },
           {
             foreignKeyName: 'feed_posts_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      file_changes: {
+        Row: {
+          attribution_source: string;
+          change_kind: string;
+          confidence: string;
+          created_at: string;
+          event_id: string;
+          file_name: string;
+          file_path: string;
+          hunks: Json;
+          id: string;
+          impact: string;
+          label: string;
+          session_id: string;
+          summary: string;
+          ticket_id: string;
+          updated_at: string;
+          why: string;
+        };
+        Insert: {
+          attribution_source?: string;
+          change_kind?: string;
+          confidence?: string;
+          created_at?: string;
+          event_id: string;
+          file_name: string;
+          file_path: string;
+          hunks?: Json;
+          id?: string;
+          impact: string;
+          label: string;
+          session_id: string;
+          summary: string;
+          ticket_id: string;
+          updated_at?: string;
+          why: string;
+        };
+        Update: {
+          attribution_source?: string;
+          change_kind?: string;
+          confidence?: string;
+          created_at?: string;
+          event_id?: string;
+          file_name?: string;
+          file_path?: string;
+          hunks?: Json;
+          id?: string;
+          impact?: string;
+          label?: string;
+          session_id?: string;
+          summary?: string;
+          ticket_id?: string;
+          updated_at?: string;
+          why?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'file_changes_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'ticket_events';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'file_changes_session_id_fkey';
+            columns: ['session_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'file_changes_ticket_id_fkey';
             columns: ['ticket_id'];
             isOneToOne: false;
             referencedRelation: 'tickets';

@@ -26,7 +26,7 @@ export const ChangeRationaleSchema = z.object({
 export type ChangeRationale = z.infer<typeof ChangeRationaleSchema>;
 
 export const ArtifactSchema = z.object({
-  type: z.enum(['file_changes', 'next_steps', 'test_results', 'migration', 'note', 'url']),
+  type: z.enum(['next_steps', 'test_results', 'migration', 'note', 'url', 'decision']),
   label: z.string().describe('Display name for this artifact'),
   content: z.string().describe('Artifact content or summary')
 });
@@ -168,7 +168,7 @@ export const RecordChangeRationalesPayloadSchema = z.object({
   changeRationales: z
     .array(ChangeRationaleSchema)
     .min(1)
-    .describe('Structured rationale rows to persist to the change_rationales table')
+    .describe('Structured file change rationale rows to persist to the file_changes table')
 });
 export type RecordChangeRationalesPayload = z.infer<typeof RecordChangeRationalesPayloadSchema>;
 

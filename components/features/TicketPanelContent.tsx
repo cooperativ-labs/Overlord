@@ -14,7 +14,6 @@ import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
-import { TicketToolsAndCriteria } from '@/components/features/TicketToolsAndCriteria';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
@@ -96,6 +95,7 @@ export async function TicketPanelContent({
     eventsResult,
     stateResult,
     artifactsResult,
+    fileChangesResult,
     statusesResult,
     everhourResult,
     projectsResult,
@@ -117,6 +117,12 @@ export async function TicketPanelContent({
       .limit(20),
     supabase
       .from('artifacts')
+      .select('*')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('file_changes')
       .select('*')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
@@ -164,6 +170,7 @@ export async function TicketPanelContent({
   const events = eventsResult.data;
   const state = stateResult.data;
   const artifacts = artifactsResult.data;
+  const fileChanges = fileChangesResult.data;
   const statuses = statusesResult.data;
   const everhourIntegration = everhourResult.data;
   const projects = projectsResult.data;
@@ -280,6 +287,7 @@ export async function TicketPanelContent({
       ticketId={ticketId}
       initialEvents={events ?? []}
       initialArtifacts={artifacts ?? []}
+      initialFileChanges={fileChanges ?? []}
       initialSession={agentSession ?? null}
       initialSharedState={state ?? []}
     >

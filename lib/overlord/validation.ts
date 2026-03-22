@@ -121,7 +121,9 @@ export const deliverSchema = z.object({
   artifacts: z
     .array(
       z.object({
-        type: z.string().trim().min(1).max(80),
+        type: z
+          .enum(['next_steps', 'test_results', 'migration', 'decision', 'note', 'url'])
+          .describe('Artifact type'),
         label: z.string().trim().min(1).max(160),
         uri: z.string().trim().max(1_024).optional(),
         content: z.string().trim().max(100_000).optional(),

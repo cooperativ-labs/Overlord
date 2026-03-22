@@ -42,14 +42,7 @@ export function generateDeliverPayloadExample(ticketId: string): string {
           hunks: [{ header: '@@ -10,6 +10,14 @@' }]
         }
       ],
-      artifacts: [
-        {
-          type: 'file_changes',
-          label: 'Files modified',
-          content: 'git diff --stat or summary'
-        },
-        { type: 'next_steps', label: 'Next steps', content: 'Bulleted list.' }
-      ]
+      artifacts: [{ type: 'next_steps', label: 'Next steps', content: 'Bulleted list.' }]
     },
     null,
     2

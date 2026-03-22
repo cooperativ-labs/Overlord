@@ -2,10 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import {
-  insertChangeRationales,
-  resolveTicketProjectContext
-} from '@/lib/overlord/change-rationales';
+import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { recordChangeRationalesSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -38,7 +35,7 @@ export async function POST(request: Request) {
         event_type: 'update',
         payload: {
           change_rationale_count: rationaleCount,
-          entry_type: 'change_rationales'
+          entry_type: 'file_changes'
         },
         phase: phase ?? null,
         session_id: resolved.session.id,
@@ -54,19 +51,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const ticketContext = await resolveTicketProjectContext(typedSupabase, ticketId);
-    if (!ticketContext) {
-      return NextResponse.json(
-        { error: 'Failed to resolve ticket project context.' },
-        { status: 500 }
-      );
-    }
-
-    const rationaleResult = await insertChangeRationales({
+    const rationaleResult = await insertFileChanges({
       changeRationales,
       eventId: event.id,
-      organizationId: ticketContext.organization_id,
-      projectId: ticketContext.project_id,
       sessionId: resolved.session.id,
       supabase: typedSupabase,
       ticketId

@@ -287,9 +287,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Fetch change rationales
+    // Fetch file changes
     const rationalesQuery = supabase
-      .from('change_rationales')
+      .from('file_changes')
       .select('file_path, summary, why, impact')
       .eq('ticket_id', ticketId)
       .limit(30);

@@ -9,7 +9,7 @@ import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
 import type { FeedPost } from '@/lib/actions/feed';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
-import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
 const impactConfig: Record<string, { label: string; className: string }> = {
@@ -29,6 +29,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
   const impact = impactConfig[post.impact_level] ?? impactConfig.notable;
   const agentType = getAgentTypeByIdentifier(post.agent_type);
   const ticketPath = buildTicketPath({ projectId: post.project_id, ticketId: post.ticket_id });
+  const currentChangesPath = `${buildProjectPath({ projectId: post.project_id })}/current-changes`;
   const tradeoffs = Array.isArray(post.tradeoffs) ? post.tradeoffs : [];
   const humanActions = Array.isArray(post.human_actions) ? post.human_actions : [];
   const filesTouched = Array.isArray(post.files_touched) ? post.files_touched : [];
@@ -191,9 +192,13 @@ export function FeedCard({ post }: { post: FeedPost }) {
                   <FileCode2 className="h-3.5 w-3.5" />
                   <span className="font-medium">Files:</span>
                   {filesTouched.slice(0, 5).map(f => (
-                    <code key={f} className="rounded bg-muted px-1 py-0.5 text-xs">
+                    <Link
+                      key={f}
+                      href={`${currentChangesPath}?file=${encodeURIComponent(f)}`}
+                      className="rounded bg-muted px-1 py-0.5 text-xs underline-offset-4 hover:bg-muted/80 hover:underline"
+                    >
                       {f}
-                    </code>
+                    </Link>
                   ))}
                   {filesTouched.length > 5 && (
                     <span className="text-muted-foreground/60">

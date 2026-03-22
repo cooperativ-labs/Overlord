@@ -2,11 +2,11 @@ import Link from 'next/link';
 
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
-import type { ChangeRationaleRecord, TicketSummary } from './types';
+import type { FileChangeRecord, TicketSummary } from './types';
 
 type HunkPopoverContentProps = {
   fileTickets?: TicketSummary[];
-  matches: ChangeRationaleRecord[];
+  matches: FileChangeRecord[];
   projectId: string;
 };
 

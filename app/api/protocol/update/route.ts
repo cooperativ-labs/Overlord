@@ -7,10 +7,7 @@ import {
   buildAgentNotificationSummary,
   extractAgentNotifications
 } from '@/lib/overlord/agent-notifications';
-import {
-  insertChangeRationales,
-  resolveTicketProjectContext
-} from '@/lib/overlord/change-rationales';
+import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { updateSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -62,19 +59,9 @@ export async function POST(request: Request) {
     }
 
     if (Array.isArray(changeRationales) && changeRationales.length > 0) {
-      const ticketContext = await resolveTicketProjectContext(typedSupabase, ticketId);
-      if (!ticketContext) {
-        return NextResponse.json(
-          { error: 'Failed to resolve ticket project context.' },
-          { status: 500 }
-        );
-      }
-
-      const rationaleResult = await insertChangeRationales({
+      const rationaleResult = await insertFileChanges({
         changeRationales,
         eventId: event.id,
-        organizationId: ticketContext.organization_id,
-        projectId: ticketContext.project_id,
         sessionId: resolved.session.id,
         supabase: typedSupabase,
         ticketId

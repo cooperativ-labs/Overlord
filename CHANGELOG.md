@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-03-22:14:38
+
+### Added
+- Introduce Sunpeak MCP app for ticket card, including resources, tools, and a gap analysis document.
+
+### Changed
+- Relocate agent token management to MCP & Cloud Agents and refine project API data access.
+- Increase feed size.
+
+### Fixed
+- Fix `@mentions` in blank Kanban cards on `/u` board by using default project working directory.
+
+### Chore
+- Bump the package version to `2.3.0`.
+
 ## [2.2.0] - 2026-03-21:11:21
 
 ### Added

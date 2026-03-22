@@ -67,11 +67,9 @@ export function FileListItem({ file, isSelected, onSelect }: FileListItemProps) 
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
         <span>
-          {file.rationaleCount > 0
-            ? `${file.rationaleCount} rationale${file.rationaleCount === 1 ? '' : 's'}`
-            : file.attributionCount > 0
-              ? `${file.attributionCount} linked ticket${file.attributionCount === 1 ? '' : 's'}`
-              : 'No linked ticket yet'}
+          {file.fileChangeCount > 0
+            ? `${file.fileChangeCount} file change${file.fileChangeCount === 1 ? '' : 's'}`
+            : 'No linked ticket yet'}
         </span>
         {file.tickets.length > 1 ? <span>{file.tickets.length} tickets</span> : null}
       </div>

@@ -1,11 +1,11 @@
 'use client';
 
+import { FileCode2 } from 'lucide-react';
 import { MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useTransition } from 'react';
 
 import { CliQuickstart } from '@/components/features/CliQuickstart';
-import { FileChangesArtifact } from '@/components/features/FileChangesArtifact';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { buildDiffHref } from '@/lib/helpers/file-changes';
 import {
   getEventDisplayLabel,
   getEventDisplaySummary,
@@ -25,6 +26,7 @@ import type { Database } from '@/types/database.types';
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
+type FileChange = Database['public']['Tables']['file_changes']['Row'];
 type SessionState = Database['public']['Enums']['session_state'];
 
 // --- AgentSessionBadge ---
@@ -135,16 +137,81 @@ function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
 
 // --- LiveArtifacts ---
 
+function LiveFileChangeCard({
+  editorScheme,
+  fileChange,
+  workspaceRoot
+}: {
+  editorScheme: string;
+  fileChange: FileChange;
+  workspaceRoot: string;
+}) {
+  const href = workspaceRoot
+    ? buildDiffHref(fileChange.file_path, workspaceRoot, editorScheme)
+    : undefined;
+
+  return (
+    <article className="rounded-lg border bg-muted/20 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="mb-1 text-xs font-medium break-words">File change</p>
+          <p className="mb-1 text-xs text-muted-foreground">file_change</p>
+          {href ? (
+            <a
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
+              href={href}
+              title={`Open ${fileChange.file_path} in your editor`}
+            >
+              <FileCode2 className="h-4 w-4" />
+              <span className="truncate">{fileChange.file_name}</span>
+            </a>
+          ) : (
+            <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
+              <FileCode2 className="h-4 w-4" />
+              <span className="truncate">{fileChange.file_name}</span>
+            </div>
+          )}
+          <p className="mt-1 break-all text-xs text-muted-foreground">{fileChange.file_path}</p>
+        </div>
+        <span className="shrink-0 text-[11px] text-muted-foreground">
+          {new Date(fileChange.created_at).toLocaleString()}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 text-sm">
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Change</p>
+          <p className="text-foreground">{fileChange.label}</p>
+          <p className="mt-1 text-muted-foreground">{fileChange.summary}</p>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Why</p>
+            <p className="text-foreground">{fileChange.why}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Impact</p>
+            <p className="text-foreground">{fileChange.impact}</p>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function LiveArtifacts({
   artifacts,
   editorScheme,
+  fileChanges,
   workspaceRoot
 }: {
   artifacts: Artifact[];
   editorScheme: string;
+  fileChanges: FileChange[];
   workspaceRoot: string;
 }) {
-  if (!artifacts.length) return null;
+  const visibleArtifacts = artifacts.filter(artifact => artifact.artifact_type !== 'file_changes');
+
+  if (!fileChanges.length && !visibleArtifacts.length) return null;
 
   return (
     <section>
@@ -152,7 +219,15 @@ function LiveArtifacts({
         Artifacts
       </h2>
       <div className="grid gap-4">
-        {artifacts.map(artifact => (
+        {fileChanges.map(fileChange => (
+          <LiveFileChangeCard
+            key={fileChange.id}
+            editorScheme={editorScheme}
+            fileChange={fileChange}
+            workspaceRoot={workspaceRoot}
+          />
+        ))}
+        {visibleArtifacts.map(artifact => (
           <div key={artifact.id} className="min-w-0">
             <p className="mb-0.5 text-xs font-medium break-words">{artifact.label}</p>
             <p className="mb-1 text-xs text-muted-foreground">{artifact.artifact_type}</p>
@@ -165,17 +240,9 @@ function LiveArtifacts({
               </a>
             ) : null}
             {artifact.content ? (
-              artifact.artifact_type === 'file_changes' ? (
-                <FileChangesArtifact
-                  content={artifact.content}
-                  editorScheme={editorScheme}
-                  workspaceRoot={workspaceRoot}
-                />
-              ) : (
-                <MarkdownContent compact className="mt-1 text-xs text-muted-foreground">
-                  {artifact.content}
-                </MarkdownContent>
-              )
+              <MarkdownContent compact className="mt-1 text-xs text-muted-foreground">
+                {artifact.content}
+              </MarkdownContent>
             ) : null}
           </div>
         ))}
@@ -226,7 +293,7 @@ export function TicketPanelLive({
   opencodeResumeCommand: _opencodeResumeCommand
 }: TicketPanelLiveProps) {
   const router = useRouter();
-  const { events, artifacts, session, sharedState } = useTicketLive();
+  const { events, artifacts, fileChanges, session, sharedState } = useTicketLive();
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -320,7 +387,7 @@ export function TicketPanelLive({
         <LiveActivityFeed events={events} />
       </section>
 
-      {(sharedState?.length ?? 0) > 0 || artifacts.length > 0 ? (
+      {(sharedState?.length ?? 0) > 0 || fileChanges.length > 0 || artifacts.length > 0 ? (
         <>
           <Separator className="mb-6" />
           <div className="grid gap-6">
@@ -344,6 +411,7 @@ export function TicketPanelLive({
             <LiveArtifacts
               artifacts={artifacts}
               editorScheme={editorScheme}
+              fileChanges={fileChanges}
               workspaceRoot={workspaceRoot}
             />
           </div>

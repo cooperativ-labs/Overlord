@@ -5,7 +5,7 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
-import { insertChangeRationales, resolveTicketProjectContext } from './_change-rationales.ts';
+import { insertChangeRationales } from './_change-rationales.ts';
 
 export async function handleRecordChangeRationales(
   supabase: SupabaseClient,
@@ -38,7 +38,7 @@ export async function handleRecordChangeRationales(
       event_type: 'update',
       payload: {
         change_rationale_count: changeRationales.length,
-        entry_type: 'change_rationales'
+        entry_type: 'file_changes'
       },
       phase: phase ?? null,
       session_id: resolved.session.id,
@@ -50,14 +50,9 @@ export async function handleRecordChangeRationales(
 
   if (eventErr || !event) return toolErr(eventErr?.message ?? 'Failed to create event.');
 
-  const ticketContext = await resolveTicketProjectContext(supabase, ticketId);
-  if (!ticketContext) return toolErr('Failed to resolve ticket project context.');
-
   const rationaleResult = await insertChangeRationales(supabase, {
     changeRationales,
     eventId: event.id,
-    organizationId: ticketContext.organization_id,
-    projectId: ticketContext.project_id,
     sessionId: resolved.session.id,
     ticketId
   });
