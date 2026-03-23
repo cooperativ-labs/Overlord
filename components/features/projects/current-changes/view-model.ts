@@ -48,6 +48,10 @@ function uniqueTickets(relatedRationales: FileChangeRecord[]): TicketSummary[] {
   return [...ticketMap.values()];
 }
 
+function isReviewTicket(rationale: FileChangeRecord): boolean {
+  return rationale.ticket?.status === 'review';
+}
+
 export function buildEnrichedCurrentChangeFiles(args: {
   files: GitStatusFile[];
   rationales: FileChangeRecord[];
@@ -57,7 +61,7 @@ export function buildEnrichedCurrentChangeFiles(args: {
   return files.map(file => {
     const paths = new Set(candidatePaths(file));
     const relatedRationales = rationales
-      .filter(rationale => paths.has(rationale.file_path))
+      .filter(rationale => paths.has(rationale.file_path) && isReviewTicket(rationale))
       .sort(compareNewestFirst);
     const tickets = uniqueTickets(relatedRationales);
     const primaryFileChange = relatedRationales[0] ?? null;

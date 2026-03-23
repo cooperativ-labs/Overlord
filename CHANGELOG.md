@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.8.0] - 2026-03-23:17:20
+
+### Added
+- Add a hard-refresh control to the nav header (plus new `app:reload` IPC) so Electron windows and PWAs can refresh beyond cached service workers.
+- Expand the About page so update prompts list running agent sessions with stop buttons and toast feedback, ensuring installers can close active agents before updating.
+
+### Fixed
+- None.
+
+### Changed
+- The Diff pane now nests secondary review tickets in an accordion and only surfaces review-phase rationales, with the view model filtering tickets accordingly.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `2.8.0`.
+
 ## [2.7.0] - 2026-03-23:16:29
 
 ### Added

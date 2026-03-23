@@ -2,6 +2,12 @@ import { Bot, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
@@ -95,17 +101,40 @@ export function DiffPane({
             </p>
 
             {secondaryTickets.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {secondaryTickets.map(ticket => (
-                  <Badge
-                    key={ticket.id}
-                    variant="outline"
-                    className="max-w-full truncate text-[10px]"
-                  >
-                    {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
-                  </Badge>
-                ))}
-              </div>
+              <Accordion type="single" collapsible className="mt-3 rounded-md border bg-background">
+                <AccordionItem value="secondary-review-tickets" className="border-b-0">
+                  <AccordionTrigger className="px-3 py-2 text-xs font-medium text-foreground hover:no-underline">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span>More review tickets</span>
+                      <Badge variant="outline" className="rounded-full text-[10px]">
+                        {secondaryTickets.length}
+                      </Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-2 px-3 pb-3">
+                    {secondaryTickets.map(ticket => (
+                      <div key={ticket.id} className="rounded-md border bg-muted/20 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            className="font-medium text-foreground underline-offset-4 hover:underline"
+                            href={buildTicketPath({ projectId, ticketId: ticket.id })}
+                          >
+                            {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                          </Link>
+                          {ticket.status ? (
+                            <Badge variant="outline" className="rounded-full text-[10px]">
+                              {ticket.status}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {ticket.objective?.trim() || 'No ticket objective yet.'}
+                        </p>
+                      </div>
+                    ))}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             ) : null}
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">

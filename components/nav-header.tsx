@@ -1,24 +1,81 @@
 'use client';
 
+import { RefreshCwIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { EverhourNavTimer } from '@/components/features/everhour/EverhourNavTimer';
 import { NewTicketButton } from '@/components/features/NewTicketButton';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { TicketSearch } from '@/components/nav-header/TicketSearch';
+import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
 
 export function NavHeader() {
   const [hasEverhourIntegration, setHasEverhourIntegration] = useState(false);
+  const [isStandalonePwa, setIsStandalonePwa] = useState(false);
+  const { api, isElectron } = useElectron();
 
   useEffect(() => {
     getEverhourConnectionStatus().then(status => setHasEverhourIntegration(status.connected));
   }, []);
 
+  useEffect(() => {
+    if (isElectron) return;
+
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const updateStandaloneState = () => {
+      setIsStandalonePwa(
+        mediaQuery.matches ||
+          Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+      );
+    };
+
+    updateStandaloneState();
+    mediaQuery.addEventListener('change', updateStandaloneState);
+    return () => mediaQuery.removeEventListener('change', updateStandaloneState);
+  }, [isElectron]);
+
+  const showRefreshButton = isElectron || isStandalonePwa;
+
+  const handleHardRefresh = async () => {
+    if (isElectron) {
+      await api?.app.reload();
+      return;
+    }
+
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(registration => registration.update()));
+    }
+
+    const refreshUrl = new URL(window.location.href);
+    refreshUrl.searchParams.set('_refresh', Date.now().toString());
+    window.location.replace(refreshUrl.toString());
+  };
+
   return (
     <header className=" electron-drag-region flex flex-row justify-between dark:rounded-lg items-center gap-2 border-b bg-card px-4 py-2 text-card-foreground">
-      <div className="flex shrink-0 items-center">
+      <div className="flex shrink-0 items-center gap-1">
         <SidebarTrigger className="-ml-1 electron-no-drag" />
+        {showRefreshButton ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="electron-no-drag"
+                onClick={() => void handleHardRefresh()}
+                aria-label="Hard refresh app"
+              >
+                <RefreshCwIcon className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Hard refresh app</TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
       <div className="flex justify-center min-w-0 flex-1 px-2">
         <div className="electron-no-drag min-w-0 w-full max-w-xl">

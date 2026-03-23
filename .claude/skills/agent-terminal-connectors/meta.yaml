@@ -1,8 +1,0 @@
-slug: agent-terminal-connectors
-name: agent-terminal-connectors
-description: Current Overlord terminal and connector patterns for Electron, web
-  MCP clients, cloud agents, and the human CLI, including the ovld protocol
-  lifecycle, auth flows, and prompt modes.
-tags: []
-compat: []
-sha256: b502669d466243af05d8bfebf1bd475b3f415b7656d573bf9feecf18200aa429

@@ -84,6 +84,7 @@ interface ElectronAPI {
     getPlatformUrl: () => Promise<string>;
     notify: (title: string, body: string) => Promise<boolean>;
     revealFile: (filePath: string) => Promise<string>;
+    reload: () => Promise<boolean>;
   };
   cli?: {
     getInstallStatus: () => Promise<{

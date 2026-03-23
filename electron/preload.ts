@@ -54,7 +54,8 @@ const electronAPI = {
     getConnectorUrl: () => ipcRenderer.invoke('app:get-connector-url'),
     getPlatformUrl: () => ipcRenderer.invoke('app:get-platform-url'),
     notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body }),
-    revealFile: (filePath: string) => ipcRenderer.invoke('app:reveal-file', filePath)
+    revealFile: (filePath: string) => ipcRenderer.invoke('app:reveal-file', filePath),
+    reload: () => ipcRenderer.invoke('app:reload')
   },
   cli: {
     getInstallStatus: () => ipcRenderer.invoke('cli:get-install-status'),

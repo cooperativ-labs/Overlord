@@ -35,7 +35,7 @@ export function TimerWithTimeEntries({
             Time Tracking
           </h2>
           <p className="text-muted-foreground text-sm line-clamp-1 truncate">
-            Track time on this ticket with Everhour.
+            Track time on this ticket.
           </p>
         </div>
         <div className="flex items-center gap-1">

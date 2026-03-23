@@ -1,4 +1,4 @@
-import { ipcMain, Notification, shell } from 'electron';
+import { BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -74,6 +74,14 @@ export function registerAppIpc({
     const resolvedPath = resolveUserPath(filePath);
     shell.showItemInFolder(resolvedPath);
     return resolvedPath;
+  });
+
+  ipcMain.handle('app:reload', event => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return false;
+
+    window.webContents.reloadIgnoringCache();
+    return true;
   });
 
   ipcMain.handle('app-update:get-status', () => {
