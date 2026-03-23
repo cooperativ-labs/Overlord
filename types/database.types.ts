@@ -177,6 +177,100 @@ export type Database = {
           }
         ];
       };
+      agent_transcript_events: {
+        Row: {
+          actor: string | null;
+          command_preview: string | null;
+          created_at: string;
+          event_hash: string;
+          event_kind: string;
+          event_source: string;
+          event_time: string;
+          evidence: Json;
+          external_session_id: string | null;
+          file_path: string | null;
+          high_signal: boolean;
+          id: string;
+          parser_version: string;
+          promoted_event_id: string | null;
+          raw_payload: Json;
+          session_id: string;
+          source_path: string | null;
+          summary: string | null;
+          ticket_id: string;
+          tool_name: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          actor?: string | null;
+          command_preview?: string | null;
+          created_at?: string;
+          event_hash: string;
+          event_kind: string;
+          event_source: string;
+          event_time: string;
+          evidence?: Json;
+          external_session_id?: string | null;
+          file_path?: string | null;
+          high_signal?: boolean;
+          id?: string;
+          parser_version?: string;
+          promoted_event_id?: string | null;
+          raw_payload?: Json;
+          session_id: string;
+          source_path?: string | null;
+          summary?: string | null;
+          ticket_id: string;
+          tool_name?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          actor?: string | null;
+          command_preview?: string | null;
+          created_at?: string;
+          event_hash?: string;
+          event_kind?: string;
+          event_source?: string;
+          event_time?: string;
+          evidence?: Json;
+          external_session_id?: string | null;
+          file_path?: string | null;
+          high_signal?: boolean;
+          id?: string;
+          parser_version?: string;
+          promoted_event_id?: string | null;
+          raw_payload?: Json;
+          session_id?: string;
+          source_path?: string | null;
+          summary?: string | null;
+          ticket_id?: string;
+          tool_name?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'agent_transcript_events_promoted_event_id_fkey';
+            columns: ['promoted_event_id'];
+            isOneToOne: false;
+            referencedRelation: 'ticket_events';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'agent_transcript_events_session_id_fkey';
+            columns: ['session_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'agent_transcript_events_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       artifacts: {
         Row: {
           artifact_type: string;
@@ -294,6 +388,84 @@ export type Database = {
           }
         ];
       };
+      change_rationale_drafts: {
+        Row: {
+          attribution_source: string;
+          change_kind: string;
+          confidence: string;
+          created_at: string;
+          evidence: Json;
+          file_name: string;
+          file_path: string;
+          hunks: Json;
+          id: string;
+          impact: string;
+          label: string;
+          session_id: string;
+          source_event_hashes: string[];
+          status: string;
+          summary: string;
+          ticket_id: string;
+          updated_at: string;
+          why: string;
+        };
+        Insert: {
+          attribution_source?: string;
+          change_kind?: string;
+          confidence?: string;
+          created_at?: string;
+          evidence?: Json;
+          file_name: string;
+          file_path: string;
+          hunks?: Json;
+          id?: string;
+          impact: string;
+          label: string;
+          session_id: string;
+          source_event_hashes?: string[];
+          status?: string;
+          summary: string;
+          ticket_id: string;
+          updated_at?: string;
+          why: string;
+        };
+        Update: {
+          attribution_source?: string;
+          change_kind?: string;
+          confidence?: string;
+          created_at?: string;
+          evidence?: Json;
+          file_name?: string;
+          file_path?: string;
+          hunks?: Json;
+          id?: string;
+          impact?: string;
+          label?: string;
+          session_id?: string;
+          source_event_hashes?: string[];
+          status?: string;
+          summary?: string;
+          ticket_id?: string;
+          updated_at?: string;
+          why?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'change_rationale_drafts_session_id_fkey';
+            columns: ['session_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'change_rationale_drafts_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       connections: {
         Row: {
           config: Json;
@@ -380,6 +552,7 @@ export type Database = {
           source_window_start: string | null;
           tags: string[];
           ticket_id: string;
+          tickets_created: Json;
           title: string;
           tradeoffs: Json;
           updated_at: string;
@@ -400,6 +573,7 @@ export type Database = {
           source_window_start?: string | null;
           tags?: string[];
           ticket_id: string;
+          tickets_created?: Json;
           title: string;
           tradeoffs?: Json;
           updated_at?: string;
@@ -420,6 +594,7 @@ export type Database = {
           source_window_start?: string | null;
           tags?: string[];
           ticket_id?: string;
+          tickets_created?: Json;
           title?: string;
           tradeoffs?: Json;
           updated_at?: string;
@@ -895,6 +1070,7 @@ export type Database = {
           context: string;
           created_at: string;
           created_by: string;
+          delegate: string | null;
           everhour_task_id: string | null;
           execution_target: Database['public']['Enums']['ticket_execution_target'];
           id: string;
@@ -920,6 +1096,7 @@ export type Database = {
           context?: string;
           created_at?: string;
           created_by?: string;
+          delegate?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;
@@ -945,6 +1122,7 @@ export type Database = {
           context?: string;
           created_at?: string;
           created_by?: string;
+          delegate?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;

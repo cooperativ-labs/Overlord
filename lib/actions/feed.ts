@@ -18,6 +18,7 @@ export type FeedPost = {
   files_touched: string[];
   tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
   human_actions: string[];
+  tickets_created: Array<{ id: string; sequence: number; title: string }>;
   source_event_ids: string[];
   source_window_start: string | null;
   source_window_end: string | null;
@@ -125,6 +126,7 @@ export async function getFeedPostsAction(options?: {
       files_touched: changedFiles.length > 0 ? changedFiles : storedFilesTouched,
       tradeoffs: row.tradeoffs as FeedPost['tradeoffs'],
       human_actions: (row.human_actions as string[]) ?? [],
+      tickets_created: (row.tickets_created as FeedPost['tickets_created']) ?? [],
       source_event_ids: row.source_event_ids as string[],
       source_window_start: row.source_window_start as string | null,
       source_window_end: row.source_window_end as string | null,

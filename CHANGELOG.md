@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.7.0] - 2026-03-23:16:29
+
+### Added
+- Build the transcript ingestion pipeline: add `agent_transcript_events` and `change_rationale_drafts` (with RLS and migrations), expose `/api/protocol/transcript-ingest`, and ship a new `bin/_cli/transcript-ingestion.mjs` (plus the CLI counterpart) that tails local Claude/Codex logs, infers high-signal events, promotes output into ticket events, and seeds draft change rationales.
+- Introduce `tickets_created` tracking in `feed_posts` plus shipment of delegate metadata through `protocol.spawn`, giving feed posts structured references to spawned tickets and letting the CLI feed card render them via the new column.
+
+### Fixed
+- None.
+
+### Changed
+- File-change pages now include `change_rationale_drafts`, mark the draft rows with a badge, and keep drafts ordered after committed rationales; the validation schema and types support the new transcript ingestion payload.
+- Feed cards (and the Gemini post generator) now show tickets created during the session, and spawn/protocol state records delegates and parent-session events so feeds can report which tickets came out of each agent run.
+
+### Security
+- None.
+
+### Test
+- Add regression suites for transcript parsing/draft generation plus the delivery guard scenarios that cover outside-git repos, `--skip-file-change-check`, absolute/backslash paths, and credential precedence; ensure no agent-facing instructions mention `file_changes` artifacts.
+
+### Chore
+- Bump the package version to `2.7.0`.
+
 ## [2.6.0] - 2026-03-23:14:08
 
 ### Added

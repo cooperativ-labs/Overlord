@@ -601,4 +601,317 @@ for (const modulePath of ['bin/_cli/protocol.mjs', 'packages/overlord-cli/bin/_c
       }
     }
   );
+
+  // ---------------------------------------------------------------------------
+  // Spec 4.1.1 — delivery succeeds outside a git repo with no changeRationales
+  // ---------------------------------------------------------------------------
+  test(
+    `${modulePath} deliver succeeds outside a git repo with no changeRationales`,
+    { concurrency: false },
+    async () => {
+      // Create a temp dir that is NOT a git repo
+      const nonRepoDir = createTempDir('ovld-deliver-no-git');
+      mkdirSync(nonRepoDir, { recursive: true });
+      writeFileSync(join(nonRepoDir, 'some-file.ts'), 'export const x = 1;\n', 'utf8');
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(nonRepoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Done without git'
+            ]);
+          });
+        });
+
+        assert.equal(requestBody.summary, 'Done without git');
+        assert.deepEqual(requestBody.artifacts, []);
+      } finally {
+        await close();
+        rmSync(nonRepoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Spec 4.1.6 — --skip-file-change-check bypasses the guard
+  // ---------------------------------------------------------------------------
+  test(
+    `${modulePath} deliver succeeds with --skip-file-change-check even with changed files and no rationales`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-skip-check');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'dirty.ts'), 'export const dirty = true;\n', 'utf8');
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Skipped check',
+              '--skip-file-change-check'
+            ]);
+          });
+        });
+
+        assert.equal(requestBody.summary, 'Skipped check');
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Spec 4.1.7 — absolute rationale file paths inside the repo normalize correctly
+  // ---------------------------------------------------------------------------
+  test(
+    `${modulePath} deliver succeeds when rationale uses absolute path inside the repo`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-abs-path');
+      initGitRepo(repoDir);
+      mkdirSync(join(repoDir, 'src'), { recursive: true });
+      writeFileSync(join(repoDir, 'src', 'index.ts'), 'export const v = 1;\n', 'utf8');
+      // Commit so git tracks the file path individually (untracked dirs collapse to "src/")
+      execFileSync('git', ['add', '.'], { cwd: repoDir, stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', 'initial'], { cwd: repoDir, stdio: 'ignore' });
+      writeFileSync(join(repoDir, 'src', 'index.ts'), 'export const v = 2;\n', 'utf8');
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          // Use the real absolute path (resolve symlinks like /var → /private/var on macOS)
+          const { realpathSync } = await import('node:fs');
+          const absolutePath = join(realpathSync(repoDir), 'src', 'index.ts');
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Absolute path test',
+              '--change-rationales-json',
+              JSON.stringify([{
+                label: 'Absolute path file',
+                file_path: absolutePath,
+                summary: 'Changed file referenced by absolute path.',
+                why: 'Testing normalization.',
+                impact: 'Path should normalize to repo-relative.',
+                hunks: [{ header: '@@ -1 +1 @@' }]
+              }])
+            ]);
+          });
+        });
+
+        assert.equal(requestBody.changeRationales.length, 1);
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Spec 4.1.8 — rationale file paths outside the repo do not match
+  // ---------------------------------------------------------------------------
+  test(
+    `${modulePath} deliver fails when rationale path is an absolute path outside the repo`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-outside-repo');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'real.ts'), 'export const r = 1;\n', 'utf8');
+      execFileSync('git', ['add', '.'], { cwd: repoDir, stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', 'initial'], { cwd: repoDir, stdio: 'ignore' });
+      writeFileSync(join(repoDir, 'real.ts'), 'export const r = 2;\n', 'utf8');
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = 'http://127.0.0.1:9';
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await assert.rejects(
+            () =>
+              withStubbedConsole(() =>
+                runProtocolCommand('deliver', [
+                  '--session-key',
+                  'sk',
+                  '--ticket-id',
+                  'tid',
+                  '--summary',
+                  'Outside repo path',
+                  '--change-rationales-json',
+                  JSON.stringify([{
+                    label: 'Outside repo',
+                    file_path: '/tmp/some-other-place/file.ts',
+                    summary: 'Path outside repo.',
+                    why: 'Testing.',
+                    impact: 'Should not match.',
+                    hunks: [{ header: '@@ -1 +1 @@' }]
+                  }])
+                ])
+              ),
+            err => {
+              assert.ok(err instanceof Error);
+              // Outside-repo paths normalize to null, so rationalePaths is empty → "did not include" error
+              assert.match(err.message, /did not include matching `changeRationales`/);
+              assert.match(err.message, /--skip-file-change-check/);
+              return true;
+            }
+          );
+        });
+      } finally {
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Spec 4.1.9 — Windows-style path separators normalize correctly
+  // ---------------------------------------------------------------------------
+  test(
+    `${modulePath} deliver succeeds when rationale uses backslash path separators`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-win-sep');
+      initGitRepo(repoDir);
+      mkdirSync(join(repoDir, 'src', 'lib'), { recursive: true });
+      writeFileSync(join(repoDir, 'src', 'lib', 'utils.ts'), 'export const u = 1;\n', 'utf8');
+      // Commit first so git tracks the file individually (untracked dirs show as "src/" not "src/lib/utils.ts")
+      execFileSync('git', ['add', '.'], { cwd: repoDir, stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', 'initial'], { cwd: repoDir, stdio: 'ignore' });
+      writeFileSync(join(repoDir, 'src', 'lib', 'utils.ts'), 'export const u = 2;\n', 'utf8');
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Windows path test',
+              '--change-rationales-json',
+              JSON.stringify([{
+                label: 'Backslash path',
+                file_path: 'src\\lib\\utils.ts',
+                summary: 'Changed file with backslash path.',
+                why: 'Testing Windows path normalization.',
+                impact: 'Backslashes should normalize to forward slashes.',
+                hunks: [{ header: '@@ -1 +1 @@' }]
+              }])
+            ]);
+          });
+        });
+
+        assert.equal(requestBody.changeRationales.length, 1);
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
 }
+
+// ---------------------------------------------------------------------------
+// Spec 4.2 — Instruction regression: no agent-facing example uses file_changes as artifact type
+// ---------------------------------------------------------------------------
+test('no local agent instruction source uses file_changes as an artifact type', async () => {
+  const { readFileSync } = await import('node:fs');
+
+  const filesToCheck = [
+    'electron/services/agent-bundle/templates.ts',
+    'packages/overlord-cli/bin/_cli/setup.mjs',
+    'lib/overlord/ticket-prompt.ts'
+  ];
+
+  for (const relPath of filesToCheck) {
+    const fullPath = join(ROOT, relPath);
+    const content = readFileSync(fullPath, 'utf8');
+
+    // Must NOT contain artifact examples with type "file_changes"
+    const artifactFileChangesPattern = /"type"\s*:\s*"file_changes"/;
+    assert.ok(
+      !artifactFileChangesPattern.test(content),
+      `${relPath} contains a "type": "file_changes" artifact example — this is prohibited`
+    );
+
+    // Must NOT contain artifact type enum that includes file_changes
+    const typeEnumPattern = /type['"]?\s*:\s*['"]file_changes['"]/;
+    assert.ok(
+      !typeEnumPattern.test(content),
+      `${relPath} references file_changes as a valid artifact type — this is prohibited`
+    );
+  }
+
+  // Verify the templates DO mention changeRationales (positive check)
+  for (const relPath of filesToCheck) {
+    const fullPath = join(ROOT, relPath);
+    const content = readFileSync(fullPath, 'utf8');
+    assert.ok(
+      content.includes('changeRationales'),
+      `${relPath} must reference changeRationales for file change submission`
+    );
+  }
+});

@@ -43,6 +43,7 @@ type FeedPostPayload = {
   tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
   human_actions: string[];
   files_touched: string[];
+  tickets_created: Array<{ id: string; sequence: number; title: string }>;
 };
 
 function sanitizeStringArray(value: unknown, limit: number): string[] {
@@ -77,6 +78,23 @@ function sanitizeTradeoffs(value: unknown): FeedPostPayload['tradeoffs'] {
     .slice(0, 10);
 }
 
+function sanitizeTicketsCreated(value: unknown): FeedPostPayload['tickets_created'] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const ticket = item as Record<string, unknown>;
+      const id = String(ticket.id ?? '').trim();
+      const sequence = typeof ticket.sequence === 'number' ? ticket.sequence : 0;
+      const title = String(ticket.title ?? '').trim();
+      if (!id || !title) return null;
+      return { id, sequence, title };
+    })
+    .filter((t): t is FeedPostPayload['tickets_created'][number] => t !== null)
+    .slice(0, 20);
+}
+
 function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
   if (!value || typeof value !== 'object') return null;
 
@@ -104,7 +122,8 @@ function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
       : 'notable',
     tradeoffs: sanitizeTradeoffs(parsed.tradeoffs),
     human_actions: sanitizeStringArray(parsed.human_actions, 20),
-    files_touched: sanitizeStringArray(parsed.files_touched, 50)
+    files_touched: sanitizeStringArray(parsed.files_touched, 50),
+    tickets_created: sanitizeTicketsCreated(parsed.tickets_created)
   };
 }
 
@@ -152,6 +171,12 @@ function buildPrompt(context: {
     why: string;
     impact: string;
   }>;
+  spawnedTickets: Array<{
+    id: string;
+    title: string | null;
+    ticket_sequence: number;
+    delegate: string | null;
+  }>;
   existingPost?: { title: string; body: string } | null;
 }): string {
   const eventLines = context.events
@@ -160,6 +185,13 @@ function buildPrompt(context: {
 
   const rationaleLines = context.rationales
     .map(r => `- ${r.file_path}: ${r.summary} (why: ${r.why}, impact: ${r.impact})`)
+    .join('\n');
+
+  const spawnedLines = context.spawnedTickets
+    .map(
+      t =>
+        `- #${t.ticket_sequence}: ${t.title ?? 'Untitled'}${t.delegate ? ` (delegate: ${t.delegate})` : ''}`
+    )
     .join('\n');
 
   const appendSection = context.existingPost
@@ -177,21 +209,26 @@ ${eventLines || '(no events)'}
 CODE CHANGES:
 ${rationaleLines || '(no code changes recorded)'}
 
+TICKETS CREATED DURING THIS SESSION:
+${spawnedLines || '(none)'}
+
 Respond with a single JSON object:
 {
   "title": "One-line action-oriented summary, max 80 characters",
-  "body": "Concise Markdown summary using bullet points. Cover: what was done and why; any tradeoffs or deviations from the objective; what the human should be aware of. Do NOT repeat the title. Prefer bullet lists over paragraphs. Keep it scannable.",
+  "body": "Concise Markdown summary using bullet points. Cover: what was done and why; any tradeoffs or deviations from the objective; what the human should be aware of. If tickets were created during this session, list them clearly. Do NOT repeat the title. Prefer bullet lists over paragraphs. Keep it scannable.",
   "tags": ["array of tags like: bugfix, refactor, new-feature, tradeoff, blocker-resolved, test, docs, config, dependency, performance, action-required"],
   "impact_level": "minor or notable or significant",
   "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}],
   "human_actions": ["ONLY proactive tasks the human must do — e.g. create an account, set an API key, run a migration, add an env variable, deploy a function, configure a third-party service. Return an empty array if none."],
-  "files_touched": ["list/of/files.ts"]
+  "files_touched": ["list/of/files.ts"],
+  "tickets_created": [{"id": "uuid", "sequence": 123, "title": "Ticket title"}]
 }
 
 IMPORTANT INSTRUCTIONS:
 - Keep the body under 300 words. Use bullet points, not paragraphs.
 - Surface tradeoffs prominently — they are the most valuable part. If there are no tradeoffs, return an empty array.
 - "human_actions" is ONLY for proactive tasks the human must perform — things like creating accounts, setting API keys, running migrations, adding env variables, deploying functions, or configuring external services. Do NOT include: testing the code, verifying behavior, reviewing files, checking that things work, or any other validation/QA tasks. Those are implied and clutter the feed. If there are no proactive tasks, return an empty array.
+- "tickets_created" should list any tickets that were spawned/created during this session. Return an empty array if none.
 - Do not wrap the JSON in Markdown fences or any explanatory text.`;
 }
 
@@ -311,6 +348,39 @@ Deno.serve(async (req: Request) => {
       agentType = session?.agent_identifier ?? null;
     }
 
+    // Fetch tickets spawned during this session (recorded via protocol.spawn
+    // with parentSessionKey pointing back to this session).
+    let spawnedTickets: Array<{
+      id: string;
+      title: string | null;
+      ticket_sequence: number;
+      delegate: string | null;
+    }> = [];
+    if (sessionId) {
+      // Find spawn events on this session that reference spawned_ticket_id
+      const { data: spawnEvents } = await supabase
+        .from('ticket_events')
+        .select('payload')
+        .eq('session_id', sessionId)
+        .eq('ticket_id', ticketId)
+        .limit(50);
+
+      const spawnedIds = (spawnEvents ?? [])
+        .map(e => {
+          const p = e.payload as Record<string, unknown> | null;
+          return p?.spawned_ticket_id as string | undefined;
+        })
+        .filter((id): id is string => !!id);
+
+      if (spawnedIds.length > 0) {
+        const { data: tickets } = await supabase
+          .from('tickets')
+          .select('id, title, ticket_sequence, delegate')
+          .in('id', spawnedIds);
+        spawnedTickets = tickets ?? [];
+      }
+    }
+
     // Build prompt and call Gemini
     const prompt = buildPrompt({
       projectName: project?.name ?? 'Unknown Project',
@@ -320,6 +390,7 @@ Deno.serve(async (req: Request) => {
       constraints: ticket.constraints,
       events: filteredEvents,
       rationales: rationales ?? [],
+      spawnedTickets,
       existingPost: existingPost ? { title: existingPost.title, body: existingPost.body } : null
     });
 
@@ -339,6 +410,13 @@ Deno.serve(async (req: Request) => {
     const windowStart = timestamps[0] ?? new Date().toISOString();
     const windowEnd = timestamps[timestamps.length - 1] ?? new Date().toISOString();
 
+    // Build structured tickets_created from source data (not Gemini output)
+    const ticketsCreatedPayload = spawnedTickets.map(t => ({
+      id: t.id,
+      sequence: t.ticket_sequence,
+      title: t.title ?? 'Untitled'
+    }));
+
     if (existingPost) {
       // Append: update existing post
       const mergedEventIds = [...new Set([...(existingPost.source_event_ids ?? []), ...eventIds])];
@@ -353,6 +431,7 @@ Deno.serve(async (req: Request) => {
           tradeoffs: generated.tradeoffs,
           human_actions: generated.human_actions,
           files_touched: generated.files_touched,
+          tickets_created: ticketsCreatedPayload,
           source_event_ids: mergedEventIds,
           source_window_end: windowEnd,
           updated_at: new Date().toISOString()
@@ -395,6 +474,7 @@ Deno.serve(async (req: Request) => {
           files_touched: generated.files_touched,
           tradeoffs: generated.tradeoffs,
           human_actions: generated.human_actions,
+          tickets_created: ticketsCreatedPayload,
           source_event_ids: eventIds,
           source_window_start: windowStart,
           source_window_end: windowEnd

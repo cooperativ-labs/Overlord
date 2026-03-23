@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
+import { prepareTranscriptIngestion } from './transcript-ingestion.mjs';
 
 /**
  * Parse simple CLI flags: --key value or --key=value
@@ -270,15 +271,15 @@ function getGitChangedFiles() {
 }
 
 function createFileChangeCheckError(message, changedFiles, rationalePaths = []) {
-  const changedPreview = [...changedFiles].slice(0, 5).join(', ');
-  const rationalePreview = rationalePaths.slice(0, 5).join(', ');
+  const changedPreview = [...changedFiles].slice(0, 10).join(', ');
+  const rationalePreview = rationalePaths.slice(0, 10).join(', ');
 
   return new Error(
     `${message}\n` +
     `Overlord persists file changes through \`changeRationales\`, not \`file_changes\` artifacts.\n` +
     `Re-run with --change-rationales-json or --change-rationales-file, or pass --skip-file-change-check if this was intentional.` +
-    `${changedPreview ? `\nChanged files: ${changedPreview}${changedFiles.size > 5 ? ', ...' : ''}` : ''}` +
-    `${rationalePreview ? `\nProvided rationale paths: ${rationalePreview}${rationalePaths.length > 5 ? ', ...' : ''}` : ''}`
+    `${changedPreview ? `\nChanged files: ${changedPreview}${changedFiles.size > 10 ? ', ...' : ''}` : ''}` +
+    `${rationalePreview ? `\nProvided rationale paths: ${rationalePreview}${rationalePaths.length > 10 ? ', ...' : ''}` : ''}`
   );
 }
 
@@ -396,7 +397,9 @@ async function protocolAttach(args) {
     agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
     connectionMethod: String(flags.method ?? 'cli'),
     ...(externalSessionId !== undefined ? { externalSessionId } : {}),
-    metadata: {}
+    metadata: {
+      cwd: process.cwd()
+    }
   };
 
   const data = await apiPost(
@@ -434,8 +437,29 @@ async function protocolUpdate(args) {
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
   const changeRationales = await resolveChangeRationales(flags);
-
   const externalSessionId = resolveExternalSessionId(flags);
+  const agentIdentifier = String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code');
+  const transcriptIngestion = prepareTranscriptIngestion({
+    agentIdentifier,
+    apiPost,
+    changeRationales,
+    externalSessionId,
+    localSecret,
+    platformUrl,
+    sessionKey,
+    ticketId,
+    token: agentToken
+  });
+
+  if (transcriptIngestion) {
+    try {
+      await transcriptIngestion.ingest();
+    } catch (error) {
+      process.stderr.write(
+        `[protocol] transcript-ingest skipped: ${error instanceof Error ? error.message : String(error)}\n`
+      );
+    }
+  }
 
   const body = {
     sessionKey,
@@ -656,6 +680,29 @@ async function protocolDeliver(args) {
 
   const changeRationales = deliverPayload?.changeRationales ?? await resolveChangeRationales(flags);
   validateDeliverFileChanges(flags, changeRationales);
+  const externalSessionId = resolveExternalSessionId(flags);
+  const agentIdentifier = String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code');
+  const transcriptIngestion = prepareTranscriptIngestion({
+    agentIdentifier,
+    apiPost,
+    changeRationales,
+    externalSessionId,
+    localSecret,
+    platformUrl,
+    sessionKey,
+    ticketId,
+    token: agentToken
+  });
+
+  if (transcriptIngestion) {
+    try {
+      await transcriptIngestion.ingest();
+    } catch (error) {
+      process.stderr.write(
+        `[protocol] transcript-ingest skipped: ${error instanceof Error ? error.message : String(error)}\n`
+      );
+    }
+  }
 
   const body = {
     sessionKey,
@@ -919,7 +966,10 @@ async function protocolSpawn(args) {
     ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
     ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
-    ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {})
+    ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
+    ...(flags.delegate ? { delegate: String(flags.delegate) } : {}),
+    ...(flags['parent-session-key'] ? { parentSessionKey: String(flags['parent-session-key']) } : {}),
+    ...(flags['parent-ticket-id'] ? { parentTicketId: String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '') } : {})
   };
 
   const data = await apiPost(
@@ -951,75 +1001,234 @@ export async function runProtocolCommand(subcommand, args) {
   if (!subcommand || subcommand === 'help' || subcommand === '--help') {
     console.log(`ovld protocol <subcommand> [flags]
 
+Agent-only workflow commands for talking to Overlord from a local runtime.
+Use these after a human or launcher has already given you OVERLORD_URL, AGENT_TOKEN,
+and usually TICKET_ID. Typical lifecycle: attach -> update(s) -> ask or deliver.
+
 Subcommands:
-  attach          Start a session on a ticket (returns full context)
-  connect         Start a session on a ticket (lightweight, no context returned)
-  load-context    Fetch ticket details read-only (no session created)
-  spawn           Create a new ticket and connect to it immediately
-  update          Post a progress update
-  record-change-rationales  Persist structured change rationales
-  ask             Post a blocking question
-  read-context    Retrieve shared context
-  write-context   Store a key/value in shared context
-  deliver         Mark the ticket complete and deliver artifacts
+  attach                    Start a ticket session and return full working context
+  connect                   Start a lightweight session without full context
+  load-context              Read ticket context without creating a session
+  spawn                     Create a follow-up ticket and attach to it immediately
+  update                    Post progress, activity events, and optional change rationales
+  record-change-rationales  Persist structured change rationales without a progress update
+  ask                       Post a blocking question and move the ticket to review
+  read-context              Read shared persistent context for this ticket
+  write-context             Write shared persistent context for future sessions
+  deliver                   Finish work, send artifacts, and move the ticket to review
   artifact-prepare-upload   Get a signed upload URL for a ticket artifact
-  artifact-finalize-upload  Create artifact row after upload
-  artifact-download-url     Get a signed download URL for an artifact
-  artifact-upload-file      Upload local file and finalize in one command
+  artifact-finalize-upload  Finalize an uploaded artifact row after storage upload
+  artifact-download-url     Get a signed download URL for an existing artifact
+  artifact-upload-file      Prepare, upload, and finalize a local file in one command
 
-Flags read from env vars when not provided:
-  SESSION_KEY, TICKET_ID, OVERLORD_URL, AGENT_TOKEN
+Lifecycle:
+  1. attach first to get session.sessionKey
+  2. use update after meaningful steps
+  3. use ask if blocked by a human and stop working after calling it
+  4. use deliver last, usually with changeRationales
 
-Common flags (all subcommands):
-  --timeout <ms>          Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS}).
-                          Also: OVERLORD_TIMEOUT env var.
+Environment fallback:
+  --session-key <- SESSION_KEY
+  --ticket-id   <- TICKET_ID
+  auth/host     <- OVERLORD_URL, AGENT_TOKEN
+  --timeout     <- OVERLORD_TIMEOUT
 
-Attach/update-specific flags:
-  --external-session-id <id>  Store or clear ('null') the agent's native session id for resume.
+Common flags:
+  --timeout <ms>              Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})
+  --ticket-id <id>            Ticket id when the subcommand operates on an existing ticket
+  --session-key <key>         Session key returned by attach/connect/spawn
+  --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
+  --method <connectionMethod> Connection method sent to Overlord (default: cli)
 
-Update-specific flags:
-  --external-url <url>   Store or refresh a deep link to the current agent session.
-  --summary-file <path>  Read the update summary from a text file.
-  --change-rationales-json <json>  Inline JSON array of change rationale objects.
-  --change-rationales-file <path>  Path to a JSON file containing change rationales.
+attach:
+  Purpose:
+    Create the working session for an agent on an existing ticket. This is the normal first call.
+  Required:
+    --ticket-id <id>
+  Optional:
+    --agent <identifier>
+    --method <connectionMethod>
+    --external-session-id <id|null>  Store the native agent thread/session id, or clear it with null
+  Returns:
+    Full JSON including session.sessionKey, ticket, history, artifacts, sharedState, and promptContext
+  Notes:
+    If --external-session-id is omitted, the CLI may auto-detect Codex or Claude session ids
 
-Record-change-rationales flags:
-  --summary <text>        Optional ticket-event summary for this rationale submission.
-  --summary-file <path>   Read the optional rationale summary from a text file.
-  --phase <status>        Optional phase for the rationale event (for example: execute).
-  --change-rationales-json <json>  Inline JSON array of change rationale objects.
-  --change-rationales-file <path>  Path to a JSON file containing change rationales.
+connect:
+  Purpose:
+    Create a lightweight session when you only need a session key and not the full ticket payload
+  Required:
+    --ticket-id <id>
+  Optional:
+    --agent <identifier>
+    --method <connectionMethod>
+  Returns:
+    Session JSON and SESSION_KEY on stderr when available
 
-Deliver-specific flags:
-  --payload-file <path>  Path to a JSON file containing { summary, artifacts, changeRationales }.
-  --summary-file <path>  Read the delivery summary from a text file.
-  --artifacts-json <json> Inline JSON array of artifact objects.
-  --artifacts-file <path> Path to a JSON file containing artifacts (avoids shell-escaping issues
-                          with large payloads).
-  --change-rationales-json <json>  Inline JSON array of change rationale objects.
-  --change-rationales-file <path>  Path to a JSON file containing change rationales.
-  --skip-file-change-check Skip the local git/changeRationales reconciliation before deliver.
+load-context:
+  Purpose:
+    Read ticket details without creating a session
+  Required:
+    --ticket-id <id>
 
-Ask-specific flags:
-  --question-file <path> Read the blocking question from a text file.
+update:
+  Purpose:
+    Post progress or activity events during execution
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --summary <text> or --summary-file <path>
+  Optional:
+    --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
+    --event-type <type>       update | user_follow_up | alert
+    --payload-json <json>     Additional structured payload, for example notifications
+    --external-url <url|null> Store or clear a deep link to the live agent session
+    --external-session-id <id|null>
+    --change-rationales-json <json>
+    --change-rationales-file <path>
+  Notes:
+    Use phase=execute while actively working. user_follow_up is for verbatim human follow-up messages.
 
-Spawn-specific flags:
-  --objective <text>      Ticket objective (required)
-  --title <text>          Ticket title (optional, derived from objective if omitted)
-  --priority <level>      low | medium | high | urgent (default: medium)
-  --project-id <id>       Target project (optional, defaults to first in org)
-  --execution-target <t>  agent | human (default: agent)
+record-change-rationales:
+  Purpose:
+    Persist structured file-change rationale records without also posting a normal update
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --change-rationales-json <json> or --change-rationales-file <path>
+  Optional:
+    --summary <text> or --summary-file <path>
+    --phase <status>
+
+ask:
+  Purpose:
+    Raise a blocking question for a human reviewer/PM
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --question <text> or --question-file <path>
+  Optional:
+    --phase <status>
+    --payload-json <json>
+  Notes:
+    After ask succeeds, stop working until the human responds
+
+read-context:
+  Purpose:
+    Read persistent shared context written by earlier sessions
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+  Optional:
+    --query <text>            Filter by key substring
+    --limit <n>               Max entries to return
+
+write-context:
+  Purpose:
+    Save shared facts for future sessions
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --key <name>
+    --value <json-or-string>  Parsed as JSON first; stored as a string if JSON parsing fails
+  Optional:
+    --tags <csv>
+
+deliver:
+  Purpose:
+    Conclude the session and submit the final narrative plus artifacts/change rationales
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --summary <text> or --summary-file <path>
+    or: --payload-file <path> containing { summary, artifacts, changeRationales }
+  Optional:
+    --artifacts-json <json>
+    --artifacts-file <path>
+    --change-rationales-json <json>
+    --change-rationales-file <path>
+    --skip-file-change-check  Bypass local git vs changeRationales validation
+  Notes:
+    Do not combine --payload-file with --artifacts-json/--artifacts-file or change-rationale flags.
+    In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
+
+spawn:
+  Purpose:
+    Create a follow-up ticket and attach to it in one call
+  Required:
+    --objective <text>
+  Optional:
+    --title <text>
+    --priority <level>        low | medium | high | urgent
+    --project-id <id>
+    --acceptance-criteria <text>
+    --available-tools <text>
+    --execution-target <t>    agent | human
+    --delegate <model>        Model or delegate identifier that created the ticket
+    --parent-session-key <key>
+    --parent-ticket-id <id>
+    --agent <identifier>
+    --method <connectionMethod>
+  Returns:
+    New ticket/session JSON plus SESSION_KEY and TICKET_ID on stderr when available
+
+artifact-prepare-upload:
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --file-name <name>
+  Optional:
+    --label <text>
+    --artifact-type <type>
+    --content-type <mime>
+    --file-size <bytes>
+    --metadata-json <json>
+
+artifact-finalize-upload:
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --storage-path <path>
+    --label <text>
+  Optional:
+    --artifact-type <type>
+    --content-type <mime>
+    --file-size <bytes>
+    --metadata-json <json>
+
+artifact-download-url:
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    one of: --artifact-id <id> | --storage-path <path>
+  Optional:
+    --expires-in <seconds>
+
+artifact-upload-file:
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+    --file <path>
+  Optional:
+    --file-name <name>        Defaults to basename of --file
+    --label <text>            Defaults to file name
+    --artifact-type <type>    Defaults to document
+    --content-type <mime>     Defaults to application/octet-stream
+    --metadata-json <json>
 
 Examples:
   ovld protocol attach --ticket-id abc-123
+  ovld protocol attach --ticket-id abc-123 --external-session-id null
   ovld protocol connect --ticket-id abc-123
   ovld protocol load-context --ticket-id abc-123
   ovld protocol spawn --objective "Implement user auth" --priority high
-  ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X"
+  ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X" --phase execute
+  ovld protocol update --session-key <key> --ticket-id <id> --summary-file ./update.txt --event-type user_follow_up
   ovld protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
   ovld protocol ask --session-key <key> --ticket-id <id> --question-file ./question.txt
-  ovld protocol read-context --session-key <key> --ticket-id <id>
-  ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"'
+  ovld protocol read-context --session-key <key> --ticket-id <id> --query arch --limit 5
+  ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"' --tags repo,agent
+  ovld protocol artifact-prepare-upload --session-key <key> --ticket-id <id> --file-name spec.pdf --content-type application/pdf
   ovld protocol artifact-upload-file --session-key <key> --ticket-id <id> --file ./spec.pdf --content-type application/pdf
   ovld protocol artifact-download-url --session-key <key> --ticket-id <id> --artifact-id <artifact-id>
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"

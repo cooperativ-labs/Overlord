@@ -40,6 +40,7 @@ export type FileChangeRecord = {
   change_kind: string;
   confidence: string;
   created_at: string;
+  draft_status?: string | null;
   event: {
     created_at: string;
     event_type: string;
@@ -51,11 +52,13 @@ export type FileChangeRecord = {
   hunks: Json;
   id: string;
   impact: string;
+  is_draft?: boolean;
   label: string;
   session: {
     agent_identifier: string;
     id: string;
   } | null;
+  source_event_hashes?: string[];
   summary: string;
   ticket: {
     id: string;

@@ -88,6 +88,7 @@ export const DEMO_FEED_POSTS = [
       }
     ],
     human_actions: ['Verify the tab order after the UI refresh.'],
+    tickets_created: [],
     source_event_ids: ['evt-demo-feed-001', 'evt-demo-feed-002'],
     source_window_start: '2026-03-21T08:00:00.000Z',
     source_window_end: '2026-03-21T08:20:00.000Z',
@@ -125,6 +126,7 @@ export const DEMO_FEED_POSTS = [
       'Check that the collapsed state still exposes the important review context.',
       'Confirm the action badge wraps cleanly on smaller screens.'
     ],
+    tickets_created: [],
     source_event_ids: ['evt-demo-feed-003'],
     source_window_start: '2026-03-20T16:10:00.000Z',
     source_window_end: '2026-03-20T16:40:00.000Z',
@@ -150,6 +152,7 @@ export const DEMO_FEED_POSTS = [
     files_touched: ['app/api/protocol/update/route.ts', 'app/api/protocol/deliver/route.ts'],
     tradeoffs: [],
     human_actions: [],
+    tickets_created: [],
     source_event_ids: ['evt-demo-feed-004', 'evt-demo-feed-005', 'evt-demo-feed-006'],
     source_window_start: '2026-03-19T09:00:00.000Z',
     source_window_end: '2026-03-19T09:30:00.000Z',
@@ -183,6 +186,7 @@ export const DEMO_FEED_POSTS = [
     human_actions: [
       'Decide whether the final tab label should stay as Feed or become Activity Feed.'
     ],
+    tickets_created: [],
     source_event_ids: ['evt-demo-feed-007'],
     source_window_start: '2026-03-18T13:20:00.000Z',
     source_window_end: '2026-03-18T13:35:00.000Z',

@@ -1,6 +1,13 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileCode2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  FileCode2,
+  TicketPlus
+} from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -34,6 +41,7 @@ export function FeedCard({ post }: { post: FeedPost }) {
   const tradeoffs = Array.isArray(post.tradeoffs) ? post.tradeoffs : [];
   const humanActions = Array.isArray(post.human_actions) ? post.human_actions : [];
   const filesTouched = Array.isArray(post.files_touched) ? post.files_touched : [];
+  const ticketsCreated = Array.isArray(post.tickets_created) ? post.tickets_created : [];
 
   const timestamp = new Date(post.created_at);
   const timeStr = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -176,6 +184,34 @@ export function FeedCard({ post }: { post: FeedPost }) {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Tickets created by agent */}
+              {ticketsCreated.length > 0 && (
+                <div className="rounded-md border border-violet-200 bg-violet-50 p-3.5 dark:border-violet-800/40 dark:bg-violet-950/20">
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <TicketPlus className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                    <span className="text-sm font-semibold text-violet-800 dark:text-violet-300">
+                      Tickets created
+                    </span>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {ticketsCreated.map(t => (
+                      <li
+                        key={t.id}
+                        className="flex gap-2 text-[13px] text-violet-800 dark:text-violet-300"
+                      >
+                        <span className="shrink-0 mt-0.5">&#8226;</span>
+                        <Link
+                          href={buildTicketPath({ projectId: post.project_id, ticketId: t.id })}
+                          className="hover:underline underline-offset-2"
+                        >
+                          #{t.sequence}: {t.title}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>

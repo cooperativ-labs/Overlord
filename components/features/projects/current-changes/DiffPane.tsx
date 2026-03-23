@@ -110,7 +110,14 @@ export function DiffPane({
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <div className="rounded-md border bg-background p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Change</p>
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <span>Change</span>
+                  {file.primaryFileChange?.is_draft ? (
+                    <Badge variant="outline" className="h-5 rounded-full px-2 text-[9px]">
+                      Draft
+                    </Badge>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-sm text-foreground">
                   {file.primaryFileChange?.label || file.summary}
                 </p>

@@ -74,6 +74,20 @@ const changeRationaleHunkSchema = z
     }
   );
 
+const transcriptEventSchema = z.object({
+  actor: z.string().trim().max(40).nullable().optional(),
+  commandPreview: z.string().trim().max(240).nullable().optional(),
+  eventHash: z.string().trim().min(1).max(120),
+  eventKind: z.string().trim().min(1).max(80),
+  eventTime: z.string().trim().min(1).max(120),
+  evidence: z.unknown().optional().default({}),
+  filePath: z.string().trim().max(1024).nullable().optional(),
+  highSignal: z.boolean().optional().default(false),
+  rawPayload: z.unknown().optional().default({}),
+  summary: z.string().trim().max(2_000).nullable().optional(),
+  toolName: z.string().trim().max(120).nullable().optional()
+});
+
 export const changeRationaleSchema = z.object({
   attribution_source: z.string().trim().min(1).max(40).optional().default('explicit'),
   change_kind: z.string().trim().min(1).max(40).optional().default('modify'),
@@ -142,6 +156,40 @@ export const recordChangeRationalesSchema = z.object({
   phase: ticketStatusSchema.optional()
 });
 
+export const transcriptIngestSchema = z.object({
+  drafts: z
+    .array(
+      z.object({
+        attribution_source: z.string().trim().min(1).max(80).optional().default('transcript_draft'),
+        change_kind: z.string().trim().min(1).max(40).optional().default('modify'),
+        confidence: z.string().trim().min(1).max(40).optional().default('medium'),
+        evidence: z.unknown().optional().default([]),
+        file_path: z.string().trim().min(1).max(1024),
+        hunks: z.array(changeRationaleHunkSchema).max(20).optional().default([]),
+        impact: z.string().trim().min(1).max(2_000),
+        label: z.string().trim().min(1).max(160),
+        source_event_hashes: z
+          .array(z.string().trim().min(1).max(120))
+          .max(20)
+          .optional()
+          .default([]),
+        status: z.string().trim().min(1).max(40).optional().default('draft'),
+        summary: z.string().trim().min(1).max(2_000),
+        why: z.string().trim().min(1).max(2_000)
+      })
+    )
+    .max(100)
+    .optional()
+    .default([]),
+  events: z.array(transcriptEventSchema).max(400).optional().default([]),
+  externalSessionId: z.string().trim().max(2_048).nullable().optional(),
+  parserVersion: z.string().trim().min(1).max(80).optional().default('transcript-v1'),
+  sessionKey: z.string().uuid(),
+  sourceAgent: z.string().trim().min(1).max(120),
+  sourcePath: z.string().trim().min(1).max(4_096),
+  ticketId: ticketIdSchema
+});
+
 export const createStandaloneTicketSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
   objective: z.string().trim().min(1).max(20_000),
@@ -185,6 +233,9 @@ export const spawnSchema = z.object({
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
+  delegate: z.string().trim().max(120).optional(),
+  parentSessionKey: z.string().uuid().optional(),
+  parentTicketId: z.string().optional(),
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
   metadata: z.record(z.string(), z.unknown()).optional().default({})

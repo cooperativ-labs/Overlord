@@ -17,6 +17,9 @@ export type SpawnParams = {
   executionTarget: 'agent' | 'human';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   projectId?: string;
+  delegate?: string;
+  parentSessionKey?: string;
+  parentTicketId?: string;
   agentIdentifier: string;
   connectionMethod: ConnectionMethod;
   metadata: Json;
@@ -40,6 +43,9 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     executionTarget,
     priority,
     projectId,
+    delegate,
+    parentSessionKey,
+    parentTicketId,
     agentIdentifier,
     connectionMethod,
     metadata,
@@ -73,6 +79,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       acceptance_criteria: acceptanceCriteria || null,
       available_tools: availableTools,
       created_by: userId,
+      delegate: delegate || null,
       execution_target: executionTarget,
       objective,
       organization_id: organizationId,
@@ -112,17 +119,18 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     return { error: 'Ticket created but failed to create session.', status: 500 } as const;
   }
 
-  // Record the spawn event
+  // Record the spawn event on the new ticket's session
   const { error: eventError } = await supabase.from('ticket_events').insert({
     event_type: 'system',
     payload: {
       agent_identifier: agentIdentifier,
       connection_method: connectionMethod,
-      created_via: 'protocol.spawn'
+      created_via: 'protocol.spawn',
+      ...(delegate ? { delegate } : {})
     },
     phase: 'execute',
     session_id: session.id,
-    summary: `Ticket spawned by ${agentIdentifier} via ${connectionMethod}.`,
+    summary: `Ticket spawned by ${agentIdentifier}${delegate ? ` (${delegate})` : ''} via ${connectionMethod}.`,
     ticket_id: ticket.id
   });
 
@@ -131,6 +139,34 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       error: 'Ticket and session created but failed to record event.',
       status: 500
     } as const;
+  }
+
+  // If spawned from within an existing session, record an event on the parent
+  // session so the parent's feed post can list tickets created by the agent.
+  if (parentSessionKey && parentTicketId) {
+    const { data: parentSession } = await supabase
+      .from('agent_sessions')
+      .select('id')
+      .eq('session_key', parentSessionKey)
+      .eq('ticket_id', parentTicketId)
+      .maybeSingle();
+
+    if (parentSession) {
+      await supabase.from('ticket_events').insert({
+        event_type: 'update',
+        payload: {
+          created_via: 'protocol.spawn',
+          spawned_ticket_id: ticket.id,
+          spawned_ticket_title: nextTitle,
+          spawned_ticket_sequence: ticket.ticket_sequence,
+          delegate: delegate || null
+        },
+        phase: 'execute',
+        session_id: parentSession.id,
+        summary: `Spawned ticket #${ticket.ticket_sequence}: ${nextTitle}`,
+        ticket_id: parentTicketId
+      });
+    }
   }
 
   return {

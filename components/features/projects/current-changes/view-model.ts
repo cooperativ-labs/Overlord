@@ -9,6 +9,9 @@ function compareNewestFirst(
   left: Pick<FileChangeRecord, 'created_at'>,
   right: Pick<FileChangeRecord, 'created_at'>
 ) {
+  if ('is_draft' in left && 'is_draft' in right && left.is_draft !== right.is_draft) {
+    return left.is_draft ? 1 : -1;
+  }
   return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
 }
 
