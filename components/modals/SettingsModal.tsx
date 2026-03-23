@@ -64,6 +64,7 @@ type SettingsModalProps = {
   onOpenChange: (open: boolean) => void;
   organizations: UserOrganization[];
   selectedOrgId: number | null;
+  initialNav?: SettingsNavSection;
 };
 
 type NavItem = {
@@ -94,12 +95,14 @@ const userNavItems: NavItem[] = [
 ];
 
 const navItems: NavItem[] = [...workflowNavItems, ...appNavItems, ...userNavItems];
+export type SettingsNavSection = (typeof navItems)[number]['name'];
 
 export function SettingsModal({
   open,
   onOpenChange,
   organizations,
-  selectedOrgId
+  selectedOrgId,
+  initialNav
 }: SettingsModalProps) {
   const { isElectron } = useElectron();
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
@@ -107,6 +110,12 @@ export function SettingsModal({
   const visibleAppNavItems = appNavItems.filter(item => !item.electronOnly || isElectron);
   const visibleUserNavItems = userNavItems.filter(item => !item.electronOnly || isElectron);
   const [activeNav, setActiveNav] = useState<string>('Integrations');
+
+  useEffect(() => {
+    if (!open || !initialNav) return;
+    if (!visibleNavItems.some(item => item.name === initialNav)) return;
+    setActiveNav(initialNav);
+  }, [open, initialNav, visibleNavItems]);
 
   useEffect(() => {
     if (visibleNavItems.length > 0 && !visibleNavItems.find(i => i.name === activeNav)) {

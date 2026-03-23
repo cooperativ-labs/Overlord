@@ -69,13 +69,47 @@ export async function getFeedPostsAction(options?: {
     throw new Error(error.message);
   }
 
-  return (data ?? []).map((row: Record<string, unknown>) => {
+  const rows = (data ?? []) as Record<string, unknown>[];
+  const ticketIds = [...new Set(rows.map(row => row.ticket_id).filter(Boolean) as string[])];
+
+  const filePathsByTicketId = new Map<string, string[]>();
+
+  if (ticketIds.length > 0) {
+    const { data: fileChanges, error: fileChangesError } = await supabase
+      .from('file_changes')
+      .select('ticket_id,file_path')
+      .in('ticket_id', ticketIds)
+      .order('created_at', { ascending: false });
+
+    if (fileChangesError) {
+      console.error('[getFeedPostsAction] file_changes error:', fileChangesError);
+      Sentry.captureException(fileChangesError);
+    } else {
+      for (const row of fileChanges ?? []) {
+        const ticketId = row.ticket_id;
+        const filePath = row.file_path?.trim();
+        if (!ticketId || !filePath) continue;
+
+        const existing = filePathsByTicketId.get(ticketId) ?? [];
+        if (!existing.includes(filePath)) {
+          existing.push(filePath);
+          filePathsByTicketId.set(ticketId, existing);
+        }
+      }
+    }
+  }
+
+  return rows.map((row: Record<string, unknown>) => {
     const projects = row.projects as { name: string; color: string } | null;
     const tickets = row.tickets as {
       title: string | null;
       objective: string | null;
       ticket_sequence: number | null;
     } | null;
+    const storedFilesTouched = Array.isArray(row.files_touched)
+      ? (row.files_touched as string[]).filter(Boolean)
+      : [];
+    const changedFiles = filePathsByTicketId.get(row.ticket_id as string) ?? [];
 
     return {
       id: row.id as string,
@@ -88,7 +122,7 @@ export async function getFeedPostsAction(options?: {
       body: row.body as string,
       tags: row.tags as string[],
       impact_level: row.impact_level as string,
-      files_touched: row.files_touched as string[],
+      files_touched: changedFiles.length > 0 ? changedFiles : storedFilesTouched,
       tradeoffs: row.tradeoffs as FeedPost['tradeoffs'],
       human_actions: (row.human_actions as string[]) ?? [],
       source_event_ids: row.source_event_ids as string[],

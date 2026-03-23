@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
+import type { SettingsNavSection } from '@/components/modals/SettingsModal';
 
 import { useSystemNotifications } from './SystemNotificationContext';
 
@@ -16,7 +17,9 @@ const AGENT_LABELS: Record<string, string> = {
  * Checks agent bundle statuses on mount and surfaces a system notification
  * when any installed bundle is stale (needs updating) or partial (needs repair).
  */
-export function useAgentBundleNotifications(onOpenSettings?: () => void) {
+export function useAgentBundleNotifications(
+  onOpenSettings?: (section?: SettingsNavSection) => void
+) {
   const { isElectron } = useElectron();
   const { addNotification } = useSystemNotifications();
 
@@ -41,7 +44,10 @@ export function useAgentBundleNotifications(onOpenSettings?: () => void) {
           message: `${names} ${staleAgents.length === 1 ? 'has' : 'have'} a newer prompt version. Update to get the latest workflow instructions.`,
           dismissKey: `overlord-bundle-stale-dismissed-${staleAgents.map(s => s.version).join('-')}`,
           action: onOpenSettings
-            ? { label: 'Update in Settings', onClick: onOpenSettings }
+            ? {
+                label: 'Open CLI settings',
+                onClick: () => onOpenSettings('CLI & Local Agents')
+              }
             : undefined
         });
       }
@@ -56,7 +62,10 @@ export function useAgentBundleNotifications(onOpenSettings?: () => void) {
           message: `${names} ${partialAgents.length === 1 ? 'has' : 'have'} an incomplete installation. Repair to ensure agents work correctly.`,
           dismissKey: `overlord-bundle-partial-dismissed-${partialAgents.map(s => s.agent).join('-')}`,
           action: onOpenSettings
-            ? { label: 'Repair in Settings', onClick: onOpenSettings }
+            ? {
+                label: 'Open CLI settings',
+                onClick: () => onOpenSettings('CLI & Local Agents')
+              }
             : undefined
         });
       }

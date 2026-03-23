@@ -12,7 +12,7 @@ import { useProjectCreator } from '@/components/features/projects/ProjectCreator
 import { ProjectWorkingDirectoryRequiredModal } from '@/components/features/projects/ProjectWorkingDirectoryRequiredModal';
 import { useAgentBundleNotifications } from '@/components/features/system-notifications';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { SettingsModal } from '@/components/modals/SettingsModal';
+import { SettingsModal, type SettingsNavSection } from '@/components/modals/SettingsModal';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
 import {
@@ -107,11 +107,17 @@ export function AppSidebar({
   const { defaultProject } = useDefaultProject();
   const { openTutorial } = useTutorialWizard();
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [settingsInitialNav, setSettingsInitialNav] = React.useState<
+    SettingsNavSection | undefined
+  >(undefined);
   const [projectNeedingDirectory, setProjectNeedingDirectory] =
     React.useState<SidebarProject | null>(null);
   const [pendingPath, setPendingPath] = React.useState<string | null>(null);
 
-  const openSettings = React.useCallback(() => setSettingsOpen(true), []);
+  const openSettings = React.useCallback((section?: SettingsNavSection) => {
+    setSettingsInitialNav(section);
+    setSettingsOpen(true);
+  }, []);
   useAgentBundleNotifications(openSettings);
 
   const defaultOrganizationId = React.useMemo(() => {
@@ -276,9 +282,15 @@ export function AppSidebar({
       </SidebarFooter>
       <SettingsModal
         open={settingsOpen}
-        onOpenChange={setSettingsOpen}
+        onOpenChange={nextOpen => {
+          setSettingsOpen(nextOpen);
+          if (!nextOpen) {
+            setSettingsInitialNav(undefined);
+          }
+        }}
         organizations={organizations}
         selectedOrgId={selectedOrgId}
+        initialNav={settingsInitialNav}
       />
       <ProjectWorkingDirectoryRequiredModal
         open={projectNeedingDirectory !== null}
