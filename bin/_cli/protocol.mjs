@@ -166,6 +166,29 @@ function requireFlag(flags, name, envAlias) {
   return String(value);
 }
 
+function readTextFile(filePath, label) {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (err) {
+    throw new Error(
+      `${label}: could not read "${filePath}": ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+function readJsonFile(filePath, label) {
+  try {
+    return JSON.parse(readTextFile(filePath, label));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith(`${label}: could not read`)) {
+      throw err;
+    }
+    throw new Error(
+      `${label}: could not parse "${filePath}": ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // changeRationales helper
 // ---------------------------------------------------------------------------
@@ -177,14 +200,7 @@ function requireFlag(flags, name, envAlias) {
  */
 async function resolveChangeRationales(flags) {
   if (flags['change-rationales-file']) {
-    const { readFileSync } = await import('node:fs');
-    try {
-      return JSON.parse(readFileSync(String(flags['change-rationales-file']), 'utf8'));
-    } catch (err) {
-      throw new Error(
-        `--change-rationales-file: could not read or parse "${flags['change-rationales-file']}": ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
+    return readJsonFile(String(flags['change-rationales-file']), '--change-rationales-file');
   }
   if (flags['change-rationales-json']) {
     try {
@@ -411,7 +427,9 @@ async function protocolUpdate(args) {
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
-  const summary = requireFlag(flags, 'summary', undefined);
+  const summary = flags['summary-file']
+    ? readTextFile(String(flags['summary-file']), '--summary-file')
+    : requireFlag(flags, 'summary', undefined);
 
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
@@ -473,7 +491,11 @@ async function protocolRecordChangeRationales(args) {
     sessionKey,
     ticketId,
     changeRationales,
-    ...(flags.summary ? { summary: String(flags.summary) } : {}),
+    ...(flags['summary-file']
+      ? { summary: readTextFile(String(flags['summary-file']), '--summary-file') }
+      : flags.summary
+        ? { summary: String(flags.summary) }
+        : {}),
     ...(flags.phase ? { phase: String(flags.phase) } : {})
   };
 
@@ -497,7 +519,9 @@ async function protocolAsk(args) {
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
-  const question = requireFlag(flags, 'question', undefined);
+  const question = flags['question-file']
+    ? readTextFile(String(flags['question-file']), '--question-file')
+    : requireFlag(flags, 'question', undefined);
 
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
@@ -598,22 +622,26 @@ async function protocolDeliver(args) {
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
-  const summary = requireFlag(flags, 'summary', undefined);
+  const deliverPayload = flags['payload-file']
+    ? readJsonFile(String(flags['payload-file']), '--payload-file')
+    : null;
+  const summary = deliverPayload?.summary ??
+    (flags['summary-file']
+      ? readTextFile(String(flags['summary-file']), '--summary-file')
+      : requireFlag(flags, 'summary', undefined));
 
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
-  let artifacts = [];
+  let artifacts = deliverPayload?.artifacts ?? [];
+  if (deliverPayload && flags['artifacts-file']) {
+    throw new Error('Use either --payload-file or --artifacts-file, not both');
+  }
+  if (deliverPayload && flags['artifacts-json']) {
+    throw new Error('Use either --payload-file or --artifacts-json, not both');
+  }
   if (flags['artifacts-file']) {
-    // Load artifacts from a file — avoids shell-escaping issues with large inline JSON bodies
-    const { readFileSync } = await import('node:fs');
-    try {
-      artifacts = JSON.parse(readFileSync(String(flags['artifacts-file']), 'utf8'));
-    } catch (err) {
-      throw new Error(
-        `--artifacts-file: could not read or parse "${flags['artifacts-file']}": ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
+    artifacts = readJsonFile(String(flags['artifacts-file']), '--artifacts-file');
   } else if (flags['artifacts-json']) {
     try {
       artifacts = JSON.parse(String(flags['artifacts-json']));
@@ -622,7 +650,11 @@ async function protocolDeliver(args) {
     }
   }
 
-  const changeRationales = await resolveChangeRationales(flags);
+  if (deliverPayload && (flags['change-rationales-file'] || flags['change-rationales-json'])) {
+    throw new Error('Use either --payload-file or change-rationale flags, not both');
+  }
+
+  const changeRationales = deliverPayload?.changeRationales ?? await resolveChangeRationales(flags);
   validateDeliverFileChanges(flags, changeRationales);
 
   const body = {
@@ -947,22 +979,29 @@ Attach/update-specific flags:
 
 Update-specific flags:
   --external-url <url>   Store or refresh a deep link to the current agent session.
+  --summary-file <path>  Read the update summary from a text file.
   --change-rationales-json <json>  Inline JSON array of change rationale objects.
   --change-rationales-file <path>  Path to a JSON file containing change rationales.
 
 Record-change-rationales flags:
   --summary <text>        Optional ticket-event summary for this rationale submission.
+  --summary-file <path>   Read the optional rationale summary from a text file.
   --phase <status>        Optional phase for the rationale event (for example: execute).
   --change-rationales-json <json>  Inline JSON array of change rationale objects.
   --change-rationales-file <path>  Path to a JSON file containing change rationales.
 
 Deliver-specific flags:
+  --payload-file <path>  Path to a JSON file containing { summary, artifacts, changeRationales }.
+  --summary-file <path>  Read the delivery summary from a text file.
   --artifacts-json <json> Inline JSON array of artifact objects.
   --artifacts-file <path> Path to a JSON file containing artifacts (avoids shell-escaping issues
                           with large payloads).
   --change-rationales-json <json>  Inline JSON array of change rationale objects.
   --change-rationales-file <path>  Path to a JSON file containing change rationales.
   --skip-file-change-check Skip the local git/changeRationales reconciliation before deliver.
+
+Ask-specific flags:
+  --question-file <path> Read the blocking question from a text file.
 
 Spawn-specific flags:
   --objective <text>      Ticket objective (required)
@@ -978,13 +1017,14 @@ Examples:
   ovld protocol spawn --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X"
   ovld protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
-  ovld protocol ask --session-key <key> --ticket-id <id> --question "Which approach?"
+  ovld protocol ask --session-key <key> --ticket-id <id> --question-file ./question.txt
   ovld protocol read-context --session-key <key> --ticket-id <id>
   ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"'
   ovld protocol artifact-upload-file --session-key <key> --ticket-id <id> --file ./spec.pdf --content-type application/pdf
   ovld protocol artifact-download-url --session-key <key> --ticket-id <id> --artifact-id <artifact-id>
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --artifacts-file ./artifacts.json
+  ovld protocol deliver --session-key <key> --ticket-id <id> --payload-file ./deliver.json
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --timeout 60000
 `);

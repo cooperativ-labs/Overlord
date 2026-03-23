@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.6.0] - 2026-03-23:14:08
+
+### Added
+- Let `ovld protocol` commands read summaries, questions, artifacts, or entire payloads from disk (`--summary-file`, `--question-file`, `--artifacts-file`, `--payload-file`) while guarding against conflicting flag combinations so large inputs stay shell-friendly but remain validated before dispatching.
+- Surface every managed bundle/slash-command file in the CLI Settings modal and wire an “Open in Finder” button via the new `app:reveal-file` IPC helper (and preload/typings) so agents can inspect the exact files that the bundle or slash-command manages.
+
+### Fixed
+- None.
+
+### Changed
+- Make `resolveAuth` prefer the `AGENT_TOKEN` environment variable over stored credentials so CLI(installed) sessions can override cached tokens immediately.
+
+### Security
+- None.
+
+### Test
+- Add regression tests that spin up temporary git repositories to cover clean/missing/mismatched change rationale paths, demonstrate the new `--payload-file` workflows, and ensure the CLI honors `AGENT_TOKEN` ahead of saved credentials.
+
+### Chore
+- Bump the package version to `2.6.0`.
+
 ## [2.5.0] - 2026-03-23:13:30
 
 ### Added

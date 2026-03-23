@@ -240,8 +240,8 @@ export function resolveAuth() {
   return {
     platformUrl,
     agentToken:
-      normalizeAgentToken(creds?.access_token) ||
       normalizeAgentToken(process.env.AGENT_TOKEN) ||
+      normalizeAgentToken(creds?.access_token) ||
       'overlord-local-dev-token',
     localSecret
   };

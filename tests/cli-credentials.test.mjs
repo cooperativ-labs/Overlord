@@ -136,4 +136,41 @@ for (const modulePath of [
       });
     }
   );
+
+  test(
+    `${modulePath} resolveAuth prefers AGENT_TOKEN env var over stored credentials`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        const credentialsPath = path.join(ovldDir, 'credentials.json');
+        fs.writeFileSync(
+          credentialsPath,
+          JSON.stringify(
+            {
+              access_token: 'stored-token',
+              platform_url: 'https://www.ovld.ai'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+        fs.chmodSync(credentialsPath, 0o600);
+
+        process.env.OVERLORD_URL = 'https://www.ovld.ai';
+        process.env.AGENT_TOKEN = 'env-token';
+        delete process.env.OVERLORD_CONNECTOR_URL;
+
+        const { resolveAuth } = await importFresh(modulePath);
+        const result = resolveAuth();
+
+        assert.equal(result.platformUrl, 'https://www.ovld.ai');
+        assert.equal(result.agentToken, 'env-token');
+      });
+    }
+  );
 }

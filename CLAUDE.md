@@ -9,16 +9,6 @@ To manage skills, use the `skill` CLI command (run `skill --help` for usage).
 <!-- overskill-end -->
 
 
-
-## Supabase local APIs
-
-- Project URL: http://127.0.0.1:54321
-- REST: http://127.0.0.1:54321/rest/v1
-- GraphQL: http://127.0.0.1:54321/graphql/v1
-- Edge Functions: http://127.0.0.1:54321/functions/v1
-- Mailpit: http://127.0.0.1:54324
-- Storage: http://127.0.0.1:54321/storage/v1/s3
-
 ## Deployment
 
 - Primary deployment platform: Vercel
@@ -26,12 +16,6 @@ To manage skills, use the `skill` CLI command (run `skill --help` for usage).
 - Edge functions deployed to Supabase
 - Sentry for error tracking and monitoring
 
-
-## Authentication
-
-- Supabase Auth for user authentication
-- Email confirmation flow
-- Onboarding flow for new users
 
 ## Common Tasks
 
@@ -68,14 +52,6 @@ If Supabase types are out of sync:
 yarn generate  # Regenerate from local Supabase
 ```
 
-### Build Issues
-
-Clear Next.js cache:
-
-```bash
-rm -rf .next
-yarn build-dev
-```
 
 ## Notes for AI Assistants
 

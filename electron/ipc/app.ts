@@ -1,4 +1,6 @@
-import { ipcMain, Notification } from 'electron';
+import { ipcMain, Notification, shell } from 'electron';
+import os from 'node:os';
+import path from 'node:path';
 
 import {
   type AgentBundleAgent,
@@ -30,6 +32,18 @@ export function registerAppIpc({
   connectorUrl,
   platformUrl
 }: RegisterAppIpcOptions): void {
+  function resolveUserPath(filePath: string): string {
+    if (filePath.startsWith('~/')) {
+      return path.join(os.homedir(), filePath.slice(2));
+    }
+
+    if (filePath === '~') {
+      return os.homedir();
+    }
+
+    return path.resolve(filePath);
+  }
+
   ipcMain.handle('settings:get', (_event, key: string) => {
     return store.get(key);
   });
@@ -54,6 +68,12 @@ export function registerAppIpc({
     });
     notification.show();
     return true;
+  });
+
+  ipcMain.handle('app:reveal-file', (_event, filePath: string) => {
+    const resolvedPath = resolveUserPath(filePath);
+    shell.showItemInFolder(resolvedPath);
+    return resolvedPath;
   });
 
   ipcMain.handle('app-update:get-status', () => {

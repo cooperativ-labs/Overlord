@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy, X } from 'lucide-react';
+import { Check, Copy, FolderOpen, X } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -10,6 +10,7 @@ import {
 } from '@/components/features/AgentModelSelector';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
@@ -549,6 +550,16 @@ export function CliPage({ open }: { open: boolean }) {
     }
   }
 
+  async function handleRevealFile(filePath: string) {
+    if (!window.electronAPI?.app?.revealFile) return;
+
+    try {
+      await window.electronAPI.app.revealFile(filePath);
+    } catch (error) {
+      console.error('Failed to reveal file in Finder:', error);
+    }
+  }
+
   const bundleStatusBadge = (status: BundleStatusEntry['status']) => {
     switch (status) {
       case 'installed':
@@ -793,15 +804,11 @@ export function CliPage({ open }: { open: boolean }) {
                       option.kind === 'bundle'
                         ? getBundleActionMeta(bundleStatus?.status)
                         : getSlashActionMeta(slashStatus?.status);
-                    const installFiles =
+                    const managedFiles =
                       option.kind === 'bundle'
                         ? BUNDLE_FILE_PATHS[option.bundleAgent]
                         : (slashStatus?.managedFiles ??
                           SLASH_COMMAND_CONFIGS[option.slashAgent].filePaths);
-                    const removeFiles =
-                      option.kind === 'bundle'
-                        ? BUNDLE_FILE_PATHS[option.bundleAgent]
-                        : (slashStatus?.existingManagedFiles ?? []);
                     const details =
                       option.kind === 'bundle'
                         ? (bundleStatus?.details ??
@@ -832,20 +839,33 @@ export function CliPage({ open }: { open: boolean }) {
                             {details ? (
                               <p className="text-xs text-muted-foreground">{details}</p>
                             ) : null}
-                            <p className="break-all text-xs text-muted-foreground">
-                              Install updates:{' '}
-                              <code className="rounded bg-muted px-1">
-                                {installFiles.join(', ')}
-                              </code>
-                            </p>
-                            <p className="break-all text-xs text-muted-foreground">
-                              Remove currently affects:{' '}
-                              <code className="rounded bg-muted px-1">
-                                {removeFiles.length > 0
-                                  ? removeFiles.join(', ')
-                                  : 'No managed files found yet.'}
-                              </code>
-                            </p>
+                            <div className="grid gap-2">
+                              {managedFiles.map(filePath => (
+                                <div
+                                  key={filePath}
+                                  className="flex flex-col gap-2 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                  <code className="break-all text-xs text-muted-foreground">
+                                    {filePath}
+                                  </code>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0 gap-2"
+                                    onClick={() => void handleRevealFile(filePath)}
+                                  >
+                                    <FolderOpen className="h-3.5 w-3.5" />
+                                    Open in Finder
+                                  </Button>
+                                </div>
+                              ))}
+                              {managedFiles.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  No managed files found yet.
+                                </p>
+                              ) : null}
+                            </div>
                           </div>
                           {isElectron ? (
                             <LoadingButton

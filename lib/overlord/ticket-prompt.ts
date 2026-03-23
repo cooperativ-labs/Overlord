@@ -253,6 +253,22 @@ ovld protocol deliver --session-key <sessionKey> \\
   --change-rationales-json '[{"label":"Add exponential backoff","file_path":"lib/api-client.ts","summary":"Added retry with backoff.","why":"Transient failures caused data loss.","impact":"Requests retry up to 3 times before failing.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
+For larger or quote-sensitive deliveries, prefer a single JSON file and submit it with:
+
+\`\`\`bash
+ovld protocol deliver --session-key <sessionKey> --ticket-id ${ticketId} --payload-file ./deliver.json
+\`\`\`
+
+Where \`deliver.json\` contains:
+
+\`\`\`json
+{
+  "summary": "Narrative: what you did, next steps.",
+  "artifacts": [{ "type": "next_steps", "label": "Next steps", "content": "..." }],
+  "changeRationales": [{ "label": "Short reviewer-facing title", "file_path": "path/to/file.ts", "summary": "What changed.", "why": "Why it changed.", "impact": "Behavioral or review impact.", "hunks": [{ "header": "@@ -10,6 +10,14 @@" }] }]
+}
+\`\`\`
+
 Artifact types: \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`, \`decision\`.
 
 #### Change rationales (expected on deliver)
@@ -272,7 +288,7 @@ Always include \`changeRationales\` when delivering. Overlord saves them as stru
 ]
 \`\`\`
 
-Prefer \`--change-rationales-json\` inline or \`ovld protocol record-change-rationales\`. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file. Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
+Prefer inline flags for small payloads. For quote-sensitive or larger deliveries, prefer \`--payload-file\` so summary, artifacts, and change rationales travel together in one JSON document. Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
 Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
 

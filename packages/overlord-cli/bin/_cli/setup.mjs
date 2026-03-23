@@ -68,13 +68,18 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
      --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
+   For larger or quote-sensitive deliveries, prefer a single JSON file:
+   \`\`\`bash
+   ovld protocol deliver --session-key <sessionKey> --ticket-id $TICKET_ID --payload-file ./deliver.json
+   \`\`\`
+
 ## Change Rationales
 
 Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
 
 Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
 
-These are structured protocol payloads that Overlord stores as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated command below. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file. Ordinary deliver artifacts should use \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`, or \`decision\`.
+These are structured protocol payloads that Overlord stores as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated command below. For quote-sensitive deliveries, prefer \`--payload-file\` so summary, artifacts, and change rationales stay in one JSON document. Ordinary deliver artifacts should use \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`, or \`decision\`.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\

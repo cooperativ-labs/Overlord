@@ -6,6 +6,7 @@
  *   2. CLI delivers successfully with a large artifact payload
  *   3. --artifacts-file flag loads artifacts from disk
  *   4. Non-2xx responses surface status + body (no silent failure)
+ *   5. --payload-file delivers summary, artifacts, and changeRationales from one file
  *
  * Run:
  *   node --test tests/protocol-deliver.test.mjs
@@ -521,6 +522,77 @@ for (const modulePath of ['bin/_cli/protocol.mjs', 'packages/overlord-cli/bin/_c
           });
         });
 
+        assert.equal(requestBody.changeRationales.length, 1);
+        assert.equal(requestBody.changeRationales[0].file_path, 'matching.ts');
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test(
+    `${modulePath} deliver accepts --payload-file for summary, artifacts, and change rationales`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-payload-file');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'matching.ts'), 'export const value = 1;\n', 'utf8');
+
+      const payloadPath = join(repoDir, 'deliver.json');
+      writeFileSync(
+        payloadPath,
+        JSON.stringify(
+          {
+            summary: 'Delivered from a single JSON payload file.',
+            artifacts: [
+              { type: 'note', label: 'Transport', content: 'Used --payload-file to avoid shell quoting.' }
+            ],
+            changeRationales: [
+              {
+                label: 'Match changed file',
+                file_path: 'matching.ts',
+                summary: 'Updated protocol delivery transport.',
+                why: 'Agents need a quoting-safe submission path.',
+                impact: 'Deliver can be posted from one JSON file.',
+                hunks: [{ header: '@@ -1 +1 @@' }]
+              }
+            ]
+          },
+          null,
+          2
+        ),
+        'utf8'
+      );
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--payload-file',
+              payloadPath
+            ]);
+          });
+        });
+
+        assert.equal(requestBody.summary, 'Delivered from a single JSON payload file.');
+        assert.equal(requestBody.artifacts.length, 1);
         assert.equal(requestBody.changeRationales.length, 1);
         assert.equal(requestBody.changeRationales[0].file_path, 'matching.ts');
       } finally {
