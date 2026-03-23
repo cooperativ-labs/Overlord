@@ -1,9 +1,9 @@
 'use client';
 
-import { FileCode2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileCode2 } from 'lucide-react';
 import { MessageSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 import { CliQuickstart } from '@/components/features/CliQuickstart';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
@@ -146,54 +146,65 @@ function LiveFileChangeCard({
   fileChange: FileChange;
   workspaceRoot: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const href = workspaceRoot
     ? buildDiffHref(fileChange.file_path, workspaceRoot, editorScheme)
     : undefined;
 
+  const dateStr = new Date(fileChange.created_at).toLocaleString();
+
   return (
-    <article className="rounded-lg border bg-muted/20 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="mb-1 text-xs font-medium break-words">File change</p>
-          <p className="mb-1 text-xs text-muted-foreground">file_change</p>
-          {href ? (
-            <a
-              className="inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
-              href={href}
-              title={`Open ${fileChange.file_path} in your editor`}
-            >
-              <FileCode2 className="h-4 w-4" />
-              <span className="truncate">{fileChange.file_name}</span>
-            </a>
-          ) : (
-            <div className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-              <FileCode2 className="h-4 w-4" />
-              <span className="truncate">{fileChange.file_name}</span>
+    <article className="rounded-lg border bg-muted/20">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 p-3 text-left hover:bg-muted/40 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <FileCode2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{fileChange.file_name}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">{dateStr}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t px-3 pb-3 pt-2">
+          <div className="mb-2">
+            {href ? (
+              <a
+                className="inline-flex items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline"
+                href={href}
+                title={`Open ${fileChange.file_path} in your editor`}
+              >
+                {fileChange.file_path}
+              </a>
+            ) : (
+              <p className="break-all text-xs text-muted-foreground">{fileChange.file_path}</p>
+            )}
+          </div>
+          <div className="grid gap-2 text-sm">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Change</p>
+              <p className="text-foreground">{fileChange.label}</p>
+              <p className="mt-1 text-muted-foreground">{fileChange.summary}</p>
             </div>
-          )}
-          <p className="mt-1 break-all text-xs text-muted-foreground">{fileChange.file_path}</p>
-        </div>
-        <span className="shrink-0 text-[11px] text-muted-foreground">
-          {new Date(fileChange.created_at).toLocaleString()}
-        </span>
-      </div>
-      <div className="mt-3 grid gap-2 text-sm">
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Change</p>
-          <p className="text-foreground">{fileChange.label}</p>
-          <p className="mt-1 text-muted-foreground">{fileChange.summary}</p>
-        </div>
-        <div className="grid gap-2 md:grid-cols-2">
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Why</p>
-            <p className="text-foreground">{fileChange.why}</p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Impact</p>
-            <p className="text-foreground">{fileChange.impact}</p>
+            <div className="grid gap-2 md:grid-cols-2">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Why</p>
+                <p className="text-foreground">{fileChange.why}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Impact</p>
+                <p className="text-foreground">{fileChange.impact}</p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </article>
   );
 }

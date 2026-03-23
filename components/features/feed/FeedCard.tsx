@@ -87,19 +87,11 @@ export function FeedCard({ post }: { post: FeedPost }) {
               )}
             </button>
             <h3
-              className="flex-1 cursor-pointer text-base font-semibold leading-snug"
+              className="flex-1 cursor-pointer text-base font-semibold leading-snug break-words"
               onClick={() => setExpanded(!expanded)}
             >
               {post.title}
             </h3>
-            {humanActions.length > 0 && (
-              <Badge
-                className="shrink-0 rounded-full px-2 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                variant="secondary"
-              >
-                {humanActions.length} action{humanActions.length > 1 ? 's' : ''}
-              </Badge>
-            )}
             <Badge
               className={cn('shrink-0 rounded-full px-2 text-xs font-medium', impact.className)}
               variant="secondary"
@@ -185,28 +177,22 @@ export function FeedCard({ post }: { post: FeedPost }) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Files touched */}
-              {filesTouched.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
-                  <FileCode2 className="h-3.5 w-3.5" />
-                  <span className="font-medium">Files:</span>
-                  {filesTouched.slice(0, 5).map(f => (
-                    <Link
-                      key={f}
-                      href={`${currentChangesPath}?file=${encodeURIComponent(f)}`}
-                      className="rounded bg-muted px-1 py-0.5 text-xs underline-offset-4 hover:bg-muted/80 hover:underline"
-                    >
-                      {f}
-                    </Link>
-                  ))}
-                  {filesTouched.length > 5 && (
-                    <span className="text-muted-foreground/60">
-                      +{filesTouched.length - 5} more
-                    </span>
-                  )}
-                </div>
-              )}
+          {/* Files touched — always visible */}
+          {filesTouched.length > 0 && (
+            <div className="mt-2.5 ml-6 flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
+              <FileCode2 className="h-3.5 w-3.5 shrink-0" />
+              {filesTouched.map(f => (
+                <Link
+                  key={f}
+                  href={`${currentChangesPath}?file=${encodeURIComponent(f)}`}
+                  className="rounded bg-muted px-1 py-0.5 text-xs break-all underline-offset-4 hover:bg-muted/80 hover:underline"
+                >
+                  {f}
+                </Link>
+              ))}
             </div>
           )}
 
