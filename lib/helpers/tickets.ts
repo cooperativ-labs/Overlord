@@ -1,3 +1,9 @@
+import { collapseInlineFileMentions } from '@/lib/helpers/file-mentions';
+
+function normalizeObjectiveForTitle(objective: string | null | undefined): string {
+  return collapseInlineFileMentions((objective ?? '').trim());
+}
+
 /**
  * Returns a display title for a ticket.
  * Uses the explicit title if set, otherwise falls back to the first 60 characters
@@ -9,7 +15,7 @@ export function getDisplayTitle(ticket: {
   objective?: string | null;
 }): string {
   if (ticket.title?.trim()) return ticket.title.trim();
-  const text = (ticket.objective ?? '').trim();
+  const text = normalizeObjectiveForTitle(ticket.objective);
   if (!text) return 'Untitled';
   return text.length > 60 ? text.slice(0, 57) + '…' : text;
 }
@@ -24,7 +30,7 @@ export function getTicketIdentifier(ticketId: string): string {
  * Truncates to 60 characters with an ellipsis if needed.
  */
 export function deriveTitleFromObjective(objective: string): string {
-  const trimmed = objective.trim();
+  const trimmed = normalizeObjectiveForTitle(objective);
   if (trimmed.length <= 60) return trimmed;
   return trimmed.slice(0, 60) + '…';
 }

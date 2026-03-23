@@ -4,6 +4,7 @@ import { Newspaper } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import type { FeedPost } from '@/lib/actions/feed';
+import { getWorkspaceRoot } from '@/lib/env';
 
 import { FeedCard } from './FeedCard';
 import { FeedProjectFilter } from './FeedProjectFilter';
@@ -12,15 +13,24 @@ type Project = {
   id: string;
   name: string;
   color: string;
+  localWorkingDirectory: string | null;
 };
 
 type FeedListProps = {
   posts: FeedPost[];
   projects: Project[];
+  editorScheme: string;
 };
 
-export function FeedList({ posts, projects }: FeedListProps) {
+export function FeedList({ posts, projects, editorScheme }: FeedListProps) {
   const [selectedProjectId, setSelectedProjectId] = useState('all');
+  const workspaceRootByProjectId = useMemo(
+    () =>
+      new Map(
+        projects.map(project => [project.id, getWorkspaceRoot(project.localWorkingDirectory)])
+      ),
+    [projects]
+  );
 
   const filteredPosts = useMemo(() => {
     if (selectedProjectId === 'all') return posts;
@@ -52,7 +62,12 @@ export function FeedList({ posts, projects }: FeedListProps) {
         ) : (
           <div className="max-w-2xl mx-auto">
             {filteredPosts.map(post => (
-              <FeedCard key={post.id} post={post} />
+              <FeedCard
+                key={post.id}
+                post={post}
+                editorScheme={editorScheme}
+                workspaceRoot={workspaceRootByProjectId.get(post.project_id) ?? ''}
+              />
             ))}
           </div>
         )}

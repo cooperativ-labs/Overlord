@@ -87,7 +87,7 @@ export function parseFileChanges(content: string): FileChangeEntry[] {
     .filter((entry): entry is FileChangeEntry => Boolean(entry));
 }
 
-function buildEditorHref(path: string, workspaceRoot: string, editorScheme: string): string {
+export function buildEditorHref(path: string, workspaceRoot: string, editorScheme: string): string {
   const fullPath =
     path.startsWith('/') || !workspaceRoot ? path : `${workspaceRoot.replace(/\/$/, '')}/${path}`;
 

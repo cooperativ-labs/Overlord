@@ -16,8 +16,9 @@ import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
 import type { FeedPost } from '@/lib/actions/feed';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { buildEditorHref } from '@/lib/helpers/file-changes';
 import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
-import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
+import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
 const impactConfig: Record<string, { label: string; className: string }> = {
@@ -32,16 +33,25 @@ const impactConfig: Record<string, { label: string; className: string }> = {
   }
 };
 
-export function FeedCard({ post }: { post: FeedPost }) {
+type FeedCardProps = {
+  post: FeedPost;
+  editorScheme: string;
+  workspaceRoot: string;
+};
+
+export function FeedCard({ post, editorScheme, workspaceRoot }: FeedCardProps) {
   const [expanded, setExpanded] = useState(false);
   const impact = impactConfig[post.impact_level] ?? impactConfig.notable;
   const agentType = getAgentTypeByIdentifier(post.agent_type);
   const ticketPath = buildTicketPath({ projectId: post.project_id, ticketId: post.ticket_id });
-  const currentChangesPath = `${buildProjectPath({ projectId: post.project_id })}/current-changes`;
   const tradeoffs = Array.isArray(post.tradeoffs) ? post.tradeoffs : [];
   const humanActions = Array.isArray(post.human_actions) ? post.human_actions : [];
   const filesTouched = Array.isArray(post.files_touched) ? post.files_touched : [];
   const ticketsCreated = Array.isArray(post.tickets_created) ? post.tickets_created : [];
+  const fileLinks = filesTouched.map(path => ({
+    path,
+    href: workspaceRoot ? buildEditorHref(path, workspaceRoot, editorScheme) : null
+  }));
 
   const timestamp = new Date(post.created_at);
   const timeStr = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -221,16 +231,30 @@ export function FeedCard({ post }: { post: FeedPost }) {
           {filesTouched.length > 0 && (
             <div className="mt-2.5 ml-6 flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
               <FileCode2 className="h-3.5 w-3.5 shrink-0" />
-              {filesTouched.map(f => (
-                <Link
-                  key={f}
-                  href={`${currentChangesPath}?file=${encodeURIComponent(f)}`}
-                  title={f}
-                  className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5 text-xs underline-offset-4 transition-colors hover:bg-muted hover:underline"
-                >
-                  {getCollapsedFileMentionLabel(f)}
-                </Link>
-              ))}
+              {fileLinks.map(({ path, href }) => {
+                if (href) {
+                  return (
+                    <a
+                      key={path}
+                      href={href}
+                      title={path}
+                      className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5 text-xs underline-offset-4 transition-colors hover:bg-muted hover:underline"
+                    >
+                      {getCollapsedFileMentionLabel(path)}
+                    </a>
+                  );
+                }
+
+                return (
+                  <span
+                    key={path}
+                    title={path}
+                    className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5 text-xs"
+                  >
+                    {getCollapsedFileMentionLabel(path)}
+                  </span>
+                );
+              })}
             </div>
           )}
 

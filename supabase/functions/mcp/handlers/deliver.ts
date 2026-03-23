@@ -3,6 +3,7 @@
 import { type SupabaseClient } from '@supabase/supabase-js';
 
 import { type TokenContext } from '../auth.ts';
+import { getPublicMcpUrl } from '../helpers/public-url.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
@@ -85,7 +86,11 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     if (rationaleResult.error) return toolErr(rationaleResult.error);
   }
 
-  const mcpFunctionsUrl = `${SUPABASE_URL}/functions/v1/mcp`;
+  const publicMcpUrl = getPublicMcpUrl({
+    NEXT_PUBLIC_SITE_URL: Deno.env.get('NEXT_PUBLIC_SITE_URL'),
+    OVERLORD_URL: Deno.env.get('OVERLORD_URL'),
+    SUPABASE_URL
+  });
   const restartCommand = buildMcpRestartCommand(
     ticketId,
     resolved.session.agent_identifier,
@@ -101,7 +106,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
         {
           type: 'note',
           label: 'Restart session command',
-          content: `\`\`\`bash\n${restartCommand}\n\`\`\`\n\nOr use the MCP server at: \`${mcpFunctionsUrl}\``,
+          content: `\`\`\`bash\n${restartCommand}\n\`\`\`\n\nOr use the MCP server at: \`${publicMcpUrl}\``,
           metadata: { generated_by: 'mcp_deliver', restart_session_command: true }
         }
       ];

@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
-import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
-
-function deriveTitleFromObjective(objective: string): string {
-  const trimmed = objective.trim();
-  if (trimmed.length <= 60) return trimmed;
-  return `${trimmed.slice(0, 60)}…`;
-}
 
 export async function POST(request: Request) {
   const authResult = await resolveAgentToken(request);

@@ -29,6 +29,12 @@ type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type FileChange = Database['public']['Tables']['file_changes']['Row'];
 type SessionState = Database['public']['Enums']['session_state'];
 
+function parseTimestamp(value: string | null | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 // --- AgentSessionBadge ---
 
 const sessionBadgeConfig: Record<
@@ -221,8 +227,11 @@ function LiveArtifacts({
   workspaceRoot: string;
 }) {
   const visibleArtifacts = artifacts.filter(artifact => artifact.artifact_type !== 'file_changes');
+  const orderedFileChanges = [...fileChanges].sort(
+    (left, right) => parseTimestamp(right.created_at) - parseTimestamp(left.created_at)
+  );
 
-  if (!fileChanges.length && !visibleArtifacts.length) return null;
+  if (!orderedFileChanges.length && !visibleArtifacts.length) return null;
 
   return (
     <section>
@@ -230,7 +239,7 @@ function LiveArtifacts({
         Artifacts
       </h2>
       <div className="grid gap-4">
-        {fileChanges.map(fileChange => (
+        {orderedFileChanges.map(fileChange => (
           <LiveFileChangeCard
             key={fileChange.id}
             editorScheme={editorScheme}
