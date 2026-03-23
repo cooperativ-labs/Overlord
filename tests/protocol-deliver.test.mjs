@@ -14,11 +14,15 @@
  */
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import path, { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // ---------------------------------------------------------------------------
 // Helpers: minimal in-process HTTP server
@@ -52,6 +56,82 @@ function readBody(req) {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
+}
+
+function importFresh(relativePath) {
+  const fileUrl = pathToFileURL(path.join(ROOT, relativePath)).href;
+  return import(`${fileUrl}?t=${Date.now()}-${Math.random()}`);
+}
+
+function createTempDir(prefix) {
+  return join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+}
+
+function initGitRepo(repoDir) {
+  mkdirSync(repoDir, { recursive: true });
+  execFileSync('git', ['init'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.name', 'Overlord Test'], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['config', 'user.email', 'overlord@example.com'], {
+    cwd: repoDir,
+    stdio: 'ignore'
+  });
+}
+
+async function withProtocolEnv(callback) {
+  const tempHome = createTempDir('ovld-home');
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousConnectorUrl = process.env.OVERLORD_CONNECTOR_URL;
+  const previousAgentToken = process.env.AGENT_TOKEN;
+  const previousTicketId = process.env.TICKET_ID;
+  const previousSessionKey = process.env.SESSION_KEY;
+  const previousHome = process.env.HOME;
+  const previousCwd = process.cwd();
+
+  try {
+    mkdirSync(tempHome, { recursive: true });
+    process.env.HOME = tempHome;
+    delete process.env.OVERLORD_CONNECTOR_URL;
+    return await callback();
+  } finally {
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+
+    if (previousConnectorUrl === undefined) delete process.env.OVERLORD_CONNECTOR_URL;
+    else process.env.OVERLORD_CONNECTOR_URL = previousConnectorUrl;
+
+    if (previousAgentToken === undefined) delete process.env.AGENT_TOKEN;
+    else process.env.AGENT_TOKEN = previousAgentToken;
+
+    if (previousTicketId === undefined) delete process.env.TICKET_ID;
+    else process.env.TICKET_ID = previousTicketId;
+
+    if (previousSessionKey === undefined) delete process.env.SESSION_KEY;
+    else process.env.SESSION_KEY = previousSessionKey;
+
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+
+    process.chdir(previousCwd);
+    rmSync(tempHome, { recursive: true, force: true });
+  }
+}
+
+async function withStubbedConsole(callback) {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const originalWrite = process.stderr.write.bind(process.stderr);
+
+  console.log = () => {};
+  console.error = () => {};
+  process.stderr.write = () => true;
+
+  try {
+    return await callback();
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+    process.stderr.write = originalWrite;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +245,7 @@ test('CLI delivers large artifact payload successfully', async () => {
     // multi-kilobyte content each (~100KB total)
     const largeContent = 'x'.repeat(10_000);
     const artifacts = Array.from({ length: 10 }, (_, i) => ({
-      type: 'file_changes',
+      type: 'next_steps',
       label: `Artifact ${i}`,
       content: largeContent
     }));
@@ -198,8 +278,8 @@ test('Artifacts can be loaded from a JSON file', async () => {
   const artifactsPath = join(tmpDir, 'artifacts.json');
 
   const expectedArtifacts = [
-    { type: 'file_changes', label: 'Files modified', content: 'lib/foo.ts' },
-    { type: 'next_steps', label: 'Next steps', content: 'Deploy to staging' }
+    { type: 'next_steps', label: 'Next steps', content: 'Deploy to staging' },
+    { type: 'note', label: 'Implementation note', content: 'No schema changes required' }
   ];
   writeFileSync(artifactsPath, JSON.stringify(expectedArtifacts), 'utf8');
 
@@ -208,7 +288,7 @@ test('Artifacts can be loaded from a JSON file', async () => {
     const artifacts = JSON.parse(readFileSync(artifactsPath, 'utf8'));
     assert.deepEqual(artifacts, expectedArtifacts);
     assert.equal(artifacts.length, 2);
-    assert.equal(artifacts[0].type, 'file_changes');
+    assert.equal(artifacts[0].type, 'next_steps');
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -271,3 +351,182 @@ test('CLI returns immediate actionable error when server is unreachable', async 
     }
   );
 });
+
+for (const modulePath of ['bin/_cli/protocol.mjs', 'packages/overlord-cli/bin/_cli/protocol.mjs']) {
+  test(
+    `${modulePath} deliver succeeds without change rationales when git has no changes`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-clean');
+      initGitRepo(repoDir);
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Done'
+            ]);
+          });
+        });
+
+        assert.deepEqual(requestBody, {
+          sessionKey: 'sk',
+          ticketId: 'tid',
+          summary: 'Done',
+          artifacts: []
+        });
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test(
+    `${modulePath} deliver fails when git changes exist and no change rationales are provided`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-missing-rationales');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'changed.ts'), 'export const value = 1;\n', 'utf8');
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = 'http://127.0.0.1:9';
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await assert.rejects(
+            () =>
+              withStubbedConsole(() =>
+                runProtocolCommand('deliver', [
+                  '--session-key',
+                  'sk',
+                  '--ticket-id',
+                  'tid',
+                  '--summary',
+                  'Done'
+                ])
+              ),
+            err => {
+              assert.ok(err instanceof Error);
+              assert.match(err.message, /did not include matching `changeRationales`/);
+              assert.match(err.message, /--skip-file-change-check/);
+              assert.match(err.message, /changed\.ts/);
+              return true;
+            }
+          );
+        });
+      } finally {
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test(
+    `${modulePath} deliver fails when supplied rationale paths do not match git changes`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-mismatched-rationales');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'actual.ts'), 'export const value = 1;\n', 'utf8');
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = 'http://127.0.0.1:9';
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await assert.rejects(
+            () =>
+              withStubbedConsole(() =>
+                runProtocolCommand('deliver', [
+                  '--session-key',
+                  'sk',
+                  '--ticket-id',
+                  'tid',
+                  '--summary',
+                  'Done',
+                  '--change-rationales-json',
+                  '[{"label":"Wrong file","file_path":"other.ts","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
+                ])
+              ),
+            err => {
+              assert.ok(err instanceof Error);
+              assert.match(err.message, /none of the supplied `changeRationales\.file_path` entries match/);
+              assert.match(err.message, /actual\.ts/);
+              assert.match(err.message, /other\.ts/);
+              return true;
+            }
+          );
+        });
+      } finally {
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test(
+    `${modulePath} deliver succeeds when at least one rationale path matches a git change`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-matching-rationales');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'matching.ts'), 'export const value = 1;\n', 'utf8');
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Done',
+              '--change-rationales-json',
+              '[{"label":"Matching file","file_path":"matching.ts","summary":"Added deliver preflight coverage.","why":"The CLI should reject missing file metadata.","impact":"Deliver only proceeds when at least one rationale matches.","hunks":[{"header":"@@ -1 +1 @@"}]}]'
+            ]);
+          });
+        });
+
+        assert.equal(requestBody.changeRationales.length, 1);
+        assert.equal(requestBody.changeRationales[0].file_path, 'matching.ts');
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+}

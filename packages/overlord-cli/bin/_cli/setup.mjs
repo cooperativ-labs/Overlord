@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const BUNDLE_VERSION = '1.4.0';
+const BUNDLE_VERSION = '1.5.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
@@ -51,7 +51,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
    Pass \`--event-type <type>\` to publish a specific activity event (default: \`update\`):
    - \`update\` — standard progress update (default)
-   - \`user_follow_up\` — a message or question from the human user
+   - \`user_follow_up\` — a message or question from the human user (EXCLUDING THE INITIAL TICKET)
    - \`alert\` — surface a warning or non-blocking alert
 
 3. **Ask when blocked** — Stop working after calling:
@@ -72,7 +72,9 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
 
-These are structured protocol payloads that Overlord stores as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated command below. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file.
+Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
+
+These are structured protocol payloads that Overlord stores as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated command below. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file. Ordinary deliver artifacts should use \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`, or \`decision\`.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\
@@ -97,7 +99,7 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
 `;
 
 const CODEX_AGENTS_SECTION = `# Overlord Local Workflow
@@ -137,7 +139,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 ## Change Rationales
 
-Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes. Overlord stores these as structured rows in the \`file_changes\` table.
+Always include \`changeRationales\` when delivering. Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact. Record only meaningful behavioral changes. Overlord stores these as structured rows in the \`file_changes\` table.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\
@@ -160,7 +162,7 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
 `;
 
 const OPENCODE_AGENTS_SECTION = `# Overlord Local Workflow
@@ -200,7 +202,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 ## Change Rationales
 
-Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes. Overlord stores these as structured rows in the \`file_changes\` table.
+Always include \`changeRationales\` when delivering. Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact. Record only meaningful behavioral changes. Overlord stores these as structured rows in the \`file_changes\` table.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\
@@ -223,7 +225,7 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else.**
+- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
 `;
 
 const PERMISSION_HOOK_SCRIPT = `#!/bin/bash

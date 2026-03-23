@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.4.0';
+export const BUNDLE_VERSION = '1.5.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -59,7 +59,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
    ovld protocol deliver --session-key <sessionKey> \\
      --ticket-id $TICKET_ID \\
      --summary "Narrative: what you did, next steps." \\
-     --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\
+     --artifacts-json '[{"type":"next_steps","label":"Next steps","content":"..."}]' \\
      --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
@@ -67,7 +67,9 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
 Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work.
 
-These are structured protocol payloads that Overlord stores in the \`change_rationales\` table. Prefer inline JSON or the dedicated command below. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file.
+Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
+
+These are structured protocol payloads that Overlord stores as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated command below. Use \`--change-rationales-file\` only when a large JSON payload is easier to pass by file. Ordinary deliver artifacts should use \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`, or \`decision\`.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\
@@ -142,13 +144,13 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
    ovld protocol deliver --session-key <sessionKey> \\
      --ticket-id $TICKET_ID \\
      --summary "Narrative: what you did, next steps." \\
-     --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\
+     --artifacts-json '[{"type":"next_steps","label":"Next steps","content":"..."}]' \\
      --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
 ## Change Rationales
 
-Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes. Overlord stores these in the \`change_rationales\` table.
+Always include \`changeRationales\` when delivering. Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact. Record only meaningful behavioral changes. Overlord stores these as structured rows in the \`file_changes\` table.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\
@@ -214,13 +216,13 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
    ovld protocol deliver --session-key <sessionKey> \\
      --ticket-id $TICKET_ID \\
      --summary "Narrative: what you did, next steps." \\
-     --artifacts-json '[{"type":"file_changes","label":"Files modified","content":"..."}]' \\
+     --artifacts-json '[{"type":"next_steps","label":"Next steps","content":"..."}]' \\
      --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
 ## Change Rationales
 
-Always include \`changeRationales\` when delivering. Record only meaningful behavioral changes. Overlord stores these in the \`change_rationales\` table.
+Always include \`changeRationales\` when delivering. Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact. Record only meaningful behavioral changes. Overlord stores these as structured rows in the \`file_changes\` table.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\

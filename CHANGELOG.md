@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.5.0] - 2026-03-23:13:30
+
+### Added
+- Add a git-aware preflight to both `bin/_cli/protocol.mjs` and the published CLI binary that inspects `git status --porcelain`, ensures every delivery with local changes includes at least one matching `changeRationales.file_path`, and exposes `--skip-file-change-check` for explicitly opt-ing out.
+
+### Fixed
+- None.
+
+### Changed
+- Agent bundle templates (bundle `1.5.0`) and the ticket prompt remind agents to cover every meaningful git-tracked change in `changeRationales`, discourage sending `file_changes` artifacts on deliver (use `next_steps`, `note`, etc.), clarify that the `user_follow_up` event does not need to fire on the initial ticket message, and reiterate that deliveries must represent local file changes.
+
+### Security
+- None.
+
+### Test
+- Add regression tests that spin up temporary git repositories to prove the CLI accepts clean repos, rejects deliveries missing `changeRationales`, rejects mismatched paths, and succeeds once a matching rationale path is provided.
+
+### Chore
+- Bump the package version to `2.5.0`.
+
 ## [2.4.0] - 2026-03-23:10:49
 
 ### Added

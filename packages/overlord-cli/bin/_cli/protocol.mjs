@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -184,6 +185,103 @@ async function resolveChangeRationales(flags) {
     }
   }
   return [];
+}
+
+function normalizeRepoRelativeFilePath(filePath, repoRoot) {
+  if (typeof filePath !== 'string') return null;
+
+  const trimmed = filePath.trim();
+  if (!trimmed) return null;
+
+  if (path.isAbsolute(trimmed)) {
+    const relative = path.relative(repoRoot, trimmed);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      return null;
+    }
+    return relative.replaceAll(path.sep, '/');
+  }
+
+  return trimmed.replace(/^[.][/\\]+/, '').replaceAll('\\', '/');
+}
+
+function getGitChangedFiles() {
+  try {
+    const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    }).trim();
+
+    if (!repoRoot) return null;
+
+    const output = execFileSync('git', ['status', '--porcelain=v1', '-z'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    const changedFiles = new Set();
+    const entries = output.split('\0');
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (!entry) continue;
+
+      const status = entry.slice(0, 2);
+      const normalizedPath = normalizeRepoRelativeFilePath(entry.slice(3), repoRoot);
+      if (normalizedPath) {
+        changedFiles.add(normalizedPath);
+      }
+
+      if (status.includes('R') || status.includes('C')) {
+        i += 1;
+      }
+    }
+
+    return { repoRoot, changedFiles };
+  } catch {
+    return null;
+  }
+}
+
+function createFileChangeCheckError(message, changedFiles, rationalePaths = []) {
+  const changedPreview = [...changedFiles].slice(0, 5).join(', ');
+  const rationalePreview = rationalePaths.slice(0, 5).join(', ');
+
+  return new Error(
+    `${message}\n` +
+    `Overlord persists file changes through \`changeRationales\`, not \`file_changes\` artifacts.\n` +
+    `Re-run with --change-rationales-json or --change-rationales-file, or pass --skip-file-change-check if this was intentional.` +
+    `${changedPreview ? `\nChanged files: ${changedPreview}${changedFiles.size > 5 ? ', ...' : ''}` : ''}` +
+    `${rationalePreview ? `\nProvided rationale paths: ${rationalePreview}${rationalePaths.length > 5 ? ', ...' : ''}` : ''}`
+  );
+}
+
+function validateDeliverFileChanges(flags, changeRationales) {
+  if (flags['skip-file-change-check']) return;
+
+  const gitState = getGitChangedFiles();
+  if (!gitState || gitState.changedFiles.size === 0) return;
+
+  const rationalePaths = changeRationales
+    .map(rationale => normalizeRepoRelativeFilePath(rationale?.file_path, gitState.repoRoot))
+    .filter(Boolean);
+
+  if (rationalePaths.length === 0) {
+    throw createFileChangeCheckError(
+      'Git shows changed files in this workspace, but this delivery did not include matching `changeRationales`.',
+      gitState.changedFiles
+    );
+  }
+
+  const hasMatch = rationalePaths.some(filePath => gitState.changedFiles.has(filePath));
+  if (!hasMatch) {
+    throw createFileChangeCheckError(
+      'Git shows changed files in this workspace, but none of the supplied `changeRationales.file_path` entries match them.',
+      gitState.changedFiles,
+      rationalePaths
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +615,7 @@ async function protocolDeliver(args) {
   }
 
   const changeRationales = await resolveChangeRationales(flags);
+  validateDeliverFileChanges(flags, changeRationales);
 
   const body = {
     sessionKey,
@@ -859,6 +958,7 @@ Deliver-specific flags:
                           with large payloads).
   --change-rationales-json <json>  Inline JSON array of change rationale objects.
   --change-rationales-file <path>  Path to a JSON file containing change rationales.
+  --skip-file-change-check Skip the local git/changeRationales reconciliation before deliver.
 
 Spawn-specific flags:
   --objective <text>      Ticket objective (required)
@@ -881,6 +981,7 @@ Examples:
   ovld protocol artifact-download-url --session-key <key> --ticket-id <id> --artifact-id <artifact-id>
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --artifacts-file ./artifacts.json
+  ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --timeout 60000
 `);
     return;

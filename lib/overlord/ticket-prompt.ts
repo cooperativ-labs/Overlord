@@ -122,6 +122,7 @@ function buildSlimLocalProtocolSection(
 ${launchNote}
 
 Use your installed Overlord local workflow instructions. Start by attaching to this ticket.
+Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
 
 \`\`\`bash
 ovld protocol attach --ticket-id ${ticketId}
