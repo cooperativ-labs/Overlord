@@ -7,7 +7,8 @@ import { EverhourNavTimer } from '@/components/features/everhour/EverhourNavTime
 import { NewTicketButton } from '@/components/features/NewTicketButton';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { TicketSearch } from '@/components/nav-header/TicketSearch';
-import { Button } from '@/components/ui/button';
+import type { ButtonLoadingState } from '@/components/ui/loading-button';
+import { LoadingButton } from '@/components/ui/loading-button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
@@ -15,6 +16,8 @@ import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
 export function NavHeader() {
   const [hasEverhourIntegration, setHasEverhourIntegration] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
+  const [hardRefreshButtonState, setHardRefreshButtonState] =
+    useState<ButtonLoadingState>('default');
   const { api, isElectron } = useElectron();
 
   useEffect(() => {
@@ -40,19 +43,39 @@ export function NavHeader() {
   const showRefreshButton = isElectron || isStandalonePwa;
 
   const handleHardRefresh = async () => {
-    if (isElectron) {
-      await api?.app.reload();
-      return;
-    }
+    setHardRefreshButtonState('loading');
 
-    if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map(registration => registration.update()));
-    }
+    // Give the browser a paint opportunity so the loading spinner becomes visible.
+    await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
 
-    const refreshUrl = new URL(window.location.href);
-    refreshUrl.searchParams.set('_refresh', Date.now().toString());
-    window.location.replace(refreshUrl.toString());
+    try {
+      if (isElectron) {
+        if (!api?.app?.reload) {
+          throw new Error('Hard refresh is unavailable.');
+        }
+
+        const reloaded = await api.app.reload();
+        if (!reloaded) {
+          throw new Error('Hard refresh failed.');
+        }
+        return;
+      }
+
+      if ('serviceWorker' in navigator) {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(registration => registration.update()));
+        } catch {
+          // Continue with the refresh even if service worker updates fail.
+        }
+      }
+
+      const refreshUrl = new URL(window.location.href);
+      refreshUrl.searchParams.set('_refresh', Date.now().toString());
+      window.location.replace(refreshUrl.toString());
+    } catch {
+      setHardRefreshButtonState('error');
+    }
   };
 
   return (
@@ -62,16 +85,17 @@ export function NavHeader() {
         {showRefreshButton ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
+              <LoadingButton
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="electron-no-drag"
+                buttonState={hardRefreshButtonState}
+                setButtonState={setHardRefreshButtonState}
                 onClick={() => void handleHardRefresh()}
                 aria-label="Hard refresh app"
-              >
-                <RefreshCwIcon className="size-4" />
-              </Button>
+                text={<RefreshCwIcon className="size-4" />}
+              />
             </TooltipTrigger>
             <TooltipContent side="bottom">Hard refresh app</TooltipContent>
           </Tooltip>
