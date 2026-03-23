@@ -15,6 +15,7 @@ import { FeedProjectFilter } from '@/components/features/feed/FeedProjectFilter'
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
 import { cn } from '@/lib/utils';
 
 import { DEMO_FEED_POSTS, DEMO_FEED_PROJECTS, type DemoFeedPost } from './mock-data';
@@ -207,8 +208,12 @@ function DemoFeedCard({ post }: { post: DemoFeedPost }) {
                   <FileCode2 className="h-3.5 w-3.5" />
                   <span className="font-medium">Files:</span>
                   {filesTouched.slice(0, 5).map(file => (
-                    <code key={file} className="rounded bg-muted px-1 py-0.5 text-xs">
-                      {file}
+                    <code
+                      key={file}
+                      title={file}
+                      className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5 text-xs"
+                    >
+                      {getCollapsedFileMentionLabel(file)}
                     </code>
                   ))}
                   {filesTouched.length > 5 && (

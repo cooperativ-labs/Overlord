@@ -3,6 +3,11 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 
+import {
+  findFileMentionAtCursor,
+  getCollapsedFileMentionLabel,
+  getFileMentionMatches
+} from '@/lib/helpers/file-mentions';
 import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +47,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
   ) {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const [scrollPosition, setScrollPosition] = React.useState({ top: 0, left: 0 });
     const [mentionStart, setMentionStart] = React.useState<number | null>(null);
     const [mentionQuery, setMentionQuery] = React.useState('');
     const [mentionIndex, setMentionIndex] = React.useState(0);
@@ -75,6 +81,9 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       },
       [forwardedRef]
     );
+
+    const mentionMatches = React.useMemo(() => getFileMentionMatches(value), [value]);
+    const hasCollapsedMentions = mentionMatches.length > 0;
 
     const clearMentionState = React.useCallback(() => {
       setMentionStart(null);
@@ -175,17 +184,112 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       clearMentionState();
     }, [mentionPaths.length, clearMentionState]);
 
+    const handleCollapsedMentionBackspace = React.useCallback(
+      (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        const selectionStart = event.currentTarget.selectionStart;
+        const selectionEnd = event.currentTarget.selectionEnd;
+        if (selectionStart === null || selectionEnd === null || selectionStart !== selectionEnd) {
+          return false;
+        }
+
+        const mentionMatch = findFileMentionAtCursor(value, selectionStart);
+        if (!mentionMatch) return false;
+
+        event.preventDefault();
+
+        const nextValue = `${value.slice(0, mentionMatch.start)}@${value.slice(mentionMatch.end)}`;
+        const nextCursor = mentionMatch.start + 1;
+        onValueChange(nextValue);
+        clearMentionState();
+
+        requestAnimationFrame(() => {
+          const textArea = textareaRef.current as TextareaHandle | null;
+          if (!textArea) return;
+          textArea.focus();
+          textArea.setSelectionRange(nextCursor, nextCursor);
+        });
+
+        return true;
+      },
+      [clearMentionState, onValueChange, value]
+    );
+
+    const overlayContent = React.useMemo(() => {
+      if (!hasCollapsedMentions) return null;
+
+      const segments: React.ReactNode[] = [];
+      let cursor = 0;
+
+      mentionMatches.forEach((match, index) => {
+        if (match.start > cursor) {
+          segments.push(
+            <span key={`text-${index}-${cursor}`}>{value.slice(cursor, match.start)}</span>
+          );
+        }
+
+        segments.push(
+          <span key={`mention-${match.start}`} className="relative inline-block align-baseline">
+            <span className="invisible whitespace-pre-wrap">{match.fullMatch}</span>
+            <span className="pointer-events-none absolute inset-0 inline-flex items-center">
+              <span
+                className="inline-flex max-w-full rounded-full border border-sky-500/15 bg-sky-500/10 px-1.5 py-0 text-[0.78em] font-medium leading-[1.45] text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300"
+                title={match.filePath}
+              >
+                @{getCollapsedFileMentionLabel(match.filePath)}
+              </span>
+            </span>
+          </span>
+        );
+
+        cursor = match.end;
+      });
+
+      if (cursor < value.length) {
+        segments.push(<span key={`text-tail-${cursor}`}>{value.slice(cursor)}</span>);
+      }
+
+      return segments;
+    }, [hasCollapsedMentions, mentionMatches, value]);
+
     return (
       <div ref={containerRef} className={cn('relative w-full', containerClassName)}>
+        {hasCollapsedMentions ? (
+          <div
+            aria-hidden="true"
+            className={cn(
+              'pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words border-transparent bg-transparent text-foreground',
+              className
+            )}
+          >
+            <div
+              style={{
+                transform: `translate(${-scrollPosition.left}px, ${-scrollPosition.top}px)`
+              }}
+            >
+              {overlayContent}
+            </div>
+          </div>
+        ) : null}
         <textarea
           ref={setRefs}
-          className={cn('w-full focus:outline-none focus-visible:ring-0', className)}
+          className={cn(
+            'relative z-10 w-full focus:outline-none focus-visible:ring-0',
+            hasCollapsedMentions &&
+              'bg-transparent text-transparent caret-foreground selection:bg-accent/30',
+            className
+          )}
           value={value}
           onChange={event => {
             const nextValue = event.target.value;
             onValueChange(nextValue);
             updateMentionState(nextValue, event.target.selectionStart ?? nextValue.length);
             onChange?.(event);
+          }}
+          onScroll={event => {
+            setScrollPosition({
+              top: event.currentTarget.scrollTop,
+              left: event.currentTarget.scrollLeft
+            });
           }}
           onClick={event => {
             updateMentionState(value, event.currentTarget.selectionStart ?? value.length);
@@ -225,6 +329,10 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
               }
             }
 
+            if (event.key === 'Backspace' && handleCollapsedMentionBackspace(event)) {
+              return;
+            }
+
             onKeyDown?.(event);
           }}
           {...props}
@@ -261,7 +369,8 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
                       insertMentionAtCursor(filePath);
                     }}
                   >
-                    @{filePath}
+                    <span className="font-medium">@{getCollapsedFileMentionLabel(filePath)}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{filePath}</span>
                   </button>
                 ))}
               </div>,

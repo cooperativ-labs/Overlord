@@ -9,6 +9,7 @@ import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
 import type { FeedPost } from '@/lib/actions/feed';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
@@ -188,9 +189,10 @@ export function FeedCard({ post }: { post: FeedPost }) {
                 <Link
                   key={f}
                   href={`${currentChangesPath}?file=${encodeURIComponent(f)}`}
-                  className="rounded bg-muted px-1 py-0.5 text-xs break-all underline-offset-4 hover:bg-muted/80 hover:underline"
+                  title={f}
+                  className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5 text-xs underline-offset-4 transition-colors hover:bg-muted hover:underline"
                 >
-                  {f}
+                  {getCollapsedFileMentionLabel(f)}
                 </Link>
               ))}
             </div>

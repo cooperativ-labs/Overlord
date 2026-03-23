@@ -3,6 +3,9 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { Badge } from '@/components/ui/badge';
+import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
+
 type MarkdownContentProps = {
   children: string;
   className?: string;
@@ -33,7 +36,18 @@ export function MarkdownContent({
           // Open links in new tab
           a: ({ children: linkChildren, href, ...props }) => {
             if (href?.startsWith('mention:')) {
-              return <span className="font-medium text-sky-500">{linkChildren}</span>;
+              const filePath = decodeURIComponent(href.slice('mention:'.length));
+              const collapsedLabel = getCollapsedFileMentionLabel(filePath);
+
+              return (
+                <Badge
+                  variant="secondary"
+                  title={filePath}
+                  className="mx-0.5 inline-flex rounded-full border border-sky-500/15 bg-sky-500/10 px-1.5 py-0 align-baseline text-[0.72rem] font-medium text-sky-700 no-underline dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300"
+                >
+                  @{collapsedLabel || linkChildren}
+                </Badge>
+              );
             }
             if (href?.startsWith('artifact:')) {
               const artifactPath = href.slice('artifact:'.length);

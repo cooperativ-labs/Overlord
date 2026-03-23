@@ -8,6 +8,7 @@ import { useElectron } from '@/components/features/terminal/useElectron';
 import { uploadImageArtifactAction } from '@/lib/actions/artifacts';
 import { updateTicketFieldAction } from '@/lib/actions/tickets';
 import { areStringArraysEqual } from '@/lib/helpers/array-utils';
+import { convertInlineFileMentionsToMarkdown } from '@/lib/helpers/file-mentions';
 import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
@@ -34,16 +35,6 @@ type Props = {
   variant?: 'default' | 'textarea';
   children?: React.ReactNode;
 };
-
-function convertFileMentionsToMarkdown(value: string): string {
-  return value.replace(
-    /(^|[\s(])@([A-Za-z0-9._/\\-]+)/g,
-    (match, prefix: string, filePath: string) => {
-      if (!filePath.includes('/') && !filePath.includes('.')) return match;
-      return `${prefix}[@${filePath}](mention:${encodeURIComponent(filePath)})`;
-    }
-  );
-}
 
 export function InlineEditField({
   ticketId,
@@ -306,7 +297,7 @@ export function InlineEditField({
       {savedValue ? (
         renderMarkdown ? (
           <MarkdownContent compact className={cn('pointer-events-none', displayClassName)}>
-            {field === 'objective' ? convertFileMentionsToMarkdown(savedValue) : savedValue}
+            {field === 'objective' ? convertInlineFileMentionsToMarkdown(savedValue) : savedValue}
           </MarkdownContent>
         ) : (
           <span className="whitespace-pre-wrap">{savedValue}</span>
