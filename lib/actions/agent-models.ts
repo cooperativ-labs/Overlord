@@ -1,5 +1,7 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
+
 import {
   type AgentModel,
   applyAgentModelCatalog,
@@ -26,6 +28,7 @@ export async function getAgentModelsAction(agentType?: string): Promise<AgentMod
 
   if (error) {
     console.error('Failed to fetch agent models:', error);
+    Sentry.captureException(error);
     return [];
   }
 

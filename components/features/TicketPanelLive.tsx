@@ -275,12 +275,8 @@ type TicketPanelLiveProps = {
 
 export function TicketPanelLive({
   ticketId,
-  projectId: _projectId,
   editorScheme,
   workspaceRoot,
-  workingDirectory: _workingDirectory,
-  hasProjectWorkingDirectory: _hasProjectWorkingDirectory,
-  agentToken: _agentToken,
   claudeCommand: _claudeCommand,
   codexCommand: _codexCommand,
   cursorCommand: _cursorCommand,
@@ -325,27 +321,10 @@ export function TicketPanelLive({
 
   return (
     <>
-      {/* {claudeCommand && codexCommand && cursorCommand && geminiCommand ? (
-        <LaunchCommandBar
-          className="mb-6 border-primary/25 bg-background/80"
-          ticketId={ticketId}
-          agentToken={agentToken}
-          claudeCommand={claudeCommand}
-          codexCommand={codexCommand}
-          cursorCommand={cursorCommand}
-          geminiCommand={geminiCommand}
-          workingDirectory={workingDirectory}
-          activeAgentIdentifier={activeAgentIdentifier}
-          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-          agentSessionState={session?.session_state ?? null}
-        />
-      ) : null} */}
-
-      {/* <TicketConversationComposer ticketId={ticketId} projectId={projectId} events={events} /> */}
-
       <CliQuickstart
         activeAgentValue={activeAgentType?.value}
         externalSessionId={session?.external_session_id}
+        hasExecutedObjectives={events.length > 0}
         claudeCommand={_claudeCommand}
         codexCommand={_codexCommand}
         cursorCommand={_cursorCommand}

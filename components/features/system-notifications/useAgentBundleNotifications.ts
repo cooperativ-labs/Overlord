@@ -1,0 +1,69 @@
+'use client';
+
+import { useEffect } from 'react';
+
+import { useElectron } from '@/components/features/terminal/useElectron';
+
+import { useSystemNotifications } from './SystemNotificationContext';
+
+const AGENT_LABELS: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode'
+};
+
+/**
+ * Checks agent bundle statuses on mount and surfaces a system notification
+ * when any installed bundle is stale (needs updating) or partial (needs repair).
+ */
+export function useAgentBundleNotifications(onOpenSettings?: () => void) {
+  const { isElectron } = useElectron();
+  const { addNotification } = useSystemNotifications();
+
+  useEffect(() => {
+    if (!isElectron || !window.electronAPI?.agentBundle) return;
+
+    let cancelled = false;
+
+    void window.electronAPI.agentBundle.getAllStatuses().then(statuses => {
+      if (cancelled) return;
+
+      const staleAgents = statuses.filter(s => s.status === 'stale');
+      const partialAgents = statuses.filter(s => s.status === 'partial');
+
+      if (staleAgents.length > 0) {
+        const names = staleAgents.map(s => AGENT_LABELS[s.agent] ?? s.agent).join(', ');
+
+        addNotification({
+          id: 'agent-bundle-stale',
+          type: 'update',
+          title: 'Agent prompt update available',
+          message: `${names} ${staleAgents.length === 1 ? 'has' : 'have'} a newer prompt version. Update to get the latest workflow instructions.`,
+          dismissKey: `overlord-bundle-stale-dismissed-${staleAgents.map(s => s.version).join('-')}`,
+          action: onOpenSettings
+            ? { label: 'Update in Settings', onClick: onOpenSettings }
+            : undefined
+        });
+      }
+
+      if (partialAgents.length > 0) {
+        const names = partialAgents.map(s => AGENT_LABELS[s.agent] ?? s.agent).join(', ');
+
+        addNotification({
+          id: 'agent-bundle-partial',
+          type: 'warning',
+          title: 'Agent prompt needs repair',
+          message: `${names} ${partialAgents.length === 1 ? 'has' : 'have'} an incomplete installation. Repair to ensure agents work correctly.`,
+          dismissKey: `overlord-bundle-partial-dismissed-${partialAgents.map(s => s.agent).join('-')}`,
+          action: onOpenSettings
+            ? { label: 'Repair in Settings', onClick: onOpenSettings }
+            : undefined
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isElectron, addNotification, onOpenSettings]);
+}

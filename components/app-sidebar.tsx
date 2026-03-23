@@ -10,6 +10,7 @@ import { useDefaultProject } from '@/components/features/projects/DefaultProject
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
 import { useProjectCreator } from '@/components/features/projects/ProjectCreatorContext';
 import { ProjectWorkingDirectoryRequiredModal } from '@/components/features/projects/ProjectWorkingDirectoryRequiredModal';
+import { useAgentBundleNotifications } from '@/components/features/system-notifications';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { NavUser } from '@/components/nav-user';
@@ -109,6 +110,9 @@ export function AppSidebar({
   const [projectNeedingDirectory, setProjectNeedingDirectory] =
     React.useState<SidebarProject | null>(null);
   const [pendingPath, setPendingPath] = React.useState<string | null>(null);
+
+  const openSettings = React.useCallback(() => setSettingsOpen(true), []);
+  useAgentBundleNotifications(openSettings);
 
   const defaultOrganizationId = React.useMemo(() => {
     if (selectedOrgId !== null) return selectedOrgId;

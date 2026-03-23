@@ -22,6 +22,7 @@ type QuickstartCommands = Record<LaunchAgentTypeValue, string>;
 type CliQuickstartProps = {
   activeAgentValue?: string | null;
   externalSessionId?: string | null;
+  hasExecutedObjectives?: boolean;
   claudeCommand?: string;
   codexCommand?: string;
   cursorCommand?: string;
@@ -75,6 +76,7 @@ function CommandRow({ label, command }: { label: string; command: string }) {
 export function CliQuickstart({
   activeAgentValue = null,
   externalSessionId = null,
+  hasExecutedObjectives = false,
   claudeCommand,
   codexCommand,
   cursorCommand,
@@ -167,22 +169,27 @@ export function CliQuickstart({
                 })}
               </div>
               <div className="grid gap-2.5">
-                {/* <CommandRow
-                  label="Connect to this ticket"
-                  command={connectCommands[selectedAgent]}
-                /> */}
-                <CommandRow
-                  label="Restart session"
-                  command={
-                    nativeResumeCommands[selectedAgent] ?? overlordResumeCommands[selectedAgent]
-                  }
-                />
-                {nativeResumeCommands[selectedAgent] ? (
+                {hasExecutedObjectives ? (
+                  <>
+                    <CommandRow
+                      label="Restart session"
+                      command={
+                        nativeResumeCommands[selectedAgent] ?? overlordResumeCommands[selectedAgent]
+                      }
+                    />
+                    {nativeResumeCommands[selectedAgent] ? (
+                      <CommandRow
+                        label="Restart session (Overlord wrapper)"
+                        command={overlordResumeCommands[selectedAgent]}
+                      />
+                    ) : null}
+                  </>
+                ) : (
                   <CommandRow
-                    label="Restart session (Overlord wrapper)"
-                    command={overlordResumeCommands[selectedAgent]}
+                    label="Attach to this ticket"
+                    command={connectCommands[selectedAgent]}
                   />
-                ) : null}
+                )}
               </div>
             </div>
           </AccordionContent>

@@ -30,16 +30,8 @@ export async function GET(request: Request) {
     .eq('token', token)
     .single();
 
-  if (!data) {
+  if (!data || data.revoked_at || (data.expires_at && new Date(data.expires_at) < new Date())) {
     return NextResponse.json({ ok: false }, { status: 401 });
-  }
-
-  if (data.revoked_at) {
-    return NextResponse.json({ ok: false, reason: 'revoked' }, { status: 401 });
-  }
-
-  if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    return NextResponse.json({ ok: false, reason: 'expired' }, { status: 401 });
   }
 
   return NextResponse.json({ ok: true });

@@ -69,7 +69,7 @@ export async function upsertProjectUserPreferencesAction(
   const current = parsePreferences(existing?.preferences);
   const merged: ProjectUserPreferences = { ...current, ...patch };
 
-  await supabase.from('project_user_preferences').upsert(
+  const { error } = await supabase.from('project_user_preferences').upsert(
     {
       user_id: user.id,
       project_id: projectId,
@@ -78,4 +78,7 @@ export async function upsertProjectUserPreferencesAction(
     },
     { onConflict: 'user_id,project_id' }
   );
+  if (error) {
+    throw new Error(`Failed to update project preferences: ${error.message}`);
+  }
 }

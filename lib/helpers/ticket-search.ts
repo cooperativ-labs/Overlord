@@ -1,3 +1,7 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import type { Database } from '@/types/database.types';
+
 function sanitizeQuery(value: string): string {
   return value
     .replace(/[^a-zA-Z0-9\s-]/g, ' ')
@@ -27,7 +31,7 @@ export function normalizeTicketSearchQuery(value: string) {
 }
 
 export async function searchTicketsByTitle(
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   {
     includeCompleted = true,
     organizationId,

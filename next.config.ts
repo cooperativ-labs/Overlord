@@ -1,9 +1,10 @@
 import { withSerwist } from '@serwist/turbopack';
-import type { NextConfig } from 'next';
 
-const supabaseHostname = process.env.NEXT_PUBLIC_SUPABASE_URL
-  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
-  : 'zitmmhvbilhjjdwgxlfm.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+if (!supabaseUrl) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL is required.');
+}
+const supabaseHostname = new URL(supabaseUrl).hostname;
 
 const securityHeaders = async () => [
   {
@@ -11,7 +12,9 @@ const securityHeaders = async () => [
     headers: [
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       { key: 'X-Frame-Options', value: 'DENY' },
-      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' }
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' }
     ]
   },
   {
@@ -53,4 +56,4 @@ export default withSerwist({
       }
     ]
   }
-} as any as NextConfig);
+});

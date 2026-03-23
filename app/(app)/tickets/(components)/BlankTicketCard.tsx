@@ -5,18 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Card, CardContent } from '@/components/ui/card';
+import { areStringArraysEqual } from '@/lib/helpers/array-utils';
 import type { TextareaHandle } from '@/lib/types/text-control';
 
 const EMPTY_PATHS: string[] = [];
-
-function areStringArraysEqual(left: string[], right: string[]): boolean {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
-}
 
 type BlankTicketCardProps = {
   inputId: string;

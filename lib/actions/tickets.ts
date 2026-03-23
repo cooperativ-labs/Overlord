@@ -1,5 +1,6 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
@@ -21,8 +22,7 @@ import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
-function revalidateTicketBoards(organizationIds: Iterable<number>) {
-  void organizationIds;
+function revalidateTicketBoards() {
   revalidatePath('/u');
   revalidatePath('/projects');
 }
@@ -280,7 +280,7 @@ export async function createTicketInColumnAction(
     await assignTicketToColumnStart(supabase, data.id, status, data.organization_id);
   }
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -320,7 +320,7 @@ export async function createBlankTicketAction(organizationId?: number, projectId
   await upsertDraftObjective(supabase, data.id, '');
   await assignTicketToColumnEnd(supabase, data.id, 'draft', data.organization_id);
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -385,7 +385,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     ticket_id: data.id
   });
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -433,7 +433,7 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -485,7 +485,7 @@ export async function updateTicketFieldAction(
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -520,7 +520,7 @@ export async function updateTicketStatusAction(ticketId: string, status: string)
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -554,7 +554,7 @@ export async function updateTicketPriorityAction(
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -591,7 +591,7 @@ export async function updateTicketExecutionTargetAction(
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -634,7 +634,7 @@ export async function setTicketProjectAction(ticketId: string, projectId: string
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -708,7 +708,7 @@ export async function markObjectiveExecutedAction(
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([ticket.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
   );
@@ -794,7 +794,7 @@ export async function markObjectiveUnexecutedAction(
     ticket_id: ticketId
   });
 
-  revalidateTicketBoards([ticket.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
   );
@@ -829,7 +829,7 @@ export async function createProjectAction(input: {
     throw new Error(error?.message ?? 'Failed to create project.');
   }
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   return { id: data.id, name: data.name, color: data.color, everhour_project_id: null };
 }
 
@@ -897,26 +897,29 @@ export async function reorderTicketsAction(
     ]);
   }
 
-  revalidateTicketBoards(organizationIds);
+  revalidateTicketBoards();
 }
 
 export async function markTicketReadAction(ticketId: string): Promise<void> {
   const supabase = await createClient();
-  await supabase.from('tickets').update({ is_read: true }).eq('id', ticketId);
-  revalidateTicketBoards([]);
+  const { error } = await supabase.from('tickets').update({ is_read: true }).eq('id', ticketId);
+  if (error) throw new Error(`Failed to mark ticket as read: ${error.message}`);
+  revalidateTicketBoards();
 }
 
 export async function markTicketsReadAction(ticketIds: string[]): Promise<void> {
   if (ticketIds.length === 0) return;
   const supabase = await createClient();
-  await supabase.from('tickets').update({ is_read: true }).in('id', ticketIds);
-  revalidateTicketBoards([]);
+  const { error } = await supabase.from('tickets').update({ is_read: true }).in('id', ticketIds);
+  if (error) throw new Error(`Failed to mark tickets as read: ${error.message}`);
+  revalidateTicketBoards();
 }
 
 export async function markTicketUnreadAction(ticketId: string): Promise<void> {
   const supabase = await createClient();
-  await supabase.from('tickets').update({ is_read: false }).eq('id', ticketId);
-  revalidateTicketBoards([]);
+  const { error } = await supabase.from('tickets').update({ is_read: false }).eq('id', ticketId);
+  if (error) throw new Error(`Failed to mark ticket as unread: ${error.message}`);
+  revalidateTicketBoards();
 }
 
 export async function markSessionDisconnectedAction(sessionId: string): Promise<void> {
@@ -960,7 +963,7 @@ export async function deleteTicketAction(
     throw new Error(error?.message ?? 'Failed to delete ticket.');
   }
 
-  revalidateTicketBoards([data.organization_id]);
+  revalidateTicketBoards();
   revalidatePath(
     buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
   );
@@ -992,6 +995,7 @@ export async function getTicketPromptForCopy(
       agentConfigs = await getAllAgentConfigsAction();
     } catch (error) {
       console.error('Failed to load agent configs for prompt:', error);
+      Sentry.captureException(error);
     }
   }
 

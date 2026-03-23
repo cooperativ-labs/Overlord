@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.0] - 2026-03-23:10:49
+
+### Added
+- Persist structured `changeRationales` payloads in the new `file_changes` table (with its migration, indexes, trigger, and RLS policies) so protocol handlers and the MCP tools store per-file rationale rows instead of bundling them into generic artifacts.
+
+### Fixed
+- When an agent posts an update after a ticket has already moved into `review` or `complete`, automatically move the ticket back to `execute`, resume the agent session, and emit a `ticket_reopened` event so follow-up work resumes cleanly.
+- `auth/check-token` now rejects revoked or expired tokens in a single branch so polling clients reliably see invalid credentials.
+
+### Changed
+- Ticket Live’s CLI quickstart shows the attach command until objectives have executed and then flips to the resume/restart lines so the panel always matches the current session state.
+- Every ticket mutation now revalidates both `/u` and `/projects`, and read/unread toggles raise errors on failure, keeping the board views synchronized after any write.
+
+### Security
+- Project file APIs (`/file-tree`, `/file-changes`, `/file-attribution`) now assert organization membership before returning data so file metadata can’t leak across teams.
+- Electron renderers now launch with `sandbox: true`, Next requires `NEXT_PUBLIC_SUPABASE_URL`, applies HSTS/Permissions headers, and a new migration revokes TRUNCATE/REFERENCES/TRIGGER grants from the anonymous and authenticated roles to shrink their privileges.
+
+### Chore
+- Bump the package version to `2.4.0`.
+
 ## [2.3.0] - 2026-03-22:14:38
 
 ### Added

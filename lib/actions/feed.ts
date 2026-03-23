@@ -1,5 +1,7 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
+
 import { createClient } from '@/supabase/utils/server';
 
 export type FeedPost = {
@@ -63,6 +65,7 @@ export async function getFeedPostsAction(options?: {
 
   if (error) {
     console.error('[getFeedPostsAction] error:', error);
+    Sentry.captureException(error);
     throw new Error(error.message);
   }
 

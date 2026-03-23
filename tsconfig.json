@@ -16,6 +16,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "noFallthroughCasesInSwitch": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [

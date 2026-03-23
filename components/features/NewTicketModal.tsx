@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -24,21 +25,13 @@ import {
   setTicketProjectAction,
   updateTicketFieldAction
 } from '@/lib/actions/tickets';
+import { areStringArraysEqual } from '@/lib/helpers/array-utils';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { EditableTextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
-
-function areStringArraysEqual(left: string[], right: string[]): boolean {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
-}
 
 type ProjectOption = {
   id: string;
@@ -120,6 +113,7 @@ export function NewTicketModal({
         await updateTicketFieldAction(ticketId, 'objective', objective);
       } catch (error) {
         console.error('Failed to auto-save objective:', error);
+        toast.error('Failed to save changes.');
       }
     }, 1000);
 

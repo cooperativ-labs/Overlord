@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { assertOrgMembership } from '@/app/api/projects/_lib';
 import { createClient } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -34,6 +35,10 @@ export async function GET(request: Request, { params }: RouteContext) {
         { error: projectError?.message ?? 'Project not found.' },
         { status: 404 }
       );
+    }
+
+    if (!(await assertOrgMembership(supabase, user.id, project.organization_id))) {
+      return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
     let excludedTicketIds: string[] = [];

@@ -1,5 +1,6 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
 import type { User } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
@@ -269,6 +270,10 @@ export async function uploadProfileImageAction(formData: FormData): Promise<stri
 
     if (removeError) {
       console.warn('Failed to remove previous profile image:', removeError.message);
+      Sentry.captureMessage(
+        `Failed to remove previous profile image: ${removeError.message}`,
+        'warning'
+      );
     }
   }
 
@@ -297,5 +302,6 @@ export async function removeProfileImageAction(): Promise<void> {
 
   if (error) {
     console.warn('Failed to remove profile image object:', error.message);
+    Sentry.captureMessage(`Failed to remove profile image object: ${error.message}`, 'warning');
   }
 }

@@ -28,6 +28,35 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
 
+  // Detect when an agent continues working on a ticket that was already delivered.
+  // Auto-transition the ticket back to execute and reactivate the session.
+  const { data: currentTicket } = await supabase
+    .from('tickets')
+    .select('status')
+    .eq('id', ticketId)
+    .single();
+
+  const postDeliveryStatuses = ['review', 'complete'];
+  const isResumeAfterDelivery =
+    currentTicket && postDeliveryStatuses.includes((currentTicket as { status: string }).status);
+
+  if (isResumeAfterDelivery) {
+    await Promise.all([
+      supabase.from('tickets').update({ status: 'execute' }).eq('id', ticketId),
+      supabase
+        .from('agent_sessions')
+        .update({ session_state: 'active', detached_at: null })
+        .eq('id', resolved.session.id),
+      supabase.from('ticket_events').insert({
+        event_type: 'ticket_reopened',
+        phase: 'execute',
+        session_id: resolved.session.id,
+        summary: 'Ticket resumed — agent continued working after delivery.',
+        ticket_id: ticketId
+      })
+    ]);
+  }
+
   const { data: event, error: eventErr } = await supabase
     .from('ticket_events')
     .insert({

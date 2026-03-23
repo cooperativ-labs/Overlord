@@ -1,5 +1,6 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
 
 import { createProject, updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
@@ -204,11 +205,16 @@ export async function createFirstOrganization(input: { name: string }): Promise<
   } = await supabase.auth.getUser();
   if (user) {
     const serviceSupabase = createServiceRoleClient();
-    await serviceSupabase.from('agent_tokens').insert({
+    const { error: tokenError } = await serviceSupabase.from('agent_tokens').insert({
       user_id: user.id,
       organization_id: organizationId,
       name: 'Default CLI Token'
     });
+    if (tokenError) {
+      Sentry.captureException(
+        new Error(`Failed to create default agent token: ${tokenError.message}`)
+      );
+    }
   }
 
   return { organizationId };

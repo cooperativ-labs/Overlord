@@ -1,5 +1,6 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
 import { Resend } from 'resend';
 import { z } from 'zod';
 
@@ -79,6 +80,7 @@ export async function requestEarlyAccess(formData: FormData): Promise<EarlyAcces
     });
   } catch (error) {
     console.error('Failed to send early access email', error);
+    Sentry.captureException(error);
     return { error: 'We could not submit your request right now. Please try again soon.' };
   }
 

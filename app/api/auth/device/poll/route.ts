@@ -49,6 +49,13 @@ export async function POST(request: Request) {
     .update({ next_poll_at: new Date(Date.now() + POLL_INTERVAL_SECONDS * 1000).toISOString() })
     .eq('id', data.id);
 
+  // Opportunistic cleanup: delete expired codes older than 1 hour
+  void supabase
+    .from('device_auth_codes')
+    .delete()
+    .lt('expires_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+    .then(() => {});
+
   if (!data.access_token) {
     return NextResponse.json({ status: 'pending' });
   }

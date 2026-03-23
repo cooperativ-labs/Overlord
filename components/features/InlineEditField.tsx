@@ -7,20 +7,12 @@ import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { uploadImageArtifactAction } from '@/lib/actions/artifacts';
 import { updateTicketFieldAction } from '@/lib/actions/tickets';
+import { areStringArraysEqual } from '@/lib/helpers/array-utils';
 import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 type EditableField = 'title' | 'objective' | 'available_tools' | 'acceptance_criteria';
 const EMPTY_MENTION_PATHS: string[] = [];
-
-function areStringArraysEqual(left: string[], right: string[]): boolean {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
-}
 
 type Props = {
   ticketId: string;

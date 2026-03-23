@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 
+import { assertOrgMembership } from '@/app/api/projects/_lib';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { createClient } from '@/supabase/utils/server';
 
@@ -11,9 +12,17 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const { projectId } = await params;
     const supabase = await createClient();
 
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+    }
+
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id,local_working_directory')
+      .select('id,organization_id,local_working_directory')
       .eq('id', projectId)
       .single();
 
@@ -22,6 +31,10 @@ export async function GET(_request: Request, { params }: RouteContext) {
         { error: projectError?.message ?? 'Project not found.' },
         { status: projectError?.code === 'PGRST116' ? 404 : 500 }
       );
+    }
+
+    if (!(await assertOrgMembership(supabase, user.id, project.organization_id))) {
+      return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
     const resolvedRoot = resolveLinkedDirectory(project.local_working_directory);
