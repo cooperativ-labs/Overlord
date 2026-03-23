@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, Copy, FolderOpen, X } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -235,6 +236,35 @@ const AGENT_PLUGIN_GROUPS = [
   { key: 'gemini', label: 'Gemini CLI' },
   { key: 'opencode', label: 'OpenCode' }
 ] as const;
+
+function AgentNameWithLogo({
+  agent,
+  label,
+  iconClassName = 'h-4 w-4'
+}: {
+  agent: BundleAgent | SlashAgent | AgentSelectorValue;
+  label: string;
+  iconClassName?: string;
+}) {
+  if (agent === 'copy-local' || agent === 'copy-cloud') {
+    return <span>{label}</span>;
+  }
+
+  const agentType = getAgentTypeByValue(agent);
+
+  return (
+    <span className="flex items-center gap-2">
+      <Image
+        src={agentType.icon}
+        alt={agentType.label}
+        width={16}
+        height={16}
+        className={iconClassName}
+      />
+      <span>{label}</span>
+    </span>
+  );
+}
 
 function getBundleActionMeta(status: BundleStatusEntry['status'] | undefined): PluginActionMeta {
   const label =
@@ -659,7 +689,10 @@ export function CliPage({ open }: { open: boolean }) {
                 <SelectContent>
                   {AGENT_SELECTOR_VALUES.map(agentValue => (
                     <SelectItem key={agentValue} value={agentValue}>
-                      {getAgentSelectorLabel(agentValue)}
+                      <AgentNameWithLogo
+                        agent={agentValue}
+                        label={getAgentSelectorLabel(agentValue)}
+                      />
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -682,7 +715,7 @@ export function CliPage({ open }: { open: boolean }) {
               <SelectContent>
                 {AGENTS.map(agent => (
                   <SelectItem key={agent} value={agent}>
-                    {AGENT_LABELS[agent]}
+                    <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent]} />
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -785,7 +818,9 @@ export function CliPage({ open }: { open: boolean }) {
                 className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3"
               >
                 <div className="grid gap-1">
-                  <p className="text-xs font-medium">{group.label}</p>
+                  <p className="text-xs font-medium">
+                    <AgentNameWithLogo agent={group.key} label={group.label} />
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {options.map(option => option.label).join(' • ')}
                   </p>
