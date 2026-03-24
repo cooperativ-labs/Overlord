@@ -14,7 +14,9 @@ function getResendClient(): Resend {
 }
 
 function getFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL?.trim() || 'Overlord <feedback@ovld.ai>';
+  return (
+    process.env.RESEND_FROM_EMAIL?.trim() || 'Overlord Feedback <ovld@notifications.cooperativ.io>'
+  );
 }
 
 function escapeHtml(value: string): string {

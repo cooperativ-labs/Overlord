@@ -34,7 +34,9 @@ function getResendClient(): Resend {
 }
 
 function getFromEmail(): string {
-  return process.env.RESEND_FROM_EMAIL?.trim() || 'Overlord <access@ovld.ai>';
+  return (
+    process.env.RESEND_FROM_EMAIL?.trim() || 'Overlord Access <ovld@notifications.cooperativ.io>'
+  );
 }
 
 function escapeHtml(value: string): string {
