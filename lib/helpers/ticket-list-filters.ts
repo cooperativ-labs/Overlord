@@ -3,6 +3,11 @@ export type TicketListFilters = {
   filter_project_id: string | null;
 };
 
+type TicketListFiltersInput = {
+  selected_statuses?: unknown;
+  filter_project_id?: unknown;
+};
+
 export function createDefaultTicketListFilters(): TicketListFilters {
   return {
     selected_statuses: [],
@@ -28,7 +33,7 @@ export function normalizeStringList(value: unknown): string[] {
 }
 
 export function normalizeTicketListFilters(
-  value?: Partial<TicketListFilters> | null
+  value?: TicketListFiltersInput | null
 ): TicketListFilters {
   return {
     selected_statuses: normalizeStringList(value?.selected_statuses),
