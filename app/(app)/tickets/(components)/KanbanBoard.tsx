@@ -162,7 +162,7 @@ export default function KanbanBoard({
   // Single source of truth for ticket data after mount.
   // Seeded from server props, updated directly by real-time events, polling, and user actions.
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
-
+  console.log(tickets);
   // Tracks the column a card is being dragged into, for immediate synchronous
   // re-render of SortableContext items (shows the insertion gap in the target column).
   const [activeDragStatus, setActiveDragStatus] = useState<{

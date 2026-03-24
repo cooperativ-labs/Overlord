@@ -131,7 +131,7 @@ export default async function TicketsBoardContent({
     let query = supabase
       .from('tickets')
       .select(
-        'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+        'id,title,objective,execution_target,status,priority,assigned_agent,delegate,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
       )
       .eq('status', status.name)
       .order('updated_at', { ascending: false })

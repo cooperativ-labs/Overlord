@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react';
+import { Bot, ChevronDown } from 'lucide-react';
 import { headers } from 'next/headers';
 import Image from 'next/image';
 import fs from 'node:fs/promises';
@@ -317,9 +317,15 @@ export async function TicketPanelContent({
           everhourIntegration={everhourIntegration ?? null}
         />
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden  bg-muted/50 ">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/50 pb-10 ">
           <section className="bg-background py-5">
             <div className="px-5">
+              {ticket.delegate ? (
+                <div className="mb-3 flex items-center gap-1.5 text-xs text-orange-500/90">
+                  <Bot className="h-3.5 w-3.5 shrink-0" />
+                  <span>Created by agent: {ticket.delegate}</span>
+                </div>
+              ) : null}
               <div className="mb-4">
                 <InlineEditField
                   displayClassName="text-xl font-bold tracking-tight"

@@ -1065,7 +1065,7 @@ ${section('Objective', source.latestObjective)}${section('Acceptance Criteria', 
 }
 
 const TICKET_BOARD_SELECT =
-  'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+  'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
 type RawBoardTicket = {
   id: string;
@@ -1082,6 +1082,7 @@ type RawBoardTicket = {
   organization_id: number;
   project_id: string;
   everhour_task_id: string | null;
+  delegate: string | null;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
     | { name: string; color: string; everhour_project_id: string | null }
@@ -1107,6 +1108,7 @@ function mapBoardTicket(raw: RawBoardTicket) {
     organization_id: raw.organization_id,
     project_id: raw.project_id,
     everhour_task_id: raw.everhour_task_id,
+    delegate: raw.delegate,
     organization_name: org?.name ?? null,
     project_name: p?.name ?? null,
     project_color: p?.color ?? null,

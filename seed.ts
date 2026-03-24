@@ -23,6 +23,10 @@ async function main() {
   const jakeHashedPassword = await hash(jakePassword, 10);
 
   const jakeId = '11111111-1111-4111-8111-111111111111';
+  const aliceId = '22222222-2222-4222-8222-222222222222';
+  const orgId = 1;
+  const projectAlphaId = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const projectBetaId = 'aaaaaaaa-0000-4000-8000-000000000002';
 
   // Register OAuth clients for CLI and Electron login
   // Explicitly control nullable fields to prevent Snaplet from auto-generating
@@ -58,7 +62,7 @@ async function main() {
     }
   ]);
 
-  // Insert Jake; trigger creates org 1 for first user
+  // Insert Jake (primary user / admin) and Alice (delegate user)
   await seed.users([
     {
       instance_id: '00000000-0000-0000-0000-000000000000',
@@ -74,6 +78,269 @@ async function main() {
         email: 'jake@c.com',
         username: 'jchaselubitz'
       }
+    },
+    {
+      instance_id: '00000000-0000-0000-0000-000000000000',
+      id: aliceId,
+      email: 'alice@c.com',
+      encrypted_password: jakeHashedPassword,
+      role: 'authenticated',
+      aud: 'authenticated',
+      is_super_admin: false,
+      raw_app_meta_data: { provider: 'email', providers: ['email'] },
+      raw_user_meta_data: {
+        name: 'Alice',
+        email: 'alice@c.com',
+        username: 'alicecooper'
+      }
+    }
+  ]);
+
+  // Organization
+  await seed.organizations([
+    {
+      id: orgId,
+      name: 'Cooperativ',
+      feed_retention_days: 30
+    }
+  ]);
+
+  // Members: Jake as ADMIN, Alice as MANAGER
+  await seed.members([
+    { organization_id: orgId, user_id: jakeId, role: 'ADMIN' },
+    { organization_id: orgId, user_id: aliceId, role: 'MANAGER' }
+  ]);
+
+  // Seed default ticket statuses for the organization
+  await seed.ticket_statuses([
+    { organization_id: orgId, name: 'icebox', status_type: 'draft', position: 0, is_default: true },
+    { organization_id: orgId, name: 'draft', status_type: 'draft', position: 1, is_default: true },
+    {
+      organization_id: orgId,
+      name: 'next-up',
+      status_type: 'draft',
+      position: 2,
+      is_default: true
+    },
+    {
+      organization_id: orgId,
+      name: 'in-progress',
+      status_type: 'execute',
+      position: 3,
+      is_default: true
+    },
+    {
+      organization_id: orgId,
+      name: 'review',
+      status_type: 'review',
+      position: 4,
+      is_default: true
+    },
+    {
+      organization_id: orgId,
+      name: 'complete',
+      status_type: 'complete',
+      position: 5,
+      is_default: true
+    },
+    {
+      organization_id: orgId,
+      name: 'blocked',
+      status_type: 'execute',
+      position: 6,
+      is_default: true
+    },
+    {
+      organization_id: orgId,
+      name: 'cancelled',
+      status_type: 'complete',
+      position: 7,
+      is_default: true
+    }
+  ]);
+
+  // Two projects
+  await seed.projects([
+    {
+      id: projectAlphaId,
+      organization_id: orgId,
+      name: 'Alpha',
+      color: '#6366f1'
+    },
+    {
+      id: projectBetaId,
+      organization_id: orgId,
+      name: 'Beta',
+      color: '#10b981'
+    }
+  ]);
+
+  // Tickets in Draft stage — two created by Alice (delegate)
+  const ticketIds = [
+    'bbbbbbbb-0000-4000-8000-000000000001',
+    'bbbbbbbb-0000-4000-8000-000000000002',
+    'bbbbbbbb-0000-4000-8000-000000000003',
+    'bbbbbbbb-0000-4000-8000-000000000004',
+    'bbbbbbbb-0000-4000-8000-000000000005',
+    'bbbbbbbb-0000-4000-8000-000000000006'
+  ];
+
+  await seed.tickets([
+    {
+      id: ticketIds[0],
+      organization_id: orgId,
+      project_id: projectAlphaId,
+      created_by: jakeId,
+      title: 'Set up CI/CD pipeline',
+      objective: 'Configure GitHub Actions workflows for lint, test, and deploy steps.',
+      status: 'draft',
+      priority: 'high',
+      board_position: 1,
+      recent_agent: 'Claude',
+      acceptance_criteria: null,
+      assigned_agent: null,
+      everhour_task_id: null,
+      delegate: null
+    },
+    {
+      id: ticketIds[1],
+      organization_id: orgId,
+      project_id: projectAlphaId,
+      created_by: jakeId,
+      title: 'Design system tokens',
+      objective: 'Define color, spacing, and typography tokens for the Alpha project.',
+      status: 'draft',
+      priority: 'medium',
+      board_position: 2,
+      recent_agent: null,
+      acceptance_criteria: null,
+      assigned_agent: null,
+      everhour_task_id: null,
+      delegate: null
+    },
+    {
+      id: ticketIds[2],
+      organization_id: orgId,
+      project_id: projectAlphaId,
+      created_by: jakeId,
+      title: 'Write API documentation',
+      objective: 'Document all public REST endpoints with examples and error codes.',
+      status: 'draft',
+      priority: 'low',
+      board_position: 3,
+      recent_agent: null,
+      acceptance_criteria: null,
+      assigned_agent: null,
+      everhour_task_id: null,
+      delegate: null
+    },
+    // Delegate tickets — created by Alice on behalf of the org
+    {
+      id: ticketIds[3],
+      organization_id: orgId,
+      project_id: projectBetaId,
+      created_by: jakeId,
+      delegate: 'Claude',
+      title: 'Integrate analytics SDK',
+      objective: 'Add PostHog analytics to the Beta project and instrument key user flows.',
+      status: 'draft',
+      priority: 'medium',
+      board_position: 1,
+      recent_agent: null,
+      assigned_agent: null,
+      acceptance_criteria: null,
+      everhour_task_id: null
+    },
+    {
+      id: ticketIds[4],
+      organization_id: orgId,
+      project_id: projectBetaId,
+      created_by: jakeId,
+      delegate: 'Claude',
+      title: 'Audit accessibility issues',
+      objective: 'Run axe-core across all pages and resolve WCAG AA violations.',
+      status: 'draft',
+      priority: 'high',
+      recent_agent: 'Codex',
+      board_position: 2,
+      acceptance_criteria: 'The script runs without errors and resolves all WCAG AA violations.',
+      assigned_agent: null,
+      everhour_task_id: null
+    },
+    {
+      id: ticketIds[5],
+      organization_id: orgId,
+      project_id: projectBetaId,
+      created_by: jakeId,
+      title: 'Migrate legacy data',
+      objective: 'Write a one-time script to migrate records from the old schema to the new one.',
+      status: 'draft',
+      priority: 'medium',
+      board_position: 3,
+      recent_agent: null,
+      acceptance_criteria:
+        'The script runs without errors and migrates all records from the old schema to the new one.',
+      everhour_task_id: null,
+      assigned_agent: null,
+      delegate: null
+    }
+  ]);
+
+  // Feed posts
+  await seed.feed_posts([
+    {
+      organization_id: orgId,
+      project_id: projectAlphaId,
+      ticket_id: ticketIds[0],
+      title: 'CI/CD pipeline scaffolded',
+      body: 'Created the initial GitHub Actions workflows for linting and testing. Deployment step is stubbed pending secrets setup.',
+      impact_level: 'medium',
+      files_touched: ['.github/workflows/ci.yml', '.github/workflows/deploy.yml'],
+      human_actions: ['Reviewed workflow config', 'Approved secrets plan'],
+      tags: ['ci', 'devops'],
+      tickets_created: [],
+      tradeoffs: { notes: 'Used matrix builds for speed; increases parallel job costs.' }
+    },
+    {
+      organization_id: orgId,
+      project_id: projectAlphaId,
+      ticket_id: ticketIds[1],
+      title: 'Design tokens defined',
+      body: 'Established the initial color palette and spacing scale. Typography tokens are pending font licensing confirmation.',
+      impact_level: 'low',
+      files_touched: ['tokens/colors.ts', 'tokens/spacing.ts'],
+      human_actions: ['Reviewed palette with design team'],
+      tags: ['design', 'frontend'],
+      tickets_created: [],
+      tradeoffs: {
+        notes: 'Opted for CSS custom properties over JS-in-CSS for broader tooling compatibility.'
+      }
+    },
+    {
+      organization_id: orgId,
+      project_id: projectBetaId,
+      ticket_id: ticketIds[3],
+      title: 'PostHog SDK integrated',
+      body: 'Installed and initialized PostHog in the Beta app. Key flows (signup, onboarding, checkout) are now instrumented.',
+      impact_level: 'medium',
+      files_touched: ['lib/analytics.ts', 'app/layout.tsx'],
+      human_actions: ['Verified events in PostHog dashboard'],
+      tags: ['analytics', 'tracking'],
+      tickets_created: [],
+      tradeoffs: { notes: 'Lazy-loaded the SDK to avoid blocking initial render.' }
+    },
+    {
+      organization_id: orgId,
+      project_id: projectBetaId,
+      ticket_id: ticketIds[4],
+      title: 'Accessibility audit complete',
+      body: 'Ran axe-core on all pages. Found 12 WCAG AA violations — 8 resolved, 4 deferred to next sprint pending design input.',
+      impact_level: 'high',
+      files_touched: ['components/Button.tsx', 'components/Modal.tsx', 'app/page.tsx'],
+      human_actions: ['Triaged violations with design', 'Merged accessibility fixes'],
+      tags: ['a11y', 'quality'],
+      tickets_created: [],
+      tradeoffs: { notes: 'Deferred colour-contrast changes until brand refresh is finalised.' }
     }
   ]);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bot } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
@@ -149,6 +149,15 @@ export default function TicketListCard({
               </Badge>
               <ExecutionTargetBadge executionTarget={ticket.execution_target} />
             </div>
+            {ticket.delegate ? (
+              <div
+                className="mt-1 flex items-center gap-0.5 text-[10px] text-orange-600"
+                title={`Created by agent: ${ticket.delegate}`}
+              >
+                <Bot className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate max-w-[140px]">Created by {ticket.delegate}</span>
+              </div>
+            ) : null}
           </div>
 
           {/* Status dots */}

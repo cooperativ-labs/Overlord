@@ -15,7 +15,8 @@ import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
 
 function getSelectionLabel(models: AgentModel[], modelId: string | null): string {
   if (!modelId) return 'Default model';
-  return models.find(model => model.model_id === modelId)?.display_name ?? 'Selected model';
+  const name = models.find(model => model.model_id === modelId)?.display_name ?? 'Selected model';
+  return name.replace(/^Claude\s+/i, '');
 }
 
 export function AgentModelChooserButton() {

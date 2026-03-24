@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, Bot } from 'lucide-react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
@@ -51,6 +51,7 @@ export type Ticket = {
   is_read?: boolean;
   objectives_executed_count?: number;
   updated_at?: string;
+  delegate?: string | null;
 };
 
 function StatusDot({
@@ -249,54 +250,67 @@ function KanbanCardBody({
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
   return (
-    <CardContent className="flex h-full flex-col p-3">
-      <div className="min-w-0 space-y-1">
-        <div className="flex items-start gap-2">
-          <div className="flex min-w-0 flex-1 items-start gap-2">
-            {ticket.project_color ? (
-              <span
-                className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border"
-                style={{ backgroundColor: ticket.project_color, borderColor: ticket.project_color }}
-                title={ticket.project_name ?? 'Project'}
+    <CardContent className="flex h-full flex-col p-0 pt-3  ">
+      <div className="px-3">
+        <div className="min-w-0 gap-1">
+          <div className="flex items-start gap-2">
+            <div className="flex min-w-0 flex-1 items-start gap-2">
+              {ticket.project_color ? (
+                <span
+                  className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border"
+                  style={{
+                    backgroundColor: ticket.project_color,
+                    borderColor: ticket.project_color
+                  }}
+                  title={ticket.project_name ?? 'Project'}
+                />
+              ) : (
+                <span
+                  className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border border-muted-foreground/50"
+                  title="No project"
+                />
+              )}
+              <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
+            </div>
+          </div>
+          {showOrganizationName && ticket.organization_name ? (
+            <p className="text-muted-foreground text-xs">{ticket.organization_name}</p>
+          ) : null}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
+        </div>
+        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+          <div className="flex min-w-0 items-center">
+            {ticket.project_everhour_project_id ? (
+              <KanbanTimerButton
+                initialTaskId={ticket.everhour_task_id ?? null}
+                ticketId={ticket.id}
               />
-            ) : (
+            ) : null}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <ActiveAgentDisplay identifier={activeAgentIdentifier} />
+            {executedObjectivesCount > 0 ? (
               <span
-                className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border border-muted-foreground/50"
-                title="No project"
-              />
-            )}
-            <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
+                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
+                title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+                aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
+              >
+                {executedObjectivesCount}
+              </span>
+            ) : null}
           </div>
         </div>
-        {showOrganizationName && ticket.organization_name ? (
-          <p className="text-muted-foreground text-xs">{ticket.organization_name}</p>
-        ) : null}
       </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
-      </div>
-      <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-        <div className="flex min-w-0 items-center">
-          {ticket.project_everhour_project_id ? (
-            <KanbanTimerButton
-              initialTaskId={ticket.everhour_task_id ?? null}
-              ticketId={ticket.id}
-            />
-          ) : null}
+      {ticket.delegate ? (
+        <div className="mt-2 flex items-center bg-orange-400/10 gap-1 border-t border-orange-400/60 px-3  text-orange-600 py-1">
+          <Bot className="h-2.5 w-2.5 shrink-0 " />
+          <span className="text-[10px] truncate">Created by {ticket.delegate}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <ActiveAgentDisplay identifier={activeAgentIdentifier} />
-          {executedObjectivesCount > 0 ? (
-            <span
-              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
-              title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-              aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-            >
-              {executedObjectivesCount}
-            </span>
-          ) : null}
-        </div>
-      </div>
+      ) : (
+        <div className="h-2" />
+      )}
     </CardContent>
   );
 }
