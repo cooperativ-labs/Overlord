@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 
 import type { FeedPost } from '@/lib/actions/feed';
 import { getWorkspaceRoot } from '@/lib/env';
+import { useFeedRealtime } from '@/lib/hooks/use-feed-realtime';
 
 import { FeedCard } from './FeedCard';
 import { FeedProjectFilter } from './FeedProjectFilter';
@@ -23,6 +24,7 @@ type FeedListProps = {
 };
 
 export function FeedList({ posts, projects, editorScheme }: FeedListProps) {
+  useFeedRealtime();
   const [selectedProjectId, setSelectedProjectId] = useState('all');
   const workspaceRootByProjectId = useMemo(
     () =>

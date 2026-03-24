@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,9 +10,11 @@ import { getFeedRetentionDaysAction, updateFeedRetentionDaysAction } from '@/lib
 
 export function FeedSettingsPage({ open }: { open: boolean }) {
   const [retentionDays, setRetentionDays] = useState(30);
+  const [savedRetentionDays, setSavedRetentionDays] = useState(30);
   const [loading, setLoading] = useState(false);
   const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
+  const saveInFlightRef = useRef(false);
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -20,6 +22,7 @@ export function FeedSettingsPage({ open }: { open: boolean }) {
     try {
       const days = await getFeedRetentionDaysAction();
       setRetentionDays(days);
+      setSavedRetentionDays(days);
     } catch (err) {
       console.error('Failed to load feed settings:', err);
       setError(err instanceof Error ? err.message : 'Failed to load feed settings.');
@@ -38,17 +41,21 @@ export function FeedSettingsPage({ open }: { open: boolean }) {
   }, [open, loadSettings]);
 
   async function handleSave() {
-    if (loading) return;
+    if (loading || saveInFlightRef.current || retentionDays === savedRetentionDays) return;
+    saveInFlightRef.current = true;
     setSaveState('loading');
     setError(null);
     try {
       const saved = await updateFeedRetentionDaysAction(retentionDays);
       setRetentionDays(saved);
+      setSavedRetentionDays(saved);
       setSaveState('success');
     } catch (err) {
       console.error('Failed to save feed settings:', err);
       setSaveState('error');
       setError(err instanceof Error ? err.message : 'Failed to save feed settings.');
+    } finally {
+      saveInFlightRef.current = false;
     }
   }
 
@@ -72,6 +79,7 @@ export function FeedSettingsPage({ open }: { open: boolean }) {
             className="w-24"
             value={retentionDays}
             onChange={e => setRetentionDays(Number(e.target.value) || 30)}
+            onBlur={handleSave}
             disabled={loading}
           />
           <span className="text-xs text-muted-foreground">days</span>

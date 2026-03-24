@@ -10,6 +10,12 @@ import {
   useAgentModelPreference
 } from '@/components/features/AgentModelSelector';
 import { useElectron } from '@/components/features/terminal/useElectron';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger
+} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -667,133 +673,158 @@ export function CliPage({ open }: { open: boolean }) {
 
       {isElectron ? (
         <>
-          <div className="grid gap-4">
-            <div className="grid gap-1">
-              <p className="text-sm font-medium">Default agent</p>
-              <p className="text-xs text-muted-foreground">
-                Choose your default agent, model, and thinking level for launching tasks.
-              </p>
-            </div>
-            <DefaultAgentSelector />
-            <div className="grid gap-2">
-              <p className="text-xs text-muted-foreground">
-                Default quick-launch target for the Run menu.
-              </p>
-              <Select
-                value={selectedDefaultAgentTrigger}
-                onValueChange={handleDefaultAgentTriggerChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select default agent" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AGENT_SELECTOR_VALUES.map(agentValue => (
-                    <SelectItem key={agentValue} value={agentValue}>
-                      <AgentNameWithLogo
-                        agent={agentValue}
-                        label={getAgentSelectorLabel(agentValue)}
-                      />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-4">
-            <div className="grid gap-1">
-              <p className="text-sm font-medium">Local agent configuration</p>
-              <p className="text-xs text-muted-foreground">
-                Add custom flags to the agent command when running locally. Claude has
-                --enable-auto-mode enabled by default.
-              </p>
-            </div>
-            <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select agent" />
-              </SelectTrigger>
-              <SelectContent>
-                {AGENTS.map(agent => (
-                  <SelectItem key={agent} value={agent}>
-                    <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent]} />
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-foreground">Command flags</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g., --enable-auto-mode"
-                    value={flagInput}
-                    onChange={e => setFlagInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void handleAddFlag();
-                      }
-                    }}
-                    className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleAddFlag()}
-                    className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
-                  >
-                    Add
-                  </button>
+          <Accordion type="multiple" className="grid gap-0">
+            <AccordionItem value="default-agent" className="rounded-md border px-3">
+              <AccordionTrigger className="hover:no-underline">
+                <div className="grid gap-1">
+                  <p className="text-sm font-medium">Default agent</p>
+                  <p className="text-xs text-muted-foreground font-normal">
+                    <AgentNameWithLogo
+                      agent={selectedDefaultAgentTrigger}
+                      label={getAgentSelectorLabel(selectedDefaultAgentTrigger)}
+                    />
+                  </p>
                 </div>
-              </div>
-              {(agentFlags[selectedLocalAgent] ?? []).length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {(agentFlags[selectedLocalAgent] ?? []).map((flag, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
-                      >
-                        <code className="text-xs font-medium">{flag}</code>
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
-                          className="rounded p-0.5 hover:bg-muted-foreground/20"
-                          title="Remove flag"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid gap-4">
+                  <DefaultAgentSelector />
+                  <div className="grid gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Default quick-launch target for the Run menu.
+                    </p>
+                    <Select
+                      value={selectedDefaultAgentTrigger}
+                      onValueChange={handleDefaultAgentTriggerChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select default agent" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AGENT_SELECTOR_VALUES.map(agentValue => (
+                          <SelectItem key={agentValue} value={agentValue}>
+                            <AgentNameWithLogo
+                              agent={agentValue}
+                              label={getAgentSelectorLabel(agentValue)}
+                            />
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-              )}
-              <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-foreground">Command</p>
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyCommand()}
-                    className="shrink-0 rounded p-1 hover:bg-muted"
-                    title="Copy command"
-                  >
-                    {commandCopied ? (
-                      <Check className="h-3.5 w-3.5 text-green-500" />
-                    ) : (
-                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                  </button>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="local-agent-config" className="rounded-md border px-3">
+              <AccordionTrigger className="hover:no-underline">
+                <div className="grid gap-1">
+                  <p className="text-sm font-medium">Local agent configuration</p>
+                  <p className="text-xs text-muted-foreground font-normal">
+                    <AgentNameWithLogo
+                      agent={selectedLocalAgent as BundleAgent}
+                      label={AGENT_LABELS[selectedLocalAgent]}
+                    />
+                    {(agentFlags[selectedLocalAgent] ?? []).length > 0 ? (
+                      <span className="ml-2">
+                        · {(agentFlags[selectedLocalAgent] ?? []).length} flag
+                        {(agentFlags[selectedLocalAgent] ?? []).length !== 1 ? 's' : ''}
+                      </span>
+                    ) : null}
+                  </p>
                 </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                  {`ovld restart ${selectedLocalAgent}${
-                    (agentFlags[selectedLocalAgent] ?? []).length > 0
-                      ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                      : ''
-                  }`}
-                </pre>
-              </div>
-            </div>
-          </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="grid gap-4">
+                  <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGENTS.map(agent => (
+                        <SelectItem key={agent} value={agent}>
+                          <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent]} />
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-foreground">Command flags</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g., --enable-auto-mode"
+                          value={flagInput}
+                          onChange={e => setFlagInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void handleAddFlag();
+                            }
+                          }}
+                          className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleAddFlag()}
+                          className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    {(agentFlags[selectedLocalAgent] ?? []).length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {(agentFlags[selectedLocalAgent] ?? []).map((flag, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
+                            >
+                              <code className="text-xs font-medium">{flag}</code>
+                              <button
+                                type="button"
+                                onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
+                                className="rounded p-0.5 hover:bg-muted-foreground/20"
+                                title="Remove flag"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-foreground">Command</p>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyCommand()}
+                          className="shrink-0 rounded p-1 hover:bg-muted"
+                          title="Copy command"
+                        >
+                          {commandCopied ? (
+                            <Check className="h-3.5 w-3.5 text-green-500" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                          )}
+                        </button>
+                      </div>
+                      <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                        {`ovld restart ${selectedLocalAgent}${
+                          (agentFlags[selectedLocalAgent] ?? []).length > 0
+                            ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                            : ''
+                        }`}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </>
       ) : null}
 
@@ -808,137 +839,160 @@ export function CliPage({ open }: { open: boolean }) {
             <code className="rounded bg-muted px-1">/spawn</code>.
           </p>
         </div>
-        <div className="space-y-2">
+        <Accordion type="multiple" className="space-y-2">
           {AGENT_PLUGIN_GROUPS.map(group => {
             const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
 
-            return (
-              <div
-                key={group.key}
-                className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3"
-              >
-                <div className="grid gap-1">
-                  <p className="text-xs font-medium">
-                    <AgentNameWithLogo agent={group.key} label={group.label} />
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {options.map(option => option.label).join(' • ')}
-                  </p>
-                </div>
-                <div className="grid gap-3">
-                  {options.map(option => {
-                    const bundleStatus =
-                      option.kind === 'bundle'
-                        ? bundleStatuses.find(status => status.agent === option.bundleAgent)
-                        : null;
-                    const slashStatus =
-                      option.kind === 'slash'
-                        ? slashStatuses.find(status => status.agent === option.slashAgent)
-                        : null;
-                    const actionMeta =
-                      option.kind === 'bundle'
-                        ? getBundleActionMeta(bundleStatus?.status)
-                        : getSlashActionMeta(slashStatus?.status);
-                    const managedFiles =
-                      option.kind === 'bundle'
-                        ? BUNDLE_FILE_PATHS[option.bundleAgent]
-                        : (slashStatus?.managedFiles ??
-                          SLASH_COMMAND_CONFIGS[option.slashAgent].filePaths);
-                    const details =
-                      option.kind === 'bundle'
-                        ? (bundleStatus?.details ??
-                          'Prompt and skill bundle details are available in the desktop app.')
-                        : slashStatus?.details;
-                    const canRunAction =
-                      option.kind === 'bundle' ? Boolean(bundleStatus) : Boolean(slashStatus);
-                    const buttonState = pluginActionButtonStates[option.key] ?? 'default';
+            const groupStatuses = options
+              .map(option => {
+                if (option.kind === 'bundle') {
+                  const s = bundleStatuses.find(status => status.agent === option.bundleAgent);
+                  return s ? { label: option.label, badge: bundleStatusBadge(s.status) } : null;
+                }
+                const s = slashStatuses.find(status => status.agent === option.slashAgent);
+                return s ? { label: option.label, badge: slashStatusBadge(s.status) } : null;
+              })
+              .filter(Boolean);
 
-                    return (
-                      <div key={option.key} className="rounded-md border bg-background p-3">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="grid gap-2">
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-medium">{option.label}</p>
-                              {option.kind === 'bundle'
-                                ? bundleStatus
-                                  ? bundleStatusBadge(bundleStatus.status)
-                                  : null
-                                : slashStatus
-                                  ? slashStatusBadge(slashStatus.status)
-                                  : null}
-                            </div>
-                            <p className="text-xs text-muted-foreground">{option.description}</p>
-                            {option.supportNote ? (
-                              <p className="text-xs text-muted-foreground">{option.supportNote}</p>
-                            ) : null}
-                            {details ? (
-                              <p className="text-xs text-muted-foreground">{details}</p>
-                            ) : null}
+            return (
+              <AccordionItem
+                key={group.key}
+                value={group.key}
+                className="rounded-md border bg-muted/30 px-3"
+              >
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="grid gap-1">
+                    <p className="text-xs font-medium">
+                      <AgentNameWithLogo agent={group.key} label={group.label} />
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-muted-foreground font-normal">
+                        {options.map(option => option.label).join(' · ')}
+                      </p>
+                      {groupStatuses.map((gs, i) => (
+                        <span key={i}>{gs!.badge}</span>
+                      ))}
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid gap-3">
+                    {options.map(option => {
+                      const bundleStatus =
+                        option.kind === 'bundle'
+                          ? bundleStatuses.find(status => status.agent === option.bundleAgent)
+                          : null;
+                      const slashStatus =
+                        option.kind === 'slash'
+                          ? slashStatuses.find(status => status.agent === option.slashAgent)
+                          : null;
+                      const actionMeta =
+                        option.kind === 'bundle'
+                          ? getBundleActionMeta(bundleStatus?.status)
+                          : getSlashActionMeta(slashStatus?.status);
+                      const managedFiles =
+                        option.kind === 'bundle'
+                          ? BUNDLE_FILE_PATHS[option.bundleAgent]
+                          : (slashStatus?.managedFiles ??
+                            SLASH_COMMAND_CONFIGS[option.slashAgent].filePaths);
+                      const details =
+                        option.kind === 'bundle'
+                          ? (bundleStatus?.details ??
+                            'Prompt and skill bundle details are available in the desktop app.')
+                          : slashStatus?.details;
+                      const canRunAction =
+                        option.kind === 'bundle' ? Boolean(bundleStatus) : Boolean(slashStatus);
+                      const buttonState = pluginActionButtonStates[option.key] ?? 'default';
+
+                      return (
+                        <div key={option.key} className="rounded-md border bg-background p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="grid gap-2">
-                              {managedFiles.map(filePath => (
-                                <div
-                                  key={filePath}
-                                  className="flex flex-col gap-2 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between"
-                                >
-                                  <code className="break-all text-xs text-muted-foreground">
-                                    {filePath}
-                                  </code>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="shrink-0 gap-2"
-                                    onClick={() => void handleRevealFile(filePath)}
-                                  >
-                                    <FolderOpen className="h-3.5 w-3.5" />
-                                    Open in Finder
-                                  </Button>
-                                </div>
-                              ))}
-                              {managedFiles.length === 0 ? (
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs font-medium">{option.label}</p>
+                                {option.kind === 'bundle'
+                                  ? bundleStatus
+                                    ? bundleStatusBadge(bundleStatus.status)
+                                    : null
+                                  : slashStatus
+                                    ? slashStatusBadge(slashStatus.status)
+                                    : null}
+                              </div>
+                              <p className="text-xs text-muted-foreground">{option.description}</p>
+                              {option.supportNote ? (
                                 <p className="text-xs text-muted-foreground">
-                                  No managed files found yet.
+                                  {option.supportNote}
                                 </p>
                               ) : null}
+                              {details ? (
+                                <p className="text-xs text-muted-foreground">{details}</p>
+                              ) : null}
+                              <div className="grid gap-2">
+                                {managedFiles.map(filePath => (
+                                  <div
+                                    key={filePath}
+                                    className="flex flex-col gap-2 rounded-md border bg-muted/20 p-2 sm:flex-row sm:items-center sm:justify-between"
+                                  >
+                                    <code className="break-all text-xs text-muted-foreground">
+                                      {filePath}
+                                    </code>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="shrink-0 gap-2"
+                                      onClick={() => void handleRevealFile(filePath)}
+                                    >
+                                      <FolderOpen className="h-3.5 w-3.5" />
+                                      Open in Finder
+                                    </Button>
+                                  </div>
+                                ))}
+                                {managedFiles.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    No managed files found yet.
+                                  </p>
+                                ) : null}
+                              </div>
                             </div>
+                            {isElectron ? (
+                              <LoadingButton
+                                buttonState={buttonState}
+                                setButtonState={state =>
+                                  setPluginActionButtonState(option.key, state)
+                                }
+                                text={actionMeta.label}
+                                loadingText={actionMeta.loadingText}
+                                successText={actionMeta.successText}
+                                errorText={actionMeta.errorText}
+                                size="sm"
+                                variant="outline"
+                                reset={true}
+                                onClick={() =>
+                                  void (option.kind === 'bundle'
+                                    ? bundleStatus?.status === 'installed'
+                                      ? handleUninstallBundle(bundleStatus.agent, option.key)
+                                      : bundleStatus?.status === 'partial' ||
+                                          bundleStatus?.status === 'error'
+                                        ? handleRepairBundle(bundleStatus.agent, option.key)
+                                        : handleInstallBundle(option.bundleAgent, option.key)
+                                    : !slashStatus || slashStatus.status === 'not_installed'
+                                      ? handleInstallSlashCommands(option.slashAgent, option.key)
+                                      : handleUninstallSlashCommands(option.slashAgent, option.key))
+                                }
+                                disabled={!canRunAction || activePluginActionKey !== null}
+                              />
+                            ) : null}
                           </div>
-                          {isElectron ? (
-                            <LoadingButton
-                              buttonState={buttonState}
-                              setButtonState={state =>
-                                setPluginActionButtonState(option.key, state)
-                              }
-                              text={actionMeta.label}
-                              loadingText={actionMeta.loadingText}
-                              successText={actionMeta.successText}
-                              errorText={actionMeta.errorText}
-                              size="sm"
-                              variant="outline"
-                              reset={true}
-                              onClick={() =>
-                                void (option.kind === 'bundle'
-                                  ? bundleStatus?.status === 'installed'
-                                    ? handleUninstallBundle(bundleStatus.agent, option.key)
-                                    : bundleStatus?.status === 'partial' ||
-                                        bundleStatus?.status === 'error'
-                                      ? handleRepairBundle(bundleStatus.agent, option.key)
-                                      : handleInstallBundle(option.bundleAgent, option.key)
-                                  : !slashStatus || slashStatus.status === 'not_installed'
-                                    ? handleInstallSlashCommands(option.slashAgent, option.key)
-                                    : handleUninstallSlashCommands(option.slashAgent, option.key))
-                              }
-                              disabled={!canRunAction || activePluginActionKey !== null}
-                            />
-                          ) : null}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      );
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
             );
           })}
-        </div>
+        </Accordion>
         {isElectron && bundleStatuses.length > 0 ? (
           <LoadingButton
             buttonState={installAllBundlesButtonState}

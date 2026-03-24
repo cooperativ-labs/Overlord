@@ -3,10 +3,9 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 
 import { type TokenContext } from '../auth.ts';
 import { appToolOk, toolErr } from '../rpc.ts';
+import { TICKET_CARD_RESOURCE_URI } from '../ui/ticket-card-resource.ts';
 
 import { buildTicketDraft, resolveProject } from './_ticket-drafts.ts';
-
-export const TICKET_CARD_RESOURCE_URI = 'ui://overlord/ticket-card';
 
 export async function handleCreateTicketDraft(
   supabase: SupabaseClient,

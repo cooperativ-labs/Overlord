@@ -1,7 +1,10 @@
 import {
+  TICKET_CARD_DESCRIPTION,
   TICKET_CARD_HTML,
+  TICKET_CARD_META,
   TICKET_CARD_MIME_TYPE,
-  TICKET_CARD_RESOURCE_URI
+  TICKET_CARD_RESOURCE_URI,
+  TICKET_CARD_TITLE
 } from './ticket-card-resource.ts';
 
 type UiResource = {
@@ -16,26 +19,11 @@ type UiResource = {
 const UI_RESOURCES: UiResource[] = [
   {
     uri: TICKET_CARD_RESOURCE_URI,
-    name: 'Overlord Ticket Card',
-    description: 'Inline MCP app for reviewing and saving a drafted Overlord ticket.',
+    name: TICKET_CARD_TITLE,
+    description: TICKET_CARD_DESCRIPTION,
     mimeType: TICKET_CARD_MIME_TYPE,
     text: TICKET_CARD_HTML,
-    _meta: {
-      ui: {
-        csp: {
-          connectDomains: [],
-          resourceDomains: []
-        },
-        permissions: {}
-      },
-      'openai/widgetDescription':
-        'Review and edit a drafted Overlord ticket before saving it from chat.',
-      'openai/widgetPrefersBorder': true,
-      'openai/widgetCSP': {
-        connect_domains: [],
-        resource_domains: []
-      }
-    }
+    _meta: TICKET_CARD_META
   }
 ];
 

@@ -15,6 +15,8 @@
     "sunpeak:ticket-card:dev": "cd mcp-apps/ticket-card && node ../../node_modules/sunpeak/bin/sunpeak.js dev --no-begging",
     "sunpeak:ticket-card:build": "cd mcp-apps/ticket-card && node ../../node_modules/sunpeak/bin/sunpeak.js build",
     "sunpeak:ticket-card:start": "cd mcp-apps/ticket-card && node ../../node_modules/sunpeak/bin/sunpeak.js start",
+    "sunpeak:ticket-card:sync": "node scripts/build-ticket-card-app.mjs",
+    "sunpeak:ticket-card:build-and-sync": "yarn sunpeak:ticket-card:build && yarn sunpeak:ticket-card:sync",
     "generate": "node scripts/generate-supabase-types.js local",
     "new": "rm -rf node_modules && yarn cache clean && yarn install && yarn generate",
     "nuke": "yarn install && supabase db reset && supabase start && supabase status && yarn generate",
