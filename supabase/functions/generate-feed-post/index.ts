@@ -95,6 +95,12 @@ function sanitizeTicketsCreated(value: unknown): FeedPostPayload['tickets_create
     .slice(0, 20);
 }
 
+function sanitizeOptionalInstruction(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 4_000) : null;
+}
+
 function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
   if (!value || typeof value !== 'object') return null;
 
@@ -164,6 +170,7 @@ function buildPrompt(context: {
   ticketObjective: string | null;
   acceptanceCriteria: string | null;
   constraints: string | null;
+  feedPostInstructions: string | null;
   events: Array<{ created_at: string; event_type: string; summary: string | null }>;
   rationales: Array<{
     file_path: string;
@@ -197,11 +204,15 @@ function buildPrompt(context: {
   const appendSection = context.existingPost
     ? `\nPREVIOUS POST (merge new information into this, updating where needed):\nTitle: ${context.existingPost.title}\n${context.existingPost.body}\n`
     : '';
+  const feedInstructionsSection = context.feedPostInstructions
+    ? `\nPROJECT-USER FEED INSTRUCTIONS:\n${context.feedPostInstructions}\n`
+    : '';
 
   return `PROJECT: ${context.projectName}
 TICKET: ${context.ticketTitle ?? 'Untitled'} — ${context.ticketObjective ?? 'No objective'}
 ${context.acceptanceCriteria ? `ACCEPTANCE CRITERIA: ${context.acceptanceCriteria}` : ''}
 ${context.constraints ? `CONSTRAINTS: ${context.constraints}` : ''}
+${feedInstructionsSection}
 ${appendSection}
 CHRONOLOGICAL EVENTS (${context.events.length} total):
 ${eventLines || '(no events)'}
@@ -227,6 +238,7 @@ Respond with a single JSON object:
 IMPORTANT INSTRUCTIONS:
 - Keep the body under 300 words. Use bullet points, not paragraphs.
 - Surface tradeoffs prominently — they are the most valuable part. If there are no tradeoffs, return an empty array.
+- Follow any PROJECT-USER FEED INSTRUCTIONS when they are provided, unless they conflict with the required JSON shape or the source facts.
 - "human_actions" is ONLY for proactive tasks the human must perform — things like creating accounts, setting API keys, running migrations, adding env variables, deploying functions, or configuring external services. Do NOT include: testing the code, verifying behavior, reviewing files, checking that things work, or any other validation/QA tasks. Those are implied and clutter the feed. If there are no proactive tasks, return an empty array.
 - "tickets_created" should list any tickets that were spawned/created during this session. Return an empty array if none.
 - Do not wrap the JSON in Markdown fences or any explanatory text.`;
@@ -276,7 +288,7 @@ Deno.serve(async (req: Request) => {
     // Fetch ticket details
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('title, objective, acceptance_criteria, constraints, project_id')
+      .select('title, objective, acceptance_criteria, constraints, project_id, created_by')
       .eq('id', ticketId)
       .single();
 
@@ -293,6 +305,17 @@ Deno.serve(async (req: Request) => {
       .select('name')
       .eq('id', ticket.project_id)
       .single();
+
+    const { data: projectUserPreferences } = await supabase
+      .from('project_user_preferences')
+      .select('preferences')
+      .eq('project_id', ticket.project_id)
+      .eq('user_id', ticket.created_by)
+      .maybeSingle();
+
+    const feedPostInstructions = sanitizeOptionalInstruction(
+      (projectUserPreferences?.preferences as Record<string, unknown> | null)?.feed_post_instructions
+    );
 
     // Fetch events for this session (or all recent events for ticket)
     const eventsQuery = supabase
@@ -388,6 +411,7 @@ Deno.serve(async (req: Request) => {
       ticketObjective: ticket.objective,
       acceptanceCriteria: ticket.acceptance_criteria,
       constraints: ticket.constraints,
+      feedPostInstructions,
       events: filteredEvents,
       rationales: rationales ?? [],
       spawnedTickets,

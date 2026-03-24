@@ -1,16 +1,33 @@
 'use server';
 
+import {
+  createDefaultTicketListFilters,
+  normalizeStringList,
+  normalizeTicketListFilters,
+  parseTicketListFilters,
+  type TicketListFilters
+} from '@/lib/helpers/ticket-list-filters';
 import { createClient } from '@/supabase/utils/server';
 
 export type ProjectUserPreferences = {
+  feed_post_instructions: string | null;
   hidden_columns: string[];
   preferred_view: string | null;
+  list_filters: TicketListFilters;
 };
 
 const DEFAULT_PREFERENCES: ProjectUserPreferences = {
+  feed_post_instructions: null,
   hidden_columns: [],
-  preferred_view: null
+  preferred_view: null,
+  list_filters: createDefaultTicketListFilters()
 };
+
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function parsePreferences(raw: unknown): ProjectUserPreferences {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -18,10 +35,10 @@ function parsePreferences(raw: unknown): ProjectUserPreferences {
   }
   const obj = raw as Record<string, unknown>;
   return {
-    hidden_columns: Array.isArray(obj.hidden_columns)
-      ? (obj.hidden_columns as string[]).filter(v => typeof v === 'string')
-      : [],
-    preferred_view: typeof obj.preferred_view === 'string' ? obj.preferred_view : null
+    feed_post_instructions: normalizeOptionalString(obj.feed_post_instructions),
+    hidden_columns: normalizeStringList(obj.hidden_columns),
+    preferred_view: typeof obj.preferred_view === 'string' ? obj.preferred_view : null,
+    list_filters: parseTicketListFilters(obj.list_filters)
   };
 }
 
@@ -67,7 +84,22 @@ export async function upsertProjectUserPreferencesAction(
     .single();
 
   const current = parsePreferences(existing?.preferences);
-  const merged: ProjectUserPreferences = { ...current, ...patch };
+  const merged: ProjectUserPreferences = {
+    feed_post_instructions:
+      patch.feed_post_instructions !== undefined
+        ? normalizeOptionalString(patch.feed_post_instructions)
+        : current.feed_post_instructions,
+    hidden_columns:
+      patch.hidden_columns !== undefined
+        ? normalizeStringList(patch.hidden_columns)
+        : current.hidden_columns,
+    preferred_view:
+      patch.preferred_view !== undefined ? patch.preferred_view : current.preferred_view,
+    list_filters:
+      patch.list_filters !== undefined
+        ? normalizeTicketListFilters(patch.list_filters)
+        : current.list_filters
+  };
 
   const { error } = await supabase.from('project_user_preferences').upsert(
     {

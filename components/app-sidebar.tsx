@@ -1,6 +1,14 @@
 'use client';
 
-import { GraduationCap, ListChecks, MoreHorizontal, Newspaper, Plus, Settings } from 'lucide-react';
+import {
+  GraduationCap,
+  ListChecks,
+  MessageSquarePlus,
+  MoreHorizontal,
+  Newspaper,
+  Plus,
+  Settings
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -12,6 +20,7 @@ import { useProjectCreator } from '@/components/features/projects/ProjectCreator
 import { ProjectWorkingDirectoryRequiredModal } from '@/components/features/projects/ProjectWorkingDirectoryRequiredModal';
 import { useAgentBundleNotifications } from '@/components/features/system-notifications';
 import { useElectron } from '@/components/features/terminal/useElectron';
+import { FeedbackModal } from '@/components/modals/FeedbackModal';
 import { SettingsModal, type SettingsNavSection } from '@/components/modals/SettingsModal';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
@@ -106,6 +115,7 @@ export function AppSidebar({
   const { openProjectCreator } = useProjectCreator();
   const { defaultProject } = useDefaultProject();
   const { openTutorial } = useTutorialWizard();
+  const [feedbackOpen, setFeedbackOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = React.useState<
     SettingsNavSection | undefined
@@ -266,6 +276,12 @@ export function AppSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Send Feedback" onClick={() => setFeedbackOpen(true)}>
+              <MessageSquarePlus />
+              <span>Feedback</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <SidebarMenuButton tooltip="Tutorial" onClick={() => openTutorial({ startAtStep: 3 })}>
               <GraduationCap />
               <span>Take Tutorial</span>
@@ -280,6 +296,7 @@ export function AppSidebar({
         </SidebarMenu>
         <NavUser user={user} />
       </SidebarFooter>
+      <FeedbackModal open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       <SettingsModal
         open={settingsOpen}
         onOpenChange={nextOpen => {

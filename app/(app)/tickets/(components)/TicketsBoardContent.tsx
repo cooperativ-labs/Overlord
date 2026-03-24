@@ -109,6 +109,7 @@ export default async function TicketsBoardContent({
   const preferredView = projectPreferences?.preferred_view ?? savedView;
   const view = isMobile ? 'list' : (preferredView ?? 'board');
   const initialHiddenColumns = projectPreferences?.hidden_columns ?? [];
+  const initialListFilters = projectPreferences?.list_filters ?? null;
   const supabase = await createClient();
   const {
     data: { user }
@@ -313,6 +314,7 @@ export default async function TicketsBoardContent({
             initialView={view}
             showViewToggle={!isMobile}
             projectId={projectId}
+            initialListFilters={initialListFilters}
           />
         </div>
       )}

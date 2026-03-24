@@ -8,6 +8,7 @@ import { InlineEditField } from '@/components/features/InlineEditField';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { TicketDocumentUpload } from '@/components/features/TicketDocumentUpload';
+import { TranscriptDebugSection } from '@/components/features/TranscriptDebugSection';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
 import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
 import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
@@ -480,6 +481,8 @@ export async function TicketPanelContent({
                 opencodeResumeCommand={opencodeResume}
               />
             </ErrorBoundary>
+
+            <TranscriptDebugSection ticketId={ticketId} />
           </section>
         </div>
       </div>

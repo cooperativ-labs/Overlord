@@ -2,7 +2,7 @@
 
 import { ArrowUpDown, Check, Filter } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { markTicketUnreadAction } from '@/lib/actions/tickets';
+import {
+  normalizeStringList,
+  normalizeTicketListFilters,
+  parseTicketListFilters,
+  type TicketListFilters
+} from '@/lib/helpers/ticket-list-filters';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import {
   getOpenedWaitingTimestamps,
@@ -40,6 +47,7 @@ const SORT_LABELS: Record<SortKey, string> = {
 
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
+const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
 
 function formatStatusLabel(status: string): string {
   return status
@@ -53,13 +61,43 @@ function getPathTicketId(pathname: string): string | null {
   return segments[segments.length - 1] ?? null;
 }
 
+function areStringListsEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function readStoredListFilters(): TicketListFilters | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const stored = localStorage.getItem(USER_LIST_FILTERS_KEY);
+    if (!stored) return null;
+    return parseTicketListFilters(JSON.parse(stored));
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeSelectedStatuses(current: string[], availableStatuses: string[]): string[] {
+  if (availableStatuses.length === 0) {
+    return current;
+  }
+  if (current.length === 0) {
+    return current;
+  }
+
+  const availableSet = new Set(availableStatuses);
+  const next = current.filter(status => availableSet.has(status));
+  return next.length > 0 ? next : availableStatuses;
+}
+
 export default function TicketListView({
   tickets,
   showOrganizationName = false,
   ticketUrlBase,
   initialView,
   showViewToggle = true,
-  projectId
+  projectId,
+  initialListFilters
 }: {
   tickets: Ticket[];
   showOrganizationName?: boolean;
@@ -67,15 +105,26 @@ export default function TicketListView({
   initialView: string;
   showViewToggle?: boolean;
   projectId?: string;
+  initialListFilters?: TicketListFilters | null;
 }) {
   const pathname = usePathname();
   const [, startTransition] = useTransition();
 
+  const [storedListFilters] = useState<TicketListFilters | null>(() =>
+    projectId ? null : readStoredListFilters()
+  );
   const [sortKey, setSortKey] = useState<SortKey>('updated_at');
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => [
-    ...DEFAULT_SELECTED_STATUSES
-  ]);
-  const [filterProject, setFilterProject] = useState<string | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
+    normalizeStringList(
+      initialListFilters?.selected_statuses ??
+        storedListFilters?.selected_statuses ?? [...DEFAULT_SELECTED_STATUSES]
+    )
+  );
+  const [filterProject, setFilterProject] = useState<string | null>(() =>
+    projectId
+      ? null
+      : (initialListFilters?.filter_project_id ?? storedListFilters?.filter_project_id ?? null)
+  );
 
   const [openedWaitingTimestamps, setOpenedWaitingTimestamps] = useState<TicketOpenedTimestamps>(
     () => getOpenedWaitingTimestamps()
@@ -130,9 +179,33 @@ export default function TicketListView({
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [tickets]);
 
+  const saveListFilters = useCallback(
+    (nextSelectedStatuses: string[], nextFilterProject: string | null) => {
+      const nextFilters = normalizeTicketListFilters({
+        selected_statuses: nextSelectedStatuses,
+        filter_project_id: projectId ? null : nextFilterProject
+      });
+
+      if (projectId) {
+        startTransition(() => {
+          void upsertProjectUserPreferencesAction(projectId, { list_filters: nextFilters });
+        });
+        return;
+      }
+
+      try {
+        localStorage.setItem(USER_LIST_FILTERS_KEY, JSON.stringify(nextFilters));
+      } catch {
+        // ignore localStorage errors (quota, private browsing)
+      }
+    },
+    [projectId, startTransition]
+  );
+
   const selectedStatusesSet = useMemo(() => new Set(selectedStatuses), [selectedStatuses]);
   const areAllStatusesSelected = uniqueStatuses.every(status => selectedStatusesSet.has(status));
   const statusFilterLabel = useMemo(() => {
+    if (selectedStatuses.length === 0) return 'All statuses';
     if (areAllStatusesSelected || uniqueStatuses.length === 0) return 'All statuses';
     if (selectedStatuses.length === 1) return formatStatusLabel(selectedStatuses[0] ?? '');
     if (selectedStatuses.length <= 2) return selectedStatuses.map(formatStatusLabel).join(', ');
@@ -150,20 +223,13 @@ export default function TicketListView({
     ? (projectOptions.find(project => project.id === filterProject)?.name ?? 'Project')
     : null;
 
-  function handleMarkAllRead() {
-    const now = Date.now();
-    for (const ticket of tickets) {
-      if (ticket.waiting_for_response_at) markTicketWaitingOpened(ticket.id, now);
-    }
-    setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
-    setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-  }
-
   function toggleStatus(status: string) {
     setSelectedStatuses(current => {
-      if (current.includes(status))
-        return current.filter(currentStatus => currentStatus !== status);
-      return [...current, status];
+      const next = current.includes(status)
+        ? current.filter(currentStatus => currentStatus !== status)
+        : [...current, status];
+      saveListFilters(next, filterProject);
+      return next;
     });
   }
 
@@ -195,6 +261,23 @@ export default function TicketListView({
   ]);
 
   const hasTickets = tickets.length > 0;
+
+  useEffect(() => {
+    setSelectedStatuses(current => {
+      const next = sanitizeSelectedStatuses(current, uniqueStatuses);
+      if (areStringListsEqual(current, next)) return current;
+      saveListFilters(next, filterProject);
+      return next;
+    });
+  }, [filterProject, saveListFilters, uniqueStatuses]);
+
+  useEffect(() => {
+    if (projectId) return;
+    if (filterProject === null) return;
+    if (projectOptions.some(project => project.id === filterProject)) return;
+    saveListFilters(selectedStatuses, null);
+    setFilterProject(null);
+  }, [filterProject, projectId, projectOptions, saveListFilters, selectedStatuses]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -236,7 +319,10 @@ export default function TicketListView({
                   <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => setSelectedStatuses(uniqueStatuses)}
+                    onClick={() => {
+                      setSelectedStatuses(uniqueStatuses);
+                      saveListFilters(uniqueStatuses, filterProject);
+                    }}
                     className="gap-2"
                   >
                     All statuses
@@ -267,14 +353,23 @@ export default function TicketListView({
                   <DropdownMenuContent align="start" className="w-48">
                     <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setFilterProject(null)} className="gap-2">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setFilterProject(null);
+                        saveListFilters(selectedStatuses, null);
+                      }}
+                      className="gap-2"
+                    >
                       All projects
                       {filterProject === null && <Check className="ml-auto h-4 w-4" />}
                     </DropdownMenuItem>
                     {projectOptions.map(p => (
                       <DropdownMenuItem
                         key={p.id}
-                        onClick={() => setFilterProject(p.id)}
+                        onClick={() => {
+                          setFilterProject(p.id);
+                          saveListFilters(selectedStatuses, p.id);
+                        }}
                         className="gap-2"
                       >
                         {p.color && (
