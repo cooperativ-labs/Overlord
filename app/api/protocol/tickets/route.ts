@@ -4,6 +4,7 @@ import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -36,12 +37,14 @@ export async function POST(request: Request) {
       objective,
       priority,
       projectId,
+      workingDirectory,
       title
     } = parsed.data;
 
     const supabase = createServiceRoleClient();
 
-    // Resolve project_id — use provided projectId or fall back to first project in org.
+    // Resolve project_id — use provided projectId, then try workingDirectory,
+    // then fall back to first project in org.
     // Ticket organization_id follows the selected project so the CLI can treat
     // the project choice as the source of truth.
     let resolvedProjectId: string | null = projectId ?? null;
@@ -56,6 +59,18 @@ export async function POST(request: Request) {
 
       resolvedProjectId = project?.id ?? null;
       resolvedOrganizationId = project?.organization_id ?? null;
+    }
+
+    if (!resolvedProjectId && workingDirectory) {
+      const matched = await resolveProjectByWorkingDirectory(
+        supabase,
+        organizationId,
+        workingDirectory
+      );
+      if (matched) {
+        resolvedProjectId = matched.id;
+        resolvedOrganizationId = matched.organization_id;
+      }
     }
 
     if (!resolvedProjectId) {

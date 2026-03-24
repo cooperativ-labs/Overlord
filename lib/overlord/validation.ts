@@ -149,7 +149,8 @@ export const createStandaloneTicketSchema = z.object({
   acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
-  projectId: z.string().optional()
+  projectId: z.string().optional(),
+  workingDirectory: z.string().trim().max(1024).optional()
 });
 
 export const createFollowUpTicketSchema = z.object({
@@ -185,12 +186,18 @@ export const spawnSchema = z.object({
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
+  workingDirectory: z.string().trim().max(1024).optional(),
   delegate: z.string().trim().max(120).optional(),
   parentSessionKey: z.string().uuid().optional(),
   parentTicketId: z.string().optional(),
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
   metadata: z.record(z.string(), z.unknown()).optional().default({})
+});
+
+/** discover-project: resolve a project from working directory */
+export const discoverProjectSchema = z.object({
+  workingDirectory: z.string().trim().min(1).max(1024)
 });
 
 export const artifactPrepareUploadSchema = z.object({

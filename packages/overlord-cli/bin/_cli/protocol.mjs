@@ -844,6 +844,32 @@ async function protocolArtifactUploadFile(args) {
 }
 
 // ---------------------------------------------------------------------------
+// discover-project (resolve project from working directory)
+// ---------------------------------------------------------------------------
+
+async function protocolDiscoverProject(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const workingDirectory = String(flags['working-directory'] ?? process.cwd());
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/discover-project',
+    { workingDirectory },
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+
+  if (data.project?.id) {
+    process.stderr.write(`\nPROJECT_ID=${data.project.id}\n`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // connect (lightweight session, no context returned)
 // ---------------------------------------------------------------------------
 
@@ -910,6 +936,10 @@ async function protocolSpawn(args) {
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
+  // When --project-id is not provided, auto-send cwd as workingDirectory
+  // so the server can resolve the project from the local_working_directory setting.
+  const workingDirectory = flags['working-directory'] ?? (!flags['project-id'] ? process.cwd() : undefined);
+
   const body = {
     objective,
     agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
@@ -918,6 +948,7 @@ async function protocolSpawn(args) {
     ...(flags.title ? { title: String(flags.title) } : {}),
     ...(flags.priority ? { priority: String(flags.priority) } : {}),
     ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
+    ...(workingDirectory ? { workingDirectory: String(workingDirectory) } : {}),
     ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
@@ -959,7 +990,19 @@ Use this for agent workflow on a ticket: create one with \`ovld protocol spawn\`
 attach with \`ovld protocol attach --ticket-id <id>\`, then begin executing with
 \`ovld protocol update --phase execute\`.
 
+Project discovery:
+  When spawning or creating tickets, the CLI automatically resolves the correct
+  project by matching your current working directory against each project's
+  configured "Local working directory" (set in Project Settings in the Overlord UI).
+  You can also discover the project explicitly:
+
+    ovld protocol discover-project
+    ovld protocol discover-project --working-directory /path/to/repo
+
+  Use --project-id to override automatic resolution on spawn or ticket creation.
+
 Subcommands:
+  discover-project          Resolve a project from the current working directory
   attach                    Start a ticket session and return full working context
   connect                   Start a lightweight session without full context
   load-context              Read ticket context without creating a session
@@ -987,6 +1030,18 @@ Common flags:
   --session-key <key>         Session key returned by attach/connect/spawn
   --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
   --method <connectionMethod> Connection method sent to Overlord (default: cli)
+
+discover-project:
+  Purpose:
+    Resolve the Overlord project that corresponds to the current (or given) working directory.
+    Uses each project's "Local working directory" setting for matching.
+  Optional:
+    --working-directory <path>  Directory to match (default: current working directory)
+  Returns:
+    Project JSON with id, name, organizationId. Prints PROJECT_ID=<id> on stderr.
+  Notes:
+    Set the local working directory for a project in the Overlord UI under Project Settings.
+    When no match is found, returns a 404 with a hint.
 
 attach:
   Purpose:
@@ -1102,13 +1157,16 @@ deliver:
 
 spawn:
   Purpose:
-    Create a follow-up ticket and attach to it in one call
+    Create a follow-up ticket and attach to it in one call.
+    When --project-id is omitted, automatically resolves the project from the
+    current working directory (matching against each project's local_working_directory).
   Required:
     --objective <text>
   Optional:
     --title <text>
     --priority <level>        low | medium | high | urgent
-    --project-id <id>
+    --project-id <id>         Explicit project; skips working-directory resolution
+    --working-directory <path> Override cwd for project resolution (default: cwd)
     --acceptance-criteria <text>
     --available-tools <text>
     --execution-target <t>    agent | human
@@ -1165,6 +1223,9 @@ artifact-upload-file:
     --metadata-json <json>
 
 Examples:
+  ovld protocol discover-project
+  ovld protocol discover-project --working-directory /path/to/repo
+  ovld protocol spawn --objective "Implement feature X"   # auto-resolves project from cwd
   ovld protocol attach --ticket-id abc-123
   ovld protocol attach --ticket-id abc-123 --external-session-id null
   ovld protocol connect --ticket-id abc-123
@@ -1188,6 +1249,7 @@ Examples:
     return;
   }
 
+  if (subcommand === 'discover-project') { await protocolDiscoverProject(args); return; }
   if (subcommand === 'attach') { await protocolAttach(args); return; }
   if (subcommand === 'connect') { await protocolConnect(args); return; }
   if (subcommand === 'load-context') { await protocolLoadContext(args); return; }

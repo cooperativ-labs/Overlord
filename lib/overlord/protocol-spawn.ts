@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
+import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
 import type { Database, Json } from '@/types/database.types';
 
@@ -17,6 +18,7 @@ export type SpawnParams = {
   executionTarget: 'agent' | 'human';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   projectId?: string;
+  workingDirectory?: string;
   delegate?: string;
   parentSessionKey?: string;
   parentTicketId?: string;
@@ -43,6 +45,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     executionTarget,
     priority,
     projectId,
+    workingDirectory,
     delegate,
     parentSessionKey,
     parentTicketId,
@@ -53,8 +56,18 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     userId
   } = params;
 
-  // Resolve project — use provided or fall back to first in org
+  // Resolve project — use provided projectId, then try workingDirectory, then fall back to first in org
   let resolvedProjectId: string | undefined = projectId;
+
+  if (!resolvedProjectId && workingDirectory) {
+    const matched = await resolveProjectByWorkingDirectory(
+      supabase,
+      organizationId,
+      workingDirectory
+    );
+    resolvedProjectId = matched?.id;
+  }
+
   if (!resolvedProjectId) {
     const { data: project } = await supabase
       .from('projects')

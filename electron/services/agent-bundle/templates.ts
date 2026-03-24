@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.5.0';
+export const BUNDLE_VERSION = '1.6.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -84,6 +84,24 @@ ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
 \`\`\`
 
 Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
+
+## Project Discovery & Ticket Spawning
+
+When creating tickets from within a repository, \`spawn\` automatically resolves the
+correct project by matching your current working directory against each project's
+configured "Local working directory". No \`--project-id\` flag is needed:
+
+\`\`\`bash
+ovld protocol spawn --objective "Implement feature X" --priority medium
+\`\`\`
+
+To discover which project maps to the current directory:
+
+\`\`\`bash
+ovld protocol discover-project
+\`\`\`
+
+You can override with \`--project-id\` or \`--working-directory\` if needed.
 
 ## Context & Artifacts
 
@@ -164,6 +182,24 @@ ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
+## Project Discovery & Ticket Spawning
+
+When creating tickets from within a repository, \`spawn\` automatically resolves the
+correct project by matching your current working directory against each project's
+configured "Local working directory". No \`--project-id\` flag is needed:
+
+\`\`\`bash
+ovld protocol spawn --objective "Implement feature X" --priority medium
+\`\`\`
+
+To discover which project maps to the current directory:
+
+\`\`\`bash
+ovld protocol discover-project
+\`\`\`
+
+You can override with \`--project-id\` or \`--working-directory\` if needed.
+
 ## Context & Artifacts
 
 \`\`\`bash
@@ -229,6 +265,24 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
   --summary "Recorded rationale details for the latest code changes." --phase execute \\
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
+
+## Project Discovery & Ticket Spawning
+
+When creating tickets from within a repository, \`spawn\` automatically resolves the
+correct project by matching your current working directory against each project's
+configured "Local working directory". No \`--project-id\` flag is needed:
+
+\`\`\`bash
+ovld protocol spawn --objective "Implement feature X" --priority medium
+\`\`\`
+
+To discover which project maps to the current directory:
+
+\`\`\`bash
+ovld protocol discover-project
+\`\`\`
+
+You can override with \`--project-id\` or \`--working-directory\` if needed.
 
 ## Context & Artifacts
 

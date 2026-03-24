@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.10.0] - 2026-03-24:12:00
+
+### Added
+- Add `ovld protocol discover-project` and a matching protocol endpoint so agents can resolve the correct project from a working directory.
+
+### Fixed
+- Automatically resolve spawned tickets and ticket-creation requests against the current working directory when `--project-id` is omitted, so repository-scoped work lands in the intended project by default.
+
+### Changed
+- Extend protocol spawn and ticket creation payloads with `workingDirectory`, letting the server match against each project's configured local working directory before falling back to the first project.
+- Update the CLI help and agent bundle guidance to explain the new project-discovery workflow and the `--working-directory` override.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `2.10.0` and the agent bundle version to `1.6.0`.
+
 ## [2.9.0] - 2026-03-24:11:33
 
 ### Added
