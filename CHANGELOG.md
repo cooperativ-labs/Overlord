@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.9.0] - 2026-03-24:11:33
+
+### Added
+- Upgrade CLI login to a browser-based OAuth PKCE flow with a loopback callback listener, replacing the older device-code approval path.
+
+### Fixed
+- Preserve loaded and freshly refreshed Kanban tickets when the board receives new data, so board state no longer resets while users page or refresh.
+
+### Changed
+- Rework the Kanban board controls into a dedicated toolbar and keep project filtering, column visibility, and project settings in one place.
+- Simplify current-changes file-change presentation by removing draft-specific badges and ordering entries strictly by newest timestamp.
+- Remove transcript-ingestion plumbing from protocol updates and deliveries, along with the related transcript debug surface in the ticket panel.
+
+### Security
+- Tighten CLI authentication with PKCE, explicit callback validation, and clearer failure handling when the agent token is invalid or revoked.
+
+### Removed
+- Remove the transcript-ingest API, CLI helper, and transcript-ingestion validation schema now that the pipeline is retired.
+
+### Chore
+- Bump the package version to `2.9.0`.
+
 ## [2.8.0] - 2026-03-23:17:20
 
 ### Added

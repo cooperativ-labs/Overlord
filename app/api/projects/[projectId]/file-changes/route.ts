@@ -83,35 +83,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: fileChangeError.message }, { status: 500 });
     }
 
-    let draftQuery = supabase
-      .from('change_rationale_drafts')
-      .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,status,created_at,updated_at,ticket_id,session_id,source_event_hashes,tickets!inner(id,title,status,objective,recent_agent,project_id)'
-      )
-      .eq('tickets.project_id', projectId)
-      .eq('status', 'draft')
-      .order('updated_at', { ascending: false });
-
-    if (filePaths.length > 0) {
-      draftQuery = draftQuery.in('file_path', filePaths);
-    }
-
-    if (excludedTicketIds.length > 0) {
-      draftQuery = draftQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
-    }
-
-    const { data: drafts, error: draftError } = await draftQuery;
-    if (draftError) {
-      return NextResponse.json({ error: draftError.message }, { status: 500 });
-    }
-
     const eventIds = [...new Set((fileChanges ?? []).map(row => row.event_id))];
-    const sessionIds = [
-      ...new Set([
-        ...(fileChanges ?? []).map(row => row.session_id),
-        ...(drafts ?? []).map(row => row.session_id)
-      ])
-    ];
+    const sessionIds = [...new Set((fileChanges ?? []).map(row => row.session_id))];
 
     const [eventsResult, sessionsResult] = await Promise.all([
       eventIds.length
@@ -150,42 +123,18 @@ export async function GET(request: Request, { params }: RouteContext) {
           change_kind: fileChange.change_kind,
           confidence: fileChange.confidence,
           created_at: fileChange.created_at,
-          draft_status: null,
           event: eventsById.get(fileChange.event_id) ?? null,
           file_name: fileChange.file_name,
           file_path: fileChange.file_path,
           hunks: fileChange.hunks,
           id: fileChange.id,
           impact: fileChange.impact,
-          is_draft: false,
           label: fileChange.label,
           session: sessionsById.get(fileChange.session_id) ?? null,
-          source_event_hashes: [],
           summary: fileChange.summary,
           ticket: fileChange.tickets ?? null,
           updated_at: fileChange.updated_at,
           why: fileChange.why
-        })),
-        ...(drafts ?? []).map(draft => ({
-          attribution_source: draft.attribution_source,
-          change_kind: draft.change_kind,
-          confidence: draft.confidence,
-          created_at: draft.created_at,
-          draft_status: draft.status,
-          event: null,
-          file_name: draft.file_name,
-          file_path: draft.file_path,
-          hunks: draft.hunks,
-          id: draft.id,
-          impact: draft.impact,
-          is_draft: true,
-          label: draft.label,
-          session: sessionsById.get(draft.session_id) ?? null,
-          source_event_hashes: draft.source_event_hashes,
-          summary: draft.summary,
-          ticket: draft.tickets ?? null,
-          updated_at: draft.updated_at,
-          why: draft.why
         }))
       ]
     });

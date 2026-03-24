@@ -6,7 +6,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
-import { prepareTranscriptIngestion } from './transcript-ingestion.mjs';
 
 /**
  * Parse simple CLI flags: --key value or --key=value
@@ -438,28 +437,6 @@ async function protocolUpdate(args) {
   const timeoutMs = resolveTimeout(flags);
   const changeRationales = await resolveChangeRationales(flags);
   const externalSessionId = resolveExternalSessionId(flags);
-  const agentIdentifier = String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code');
-  const transcriptIngestion = prepareTranscriptIngestion({
-    agentIdentifier,
-    apiPost,
-    changeRationales,
-    externalSessionId,
-    localSecret,
-    platformUrl,
-    sessionKey,
-    ticketId,
-    token: agentToken
-  });
-
-  if (transcriptIngestion) {
-    try {
-      await transcriptIngestion.ingest();
-    } catch (error) {
-      process.stderr.write(
-        `[protocol] transcript-ingest skipped: ${error instanceof Error ? error.message : String(error)}\n`
-      );
-    }
-  }
 
   const body = {
     sessionKey,
@@ -680,29 +657,6 @@ async function protocolDeliver(args) {
 
   const changeRationales = deliverPayload?.changeRationales ?? await resolveChangeRationales(flags);
   validateDeliverFileChanges(flags, changeRationales);
-  const externalSessionId = resolveExternalSessionId(flags);
-  const agentIdentifier = String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code');
-  const transcriptIngestion = prepareTranscriptIngestion({
-    agentIdentifier,
-    apiPost,
-    changeRationales,
-    externalSessionId,
-    localSecret,
-    platformUrl,
-    sessionKey,
-    ticketId,
-    token: agentToken
-  });
-
-  if (transcriptIngestion) {
-    try {
-      await transcriptIngestion.ingest();
-    } catch (error) {
-      process.stderr.write(
-        `[protocol] transcript-ingest skipped: ${error instanceof Error ? error.message : String(error)}\n`
-      );
-    }
-  }
 
   const body = {
     sessionKey,
@@ -1001,9 +955,9 @@ export async function runProtocolCommand(subcommand, args) {
   if (!subcommand || subcommand === 'help' || subcommand === '--help') {
     console.log(`ovld protocol <subcommand> [flags]
 
-Agent-only workflow commands for talking to Overlord from a local runtime.
-Use these after a human or launcher has already given you OVERLORD_URL, AGENT_TOKEN,
-and usually TICKET_ID. Typical lifecycle: attach -> update(s) -> ask or deliver.
+Use this for agent workflow on a ticket: create one with \`ovld protocol spawn\`,
+attach with \`ovld protocol attach --ticket-id <id>\`, then begin executing with
+\`ovld protocol update --phase execute\`.
 
 Subcommands:
   attach                    Start a ticket session and return full working context
@@ -1020,12 +974,6 @@ Subcommands:
   artifact-finalize-upload  Finalize an uploaded artifact row after storage upload
   artifact-download-url     Get a signed download URL for an existing artifact
   artifact-upload-file      Prepare, upload, and finalize a local file in one command
-
-Lifecycle:
-  1. attach first to get session.sessionKey
-  2. use update after meaningful steps
-  3. use ask if blocked by a human and stop working after calling it
-  4. use deliver last, usually with changeRationales
 
 Environment fallback:
   --session-key <- SESSION_KEY

@@ -12,20 +12,10 @@ import {
   useSensors
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { Check, Columns3, Eye, EyeOff, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import {
   createTicketInColumnAction,
@@ -49,9 +39,9 @@ import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
+import KanbanBoardToolbar from './KanbanBoardToolbar';
 import KanbanCard, { type Ticket } from './KanbanCard';
 import KanbanColumn from './KanbanColumn';
-import TicketsViewControls from './TicketsViewControls';
 
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
@@ -99,6 +89,45 @@ function toWaitingByTicket(tickets: Ticket[]): Record<string, string> {
     }
     return acc;
   }, {});
+}
+
+function mergeTicketsById(current: Ticket[], incoming: Ticket[]): Ticket[] {
+  if (incoming.length === 0) return current;
+
+  const incomingById = new Map(incoming.map(ticket => [ticket.id, ticket]));
+  const seen = new Set<string>();
+  const merged = current.map(ticket => {
+    const next = incomingById.get(ticket.id);
+    if (!next) return ticket;
+    seen.add(ticket.id);
+    return { ...ticket, ...next };
+  });
+
+  for (const ticket of incoming) {
+    if (!seen.has(ticket.id)) {
+      merged.push(ticket);
+    }
+  }
+
+  return merged;
+}
+
+function mergeWaitingByTicket(
+  current: Record<string, string>,
+  incoming: Ticket[]
+): Record<string, string> {
+  if (incoming.length === 0) return current;
+
+  const next = { ...current };
+  for (const ticket of incoming) {
+    if (ticket.waiting_for_response_at) {
+      next[ticket.id] = ticket.waiting_for_response_at;
+    } else {
+      delete next[ticket.id];
+    }
+  }
+
+  return next;
 }
 
 function getTopBoardPositionForStatus(
@@ -162,7 +191,6 @@ export default function KanbanBoard({
   // Single source of truth for ticket data after mount.
   // Seeded from server props, updated directly by real-time events, polling, and user actions.
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
-  console.log(tickets);
   // Tracks the column a card is being dragged into, for immediate synchronous
   // re-render of SortableContext items (shows the insertion gap in the target column).
   const [activeDragStatus, setActiveDragStatus] = useState<{
@@ -177,6 +205,8 @@ export default function KanbanBoard({
   const openTicketIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollKey = `kanban-scroll:${projectId ?? organizationId ?? 'default'}`;
+  const boardScopeKey = `${organizationId ?? 'all'}:${projectId ?? 'all'}`;
+  const previousBoardScopeKeyRef = useRef(boardScopeKey);
 
   useEffect(() => {
     waitingByTicketRef.current = waitingByTicket;
@@ -184,9 +214,16 @@ export default function KanbanBoard({
 
   // Reconcile when server delivers new data (navigation, router.refresh()).
   useEffect(() => {
-    setTickets(initialTickets);
-    setWaitingByTicket(toWaitingByTicket(initialTickets));
-  }, [initialTickets]);
+    if (previousBoardScopeKeyRef.current !== boardScopeKey) {
+      previousBoardScopeKeyRef.current = boardScopeKey;
+      setTickets(initialTickets);
+      setWaitingByTicket(toWaitingByTicket(initialTickets));
+      return;
+    }
+
+    setTickets(previous => mergeTicketsById(previous, initialTickets));
+    setWaitingByTicket(previous => mergeWaitingByTicket(previous, initialTickets));
+  }, [boardScopeKey, initialTickets]);
 
   // Restore x-scroll position after remount (e.g. when opening a ticket reloads the board)
   useEffect(() => {
@@ -241,7 +278,6 @@ export default function KanbanBoard({
   const [columnLoadMoreStates, setColumnLoadMoreStates] = useState<
     Map<string, ColumnLoadMoreState>
   >(() => new Map());
-  const [extraTickets, setExtraTickets] = useState<Ticket[]>([]);
 
   // Apply the in-flight drag column override so the target column's SortableContext
   // includes the dragged card immediately (no startTransition deferral).
@@ -277,7 +313,7 @@ export default function KanbanBoard({
   const projectOptions = useMemo(() => {
     if (projectId) return [];
     const seen = new Map<string, { id: string; name: string; color: string | null }>();
-    for (const ticket of initialTickets) {
+    for (const ticket of tickets) {
       if (!seen.has(ticket.project_id)) {
         seen.set(ticket.project_id, {
           id: ticket.project_id,
@@ -287,17 +323,14 @@ export default function KanbanBoard({
       }
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [initialTickets, projectId]);
-
-  const allTickets = useMemo(
-    () => [...ticketsWithIndicators, ...extraTickets],
-    [ticketsWithIndicators, extraTickets]
-  );
+  }, [projectId, tickets]);
 
   const displayedTickets = useMemo(
     () =>
-      filteredProjectId ? allTickets.filter(t => t.project_id === filteredProjectId) : allTickets,
-    [allTickets, filteredProjectId]
+      filteredProjectId
+        ? ticketsWithIndicators.filter(t => t.project_id === filteredProjectId)
+        : ticketsWithIndicators,
+    [filteredProjectId, ticketsWithIndicators]
   );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -316,51 +349,53 @@ export default function KanbanBoard({
     return counts;
   }, [initialTickets]);
 
-  function groupTickets(ticketList: Ticket[]) {
-    const groups = new Map<string, Ticket[]>();
-    const uncategorized: Ticket[] = [];
-    const getUpdatedAtMs = (ticket: Ticket) => {
-      const value = ticket.updated_at ? Date.parse(ticket.updated_at) : Number.NaN;
-      return Number.isNaN(value) ? -1 : value;
-    };
+  const groupTickets = useCallback(
+    (ticketList: Ticket[]) => {
+      const groups = new Map<string, Ticket[]>();
+      const uncategorized: Ticket[] = [];
+      const getUpdatedAtMs = (ticket: Ticket) => {
+        const value = ticket.updated_at ? Date.parse(ticket.updated_at) : Number.NaN;
+        return Number.isNaN(value) ? -1 : value;
+      };
 
-    for (const col of sortedColumns) {
-      groups.set(col.id, []);
-    }
-
-    for (const ticket of ticketList) {
-      if (groups.has(ticket.status)) {
-        groups.get(ticket.status)!.push(ticket);
-      } else {
-        uncategorized.push(ticket);
+      for (const col of sortedColumns) {
+        groups.set(col.id, []);
       }
-    }
 
-    for (const [slug, colTickets] of groups) {
-      if (!visibleSlugs.has(slug)) {
-        continue;
+      for (const ticket of ticketList) {
+        if (groups.has(ticket.status)) {
+          groups.get(ticket.status)!.push(ticket);
+        } else {
+          uncategorized.push(ticket);
+        }
       }
-      const isCompleteColumn = columnById.get(slug)?.statusType === 'complete';
-      if (isCompleteColumn) {
-        colTickets.sort((a, b) => {
-          const updatedAtDiff = getUpdatedAtMs(b) - getUpdatedAtMs(a);
-          if (updatedAtDiff !== 0) return updatedAtDiff;
-          return a.board_position - b.board_position;
-        });
-      } else {
-        colTickets.sort((a, b) => a.board_position - b.board_position);
+
+      for (const [slug, colTickets] of groups) {
+        if (!visibleSlugs.has(slug)) {
+          continue;
+        }
+        const isCompleteColumn = columnById.get(slug)?.statusType === 'complete';
+        if (isCompleteColumn) {
+          colTickets.sort((a, b) => {
+            const updatedAtDiff = getUpdatedAtMs(b) - getUpdatedAtMs(a);
+            if (updatedAtDiff !== 0) return updatedAtDiff;
+            return a.board_position - b.board_position;
+          });
+        } else {
+          colTickets.sort((a, b) => a.board_position - b.board_position);
+        }
       }
-    }
 
-    uncategorized.sort((a, b) => a.board_position - b.board_position);
+      uncategorized.sort((a, b) => a.board_position - b.board_position);
 
-    return { groups, uncategorized };
-  }
+      return { groups, uncategorized };
+    },
+    [columnById, sortedColumns, visibleSlugs]
+  );
 
   const { groups: columnTickets, uncategorized } = useMemo(
     () => groupTickets(displayedTickets),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [displayedTickets, sortedColumns, visibleSlugs]
+    [displayedTickets, groupTickets]
   );
 
   function handleMarkColumnRead(ticketIds: string[]) {
@@ -438,7 +473,8 @@ export default function KanbanBoard({
       const newCutoff =
         loaded.length > 0 ? (loaded[loaded.length - 1].updated_at ?? cutoff) : cutoff;
 
-      setExtraTickets(prev => [...prev, ...(loaded as Ticket[])]);
+      setTickets(prev => mergeTicketsById(prev, loaded as Ticket[]));
+      setWaitingByTicket(prev => mergeWaitingByTicket(prev, loaded as Ticket[]));
       setColumnLoadMoreStates(prev => {
         const next = new Map(prev);
         next.set(columnId, {
@@ -981,97 +1017,18 @@ export default function KanbanBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
-            <div className="flex items-center gap-2">
-              <TicketsViewControls initialView={initialView} projectId={projectId} />
-              {projectOptions.length > 1 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Eye className="h-4 w-4" />
-                      {filteredProjectId
-                        ? (projectOptions.find(p => p.id === filteredProjectId)?.name ?? 'Project')
-                        : 'All Projects'}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-52">
-                    <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setFilteredProjectId(null)} className="gap-2">
-                      All Projects
-                      {filteredProjectId === null && <Check className="ml-auto h-4 w-4" />}
-                    </DropdownMenuItem>
-                    {projectOptions.map(p => (
-                      <DropdownMenuItem
-                        key={p.id}
-                        onClick={() => setFilteredProjectId(p.id)}
-                        className="gap-2"
-                      >
-                        {p.color && (
-                          <span
-                            className="h-2.5 w-2.5 rounded-[2px] border shrink-0"
-                            style={{ backgroundColor: p.color, borderColor: p.color }}
-                          />
-                        )}
-                        <span className="truncate">{p.name}</span>
-                        {filteredProjectId === p.id && <Check className="ml-auto h-4 w-4" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Columns3 className="h-4 w-4" />
-                  Columns
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel>Show columns</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {sortedColumns.map(col => {
-                  const visible = visibleSlugs.has(col.id);
-                  return (
-                    <DropdownMenuItem
-                      key={col.id}
-                      onClick={() => toggleColumnVisibility(col.id)}
-                      className="gap-2"
-                    >
-                      {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      {col.title}
-                    </DropdownMenuItem>
-                  );
-                })}
-                {uncategorized.length > 0 && (
-                  <DropdownMenuItem
-                    onClick={() => toggleColumnVisibility(UNCATEGORIZED_COLUMN_ID)}
-                    className="gap-2"
-                  >
-                    {visibleSlugs.has(UNCATEGORIZED_COLUMN_ID) ? (
-                      <Eye className="h-4 w-4" />
-                    ) : (
-                      <EyeOff className="h-4 w-4" />
-                    )}
-                    Uncategorized
-                  </DropdownMenuItem>
-                )}
-                {projectId && projectSettings ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={projectSettings.openProjectSettings}
-                      className="gap-2"
-                    >
-                      <Settings className="h-4 w-4" />
-                      Column order
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <KanbanBoardToolbar
+            initialView={initialView}
+            projectId={projectId}
+            projectOptions={projectOptions}
+            filteredProjectId={filteredProjectId}
+            onFilterProject={setFilteredProjectId}
+            columns={sortedColumns}
+            visibleSlugs={visibleSlugs}
+            showUncategorized={uncategorized.length > 0}
+            onToggleColumnVisibility={toggleColumnVisibility}
+            onOpenProjectSettings={projectSettings?.openProjectSettings}
+          />
           <div
             ref={scrollContainerRef}
             onScroll={handleScroll}

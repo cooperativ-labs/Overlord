@@ -14,7 +14,6 @@ import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
-import { TranscriptDebugSection } from '@/components/features/TranscriptDebugSection';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
@@ -487,8 +486,6 @@ export async function TicketPanelContent({
                 opencodeResumeCommand={opencodeResume}
               />
             </ErrorBoundary>
-
-            <TranscriptDebugSection ticketId={ticketId} />
           </section>
         </div>
       </div>

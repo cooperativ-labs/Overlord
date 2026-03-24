@@ -55,11 +55,6 @@ export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopo
               <p className="text-xs text-muted-foreground">{match.summary}</p>
             </div>
             <div className="flex items-center gap-2">
-              {match.is_draft ? (
-                <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">
-                  draft
-                </span>
-              ) : null}
               <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {match.confidence}
               </span>

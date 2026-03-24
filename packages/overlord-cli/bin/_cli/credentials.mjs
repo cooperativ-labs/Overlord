@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /* global process, URL */
 
 import fs from 'node:fs';

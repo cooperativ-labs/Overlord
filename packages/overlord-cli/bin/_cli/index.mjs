@@ -21,13 +21,16 @@ Usage:
   ${primaryCommand} auth <subcommand>          Login, logout, or check auth status
   ${primaryCommand} tickets <subcommand>       Create or list tickets
   ${primaryCommand} ticket <subcommand>        Work with a single ticket
-  ${primaryCommand} protocol <subcommand>      Post protocol events (attach, update, deliver, …)
+  ${primaryCommand} protocol <subcommand>      Agent workflow commands
   ${primaryCommand} connect <agent>            Launch an agent on a ticket
   ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
   ${primaryCommand} setup <agent|all>          Install Overlord agent connector
   ${primaryCommand} doctor                     Validate installed agent connectors
   ${primaryCommand} help                       Show this help message
+
+Agents:
+  Use ${primaryCommand} protocol help for ticket lifecycle commands.
 
 Auth:
   ${primaryCommand} auth login               Authorize CLI via browser
@@ -42,16 +45,6 @@ Tickets:
 
 Ticket:
   ${primaryCommand} ticket context <ticketId>
-
-Protocol:
-  ${primaryCommand} protocol attach --ticket-id <id>
-  ${primaryCommand} protocol update --session-key <key> --ticket-id <id> --summary "..."
-  ${primaryCommand} protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json "[...]"
-  ${primaryCommand} protocol decision --session-key <key> --ticket-id <id> --title "..." --rationale "..."
-  ${primaryCommand} protocol ask --session-key <key> --ticket-id <id> --question "..."
-  ${primaryCommand} protocol read-context --session-key <key> --ticket-id <id>
-  ${primaryCommand} protocol write-context --session-key <key> --ticket-id <id> --key k --value v
-  ${primaryCommand} protocol deliver --session-key <key> --ticket-id <id> --summary "..."
 
 Run a subcommand with --help for more detail.
 `);
@@ -105,7 +98,6 @@ export async function runCli({ primaryCommand }) {
     return;
   }
 
-  // Setup / doctor commands
   if (command === 'setup') {
     await runSetupCommand(rest);
     return;
