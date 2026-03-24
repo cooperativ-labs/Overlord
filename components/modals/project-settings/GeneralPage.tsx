@@ -7,10 +7,7 @@ import { ProjectColorSetter } from '@/components/features/projects/ProjectColorS
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import {
-  updateProjectColorAction,
-  updateProjectNameAction
-} from '@/lib/actions/projects';
+import { updateProjectColorAction, updateProjectNameAction } from '@/lib/actions/projects';
 
 type GeneralPageProps = {
   open: boolean;

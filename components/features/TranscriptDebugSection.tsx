@@ -115,14 +115,9 @@ export function TranscriptDebugSection({ ticketId }: { ticketId: string }) {
                 <div key={event.id} className="px-3 py-2 text-xs">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-muted-foreground">
-                      {eventKindIcon[event.event_kind] ?? (
-                        <Zap className="h-3.5 w-3.5" />
-                      )}
+                      {eventKindIcon[event.event_kind] ?? <Zap className="h-3.5 w-3.5" />}
                     </span>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] rounded-full px-1.5 py-0"
-                    >
+                    <Badge variant="outline" className="text-[10px] rounded-full px-1.5 py-0">
                       {event.event_kind}
                     </Badge>
                     {event.tool_name && (
@@ -196,38 +191,38 @@ export function TranscriptDebugSection({ ticketId }: { ticketId: string }) {
                       <span className="text-muted-foreground">{draft.attribution_source}</span>
                     </p>
                   </div>
-                  {Array.isArray(draft.evidence) && (draft.evidence as Array<Record<string, unknown>>).length > 0 && (
-                    <details className="mt-1.5">
-                      <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
-                        Evidence ({(draft.evidence as Array<Record<string, unknown>>).length} entries)
-                      </summary>
-                      <div className="mt-1 space-y-1">
-                        {(draft.evidence as Array<Record<string, string | number | null>>).map(
-                          (ev, i) => (
-                            <div
-                              key={i}
-                              className="rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground"
-                            >
-                              <span className="font-mono">
-                                {ev.tool_name ?? ev.event_kind}
-                              </span>
-                              {ev.summary && (
-                                <span className="ml-1.5">{String(ev.summary).slice(0, 120)}</span>
-                              )}
-                              {ev.score != null && (
-                                <Badge
-                                  variant="outline"
-                                  className="ml-1.5 text-[9px] rounded-full px-1 py-0"
-                                >
-                                  score: {ev.score}
-                                </Badge>
-                              )}
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </details>
-                  )}
+                  {Array.isArray(draft.evidence) &&
+                    (draft.evidence as Array<Record<string, unknown>>).length > 0 && (
+                      <details className="mt-1.5">
+                        <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">
+                          Evidence ({(draft.evidence as Array<Record<string, unknown>>).length}{' '}
+                          entries)
+                        </summary>
+                        <div className="mt-1 space-y-1">
+                          {(draft.evidence as Array<Record<string, string | number | null>>).map(
+                            (ev, i) => (
+                              <div
+                                key={i}
+                                className="rounded bg-muted px-2 py-1 text-[10px] text-muted-foreground"
+                              >
+                                <span className="font-mono">{ev.tool_name ?? ev.event_kind}</span>
+                                {ev.summary && (
+                                  <span className="ml-1.5">{String(ev.summary).slice(0, 120)}</span>
+                                )}
+                                {ev.score !== null && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-1.5 text-[9px] rounded-full px-1 py-0"
+                                  >
+                                    score: {ev.score}
+                                  </Badge>
+                                )}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </details>
+                    )}
                 </div>
               ))}
             </div>

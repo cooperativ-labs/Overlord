@@ -39,9 +39,7 @@ export function WorkflowPage({
   const { api, isElectron } = useElectron();
   const router = useRouter();
   const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
-  const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(
-    initialWorkingDirectory ?? ''
-  );
+  const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [workingDirectorySaveState, setWorkingDirectorySaveState] =
     useState<ButtonLoadingState>('default');
   const [workingDirectoryError, setWorkingDirectoryError] = useState<string | null>(null);
@@ -142,9 +140,7 @@ export function WorkflowPage({
               )}
               onClick={handleChooseDirectory}
               disabled={workingDirectorySaveState === 'loading'}
-              title={
-                hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'
-              }
+              title={hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
             >
               <Folder className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">

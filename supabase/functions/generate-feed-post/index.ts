@@ -314,7 +314,8 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     const feedPostInstructions = sanitizeOptionalInstruction(
-      (projectUserPreferences?.preferences as Record<string, unknown> | null)?.feed_post_instructions
+      (projectUserPreferences?.preferences as Record<string, unknown> | null)
+        ?.feed_post_instructions
     );
 
     // Fetch events for this session (or all recent events for ticket)

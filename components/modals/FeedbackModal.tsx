@@ -4,12 +4,7 @@ import { ImagePlus, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
@@ -76,9 +71,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
 
       setScreenshots(prev =>
         prev.map(s =>
-          s.preview === screenshot.preview
-            ? { ...s, uploading: false, path: result.path }
-            : s
+          s.preview === screenshot.preview ? { ...s, uploading: false, path: result.path } : s
         )
       );
 
