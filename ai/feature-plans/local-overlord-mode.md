@@ -93,7 +93,7 @@ Reasoning:
 - replacing the backend with SQLite would create a parallel product and break parity over time
 - local Postgres is operationally heavier, but far cheaper than rewriting the app around a different storage model
 
-###+ 3. Local artifact storage
+### 3. Local artifact storage
 
 Artifacts currently assume Supabase Storage signed upload URLs. Local mode needs either:
 

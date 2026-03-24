@@ -122,8 +122,6 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
       </p>
       {feedInstructionsError ? (
         <p className="text-xs text-destructive">{feedInstructionsError}</p>
-      ) : feedInstructionsSaveState === 'success' ? (
-        <p className="text-xs text-muted-foreground">Saved</p>
       ) : null}
       <div className="flex items-center gap-2">
         <LoadingButton
