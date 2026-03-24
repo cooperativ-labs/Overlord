@@ -7,7 +7,8 @@ import {
   MoreHorizontal,
   Newspaper,
   Plus,
-  Settings
+  Settings,
+  Shield
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -56,6 +57,7 @@ type AppSidebarUser = {
 };
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  isAdmin: boolean;
   user: AppSidebarUser;
   projects: SidebarProject[];
   organizations: UserOrganization[];
@@ -103,6 +105,7 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
 }
 
 export function AppSidebar({
+  isAdmin,
   user,
   projects,
   organizations,
@@ -143,6 +146,7 @@ export function AppSidebar({
   );
 
   // const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
+  const isAdminActive = pathname === '/admin' || pathname.startsWith('/admin/');
   const isFeedActive = pathname === '/feed' || pathname.startsWith('/feed/');
   const isMyTasksActive = pathname === '/u' || pathname.startsWith('/u/');
 
@@ -218,6 +222,16 @@ export function AppSidebar({
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {isAdmin ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isAdminActive} tooltip="Admin">
+                    <Link href="/admin">
+                      <Shield />
+                      <span>Admin</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

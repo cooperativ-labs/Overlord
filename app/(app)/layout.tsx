@@ -23,6 +23,7 @@ import { getOnboardingState } from '@/lib/actions/onboarding';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
+import { isAdminEmail } from '@/lib/auth/admin';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 import { createClient } from '@/supabase/utils/server';
@@ -141,6 +142,7 @@ export default async function RootLayout({
                               avatar:
                                 user.user_metadata?.picture ?? user.user_metadata?.avatar_url ?? ''
                             }}
+                            isAdmin={isAdminEmail(user.email)}
                             projects={projects}
                             organizations={organizations}
                             selectedOrgId={selectedOrgId}

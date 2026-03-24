@@ -363,6 +363,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      early_access_requests: {
+        Row: {
+          created_at: string;
+          email: string;
+          id: string;
+          name: string;
+          role: string;
+        };
+        Insert: {
+          created_at?: string;
+          email: string;
+          id?: string;
+          name: string;
+          role: string;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          id?: string;
+          name?: string;
+          role?: string;
+        };
+        Relationships: [];
+      };
       feed_posts: {
         Row: {
           agent_type: string | null;
