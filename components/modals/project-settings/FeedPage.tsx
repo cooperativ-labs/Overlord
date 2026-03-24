@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -18,10 +18,12 @@ type FeedPageProps = {
 
 export function FeedPage({ open, projectId }: FeedPageProps) {
   const [feedInstructions, setFeedInstructions] = useState('');
+  const [savedFeedInstructions, setSavedFeedInstructions] = useState('');
   const [feedInstructionsLoading, setFeedInstructionsLoading] = useState(false);
   const [feedInstructionsError, setFeedInstructionsError] = useState<string | null>(null);
   const [feedInstructionsSaveState, setFeedInstructionsSaveState] =
     useState<ButtonLoadingState>('default');
+  const saveInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -38,7 +40,9 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
       try {
         const preferences = await getProjectUserPreferencesAction(projectId);
         if (cancelled) return;
-        setFeedInstructions(preferences.feed_post_instructions ?? '');
+        const instructions = preferences.feed_post_instructions ?? '';
+        setFeedInstructions(instructions);
+        setSavedFeedInstructions(instructions);
       } catch (error) {
         if (cancelled) return;
         setFeedInstructionsError(
@@ -59,22 +63,38 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
   }, [open, projectId]);
 
   async function handleSaveFeedInstructions() {
-    if (feedInstructionsLoading) return;
+    if (feedInstructionsLoading || saveInFlightRef.current) return;
 
+    const trimmedInstructions = feedInstructions.trim();
+    if (trimmedInstructions === savedFeedInstructions) return;
+
+    saveInFlightRef.current = true;
     setFeedInstructionsSaveState('loading');
     setFeedInstructionsError(null);
     try {
       await upsertProjectUserPreferencesAction(projectId, {
-        feed_post_instructions: feedInstructions
+        feed_post_instructions: trimmedInstructions
       });
-      setFeedInstructions(feedInstructions.trim());
+      setFeedInstructions(trimmedInstructions);
+      setSavedFeedInstructions(trimmedInstructions);
       setFeedInstructionsSaveState('success');
     } catch (error) {
       setFeedInstructionsSaveState('error');
       setFeedInstructionsError(
         error instanceof Error ? error.message : 'Failed to save feed settings.'
       );
+    } finally {
+      saveInFlightRef.current = false;
     }
+  }
+
+  function handleBlur() {
+    void handleSaveFeedInstructions();
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Escape') return;
+    event.currentTarget.blur();
   }
 
   return (
@@ -92,6 +112,8 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
         rows={5}
         value={feedInstructions}
         onChange={event => setFeedInstructions(event.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         disabled={feedInstructionsLoading}
       />
       <p className="text-xs text-muted-foreground">
@@ -100,6 +122,8 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
       </p>
       {feedInstructionsError ? (
         <p className="text-xs text-destructive">{feedInstructionsError}</p>
+      ) : feedInstructionsSaveState === 'success' ? (
+        <p className="text-xs text-muted-foreground">Saved</p>
       ) : null}
       <div className="flex items-center gap-2">
         <LoadingButton
@@ -116,7 +140,9 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
         />
         {feedInstructionsLoading ? (
           <p className="text-xs text-muted-foreground">Loading saved feed settings…</p>
-        ) : null}
+        ) : (
+          <p className="text-xs text-muted-foreground">Changes save when this field loses focus.</p>
+        )}
       </div>
     </div>
   );

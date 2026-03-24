@@ -73,7 +73,7 @@ export async function submitFeedbackAction(
 
     await resend.emails.send({
       from: getFromEmail(),
-      to: ['feedback@ovld.ai'],
+      to: ['ovld-feedback@cooperativ.io'],
       replyTo: user.email ?? undefined,
       subject: `Feedback from ${user.email ?? 'Unknown user'}`,
       text: [
