@@ -715,116 +715,98 @@ export function CliPage({ open }: { open: boolean }) {
                 </div>
               </AccordionContent>
             </AccordionItem>
+          </Accordion>
 
-            <AccordionItem value="local-agent-config" className="rounded-md border px-3">
-              <AccordionTrigger className="hover:no-underline">
-                <div className="grid gap-1">
-                  <p className="text-sm font-medium">Local agent configuration</p>
-                  <p className="text-xs text-muted-foreground font-normal">
-                    <AgentNameWithLogo
-                      agent={selectedLocalAgent as BundleAgent}
-                      label={AGENT_LABELS[selectedLocalAgent]}
+          <div className="rounded-md border px-3 py-3 grid gap-4">
+            <p className="text-sm font-medium">Local agent configuration</p>
+            <div className="grid gap-4">
+              <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AGENTS.map(agent => (
+                    <SelectItem key={agent} value={agent}>
+                      <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent]} />
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-foreground">Command flags</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g., --enable-auto-mode"
+                      value={flagInput}
+                      onChange={e => setFlagInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void handleAddFlag();
+                        }
+                      }}
+                      className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
                     />
-                    {(agentFlags[selectedLocalAgent] ?? []).length > 0 ? (
-                      <span className="ml-2">
-                        · {(agentFlags[selectedLocalAgent] ?? []).length} flag
-                        {(agentFlags[selectedLocalAgent] ?? []).length !== 1 ? 's' : ''}
-                      </span>
-                    ) : null}
-                  </p>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid gap-4">
-                  <Select value={selectedLocalAgent} onValueChange={setSelectedLocalAgent}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AGENTS.map(agent => (
-                        <SelectItem key={agent} value={agent}>
-                          <AgentNameWithLogo agent={agent} label={AGENT_LABELS[agent]} />
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-foreground">Command flags</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="e.g., --enable-auto-mode"
-                          value={flagInput}
-                          onChange={e => setFlagInput(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              void handleAddFlag();
-                            }
-                          }}
-                          className="flex-1 rounded border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void handleAddFlag()}
-                          className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                    {(agentFlags[selectedLocalAgent] ?? []).length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap gap-2">
-                          {(agentFlags[selectedLocalAgent] ?? []).map((flag, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
-                            >
-                              <code className="text-xs font-medium">{flag}</code>
-                              <button
-                                type="button"
-                                onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
-                                className="rounded p-0.5 hover:bg-muted-foreground/20"
-                                title="Remove flag"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="space-y-2 rounded-md border bg-muted/30 p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-foreground">Command</p>
-                        <button
-                          type="button"
-                          onClick={() => void handleCopyCommand()}
-                          className="shrink-0 rounded p-1 hover:bg-muted"
-                          title="Copy command"
-                        >
-                          {commandCopied ? (
-                            <Check className="h-3.5 w-3.5 text-green-500" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                          )}
-                        </button>
-                      </div>
-                      <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                        {`ovld restart ${selectedLocalAgent}${
-                          (agentFlags[selectedLocalAgent] ?? []).length > 0
-                            ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                            : ''
-                        }`}
-                      </pre>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddFlag()}
+                      className="rounded border bg-muted px-3 py-2 text-xs font-medium hover:bg-muted/80"
+                    >
+                      Add
+                    </button>
                   </div>
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+                {(agentFlags[selectedLocalAgent] ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {(agentFlags[selectedLocalAgent] ?? []).map((flag, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1"
+                        >
+                          <code className="text-xs font-medium">{flag}</code>
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveFlag(selectedLocalAgent, index)}
+                            className="rounded p-0.5 hover:bg-muted-foreground/20"
+                            title="Remove flag"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">Command</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyCommand()}
+                      className="shrink-0 rounded p-1 hover:bg-muted"
+                      title="Copy command"
+                    >
+                      {commandCopied ? (
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                  <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                    {`ovld restart ${selectedLocalAgent}${
+                      (agentFlags[selectedLocalAgent] ?? []).length > 0
+                        ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                        : ''
+                    }`}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
         </>
       ) : null}
 
@@ -839,7 +821,7 @@ export function CliPage({ open }: { open: boolean }) {
             <code className="rounded bg-muted px-1">/spawn</code>.
           </p>
         </div>
-        <Accordion type="multiple" className="gap-2">
+        <Accordion type="multiple" className="flex flex-col gap-2">
           {AGENT_PLUGIN_GROUPS.map(group => {
             const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
 

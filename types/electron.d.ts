@@ -105,6 +105,7 @@ interface ElectronAPI {
         version: string | null;
         installedVersion: string | null;
         details: string;
+        currentContentHash: string;
       }>
     >;
     getStatus: (agent: 'claude' | 'codex' | 'opencode') => Promise<{
@@ -113,6 +114,7 @@ interface ElectronAPI {
       version: string | null;
       installedVersion: string | null;
       details: string;
+      currentContentHash: string;
     }>;
     install: (agent: 'claude' | 'codex' | 'opencode') => Promise<{
       ok: boolean;

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.12.0] - 2026-03-25:09:35
+
+### Added
+- None.
+
+### Fixed
+- Treat agent bundle template content changes as stale even when the version string is unchanged, so update notifications resurface after prompt edits.
+
+### Changed
+- Simplify the CLI settings modal's local agent configuration into a flatter panel and tighten the agent prompt update notification fingerprinting so dismissals only hide the exact stale bundle state.
+- Keep the home page divider styling aligned with the newer gradient utility.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `2.12.0`.
+
 ## [2.11.0] - 2026-03-25:08:56
 
 ### Added

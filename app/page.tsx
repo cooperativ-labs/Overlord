@@ -218,7 +218,7 @@ export default async function HomePage() {
   return (
     <div className="relative min-h-dvh overflow-y-auto bg-[#020817] text-white">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[42rem] bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(56,189,248,0.12),_transparent_26%),radial-gradient(circle_at_50%_0%,_rgba(15,23,42,0.6),_transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.85),rgba(2,8,23,0))]" />
-      <div className="pointer-events-none absolute inset-x-0 top-24 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-24 h-px bg-linear-to-r from-transparent via-white/12 to-transparent" />
 
       <div className="relative flex flex-col mx-auto max-w-[1800px] px-6 pb-12 sm:px-8 lg:px-12 gap-8">
         {/* Header */}

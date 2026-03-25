@@ -36,13 +36,15 @@ export function useAgentBundleNotifications(
 
       if (staleAgents.length > 0) {
         const names = staleAgents.map(s => AGENT_LABELS[s.agent] ?? s.agent).join(', ');
+        // Include content hashes in dismiss key so new template changes always surface a fresh notification
+        const dismissFingerprint = staleAgents.map(s => `${s.agent}:${s.currentContentHash ?? s.version}`).join('-');
 
         addNotification({
           id: 'agent-bundle-stale',
           type: 'update',
           title: 'Agent prompt update available',
           message: `${names} ${staleAgents.length === 1 ? 'has' : 'have'} a newer prompt version. Update to get the latest workflow instructions.`,
-          dismissKey: `overlord-bundle-stale-dismissed-${staleAgents.map(s => s.version).join('-')}`,
+          dismissKey: `overlord-bundle-stale-dismissed-${dismissFingerprint}`,
           action: onOpenSettings
             ? {
                 label: 'Open CLI settings',

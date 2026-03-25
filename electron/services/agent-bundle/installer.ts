@@ -49,6 +49,8 @@ export type AgentBundleStatus = {
   version: string | null;
   installedVersion: string | null;
   details: string;
+  /** Current content hash — useful for building unique dismiss keys. */
+  currentContentHash: string;
 };
 
 export type InstallResult = {
@@ -123,9 +125,17 @@ function contentHash(content: string): string {
 // Status
 // ---------------------------------------------------------------------------
 
+/** Returns the content hash for the current (bundled) template of a given agent. */
+function currentContentHashForAgent(agent: AgentBundleAgent): string {
+  if (agent === 'claude') return contentHash(CLAUDE_SKILL_CONTENT);
+  if (agent === 'codex') return contentHash(CODEX_AGENTS_SECTION);
+  return contentHash(OPENCODE_AGENTS_SECTION);
+}
+
 export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus {
   const manifest = readManifest();
   const entry = manifest[agent];
+  const hash = currentContentHashForAgent(agent);
 
   if (!entry) {
     // Check if files exist anyway (manual install or pre-manifest)
@@ -141,7 +151,8 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
         status: 'partial',
         version: BUNDLE_VERSION,
         installedVersion: null,
-        details: 'Files found but no manifest entry. Run repair to register.'
+        details: 'Files found but no manifest entry. Run repair to register.',
+        currentContentHash: hash
       };
     }
     return {
@@ -149,7 +160,8 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
       status: 'not_installed',
       version: BUNDLE_VERSION,
       installedVersion: null,
-      details: 'Bundle not installed.'
+      details: 'Bundle not installed.',
+      currentContentHash: hash
     };
   }
 
@@ -159,7 +171,21 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
       status: 'stale',
       version: BUNDLE_VERSION,
       installedVersion: entry.version,
-      details: `Installed v${entry.version}, current is v${BUNDLE_VERSION}.`
+      details: `Installed v${entry.version}, current is v${BUNDLE_VERSION}.`,
+      currentContentHash: hash
+    };
+  }
+
+  // Even if the version matches, check if the template content has changed.
+  // This catches cases where templates are updated without bumping the version string.
+  if (entry.contentHash !== hash) {
+    return {
+      agent,
+      status: 'stale',
+      version: BUNDLE_VERSION,
+      installedVersion: entry.version,
+      details: 'Template content has changed since last install. Update to get the latest.',
+      currentContentHash: hash
     };
   }
 
@@ -171,7 +197,8 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
       status: 'partial',
       version: BUNDLE_VERSION,
       installedVersion: entry.version,
-      details: 'Some managed files are missing. Run repair.'
+      details: 'Some managed files are missing. Run repair.',
+      currentContentHash: hash
     };
   }
 
@@ -180,7 +207,8 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
     status: 'installed',
     version: BUNDLE_VERSION,
     installedVersion: entry.version,
-    details: 'Bundle is up to date.'
+    details: 'Bundle is up to date.',
+    currentContentHash: hash
   };
 }
 
