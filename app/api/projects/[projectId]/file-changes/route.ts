@@ -65,7 +65,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     let fileChangeQuery = supabase
       .from('file_changes')
       .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,title,status,objective,recent_agent,project_id)'
+        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,title,status,recent_agent,project_id)'
       )
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });

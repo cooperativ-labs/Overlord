@@ -62,7 +62,7 @@ export async function getFeedPostsAction(options?: {
       `
       *,
       projects!inner(name, color),
-      tickets!inner(title, objective, ticket_sequence)
+      tickets!inner(title, ticket_sequence)
     `
     )
     .gte('created_at', cutoff.toISOString())
@@ -83,15 +83,41 @@ export async function getFeedPostsAction(options?: {
 
   const rows = (data ?? []) as Record<string, unknown>[];
   const ticketIds = [...new Set(rows.map(row => row.ticket_id).filter(Boolean) as string[])];
+  const latestObjectiveByTicketId = new Map<string, string>();
 
   const filePathsByTicketId = new Map<string, string[]>();
 
   if (ticketIds.length > 0) {
-    const { data: fileChanges, error: fileChangesError } = await supabase
-      .from('file_changes')
-      .select('ticket_id,file_path')
-      .in('ticket_id', ticketIds)
-      .order('created_at', { ascending: false });
+    const [
+      { data: objectives, error: objectivesError },
+      { data: fileChanges, error: fileChangesError }
+    ] = await Promise.all([
+      supabase
+        .from('objectives')
+        .select('ticket_id,objective,created_at')
+        .in('ticket_id', ticketIds)
+        .eq('is_executed', false)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('file_changes')
+        .select('ticket_id,file_path')
+        .in('ticket_id', ticketIds)
+        .order('created_at', { ascending: false })
+    ]);
+
+    if (objectivesError) {
+      console.error('[getFeedPostsAction] objectives error:', objectivesError);
+      Sentry.captureException(objectivesError);
+    } else {
+      for (const row of (objectives ?? []) as Array<{
+        ticket_id: string;
+        objective: string;
+      }>) {
+        if (!latestObjectiveByTicketId.has(row.ticket_id) && row.objective.trim()) {
+          latestObjectiveByTicketId.set(row.ticket_id, row.objective);
+        }
+      }
+    }
 
     if (fileChangesError) {
       console.error('[getFeedPostsAction] file_changes error:', fileChangesError);
@@ -115,7 +141,6 @@ export async function getFeedPostsAction(options?: {
     const projects = row.projects as { name: string; color: string } | null;
     const tickets = row.tickets as {
       title: string | null;
-      objective: string | null;
       ticket_sequence: number | null;
     } | null;
     const storedFilesTouched = Array.isArray(row.files_touched)
@@ -146,7 +171,7 @@ export async function getFeedPostsAction(options?: {
       project_name: projects?.name ?? 'Unknown',
       project_color: projects?.color ?? '#6b7280',
       ticket_title: tickets?.title ?? null,
-      ticket_objective: tickets?.objective ?? null,
+      ticket_objective: latestObjectiveByTicketId.get(row.ticket_id as string) ?? null,
       ticket_sequence: tickets?.ticket_sequence ?? null
     };
   });

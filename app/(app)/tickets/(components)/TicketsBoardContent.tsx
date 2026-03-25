@@ -57,7 +57,7 @@ type TicketsBoardContentProps = {
 type RawTicket = {
   id: string;
   title: string | null;
-  objective: string | null;
+  objective?: string | null;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
@@ -131,7 +131,7 @@ export default async function TicketsBoardContent({
     let query = supabase
       .from('tickets')
       .select(
-        'id,title,objective,execution_target,status,priority,assigned_agent,delegate,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+        'id,title,execution_target,status,priority,assigned_agent,delegate,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
       )
       .eq('status', status.name)
       .order('updated_at', { ascending: false })
@@ -234,6 +234,7 @@ export default async function TicketsBoardContent({
       const isAttached = session?.session_state === 'attached';
       return {
         ...ticket,
+        objective: null,
         project_id: ticket.project_id,
         organization_name: getOrganizationName(organization),
         project_name: p?.name ?? null,

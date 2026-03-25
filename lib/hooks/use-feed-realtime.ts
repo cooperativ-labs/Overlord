@@ -37,9 +37,18 @@ export function useFeedRealtime() {
       // Fetch ticket info
       const { data: ticket } = await supabase
         .from('tickets')
-        .select('title, objective, ticket_sequence')
+        .select('title, ticket_sequence')
         .eq('id', row.ticket_id)
         .single();
+
+      const { data: objective } = await supabase
+        .from('objectives')
+        .select('objective')
+        .eq('ticket_id', row.ticket_id)
+        .eq('is_executed', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       // Fetch file changes
       const { data: fileChanges } = await supabase
@@ -78,7 +87,7 @@ export function useFeedRealtime() {
         project_name: project?.name ?? 'Unknown',
         project_color: project?.color ?? '#6b7280',
         ticket_title: ticket?.title ?? null,
-        ticket_objective: ticket?.objective ?? null,
+        ticket_objective: objective?.objective ?? null,
         ticket_sequence: ticket?.ticket_sequence ?? null
       };
     }

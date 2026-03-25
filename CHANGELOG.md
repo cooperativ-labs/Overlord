@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.11.0] - 2026-03-25:08:56
+
+### Added
+- Add an admin-only submissions dashboard: a new `early_access_requests` table persists every request before notifying via Resend, and the sidebar exposes an `/admin` link for `ADMIN_EMAIL` that lists early access submissions and product feedback pulled via the service role.
+- Add list of executing tickets to the feed page.
+
+### Fixed
+- Remove `objective` from tickets model and updated all ticket creation interfaces to use the `objectives` table.
+- Update early access and feedback notifications to send from `ovld@notifications.cooperativ.io` and to `ovld-access@cooperativ.io` / `ovld-feedback@cooperativ.io` so the messages land in the new inboxes.
+- Add artifact download to agent templates.
+- Improve agent permissions configration so that it loads on app updates
+
+### Changed
+- Deliver/review transitions now invoke the `generate-feed-post` Supabase Edge Function (Gemini 2.5) to synthesize summaries from ticket events, change rationales, human actions, and spawned tickets so the new Feed page stays up to date.
+- Ticket objectives now live in the `objectives` table instead of the `tickets` row: all creation/update APIs, Overlord flows, and CLI handlers write to that table, the legacy column is dropped via migration/seed updates, and the new `/api/tickets/[ticketId]/delete-if-empty` endpoint lets clients purge drafts that never received content.
+
+### Security
+- Restrict access to `early_access_requests` with row-level security that only allows the configured `ADMIN_EMAIL` to select, update, or delete submissions, keeping the backlog private to the admin.
+
 ## [2.10.0] - 2026-03-24:12:00
 
 ### Added
