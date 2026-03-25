@@ -1,12 +1,13 @@
 import { FeedList } from '@/components/features/feed/FeedList';
-import { getFeedPostsAction } from '@/lib/actions/feed';
+import { getExecutingFeedTicketsAction, getFeedPostsAction } from '@/lib/actions/feed';
 import { getEditorSchemeAction } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { getEditorScheme } from '@/lib/env';
 
 export default async function FeedPage() {
-  const [posts, projects, preferredEditorScheme] = await Promise.all([
+  const [posts, executingTickets, projects, preferredEditorScheme] = await Promise.all([
     getFeedPostsAction({ daysBack: 3 }),
+    getExecutingFeedTicketsAction(),
     getProjectsForCurrentUser(),
     getEditorSchemeAction()
   ]);
@@ -21,6 +22,7 @@ export default async function FeedPage() {
   return (
     <FeedList
       posts={posts}
+      executingTickets={executingTickets}
       projects={projectList}
       editorScheme={getEditorScheme(preferredEditorScheme)}
     />

@@ -97,7 +97,7 @@ export function NavHeader() {
                 text={<RefreshCwIcon className="size-4" />}
               />
             </TooltipTrigger>
-            <TooltipContent side="bottom">Hard refresh app</TooltipContent>
+            <TooltipContent side="bottom">Hard refresh app (Cmd+R)</TooltipContent>
           </Tooltip>
         ) : null}
       </div>

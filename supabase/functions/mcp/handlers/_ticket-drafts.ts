@@ -209,7 +209,6 @@ export async function createDraftTicket(
     .insert({
       created_by: ctx.userId,
       execution_target: DEFAULT_EXECUTION_TARGET,
-      objective: draft.description,
       organization_id: project.organization_id,
       priority: draft.priority,
       project_id: project.id,

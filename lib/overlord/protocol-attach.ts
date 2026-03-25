@@ -14,7 +14,7 @@ type ConnectionMethod = (typeof connectionMethods)[number];
  * IMPORTANT: Keep this in sync with supabase/functions/mcp/handlers/attach.ts.
  */
 export const TICKET_AGENT_FIELDS =
-  'id,title,objective,status,priority,assigned_agent,recent_agent,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
+  'id,title,status,priority,assigned_agent,recent_agent,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
 
 export type AttachParams = {
   ticketId: string;
@@ -169,7 +169,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: {
       ...ticket,
-      objective: objectiveExecution.executedObjective ?? ticket.objective
+      objective: objectiveExecution.executedObjective ?? undefined
     },
     recentEvents: recentEvents ?? [],
     history: history ?? [],
@@ -194,7 +194,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       promptContextSections,
       ticket: {
         ...ticket,
-        objective: objectiveExecution.executedObjective ?? ticket.objective
+        objective: objectiveExecution.executedObjective ?? undefined
       }
     }
   } as const;

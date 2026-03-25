@@ -6,18 +6,12 @@ function normalizeObjectiveForTitle(objective: string | null | undefined): strin
 
 /**
  * Returns a display title for a ticket.
- * Uses the explicit title if set, otherwise falls back to the first 60 characters
- * of the objective (description). This lets users skip the title field on creation
- * while still having a readable label on cards and lists.
+ * Uses the explicit title if set, otherwise returns 'Untitled'.
+ * Tickets should always have a title derived from their objective during creation.
  */
-export function getDisplayTitle(ticket: {
-  title?: string | null;
-  objective?: string | null;
-}): string {
+export function getDisplayTitle(ticket: { title?: string | null }): string {
   if (ticket.title?.trim()) return ticket.title.trim();
-  const text = normalizeObjectiveForTitle(ticket.objective);
-  if (!text) return 'Untitled';
-  return text.length > 60 ? text.slice(0, 57) + '…' : text;
+  return 'Untitled';
 }
 
 export function getTicketIdentifier(ticketId: string): string {

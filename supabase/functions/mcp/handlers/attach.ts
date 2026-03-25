@@ -11,7 +11,7 @@ import { buildPromptContext } from './_prompt-context.ts';
  * IMPORTANT: Keep this in sync with lib/overlord/protocol-attach.ts (TICKET_AGENT_FIELDS).
  */
 const TICKET_AGENT_FIELDS =
-  'id,title,objective,status,priority,assigned_agent,recent_agent,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
+  'id,title,status,priority,assigned_agent,recent_agent,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
 
 export async function handleAttach(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {

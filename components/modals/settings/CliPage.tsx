@@ -673,7 +673,7 @@ export function CliPage({ open }: { open: boolean }) {
 
       {isElectron ? (
         <>
-          <Accordion type="multiple" className="grid gap-0">
+          <Accordion type="multiple" className="grid gap-1">
             <AccordionItem value="default-agent" className="rounded-md border px-3">
               <AccordionTrigger className="hover:no-underline">
                 <div className="grid gap-1">
@@ -839,7 +839,7 @@ export function CliPage({ open }: { open: boolean }) {
             <code className="rounded bg-muted px-1">/spawn</code>.
           </p>
         </div>
-        <Accordion type="multiple" className="space-y-2">
+        <Accordion type="multiple" className="gap-2">
           {AGENT_PLUGIN_GROUPS.map(group => {
             const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
 
@@ -1083,30 +1083,6 @@ export function CliPage({ open }: { open: boolean }) {
           <li className="break-words">
             <code className="rounded bg-muted px-1">ovld attach</code> — interactive: search
             tickets, pick agent
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">
-              ovld protocol connect --ticket-id &lt;ticketId&gt;
-            </code>{' '}
-            — connect to an existing ticket without loading full context
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">
-              ovld protocol load-context --ticket-id &lt;ticketId&gt;
-            </code>{' '}
-            — read-only ticket context fetch
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">
-              ovld protocol spawn --objective &quot;...&quot; --execution-target agent
-            </code>{' '}
-            — create and connect to a ticket in one call
-          </li>
-          <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">
-              ovld protocol artifact-upload-file --session-key &lt;key&gt; --ticket-id &lt;id&gt;
-              --file ./spec.pdf --content-type application/pdf
-            </code>
           </li>
         </ul>
         <p className="mt-2 text-muted-foreground">

@@ -256,13 +256,31 @@ function installClaude(): InstallResult {
       return true;
     });
 
+    // Merge permission allow rules for ovld protocol commands
+    const existingPermissions =
+      existingSettings.permissions && typeof existingSettings.permissions === 'object'
+        ? (existingSettings.permissions as Record<string, unknown>)
+        : {};
+    const existingAllow = Array.isArray(existingPermissions.allow)
+      ? existingPermissions.allow.filter((e: unknown): e is string => typeof e === 'string')
+      : [];
+    const requiredPerms = ['Bash(ovld protocol:*)', 'Bash(curl -sS -X POST:*)'];
+    const mergedAllow = Array.from(new Set([...existingAllow, ...requiredPerms]));
+
     const hookAdditions = {
       hooks: {
         PermissionRequest: [...filteredPermHooks, overlordHook]
+      },
+      permissions: {
+        ...existingPermissions,
+        allow: mergedAllow
       }
     };
 
-    const merged = mergeJsonSettings(existingSettings, hookAdditions, ['hooks.PermissionRequest']);
+    const merged = mergeJsonSettings(existingSettings, hookAdditions, [
+      'hooks.PermissionRequest',
+      'permissions.allow'
+    ]);
     writeJsonFile(paths.settingsFile, merged);
 
     // 4. Install Claude slash commands alongside the durable bundle.
@@ -293,8 +311,51 @@ function installClaude(): InstallResult {
 // Install: Codex
 // ---------------------------------------------------------------------------
 
+function mergeCodexRules(existingContent: string): string {
+  const start = '# overlord:permissions:start';
+  const end = '# overlord:permissions:end';
+  const managedBlock = [
+    start,
+    'prefix_rule(',
+    '  pattern = ["npx", "overlord", "protocol"],',
+    '  decision = "allow",',
+    '  justification = "Allow all Overlord protocol commands without prompts.",',
+    ')',
+    '',
+    'prefix_rule(',
+    '  pattern = ["ovld", "protocol"],',
+    '  decision = "allow",',
+    '  justification = "Allow all Overlord protocol commands without prompts.",',
+    ')',
+    '',
+    'prefix_rule(',
+    '  pattern = ["curl", "-sS", "-X", "POST"],',
+    '  decision = "allow",',
+    '  justification = "Allow curl protocol POST commands without prompts.",',
+    ')',
+    end
+  ].join('\n');
+
+  const startIndex = existingContent.indexOf(start);
+  const endIndex = existingContent.indexOf(end);
+
+  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+    const before = existingContent.slice(0, startIndex).trimEnd();
+    const after = existingContent.slice(endIndex + end.length).trimStart();
+    if (!before && !after) return `${managedBlock}\n`;
+    if (!before) return `${managedBlock}\n\n${after}`;
+    if (!after) return `${before}\n\n${managedBlock}\n`;
+    return `${before}\n\n${managedBlock}\n\n${after}`;
+  }
+
+  const trimmed = existingContent.trimEnd();
+  if (!trimmed) return `${managedBlock}\n`;
+  return `${trimmed}\n\n${managedBlock}\n`;
+}
+
 function installCodex(): InstallResult {
   const paths = codexPaths();
+  const rulesFile = path.join(os.homedir(), '.codex', 'rules', 'default.rules');
   const backups: string[] = [];
 
   try {
@@ -307,13 +368,20 @@ function installCodex(): InstallResult {
     const merged = mergeMarkdownSection(existing, CODEX_AGENTS_SECTION);
     writeTextFile(paths.agentsFile, merged);
 
-    // 3. Update manifest
+    // 3. Install permission prefix rules
+    const rulesBackup = backupFile(rulesFile);
+    if (rulesBackup) backups.push(rulesBackup);
+    const existingRules = readTextFile(rulesFile);
+    const mergedRules = mergeCodexRules(existingRules);
+    writeTextFile(rulesFile, mergedRules);
+
+    // 4. Update manifest
     const manifest = readManifest();
     manifest.codex = {
       version: BUNDLE_VERSION,
       contentHash: contentHash(CODEX_AGENTS_SECTION),
       installedAt: new Date().toISOString(),
-      files: [paths.agentsFile]
+      files: [paths.agentsFile, rulesFile]
     };
     writeManifest(manifest);
 

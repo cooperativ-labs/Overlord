@@ -279,7 +279,7 @@ export async function TicketPanelContent({
     objective => objective.is_executed && objective.objective.trim().length > 0
   );
   const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
-  const draftObjectiveValue = draftObjective?.objective ?? ticket.objective ?? '';
+  const draftObjectiveValue = draftObjective?.objective ?? '';
   const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
 
   return (

@@ -31,6 +31,17 @@ export type FeedPost = {
   ticket_sequence: number | null;
 };
 
+export type ExecutingFeedTicket = {
+  id: string;
+  project_id: string;
+  title: string | null;
+  ticket_sequence: number | null;
+  project_name: string;
+  project_color: string;
+  running_agent: string;
+  attached_at: string | null;
+};
+
 export async function getFeedPostsAction(options?: {
   projectId?: string;
   daysBack?: number;
@@ -139,6 +150,104 @@ export async function getFeedPostsAction(options?: {
       ticket_sequence: tickets?.ticket_sequence ?? null
     };
   });
+}
+
+export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTicket[]> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const { data: tickets, error: ticketsError } = await supabase
+    .from('tickets')
+    .select(
+      `
+      id,
+      project_id,
+      title,
+      ticket_sequence,
+      projects!inner(name, color)
+    `
+    )
+    .eq('status', 'execute')
+    .order('updated_at', { ascending: false })
+    .limit(24);
+
+  if (ticketsError) {
+    console.error('[getExecutingFeedTicketsAction] tickets error:', ticketsError);
+    Sentry.captureException(ticketsError);
+    throw new Error(ticketsError.message);
+  }
+
+  const rows = (tickets ?? []) as Array<
+    Record<string, unknown> & {
+      id: string;
+      project_id: string;
+      title: string | null;
+      ticket_sequence: number | null;
+    }
+  >;
+  const ticketIds = rows.map(ticket => ticket.id);
+
+  if (ticketIds.length === 0) return [];
+
+  const { data: sessions, error: sessionsError } = await supabase
+    .from('agent_sessions')
+    .select('ticket_id,session_state,agent_identifier,attached_at')
+    .in('ticket_id', ticketIds)
+    .order('attached_at', { ascending: false });
+
+  if (sessionsError) {
+    console.error('[getExecutingFeedTicketsAction] agent_sessions error:', sessionsError);
+    Sentry.captureException(sessionsError);
+    throw new Error(sessionsError.message);
+  }
+
+  const latestAttachedSessionByTicketId = new Map<
+    string,
+    { agent_identifier: string; attached_at: string | null }
+  >();
+
+  for (const session of (sessions ?? []) as Array<{
+    ticket_id: string;
+    session_state: string;
+    agent_identifier: string;
+    attached_at: string | null;
+  }>) {
+    if (latestAttachedSessionByTicketId.has(session.ticket_id)) continue;
+    if (session.session_state !== 'attached') continue;
+
+    latestAttachedSessionByTicketId.set(session.ticket_id, {
+      agent_identifier: session.agent_identifier,
+      attached_at: session.attached_at
+    });
+  }
+
+  return rows
+    .map(ticket => {
+      const project = ticket.projects as { name: string; color: string } | null;
+      const session = latestAttachedSessionByTicketId.get(ticket.id);
+      if (!session?.agent_identifier) return null;
+
+      return {
+        id: ticket.id,
+        project_id: ticket.project_id,
+        title: ticket.title,
+        ticket_sequence: ticket.ticket_sequence,
+        project_name: project?.name ?? 'Unknown',
+        project_color: project?.color ?? '#6b7280',
+        running_agent: session.agent_identifier,
+        attached_at: session.attached_at
+      };
+    })
+    .filter((ticket): ticket is ExecutingFeedTicket => ticket !== null)
+    .sort((a, b) => {
+      if (!a.attached_at && !b.attached_at) return 0;
+      if (!a.attached_at) return 1;
+      if (!b.attached_at) return -1;
+      return new Date(b.attached_at).getTime() - new Date(a.attached_at).getTime();
+    });
 }
 
 export async function getFeedRetentionDaysAction(): Promise<number> {

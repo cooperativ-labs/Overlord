@@ -192,7 +192,6 @@ async function main() {
       project_id: projectAlphaId,
       created_by: jakeId,
       title: 'Set up CI/CD pipeline',
-      objective: 'Configure GitHub Actions workflows for lint, test, and deploy steps.',
       status: 'draft',
       priority: 'high',
       board_position: 1,
@@ -208,7 +207,6 @@ async function main() {
       project_id: projectAlphaId,
       created_by: jakeId,
       title: 'Design system tokens',
-      objective: 'Define color, spacing, and typography tokens for the Alpha project.',
       status: 'draft',
       priority: 'medium',
       board_position: 2,
@@ -224,7 +222,6 @@ async function main() {
       project_id: projectAlphaId,
       created_by: jakeId,
       title: 'Write API documentation',
-      objective: 'Document all public REST endpoints with examples and error codes.',
       status: 'draft',
       priority: 'low',
       board_position: 3,
@@ -242,7 +239,6 @@ async function main() {
       created_by: jakeId,
       delegate: 'Claude',
       title: 'Integrate analytics SDK',
-      objective: 'Add PostHog analytics to the Beta project and instrument key user flows.',
       status: 'draft',
       priority: 'medium',
       board_position: 1,
@@ -258,7 +254,6 @@ async function main() {
       created_by: jakeId,
       delegate: 'Claude',
       title: 'Audit accessibility issues',
-      objective: 'Run axe-core across all pages and resolve WCAG AA violations.',
       status: 'draft',
       priority: 'high',
       recent_agent: 'Codex',
@@ -273,7 +268,6 @@ async function main() {
       project_id: projectBetaId,
       created_by: jakeId,
       title: 'Migrate legacy data',
-      objective: 'Write a one-time script to migrate records from the old schema to the new one.',
       status: 'draft',
       priority: 'medium',
       board_position: 3,
@@ -283,6 +277,40 @@ async function main() {
       everhour_task_id: null,
       assigned_agent: null,
       delegate: null
+    }
+  ]);
+
+  // Create objectives for each ticket
+  await seed.objectives([
+    {
+      ticket_id: ticketIds[0],
+      objective: 'Configure GitHub Actions workflows for lint, test, and deploy steps.',
+      is_executed: false
+    },
+    {
+      ticket_id: ticketIds[1],
+      objective: 'Define color, spacing, and typography tokens for the Alpha project.',
+      is_executed: false
+    },
+    {
+      ticket_id: ticketIds[2],
+      objective: 'Document all public REST endpoints with examples and error codes.',
+      is_executed: false
+    },
+    {
+      ticket_id: ticketIds[3],
+      objective: 'Add PostHog analytics to the Beta project and instrument key user flows.',
+      is_executed: false
+    },
+    {
+      ticket_id: ticketIds[4],
+      objective: 'Run axe-core across all pages and resolve WCAG AA violations.',
+      is_executed: false
+    },
+    {
+      ticket_id: ticketIds[5],
+      objective: 'Write a one-time script to migrate records from the old schema to the new one.',
+      is_executed: false
     }
   ]);
 

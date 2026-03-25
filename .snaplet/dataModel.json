@@ -370,39 +370,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "agent_transcript_events",
-          "type": "agent_transcript_events",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_transcript_eventsToagent_sessions",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
           "name": "artifacts",
           "type": "artifacts",
           "isRequired": false,
           "kind": "object",
           "relationName": "artifactsToagent_sessions",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "change_rationale_drafts",
-          "type": "change_rationale_drafts",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "change_rationale_draftsToagent_sessions",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -711,378 +683,6 @@
           "name": "agent_tokens_token_key",
           "fields": [
             "token"
-          ],
-          "nullNotDistinct": false
-        }
-      ]
-    },
-    "agent_transcript_events": {
-      "id": "public.agent_transcript_events",
-      "schemaName": "public",
-      "tableName": "agent_transcript_events",
-      "fields": [
-        {
-          "id": "public.agent_transcript_events.id",
-          "name": "id",
-          "columnName": "id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": true,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.ticket_id",
-          "name": "ticket_id",
-          "columnName": "ticket_id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.session_id",
-          "name": "session_id",
-          "columnName": "session_id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.promoted_event_id",
-          "name": "promoted_event_id",
-          "columnName": "promoted_event_id",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.event_hash",
-          "name": "event_hash",
-          "columnName": "event_hash",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.event_source",
-          "name": "event_source",
-          "columnName": "event_source",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.external_session_id",
-          "name": "external_session_id",
-          "columnName": "external_session_id",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.source_path",
-          "name": "source_path",
-          "columnName": "source_path",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.parser_version",
-          "name": "parser_version",
-          "columnName": "parser_version",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.event_time",
-          "name": "event_time",
-          "columnName": "event_time",
-          "type": "timestamptz",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.event_kind",
-          "name": "event_kind",
-          "columnName": "event_kind",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.actor",
-          "name": "actor",
-          "columnName": "actor",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.tool_name",
-          "name": "tool_name",
-          "columnName": "tool_name",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.file_path",
-          "name": "file_path",
-          "columnName": "file_path",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.command_preview",
-          "name": "command_preview",
-          "columnName": "command_preview",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.summary",
-          "name": "summary",
-          "columnName": "summary",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.evidence",
-          "name": "evidence",
-          "columnName": "evidence",
-          "type": "jsonb",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.raw_payload",
-          "name": "raw_payload",
-          "columnName": "raw_payload",
-          "type": "jsonb",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.high_signal",
-          "name": "high_signal",
-          "columnName": "high_signal",
-          "type": "bool",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.created_at",
-          "name": "created_at",
-          "columnName": "created_at",
-          "type": "timestamptz",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_transcript_events.updated_at",
-          "name": "updated_at",
-          "columnName": "updated_at",
-          "type": "timestamptz",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
-          "isRequired": true,
-          "kind": "object",
-          "relationName": "agent_transcript_eventsToagent_sessions",
-          "relationFromFields": [
-            "session_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "ticket_events",
-          "type": "ticket_events",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_transcript_eventsToticket_events",
-          "relationFromFields": [
-            "promoted_event_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "tickets",
-          "type": "tickets",
-          "isRequired": true,
-          "kind": "object",
-          "relationName": "agent_transcript_eventsTotickets",
-          "relationFromFields": [
-            "ticket_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        }
-      ],
-      "uniqueConstraints": [
-        {
-          "name": "agent_transcript_events_pkey",
-          "fields": [
-            "id"
-          ],
-          "nullNotDistinct": false
-        },
-        {
-          "name": "agent_transcript_events_session_hash_key",
-          "fields": [
-            "event_hash",
-            "session_id"
           ],
           "nullNotDistinct": false
         }
@@ -2088,319 +1688,6 @@
       ],
       "uniqueConstraints": []
     },
-    "change_rationale_drafts": {
-      "id": "public.change_rationale_drafts",
-      "schemaName": "public",
-      "tableName": "change_rationale_drafts",
-      "fields": [
-        {
-          "id": "public.change_rationale_drafts.id",
-          "name": "id",
-          "columnName": "id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": true,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.ticket_id",
-          "name": "ticket_id",
-          "columnName": "ticket_id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.session_id",
-          "name": "session_id",
-          "columnName": "session_id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.file_name",
-          "name": "file_name",
-          "columnName": "file_name",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.file_path",
-          "name": "file_path",
-          "columnName": "file_path",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.label",
-          "name": "label",
-          "columnName": "label",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.summary",
-          "name": "summary",
-          "columnName": "summary",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.why",
-          "name": "why",
-          "columnName": "why",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.impact",
-          "name": "impact",
-          "columnName": "impact",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.change_kind",
-          "name": "change_kind",
-          "columnName": "change_kind",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.attribution_source",
-          "name": "attribution_source",
-          "columnName": "attribution_source",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.confidence",
-          "name": "confidence",
-          "columnName": "confidence",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.hunks",
-          "name": "hunks",
-          "columnName": "hunks",
-          "type": "jsonb",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.evidence",
-          "name": "evidence",
-          "columnName": "evidence",
-          "type": "jsonb",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.source_event_hashes",
-          "name": "source_event_hashes",
-          "columnName": "source_event_hashes",
-          "type": "text[]",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.status",
-          "name": "status",
-          "columnName": "status",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.created_at",
-          "name": "created_at",
-          "columnName": "created_at",
-          "type": "timestamptz",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.change_rationale_drafts.updated_at",
-          "name": "updated_at",
-          "columnName": "updated_at",
-          "type": "timestamptz",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "name": "agent_sessions",
-          "type": "agent_sessions",
-          "isRequired": true,
-          "kind": "object",
-          "relationName": "change_rationale_draftsToagent_sessions",
-          "relationFromFields": [
-            "session_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "tickets",
-          "type": "tickets",
-          "isRequired": true,
-          "kind": "object",
-          "relationName": "change_rationale_draftsTotickets",
-          "relationFromFields": [
-            "ticket_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        }
-      ],
-      "uniqueConstraints": [
-        {
-          "name": "change_rationale_drafts_pkey",
-          "fields": [
-            "id"
-          ],
-          "nullNotDistinct": false
-        },
-        {
-          "name": "change_rationale_drafts_session_file_status_key",
-          "fields": [
-            "file_path",
-            "session_id",
-            "status"
-          ],
-          "nullNotDistinct": false
-        }
-      ]
-    },
     "connections": {
       "id": "public.connections",
       "schemaName": "public",
@@ -3068,6 +2355,92 @@
           "name": "device_auth_codes_user_code_key",
           "fields": [
             "user_code"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "early_access_requests": {
+      "id": "public.early_access_requests",
+      "schemaName": "public",
+      "tableName": "early_access_requests",
+      "fields": [
+        {
+          "id": "public.early_access_requests.id",
+          "name": "id",
+          "columnName": "id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.early_access_requests.name",
+          "name": "name",
+          "columnName": "name",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.early_access_requests.email",
+          "name": "email",
+          "columnName": "email",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.early_access_requests.role",
+          "name": "role",
+          "columnName": "role",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.early_access_requests.created_at",
+          "name": "created_at",
+          "columnName": "created_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "early_access_requests_pkey",
+          "fields": [
+            "id"
           ],
           "nullNotDistinct": false
         }
@@ -10121,20 +9494,6 @@
           "hasDefaultValue": false
         },
         {
-          "name": "agent_transcript_events",
-          "type": "agent_transcript_events",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_transcript_eventsToticket_events",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
           "name": "artifacts",
           "type": "artifacts",
           "isRequired": false,
@@ -10361,20 +9720,6 @@
           "id": "public.tickets.title",
           "name": "title",
           "columnName": "title",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.tickets.objective",
-          "name": "objective",
-          "columnName": "objective",
           "type": "text",
           "isRequired": false,
           "kind": "scalar",
@@ -10756,39 +10101,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "agent_transcript_events",
-          "type": "agent_transcript_events",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_transcript_eventsTotickets",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
           "name": "artifacts",
           "type": "artifacts",
           "isRequired": false,
           "kind": "object",
           "relationName": "artifactsTotickets",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "change_rationale_drafts",
-          "type": "change_rationale_drafts",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "change_rationale_draftsTotickets",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,

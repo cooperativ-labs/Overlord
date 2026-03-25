@@ -11,7 +11,8 @@ export function HotkeysPage() {
   const [items, setItems] = useState<HotkeyItem[]>([
     { action: 'Focus ticket search', shortcut: '⌘F' },
     { action: 'Create new ticket', shortcut: '⌘N' },
-    { action: 'Toggle current changes (project pages)', shortcut: '⇧⌘.' }
+    { action: 'Toggle current changes (project pages)', shortcut: '⇧⌘.' },
+    { action: 'Hard refresh app', shortcut: '⌘R (Cmd+R)' }
   ]);
 
   useEffect(() => {
@@ -19,7 +20,11 @@ export function HotkeysPage() {
     setItems([
       { action: 'Focus ticket search', shortcut: isMac ? '⌘F' : 'Ctrl+F' },
       { action: 'Create new ticket', shortcut: isMac ? '⌘N' : 'Ctrl+N' },
-      { action: 'Toggle current changes (project pages)', shortcut: isMac ? '⇧⌘.' : 'Shift+Ctrl+.' }
+      {
+        action: 'Toggle current changes (project pages)',
+        shortcut: isMac ? '⇧⌘.' : 'Shift+Ctrl+.'
+      },
+      { action: 'Hard refresh app', shortcut: isMac ? '⌘R (Cmd+R)' : 'Ctrl+R' }
     ]);
   }, []);
 

@@ -14,7 +14,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     acceptanceCriteria = '',
     availableTools = '',
     executionTarget = 'human',
-    priority = 'medium'
+    priority = 'medium',
+    delegate = null
   } = args;
   const { organizationId, userId } = ctx;
   const resolved = await resolveSession(
@@ -44,8 +45,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       acceptance_criteria: acceptanceCriteria || null,
       available_tools: availableTools,
       created_by: userId,
+      delegate: delegate || null,
       execution_target: executionTarget,
-      objective,
       organization_id: sourceTicket.organization_id,
       priority,
       project_id: sourceTicket.project_id,
@@ -56,6 +57,15 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     .single();
 
   if (createErr || !created) return toolErr(createErr?.message ?? 'Failed to create ticket.');
+
+  // Create objective in the objectives table
+  const { error: objectiveErr } = await supabase.from('objectives').insert({
+    is_executed: false,
+    objective: objective,
+    ticket_id: created.id
+  });
+
+  if (objectiveErr) return toolErr(objectiveErr.message);
 
   const sourceRef = ticketId.slice(-8);
   const createdRef = created.id.slice(-8);

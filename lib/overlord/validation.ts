@@ -150,7 +150,8 @@ export const createStandaloneTicketSchema = z.object({
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
-  workingDirectory: z.string().trim().max(1024).optional()
+  workingDirectory: z.string().trim().max(1024).optional(),
+  delegate: z.string().trim().max(120).optional()
 });
 
 export const createFollowUpTicketSchema = z.object({
@@ -161,7 +162,8 @@ export const createFollowUpTicketSchema = z.object({
   availableTools: z.string().trim().max(20_000).optional().default(''),
   acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('human'),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium')
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  delegate: z.string().trim().max(120).optional()
 });
 
 /** connect: lightweight session creation, no ticket context returned */

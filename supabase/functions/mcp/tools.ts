@@ -479,7 +479,7 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      'Create a follow-up ticket in the same project. Use when blocked by a human-only action.',
+      'Create a follow-up ticket in the same project. Use when blocked by a human-only action. The objective will be stored in the objectives table and associated with the ticket.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -489,11 +489,20 @@ export const TOOLS = [
           description: 'Current ticket UUID (follow-up will be linked to this).'
         },
         title: { type: 'string', description: 'Short title for the new ticket.' },
-        objective: { type: 'string', description: 'What needs to be done.' },
+        objective: {
+          type: 'string',
+          description:
+            'What needs to be done. This will be stored as an objective in the objectives table.'
+        },
         acceptanceCriteria: { type: 'string' },
         availableTools: { type: 'string' },
         executionTarget: { type: 'string', enum: ['agent', 'human'], default: 'human' },
-        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' }
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
+        delegate: {
+          type: 'string',
+          description:
+            'Who is creating this ticket (your agent identifier, e.g. "claude-code"). Always provide this so the ticket tracks its origin.'
+        }
       },
       required: ['sessionKey', 'ticketId', 'objective']
     }

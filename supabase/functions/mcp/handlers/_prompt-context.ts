@@ -3,7 +3,7 @@
 type TicketLike = {
   id: string;
   title: string | null | undefined;
-  objective: string | null;
+  objective?: string | null;
   acceptance_criteria: string | null;
   available_tools: string | null;
   constraints?: string | null;

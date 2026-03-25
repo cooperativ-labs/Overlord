@@ -230,7 +230,7 @@ Respond with a single JSON object:
   "tags": ["array of tags like: bugfix, refactor, new-feature, tradeoff, blocker-resolved, test, docs, config, dependency, performance, action-required"],
   "impact_level": "minor or notable or significant",
   "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}],
-  "human_actions": ["ONLY proactive tasks the human must do — e.g. create an account, set an API key, run a migration, add an env variable, deploy a function, configure a third-party service. Return an empty array if none."],
+  "human_actions": ["ONLY proactive tasks the human must do — e.g. create an account, set an API key, run a migration, add an env variable, deploy a function, repackage or recompile an app, configure a third-party service. Return an empty array if none."],
   "files_touched": ["list/of/files.ts"],
   "tickets_created": [{"id": "uuid", "sequence": 123, "title": "Ticket title"}]
 }

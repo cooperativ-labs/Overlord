@@ -121,7 +121,7 @@ function buildSlimLocalProtocolSection(
 
 ${launchNote}
 
-Use your installed Overlord local workflow instructions. Start by attaching to this ticket.
+Use your installed Overlord local workflow instructions. Before doing anything else, look for and invoke the \`overlord-local\` skill — then attach to this ticket.
 Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
 
 \`\`\`bash
@@ -357,7 +357,7 @@ ${settingsJson}
 **Step 2** — Available MCP tools:
 - \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
 - \`artifact_prepare_upload\` / \`artifact_finalize_upload\` — upload and associate storage artifacts
-- \`artifact_get_download_url\` — signed read URL for storage artifacts
+- \`artifact_get_download_url\` — signed read URL for storage artifacts (CLI: \`artifact-download-url\`)
 - \`update\` — post progress updates
 - \`record_change_rationales\` — persist structured change rationales to the \`file_changes\` table
 - \`ask\` — ask a blocking question

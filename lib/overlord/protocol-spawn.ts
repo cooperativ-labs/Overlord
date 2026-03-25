@@ -94,7 +94,6 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       created_by: userId,
       delegate: delegate || null,
       execution_target: executionTarget,
-      objective,
       organization_id: organizationId,
       priority,
       project_id: resolvedProjectId,

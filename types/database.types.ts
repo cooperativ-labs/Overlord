@@ -951,7 +951,6 @@ export type Database = {
           execution_target: Database['public']['Enums']['ticket_execution_target'];
           id: string;
           is_read: boolean;
-          objective: string | null;
           organization_id: number;
           output_format: string;
           priority: Database['public']['Enums']['ticket_priority'];
@@ -977,7 +976,6 @@ export type Database = {
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;
           is_read?: boolean;
-          objective?: string | null;
           organization_id: number;
           output_format?: string;
           priority?: Database['public']['Enums']['ticket_priority'];
@@ -1003,7 +1001,6 @@ export type Database = {
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;
           is_read?: boolean;
-          objective?: string | null;
           organization_id?: number;
           output_format?: string;
           priority?: Database['public']['Enums']['ticket_priority'];

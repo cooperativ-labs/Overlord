@@ -74,7 +74,7 @@ export async function runLoadContextProtocol(
     data: {
       ticket: {
         ...ticket,
-        objective: draftObjective?.objective ?? ticket.objective
+        objective: draftObjective?.objective ?? undefined
       },
       history: history ?? [],
       artifacts: artifacts ?? [],

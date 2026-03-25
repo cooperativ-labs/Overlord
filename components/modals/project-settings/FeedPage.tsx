@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -10,6 +11,51 @@ import {
   getProjectUserPreferencesAction,
   upsertProjectUserPreferencesAction
 } from '@/lib/actions/project-user-preferences';
+
+const FEED_POST_PARAMETERS = [
+  {
+    name: 'title',
+    type: 'string',
+    description: 'One-line action-oriented summary (max 80 characters)'
+  },
+  {
+    name: 'body',
+    type: 'string',
+    description: 'Concise Markdown summary using bullet points (max 300 words)'
+  },
+  {
+    name: 'tags',
+    type: 'string[]',
+    description: 'Labels like bugfix, refactor, new-feature, tradeoff, action-required, etc.'
+  },
+  {
+    name: 'impact_level',
+    type: '"minor" | "notable" | "significant"',
+    description: 'Severity of the change'
+  },
+  {
+    name: 'tradeoffs',
+    type: 'object[]',
+    description:
+      'Design decisions with decision, alternatives_considered, and rationale fields — surfaced prominently in the feed'
+  },
+  {
+    name: 'human_actions',
+    type: 'string[]',
+    description:
+      'Proactive tasks the human must perform (e.g. set an API key, run a migration, deploy a function) — not testing or review'
+  },
+  {
+    name: 'files_touched',
+    type: 'string[]',
+    description: 'File paths modified during the session'
+  },
+  {
+    name: 'tickets_created',
+    type: 'object[]',
+    description: 'Tickets spawned during the session, each with id, sequence, and title'
+  }
+];
 
 type FeedPageProps = {
   open: boolean;
@@ -120,6 +166,27 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
         The feed generator will append these instructions to the prompt it uses when creating
         project feed posts.
       </p>
+      <div className="grid gap-2 rounded-md border p-3">
+        <p className="text-xs font-medium">Available output parameters</p>
+        <p className="text-xs text-muted-foreground">
+          Reference these in your instructions to target specific parts of the generated post.
+        </p>
+        <div className="grid gap-2">
+          {FEED_POST_PARAMETERS.map(param => (
+            <div key={param.name} className="grid gap-0.5">
+              <div className="flex items-center gap-2">
+                <code className="rounded bg-muted px-1 py-0.5 text-xs font-semibold">
+                  {param.name}
+                </code>
+                <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                  {param.type}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{param.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
       {feedInstructionsError ? (
         <p className="text-xs text-destructive">{feedInstructionsError}</p>
       ) : null}

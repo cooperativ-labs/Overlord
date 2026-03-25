@@ -250,14 +250,12 @@ export async function createTicketInColumnAction(
   const insertPayload: {
     id: string;
     status: string;
-    objective: string | null;
     title: string | null;
     organization_id: number;
     project_id: string;
   } = {
     id: ticketId,
     status,
-    objective: trimmedObjective,
     title: trimmedObjective ? deriveTitleFromObjective(trimmedObjective) : null,
     organization_id: selected.organizationId,
     project_id: selected.projectId
@@ -350,7 +348,6 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     acceptance_criteria: string | null;
     available_tools: string;
     execution_target: Database['public']['Enums']['ticket_execution_target'];
-    objective: string;
     status: string;
     title: string;
     organization_id: number;
@@ -359,7 +356,6 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     acceptance_criteria: parsed.data.acceptanceCriteria || null,
     available_tools: parsed.data.availableTools,
     execution_target: parsed.data.executionTarget,
-    objective: parsed.data.description,
     status: 'draft',
     title: parsed.data.title || deriveTitleFromObjective(parsed.data.description),
     organization_id: selected.organizationId,
@@ -415,7 +411,6 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
       acceptance_criteria: parsed.data.acceptanceCriteria || null,
       available_tools: parsed.data.availableTools,
       execution_target: parsed.data.executionTarget,
-      objective: parsed.data.description,
       title: parsed.data.title || null
     })
     .eq('id', ticketId)
@@ -458,25 +453,39 @@ export async function updateTicketFieldAction(
   await assertTicketAccess(supabase, ticketId);
 
   const normalizedValue = value.trim();
-  const ticketUpdatePayload =
-    field === 'objective'
-      ? { objective: normalizedValue || null }
-      : field === 'available_tools'
-        ? { available_tools: normalizedValue }
-        : { [field]: normalizedValue || null };
-  const { data, error } = await supabase
-    .from('tickets')
-    .update(ticketUpdatePayload)
-    .eq('id', ticketId)
-    .select('organization_id,project_id')
-    .single();
 
-  if (error || !data) {
-    throw new Error(error?.message ?? 'Failed to update ticket.');
-  }
+  let data: { organization_id: number; project_id: string };
 
+  // For objective field, only update the objectives table
   if (field === 'objective') {
     await upsertDraftObjective(supabase, ticketId, normalizedValue);
+    const result = await supabase
+      .from('tickets')
+      .select('organization_id,project_id')
+      .eq('id', ticketId)
+      .single();
+
+    if (result.error || !result.data) {
+      throw new Error(result.error?.message ?? 'Failed to get ticket details.');
+    }
+    data = result.data;
+  } else {
+    // For other fields, update the tickets table
+    const ticketUpdatePayload =
+      field === 'available_tools'
+        ? { available_tools: normalizedValue }
+        : { [field]: normalizedValue || null };
+    const result = await supabase
+      .from('tickets')
+      .update(ticketUpdatePayload)
+      .eq('id', ticketId)
+      .select('organization_id,project_id')
+      .single();
+
+    if (result.error || !result.data) {
+      throw new Error(result.error?.message ?? 'Failed to update ticket.');
+    }
+    data = result.data;
   }
 
   await supabase.from('ticket_events').insert({
@@ -1065,12 +1074,11 @@ ${section('Objective', source.latestObjective)}${section('Acceptance Criteria', 
 }
 
 const TICKET_BOARD_SELECT =
-  'id,title,objective,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+  'id,title,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
 type RawBoardTicket = {
   id: string;
   title: string | null;
-  objective: string | null;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
@@ -1096,7 +1104,6 @@ function mapBoardTicket(raw: RawBoardTicket) {
   return {
     id: raw.id,
     title: raw.title,
-    objective: raw.objective,
     execution_target: raw.execution_target,
     status: raw.status,
     priority: raw.priority,

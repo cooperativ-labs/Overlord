@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     const {
       acceptanceCriteria,
       availableTools,
+      delegate,
       executionTarget,
       objective,
       priority,
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
       .insert({
         acceptance_criteria: acceptanceCriteria || null,
         available_tools: availableTools,
+        delegate: delegate || null,
         execution_target: executionTarget,
         objective,
         organization_id: resolvedOrganizationId,

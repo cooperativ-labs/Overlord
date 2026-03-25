@@ -109,6 +109,7 @@ You can override with \`--project-id\` or \`--working-directory\` if needed.
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 \`\`\`
 
 ## Rules
@@ -206,6 +207,7 @@ You can override with \`--project-id\` or \`--working-directory\` if needed.
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 \`\`\`
 
 ## Rules
@@ -290,6 +292,7 @@ You can override with \`--project-id\` or \`--working-directory\` if needed.
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 \`\`\`
 
 ## Rules
