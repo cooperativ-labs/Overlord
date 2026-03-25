@@ -425,7 +425,7 @@ export async function TicketPanelContent({
                   </div>
                 ) : null}
 
-                <div className="flex items-start gap-1 w-full border rounded-md">
+                <div className="flex items-start gap-1 w-full">
                   <InlineEditField
                     key={draftObjective?.id ?? 'current-objective'}
                     displayClassName="text-base leading-relaxed"

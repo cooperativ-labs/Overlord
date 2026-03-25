@@ -220,16 +220,22 @@ export function InlineEditField({
     'disabled:opacity-50',
     inputClassName
   );
+  const isTextareaVariant = variant === 'textarea';
 
   if (editing) {
     if (multiline) {
       return (
-        <div className="relative w-full">
+        <div
+          className={cn(
+            'relative w-full',
+            isTextareaVariant && 'ring-1 rounded-md ring-muted-foreground/40'
+          )}
+        >
           <div className={cn(baseInputClass, 'resize-none leading-relaxed relative')}>
             <MentionableTextarea
               ref={inputRef as React.Ref<HTMLTextAreaElement>}
               autoFocus
-              className="w-full focus:outline-none border-none"
+              className={cn('w-full focus:outline-none border-none', children && 'pr-3')}
               disabled={pending}
               value={value}
               onValueChange={setValue}
@@ -271,7 +277,6 @@ export function InlineEditField({
   }
 
   const isEmpty = !savedValue;
-  const isTextareaVariant = variant === 'textarea';
 
   return (
     <div
@@ -280,10 +285,10 @@ export function InlineEditField({
         displayClassName,
         isTextareaVariant
           ? [
-              'px-2 py-1',
+              'px-3 py-1 bg-gray-200/40 dark:bg-gray-900/30 rounded-md',
               isEmpty
-                ? 'min-h-[200px] hover:ring-1 hover:ring-muted-foreground/60'
-                : 'hover:ring-1 hover:ring-muted-foreground/60  '
+                ? 'min-h-[100px] ring-1 ring-muted-foreground/40 hover:ring-muted-foreground'
+                : 'hover:ring-1 hover:ring-muted-foreground/60'
             ]
           : ['-mx-2 -my-1 px-2 py-1', 'hover:bg-muted/50']
       )}
@@ -296,7 +301,10 @@ export function InlineEditField({
     >
       {savedValue ? (
         renderMarkdown ? (
-          <MarkdownContent compact className={cn('pointer-events-none', displayClassName)}>
+          <MarkdownContent
+            compact
+            className={cn('pointer-events-none', displayClassName, children && 'pr-3')}
+          >
             {field === 'objective' ? convertInlineFileMentionsToMarkdown(savedValue) : savedValue}
           </MarkdownContent>
         ) : (

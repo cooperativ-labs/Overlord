@@ -387,3 +387,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 [functions.mcp]
 # Disable JWT verification with the legacy project JWT secret for this function.
 verify_jwt = false
+
+[functions.generate-feed-post]
+# Called server-side with service role key, no user JWT available.
+verify_jwt = false

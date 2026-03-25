@@ -288,7 +288,7 @@ Deno.serve(async (req: Request) => {
     // Fetch ticket details
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('title, objective, acceptance_criteria, constraints, project_id, created_by')
+      .select('title, acceptance_criteria, constraints, project_id, created_by')
       .eq('id', ticketId)
       .single();
 
@@ -298,6 +298,15 @@ Deno.serve(async (req: Request) => {
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
       });
     }
+
+    // Fetch the latest objective from the objectives table
+    const { data: latestObjective } = await supabase
+      .from('objectives')
+      .select('objective')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     // Fetch project name
     const { data: project } = await supabase
@@ -409,7 +418,7 @@ Deno.serve(async (req: Request) => {
     const prompt = buildPrompt({
       projectName: project?.name ?? 'Unknown Project',
       ticketTitle: ticket.title,
-      ticketObjective: ticket.objective,
+      ticketObjective: latestObjective?.objective ?? null,
       acceptanceCriteria: ticket.acceptance_criteria,
       constraints: ticket.constraints,
       feedPostInstructions,
