@@ -799,6 +799,56 @@ export type Database = {
           }
         ];
       };
+      schedule: {
+        Row: {
+          created_at: string;
+          days_of_month: number[] | null;
+          days_of_week: Json | null;
+          id: number;
+          name: string | null;
+          organization_id: number;
+          period_interval: number;
+          period_type: string;
+          start_date: string | null;
+          timezone: string;
+          weeks_of_month: number[] | null;
+        };
+        Insert: {
+          created_at?: string;
+          days_of_month?: number[] | null;
+          days_of_week?: Json | null;
+          id?: number;
+          name?: string | null;
+          organization_id: number;
+          period_interval?: number;
+          period_type?: string;
+          start_date?: string | null;
+          timezone: string;
+          weeks_of_month?: number[] | null;
+        };
+        Update: {
+          created_at?: string;
+          days_of_month?: number[] | null;
+          days_of_week?: Json | null;
+          id?: number;
+          name?: string | null;
+          organization_id?: number;
+          period_interval?: number;
+          period_type?: string;
+          start_date?: string | null;
+          timezone?: string;
+          weeks_of_month?: number[] | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'schedule_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       shared_state: {
         Row: {
           created_at: string;
@@ -947,6 +997,7 @@ export type Database = {
           created_at: string;
           created_by: string;
           delegate: string | null;
+          due_datetime: string | null;
           everhour_task_id: string | null;
           execution_target: Database['public']['Enums']['ticket_execution_target'];
           id: string;
@@ -956,6 +1007,7 @@ export type Database = {
           priority: Database['public']['Enums']['ticket_priority'];
           project_id: string;
           recent_agent: string | null;
+          schedule_id: number | null;
           search_vector: unknown;
           status: string;
           ticket_sequence: number;
@@ -972,6 +1024,7 @@ export type Database = {
           created_at?: string;
           created_by?: string;
           delegate?: string | null;
+          due_datetime?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;
@@ -981,6 +1034,7 @@ export type Database = {
           priority?: Database['public']['Enums']['ticket_priority'];
           project_id: string;
           recent_agent?: string | null;
+          schedule_id?: number | null;
           search_vector?: unknown;
           status?: string;
           ticket_sequence?: number;
@@ -997,6 +1051,7 @@ export type Database = {
           created_at?: string;
           created_by?: string;
           delegate?: string | null;
+          due_datetime?: string | null;
           everhour_task_id?: string | null;
           execution_target?: Database['public']['Enums']['ticket_execution_target'];
           id?: string;
@@ -1006,6 +1061,7 @@ export type Database = {
           priority?: Database['public']['Enums']['ticket_priority'];
           project_id?: string;
           recent_agent?: string | null;
+          schedule_id?: number | null;
           search_vector?: unknown;
           status?: string;
           ticket_sequence?: number;
@@ -1025,6 +1081,13 @@ export type Database = {
             columns: ['project_id', 'organization_id'];
             isOneToOne: false;
             referencedRelation: 'projects';
+            referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'tickets_schedule_org_fkey';
+            columns: ['schedule_id', 'organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'schedule';
             referencedColumns: ['id', 'organization_id'];
           },
           {
@@ -1148,6 +1211,14 @@ export type Database = {
         Returns: boolean;
       };
       is_ticket_org_member: { Args: { p_ticket_id: string }; Returns: boolean };
+      schedule_days_of_week_is_valid: {
+        Args: { payload: Json };
+        Returns: boolean;
+      };
+      schedule_smallint_array_between: {
+        Args: { max_value: number; min_value: number; payload: number[] };
+        Returns: boolean;
+      };
       seed_default_ticket_statuses_for_organization: {
         Args: { target_organization_id: number };
         Returns: undefined;

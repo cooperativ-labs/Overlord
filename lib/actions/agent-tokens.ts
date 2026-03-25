@@ -13,6 +13,76 @@ export type AgentTokenListItem = {
   expiresAt: string | null;
 };
 
+async function ensureAgentTokenRecord(preferredOrganizationId?: number): Promise<{
+  token: string;
+  created: boolean;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const now = Date.now();
+  const tokenQuery = supabase
+    .from('agent_tokens')
+    .select('token, expires_at')
+    .eq('user_id', user.id)
+    .is('revoked_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const { data: tokenRow, error: tokenError } = preferredOrganizationId
+    ? await tokenQuery.eq('organization_id', preferredOrganizationId).maybeSingle()
+    : await tokenQuery.maybeSingle();
+
+  if (tokenError && !tokenRow) {
+    throw new Error(tokenError.message ?? 'Failed to load agent token.');
+  }
+
+  if (tokenRow && (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() > now)) {
+    return { token: tokenRow.token, created: false };
+  }
+
+  const serviceSupabase = createServiceRoleClient();
+  let organizationId = preferredOrganizationId;
+
+  if (!organizationId) {
+    const { data: orgRow, error: orgError } = await serviceSupabase
+      .from('members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .order('organization_id', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (orgError || !orgRow) {
+      throw new Error(orgError?.message ?? 'No organization found for this user.');
+    }
+
+    organizationId = orgRow.organization_id;
+  }
+
+  const { data: createdToken, error: createError } = await serviceSupabase
+    .from('agent_tokens')
+    .insert({
+      user_id: user.id,
+      organization_id: organizationId,
+      name: 'CLI Token'
+    })
+    .select('token')
+    .single();
+
+  if (createError || !createdToken) {
+    throw new Error(createError?.message ?? 'Failed to create new agent token.');
+  }
+
+  return { token: createdToken.token, created: true };
+}
+
 export async function getAgentTokenAction(
   preferredOrganizationId?: number
 ): Promise<string | null> {
@@ -49,72 +119,20 @@ export async function getAgentTokenAction(
 }
 
 export async function ensureAgentTokenAction(preferredOrganizationId?: number): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { token, created } = await ensureAgentTokenRecord(preferredOrganizationId);
 
-  if (!user) {
-    throw new Error('Unauthorized');
+  if (created) {
+    revalidatePath('/account/tokens');
   }
 
-  const now = Date.now();
-  const tokenQuery = supabase
-    .from('agent_tokens')
-    .select('token, expires_at')
-    .eq('user_id', user.id)
-    .is('revoked_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1);
+  return token;
+}
 
-  const { data: tokenRow, error: tokenError } = preferredOrganizationId
-    ? await tokenQuery.eq('organization_id', preferredOrganizationId).maybeSingle()
-    : await tokenQuery.maybeSingle();
-
-  if (tokenError && !tokenRow) {
-    throw new Error(tokenError.message ?? 'Failed to load agent token.');
-  }
-
-  if (tokenRow && (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() > now)) {
-    return tokenRow.token;
-  }
-
-  const serviceSupabase = createServiceRoleClient();
-  let organizationId = preferredOrganizationId;
-
-  if (!organizationId) {
-    const { data: orgRow, error: orgError } = await serviceSupabase
-      .from('members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .order('organization_id', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (orgError || !orgRow) {
-      throw new Error(orgError?.message ?? 'No organization found for this user.');
-    }
-
-    organizationId = orgRow.organization_id;
-  }
-
-  const { data: createdToken, error: createError } = await serviceSupabase
-    .from('agent_tokens')
-    .insert({
-      user_id: user.id,
-      organization_id: organizationId,
-      name: 'CLI Token'
-    })
-    .select('token')
-    .single();
-
-  if (createError || !createdToken) {
-    throw new Error(createError?.message ?? 'Failed to create new agent token.');
-  }
-
-  revalidatePath('/account/tokens');
-
-  return createdToken.token;
+export async function ensureAgentTokenForLaunchAction(
+  preferredOrganizationId?: number
+): Promise<string> {
+  const { token } = await ensureAgentTokenRecord(preferredOrganizationId);
+  return token;
 }
 
 export async function rotateAgentTokenAction(preferredOrganizationId?: number): Promise<string> {

@@ -2,28 +2,26 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ArrowDown, ArrowUp, Bot } from 'lucide-react';
-import Image from 'next/image';
+import { Bot } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useTransition } from 'react';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
+import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu';
-import { updateTicketPriorityAction } from '@/lib/actions/tickets';
-import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
+import {
+  ActiveAgentDisplay,
+  AttentionIndicators,
+  ObjectivesExecutedBadge,
+  ProjectColorDot,
+  TicketPriorityContextMenu
+} from './TicketCardPrimitives';
 
 type SessionState = Database['public']['Enums']['session_state'];
 
@@ -52,48 +50,9 @@ export type Ticket = {
   objectives_executed_count?: number;
   updated_at?: string;
   delegate?: string | null;
+  schedule_id?: number | null;
+  due_datetime?: string | null;
 };
-
-function StatusDot({
-  colorClassName,
-  label,
-  title
-}: {
-  colorClassName: string;
-  label: string;
-  title: string;
-}) {
-  return (
-    <span
-      className={cn('h-2.5 w-2.5 rounded-full ring-2 ring-background', colorClassName)}
-      aria-label={label}
-      title={title}
-    />
-  );
-}
-
-function ActiveAgentDisplay({ identifier }: { identifier: string | null }) {
-  if (!identifier) return null;
-  const agentType = getAgentTypeByIdentifier(identifier);
-  return (
-    <div className="min-w-0">
-      {agentType ? (
-        <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-          <Image
-            src={agentType.icon}
-            alt={`${agentType.label} icon`}
-            width={12}
-            height={12}
-            className="h-3 w-3 shrink-0"
-          />
-          <span className="truncate">{agentType.label}</span>
-        </p>
-      ) : (
-        <p className="text-[10px] text-muted-foreground/70 truncate">{identifier}</p>
-      )}
-    </div>
-  );
-}
 
 export default function KanbanCard({
   ticket,
@@ -114,17 +73,6 @@ export default function KanbanCard({
     id: ticket.id,
     disabled: isDragOverlay
   });
-  const [isPending, startTransition] = useTransition();
-  const isHighPriority = ticket.priority === 'high';
-  const isMediumPriority = ticket.priority === 'medium';
-  const raiseDisabled = isPending || !isMediumPriority;
-  const reduceDisabled = isPending || !isHighPriority;
-
-  function handlePriorityChange(nextPriority: Database['public']['Enums']['ticket_priority']) {
-    startTransition(async () => {
-      await updateTicketPriorityAction(ticket.id, nextPriority);
-    });
-  }
 
   if (isDragOverlay) {
     return (
@@ -149,20 +97,6 @@ export default function KanbanCard({
     : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
   const isSelected = pathname === ticketPath;
 
-  function handleCardClick() {
-    router.push(ticketPath);
-  }
-
-  function handleMarkUnreadClick() {
-    if (!onMarkUnread) return;
-    onMarkUnread(ticket.id);
-  }
-
-  function handleMarkReadClick() {
-    if (!onMarkRead) return;
-    onMarkRead(ticket.id);
-  }
-
   const isUnread = ticket.is_read === false;
   const markReadLabel = isUnread ? 'Mark read' : 'Mark unread';
   const markReadDisabled = isUnread ? !onMarkRead : !onMarkUnread;
@@ -183,57 +117,39 @@ export default function KanbanCard({
               'border-sky-500/40 bg-sky-50/60 bg-linear-to-br from-sky-300/18 to-transparent dark:bg-sky-950/25'
           )}
           style={style}
-          onClick={handleCardClick}
+          onClick={() => router.push(ticketPath)}
           {...listeners}
           {...attributes}
         >
-          {hasUnopenedWaitingResponse || hasUnopenedReview ? (
-            <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1">
-              {hasUnopenedWaitingResponse ? (
-                <StatusDot
-                  colorClassName="bg-red-500"
-                  label="Agent waiting for response"
-                  title="Agent is waiting for your response"
-                />
-              ) : null}
-              {hasUnopenedReview ? (
-                <StatusDot
-                  colorClassName="bg-sky-500"
-                  label="Moved to review and unopened"
-                  title="This ticket moved to review and has not been opened yet"
-                />
-              ) : null}
-            </span>
-          ) : null}
+          <AttentionIndicators
+            hasUnopenedWaitingResponse={hasUnopenedWaitingResponse}
+            hasUnopenedReview={hasUnopenedReview}
+            className="absolute right-2 top-2 z-10"
+          />
           {isAgentRunning && (
             <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
           )}
           <KanbanCardBody ticket={ticket} showOrganizationName={showOrganizationName} />
         </Card>
       </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={() => handlePriorityChange('high')} disabled={raiseDisabled}>
-          <ArrowUp className="h-3.5 w-3.5" />
-          Raise priority
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => handlePriorityChange('medium')} disabled={reduceDisabled}>
-          <ArrowDown className="h-3.5 w-3.5" />
-          Reduce priority
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          onSelect={() => {
-            if (isUnread) {
-              handleMarkReadClick();
-            } else {
-              handleMarkUnreadClick();
-            }
-          }}
-          disabled={markReadDisabled}
-        >
-          {markReadLabel}
-        </ContextMenuItem>
-      </ContextMenuContent>
+      <TicketPriorityContextMenu
+        ticketId={ticket.id}
+        priority={ticket.priority}
+        extraItems={
+          <ContextMenuItem
+            onSelect={() => {
+              if (isUnread) {
+                onMarkRead?.(ticket.id);
+              } else {
+                onMarkUnread?.(ticket.id);
+              }
+            }}
+            disabled={markReadDisabled}
+          >
+            {markReadLabel}
+          </ContextMenuItem>
+        }
+      />
     </ContextMenu>
   );
 }
@@ -247,7 +163,6 @@ function KanbanCardBody({
 }) {
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
-  const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
   return (
     <CardContent className="flex h-full flex-col p-0 pt-3  ">
@@ -255,21 +170,9 @@ function KanbanCardBody({
         <div className="min-w-0 gap-1">
           <div className="flex items-start gap-2">
             <div className="flex min-w-0 flex-1 items-start gap-2">
-              {ticket.project_color ? (
-                <span
-                  className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border"
-                  style={{
-                    backgroundColor: ticket.project_color,
-                    borderColor: ticket.project_color
-                  }}
-                  title={ticket.project_name ?? 'Project'}
-                />
-              ) : (
-                <span
-                  className="mt-1 block h-2.5 w-2.5 shrink-0 rounded-[2px] border border-muted-foreground/50"
-                  title="No project"
-                />
-              )}
+              <span className="mt-1">
+                <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
+              </span>
               <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
             </div>
           </div>
@@ -279,6 +182,7 @@ function KanbanCardBody({
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
+          {ticket.schedule_id ? <ScheduleBadge /> : null}
         </div>
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
           <div className="flex min-w-0 items-center">
@@ -291,15 +195,7 @@ function KanbanCardBody({
           </div>
           <div className="flex items-center gap-1.5">
             <ActiveAgentDisplay identifier={activeAgentIdentifier} />
-            {executedObjectivesCount > 0 ? (
-              <span
-                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
-                title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-                aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-              >
-                {executedObjectivesCount}
-              </span>
-            ) : null}
+            <ObjectivesExecutedBadge count={ticket.objectives_executed_count ?? 0} />
           </div>
         </div>
       </div>

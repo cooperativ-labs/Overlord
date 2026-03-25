@@ -7,6 +7,8 @@ import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTi
 import { InlineEditField } from '@/components/features/InlineEditField';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
+import { DueDateEditor } from '@/components/features/scheduling/DueDateEditor';
+import { ScheduleEditor } from '@/components/features/scheduling/ScheduleEditor';
 import { TicketDocumentUpload } from '@/components/features/TicketDocumentUpload';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
 import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
@@ -18,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
-import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
+import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
@@ -99,6 +101,7 @@ export async function TicketPanelContent({
     statusesResult,
     everhourResult,
     projectsResult,
+    scheduleResult,
     agentSessionResult,
     agentTokenResult,
     objectivesResult
@@ -144,6 +147,13 @@ export async function TicketPanelContent({
       .select('id,name,color,everhour_project_id,local_working_directory')
       .eq('organization_id', organizationId)
       .order('name', { ascending: true }),
+    ticket.schedule_id
+      ? supabase
+          .from('schedule')
+          .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
+          .eq('id', ticket.schedule_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
       .select('*')
@@ -174,6 +184,7 @@ export async function TicketPanelContent({
   const statuses = statusesResult.data;
   const everhourIntegration = everhourResult.data;
   const projects = projectsResult.data;
+  const schedule = scheduleResult.data;
   const agentSession = agentSessionResult.data;
   const agentTokenRow = agentTokenResult.data;
   const objectives = objectivesResult.data;
@@ -188,7 +199,7 @@ export async function TicketPanelContent({
   const agentToken =
     existingAgentToken ??
     (user
-      ? await ensureAgentTokenAction(organizationId).catch(error => {
+      ? await ensureAgentTokenForLaunchAction(organizationId).catch(error => {
           console.error('Failed to ensure agent token for ticket launch:', error);
           return null;
         })
@@ -337,7 +348,7 @@ export async function TicketPanelContent({
                 />
               </div>
 
-              <div className="mb-4 flex flex-wrap items-center gap-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <TicketProjectSelect
                   ticketId={ticketId}
                   organizationId={organizationId}
@@ -384,6 +395,28 @@ export async function TicketPanelContent({
                     </Badge>
                   );
                 })()}
+              </div>
+
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <DueDateEditor initialDueDatetime={ticket.due_datetime} ticketId={ticketId} />
+                <ScheduleEditor
+                  ticketId={ticketId}
+                  hasSchedule={ticket.schedule_id !== null}
+                  initialSchedule={
+                    schedule
+                      ? {
+                          periodType: schedule.period_type,
+                          periodInterval: schedule.period_interval,
+                          daysOfWeek: Array.isArray(schedule.days_of_week)
+                            ? schedule.days_of_week
+                            : [],
+                          daysOfMonth: schedule.days_of_month ?? undefined,
+                          weeksOfMonth: schedule.weeks_of_month ?? undefined,
+                          timezone: schedule.timezone
+                        }
+                      : null
+                  }
+                />
               </div>
             </div>
             <div className="flex flex-col pb-5">

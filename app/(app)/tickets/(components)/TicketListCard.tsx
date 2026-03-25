@@ -1,28 +1,25 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Bot } from 'lucide-react';
-import Image from 'next/image';
+import { Bot } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTransition } from 'react';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
+import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Badge } from '@/components/ui/badge';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu';
-import { updateTicketPriorityAction } from '@/lib/actions/tickets';
-import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
+import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { capitalizeFirst } from '@/lib/options';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 import type { Ticket } from './KanbanCard';
+import {
+  ActiveAgentDisplay,
+  AttentionIndicators,
+  ObjectivesExecutedBadge,
+  ProjectColorDot,
+  TicketPriorityContextMenu
+} from './TicketCardPrimitives';
 
 export default function TicketListCard({
   ticket,
@@ -38,17 +35,6 @@ export default function TicketListCard({
   onMarkUnread?: (ticketId: string) => void;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const isHighPriority = ticket.priority === 'high';
-  const isMediumPriority = ticket.priority === 'medium';
-  const raiseDisabled = isPending || !isMediumPriority;
-  const reduceDisabled = isPending || !isHighPriority;
-
-  function handlePriorityChange(nextPriority: Database['public']['Enums']['ticket_priority']) {
-    startTransition(async () => {
-      await updateTicketPriorityAction(ticket.id, nextPriority);
-    });
-  }
 
   const isAgentRunning = ticket.agent_session_state === 'attached';
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
@@ -56,52 +42,7 @@ export default function TicketListCard({
 
   const activeAgentIdentifier =
     ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
-  const activeAgentType = getAgentTypeByIdentifier(activeAgentIdentifier);
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
-
-  const ProjectColorDot = ticket.project_color ? (
-    <span
-      className="block h-2 w-2 shrink-0 rounded-[2px] border"
-      style={{ backgroundColor: ticket.project_color, borderColor: ticket.project_color }}
-      title={ticket.project_name ?? 'Project'}
-    />
-  ) : (
-    <span
-      className="block h-2 w-2 shrink-0 rounded-[2px] border border-muted-foreground/50"
-      title="No project"
-    />
-  );
-
-  const ActiveAgentDisplay =
-    activeAgentIdentifier || executedObjectivesCount > 0 ? (
-      <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-        {activeAgentIdentifier ? (
-          activeAgentType ? (
-            <p className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-              <Image
-                src={activeAgentType.icon}
-                alt={`${activeAgentType.label} icon`}
-                width={12}
-                height={12}
-                className="h-3 w-3 shrink-0"
-              />
-              <span>{activeAgentType.label}</span>
-            </p>
-          ) : (
-            <p className="text-[10px] text-muted-foreground/70">{activeAgentIdentifier}</p>
-          )
-        ) : null}
-        {executedObjectivesCount > 0 ? (
-          <span
-            className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
-            title={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-            aria-label={`${executedObjectivesCount} objective${executedObjectivesCount === 1 ? '' : 's'} executed`}
-          >
-            {executedObjectivesCount}
-          </span>
-        ) : null}
-      </div>
-    ) : null;
 
   return (
     <ContextMenu>
@@ -129,7 +70,7 @@ export default function TicketListCard({
           {/* Title + meta */}
           <div className="min-w-0 flex-1 flex flex-col gap-1">
             <span className="flex items-center gap-2 truncate text-sm font-medium">
-              {ProjectColorDot}
+              <ProjectColorDot color={ticket.project_color} name={ticket.project_name} size="sm" />
               {getDisplayTitle(ticket)}
             </span>
             <div className="mt-0.5 flex items-center gap-1.5 overflow-hidden">
@@ -143,11 +84,17 @@ export default function TicketListCard({
                   </span>
                 ) : null}
               </div>
-              {ActiveAgentDisplay}
+              {(activeAgentIdentifier || executedObjectivesCount > 0) && (
+                <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+                  <ActiveAgentDisplay identifier={activeAgentIdentifier} />
+                  <ObjectivesExecutedBadge count={executedObjectivesCount} />
+                </div>
+              )}
               <Badge variant="outline" className="py-0 text-[11px]">
                 {capitalizeFirst(ticket.status)}
               </Badge>
               <ExecutionTargetBadge executionTarget={ticket.execution_target} />
+              {ticket.schedule_id ? <ScheduleBadge /> : null}
             </div>
             {ticket.delegate ? (
               <div
@@ -160,39 +107,23 @@ export default function TicketListCard({
             ) : null}
           </div>
 
-          {/* Status dots */}
-          {(hasUnopenedWaitingResponse || hasUnopenedReview) && (
-            <span className="flex shrink-0 items-center gap-1">
-              {hasUnopenedWaitingResponse && (
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full bg-red-500 ring-1 ring-background"
-                  title="Agent is waiting for your response"
-                />
-              )}
-              {hasUnopenedReview && (
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full bg-sky-500 ring-1 ring-background"
-                  title="Moved to review and unopened"
-                />
-              )}
-            </span>
-          )}
+          {/* Attention indicators */}
+          <AttentionIndicators
+            hasUnopenedWaitingResponse={hasUnopenedWaitingResponse}
+            hasUnopenedReview={hasUnopenedReview}
+            className="shrink-0"
+          />
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={() => handlePriorityChange('high')} disabled={raiseDisabled}>
-          <ArrowUp className="h-3.5 w-3.5" />
-          Raise priority
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={() => handlePriorityChange('medium')} disabled={reduceDisabled}>
-          <ArrowDown className="h-3.5 w-3.5" />
-          Reduce priority
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => onMarkUnread?.(ticket.id)} disabled={!onMarkUnread}>
-          Mark card unread
-        </ContextMenuItem>
-      </ContextMenuContent>
+      <TicketPriorityContextMenu
+        ticketId={ticket.id}
+        priority={ticket.priority}
+        extraItems={
+          <ContextMenuItem onSelect={() => onMarkUnread?.(ticket.id)} disabled={!onMarkUnread}>
+            Mark card unread
+          </ContextMenuItem>
+        }
+      />
     </ContextMenu>
   );
 }

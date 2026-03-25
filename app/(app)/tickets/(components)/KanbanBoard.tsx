@@ -60,12 +60,7 @@ type StatusColumn = {
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 
-function toColumnTitle(status: string): string {
-  return status
-    .split('-')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
+import { formatStatusLabel, getPathTicketId } from './ticket-view-helpers';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -143,12 +138,6 @@ function getTopBoardPositionForStatus(
   }
 
   return Number.isFinite(minBoardPosition) ? minBoardPosition - 1 : 0;
-}
-
-function getPathTicketId(pathname: string): string | null {
-  const pathSegments = pathname.split('/').filter(Boolean);
-  if (pathSegments.length === 0) return null;
-  return pathSegments[pathSegments.length - 1] ?? null;
 }
 
 export default function KanbanBoard({
@@ -255,7 +244,7 @@ export default function KanbanBoard({
 
   const columns: StatusColumn[] = statuses.map(status => ({
     id: status.name,
-    title: toColumnTitle(status.name),
+    title: formatStatusLabel(status.name),
     position: status.position,
     statusType: status.status_type
   }));

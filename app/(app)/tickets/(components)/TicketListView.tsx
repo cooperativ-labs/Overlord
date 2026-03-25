@@ -34,6 +34,7 @@ import {
 } from '@/lib/helpers/ticket-waiting-response';
 
 import type { Ticket } from './KanbanCard';
+import { formatStatusLabel, getPathTicketId } from './ticket-view-helpers';
 import TicketListCard from './TicketListCard';
 import TicketsViewControls from './TicketsViewControls';
 
@@ -48,18 +49,6 @@ const SORT_LABELS: Record<SortKey, string> = {
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
 const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
-
-function formatStatusLabel(status: string): string {
-  return status
-    .split('-')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function getPathTicketId(pathname: string): string | null {
-  const segments = pathname.split('/').filter(Boolean);
-  return segments[segments.length - 1] ?? null;
-}
 
 function areStringListsEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);

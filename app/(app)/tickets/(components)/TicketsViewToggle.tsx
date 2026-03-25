@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutGrid, List } from 'lucide-react';
+import { CalendarDays, LayoutGrid, List } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
 
@@ -41,6 +41,10 @@ export default function TicketsViewToggle({
         <TabsTrigger value="list" title="List view">
           <List className="size-4" />
           List
+        </TabsTrigger>
+        <TabsTrigger value="calendar" title="Calendar view">
+          <CalendarDays className="size-4" />
+          Calendar
         </TabsTrigger>
       </TabsList>
     </Tabs>

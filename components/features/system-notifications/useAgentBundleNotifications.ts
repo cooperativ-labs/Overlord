@@ -37,7 +37,9 @@ export function useAgentBundleNotifications(
       if (staleAgents.length > 0) {
         const names = staleAgents.map(s => AGENT_LABELS[s.agent] ?? s.agent).join(', ');
         // Include content hashes in dismiss key so new template changes always surface a fresh notification
-        const dismissFingerprint = staleAgents.map(s => `${s.agent}:${s.currentContentHash ?? s.version}`).join('-');
+        const dismissFingerprint = staleAgents
+          .map(s => `${s.agent}:${s.currentContentHash ?? s.version}`)
+          .join('-');
 
         addNotification({
           id: 'agent-bundle-stale',

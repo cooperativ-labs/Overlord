@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 
 const COOKIE_NAME = 'tickets_view';
-const VALID_VIEWS = new Set(['board', 'list']);
+const VALID_VIEWS = new Set(['board', 'list', 'calendar']);
 
 export async function setViewPreferenceAction(view: string): Promise<void> {
   if (!VALID_VIEWS.has(view)) return;

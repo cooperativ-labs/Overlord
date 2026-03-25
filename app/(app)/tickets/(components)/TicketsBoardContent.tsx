@@ -7,6 +7,7 @@ import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/proje
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
+import CalendarView from './CalendarView';
 import KanbanBoard from './KanbanBoard';
 import TicketListView from './TicketListView';
 
@@ -58,6 +59,7 @@ type RawTicket = {
   id: string;
   title: string | null;
   objective?: string | null;
+  due_datetime: string | null;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
@@ -69,6 +71,7 @@ type RawTicket = {
   organization_id: number;
   project_id: string;
   everhour_task_id: string | null;
+  schedule_id: number | null;
   objectives_executed_count?: number;
   organization: { name: string } | Array<{ name: string }> | null;
   project:
@@ -127,29 +130,52 @@ export default async function TicketsBoardContent({
   const statusesResult = await statusesQuery;
   const allStatuses = dedupeStatuses(statusesResult.data ?? []);
 
-  const ticketQueries = allStatuses.map(async status => {
-    let query = supabase
-      .from('tickets')
-      .select(
-        'id,title,execution_target,status,priority,assigned_agent,delegate,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
-      )
-      .eq('status', status.name)
-      .order('updated_at', { ascending: false })
-      .limit(INITIAL_TICKETS_PER_STATUS);
+  const ticketSelectFields =
+    'id,title,due_datetime,execution_target,status,priority,assigned_agent,delegate,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
-    if (organizationId !== undefined) {
-      query = query.eq('organization_id', organizationId);
-    }
+  const ticketQueriesPromise =
+    view === 'calendar'
+      ? (async () => {
+          let query = supabase
+            .from('tickets')
+            .select(ticketSelectFields)
+            .not('due_datetime', 'is', null)
+            .order('due_datetime', { ascending: true })
+            .limit(500);
 
-    if (projectId !== undefined) {
-      query = query.eq('project_id', projectId);
-    }
+          if (organizationId !== undefined) {
+            query = query.eq('organization_id', organizationId);
+          }
+          if (projectId !== undefined) {
+            query = query.eq('project_id', projectId);
+          }
 
-    return query;
-  });
+          const result = await query;
+          return [result];
+        })()
+      : Promise.all(
+          allStatuses.map(async status => {
+            let query = supabase
+              .from('tickets')
+              .select(ticketSelectFields)
+              .eq('status', status.name)
+              .order('updated_at', { ascending: false })
+              .limit(INITIAL_TICKETS_PER_STATUS);
+
+            if (organizationId !== undefined) {
+              query = query.eq('organization_id', organizationId);
+            }
+
+            if (projectId !== undefined) {
+              query = query.eq('project_id', projectId);
+            }
+
+            return query;
+          })
+        );
 
   const [ticketResults, everhourIntegrationResult] = await Promise.all([
-    Promise.all(ticketQueries),
+    ticketQueriesPromise,
     supabase
       .from('user_integrations')
       .select('api_key')
@@ -243,7 +269,8 @@ export default async function TicketsBoardContent({
         agent_session_state: session?.session_state ?? null,
         running_agent: isAttached ? session.agent_identifier : null,
         waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
-        objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0
+        objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0,
+        schedule_id: ticket.schedule_id ?? null
       };
     });
   const statuses = allStatuses;
@@ -285,6 +312,7 @@ export default async function TicketsBoardContent({
   }
 
   const showBoard = view === 'board' && statuses.length > 0;
+  const showCalendar = view === 'calendar';
 
   return (
     <div className="flex flex-1 min-h-0 flex-col gap-4">
@@ -294,7 +322,24 @@ export default async function TicketsBoardContent({
         </Alert>
       ) : null}
 
-      {showBoard ? (
+      {showCalendar ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
+          <CalendarView
+            tickets={tickets}
+            completeStatusName={
+              statuses.find(
+                status =>
+                  status.status_type === 'complete' &&
+                  status.name.trim().toLowerCase() !== 'cancelled'
+              )?.name ?? statuses.find(status => status.status_type === 'complete')?.name
+            }
+            initialView={view}
+            showViewToggle={!isMobile}
+            projectId={projectId}
+            ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
+          />
+        </div>
+      ) : showBoard ? (
         <KanbanBoard
           tickets={tickets}
           statuses={statuses}

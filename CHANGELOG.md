@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.13.0] - 2026-03-25:18:00
+
+### Added
+- Introduce the ticket scheduling system: add a `schedule` table plus `tickets.due_datetime` and `tickets.schedule_id`, indexes, RLS policies, and validation constraints so recurring ticket metadata is persisted safely.
+- Ship the scheduling engine, Supabase actions, and schema that validate recurrence rules, upsert/clear schedules, preview future due dates, and automatically spawn the next ticket when a scheduled item is completed.
+- Build scheduling UI controls (calendar view, schedule editor, due date editor, badges, and helpers) that let agents set up daily/weekly/monthly recurrences directly from ticket panels and list/board views.
+
 ## [2.12.0] - 2026-03-25:09:35
 
 ### Added
