@@ -4,6 +4,7 @@ import {
   getLaunchAgentTypeByIdentifier,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import { AgentModelChooserButton } from './AgentModelChooserButton';
@@ -17,6 +18,7 @@ type TicketHeaderActionProps = {
   agentToken: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   agentIdentifier: string | null;
+  assignedAgent: TicketAssignedAgent | null;
   claudeCommand: string;
   codexCommand: string;
   cursorCommand: string;
@@ -32,6 +34,7 @@ export function TicketHeaderAction({
   agentToken,
   agentFlags,
   agentIdentifier,
+  assignedAgent,
   claudeCommand,
   codexCommand,
   cursorCommand,
@@ -60,7 +63,7 @@ export function TicketHeaderAction({
 
   return (
     <div className="flex items-center gap-2">
-      <AgentModelChooserButton />
+      <AgentModelChooserButton ticketId={ticketId} initialSelection={assignedAgent} />
       <DiscussTicketButton
         ticketId={ticketId}
         organizationId={organizationId}
@@ -70,7 +73,12 @@ export function TicketHeaderAction({
         workingDirectory={workingDirectory}
       />
       <AgentSplitButtonLive
-        defaultAgent={agentIdentifier ? getLaunchAgentTypeByIdentifier(agentIdentifier) : undefined}
+        defaultAgent={
+          agentIdentifier || assignedAgent
+            ? getLaunchAgentTypeByIdentifier(agentIdentifier ?? assignedAgent?.agent)
+            : undefined
+        }
+        assignedSelection={assignedAgent}
         ticketId={ticketId}
         organizationId={organizationId}
         agentToken={agentToken}

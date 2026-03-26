@@ -3,6 +3,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { ExternalLink } from '@/components/features/ExternalLink';
 import { Badge } from '@/components/ui/badge';
 import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
 
@@ -57,10 +58,13 @@ export function MarkdownContent({
                 </span>
               );
             }
+            if (!href) {
+              return <>{linkChildren}</>;
+            }
             return (
-              <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+              <ExternalLink href={href} {...props}>
                 {linkChildren}
-              </a>
+              </ExternalLink>
             );
           },
           // Style code blocks

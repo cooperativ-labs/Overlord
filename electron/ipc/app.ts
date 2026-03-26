@@ -70,6 +70,25 @@ export function registerAppIpc({
     return true;
   });
 
+  ipcMain.handle('app:open-external', async (_event, url: string) => {
+    const trimmed = url.trim();
+    if (!trimmed) return false;
+
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      return false;
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+
+    await shell.openExternal(parsed.toString());
+    return true;
+  });
+
   ipcMain.handle('app:reveal-file', (_event, filePath: string) => {
     const resolvedPath = resolveUserPath(filePath);
     shell.showItemInFolder(resolvedPath);

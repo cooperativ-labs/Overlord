@@ -14,6 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
@@ -23,6 +24,7 @@ import {
   isAgentIdentifierMatch,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
@@ -44,6 +46,7 @@ type AgentSplitButtonProps = {
   commands: Record<LaunchAgentTypeValue, string>;
   workingDirectory?: string | null;
   activeAgentIdentifier?: string | null;
+  assignedSelection?: TicketAssignedAgent | null;
   hasProjectWorkingDirectory?: boolean;
   agentSessionState?: SessionState | null;
   size?: AgentSplitButtonSize;
@@ -104,6 +107,7 @@ export function AgentSplitButton({
   commands,
   workingDirectory,
   activeAgentIdentifier,
+  assignedSelection,
   hasProjectWorkingDirectory,
   agentSessionState,
   size = 'default'
@@ -113,9 +117,10 @@ export function AgentSplitButton({
   const { selection } = useAgentModelPreference();
   const { isElectron, launchAgent } = useTerminal();
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
+  const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
 
   const isActive =
-    isAgentIdentifierMatch(selection.agent, activeAgentIdentifier) &&
+    isAgentIdentifierMatch(effectiveSelection.agent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
@@ -137,7 +142,7 @@ export function AgentSplitButton({
   }, [activeAgentIdentifier, onSelectAgent, selectedAgent]);
 
   async function handleLaunch(
-    agentValue: AgentSelectorValue = selection.agent,
+    agentValue: AgentSelectorValue = effectiveSelection.agent,
     options?: { useStoredModelPreference?: boolean }
   ): Promise<void> {
     const isCopyLocalValue = agentValue === 'copy-local';
@@ -177,8 +182,8 @@ export function AgentSplitButton({
           resolvedAgentToken,
           'run',
           agentFlags?.[agentValue],
-          options?.useStoredModelPreference ? (selection.model ?? undefined) : undefined,
-          options?.useStoredModelPreference ? (selection.thinking ?? undefined) : undefined
+          options?.useStoredModelPreference ? (effectiveSelection.model ?? undefined) : undefined,
+          options?.useStoredModelPreference ? (effectiveSelection.thinking ?? undefined) : undefined
         );
       } catch (error) {
         console.error('Failed to launch agent:', error);
@@ -207,7 +212,9 @@ export function AgentSplitButton({
         styles.runButton,
         isDisabled && 'cursor-not-allowed opacity-60'
       )}
-      onClick={() => void handleLaunch(selection.agent, { useStoredModelPreference: true })}
+      onClick={() =>
+        void handleLaunch(effectiveSelection.agent, { useStoredModelPreference: true })
+      }
       disabled={isDisabled}
     >
       {isLaunching ? (

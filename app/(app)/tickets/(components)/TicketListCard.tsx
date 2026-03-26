@@ -7,6 +7,7 @@ import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerBut
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Badge } from '@/components/ui/badge';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { getAssignedAgentIdentifier } from '@/lib/helpers/ticket-assigned-agent';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { capitalizeFirst } from '@/lib/options';
 import { cn } from '@/lib/utils';
@@ -41,7 +42,9 @@ export default function TicketListCard({
   const hasUnopenedReview = ticket.is_read === false;
 
   const activeAgentIdentifier =
-    ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
+    ticket.running_agent ??
+    ticket.recent_agent ??
+    getAssignedAgentIdentifier(ticket.assigned_agent);
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
   return (

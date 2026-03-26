@@ -4,7 +4,7 @@ import { Loader2, Newspaper } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ExecutingFeedTicket, FeedPost } from '@/lib/actions/feed';
+import type { FeedPost } from '@/lib/actions/feed';
 import { getFeedPostsAction } from '@/lib/actions/feed';
 import { getWorkspaceRoot } from '@/lib/env';
 import { useExecutingFeedTickets } from '@/lib/hooks/use-executing-feed-tickets';
@@ -41,6 +41,7 @@ export function FeedList({ projects, editorScheme }: FeedListProps) {
   const [hasMore, setHasMore] = useState(false);
   const offsetRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const isSentinelVisibleRef = useRef(false);
 
   // Fetch feed posts on mount and refresh every minute in the background
   useEffect(() => {
@@ -115,6 +116,7 @@ export function FeedList({ projects, editorScheme }: FeedListProps) {
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       entries => {
+        isSentinelVisibleRef.current = entries[0].isIntersecting;
         if (entries[0].isIntersecting) {
           void loadMoreRef.current();
         }
@@ -124,6 +126,14 @@ export function FeedList({ projects, editorScheme }: FeedListProps) {
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, []);
+
+  // After initial load completes, trigger loadMore if the sentinel is already
+  // in view (happens when the first page of posts doesn't fill the screen).
+  useEffect(() => {
+    if (!isInitialLoading && isSentinelVisibleRef.current) {
+      void loadMoreRef.current();
+    }
+  }, [isInitialLoading]);
 
   const workspaceRootByProjectId = useMemo(
     () =>

@@ -9,6 +9,10 @@ import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerBut
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import {
+  getAssignedAgentIdentifier,
+  type TicketAssignedAgent
+} from '@/lib/helpers/ticket-assigned-agent';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
@@ -41,7 +45,7 @@ export type Ticket = {
   status: string;
   priority: string;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
-  assigned_agent: string | null;
+  assigned_agent: TicketAssignedAgent | null;
   board_position: number;
   organization_name?: string | null;
   waiting_for_response_at?: string | null;
@@ -162,7 +166,9 @@ function KanbanCardBody({
   showOrganizationName: boolean;
 }) {
   const activeAgentIdentifier =
-    ticket.running_agent ?? ticket.recent_agent ?? ticket.assigned_agent;
+    ticket.running_agent ??
+    ticket.recent_agent ??
+    getAssignedAgentIdentifier(ticket.assigned_agent);
 
   return (
     <CardContent className="flex h-full flex-col p-0 pt-3  ">

@@ -1,3 +1,4 @@
+import { ExternalLink } from '@/components/features/ExternalLink';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import type { Database } from '@/types/database.types';
 
@@ -19,12 +20,12 @@ export function LiveArtifacts({ artifacts }: { artifacts: Artifact[] }) {
             <p className="mb-0.5 break-words text-xs font-medium">{artifact.label}</p>
             <p className="mb-1 text-xs text-muted-foreground">{artifact.artifact_type}</p>
             {artifact.uri ? (
-              <a
+              <ExternalLink
                 className="break-all text-xs text-primary underline-offset-4 hover:underline"
                 href={artifact.uri}
               >
                 {artifact.uri}
-              </a>
+              </ExternalLink>
             ) : null}
             {artifact.content ? (
               <MarkdownContent compact className="mt-1 text-xs text-muted-foreground">

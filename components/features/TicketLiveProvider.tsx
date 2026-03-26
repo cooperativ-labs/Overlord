@@ -4,6 +4,7 @@ import { type ComponentProps, createContext, useContext, useState } from 'react'
 
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import { type AgentSelectorValue } from '@/lib/helpers/agent-types';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import type { Database } from '@/types/database.types';
 
@@ -69,9 +70,14 @@ type AgentSplitButtonLiveProps = Omit<
   'selectedAgent' | 'onSelectAgent' | 'agentSessionState' | 'activeAgentIdentifier'
 > & {
   defaultAgent?: AgentSelectorValue;
+  assignedSelection?: TicketAssignedAgent | null;
 };
 
-export function AgentSplitButtonLive({ defaultAgent, ...props }: AgentSplitButtonLiveProps) {
+export function AgentSplitButtonLive({
+  defaultAgent,
+  assignedSelection,
+  ...props
+}: AgentSplitButtonLiveProps) {
   const { session } = useTicketLive();
 
   const [selectedAgent, setSelectedAgent] = useState<AgentSelectorValue>(
@@ -83,6 +89,7 @@ export function AgentSplitButtonLive({ defaultAgent, ...props }: AgentSplitButto
       {...props}
       selectedAgent={selectedAgent}
       onSelectAgent={setSelectedAgent}
+      assignedSelection={assignedSelection}
       agentSessionState={session?.session_state ?? null}
       activeAgentIdentifier={session?.agent_identifier ?? null}
     />

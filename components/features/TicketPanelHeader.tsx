@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 
 type TicketPanelHeaderProps = {
   ticketId: string;
@@ -19,6 +20,7 @@ type TicketPanelHeaderProps = {
   agentToken: string | null;
   agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>>;
   agentIdentifier: string | null;
+  assignedAgent: TicketAssignedAgent | null;
   claudeCommand: string;
   codexCommand: string;
   cursorCommand: string;
@@ -37,6 +39,7 @@ export function TicketPanelHeader({
   agentToken,
   agentFlags,
   agentIdentifier,
+  assignedAgent,
   claudeCommand,
   codexCommand,
   cursorCommand,
@@ -84,6 +87,7 @@ export function TicketPanelHeader({
           agentToken={agentToken}
           agentFlags={agentFlags}
           agentIdentifier={agentIdentifier}
+          assignedAgent={assignedAgent}
           claudeCommand={claudeCommand}
           codexCommand={codexCommand}
           cursorCommand={cursorCommand}

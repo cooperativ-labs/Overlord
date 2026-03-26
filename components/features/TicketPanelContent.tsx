@@ -26,6 +26,10 @@ import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import {
+  getAssignedAgentIdentifier,
+  parseTicketAssignedAgent
+} from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
@@ -91,6 +95,7 @@ export async function TicketPanelContent({
   }
 
   const profileSettings = user ? await fetchProfileSettings(supabase, user.id) : null;
+  const assignedAgent = parseTicketAssignedAgent(ticket.assigned_agent);
 
   // Fetch all related data in parallel. Individual query failures are
   // handled gracefully — the component still renders with partial data.
@@ -311,6 +316,7 @@ export async function TicketPanelContent({
           agentToken={agentToken}
           agentFlags={agentFlags}
           agentIdentifier={agentSession?.agent_identifier ?? null}
+          assignedAgent={assignedAgent}
           claudeCommand={claudeCode}
           codexCommand={codex}
           cursorCommand={cursor}
@@ -374,7 +380,10 @@ export async function TicketPanelContent({
                       ? agentSession.agent_identifier
                       : null;
                   const displayAgent =
-                    runningAgent ?? ticket.recent_agent ?? ticket.assigned_agent ?? null;
+                    runningAgent ??
+                    ticket.recent_agent ??
+                    getAssignedAgentIdentifier(assignedAgent) ??
+                    null;
                   if (!displayAgent) return null;
                   const agentType = getAgentTypeByIdentifier(displayAgent);
                   return (

@@ -9,7 +9,12 @@ import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
+import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { normalizeHexColor } from '@/lib/helpers/color';
+import {
+  createTicketAssignedAgent,
+  parseTicketAssignedAgent
+} from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
@@ -1316,7 +1321,7 @@ type RawBoardTicket = {
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
-  assigned_agent: string | null;
+  assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
   recent_agent: string | null;
   is_read: boolean;
   updated_at: string;
@@ -1342,7 +1347,7 @@ function mapBoardTicket(raw: RawBoardTicket) {
     execution_target: raw.execution_target,
     status: raw.status,
     priority: raw.priority,
-    assigned_agent: raw.assigned_agent,
+    assigned_agent: parseTicketAssignedAgent(raw.assigned_agent),
     recent_agent: raw.recent_agent,
     is_read: raw.is_read,
     updated_at: raw.updated_at,
@@ -1411,6 +1416,36 @@ export async function updateTicketDueDateAction(
     .eq('id', ticketId);
 
   if (error) throw new Error(error.message);
+
+  revalidateTicketBoards();
+  revalidateTicketDetails([
+    {
+      organizationId: ticket.organization_id,
+      projectId: ticket.project_id,
+      ticketId
+    }
+  ]);
+}
+
+export async function updateTicketAssignedAgentAction(
+  ticketId: string,
+  selection: AgentModelSelection
+): Promise<void> {
+  const supabase = await createClient();
+  const ticket = await assertTicketAccess(supabase, ticketId);
+
+  const { error } = await supabase
+    .from('tickets')
+    .update({ assigned_agent: createTicketAssignedAgent(selection) })
+    .eq('id', ticketId);
+
+  if (error) throw new Error(error.message);
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: 'Assigned agent updated.',
+    ticket_id: ticketId
+  });
 
   revalidateTicketBoards();
   revalidateTicketDetails([

@@ -25,6 +25,7 @@ import {
   markTicketUnreadAction,
   reorderTicketsAction
 } from '@/lib/actions/tickets';
+import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import {
   getOpenedWaitingTimestamps,
@@ -556,7 +557,7 @@ export default function KanbanBoard({
             .order('created_at', { ascending: false }),
           supabase
             .from('tickets')
-            .select('id,status,title,recent_agent,is_read,board_position,updated_at')
+            .select('id,status,title,recent_agent,assigned_agent,is_read,board_position,updated_at')
             .in('id', ticketIds)
         ]);
 
@@ -582,6 +583,7 @@ export default function KanbanBoard({
             status: string | null;
             title: string | null;
             recent_agent: string | null;
+            assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
             is_read: boolean;
             board_position: number;
             updated_at: string;
@@ -603,6 +605,7 @@ export default function KanbanBoard({
             board_position: update.board_position ?? t.board_position,
             updated_at: update.updated_at ?? t.updated_at,
             recent_agent: update.recent_agent ?? t.recent_agent,
+            assigned_agent: parseTicketAssignedAgent(update.assigned_agent) ?? t.assigned_agent,
             ...(session
               ? {
                   agent_session_state: session.session_state,

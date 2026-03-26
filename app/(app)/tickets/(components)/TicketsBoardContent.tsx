@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
+import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -63,7 +64,7 @@ type RawTicket = {
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
-  assigned_agent: string | null;
+  assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
   recent_agent: string | null;
   is_read: boolean;
   updated_at: string;
@@ -260,6 +261,7 @@ export default async function TicketsBoardContent({
       const isAttached = session?.session_state === 'attached';
       return {
         ...ticket,
+        assigned_agent: parseTicketAssignedAgent(ticket.assigned_agent),
         objective: null,
         project_id: ticket.project_id,
         organization_name: getOrganizationName(organization),

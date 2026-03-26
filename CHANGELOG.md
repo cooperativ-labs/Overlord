@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.15.0] - 2026-03-26:12:37
+
+### Added
+- Persist ticket-specific agent, model, and thinking preferences as structured JSON so each ticket can carry its own launch configuration.
+- Add a safe Electron `openExternal` bridge and reusable `ExternalLink` component so HTTP and HTTPS links in markdown content and live artifacts open correctly in the desktop shell.
+
+### Fixed
+- None.
+
+### Changed
+- Make ticket boards, ticket lists, and the ticket panel prefer the assigned ticket agent when choosing the active agent shown in headers, cards, and launch controls.
+- Update agent selection controls to write the chosen model preference back to the ticket immediately while still keeping the user’s global default in sync.
+- Convert ticket artifact and markdown links to the shared external-link wrapper so browser and Electron behavior stays consistent.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `2.15.0`.
+
 ## [2.14.0] - 2026-03-26:09:21
 
 ### Added

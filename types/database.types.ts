@@ -995,7 +995,7 @@ export type Database = {
       tickets: {
         Row: {
           acceptance_criteria: string | null;
-          assigned_agent: string | null;
+          assigned_agent: Json | null;
           available_tools: string;
           board_position: number;
           constraints: string;
@@ -1022,7 +1022,7 @@ export type Database = {
         };
         Insert: {
           acceptance_criteria?: string | null;
-          assigned_agent?: string | null;
+          assigned_agent?: Json | null;
           available_tools?: string;
           board_position?: number;
           constraints?: string;
@@ -1049,7 +1049,7 @@ export type Database = {
         };
         Update: {
           acceptance_criteria?: string | null;
-          assigned_agent?: string | null;
+          assigned_agent?: Json | null;
           available_tools?: string;
           board_position?: number;
           constraints?: string;
