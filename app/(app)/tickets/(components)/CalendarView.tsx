@@ -26,12 +26,16 @@ import {
 } from 'date-fns';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { updateTicketDueDateAction, updateTicketStatusAction } from '@/lib/actions/tickets';
+import {
+  createCalendarTicketAction,
+  updateTicketDueDateAction,
+  updateTicketStatusAction
+} from '@/lib/actions/tickets';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
-import { getDisplayTitle } from '@/lib/helpers/tickets';
+import { deriveTitleFromObjective, getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
@@ -108,6 +112,7 @@ type CalendarViewProps = {
   initialView: string;
   showViewToggle?: boolean;
   projectId?: string;
+  organizationId?: number;
   ticketUrlBase?: string;
 };
 
@@ -117,6 +122,7 @@ export default function CalendarView({
   initialView,
   showViewToggle = true,
   projectId,
+  organizationId,
   ticketUrlBase = '/u'
 }: CalendarViewProps) {
   const router = useRouter();
@@ -124,6 +130,7 @@ export default function CalendarView({
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [localTickets, setLocalTickets] = useState(tickets);
   const [completingTicketId, setCompletingTicketId] = useState<string | null>(null);
+  const [creatingOnDateKey, setCreatingOnDateKey] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -224,6 +231,61 @@ export default function CalendarView({
     [router, ticketUrlBase]
   );
 
+  const handleStartCreating = useCallback((dateKey: string) => {
+    setCreatingOnDateKey(dateKey);
+  }, []);
+
+  const handleCloseCreating = useCallback(() => {
+    setCreatingOnDateKey(null);
+  }, []);
+
+  const handleCreateCalendarTicket = useCallback(
+    async (dateKey: string, objective: string) => {
+      const trimmed = objective.trim();
+      if (!trimmed) return;
+
+      const dueDatetime = `${dateKey}T12:00:00.000Z`;
+      const clientTicketId = crypto.randomUUID();
+
+      const referenceTicket = localTickets.find(t =>
+        projectId ? t.project_id === projectId : true
+      ) ?? localTickets[0];
+
+      const optimisticTicket: Ticket = {
+        id: clientTicketId,
+        title: deriveTitleFromObjective(trimmed),
+        objective: trimmed,
+        organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
+        project_id: projectId ?? referenceTicket?.project_id ?? '',
+        project_name: referenceTicket?.project_name ?? null,
+        project_color: referenceTicket?.project_color ?? null,
+        project_everhour_project_id: referenceTicket?.project_everhour_project_id ?? null,
+        everhour_task_id: null,
+        agent_session_state: null,
+        status: 'draft',
+        priority: 'medium',
+        execution_target: 'agent',
+        assigned_agent: null,
+        board_position: 0,
+        due_datetime: dueDatetime,
+        waiting_for_response_at: null,
+        has_unopened_waiting_response: false,
+        is_read: true
+      };
+
+      setLocalTickets(prev => [...prev, optimisticTicket]);
+      setCreatingOnDateKey(null);
+
+      try {
+        await createCalendarTicketAction(trimmed, dueDatetime, organizationId, projectId);
+        router.refresh();
+      } catch {
+        setLocalTickets(prev => prev.filter(t => t.id !== clientTicketId));
+      }
+    },
+    [localTickets, organizationId, projectId, router]
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Toolbar */}
@@ -282,6 +344,10 @@ export default function CalendarView({
                   isToday={today}
                   completeStatusName={completeStatusName}
                   completingTicketId={completingTicketId}
+                  isCreating={creatingOnDateKey === dateKey}
+                  onStartCreating={handleStartCreating}
+                  onCloseCreating={handleCloseCreating}
+                  onCreateTicket={handleCreateCalendarTicket}
                   onTicketComplete={ticketId => {
                     if (!completeStatusName) return;
                     const previousStatus =
@@ -327,6 +393,73 @@ export default function CalendarView({
   );
 }
 
+function CalendarNewTicketInput({
+  dateKey,
+  onSubmit,
+  onClose
+}: {
+  dateKey: string;
+  onSubmit: (dateKey: string, objective: string) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      if (isSubmitting) return;
+      const trimmed = e.currentTarget.value.trim();
+      if (!trimmed) {
+        onClose();
+        return;
+      }
+      setIsSubmitting(true);
+      onSubmit(dateKey, trimmed);
+    }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (isSubmitting) return;
+    const trimmed = e.target.value.trim();
+    if (trimmed) {
+      setIsSubmitting(true);
+      onSubmit(dateKey, trimmed);
+    } else {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="mt-0.5 rounded border border-border/60 bg-background shadow-sm"
+      onClick={e => e.stopPropagation()}
+    >
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        disabled={isSubmitting}
+        placeholder="Write an objective…"
+        rows={2}
+        className="w-full resize-none rounded bg-transparent px-1.5 py-1 text-xs outline-none placeholder:text-muted-foreground/50"
+      />
+    </div>
+  );
+}
+
 function CalendarDayCell({
   dateKey,
   day,
@@ -335,6 +468,10 @@ function CalendarDayCell({
   isToday: today,
   completeStatusName,
   completingTicketId,
+  isCreating,
+  onStartCreating,
+  onCloseCreating,
+  onCreateTicket,
   onTicketComplete,
   onTicketClick
 }: {
@@ -345,6 +482,10 @@ function CalendarDayCell({
   isToday: boolean;
   completeStatusName?: string;
   completingTicketId: string | null;
+  isCreating: boolean;
+  onStartCreating: (dateKey: string) => void;
+  onCloseCreating: () => void;
+  onCreateTicket: (dateKey: string, objective: string) => void;
   onTicketComplete: (ticketId: string) => void;
   onTicketClick: (ticket: Ticket) => void;
 }) {
@@ -358,6 +499,9 @@ function CalendarDayCell({
         !inCurrentMonth && 'bg-muted/30',
         isOver && 'bg-primary/10'
       )}
+      onClick={() => {
+        if (!isCreating) onStartCreating(dateKey);
+      }}
     >
       <div className="mb-0.5 flex items-center justify-between px-0.5">
         <span
@@ -382,6 +526,13 @@ function CalendarDayCell({
             onClick={() => onTicketClick(ticket)}
           />
         ))}
+        {isCreating && (
+          <CalendarNewTicketInput
+            dateKey={dateKey}
+            onSubmit={onCreateTicket}
+            onClose={onCloseCreating}
+          />
+        )}
       </div>
     </div>
   );

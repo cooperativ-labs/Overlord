@@ -177,7 +177,7 @@ export function FeedList({ projects, editorScheme }: FeedListProps) {
           <ExecutingTicketsSection tickets={filteredExecutingTickets} />
 
           {isInitialLoading ? (
-            <div className="space-y-6">
+            <div className="flex flex-col gap-6">
               {Array.from({ length: 4 }).map((_, i) => (
                 <FeedCardSkeleton key={i} />
               ))}
@@ -191,14 +191,20 @@ export function FeedList({ projects, editorScheme }: FeedListProps) {
               </p>
             </div>
           ) : (
-            filteredPosts.map(post => (
-              <FeedCard
-                key={post.id}
-                post={post}
-                editorScheme={editorScheme}
-                workspaceRoot={workspaceRootByProjectId.get(post.project_id) ?? ''}
-              />
-            ))
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Newspaper className="h-4 w-4 text-blue-600" />
+                <span>Completed</span>
+              </div>
+              {filteredPosts.map(post => (
+                <FeedCard
+                  key={post.id}
+                  post={post}
+                  editorScheme={editorScheme}
+                  workspaceRoot={workspaceRootByProjectId.get(post.project_id) ?? ''}
+                />
+              ))}
+            </div>
           )}
 
           {/* Sentinel div that triggers loading more posts when scrolled into view */}

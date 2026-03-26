@@ -1,9 +1,12 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
@@ -35,6 +38,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [searchShortcutHint, setSearchShortcutHint] = useState('⌘F');
+  const [backShortcutHint, setBackShortcutHint] = useState('⌥←');
 
   useEffect(() => {
     if (!query.trim()) {
@@ -92,9 +96,11 @@ export function TicketSearch({ className }: TicketSearchProps) {
   }, []);
 
   useEffect(() => {
-    setSearchShortcutHint(navigator.platform.toLowerCase().includes('mac') ? '⌘F' : 'Ctrl+F');
+    const isMac = navigator.platform.toLowerCase().includes('mac');
+    setSearchShortcutHint(isMac ? '⌘F' : 'Ctrl+F');
+    setBackShortcutHint(isMac ? '⌥←' : 'Alt+←');
 
-    const handleGlobalSearchHotkey = (event: globalThis.KeyboardEvent) => {
+    const handleGlobalHotkeys = (event: globalThis.KeyboardEvent) => {
       if (
         (event.metaKey || event.ctrlKey) &&
         !event.altKey &&
@@ -103,12 +109,15 @@ export function TicketSearch({ className }: TicketSearchProps) {
       ) {
         event.preventDefault();
         inputRef.current?.focus();
+      } else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === 'ArrowLeft') {
+        event.preventDefault();
+        router.back();
       }
     };
 
-    window.addEventListener('keydown', handleGlobalSearchHotkey);
-    return () => window.removeEventListener('keydown', handleGlobalSearchHotkey);
-  }, []);
+    window.addEventListener('keydown', handleGlobalHotkeys);
+    return () => window.removeEventListener('keydown', handleGlobalHotkeys);
+  }, [router]);
 
   const selectTicket = (ticket: TicketSearchResult) => {
     if (!ticket.project_id) {
@@ -142,7 +151,23 @@ export function TicketSearch({ className }: TicketSearchProps) {
   };
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div className={cn('flex items-center gap-1', className)}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-label="Go back"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Go back ({backShortcutHint})</TooltipContent>
+      </Tooltip>
+      <div ref={containerRef} className="relative min-w-0 flex-1">
       <div className="relative">
         <Input
           ref={inputRef}
@@ -202,6 +227,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
           })}
         </ul>
       )}
+      </div>
     </div>
   );
 }

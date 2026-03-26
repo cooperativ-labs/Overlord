@@ -540,6 +540,49 @@ export async function createTicketInColumnAction(
   return { id: data.id, organizationId: data.organization_id, projectId: data.project_id };
 }
 
+export async function createCalendarTicketAction(
+  objective: string,
+  dueDatetime: string,
+  organizationId?: number,
+  projectId?: string
+) {
+  const supabase = await createClient();
+  const selected = await resolveTicketProjectAndOrganization(supabase, {
+    organizationId,
+    projectId
+  });
+  const trimmedObjective = objective.trim() || null;
+  const title = trimmedObjective ? await generateTicketTitleAction(trimmedObjective) : null;
+
+  const { data, error } = await supabase
+    .from('tickets')
+    .insert({
+      status: 'draft',
+      title,
+      due_datetime: dueDatetime,
+      organization_id: selected.organizationId,
+      project_id: selected.projectId
+    })
+    .select('id,organization_id,project_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to create ticket.');
+  }
+
+  await upsertDraftObjective(supabase, data.id, trimmedObjective);
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: data.organization_id, projectId: data.project_id, ticketId: data.id }
+  ]);
+
+  return { id: data.id, organizationId: data.organization_id, projectId: data.project_id };
+}
+
 export async function createBlankTicketAction(organizationId?: number, projectId?: string) {
   const supabase = await createClient();
   const selected = await resolveTicketProjectAndOrganization(supabase, {

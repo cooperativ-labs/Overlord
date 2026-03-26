@@ -6,6 +6,7 @@ import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
@@ -27,13 +28,17 @@ export function ObjectiveCollapsibleItem({
   isLatest
 }: ObjectiveCollapsibleItemProps) {
   const executedAt = new Date(objective.created_at).toLocaleString();
+  const isExecuting = objective.state === 'executing';
 
   return (
     <Collapsible defaultOpen={isLatest}>
-      <div className="relative flex items-center gap-1 overflow-hidden rounded-md pr-1 hover:bg-background">
-        {objective.state === 'executing' && (
-          <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
+      <div
+        className={cn(
+          'relative flex items-center gap-1 overflow-hidden rounded-md pr-1 hover:bg-background',
+          isExecuting &&
+            'animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent'
         )}
+      >
         <CollapsibleTrigger asChild>
           <button
             className="flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left hover:bg-background overflow-hidden"

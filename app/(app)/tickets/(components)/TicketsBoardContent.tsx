@@ -338,6 +338,7 @@ export default async function TicketsBoardContent({
             initialView={view}
             showViewToggle={!isMobile}
             projectId={projectId}
+            organizationId={organizationId}
             ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
           />
         </div>
