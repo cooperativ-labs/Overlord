@@ -89,7 +89,7 @@ export function ActiveAgentDisplay({ identifier }: { identifier: string | null }
             alt={`${agentType.label} icon`}
             width={12}
             height={12}
-            className="h-3 w-3 shrink-0"
+            className={cn('h-3 w-3 shrink-0', agentType.invertDark ? 'dark:invert' : '')}
           />
           <span className="truncate">{agentType.label}</span>
         </p>

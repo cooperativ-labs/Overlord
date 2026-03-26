@@ -72,3 +72,23 @@ export async function signOut(): Promise<AuthResult> {
   await supabase.auth.signOut();
   return { redirect: '/login' };
 }
+
+export type OAuthResult = { error?: string; url?: string };
+
+export async function signInWithGithub(next?: string): Promise<OAuthResult> {
+  const supabase = await createClient();
+  const redirectTo =
+    `${getPlatformUrl()}/auth/callback` +
+    (next ? `?next=${encodeURIComponent(next)}` : '?next=%2Fu');
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'github',
+    options: { redirectTo }
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { url: data.url ?? undefined };
+}

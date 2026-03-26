@@ -149,7 +149,7 @@ export default function BlankTicketCard({
   );
 
   return (
-    <Card className="border-border/40 shadow-sm z-10 w-[110%] -ml-[5%]">
+    <Card className="border-border/40 shadow-2xl overflow-visible scale-110">
       <CardContent className="relative p-2">
         <MentionableTextarea
           ref={inputRef}

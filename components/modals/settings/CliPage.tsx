@@ -37,6 +37,7 @@ import {
   type AgentSelectorValue,
   getAgentTypeByValue
 } from '@/lib/helpers/agent-types';
+import { cn } from '@/lib/utils';
 
 type SlashCommandConfig = {
   label: string;
@@ -265,7 +266,7 @@ function AgentNameWithLogo({
         alt={agentType.label}
         width={16}
         height={16}
-        className={iconClassName}
+        className={cn(iconClassName, agentType.invertDark ? 'dark:invert' : '')}
       />
       <span>{label}</span>
     </span>

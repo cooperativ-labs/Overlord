@@ -1,13 +1,10 @@
 import { FeedList } from '@/components/features/feed/FeedList';
-import { getExecutingFeedTicketsAction, getFeedPostsAction } from '@/lib/actions/feed';
 import { getEditorSchemeAction } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { getEditorScheme } from '@/lib/env';
 
 export default async function FeedPage() {
-  const [posts, executingTickets, projects, preferredEditorScheme] = await Promise.all([
-    getFeedPostsAction({ limit: 10 }),
-    getExecutingFeedTicketsAction(),
+  const [projects, preferredEditorScheme] = await Promise.all([
     getProjectsForCurrentUser(),
     getEditorSchemeAction()
   ]);
@@ -19,12 +16,5 @@ export default async function FeedPage() {
     localWorkingDirectory: p.localWorkingDirectory
   }));
 
-  return (
-    <FeedList
-      posts={posts}
-      executingTickets={executingTickets}
-      projects={projectList}
-      editorScheme={getEditorScheme(preferredEditorScheme)}
-    />
-  );
+  return <FeedList projects={projectList} editorScheme={getEditorScheme(preferredEditorScheme)} />;
 }

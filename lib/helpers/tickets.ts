@@ -25,6 +25,6 @@ export function getTicketIdentifier(ticketId: string): string {
  */
 export function deriveTitleFromObjective(objective: string): string {
   const trimmed = normalizeObjectiveForTitle(objective);
-  if (trimmed.length <= 60) return trimmed;
-  return trimmed.slice(0, 60) + '…';
+  if (trimmed.length <= 100) return trimmed;
+  return trimmed.slice(0, 100) + '…';
 }

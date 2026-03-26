@@ -30,6 +30,7 @@ import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
+import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -385,7 +386,7 @@ export async function TicketPanelContent({
                             alt={`${agentType.label} icon`}
                             width={12}
                             height={12}
-                            className="h-3 w-3"
+                            className={cn('h-3 w-3', agentType.invertDark ? 'dark:invert' : '')}
                           />
                           {agentType.label}
                         </>

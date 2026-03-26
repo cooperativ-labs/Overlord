@@ -8,6 +8,7 @@ export type AgentType = {
   label: string;
   icon: string;
   identifiers: readonly string[];
+  invertDark?: boolean;
 };
 
 export const AGENT_TYPES: readonly AgentType[] = [
@@ -15,31 +16,36 @@ export const AGENT_TYPES: readonly AgentType[] = [
     value: 'claude',
     label: 'Claude Code',
     icon: '/images/icons/claude-code.svg',
-    identifiers: ['claude-code', 'claude']
+    identifiers: ['claude-code', 'claude'],
+    invertDark: false
   },
   {
     value: 'codex',
     label: 'Codex',
     icon: '/images/icons/codex.svg',
-    identifiers: ['codex']
+    identifiers: ['codex'],
+    invertDark: true
   },
   {
     value: 'cursor',
     label: 'Cursor',
     icon: '/images/icons/cursor.svg',
-    identifiers: ['cursor']
+    identifiers: ['cursor'],
+    invertDark: true
   },
   {
     value: 'gemini',
     label: 'Gemini',
     icon: '/images/icons/gemini.svg',
-    identifiers: ['gemini', 'google-gemini']
+    identifiers: ['gemini', 'google-gemini'],
+    invertDark: false
   },
   {
     value: 'opencode',
     label: 'OpenCode',
     icon: '/images/icons/opencode.svg',
-    identifiers: ['opencode', 'open-code']
+    identifiers: ['opencode', 'open-code'],
+    invertDark: false
   }
 ] as const;
 

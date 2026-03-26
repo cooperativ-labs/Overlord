@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { generateTitleWithGemini } from '@/lib/ai/generate-ticket-title';
+import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { Database } from '@/types/database.types';
 
 type ObjectiveClient = SupabaseClient<Database>;
@@ -115,6 +117,48 @@ export async function markDraftObjectiveExecuted(supabase: ObjectiveClient, tick
 
   return {
     didExecute: true,
-    executedObjective: normalizedObjective
+    executedObjective: normalizedObjective,
+    executedObjectiveId: draft.id
   };
+}
+
+const AI_TITLE_THRESHOLD = 100;
+
+/**
+ * Generates and persists a title for an executed objective.
+ * Uses the ticket title summarizer (Gemini for long objectives, truncation for short ones).
+ * Respects the user's ai_title_generation preference.
+ * Designed to be called fire-and-forget so it doesn't block other processes.
+ */
+export async function generateAndSetObjectiveTitle(
+  supabase: ObjectiveClient,
+  objectiveId: string,
+  objectiveText: string,
+  userId: string
+) {
+  const normalized = objectiveText.trim();
+  if (!normalized) return;
+
+  let title: string;
+
+  if (normalized.length <= AI_TITLE_THRESHOLD) {
+    title = deriveTitleFromObjective(normalized);
+  } else {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('ai_title_generation')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const aiEnabled = profile?.ai_title_generation ?? true;
+
+    if (aiEnabled) {
+      const aiTitle = await generateTitleWithGemini(normalized);
+      title = aiTitle || deriveTitleFromObjective(normalized);
+    } else {
+      title = deriveTitleFromObjective(normalized);
+    }
+  }
+
+  await supabase.from('objectives').update({ title }).eq('id', objectiveId);
 }

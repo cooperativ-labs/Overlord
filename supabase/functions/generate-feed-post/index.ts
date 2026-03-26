@@ -437,14 +437,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Back-fill the generated title onto the most recent executed objective
-    if (latestObjective?.id) {
-      await supabase
-        .from('objectives')
-        .update({ title: generated.title })
-        .eq('id', latestObjective.id);
-    }
-
     // Compute event window
     const allEvents = events ?? [];
     const eventIds = allEvents.map(e => e.id);

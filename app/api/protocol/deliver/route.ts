@@ -68,43 +68,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { claudeCode, codex, cursor, gemini, opencode } = buildResumeCommands({
-      platformUrl: getPlatformUrl(),
-      ticketId,
-      token: tokenValue
-    });
-    const restartCommand = selectRestartSessionCommand(
-      resolved.session.agent_identifier,
-      {
-        claudeCode,
-        codex,
-        cursor,
-        gemini,
-        opencode
-      },
-      resolved.session.external_session_id
-    );
-    const hasRestartArtifact = artifacts.some(
-      artifact => artifact.label.trim().toLowerCase() === 'restart session command'
-    );
-    const artifactsToPersist = hasRestartArtifact
-      ? artifacts
-      : [
-          ...artifacts,
-          {
-            type: 'note',
-            label: 'Restart session command',
-            content: `\`\`\`bash\n${restartCommand}\n\`\`\``,
-            uri: undefined,
-            metadata: {
-              agent_identifier: resolved.session.agent_identifier,
-              generated_by: 'protocol_deliver',
-              restart_session_command: true
-            }
-          }
-        ];
-
-    const artifactCount = artifactsToPersist.length;
+    const artifactCount = artifacts.length;
     const eventId = event.id;
     const sessionId = resolved.session.id;
     const agentIdentifier = resolved.session.agent_identifier;
@@ -114,8 +78,8 @@ export async function POST(request: Request) {
     // sandbox runtimes with short request windows receive a timely 200 response.
     after(async () => {
       try {
-        if (artifactsToPersist.length) {
-          const artifactRows = artifactsToPersist.map(artifact => ({
+        if (artifacts.length) {
+          const artifactRows = artifacts.map(artifact => ({
             artifact_type: artifact.type,
             content: artifact.content ?? null,
             event_id: eventId,

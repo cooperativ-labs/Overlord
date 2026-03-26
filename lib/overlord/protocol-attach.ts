@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
-import { markDraftObjectiveExecuted } from '@/lib/objectives';
+import { generateAndSetObjectiveTitle, markDraftObjectiveExecuted } from '@/lib/objectives';
 import { buildPromptContext } from '@/lib/overlord/prompt-context';
 import { connectionMethods } from '@/lib/overlord/types';
 import type { Database, Json } from '@/types/database.types';
@@ -84,6 +84,16 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
   }
 
   const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId);
+
+  // Fire-and-forget: generate objective title immediately without blocking attach
+  if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {
+    generateAndSetObjectiveTitle(
+      supabase,
+      objectiveExecution.executedObjectiveId,
+      objectiveExecution.executedObjective!,
+      userId
+    ).catch(err => console.error('[attach] objective title generation failed:', err));
+  }
 
   const previousStatus = ticket.status;
   const isResumeAfterDelivery = previousStatus === 'review' || previousStatus === 'complete';

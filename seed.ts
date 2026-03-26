@@ -27,6 +27,12 @@ async function main() {
   const orgId = 1;
   const projectAlphaId = 'aaaaaaaa-0000-4000-8000-000000000001';
   const projectBetaId = 'aaaaaaaa-0000-4000-8000-000000000002';
+  const reviewSessionId = 'cccccccc-0000-4000-8000-000000000001';
+  const reviewEventId = 'dddddddd-0000-4000-8000-000000000001';
+  const reviewFileChangeIds = [
+    'eeeeeeee-0000-4000-8000-000000000001',
+    'eeeeeeee-0000-4000-8000-000000000002'
+  ];
 
   // Register OAuth clients for CLI and Electron login
   // Explicitly control nullable fields to prevent Snaplet from auto-generating
@@ -318,6 +324,78 @@ async function main() {
       ticket_id: ticketIds[5],
       objective: 'Write a one-time script to migrate records from the old schema to the new one.',
       is_executed: false
+    }
+  ]);
+
+  // Review ticket change history with linked session, event, and file diffs
+  await seed.agent_sessions([
+    {
+      id: reviewSessionId,
+      ticket_id: ticketIds[0],
+      agent_identifier: 'Claude',
+      connection_method: 'claude_code',
+      session_state: 'completed',
+      session_key: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      metadata: {
+        source: 'seed',
+        purpose: 'review-ticket-file-changes'
+      },
+      heartbeat_at: '2026-03-26T10:00:00.000Z',
+      attached_at: '2026-03-26T09:45:00.000Z',
+      detached_at: '2026-03-26T10:05:00.000Z',
+      external_url: null,
+      external_session_id: null
+    }
+  ]);
+
+  await seed.ticket_events([
+    {
+      id: reviewEventId,
+      ticket_id: ticketIds[0],
+      session_id: reviewSessionId,
+      event_type: 'deliver',
+      phase: 'review',
+      summary: 'Delivered the CI/CD workflow update for review.',
+      payload: {
+        files_changed: 2,
+        objective_titles: ['CI workflow setup', 'Deployment wiring']
+      },
+      is_blocking: false
+    }
+  ]);
+
+  await seed.file_changes([
+    {
+      id: reviewFileChangeIds[0],
+      ticket_id: ticketIds[0],
+      session_id: reviewSessionId,
+      event_id: reviewEventId,
+      file_name: 'ci.yml',
+      file_path: '.github/workflows/ci.yml',
+      label: 'CI workflow updates',
+      summary: 'Added lint and test jobs with cached dependencies and fail-fast behavior.',
+      why: 'This mirrors the first completed objective and gives the review card a concrete diff to inspect.',
+      impact: 'Improves pipeline feedback time and makes the review state feel like an in-progress deliverable.',
+      change_kind: 'modify',
+      attribution_source: 'explicit',
+      confidence: 'explicit',
+      hunks: [{ header: '@@ -1,8 +1,34 @@' }]
+    },
+    {
+      id: reviewFileChangeIds[1],
+      ticket_id: ticketIds[0],
+      session_id: reviewSessionId,
+      event_id: reviewEventId,
+      file_name: 'deploy.yml',
+      file_path: '.github/workflows/deploy.yml',
+      label: 'Deploy workflow updates',
+      summary: 'Wired production secrets into the deploy job and gated releases on the main branch.',
+      why: 'This mirrors the second completed objective and shows a second file in the same review batch.',
+      impact: 'Shows how the review ticket can carry multiple related file changes before merge.',
+      change_kind: 'modify',
+      attribution_source: 'explicit',
+      confidence: 'explicit',
+      hunks: [{ header: '@@ -0,0 +1,28 @@' }]
     }
   ]);
 

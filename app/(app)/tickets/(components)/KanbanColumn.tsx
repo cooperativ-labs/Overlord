@@ -84,7 +84,13 @@ export default function KanbanColumn({
   }, [scrollKey]);
 
   const handleStartAddingTop = () => setAddPosition('top');
-  const handleStartAddingBottom = () => setAddPosition('bottom');
+  const handleStartAddingBottom = () => {
+    setAddPosition('bottom');
+    setTimeout(() => {
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
+  };
 
   const handleCloseBlankCard = useCallback(() => setAddPosition(null), []);
 
@@ -92,7 +98,7 @@ export default function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex min-w-[280px] shrink-0 flex-1 flex-col rounded-lg bg-muted/30 transition-colors',
+        'flex min-w-[280px] shrink-0 flex-1 flex-col rounded-lg bg-muted/30 transition-colors relative',
         isOver ? 'bg-muted/60' : ''
       )}
     >
@@ -131,28 +137,30 @@ export default function KanbanColumn({
           </Button>
         </div>
       </div>
-      <div className="flex-1 px-3 ">
+      <div className="flex-1 px-3">
+        {addPosition === 'top' && (
+          <div className="relative -mx-5 z-20 mb-2">
+            <BlankTicketCard
+              inputId={inputId}
+              status={column.id}
+              position="top"
+              fileMentionPaths={fileMentionPaths}
+              workingDirectory={workingDirectory}
+              onCreateTicket={onCreateTicket}
+              onCreateAndOpenTicket={onCreateAndOpenTicket}
+              onClose={handleCloseBlankCard}
+              onSubmitted={() => setFocusEditorCount(c => c + 1)}
+              focusTrigger={focusEditorCount}
+            />
+          </div>
+        )}
         <SortableContext items={ticketIds} strategy={verticalListSortingStrategy}>
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="h-[calc(100vh-16rem)] overflow-y-auto pr-2"
+            className="h-[calc(100vh-16rem)] overflow-y-auto"
           >
             <div className="flex flex-col gap-2">
-              {addPosition === 'top' && (
-                <BlankTicketCard
-                  inputId={inputId}
-                  status={column.id}
-                  position="top"
-                  fileMentionPaths={fileMentionPaths}
-                  workingDirectory={workingDirectory}
-                  onCreateTicket={onCreateTicket}
-                  onCreateAndOpenTicket={onCreateAndOpenTicket}
-                  onClose={handleCloseBlankCard}
-                  onSubmitted={() => setFocusEditorCount(c => c + 1)}
-                  focusTrigger={focusEditorCount}
-                />
-              )}
               {tickets.length === 0 && !addPosition && (
                 <div className="text-muted-foreground rounded-md bg-background/50 p-4 text-center text-xs">
                   No tickets
@@ -168,18 +176,22 @@ export default function KanbanColumn({
                 />
               ))}
               {addPosition === 'bottom' && (
-                <BlankTicketCard
-                  inputId={inputId}
-                  status={column.id}
-                  position="bottom"
-                  fileMentionPaths={fileMentionPaths}
-                  workingDirectory={workingDirectory}
-                  onCreateTicket={onCreateTicket}
-                  onCreateAndOpenTicket={onCreateAndOpenTicket}
-                  onClose={handleCloseBlankCard}
-                  onSubmitted={() => setFocusEditorCount(c => c + 1)}
-                  focusTrigger={focusEditorCount}
-                />
+                <div>
+                  <div className="absolute -mx-3 -mt-4 z-20 mb-2 w-full">
+                    <BlankTicketCard
+                      inputId={inputId}
+                      status={column.id}
+                      position="bottom"
+                      fileMentionPaths={fileMentionPaths}
+                      workingDirectory={workingDirectory}
+                      onCreateTicket={onCreateTicket}
+                      onCreateAndOpenTicket={onCreateAndOpenTicket}
+                      onClose={handleCloseBlankCard}
+                      onSubmitted={() => setFocusEditorCount(c => c + 1)}
+                      focusTrigger={focusEditorCount}
+                    />
+                  </div>
+                </div>
               )}
               {!addPosition && (
                 <button

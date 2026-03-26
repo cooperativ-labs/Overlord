@@ -945,6 +945,17 @@ export async function markObjectiveExecutedAction(
     throw new Error(ticketError?.message ?? 'Ticket not found.');
   }
 
+  // Fire-and-forget: generate objective title immediately
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (user && objective.objective) {
+    const { generateAndSetObjectiveTitle } = await import('@/lib/objectives');
+    generateAndSetObjectiveTitle(supabase, objectiveId, objective.objective, user.id).catch(err =>
+      console.error('[markObjectiveExecuted] title generation failed:', err)
+    );
+  }
+
   await supabase.from('ticket_events').insert({
     event_type: 'system',
     summary: 'Objective marked executed.',
