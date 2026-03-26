@@ -110,6 +110,8 @@ export function useExecutingFeedTickets(initialTickets: ExecutingFeedTicket[]) {
       }
     };
 
+    void refresh();
+
     const channel = supabase
       .channel('feed-executing-tickets')
       .on(

@@ -4,7 +4,7 @@ import { Loader2, Newspaper } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import type { FeedPost } from '@/lib/actions/feed';
+import type { ExecutingFeedTicket, FeedPost } from '@/lib/actions/feed';
 import { getFeedPostsAction } from '@/lib/actions/feed';
 import { getWorkspaceRoot } from '@/lib/env';
 import { useExecutingFeedTickets } from '@/lib/hooks/use-executing-feed-tickets';
@@ -28,13 +28,14 @@ type Project = {
 type FeedListProps = {
   projects: Project[];
   editorScheme: string;
+  initialExecutingTickets?: ExecutingFeedTicket[];
 };
 
-export function FeedList({ projects, editorScheme }: FeedListProps) {
+export function FeedList({ projects, editorScheme, initialExecutingTickets = [] }: FeedListProps) {
   const { newPosts, markKnown } = useFeedRealtime();
   const [basePosts, setBasePosts] = useState<FeedPost[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const liveExecutingTickets = useExecutingFeedTickets([]);
+  const liveExecutingTickets = useExecutingFeedTickets(initialExecutingTickets);
   const [selectedProjectId, setSelectedProjectId] = useState('all');
   const [additionalPosts, setAdditionalPosts] = useState<FeedPost[]>([]);
   const [isLoadingMore, setIsLoadingMore] = useState(false);

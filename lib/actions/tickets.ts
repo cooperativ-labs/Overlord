@@ -30,8 +30,8 @@ import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 function revalidateTicketBoards() {
-  revalidatePath('/u');
-  revalidatePath('/projects');
+  revalidatePath('/u', 'layout');
+  revalidatePath('/projects', 'layout');
 }
 
 function revalidateTicketDetails(
@@ -1256,7 +1256,8 @@ export async function deleteTicketAction(
 
   revalidateTicketBoards();
   revalidatePath(
-    buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id })
+    buildProjectPath({ organizationId: data.organization_id, projectId: data.project_id }),
+    'layout'
   );
   return { organizationId: data.organization_id, projectId: data.project_id };
 }

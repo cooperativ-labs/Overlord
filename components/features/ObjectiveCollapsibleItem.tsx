@@ -31,47 +31,47 @@ export function ObjectiveCollapsibleItem({
 
   return (
     <Collapsible defaultOpen={isLatest}>
-      {isExecuting && (
-        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent rounded-md" />
-      )}
-      <div
-        className={
-          'relative flex items-center gap-1 overflow-hidden rounded-md pr-1 hover:bg-background'
-        }
-      >
-        <CollapsibleTrigger asChild>
-          <button
-            className="relative flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left hover:bg-background overflow-hidden"
-            type="button"
-          >
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              {objective.state === 'executing' ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-              ) : objective.state === 'complete' ? (
-                <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
-              ) : null}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <p className="text-sm font-medium truncate">
-                    {objective.title ?? `Objective ${index + 1}`}
-                  </p>
-                </TooltipTrigger>
-                <TooltipContent side="top">Executed {executedAt}</TooltipContent>
-              </Tooltip>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-1" />
-          </button>
-        </CollapsibleTrigger>
-        <ObjectiveMenuButton
-          ticketId={ticketId}
-          objectiveId={objective.id}
-          isExecuted={objective.is_executed}
-          canMarkExecuted={objective.objective.trim().length > 0}
-        />
+      <div className="relative">
+        {isExecuting && (
+          <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent rounded-md" />
+        )}
+        <div
+          className={' flex items-center gap-1 overflow-hidden rounded-md pr-1 hover:bg-background'}
+        >
+          <CollapsibleTrigger asChild>
+            <button
+              className="relative flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left hover:bg-background overflow-hidden"
+              type="button"
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {objective.state === 'executing' ? (
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                ) : objective.state === 'complete' ? (
+                  <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                ) : null}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <p className="text-sm font-medium truncate">
+                      {objective.title ?? `Objective ${index + 1}`}
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Executed {executedAt}</TooltipContent>
+                </Tooltip>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-1" />
+            </button>
+          </CollapsibleTrigger>
+          <ObjectiveMenuButton
+            ticketId={ticketId}
+            objectiveId={objective.id}
+            isExecuted={objective.is_executed}
+            canMarkExecuted={objective.objective.trim().length > 0}
+          />
+        </div>
+        <CollapsibleContent className="px-3 pb-2 pt-1 border-b">
+          <MarkdownContent compact>{objective.objective}</MarkdownContent>
+        </CollapsibleContent>
       </div>
-      <CollapsibleContent className="px-3 pb-2 pt-1 border-b">
-        <MarkdownContent compact>{objective.objective}</MarkdownContent>
-      </CollapsibleContent>
     </Collapsible>
   );
 }

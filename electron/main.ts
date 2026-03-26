@@ -1,5 +1,5 @@
 import { config as loadDotenv } from 'dotenv';
-import { app, BrowserWindow, Menu, MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
@@ -72,6 +72,29 @@ function getRendererCsp(targetUrl: string): string {
     "font-src 'self' data:",
     `connect-src ${connectSources}`
   ].join('; ');
+}
+
+function getUrlOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+async function openUrlInDefaultBrowser(url: string): Promise<boolean> {
+  const parsed = getUrlOrigin(url);
+  if (!parsed) return false;
+
+  const protocol = new URL(url).protocol;
+  if (protocol !== 'http:' && protocol !== 'https:') return false;
+
+  try {
+    await shell.openExternal(url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function applyRendererCsp(window: BrowserWindow, targetUrl: string): void {
@@ -170,6 +193,7 @@ function resolveConnectorUrl(fallbackUrl: string): string {
 }
 
 function createWindow(targetUrl: string) {
+  const targetOrigin = getUrlOrigin(targetUrl);
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -189,6 +213,22 @@ function createWindow(targetUrl: string) {
 
   applyRendererCsp(mainWindow, targetUrl);
   registerNativeContextMenu(mainWindow);
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (targetOrigin && getUrlOrigin(url) !== targetOrigin) {
+      void openUrlInDefaultBrowser(url);
+    }
+
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!targetOrigin) return;
+
+    const nextOrigin = getUrlOrigin(url);
+    if (!nextOrigin || nextOrigin === targetOrigin) return;
+
+    event.preventDefault();
+    void openUrlInDefaultBrowser(url);
+  });
   mainWindow.loadURL(targetUrl);
 
   if (isDev) {
