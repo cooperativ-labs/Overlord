@@ -109,7 +109,7 @@ export function SettingsModal({
   const visibleWorkflowNavItems = workflowNavItems.filter(item => !item.electronOnly || isElectron);
   const visibleAppNavItems = appNavItems.filter(item => !item.electronOnly || isElectron);
   const visibleUserNavItems = userNavItems.filter(item => !item.electronOnly || isElectron);
-  const [activeNav, setActiveNav] = useState<string>('Integrations');
+  const [activeNav, setActiveNav] = useState<string>('CLI & Local Agents');
 
   useEffect(() => {
     if (!open || !initialNav) return;
