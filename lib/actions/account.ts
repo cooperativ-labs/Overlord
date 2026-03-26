@@ -268,7 +268,6 @@ export async function disconnectIdentityAction(identityId: string): Promise<Link
   }
 
   revalidatePath('/u');
-  revalidatePath('/account/sessions');
   revalidatePath('/', 'layout');
 
   return {};
