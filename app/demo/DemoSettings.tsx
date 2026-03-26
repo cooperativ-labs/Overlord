@@ -49,7 +49,7 @@ import {
   SidebarProvider
 } from '@/components/ui/sidebar';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 
 type NavItem = { name: string; icon: React.ElementType };
 
