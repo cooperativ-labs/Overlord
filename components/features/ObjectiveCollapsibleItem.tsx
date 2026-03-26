@@ -33,7 +33,7 @@ export function ObjectiveCollapsibleItem({
       <div className="flex items-center gap-1 rounded-md pr-1 hover:bg-background">
         <CollapsibleTrigger asChild>
           <button
-            className="flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left hover:bg-background"
+            className="flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left hover:bg-background overflow-hidden"
             type="button"
           >
             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -61,7 +61,7 @@ export function ObjectiveCollapsibleItem({
           canMarkExecuted={objective.objective.trim().length > 0}
         />
       </div>
-      <CollapsibleContent className="px-3 pb-2 pt-1">
+      <CollapsibleContent className="px-3 pb-2 pt-1 border-b">
         <MarkdownContent compact>{objective.objective}</MarkdownContent>
       </CollapsibleContent>
     </Collapsible>
