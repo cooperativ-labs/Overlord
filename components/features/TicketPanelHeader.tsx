@@ -52,9 +52,6 @@ export function TicketPanelHeader({
 }: TicketPanelHeaderProps) {
   return (
     <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-3">
-      {isAgentRunning && (
-        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
-      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button aria-label="Ticket actions" className="h-8 w-8" size="icon" variant="ghost">

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.16.0] - 2026-03-26
+
+### Added
+- None.
+
+### Fixed
+- Fix blank ticket card input clearing timing to prevent value persistence after submission.
+- Adjust bottom blank ticket card positioning in kanban columns for better visual alignment.
+
+### Changed
+- Move shimmer animation from ticket panel header to individual objective items during execution for more granular visual feedback.
+- Update system notification action buttons to use LoadingButton component for better async operation feedback.
+- Optimize ticket search queries by removing objective field from selection to improve performance.
+- Update ticket title display logic to use the title field directly instead of falling back to collapsed objective text.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `2.16.0`.
+
 ## [2.15.0] - 2026-03-26:12:37
 
 ### Added

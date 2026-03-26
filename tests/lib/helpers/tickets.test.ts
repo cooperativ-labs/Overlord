@@ -9,12 +9,12 @@ describe('ticket title helpers', () => {
     ).toBe('Update @BlankTicketCard.tsx to improve title generation');
   });
 
-  it('collapses file mentions when falling back to the objective for display', () => {
-    expect(
-      getDisplayTitle({
-        objective: 'Fix @components/features/TicketPanelLive.tsx and review edge cases'
-      })
-    ).toBe('Fix @TicketPanelLive.tsx and review edge cases');
+  it('returns the title when set', () => {
+    expect(getDisplayTitle({ title: 'Fix edge cases' })).toBe('Fix edge cases');
+  });
+
+  it('returns Untitled when no title is set', () => {
+    expect(getDisplayTitle({})).toBe('Untitled');
   });
 
   it('keeps non-file mentions unchanged', () => {

@@ -177,7 +177,7 @@ export default function KanbanColumn({
               ))}
               {addPosition === 'bottom' && (
                 <div>
-                  <div className="absolute -mx-3 -mt-4 z-20 mb-2 w-full">
+                  <div className="absolute -mx-3 mt-2 z-20 mb-2 w-full">
                     <BlankTicketCard
                       inputId={inputId}
                       status={column.id}

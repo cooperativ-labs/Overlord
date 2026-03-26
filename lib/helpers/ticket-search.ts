@@ -37,7 +37,7 @@ export async function searchTicketsByTitle(
     organizationId,
     limit = 8,
     query,
-    select = 'id,title,objective,ticket_sequence,project_id,organization_id,status,project:projects(name)'
+    select = 'id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)'
   }: {
     includeCompleted?: boolean;
     organizationId?: number;

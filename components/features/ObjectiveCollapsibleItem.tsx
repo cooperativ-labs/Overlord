@@ -30,7 +30,10 @@ export function ObjectiveCollapsibleItem({
 
   return (
     <Collapsible defaultOpen={isLatest}>
-      <div className="flex items-center gap-1 rounded-md pr-1 hover:bg-background">
+      <div className="relative flex items-center gap-1 overflow-hidden rounded-md pr-1 hover:bg-background">
+        {objective.state === 'executing' && (
+          <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
+        )}
         <CollapsibleTrigger asChild>
           <button
             className="flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left hover:bg-background overflow-hidden"

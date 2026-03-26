@@ -132,6 +132,7 @@ export default function BlankTicketCard({
           return;
         }
         setIsCreating(true);
+        setValue('');
         try {
           if (e.metaKey && onCreateAndOpenTicket) {
             await onCreateAndOpenTicket(status, trimmed, position);
@@ -141,7 +142,6 @@ export default function BlankTicketCard({
         } finally {
           setIsCreating(false);
         }
-        setValue('');
         onSubmitted?.();
       }
     },

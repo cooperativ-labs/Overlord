@@ -1,6 +1,10 @@
 'use client';
 
-import { AlertTriangle, ArrowRight, Info, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, Info, RefreshCw, X } from 'lucide-react';
+import { useState } from 'react';
+
+import type { ButtonLoadingState } from '@/components/ui/loading-button';
+import { LoadingButton } from '@/components/ui/loading-button';
 
 import { useSystemNotifications } from './SystemNotificationContext';
 import type { SystemNotificationType } from './types';
@@ -29,6 +33,7 @@ function notificationColor(type: SystemNotificationType) {
 
 export function SystemNotificationBanner() {
   const { notifications, dismissNotification } = useSystemNotifications();
+  const [actionStates, setActionStates] = useState<Record<string, ButtonLoadingState>>({});
 
   if (notifications.length === 0) return null;
 
@@ -44,14 +49,20 @@ export function SystemNotificationBanner() {
             <p className="text-xs font-medium leading-tight">{notification.title}</p>
             <p className="text-xs opacity-80 mt-0.5 leading-snug">{notification.message}</p>
             {notification.action && (
-              <button
-                type="button"
-                onClick={notification.action.onClick}
-                className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2 hover:no-underline"
-              >
-                {notification.action.label}
-                <ArrowRight className="h-3 w-3" />
-              </button>
+              <LoadingButton
+                buttonState={actionStates[notification.id] ?? 'default'}
+                setButtonState={state =>
+                  setActionStates(prev => ({ ...prev, [notification.id]: state }))
+                }
+                text={notification.action.label}
+                onClick={() => {
+                  setActionStates(prev => ({ ...prev, [notification.id]: 'loading' }));
+                  notification.action!.onClick();
+                }}
+                variant="link"
+                size="sm"
+                className="mt-1.5 h-auto p-0 text-xs font-medium underline underline-offset-2 hover:no-underline"
+              />
             )}
           </div>
           <button
