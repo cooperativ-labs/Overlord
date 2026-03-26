@@ -9,6 +9,7 @@ import { createClient } from '@/supabase/utils/server';
 
 export type OAuthIdentity = {
   id: string;
+  identityId: string;
   provider: string;
   email: string | null;
   createdAt: string;
@@ -109,6 +110,7 @@ export async function getProfileDataAction(): Promise<ProfileData> {
 
   const identities: OAuthIdentity[] = (user.identities ?? []).map(identity => ({
     id: identity.id,
+    identityId: identity.identity_id,
     provider: identity.provider,
     email: (identity.identity_data?.email as string | null) ?? null,
     createdAt: identity.created_at ?? new Date().toISOString(),
@@ -233,6 +235,43 @@ export async function linkGithubIdentityAction(): Promise<LinkIdentityResult> {
   }
 
   return { url: data.url ?? undefined };
+}
+
+export async function disconnectIdentityAction(identityId: string): Promise<LinkIdentityResult> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const identity = (user.identities ?? []).find(
+    entry => entry.identity_id === identityId || entry.id === identityId
+  );
+
+  if (!identity) {
+    return { error: 'Linked account not found.' };
+  }
+
+  if ((user.identities ?? []).length <= 1) {
+    return {
+      error: 'Add another sign-in method before disconnecting your last linked account.'
+    };
+  }
+
+  const { error } = await supabase.auth.unlinkIdentity(identity);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath('/u');
+  revalidatePath('/account/sessions');
+  revalidatePath('/', 'layout');
+
+  return {};
 }
 
 export async function uploadProfileImageAction(formData: FormData): Promise<string> {

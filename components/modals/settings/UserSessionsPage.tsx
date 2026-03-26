@@ -60,10 +60,11 @@ export function UserSessionsPage({ open }: UserSessionsPageProps) {
       <div>
         <h2 className="text-lg font-semibold tracking-tight">Linked accounts</h2>
         <p className="text-muted-foreground text-sm">
-          OAuth providers and login methods connected to your account.
+          OAuth providers and login methods connected to your account. Disconnect linked OAuth
+          accounts here, or add another login method first if this is your only sign-in option.
         </p>
       </div>
-      <SessionsList identities={identities} />
+      <SessionsList identities={identities} onDisconnected={loadSessions} />
     </div>
   );
 }

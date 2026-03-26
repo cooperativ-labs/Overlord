@@ -6,6 +6,7 @@ import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
@@ -31,16 +32,19 @@ export function ObjectiveCollapsibleItem({
 
   return (
     <Collapsible defaultOpen={isLatest}>
-      <div className="relative">
+      <div className="relative rounded-md overflow-hidden">
         {isExecuting && (
-          <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent rounded-md" />
+          <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent " />
         )}
         <div
           className={' flex items-center gap-1 overflow-hidden rounded-md pr-1 hover:bg-background'}
         >
           <CollapsibleTrigger asChild>
             <button
-              className="relative flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left hover:bg-background overflow-hidden"
+              className={cn(
+                'relative flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left  overflow-hidde',
+                !isExecuting && 'hover:bg-background'
+              )}
               type="button"
             >
               <div className="flex items-center gap-2 min-w-0 flex-1">
