@@ -12,8 +12,8 @@ import { TutorialWizardModal } from '@/components/features/onboarding/TutorialWi
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
 import { ProjectCreatorProvider } from '@/components/features/projects/ProjectCreatorContext';
 import {
-  SystemNotificationBanner,
-  SystemNotificationProvider
+  SystemNotificationProvider,
+  SystemNotificationRoot
 } from '@/components/features/system-notifications';
 import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
 import { TerminalProvider } from '@/components/features/terminal/TerminalProvider';
@@ -169,7 +169,7 @@ export default async function RootLayout({
                     )}
                     <TutorialWizardModal />
                   </SidebarProvider>
-                  <SystemNotificationBanner />
+                  <SystemNotificationRoot />
                 </SystemNotificationProvider>
               </TutorialProvider>
             </ProjectCreatorProvider>

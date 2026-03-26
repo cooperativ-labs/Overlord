@@ -100,7 +100,7 @@ export async function markDraftObjectiveExecuted(supabase: ObjectiveClient, tick
 
   const { error: executeError } = await supabase
     .from('objectives')
-    .update({ is_executed: true })
+    .update({ is_executed: true, state: 'executing' })
     .eq('id', draft.id);
   if (executeError) {
     throw new Error(executeError.message);

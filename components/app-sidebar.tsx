@@ -11,7 +11,7 @@ import {
   Shield
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import * as React from 'react';
 
 import { useTutorialWizard } from '@/components/features/onboarding/TutorialWizardContext';
@@ -114,6 +114,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isElectron } = useElectron();
   const { openProjectCreator } = useProjectCreator();
   const { defaultProject } = useDefaultProject();
@@ -132,6 +133,32 @@ export function AppSidebar({
     setSettingsOpen(true);
   }, []);
   useAgentBundleNotifications(openSettings);
+
+  const requestedSettingsSection = React.useMemo(() => {
+    const requestedSection = searchParams.get('settings');
+    if (!requestedSection) {
+      return undefined;
+    }
+
+    return (['Profile', 'Sessions', 'Agent tokens'] as const).find(
+      section => section === requestedSection
+    );
+  }, [searchParams]);
+
+  React.useEffect(() => {
+    if (!requestedSettingsSection) {
+      return;
+    }
+
+    openSettings(requestedSettingsSection);
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete('settings');
+    const nextHref = nextSearchParams.toString()
+      ? `${pathname}?${nextSearchParams.toString()}`
+      : pathname;
+    router.replace(nextHref, { scroll: false });
+  }, [openSettings, pathname, requestedSettingsSection, router, searchParams]);
 
   const defaultOrganizationId = React.useMemo(() => {
     if (selectedOrgId !== null) return selectedOrgId;
@@ -308,7 +335,7 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <NavUser user={user} />
+        <NavUser user={user} onOpenSettings={openSettings} />
       </SidebarFooter>
       <FeedbackModal open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       <SettingsModal

@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
+import type { SettingsNavSection } from '@/components/modals/SettingsModal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -39,13 +40,15 @@ import {
 import { signOut } from '@/lib/actions/auth';
 
 export function NavUser({
-  user
+  user,
+  onOpenSettings
 }: {
   user: {
     name: string;
     email: string;
     avatar: string;
   };
+  onOpenSettings: (section?: SettingsNavSection) => void;
 }) {
   const { isMobile } = useSidebar();
   const { isElectron } = useElectron();
@@ -105,11 +108,9 @@ export function NavUser({
               </>
             )}
             <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href="/account">
-                  <BadgeCheck />
-                  Account
-                </Link>
+              <DropdownMenuItem onClick={() => onOpenSettings('Profile')}>
+                <BadgeCheck />
+                Account
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <CreditCard />

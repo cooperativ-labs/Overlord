@@ -122,7 +122,7 @@ export async function ensureAgentTokenAction(preferredOrganizationId?: number): 
   const { token, created } = await ensureAgentTokenRecord(preferredOrganizationId);
 
   if (created) {
-    revalidatePath('/account/tokens');
+    revalidatePath('/u');
   }
 
   return token;
@@ -190,7 +190,7 @@ export async function rotateAgentTokenAction(preferredOrganizationId?: number): 
     throw new Error(tokenError.message ?? 'Failed to create new agent token.');
   }
 
-  revalidatePath('/account/tokens');
+  revalidatePath('/u');
 
   return tokenRow.token;
 }
@@ -256,5 +256,5 @@ export async function revokeAgentTokenAction(tokenId: string): Promise<void> {
     throw new Error('Token not found or already revoked.');
   }
 
-  revalidatePath('/account/tokens');
+  revalidatePath('/u');
 }

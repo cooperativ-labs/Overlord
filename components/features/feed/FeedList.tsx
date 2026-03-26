@@ -172,7 +172,7 @@ export function FeedList({ projects, editorScheme }: FeedListProps) {
       </div>
 
       {/* Feed content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto px-6 py-4 mt-4 ">
         <div className="max-w-2xl mx-auto">
           <ExecutingTicketsSection tickets={filteredExecutingTickets} />
 

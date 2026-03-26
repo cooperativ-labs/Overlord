@@ -89,7 +89,10 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   let executedObjective: string | null = null;
   if (draftObjective) {
     executedObjective = draftObjective.objective;
-    await supabase.from('objectives').update({ is_executed: true }).eq('id', draftObjective.id);
+    await supabase
+      .from('objectives')
+      .update({ is_executed: true, state: 'executing' })
+      .eq('id', draftObjective.id);
   }
 
   const previousStatus = ticket.status;

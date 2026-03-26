@@ -1,11 +1,11 @@
-import { Bot, ChevronDown } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import { headers } from 'next/headers';
 import Image from 'next/image';
 import fs from 'node:fs/promises';
 
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { InlineEditField } from '@/components/features/InlineEditField';
-import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { DueDateEditor } from '@/components/features/scheduling/DueDateEditor';
 import { ScheduleEditor } from '@/components/features/scheduling/ScheduleEditor';
@@ -17,7 +17,6 @@ import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
@@ -178,7 +177,7 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('objectives')
-      .select('id,objective,is_executed,created_at,title')
+      .select('id,objective,is_executed,created_at,title,state')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
   ]);
@@ -437,35 +436,16 @@ export async function TicketPanelContent({
                 {orderedExecutedObjectives.length > 0 ? (
                   <div className="mb-3 space-y-2 bg-background rounded-md border">
                     {orderedExecutedObjectives.map((objective, index) => (
-                      <Collapsible key={objective.id}>
-                        <div className="flex items-center gap-1 hover:bg-background rounded-md pr-1">
-                          <CollapsibleTrigger asChild>
-                            <button
-                              className="flex flex-1 items-center justify-between hover:bg-background px-3 py-2 text-left rounded-md "
-                              type="button"
-                            >
-                              <div>
-                                <p className="text-sm font-medium">
-                                  {objective.title ?? `Objective ${index + 1}`}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Executed {new Date(objective.created_at).toLocaleString()}
-                                </p>
-                              </div>
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </CollapsibleTrigger>
-                          <ObjectiveMenuButton
-                            ticketId={ticketId}
-                            objectiveId={objective.id}
-                            isExecuted={objective.is_executed}
-                            canMarkExecuted={objective.objective.trim().length > 0}
-                          />
-                        </div>
-                        <CollapsibleContent className="px-3 pb-2 pt-1">
-                          <MarkdownContent compact>{objective.objective}</MarkdownContent>
-                        </CollapsibleContent>
-                      </Collapsible>
+                      <ObjectiveCollapsibleItem
+                        key={objective.id}
+                        objective={objective}
+                        index={index}
+                        ticketId={ticketId}
+                        isLatest={
+                          index === orderedExecutedObjectives.length - 1 &&
+                          !draftObjectiveValue.trim()
+                        }
+                      />
                     ))}
                   </div>
                 ) : null}

@@ -83,7 +83,10 @@ export async function signInWithGithub(next?: string): Promise<OAuthResult> {
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
-    options: { redirectTo }
+    options: {
+      redirectTo,
+      scopes: 'user:email'
+    }
   });
 
   if (error) {

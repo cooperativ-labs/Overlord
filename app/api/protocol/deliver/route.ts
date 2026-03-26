@@ -128,6 +128,13 @@ export async function POST(request: Request) {
             .eq('id', sessionId)
         ]);
 
+        // Mark the executing objective as complete
+        await supabase
+          .from('objectives')
+          .update({ state: 'complete' })
+          .eq('ticket_id', ticketId)
+          .eq('state', 'executing');
+
         if (ticketError) {
           console.error('[protocol:deliver] ticket update error:', ticketError.message);
           Sentry.captureException(ticketError, { extra: { ticketId } });

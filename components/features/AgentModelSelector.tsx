@@ -173,7 +173,13 @@ export function AgentModelSelector({
               )}
             >
               <span className="flex h-4 w-4 items-center justify-center">
-                <Image src={agent.icon} alt={agent.label} width={14} height={14} />
+                <Image
+                  src={agent.icon}
+                  alt={agent.label}
+                  width={14}
+                  height={14}
+                  className={cn(agent.invertDark ? 'dark:invert' : '')}
+                />
               </span>
               <span className="truncate">{agent.label}</span>
               {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}

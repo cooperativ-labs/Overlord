@@ -100,10 +100,6 @@ export function useExecutingFeedTickets(initialTickets: ExecutingFeedTicket[]) {
   const [tickets, setTickets] = useState(initialTickets);
 
   useEffect(() => {
-    setTickets(initialTickets);
-  }, [initialTickets]);
-
-  useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
 

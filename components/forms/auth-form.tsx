@@ -282,6 +282,13 @@ export function AuthForm({ className, mode, error: initialError, message, next }
         errorText="GitHub sign-in failed"
       />
 
+      {isLogin ? (
+        <p className="px-1 text-center text-xs text-muted-foreground">
+          If this email already has a password account, sign in first and connect GitHub from
+          Settings &gt; Profile.
+        </p>
+      ) : null}
+
       {!isLogin ? (
         <FieldDescription className="px-6 text-center">
           By clicking continue, you agree to our{' '}

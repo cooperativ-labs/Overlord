@@ -623,6 +623,7 @@ export type Database = {
           id: string;
           is_executed: boolean;
           objective: string;
+          state: string | null;
           ticket_id: string;
           title: string | null;
           updated_at: string;
@@ -632,6 +633,7 @@ export type Database = {
           id?: string;
           is_executed?: boolean;
           objective?: string;
+          state?: string | null;
           ticket_id: string;
           title?: string | null;
           updated_at?: string;
@@ -641,6 +643,7 @@ export type Database = {
           id?: string;
           is_executed?: boolean;
           objective?: string;
+          state?: string | null;
           ticket_id?: string;
           title?: string | null;
           updated_at?: string;

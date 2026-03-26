@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/nextjs';
 import type { User } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
+import { getPlatformUrl } from '@/lib/env';
 import { createClient } from '@/supabase/utils/server';
 
 export type OAuthIdentity = {
@@ -21,6 +22,8 @@ export type ProfileData = {
   hasPassword: boolean;
   identities: OAuthIdentity[];
 };
+
+export type LinkIdentityResult = { error?: string; url?: string };
 
 const USER_IMAGES_BUCKET = 'user-images';
 const MAX_USER_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -89,7 +92,7 @@ async function updateProfileImageMetadata(
     throw new Error(profileError.message ?? 'Failed to sync profile image.');
   }
 
-  revalidatePath('/account');
+  revalidatePath('/u');
   revalidatePath('/', 'layout');
 }
 
@@ -155,7 +158,7 @@ export async function updateProfileNameAction(name: string): Promise<void> {
     throw new Error(profileError.message ?? 'Failed to update profile name.');
   }
 
-  revalidatePath('/account');
+  revalidatePath('/u');
   revalidatePath('/', 'layout');
 }
 
@@ -212,6 +215,24 @@ export async function setPasswordAction(newPassword: string): Promise<void> {
   if (error) {
     throw new Error(error.message ?? 'Failed to set password.');
   }
+}
+
+export async function linkGithubIdentityAction(): Promise<LinkIdentityResult> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'github',
+    options: {
+      redirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent('/u?settings=Sessions')}`,
+      scopes: 'user:email'
+    }
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { url: data.url ?? undefined };
 }
 
 export async function uploadProfileImageAction(formData: FormData): Promise<string> {

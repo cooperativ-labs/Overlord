@@ -169,8 +169,8 @@ export default async function DownloadsPage() {
 
       <p className="text-muted-foreground mt-6 text-sm">
         Looking for account settings?{' '}
-        <Link href="/account" className="text-foreground underline underline-offset-4">
-          Go to account
+        <Link href="/u?settings=Profile" className="text-foreground underline underline-offset-4">
+          Open profile settings
         </Link>
         .
       </p>
