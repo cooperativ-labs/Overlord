@@ -135,7 +135,7 @@ export function EverhourNavTimer() {
               'flex shrink-0 items-center justify-center rounded-full border transition-[width,background-color,box-shadow,border] duration-200 ease-in-out',
               isRunning
                 ? 'min-w-[70px] gap-2 border-red-500/40 bg-red-500/15 text-red-600   px-1 py-2 text-xs font-semibold  '
-                : 'hidden'
+                : 'border-0 bg-transparent'
             )}
           >
             <span className="pointer-events-none text-[11px]" aria-live="polite">
