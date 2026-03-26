@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.14.0] - 2026-03-26:09:21
+
+### Added
+- Add AI-generated ticket titles for long objectives, with a per-user toggle in Application settings and a deterministic fallback for short or disabled cases.
+- Add offline ticket creation in the Electron shell, including queued submissions that sync automatically when the app comes back online.
+- Add cached feed and project data for offline views, plus cached recent feed posts on the offline screen.
+- Add feed pagination with infinite scroll so the Feed page can load more posts beyond the initial batch.
+
+### Fixed
+- None.
+
+### Changed
+- Show objective titles in the ticket panel and backfill generated titles onto executed objectives so ticket history is easier to scan.
+- Let blank ticket cards support a save-and-open shortcut, making it faster to create a ticket and jump straight into it from the board.
+- Rework the settings navigation from “Appearance” to “Application”, keep theme controls there, and show Terminal & IDE settings with a clear non-Electron notice.
+- Update the initial Feed page load to fetch a smaller first page that matches the new lazy-loading behavior.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `2.14.0`.
+
 ## [2.13.0] - 2026-03-25:18:00
 
 ### Added

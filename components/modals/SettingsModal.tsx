@@ -48,7 +48,7 @@ import type { UserOrganization } from '@/lib/actions/organizations';
 
 import { AboutPage } from './settings/AboutPage';
 import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
-import { AppearancePage } from './settings/AppearancePage';
+import { ApplicationPage } from './settings/ApplicationPage';
 import { CliPage } from './settings/CliPage';
 import { CustomizationPage } from './settings/CustomizationPage';
 import { FeedSettingsPage } from './settings/FeedSettingsPage';
@@ -74,7 +74,7 @@ type NavItem = {
 };
 
 const workflowNavItems: NavItem[] = [
-  { name: 'Terminal & IDE', icon: Monitor, electronOnly: true },
+  { name: 'Terminal & IDE', icon: Monitor },
   { name: 'MCP & Cloud Agents', icon: Bot },
   { name: 'CLI & Local Agents', icon: Terminal },
   { name: 'Customization', icon: Edit3 }
@@ -82,7 +82,7 @@ const workflowNavItems: NavItem[] = [
 
 const appNavItems: NavItem[] = [
   { name: 'Feed', icon: Newspaper },
-  { name: 'Appearance', icon: Palette },
+  { name: 'Application', icon: Palette },
   { name: 'Hotkeys', icon: Keyboard },
   { name: 'Integrations', icon: Link2 },
   { name: 'About', icon: Info }
@@ -234,7 +234,7 @@ export function SettingsModal({
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
               {activeNav === 'Feed' && <FeedSettingsPage open={open} />}
-              {activeNav === 'Appearance' && <AppearancePage />}
+              {activeNav === 'Application' && <ApplicationPage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
               {activeNav === 'Sessions' && <UserSessionsPage open={open} />}
@@ -244,7 +244,7 @@ export function SettingsModal({
                   onViewAgentsAndMcp={() => setActiveNav('MCP & Cloud Agents')}
                 />
               )}
-              {activeNav === 'Terminal & IDE' && isElectron && <TerminalPage open={open} />}
+              {activeNav === 'Terminal & IDE' && <TerminalPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>
           </main>

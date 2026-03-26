@@ -1,17 +1,33 @@
 'use client';
 
 import { RefreshCw, WifiOff } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { CachedFeedPost } from '@/lib/offline/offline-feed-cache';
+import { getCachedFeedPosts } from '@/lib/offline/offline-feed-cache';
+
+import { OfflineTicketForm } from './OfflineTicketForm';
 
 type Props = {
   onRetry: () => Promise<boolean>;
 };
 
+const impactColors: Record<string, string> = {
+  minor: 'bg-muted text-muted-foreground',
+  notable: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  significant: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+};
+
 export function ElectronOfflineScreen({ onRetry }: Props) {
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
+  const [cachedPosts, setCachedPosts] = useState<CachedFeedPost[]>([]);
+
+  useEffect(() => {
+    setCachedPosts(getCachedFeedPosts());
+  }, []);
 
   async function handleRetry() {
     setIsRetrying(true);
@@ -24,7 +40,7 @@ export function ElectronOfflineScreen({ onRetry }: Props) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-6 px-4 text-center">
+    <div className="flex h-full w-full flex-col items-center gap-6 overflow-y-auto px-4 py-8 text-center">
       <div className="flex flex-col items-center gap-4">
         <div className="rounded-full bg-muted p-5">
           <WifiOff className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
@@ -52,6 +68,99 @@ export function ElectronOfflineScreen({ onRetry }: Props) {
           </p>
         )}
       </div>
+
+      {/* Offline ticket creation */}
+      <div className="flex w-full flex-col items-center gap-3 border-t border-border/40 pt-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-sm font-medium">Create tickets while you wait</h2>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            Queue tickets now and they&apos;ll be submitted automatically when you&apos;re back
+            online.
+          </p>
+        </div>
+        <OfflineTicketForm />
+      </div>
+
+      {/* Cached feed posts */}
+      {cachedPosts.length > 0 && (
+        <div className="flex w-full flex-col gap-3 border-t border-border/40 pt-6 text-left">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-sm font-medium">Recent feed</h2>
+            <p className="text-xs text-muted-foreground">
+              Showing the last {cachedPosts.length} posts from your last session.
+            </p>
+          </div>
+          <div className="w-full space-y-3">
+            {cachedPosts.map(post => {
+              const timestamp = new Date(post.created_at);
+              const timeStr = timestamp.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+              const dateStr = timestamp.toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric'
+              });
+              const impactClass = impactColors[post.impact_level] ?? impactColors.notable;
+
+              return (
+                <div key={post.id} className="rounded-lg border bg-card p-4">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+                    <span>{timeStr}</span>
+                    <span className="text-muted-foreground/40">&middot;</span>
+                    <span>{dateStr}</span>
+                    <span className="text-muted-foreground/40">&middot;</span>
+                    <span className="inline-flex items-center gap-1">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: post.project_color }}
+                      />
+                      {post.project_name}
+                    </span>
+                    {post.ticket_sequence && (
+                      <>
+                        <span className="text-muted-foreground/40">&middot;</span>
+                        <span>
+                          #{post.ticket_sequence} {post.ticket_title ?? 'Untitled'}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold leading-snug">{post.title}</p>
+                    <Badge
+                      className={`shrink-0 rounded-full px-2 text-xs font-medium ${impactClass}`}
+                      variant="secondary"
+                    >
+                      {post.impact_level.charAt(0).toUpperCase() + post.impact_level.slice(1)}
+                    </Badge>
+                  </div>
+                  {post.human_actions.length > 0 && (
+                    <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800/40 dark:bg-blue-950/20">
+                      <ul className="space-y-0.5">
+                        {post.human_actions.slice(0, 2).map((action, i) => (
+                          <li
+                            key={i}
+                            className="flex gap-2 text-[13px] text-blue-800 dark:text-blue-300"
+                          >
+                            <span className="shrink-0">&#8226;</span>
+                            <span>{action}</span>
+                          </li>
+                        ))}
+                        {post.human_actions.length > 2 && (
+                          <li className="text-[13px] text-blue-600/60 dark:text-blue-400/50">
+                            +{post.human_actions.length - 2} more...
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

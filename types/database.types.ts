@@ -624,6 +624,7 @@ export type Database = {
           is_executed: boolean;
           objective: string;
           ticket_id: string;
+          title: string | null;
           updated_at: string;
         };
         Insert: {
@@ -632,6 +633,7 @@ export type Database = {
           is_executed?: boolean;
           objective?: string;
           ticket_id: string;
+          title?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -640,6 +642,7 @@ export type Database = {
           is_executed?: boolean;
           objective?: string;
           ticket_id?: string;
+          title?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -678,6 +681,7 @@ export type Database = {
       };
       profiles: {
         Row: {
+          ai_title_generation: boolean;
           created_at: string;
           custom_agent_instructions: string;
           default_project_id: string | null;
@@ -690,6 +694,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          ai_title_generation?: boolean;
           created_at?: string;
           custom_agent_instructions?: string;
           default_project_id?: string | null;
@@ -702,6 +707,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          ai_title_generation?: boolean;
           created_at?: string;
           custom_agent_instructions?: string;
           default_project_id?: string | null;

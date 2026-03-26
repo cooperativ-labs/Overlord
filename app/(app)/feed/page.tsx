@@ -6,7 +6,7 @@ import { getEditorScheme } from '@/lib/env';
 
 export default async function FeedPage() {
   const [posts, executingTickets, projects, preferredEditorScheme] = await Promise.all([
-    getFeedPostsAction({ daysBack: 3 }),
+    getFeedPostsAction({ limit: 10 }),
     getExecutingFeedTicketsAction(),
     getProjectsForCurrentUser(),
     getEditorSchemeAction()

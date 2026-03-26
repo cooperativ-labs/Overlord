@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
@@ -58,6 +59,8 @@ export function InlineEditField({
   const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const canMentionFiles = multiline && field === 'objective';
   const effectiveMentionPaths = canMentionFiles
     ? isElectron
@@ -84,6 +87,15 @@ export function InlineEditField({
       autoResize();
     }
   }, [editing, multiline, value, autoResize]);
+
+  useEffect(() => {
+    if (searchParams.get('focus') === field) {
+      setEditing(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('focus');
+      router.replace(url.pathname + url.search, { scroll: false });
+    }
+  }, [field, searchParams, router]);
 
   useEffect(() => {
     if (editing && inputRef.current) {

@@ -6,6 +6,7 @@ import { AnnouncementBar } from '@/components/features/announcement-bar/Announce
 import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
 import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
 import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
+import { OfflineTicketProcessor } from '@/components/features/electron-offline/OfflineTicketProcessor';
 import { TutorialProvider } from '@/components/features/onboarding/TutorialWizardContext';
 import { TutorialWizardModal } from '@/components/features/onboarding/TutorialWizardModal';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
@@ -128,6 +129,7 @@ export default async function RootLayout({
                   <SidebarProvider defaultOpen className="h-dvh min-h-0">
                     {user ? (
                       <div className="flex h-full w-full flex-col overflow-hidden">
+                        <OfflineTicketProcessor />
                         <AnnouncementBar />
                         {/* Electron title bar drag region — hidden in browser */}
                         <div className="electron-drag-region shrink-0" />

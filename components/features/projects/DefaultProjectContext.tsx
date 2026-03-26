@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useTransition 
 import { saveDefaultProjectAction } from '@/lib/actions/profile-settings';
 import type { SidebarProject } from '@/lib/actions/projects';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
+import { cacheProjectsForOffline } from '@/lib/offline/offline-projects-cache';
 
 type DefaultProjectContextValue = {
   defaultProject: SidebarProject | null;
@@ -84,6 +85,13 @@ export function DefaultProjectProvider({
   useEffect(() => {
     persistDefaultProjectCookie(defaultProjectId);
   }, [defaultProjectId]);
+
+  // Cache projects for offline ticket creation
+  useEffect(() => {
+    if (projects.length > 0) {
+      cacheProjectsForOffline(projects);
+    }
+  }, [projects]);
 
   const defaultProject = useMemo(
     () => projects.find(project => project.id === defaultProjectId) ?? null,

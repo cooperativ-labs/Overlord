@@ -302,7 +302,7 @@ Deno.serve(async (req: Request) => {
     // Fetch the latest objective from the objectives table
     const { data: latestObjective } = await supabase
       .from('objectives')
-      .select('objective')
+      .select('id, objective')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -435,6 +435,14 @@ Deno.serve(async (req: Request) => {
         status: 502,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
       });
+    }
+
+    // Back-fill the generated title onto the most recent executed objective
+    if (latestObjective?.id) {
+      await supabase
+        .from('objectives')
+        .update({ title: generated.title })
+        .eq('id', latestObjective.id);
     }
 
     // Compute event window

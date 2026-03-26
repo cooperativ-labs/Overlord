@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
 import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
+import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
@@ -490,6 +491,9 @@ export async function createTicketInColumnAction(
   });
   const trimmedObjective = objective.trim() || null;
 
+  // Generate title: AI-summarised for long objectives, truncated for short ones
+  const title = trimmedObjective ? await generateTicketTitleAction(trimmedObjective) : null;
+
   const insertPayload: {
     id: string;
     status: string;
@@ -499,7 +503,7 @@ export async function createTicketInColumnAction(
   } = {
     id: ticketId,
     status,
-    title: trimmedObjective ? deriveTitleFromObjective(trimmedObjective) : null,
+    title,
     organization_id: selected.organizationId,
     project_id: selected.projectId
   };

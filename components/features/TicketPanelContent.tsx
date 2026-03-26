@@ -172,7 +172,7 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('objectives')
-      .select('id,objective,is_executed,created_at')
+      .select('id,objective,is_executed,created_at,title')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
   ]);
@@ -435,7 +435,9 @@ export async function TicketPanelContent({
                               type="button"
                             >
                               <div>
-                                <p className="text-sm font-medium">Objective {index + 1}</p>
+                                <p className="text-sm font-medium">
+                                  {objective.title ?? `Objective ${index + 1}`}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
                                   Executed {new Date(objective.created_at).toLocaleString()}
                                 </p>

@@ -175,7 +175,7 @@ async function main() {
     }
   ]);
 
-  // Tickets in Draft stage — two created by Alice (delegate)
+  // Tickets in draft plus one review card with completed objective history
   const ticketIds = [
     'bbbbbbbb-0000-4000-8000-000000000001',
     'bbbbbbbb-0000-4000-8000-000000000002',
@@ -192,7 +192,7 @@ async function main() {
       project_id: projectAlphaId,
       created_by: jakeId,
       title: 'Set up CI/CD pipeline',
-      status: 'draft',
+      status: 'review',
       priority: 'high',
       board_position: 1,
       recent_agent: 'Claude',
@@ -284,8 +284,15 @@ async function main() {
   await seed.objectives([
     {
       ticket_id: ticketIds[0],
-      objective: 'Configure GitHub Actions workflows for lint, test, and deploy steps.',
-      is_executed: false
+      title: 'CI workflow setup',
+      objective: 'Configure GitHub Actions workflows for lint and test jobs.',
+      is_executed: true
+    },
+    {
+      ticket_id: ticketIds[0],
+      title: 'Deployment wiring',
+      objective: 'Add the deploy job and wire in production secrets.',
+      is_executed: true
     },
     {
       ticket_id: ticketIds[1],

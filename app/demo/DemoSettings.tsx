@@ -61,7 +61,7 @@ const workflowNavItems: NavItem[] = [
 ];
 
 const appNavItems: NavItem[] = [
-  { name: 'Appearance', icon: Palette },
+  { name: 'Application', icon: Palette },
   { name: 'Hotkeys', icon: Keyboard },
   { name: 'Integrations', icon: Link2 },
   { name: 'About', icon: Info }
@@ -221,8 +221,9 @@ function DemoMcpSettings() {
   );
 }
 
-function DemoAppearanceSettings() {
+function DemoApplicationSettings() {
   const [theme, setTheme] = useState('system');
+  const [aiTitlesEnabled, setAiTitlesEnabled] = useState(true);
 
   return (
     <div className="grid gap-6">
@@ -241,6 +242,16 @@ function DemoAppearanceSettings() {
         <p className="text-xs text-muted-foreground">
           Choose between light and dark mode, or follow your system setting.
         </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+        <div className="space-y-1">
+          <Label className="text-sm font-medium">AI ticket titles</Label>
+          <p className="text-xs text-muted-foreground">
+            When enabled, longer objectives are summarised into concise titles automatically.
+          </p>
+        </div>
+        <Switch checked={aiTitlesEnabled} onCheckedChange={setAiTitlesEnabled} />
       </div>
     </div>
   );
@@ -753,8 +764,8 @@ function getPageContent(activeNav: string) {
       return <DemoCliSettings />;
     case 'Customization':
       return <DemoCustomizationSettings />;
-    case 'Appearance':
-      return <DemoAppearanceSettings />;
+    case 'Application':
+      return <DemoApplicationSettings />;
     case 'Profile':
       return <DemoProfileSettings />;
     default:

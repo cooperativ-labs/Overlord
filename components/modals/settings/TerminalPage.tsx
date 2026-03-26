@@ -41,7 +41,7 @@ const externalTerminalLaunchModeOptions = [
 ] as const;
 
 export function TerminalPage({ open }: { open: boolean }) {
-  const { api } = useElectron();
+  const { api, isElectron } = useElectron();
   const [terminalApp, setTerminalApp] = useState('default');
   const [terminalLaunchMode, setTerminalLaunchMode] = useState('window');
   const [terminalCustomHotkey, setTerminalCustomHotkey] = useState('');
@@ -169,6 +169,23 @@ export function TerminalPage({ open }: { open: boolean }) {
 
   return (
     <div className="grid gap-6">
+      {!isElectron && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="size-4 shrink-0"
+          >
+            <path
+              fillRule="evenodd"
+              d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Terminal agent controls are only available in the Overlord desktop app.
+        </div>
+      )}
       <div className="grid gap-2">
         <Label>Where to run terminal commands</Label>
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-foreground">
@@ -180,7 +197,7 @@ export function TerminalPage({ open }: { open: boolean }) {
       </div>
       <div className="grid gap-2">
         <Label htmlFor="terminal-app">External terminal application</Label>
-        <Select value={terminalApp} onValueChange={handleTerminalAppChange}>
+        <Select value={terminalApp} onValueChange={handleTerminalAppChange} disabled={!isElectron}>
           <SelectTrigger id="terminal-app">
             <SelectValue placeholder="Select terminal" />
           </SelectTrigger>
@@ -200,6 +217,7 @@ export function TerminalPage({ open }: { open: boolean }) {
               placeholder="Example: cmux or /Applications/cmux.app"
               value={customTerminalApp}
               onChange={event => void handleCustomTerminalAppChange(event.target.value)}
+              disabled={!isElectron}
             />
             <p className="text-xs text-muted-foreground">
               Overlord will open this app and type the launch command into the active terminal
@@ -212,7 +230,11 @@ export function TerminalPage({ open }: { open: boolean }) {
         {supportsLaunchModeSelection && (
           <>
             <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
-            <Select value={terminalLaunchMode} onValueChange={handleTerminalLaunchModeChange}>
+            <Select
+              value={terminalLaunchMode}
+              onValueChange={handleTerminalLaunchModeChange}
+              disabled={!isElectron}
+            >
               <SelectTrigger id="terminal-launch-mode">
                 <SelectValue placeholder="Select behavior" />
               </SelectTrigger>
@@ -235,6 +257,7 @@ export function TerminalPage({ open }: { open: boolean }) {
               value={terminalCustomHotkey}
               onKeyDown={handleTerminalCustomHotkeyKeyDown}
               readOnly
+              disabled={!isElectron}
             />
             <p className="text-xs text-muted-foreground">
               Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your

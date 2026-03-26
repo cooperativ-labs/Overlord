@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import {
   createBlankTicketAction,
   deleteTicketAction,
@@ -27,7 +28,6 @@ import {
 } from '@/lib/actions/tickets';
 import { areStringArraysEqual } from '@/lib/helpers/array-utils';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
-import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { EditableTextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
@@ -185,9 +185,10 @@ export function NewTicketModal({
       // The draft ticket is created when the modal opens. Persist the final project selection.
       await setTicketProjectAction(ticketId, selectedProjectId);
 
-      // Set the title from the first 60 characters of the description
+      // Generate title: AI-summarised for long objectives, truncated for short ones
       if (objective.trim()) {
-        await updateTicketFieldAction(ticketId, 'title', deriveTitleFromObjective(objective));
+        const title = await generateTicketTitleAction(objective);
+        await updateTicketFieldAction(ticketId, 'title', title);
       }
 
       setSubmitButtonState('success');

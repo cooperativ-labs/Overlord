@@ -9,13 +9,14 @@ export async function fetchProfileSettings(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<{
+  ai_title_generation: boolean | null;
   custom_agent_instructions: string | null;
   default_project_id: string | null;
   editor_scheme: string | null;
 } | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('custom_agent_instructions, default_project_id, editor_scheme')
+    .select('ai_title_generation, custom_agent_instructions, default_project_id, editor_scheme')
     .eq('id', userId)
     .maybeSingle();
 
@@ -183,4 +184,45 @@ export async function saveDefaultProjectAction(
   }
 
   return upsertProfileDefaultProject(supabase, user.id, defaultProjectId);
+}
+
+export async function getAiTitleGenerationAction(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const settings = await fetchProfileSettings(supabase, user.id);
+  return settings?.ai_title_generation ?? true;
+}
+
+export async function saveAiTitleGenerationAction(enabled: boolean): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: user.id,
+        ai_title_generation: enabled
+      },
+      { onConflict: 'id' }
+    )
+    .select('ai_title_generation')
+    .single();
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to save AI title generation preference.');
+  }
+
+  return data?.ai_title_generation ?? enabled;
 }

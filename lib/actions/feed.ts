@@ -45,6 +45,8 @@ export type ExecutingFeedTicket = {
 export async function getFeedPostsAction(options?: {
   projectId?: string;
   daysBack?: number;
+  limit?: number;
+  offset?: number;
 }): Promise<FeedPost[]> {
   const supabase = await createClient();
   const {
@@ -52,9 +54,8 @@ export async function getFeedPostsAction(options?: {
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
-  const daysBack = options?.daysBack ?? 3;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - daysBack);
+  const limit = options?.limit ?? 20;
+  const offset = options?.offset ?? 0;
 
   let query = supabase
     .from('feed_posts')
@@ -65,9 +66,14 @@ export async function getFeedPostsAction(options?: {
       tickets!inner(title, ticket_sequence)
     `
     )
-    .gte('created_at', cutoff.toISOString())
     .order('created_at', { ascending: false })
-    .limit(100);
+    .range(offset, offset + limit - 1);
+
+  if (options?.daysBack !== undefined) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - options.daysBack);
+    query = query.gte('created_at', cutoff.toISOString());
+  }
 
   if (options?.projectId) {
     query = query.eq('project_id', options.projectId);

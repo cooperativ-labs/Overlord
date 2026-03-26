@@ -7,7 +7,7 @@ import { findFileMentionAtCursor, getCollapsedFileMentionLabel } from '@/lib/hel
 import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
-const MAX_MENTION_RESULTS = 8;
+const MAX_MENTION_RESULTS = 20;
 
 type MentionableTextareaProps = Omit<
   React.ComponentProps<'textarea'>,
@@ -112,7 +112,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       const rect = containerRef.current.getBoundingClientRect();
       const viewportPadding = 8;
       const gap = 4;
-      const preferredMaxHeight = 224;
+      const preferredMaxHeight = 320;
       const minMenuHeight = 96;
       const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPadding;
       const spaceAbove = rect.top - gap - viewportPadding;

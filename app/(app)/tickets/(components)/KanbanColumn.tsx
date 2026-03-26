@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 import BlankTicketCard from './BlankTicketCard';
 import KanbanCard, { type Ticket } from './KanbanCard';
@@ -27,6 +28,7 @@ export default function KanbanColumn({
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
   workingDirectory = null,
   onCreateTicket,
+  onCreateAndOpenTicket,
   onMarkRead,
   onMarkUnread,
   onMarkAllRead,
@@ -42,6 +44,11 @@ export default function KanbanColumn({
   fileMentionPaths?: string[];
   workingDirectory?: string | null;
   onCreateTicket: (
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom'
+  ) => Promise<void> | void;
+  onCreateAndOpenTicket?: (
     status: string,
     objective: string,
     position: 'top' | 'bottom'
@@ -84,9 +91,10 @@ export default function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-w-[280px] shrink-0 flex-1 flex-col rounded-lg bg-muted/30 transition-colors ${
+      className={cn(
+        'flex min-w-[280px] shrink-0 flex-1 flex-col rounded-lg bg-muted/30 transition-colors',
         isOver ? 'bg-muted/60' : ''
-      }`}
+      )}
     >
       <div className="flex items-center justify-between gap-2 px-4 py-3">
         <h3 className="text-sm font-semibold tracking-tight">{column.title}</h3>
@@ -139,6 +147,7 @@ export default function KanbanColumn({
                   fileMentionPaths={fileMentionPaths}
                   workingDirectory={workingDirectory}
                   onCreateTicket={onCreateTicket}
+                  onCreateAndOpenTicket={onCreateAndOpenTicket}
                   onClose={handleCloseBlankCard}
                   onSubmitted={() => setFocusEditorCount(c => c + 1)}
                   focusTrigger={focusEditorCount}
@@ -166,6 +175,7 @@ export default function KanbanColumn({
                   fileMentionPaths={fileMentionPaths}
                   workingDirectory={workingDirectory}
                   onCreateTicket={onCreateTicket}
+                  onCreateAndOpenTicket={onCreateAndOpenTicket}
                   onClose={handleCloseBlankCard}
                   onSubmitted={() => setFocusEditorCount(c => c + 1)}
                   focusTrigger={focusEditorCount}

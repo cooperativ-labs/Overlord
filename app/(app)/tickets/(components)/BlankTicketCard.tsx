@@ -21,6 +21,11 @@ type BlankTicketCardProps = {
     objective: string,
     position: 'top' | 'bottom'
   ) => Promise<void> | void;
+  onCreateAndOpenTicket?: (
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom'
+  ) => Promise<void> | void;
   onClose: () => void;
   onSubmitted?: () => void;
   focusTrigger?: number;
@@ -33,6 +38,7 @@ export default function BlankTicketCard({
   fileMentionPaths,
   workingDirectory = null,
   onCreateTicket,
+  onCreateAndOpenTicket,
   onClose,
   onSubmitted,
   focusTrigger = 0
@@ -127,7 +133,11 @@ export default function BlankTicketCard({
         }
         setIsCreating(true);
         try {
-          await onCreateTicket(status, trimmed, position);
+          if (e.metaKey && onCreateAndOpenTicket) {
+            await onCreateAndOpenTicket(status, trimmed, position);
+          } else {
+            await onCreateTicket(status, trimmed, position);
+          }
         } finally {
           setIsCreating(false);
         }
@@ -135,11 +145,11 @@ export default function BlankTicketCard({
         onSubmitted?.();
       }
     },
-    [onClose, isCreating, onCreateTicket, status, position, onSubmitted]
+    [onClose, isCreating, onCreateTicket, onCreateAndOpenTicket, status, position, onSubmitted]
   );
 
   return (
-    <Card className="border-border/40 shadow-sm">
+    <Card className="border-border/40 shadow-sm z-10 w-[110%] -ml-[5%]">
       <CardContent className="relative p-2">
         <MentionableTextarea
           ref={inputRef}
@@ -156,9 +166,12 @@ export default function BlankTicketCard({
           onKeyDown={e => {
             void handleKeyDown(e);
           }}
-          className="min-h-[120px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0"
-          rows={5}
+          className="min-h-[156px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0"
+          rows={7}
         />
+        {onCreateAndOpenTicket && (
+          <p className="mt-1 px-1 text-[11px] text-muted-foreground/50">⌘↵ to save &amp; open</p>
+        )}
       </CardContent>
     </Card>
   );

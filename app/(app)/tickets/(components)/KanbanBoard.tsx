@@ -25,6 +25,7 @@ import {
   markTicketUnreadAction,
   reorderTicketsAction
 } from '@/lib/actions/tickets';
+import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import {
   getOpenedWaitingTimestamps,
   getWaitingRaisedWhileOpenMap,
@@ -989,6 +990,74 @@ export default function KanbanBoard({
     }
   }
 
+  async function handleCreateAndOpenTicket(
+    status: string,
+    objective: string,
+    position: 'top' | 'bottom' = 'top'
+  ) {
+    const trimmedObjective = objective.trim();
+    if (!trimmedObjective) return;
+    const clientTicketId = crypto.randomUUID();
+
+    const previous = workingTickets.current;
+    const columnTicketsForStatus = previous.filter(ticket => ticket.status === status);
+    const positionInColumn =
+      columnTicketsForStatus.length > 0
+        ? position === 'bottom'
+          ? columnTicketsForStatus.reduce(
+              (max, ticket) => Math.max(max, ticket.board_position),
+              -Infinity
+            ) + 1
+          : columnTicketsForStatus.reduce(
+              (min, ticket) => Math.min(min, ticket.board_position),
+              Infinity
+            ) - 1
+        : 0;
+
+    const referenceTicket =
+      previous.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? previous[0];
+
+    const optimisticTicket: Ticket = {
+      id: clientTicketId,
+      title: deriveTitleFromObjective(trimmedObjective),
+      objective: trimmedObjective,
+      organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
+      project_id: projectId ?? referenceTicket?.project_id ?? '',
+      project_name: referenceTicket?.project_name ?? null,
+      project_color: referenceTicket?.project_color ?? null,
+      project_everhour_project_id: referenceTicket?.project_everhour_project_id ?? null,
+      everhour_task_id: null,
+      agent_session_state: null,
+      status,
+      priority: 'medium',
+      execution_target: 'agent',
+      assigned_agent: null,
+      board_position: positionInColumn,
+      organization_name: referenceTicket?.organization_name ?? null,
+      waiting_for_response_at: null,
+      has_unopened_waiting_response: false,
+      is_read: true
+    };
+
+    setTickets(prev => [...prev, optimisticTicket]);
+
+    try {
+      const result = await createTicketInColumnAction(
+        status,
+        trimmedObjective,
+        clientTicketId,
+        organizationId,
+        projectId,
+        position
+      );
+      router.push(
+        buildTicketPath({ projectId: result.projectId, ticketId: result.id }) + '?focus=objective'
+      );
+    } catch {
+      setTickets(prev => prev.filter(t => t.id !== clientTicketId));
+    }
+  }
+
   const uncategorizedColumn: StatusColumn = {
     id: UNCATEGORIZED_COLUMN_ID,
     title: 'Uncategorized',
@@ -1041,6 +1110,7 @@ export default function KanbanBoard({
                     fileMentionPaths={fileMentionPaths}
                     workingDirectory={workingDirectory}
                     onCreateTicket={handleCreateTicket}
+                    onCreateAndOpenTicket={handleCreateAndOpenTicket}
                     onMarkRead={handleMarkRead}
                     onMarkUnread={handleMarkUnread}
                     onMarkAllRead={() => handleMarkColumnRead(colTickets.map(t => t.id))}
@@ -1060,6 +1130,7 @@ export default function KanbanBoard({
                   fileMentionPaths={fileMentionPaths}
                   workingDirectory={workingDirectory}
                   onCreateTicket={handleCreateTicket}
+                  onCreateAndOpenTicket={handleCreateAndOpenTicket}
                   onMarkRead={handleMarkRead}
                   onMarkUnread={handleMarkUnread}
                   onMarkAllRead={() => handleMarkColumnRead(uncategorized.map(t => t.id))}
