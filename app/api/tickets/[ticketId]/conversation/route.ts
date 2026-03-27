@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { ticketStatuses } from '@/lib/overlord/types';
+import {
+  resolvePreferredStatusNameByType,
+  resolveStatusNameForPhase,
+  resolveStatusTypeForName
+} from '@/lib/ticket-statuses';
 import { createClient } from '@/supabase/utils/server';
 
 const createConversationEntrySchema = z
@@ -39,7 +44,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
-      .select('id,status')
+      .select('id,status,organization_id')
       .eq('id', ticketId)
       .single();
     if (ticketError || !ticket) {
@@ -105,16 +110,24 @@ export async function POST(request: Request, { params }: RouteContext) {
       );
     }
 
+    const currentStatusType = await resolveStatusTypeForName(
+      supabase,
+      ticket.organization_id,
+      ticket.status
+    );
     const shouldMoveToExecute =
       entryType === 'answer' &&
       parentEventId &&
       !phase &&
-      (ticket.status === 'review' || ticket.status === 'blocked');
+      (currentStatusType === 'review' || ticket.status === 'blocked');
 
     if (phase || shouldMoveToExecute) {
+      const nextStatusName = phase
+        ? await resolveStatusNameForPhase(supabase, ticket.organization_id, phase)
+        : await resolvePreferredStatusNameByType(supabase, ticket.organization_id, 'execute');
       const { error: statusError } = await supabase
         .from('tickets')
-        .update({ status: phase ?? 'execute' })
+        .update({ status: nextStatusName })
         .eq('id', ticketId);
       if (statusError) {
         return NextResponse.json({ error: statusError.message }, { status: 500 });

@@ -70,12 +70,15 @@ const electronAPI = {
   },
   agentBundle: {
     getAllStatuses: () => ipcRenderer.invoke('agent-bundle:get-all-statuses'),
-    getStatus: (agent: 'claude' | 'opencode') =>
+    getStatus: (agent: 'claude' | 'cursor' | 'opencode') =>
       ipcRenderer.invoke('agent-bundle:get-status', agent),
-    install: (agent: 'claude' | 'opencode') => ipcRenderer.invoke('agent-bundle:install', agent),
+    install: (agent: 'claude' | 'cursor' | 'opencode') =>
+      ipcRenderer.invoke('agent-bundle:install', agent),
     installAll: () => ipcRenderer.invoke('agent-bundle:install-all'),
-    repair: (agent: 'claude' | 'opencode') => ipcRenderer.invoke('agent-bundle:repair', agent),
-    uninstall: (agent: 'claude' | 'opencode') => ipcRenderer.invoke('agent-bundle:uninstall', agent)
+    repair: (agent: 'claude' | 'cursor' | 'opencode') =>
+      ipcRenderer.invoke('agent-bundle:repair', agent),
+    uninstall: (agent: 'claude' | 'cursor' | 'opencode') =>
+      ipcRenderer.invoke('agent-bundle:uninstall', agent)
   },
   agentSlash: {
     getAllStatuses: () => ipcRenderer.invoke('agent-slash:get-all-statuses'),

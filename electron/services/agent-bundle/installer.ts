@@ -29,6 +29,7 @@ import { installSlashCommands, uninstallSlashCommands } from './slash-commands';
 import {
   BUNDLE_VERSION,
   CLAUDE_SKILL_CONTENT,
+  CURSOR_RULES_CONTENT,
   JSON_MARKER_KEY,
   OPENCODE_AGENTS_SECTION,
   PERMISSION_HOOK_SCRIPT
@@ -38,7 +39,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-export type AgentBundleAgent = 'claude' | 'opencode';
+export type AgentBundleAgent = 'claude' | 'cursor' | 'opencode';
 
 export type BundleStatus = 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
 
@@ -68,6 +69,7 @@ type ManifestEntry = {
 
 type BundleManifest = {
   claude?: ManifestEntry;
+  cursor?: ManifestEntry;
   opencode?: ManifestEntry;
 };
 
@@ -96,6 +98,14 @@ function openCodePaths() {
   };
 }
 
+function cursorPaths() {
+  const base = path.join(os.homedir(), '.cursor');
+  return {
+    rulesDir: path.join(base, 'rules'),
+    rulesFile: path.join(base, 'rules', 'overlord-local.mdc')
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Manifest
 // ---------------------------------------------------------------------------
@@ -119,6 +129,7 @@ function contentHash(content: string): string {
 /** Returns the content hash for the current (bundled) template of a given agent. */
 function currentContentHashForAgent(agent: AgentBundleAgent): string {
   if (agent === 'claude') return contentHash(CLAUDE_SKILL_CONTENT);
+  if (agent === 'cursor') return contentHash(CURSOR_RULES_CONTENT);
   return contentHash(OPENCODE_AGENTS_SECTION);
 }
 
@@ -129,7 +140,10 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
 
   if (!entry) {
     // Check if files exist anyway (manual install or pre-manifest)
-    const filesExist = agent === 'claude' ? checkClaudeFilesExist() : checkOpenCodeFilesExist();
+    let filesExist: boolean;
+    if (agent === 'claude') filesExist = checkClaudeFilesExist();
+    else if (agent === 'cursor') filesExist = checkCursorFilesExist();
+    else filesExist = checkOpenCodeFilesExist();
     if (filesExist) {
       return {
         agent,
@@ -198,7 +212,11 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
 }
 
 export function getAllBundleStatuses(): AgentBundleStatus[] {
-  return [getAgentBundleStatus('claude'), getAgentBundleStatus('opencode')];
+  return [
+    getAgentBundleStatus('claude'),
+    getAgentBundleStatus('cursor'),
+    getAgentBundleStatus('opencode')
+  ];
 }
 
 function checkClaudeFilesExist(): boolean {
@@ -211,6 +229,11 @@ function checkOpenCodeFilesExist(): boolean {
   if (!fs.existsSync(paths.agentsFile)) return false;
   const content = readTextFile(paths.agentsFile);
   return hasOverlordSection(content);
+}
+
+function checkCursorFilesExist(): boolean {
+  const paths = cursorPaths();
+  return fs.existsSync(paths.rulesFile);
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +400,38 @@ function installOpenCode(): InstallResult {
   }
 }
 
+function installCursor(): InstallResult {
+  const paths = cursorPaths();
+  const backups: string[] = [];
+
+  try {
+    // 1. Install the rules file
+    writeTextFile(paths.rulesFile, CURSOR_RULES_CONTENT);
+
+    // 2. Install Cursor slash commands alongside the durable bundle.
+    const slashResult = installSlashCommands('cursor');
+    if (!slashResult.ok) {
+      return { ok: false, agent: 'cursor', backups, error: slashResult.error };
+    }
+    backups.push(...slashResult.backups);
+
+    // 3. Update manifest
+    const manifest = readManifest();
+    manifest.cursor = {
+      version: BUNDLE_VERSION,
+      contentHash: contentHash(CURSOR_RULES_CONTENT),
+      installedAt: new Date().toISOString(),
+      files: [paths.rulesFile, ...slashResult.managedFiles]
+    };
+    writeManifest(manifest);
+
+    return { ok: true, agent: 'cursor', backups };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, agent: 'cursor', backups, error: message };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -387,6 +442,7 @@ function installOpenCode(): InstallResult {
  */
 export function installAgentBundle(agent: AgentBundleAgent): InstallResult {
   if (agent === 'claude') return installClaude();
+  if (agent === 'cursor') return installCursor();
   return installOpenCode();
 }
 
@@ -394,7 +450,11 @@ export function installAgentBundle(agent: AgentBundleAgent): InstallResult {
  * Install bundles for all supported agents.
  */
 export function installAllBundles(): InstallResult[] {
-  return [installAgentBundle('claude'), installAgentBundle('opencode')];
+  return [
+    installAgentBundle('claude'),
+    installAgentBundle('cursor'),
+    installAgentBundle('opencode')
+  ];
 }
 
 /**
@@ -452,6 +512,16 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
       }
 
       const slashUninstall = uninstallSlashCommands('claude');
+      if (!slashUninstall.ok) {
+        return { ok: false, error: slashUninstall.error };
+      }
+    } else if (agent === 'cursor') {
+      const paths = cursorPaths();
+      if (fs.existsSync(paths.rulesFile)) {
+        fs.unlinkSync(paths.rulesFile);
+      }
+
+      const slashUninstall = uninstallSlashCommands('cursor');
       if (!slashUninstall.ok) {
         return { ok: false, error: slashUninstall.error };
       }

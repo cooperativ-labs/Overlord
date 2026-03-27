@@ -26,6 +26,7 @@ import {
 import { createTicketSchema } from '@/lib/overlord/validation';
 import { generateDateFromSchedule } from '@/lib/schedulingEngine';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
+import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -132,6 +133,10 @@ async function resolveScheduledDuplicateStatus(supabase: ServerSupabase, organiz
 
   const nextUpStatus = data.find(status => status.name === 'next-up');
   return nextUpStatus?.name ?? data[0].name;
+}
+
+async function resolveNewTicketDraftStatus(supabase: ServerSupabase, organizationId: number) {
+  return resolvePreferredStatusNameByType(supabase, organizationId, 'draft');
 }
 
 function toEngineSchedule(schedule: TicketScheduleRow) {
@@ -557,7 +562,7 @@ export async function createCalendarTicketAction(
   const { data, error } = await supabase
     .from('tickets')
     .insert({
-      status: 'draft',
+      status: await resolveNewTicketDraftStatus(supabase, selected.organizationId),
       title,
       due_datetime: dueDatetime,
       organization_id: selected.organizationId,
@@ -595,7 +600,7 @@ export async function createBlankTicketAction(organizationId?: number, projectId
     organization_id: number;
     project_id: string;
   } = {
-    status: 'draft',
+    status: await resolveNewTicketDraftStatus(supabase, selected.organizationId),
     organization_id: selected.organizationId,
     project_id: selected.projectId
   };
@@ -611,7 +616,7 @@ export async function createBlankTicketAction(organizationId?: number, projectId
   }
 
   await upsertDraftObjective(supabase, data.id, '');
-  await assignTicketToColumnEnd(supabase, data.id, 'draft', data.organization_id);
+  await assignTicketToColumnEnd(supabase, data.id, insertPayload.status, data.organization_id);
 
   revalidateTicketBoards();
   revalidatePath(
@@ -651,7 +656,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     acceptance_criteria: parsed.data.acceptanceCriteria || null,
     available_tools: parsed.data.availableTools,
     execution_target: parsed.data.executionTarget,
-    status: 'draft',
+    status: await resolveNewTicketDraftStatus(supabase, selected.organizationId),
     title: parsed.data.title || deriveTitleFromObjective(parsed.data.description),
     organization_id: selected.organizationId,
     project_id: selected.projectId
@@ -668,7 +673,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
   }
 
   await upsertDraftObjective(supabase, data.id, parsed.data.description);
-  await assignTicketToColumnEnd(supabase, data.id, 'draft', data.organization_id);
+  await assignTicketToColumnEnd(supabase, data.id, insertPayload.status, data.organization_id);
 
   await supabase.from('ticket_events').insert({
     event_type: 'system',

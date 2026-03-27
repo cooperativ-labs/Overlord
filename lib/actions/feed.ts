@@ -190,30 +190,58 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Unauthorized');
 
-  const { data: tickets, error: ticketsError } = await supabase
-    .from('tickets')
-    .select(
-      `
-      id,
-      project_id,
-      title,
-      ticket_sequence,
-      projects!inner(name, color)
-    `
-    )
-    .eq('status', 'execute')
-    .order('updated_at', { ascending: false })
-    .limit(24);
+  const { data: executeStatuses, error: executeStatusesError } = await supabase
+    .from('ticket_statuses')
+    .select('organization_id,name')
+    .eq('status_type', 'execute');
 
-  if (ticketsError) {
-    console.error('[getExecutingFeedTicketsAction] tickets error:', ticketsError);
-    Sentry.captureException(ticketsError);
-    throw new Error(ticketsError.message);
+  if (executeStatusesError) {
+    console.error('[getExecutingFeedTicketsAction] execute statuses error:', executeStatusesError);
+    Sentry.captureException(executeStatusesError);
+    throw new Error(executeStatusesError.message);
   }
 
-  const rows = (tickets ?? []) as Array<
+  const ticketResults = await Promise.all(
+    (executeStatuses ?? []).map(status =>
+      supabase
+        .from('tickets')
+        .select(
+          `
+          id,
+          organization_id,
+          project_id,
+          title,
+          ticket_sequence,
+          updated_at,
+          projects!inner(name, color)
+        `
+        )
+        .eq('organization_id', status.organization_id)
+        .eq('status', status.name)
+        .order('updated_at', { ascending: false })
+        .limit(24)
+    )
+  );
+
+  for (const result of ticketResults) {
+    if (result.error) {
+      console.error('[getExecutingFeedTicketsAction] tickets error:', result.error);
+      Sentry.captureException(result.error);
+      throw new Error(result.error.message);
+    }
+  }
+
+  const rows = ticketResults
+    .flatMap(result => result.data ?? [])
+    .sort((a, b) => {
+      const left = new Date((a as { updated_at: string }).updated_at).getTime();
+      const right = new Date((b as { updated_at: string }).updated_at).getTime();
+      return right - left;
+    })
+    .slice(0, 24) as Array<
     Record<string, unknown> & {
       id: string;
+      organization_id: number;
       project_id: string;
       title: string | null;
       ticket_sequence: number | null;

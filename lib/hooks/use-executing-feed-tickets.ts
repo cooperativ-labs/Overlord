@@ -8,29 +8,56 @@ import { createClient } from '@/supabase/utils/client';
 async function loadExecutingFeedTickets(): Promise<ExecutingFeedTicket[]> {
   const supabase = createClient();
 
-  const { data: tickets, error: ticketsError } = await supabase
-    .from('tickets')
-    .select(
-      `
-      id,
-      project_id,
-      title,
-      ticket_sequence,
-      projects!inner(name, color)
-    `
-    )
-    .eq('status', 'execute')
-    .order('updated_at', { ascending: false })
-    .limit(24);
+  const { data: executeStatuses, error: executeStatusesError } = await supabase
+    .from('ticket_statuses')
+    .select('organization_id,name')
+    .eq('status_type', 'execute');
 
-  if (ticketsError) {
-    console.error('[useExecutingFeedTickets] tickets error:', ticketsError);
+  if (executeStatusesError) {
+    console.error('[useExecutingFeedTickets] execute statuses error:', executeStatusesError);
     return [];
   }
 
-  const rows = (tickets ?? []) as Array<
+  const ticketResults = await Promise.all(
+    (executeStatuses ?? []).map(status =>
+      supabase
+        .from('tickets')
+        .select(
+          `
+          id,
+          organization_id,
+          project_id,
+          title,
+          ticket_sequence,
+          updated_at,
+          projects!inner(name, color)
+        `
+        )
+        .eq('organization_id', status.organization_id)
+        .eq('status', status.name)
+        .order('updated_at', { ascending: false })
+        .limit(24)
+    )
+  );
+
+  for (const result of ticketResults) {
+    if (result.error) {
+      console.error('[useExecutingFeedTickets] tickets error:', result.error);
+      return [];
+    }
+  }
+
+  const rows = ticketResults
+    .flatMap(result => result.data ?? [])
+    .sort((a, b) => {
+      const left = new Date((a as { updated_at: string }).updated_at).getTime();
+      const right = new Date((b as { updated_at: string }).updated_at).getTime();
+      return right - left;
+    })
+    .slice(0, 24) as Array<
     Record<string, unknown> & {
       id: string;
+      organization_id: number;
       project_id: string;
       title: string | null;
       ticket_sequence: number | null;

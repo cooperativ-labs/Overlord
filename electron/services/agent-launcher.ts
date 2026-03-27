@@ -132,7 +132,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchMode = input.launchMode ?? 'run';
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
-    input.agent === 'claude' || input.agent === 'opencode'
+    input.agent === 'claude' || input.agent === 'cursor' || input.agent === 'opencode'
       ? (input.agent as AgentBundleAgent)
       : null;
   const bundleInstalled = bundleAgent ? isBundleInstalled(bundleAgent) : false;

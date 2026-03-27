@@ -3,11 +3,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { getPlatformUrl } from '@/lib/env';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
-import { buildResumeCommands, selectRestartSessionCommand } from '@/lib/overlord/launch-commands';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { deliverSchema } from '@/lib/overlord/validation';
+import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
 
@@ -20,7 +19,7 @@ export async function POST(request: Request) {
 
   try {
     const { artifacts, changeRationales, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
-    const { organizationId, tokenValue } = parsed.tokenContext;
+    const { organizationId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
@@ -72,6 +71,11 @@ export async function POST(request: Request) {
     const eventId = event.id;
     const sessionId = resolved.session.id;
     const agentIdentifier = resolved.session.agent_identifier;
+    const reviewStatusName = await resolvePreferredStatusNameByType(
+      supabase,
+      organizationId,
+      'review'
+    );
 
     // Fast-ack: return immediately after persisting the minimal deliver event.
     // Artifact inserts and status updates are deferred via after() so that constrained
@@ -103,7 +107,7 @@ export async function POST(request: Request) {
           .from('tickets')
           .select('board_position')
           .eq('organization_id', organizationId)
-          .eq('status', 'review')
+          .eq('status', reviewStatusName)
           .neq('id', ticketId)
           .order('board_position', { ascending: true })
           .limit(1);
@@ -115,7 +119,7 @@ export async function POST(request: Request) {
             .update({
               is_read: false,
               recent_agent: agentIdentifier,
-              status: 'review',
+              status: reviewStatusName,
               board_position: topBoardPosition
             })
             .eq('id', ticketId),
@@ -185,7 +189,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       artifacts: artifactCount,
       ok: true,
-      status: 'review'
+      status: reviewStatusName
     });
   } catch (error) {
     return internalErrorResponse(error);

@@ -43,13 +43,14 @@ type AgentSplitButtonProps = {
   organizationId?: number;
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
-  commands: Record<LaunchAgentTypeValue, string>;
+  commands?: Record<LaunchAgentTypeValue, string>;
   workingDirectory?: string | null;
   activeAgentIdentifier?: string | null;
   assignedSelection?: TicketAssignedAgent | null;
   hasProjectWorkingDirectory?: boolean;
   agentSessionState?: SessionState | null;
   size?: AgentSplitButtonSize;
+  allowedAgents?: readonly AgentSelectorValue[];
 };
 
 const sizeStyles: Record<
@@ -110,7 +111,8 @@ export function AgentSplitButton({
   assignedSelection,
   hasProjectWorkingDirectory,
   agentSessionState,
-  size = 'default'
+  size = 'default',
+  allowedAgents
 }: AgentSplitButtonProps) {
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -124,8 +126,12 @@ export function AgentSplitButton({
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
-  const isDisabled = !canRunAgent;
+  const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';
+  const isDisabled = !canRunAgent && !isCopySelectedAgent;
   const styles = sizeStyles[size];
+  const visibleAgents = allowedAgents
+    ? AGENT_SELECTOR_VALUES.filter(v => allowedAgents.includes(v))
+    : AGENT_SELECTOR_VALUES;
 
   const appliedStoredDefaultRef = useRef(false);
 
@@ -197,9 +203,12 @@ export function AgentSplitButton({
         setIsLaunching(false);
       }
     } else {
-      await navigator.clipboard.writeText(commands[agentValue]);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const command = commands?.[agentValue as LaunchAgentTypeValue];
+      if (command) {
+        await navigator.clipboard.writeText(command);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     }
   }
 
@@ -213,12 +222,16 @@ export function AgentSplitButton({
         isDisabled && 'cursor-not-allowed opacity-60'
       )}
       onClick={() =>
-        void handleLaunch(effectiveSelection.agent, { useStoredModelPreference: true })
+        void handleLaunch(isCopySelectedAgent ? selectedAgent : effectiveSelection.agent, {
+          useStoredModelPreference: !isCopySelectedAgent
+        })
       }
       disabled={isDisabled}
     >
       {isLaunching ? (
         <Loader2 className={cn(styles.loader, 'animate-spin')} />
+      ) : isCopySelectedAgent ? (
+        <Copy className={styles.icon} />
       ) : (
         <Bot className={styles.icon} />
       )}
@@ -229,7 +242,13 @@ export function AgentSplitButton({
           isActive && 'text-emerald-600 animate-pulse'
         )}
       >
-        {copied ? 'Run ✓' : 'Run'}
+        {copied
+          ? `${isCopySelectedAgent ? (selectedAgent === 'copy-local' ? 'Copy Local' : 'Copy Cloud') : 'Run'} ✓`
+          : isCopySelectedAgent
+            ? selectedAgent === 'copy-local'
+              ? 'Copy Local'
+              : 'Copy Cloud'
+            : 'Run'}
       </span>
     </button>
   );
@@ -279,7 +298,7 @@ export function AgentSplitButton({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[170px]">
-          {AGENT_SELECTOR_VALUES.map(agentValue => {
+          {visibleAgents.map(agentValue => {
             const isCopyValue = agentValue === 'copy-local' || agentValue === 'copy-cloud';
             const agent = isCopyValue ? null : getAgentTypeByValue(agentValue);
             const agentIsActive = activeDropdownAgent === agentValue;

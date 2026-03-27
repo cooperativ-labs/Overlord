@@ -5,6 +5,8 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
+
 export async function handleCreateTicket(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     sessionKey,
@@ -38,6 +40,11 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
   if (sourceErr || !sourceTicket) return toolErr('Source ticket not found.');
 
   const nextTitle = title.trim() || objective.slice(0, 120);
+  const draftStatusName = await resolvePreferredStatusNameByType(
+    supabase,
+    sourceTicket.organization_id,
+    'draft'
+  );
 
   const { data: created, error: createErr } = await supabase
     .from('tickets')
@@ -50,7 +57,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       organization_id: sourceTicket.organization_id,
       priority,
       project_id: sourceTicket.project_id,
-      status: 'draft',
+      status: draftStatusName,
       title: nextTitle
     })
     .select('id, organization_id, project_id, execution_target')

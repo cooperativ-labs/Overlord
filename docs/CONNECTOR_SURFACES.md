@@ -1,0 +1,416 @@
+# Connector Surfaces
+
+This document is the parity checklist for every place Overlord integrates with each AI coding agent.
+
+Use it before shipping any connector-related change. If one surface changes, check the others.
+
+## Agents and connector models
+
+| Agent | Local connector | Cloud/headless connector |
+|-------|-----------------|--------------------------|
+| Claude Code | Overlord bundle (skill + permission hook) via `ovld setup claude` | `/api/mcp` with `AGENT_TOKEN` |
+| Codex | Home-local chat plugin via Desktop app Settings → CLI | `/api/mcp` with `AGENT_TOKEN` (`~/.codex/config.toml`) |
+| Cursor | Slash commands via `ovld setup cursor` | — |
+| Gemini CLI | TOML slash commands via `ovld setup gemini` | — |
+| OpenCode | Overlord bundle (AGENTS.md + config) via `ovld setup opencode` | — |
+
+## Bundle support
+
+Bundle-backed agents get a slim ticket prompt; unbundled agents always receive the full workflow instructions on every launch.
+
+- **Bundle supported:** `claude`, `opencode`
+- **Legacy mode only:** `codex`, `cursor`, `gemini`
+
+Capability resolver:
+[agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
+
+---
+
+## Claude Code connector surfaces
+
+### 1. Bundle installer
+
+- Bundle installer:
+  [installer.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/installer.ts)
+- Templates (skill + hook content):
+  [templates.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/templates.ts) — `CLAUDE_SKILL_CONTENT`, `PERMISSION_HOOK_SCRIPT`
+- CLI install:
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup claude`
+
+Managed files:
+- `~/.claude/skills/overlord-local/SKILL.md` — durable workflow skill
+- `~/.claude/overlord-permission-hook.sh` — permission notification hook (mode 0755)
+- `~/.claude/settings.json` — hook merged into `hooks.PermissionRequest`; `Bash(ovld protocol:*)` and `Bash(curl -sS -X POST:*)` added to `permissions.allow`
+
+Checklist:
+- Skill file is the canonical workflow instructions for bundle mode
+- Hook script calls `$OVERLORD_URL/api/protocol/permission-request` when Claude awaits tool permission
+- Settings merge preserves user's existing hooks and permissions (no clobber)
+- Manifest entry written to `~/.ovld/bundle-manifest.json`
+
+### 2. Slash commands
+
+- Slash command installer:
+  [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
+
+Managed files (Markdown format):
+- `~/.claude/commands/connect.md`
+- `~/.claude/commands/load.md`
+- `~/.claude/commands/spawn.md`
+
+### 3. Local launch path
+
+- Launch service:
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+
+Command pattern:
+```
+claude --append-system-prompt "$(cat <context-file>)" [--settings <temp-settings>] [--model <model>] [--effort <level>] <start-prompt>
+```
+
+Checklist:
+- Bundle installed → `--settings` arg is omitted (durable hook already in `~/.claude/settings.json`)
+- Bundle not installed → temp settings file with per-session hook is passed via `--settings`
+- `instructionMode=bundle` is passed to context route when bundle is installed
+- Model flag: `--model`; thinking/effort flag: `--effort`
+
+### 4. Onboarding
+
+- Agent setup step:
+  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/AgentSetupStep.tsx)
+- Connector install step:
+  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+- Bundle install step:
+  [InstallAgentBundlesStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/InstallAgentBundlesStep.tsx)
+- Permission step:
+  [ConfigureAgentPermissionsStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConfigureAgentPermissionsStep.tsx)
+
+Checklist:
+- Onboarding advertises `ovld setup claude` as the connector setup command
+- Connector features list includes: skill (workflow protocol), permission hook, settings merge, slash commands, permission rules
+
+---
+
+## Codex connector surfaces
+
+### 1. Local installer and migration
+
+- Desktop-managed plugin installer:
+  [overlord-plugin.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/overlord-plugin.ts)
+- Settings UI for local Codex install / repair / uninstall:
+  [CliPage.tsx](/Users/jake/Development/Cooperativ/Overlord/components/modals/settings/CliPage.tsx)
+- IPC exposure:
+  [app.ts](/Users/jake/Development/Cooperativ/Overlord/electron/ipc/app.ts)
+  [preload.ts](/Users/jake/Development/Cooperativ/Overlord/electron/preload.ts)
+  [electron.d.ts](/Users/jake/Development/Cooperativ/Overlord/types/electron.d.ts)
+
+Managed files:
+- `~/plugins/overlord/` — plugin directory (copied from app bundle)
+- `~/.agents/plugins/marketplace.json` — Codex local plugin registry entry
+- `~/.codex/rules/default.rules` — Overlord permission prefix rules (`ovld protocol`, `curl -sS -X POST`)
+- Plugin install manifest: `~/.ovld/overlord-plugin-manifest.json`
+
+Checklist:
+- Plugin install writes `~/.agents/plugins/marketplace.json`
+- Plugin install writes `~/plugins/overlord`
+- Plugin install manages `~/.codex/rules/default.rules`
+- Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
+- Plugin install removes any legacy Codex bundle manifest entry from `~/.ovld/bundle-manifest.json`
+
+### 2. Local launch path
+
+- Electron launch service:
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+- Context route:
+  [route.ts](/Users/jake/Development/Cooperativ/Overlord/app/api/protocol/context/[ticketId]/route.ts)
+- Prompt builder:
+  [ticket-prompt.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/ticket-prompt.ts)
+- Capability resolver:
+  [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
+
+Command pattern:
+```
+codex [--model <model>] [-c model_reasoning_effort="<level>"] "$(cat <context-file>)"
+```
+
+Checklist:
+- Local Codex launches pass `agent=codex` into the context route
+- Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
+- Prompt text explicitly includes the Codex ticket workflow instructions
+- Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
+- Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
+
+### 3. Cloud / headless Codex setup
+
+- User-facing setup page:
+  [AgentsAndMcpPage.tsx](/Users/jake/Development/Cooperativ/Overlord/components/modals/settings/AgentsAndMcpPage.tsx)
+- Auth/integration reference:
+  [MCP_AUTH_AND_INTEGRATION.md](/Users/jake/Development/Cooperativ/Overlord/docs/MCP_AUTH_AND_INTEGRATION.md)
+- Public MCP endpoint:
+  [route.ts](/Users/jake/Development/Cooperativ/Overlord/app/api/mcp/route.ts)
+
+Checklist:
+- Codex cloud instructions point to `~/.codex/config.toml`
+- Codex cloud instructions use `/api/mcp`
+- Codex cloud instructions use `AGENT_TOKEN`
+- Codex cloud guidance is clearly separated from the local plugin path
+
+### 4. Onboarding
+
+- Agent setup copy:
+  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/AgentSetupStep.tsx)
+- Connector install flow:
+  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+
+Checklist:
+- Onboarding does not tell users to run `ovld setup codex`
+- Codex onboarding points users to the Desktop app chat plugin install path
+- Codex is not presented as a bundle-backed agent
+- Codex connector features list includes: home-local plugin, legacy bundle migration cleanup, permission prefix rules
+
+### 5. CLI legacy compatibility
+
+- Setup command:
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs)
+
+Checklist:
+- `ovld setup codex` exits with an error message pointing to the Desktop app
+- Help text does not advertise Codex as a bundle-supported setup target
+
+### 6. Demo / product copy
+
+- Demo settings page:
+  [DemoSettings.tsx](/Users/jake/Development/Cooperativ/Overlord/app/demo/DemoSettings.tsx)
+
+Checklist:
+- Demo copy describes the Codex chat plugin, not a prompt/skills bundle
+- Demo managed-file list matches the real installer outputs
+
+---
+
+## Cursor connector surfaces
+
+### 1. Slash commands
+
+- Slash command installer:
+  [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
+- CLI install:
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup cursor`
+
+Managed files (Markdown format):
+- `~/.cursor/commands/connect.md`
+- `~/.cursor/commands/load.md`
+- `~/.cursor/commands/spawn.md`
+
+### 2. Local launch path
+
+- Launch service:
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+
+Command pattern:
+```
+agent [--model <model>] "$(cat <context-file>)"
+```
+
+Checklist:
+- No bundle support — full workflow instructions always included in the prompt (`instructionMode=legacy`)
+- No permission hook
+- Model flag: `--model` (no thinking/effort flag for Cursor)
+
+### 3. Onboarding
+
+- Agent setup step:
+  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/AgentSetupStep.tsx)
+- Connector install step:
+  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+
+Checklist:
+- Onboarding advertises `ovld setup cursor` as the connector setup command
+- Connector features list includes: slash commands, permission rules for ovld protocol & curl
+
+---
+
+## Gemini CLI connector surfaces
+
+### 1. Slash commands
+
+- Slash command installer:
+  [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
+- CLI install:
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup gemini`
+
+Managed files (**TOML format**, not Markdown):
+- `~/.gemini/commands/connect.toml`
+- `~/.gemini/commands/load.toml`
+- `~/.gemini/commands/spawn.toml`
+
+Note: Gemini uses `{{args}}` for argument interpolation (vs `$ARGUMENTS` for Claude/Cursor/OpenCode).
+
+### 2. Local launch path
+
+- Launch service:
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+
+Command pattern:
+```
+gemini [--model <model>] [--thinking-level <level>] "$(cat <context-file>)"
+```
+
+Checklist:
+- No bundle support — full workflow instructions always included in the prompt (`instructionMode=legacy`)
+- No permission hook
+- Thinking/effort flag: `--thinking-level` (unique to Gemini)
+
+### 3. Onboarding
+
+- Agent setup step:
+  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/AgentSetupStep.tsx)
+- Connector install step:
+  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+
+Checklist:
+- Onboarding advertises `ovld setup gemini` as the connector setup command
+- Connector features list includes: TOML slash commands and TOML policy rules for ovld protocol & curl
+
+---
+
+## OpenCode connector surfaces
+
+### 1. Bundle installer
+
+- Bundle installer:
+  [installer.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/installer.ts)
+- Templates (AGENTS.md content):
+  [templates.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/templates.ts) — `OPENCODE_AGENTS_SECTION`
+- CLI install:
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup opencode`
+
+Managed files:
+- `~/.config/opencode/AGENTS.md` — Overlord workflow instructions merged in as a delimited section
+- `~/.config/opencode/opencode.json` — `instructions` array and `permission.bash` map merged (allows `ovld protocol *`, `curl -sS -X POST *`, `curl -s -X POST *`)
+
+Checklist:
+- AGENTS.md section is wrapped in `<!-- overlord:managed:start -->` / `<!-- overlord:managed:end -->` markers
+- opencode.json merge preserves user's existing instructions and bash permission entries
+- Manifest entry written to `~/.ovld/bundle-manifest.json`
+- No permission hook (OpenCode does not support the Claude Code hook mechanism)
+
+### 2. Slash commands
+
+- Slash command installer:
+  [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
+
+Managed files (Markdown with `agent: build` frontmatter):
+- `~/.config/opencode/commands/connect.md`
+- `~/.config/opencode/commands/load.md`
+- `~/.config/opencode/commands/spawn.md`
+
+### 3. Local launch path
+
+- Launch service:
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+
+Command pattern:
+```
+opencode [--model <model>] --prompt "$(cat <context-file>)"
+```
+
+Checklist:
+- Bundle supported — when installed, `instructionMode=bundle` is passed and slim prompt is used
+- Model flag: `--model` (no thinking/effort flag for OpenCode)
+- `--prompt` flag is required (unlike other agents that take the prompt as a positional argument)
+
+### 4. Onboarding
+
+- Agent setup step:
+  [AgentSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/AgentSetupStep.tsx)
+- Connector install step:
+  [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
+- Bundle install step:
+  [InstallAgentBundlesStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/InstallAgentBundlesStep.tsx)
+
+Checklist:
+- Onboarding advertises `ovld setup opencode` as the connector setup command
+- Connector features list includes: AGENTS.md workflow instructions, slash commands, opencode.json config merge
+
+---
+
+## Shared surfaces
+
+### Context route and prompt builder
+
+- Context route:
+  [route.ts](/Users/jake/Development/Cooperativ/Overlord/app/api/protocol/context/[ticketId]/route.ts)
+- Prompt builder:
+  [ticket-prompt.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/ticket-prompt.ts)
+- Capability resolver:
+  [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
+
+Checklist:
+- Context route accepts `agent=` query param for all 5 agents: `claude`, `codex`, `cursor`, `gemini`, `opencode`
+- `instructionMode=bundle` is only sent for `claude` and `opencode` when their bundle is installed
+- `instructionMode=legacy` is used for `codex`, `cursor`, `gemini`, and for `claude`/`opencode` when bundle is not installed
+- Prompt content varies per agent — verify agent-specific workflow sections when changing `ticket-prompt.ts`
+
+### CLI setup command
+
+- Setup command:
+  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs)
+
+Checklist:
+- `ovld setup claude` installs bundle for Claude Code
+- `ovld setup opencode` installs bundle for OpenCode
+- `ovld setup cursor` installs slash commands for Cursor
+- `ovld setup gemini` installs TOML slash commands for Gemini CLI
+- `ovld setup all` installs all supported agents (claude + opencode only; slash-only agents are separate)
+- `ovld setup codex` → exits with error directing user to the Desktop app
+- `ovld doctor` validates installed bundle statuses for `claude` and `opencode`
+
+### Settings UI
+
+- Agents & MCP page:
+  [AgentsAndMcpPage.tsx](/Users/jake/Development/Cooperativ/Overlord/components/modals/settings/AgentsAndMcpPage.tsx)
+- CLI settings page:
+  [CliPage.tsx](/Users/jake/Development/Cooperativ/Overlord/components/modals/settings/CliPage.tsx)
+
+### IPC (Electron)
+
+- IPC exposure:
+  [app.ts](/Users/jake/Development/Cooperativ/Overlord/electron/ipc/app.ts)
+  [preload.ts](/Users/jake/Development/Cooperativ/Overlord/electron/preload.ts)
+  [electron.d.ts](/Users/jake/Development/Cooperativ/Overlord/types/electron.d.ts)
+
+---
+
+## Regression checks
+
+When changing connector integration, verify the relevant agent(s):
+
+**Claude Code**
+- Bundle status in Settings reflects skill file, hook script, and settings.json
+- Installing bundle merges hook and permissions without clobbering user settings
+- Launching Claude from Overlord produces the correct prompt (slim for bundle mode, full for legacy)
+- Slash commands are written to `~/.claude/commands/`
+- No user-facing page references `ovld setup claude` for Codex
+
+**Codex**
+- Plugin install status in Settings reflects plugin files and `default.rules`
+- Installing the plugin cleans up legacy Codex bundle remnants
+- Launching Codex from Overlord produces Codex-specific workflow instructions in the prompt
+- Codex cloud instructions produce a valid MCP config snippet (`~/.codex/config.toml`)
+- No user-facing page advertises `ovld setup codex` or `~/.codex/AGENTS.md` as the current local Codex path
+
+**Cursor**
+- Slash commands written to `~/.cursor/commands/` (Markdown format)
+- Launching Cursor from Overlord always includes full legacy workflow instructions in the prompt
+
+**Gemini CLI**
+- Slash commands written to `~/.gemini/commands/` (TOML format, not Markdown)
+- `{{args}}` interpolation is used in TOML content (not `$ARGUMENTS`)
+- Launching Gemini from Overlord always includes full legacy workflow instructions in the prompt
+
+**OpenCode**
+- Bundle status in Settings reflects AGENTS.md section and opencode.json merge
+- Launching OpenCode from Overlord produces correct prompt (slim for bundle mode, full for legacy)
+- Slash commands written to `~/.config/opencode/commands/` (Markdown with `agent: build` frontmatter)
+- `--prompt` flag is present in the launch command

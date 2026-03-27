@@ -10,6 +10,7 @@ import { useSystemNotifications } from './SystemNotificationContext';
 const AGENT_LABELS: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
+  cursor: 'Cursor',
   opencode: 'OpenCode'
 };
 

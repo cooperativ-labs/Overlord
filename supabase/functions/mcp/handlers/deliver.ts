@@ -8,6 +8,7 @@ import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
 import { insertChangeRationales } from './_change-rationales.ts';
+import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 
@@ -111,6 +112,12 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
         }
       ];
 
+  const reviewStatusName = await resolvePreferredStatusNameByType(
+    supabase,
+    ctx.organizationId,
+    'review'
+  );
+
   if (artifactsToPersist.length) {
     await supabase.from('artifacts').insert(
       artifactsToPersist.map((a: any) => ({
@@ -131,7 +138,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     .from('tickets')
     .select('board_position')
     .eq('organization_id', ctx.organizationId)
-    .eq('status', 'review')
+    .eq('status', reviewStatusName)
     .neq('id', ticketId)
     .order('board_position', { ascending: true })
     .limit(1);
@@ -143,7 +150,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
       .from('tickets')
       .update({
         recent_agent: resolved.session.agent_identifier,
-        status: 'review',
+        status: reviewStatusName,
         board_position: topBoardPosition
       })
       .eq('id', ticketId),
@@ -161,5 +168,5 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     ticket_id: ticketId
   });
 
-  return toolOk({ artifacts: artifactsToPersist.length, ok: true, status: 'review' });
+  return toolOk({ artifacts: artifactsToPersist.length, ok: true, status: reviewStatusName });
 }

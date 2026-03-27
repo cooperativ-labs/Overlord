@@ -137,7 +137,10 @@ function resolveLocalProtocolFamily(
   agent: PromptAgent | undefined,
   instructionMode: InstructionMode
 ): LocalProtocolFamily {
-  if (instructionMode === 'bundle' && (agent === 'claude' || agent === 'opencode')) {
+  if (
+    instructionMode === 'bundle' &&
+    (agent === 'claude' || agent === 'cursor' || agent === 'opencode')
+  ) {
     return 'bundled';
   }
   if (agent === 'codex') {
@@ -163,15 +166,13 @@ function buildBundledLocalProtocolSection({
   context,
   agent
 }: ProtocolSectionInput): string {
-  const skillNote = 'Before doing anything else, look for and invoke the `overlord-local` skill.';
-
   return `## Overlord Protocol
 
 - **Ticket ID:** ${ticketId}
 
 ${buildLocalLaunchNote(context)}
 
-Use your installed Overlord local workflow instructions, then attach to this ticket.${skillNote}
+Use your installed Overlord local workflow instructions, then attach to this ticket.Before doing anything else, look for and invoke the overlord-local skill.
 Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
 
 \`\`\`bash

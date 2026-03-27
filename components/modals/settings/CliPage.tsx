@@ -46,7 +46,7 @@ type SlashCommandConfig = {
   filePaths: string[];
 };
 
-type BundleAgent = 'claude' | 'opencode';
+type BundleAgent = 'claude' | 'cursor' | 'opencode';
 type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 type BundleStatusEntry = {
@@ -177,14 +177,10 @@ const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
   claude: [
     '~/.claude/skills/overlord-local/SKILL.md',
     '~/.claude/overlord-permission-hook.sh',
-    '~/.claude/settings.json',
-    ...SLASH_COMMAND_CONFIGS.claude.filePaths
+    '~/.claude/settings.json'
   ],
-  opencode: [
-    '~/.config/opencode/AGENTS.md',
-    '~/.config/opencode/opencode.json',
-    ...SLASH_COMMAND_CONFIGS.opencode.filePaths
-  ]
+  cursor: ['~/.cursor/rules/overlord-local.mdc'],
+  opencode: ['~/.config/opencode/AGENTS.md', '~/.config/opencode/opencode.json']
 };
 
 const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
@@ -217,6 +213,16 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     serviceKey: 'overlord-plugin',
     supportNote:
       'Managed by the desktop app in ~/.agents/plugins, ~/plugins, and ~/.codex/rules/default.rules. Requires ovld to be installed on PATH.'
+  },
+  {
+    key: 'cursor:bundle',
+    agentKey: 'cursor',
+    label: 'Prompt / rules',
+    description:
+      'Installs the durable Overlord workflow bundle as a global Cursor rule (~/.cursor/rules/overlord-local.mdc) so ticket lifecycle rules live in local config.',
+    kind: 'bundle',
+    bundleAgent: 'cursor',
+    supportNote: 'Managed by the desktop app in your local ~/.cursor/rules configuration.'
   },
   {
     key: 'cursor:slash',
@@ -366,6 +372,9 @@ export function CliPage({ open }: { open: boolean }) {
   const [pluginActionButtonStates, setPluginActionButtonStates] = useState<
     Record<string, ButtonLoadingState>
   >({});
+  const [pluginActionMessages, setPluginActionMessages] = useState<Record<string, string | null>>(
+    {}
+  );
   const [activePluginActionKey, setActivePluginActionKey] = useState<string | null>(null);
 
   const [cliInstallButtonState, setCliInstallButtonState] = useState<ButtonLoadingState>('default');
@@ -449,6 +458,10 @@ export function CliPage({ open }: { open: boolean }) {
 
   const setPluginActionButtonState = useCallback((key: string, state: ButtonLoadingState) => {
     setPluginActionButtonStates(current => ({ ...current, [key]: state }));
+  }, []);
+
+  const setPluginActionMessage = useCallback((key: string, message: string | null) => {
+    setPluginActionMessages(current => ({ ...current, [key]: message }));
   }, []);
 
   async function handleAddFlag() {
@@ -624,11 +637,16 @@ export function CliPage({ open }: { open: boolean }) {
     if (!window.electronAPI?.overlordPlugin) return;
     setActivePluginActionKey(optionKey);
     setPluginActionButtonState(optionKey, 'loading');
+    setPluginActionMessage(optionKey, null);
     try {
-      await window.electronAPI.overlordPlugin.install();
+      const result = await window.electronAPI.overlordPlugin.install();
+      if (!result.ok) {
+        throw new Error(result.error ?? 'Install failed');
+      }
       await loadServiceStatuses();
       setPluginActionButtonState(optionKey, 'success');
-    } catch {
+    } catch (error) {
+      setPluginActionMessage(optionKey, error instanceof Error ? error.message : 'Install failed');
       setPluginActionButtonState(optionKey, 'error');
     } finally {
       setActivePluginActionKey(null);
@@ -639,11 +657,16 @@ export function CliPage({ open }: { open: boolean }) {
     if (!window.electronAPI?.overlordPlugin) return;
     setActivePluginActionKey(optionKey);
     setPluginActionButtonState(optionKey, 'loading');
+    setPluginActionMessage(optionKey, null);
     try {
-      await window.electronAPI.overlordPlugin.repair();
+      const result = await window.electronAPI.overlordPlugin.repair();
+      if (!result.ok) {
+        throw new Error(result.error ?? 'Repair failed');
+      }
       await loadServiceStatuses();
       setPluginActionButtonState(optionKey, 'success');
-    } catch {
+    } catch (error) {
+      setPluginActionMessage(optionKey, error instanceof Error ? error.message : 'Repair failed');
       setPluginActionButtonState(optionKey, 'error');
     } finally {
       setActivePluginActionKey(null);
@@ -654,11 +677,16 @@ export function CliPage({ open }: { open: boolean }) {
     if (!window.electronAPI?.overlordPlugin) return;
     setActivePluginActionKey(optionKey);
     setPluginActionButtonState(optionKey, 'loading');
+    setPluginActionMessage(optionKey, null);
     try {
-      await window.electronAPI.overlordPlugin.uninstall();
+      const result = await window.electronAPI.overlordPlugin.uninstall();
+      if (!result.ok) {
+        throw new Error(result.error ?? 'Remove failed');
+      }
       await loadServiceStatuses();
       setPluginActionButtonState(optionKey, 'success');
-    } catch {
+    } catch (error) {
+      setPluginActionMessage(optionKey, error instanceof Error ? error.message : 'Remove failed');
       setPluginActionButtonState(optionKey, 'error');
     } finally {
       setActivePluginActionKey(null);
@@ -983,6 +1011,7 @@ export function CliPage({ open }: { open: boolean }) {
                             ? Boolean(serviceStatus)
                             : Boolean(slashStatus);
                       const buttonState = pluginActionButtonStates[option.key] ?? 'default';
+                      const actionMessage = pluginActionMessages[option.key];
 
                       return (
                         <div key={option.key} className="rounded-md border bg-background p-3">
@@ -1076,6 +1105,9 @@ export function CliPage({ open }: { open: boolean }) {
                                 }
                                 disabled={!canRunAction || activePluginActionKey !== null}
                               />
+                            ) : null}
+                            {isElectron && actionMessage ? (
+                              <p className="text-xs text-destructive">{actionMessage}</p>
                             ) : null}
                           </div>
                         </div>

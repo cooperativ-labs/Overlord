@@ -11,6 +11,7 @@ type Props = {
   ticketId: string;
   variant?: 'icon' | 'default';
   className?: string;
+  context?: 'cli' | 'web';
 };
 
 /**
@@ -78,7 +79,7 @@ async function writeTextToClipboardLazy(textPromise: Promise<string>): Promise<b
  * Copies the full LLM prompt for this ticket (ticket content + instructions to pass
  * information back via the overlord protocol) to the clipboard.
  */
-export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }: Props) {
+export function CopyTicketPromptButton({ ticketId, variant = 'icon', className, context }: Props) {
   const [copied, setCopied] = useState(false);
 
   async function handleAction() {
@@ -86,7 +87,7 @@ export function CopyTicketPromptButton({ ticketId, variant = 'icon', className }
     // Passing this directly to writeTextToClipboardLazy lets the browser
     // register the clipboard write synchronously (preserving the user gesture)
     // while the server action resolves in the background.
-    const textPromise = getTicketPromptForCopy(ticketId, 'run', undefined).then(
+    const textPromise = getTicketPromptForCopy(ticketId, 'run', context).then(
       ({ error, prompt }) => {
         if (error || !prompt) {
           console.error('Failed to copy ticket prompt:', error, prompt ? 'prompt' : 'no prompt');

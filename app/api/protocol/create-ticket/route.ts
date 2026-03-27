@@ -5,6 +5,7 @@ import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tic
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
+import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
@@ -48,6 +49,11 @@ export async function POST(request: Request) {
     }
 
     const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+    const draftStatusName = await resolvePreferredStatusNameByType(
+      supabase,
+      sourceTicket.organization_id,
+      'draft'
+    );
 
     const { data: createdTicket, error: createTicketError } = await supabase
       .from('tickets')
@@ -60,7 +66,7 @@ export async function POST(request: Request) {
         organization_id: sourceTicket.organization_id,
         priority,
         project_id: sourceTicket.project_id,
-        status: 'draft',
+        status: draftStatusName,
         title: nextTitle
       })
       .select('id,organization_id,project_id,execution_target')

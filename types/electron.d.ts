@@ -116,7 +116,7 @@ interface ElectronAPI {
   agentBundle?: {
     getAllStatuses: () => Promise<
       Array<{
-        agent: 'claude' | 'opencode';
+        agent: 'claude' | 'cursor' | 'opencode';
         status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
         version: string | null;
         installedVersion: string | null;
@@ -124,35 +124,37 @@ interface ElectronAPI {
         currentContentHash: string;
       }>
     >;
-    getStatus: (agent: 'claude' | 'opencode') => Promise<{
-      agent: 'claude' | 'opencode';
+    getStatus: (agent: 'claude' | 'cursor' | 'opencode') => Promise<{
+      agent: 'claude' | 'cursor' | 'opencode';
       status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
       version: string | null;
       installedVersion: string | null;
       details: string;
       currentContentHash: string;
     }>;
-    install: (agent: 'claude' | 'opencode') => Promise<{
+    install: (agent: 'claude' | 'cursor' | 'opencode') => Promise<{
       ok: boolean;
-      agent: 'claude' | 'opencode';
+      agent: 'claude' | 'cursor' | 'opencode';
       backups: string[];
       error?: string;
     }>;
     installAll: () => Promise<
       Array<{
         ok: boolean;
-        agent: 'claude' | 'opencode';
+        agent: 'claude' | 'cursor' | 'opencode';
         backups: string[];
         error?: string;
       }>
     >;
-    repair: (agent: 'claude' | 'opencode') => Promise<{
+    repair: (agent: 'claude' | 'cursor' | 'opencode') => Promise<{
       ok: boolean;
-      agent: 'claude' | 'opencode';
+      agent: 'claude' | 'cursor' | 'opencode';
       backups: string[];
       error?: string;
     }>;
-    uninstall: (agent: 'claude' | 'opencode') => Promise<{ ok: boolean; error?: string }>;
+    uninstall: (
+      agent: 'claude' | 'cursor' | 'opencode'
+    ) => Promise<{ ok: boolean; error?: string }>;
   };
   agentSlash?: {
     getAllStatuses: () => Promise<

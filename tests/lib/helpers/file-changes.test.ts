@@ -46,6 +46,18 @@ describe('file change helpers', () => {
     );
   });
 
+  it('uses direct file links for Cursor (not openChange)', () => {
+    expect(
+      buildDiffHref(
+        'components/features/FileChangesArtifact.tsx',
+        '/Users/jake/Development/Cooperativ/Overlord',
+        'cursor://file'
+      )
+    ).toBe(
+      'cursor://file/Users/jake/Development/Cooperativ/Overlord/components/features/FileChangesArtifact.tsx'
+    );
+  });
+
   it('falls back to file opens for JetBrains and absolute paths', () => {
     expect(
       buildDiffHref(

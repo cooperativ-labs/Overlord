@@ -10,6 +10,11 @@ import {
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { updateSchema } from '@/lib/overlord/validation';
+import {
+  resolvePreferredStatusNameByType,
+  resolveStatusNameForPhase,
+  resolveStatusTypeForName
+} from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
 
@@ -48,13 +53,20 @@ export async function POST(request: Request) {
       .eq('id', ticketId)
       .single();
 
-    const postDeliveryStatuses = ['review', 'complete'];
+    const currentStatusType = currentTicket
+      ? await resolveStatusTypeForName(supabase, organizationId, currentTicket.status)
+      : null;
     const isResumeAfterDelivery =
-      currentTicket && postDeliveryStatuses.includes(currentTicket.status);
+      currentStatusType === 'review' || currentStatusType === 'complete';
 
     if (isResumeAfterDelivery) {
+      const executeStatusName = await resolvePreferredStatusNameByType(
+        supabase,
+        organizationId,
+        'execute'
+      );
       await Promise.all([
-        supabase.from('tickets').update({ status: 'execute' }).eq('id', ticketId),
+        supabase.from('tickets').update({ status: executeStatusName }).eq('id', ticketId),
         supabase
           .from('agent_sessions')
           .update({ session_state: 'active', detached_at: null })
@@ -148,23 +160,19 @@ export async function POST(request: Request) {
     }
 
     if (phase) {
-      const ticketUpdate: Record<string, unknown> = { status: phase };
+      const targetStatusName = await resolveStatusNameForPhase(supabase, organizationId, phase);
+      const ticketUpdate: Record<string, unknown> = { status: targetStatusName };
 
       // If moving to a review-type status, place the ticket at the top of that column
       // and mark it unread so the review indicator appears for the user.
-      const { data: statusInfo } = await supabase
-        .from('ticket_statuses')
-        .select('status_type')
-        .eq('organization_id', organizationId)
-        .eq('name', phase)
-        .maybeSingle();
+      const statusType = await resolveStatusTypeForName(supabase, organizationId, targetStatusName);
 
-      if (statusInfo?.status_type === 'review') {
+      if (statusType === 'review') {
         const { data: headTickets } = await supabase
           .from('tickets')
           .select('board_position')
           .eq('organization_id', organizationId)
-          .eq('status', phase)
+          .eq('status', targetStatusName)
           .neq('id', ticketId)
           .order('board_position', { ascending: true })
           .limit(1);

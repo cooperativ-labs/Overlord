@@ -9,6 +9,7 @@ import {
   useAgentModelPreference
 } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { useTerminal } from '@/components/features/terminal/TerminalProvider';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,15 +24,17 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import {
   createBlankTicketAction,
   deleteTicketAction,
   setTicketProjectAction,
-  updateTicketFieldAction
+  updateTicketFieldAction,
+  updateTicketStatusAction
 } from '@/lib/actions/tickets';
 import { areStringArraysEqual } from '@/lib/helpers/array-utils';
-import { buildProjectPath } from '@/lib/helpers/ticket-path';
+import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import type { EditableTextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +48,7 @@ type ProjectOption = {
   local_working_directory?: string | null;
 };
 
-type NewTicketModalProps = {
+type QuickRunModalProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   defaultProjectId?: string;
@@ -54,16 +57,17 @@ type NewTicketModalProps = {
   fileMentionPaths?: string[];
 };
 
-export function NewTicketModal({
+export function QuickRunModal({
   isOpen,
   onOpenChange,
   defaultProjectId,
   organizationId,
   projects,
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS
-}: NewTicketModalProps) {
+}: QuickRunModalProps) {
   const router = useRouter();
   const [ticketId, setTicketId] = useState<string | null>(null);
+  const [ticketProjectId, setTicketProjectId] = useState<string | null>(null);
   const [objective, setObjective] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(
     defaultProjectId || projects[0]?.id || ''
@@ -74,6 +78,7 @@ export function NewTicketModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { api, isElectron } = useElectron();
+  const { launchAgent } = useTerminal();
   const { selection, setSelection } = useAgentModelPreference();
   const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
 
@@ -83,7 +88,6 @@ export function NewTicketModal({
     );
   }, []);
 
-  // Auto-resize textarea
   const autoResize = useCallback(() => {
     const el = textareaRef.current as EditableTextareaHandle | null;
     if (!el) return;
@@ -98,6 +102,7 @@ export function NewTicketModal({
         try {
           const created = await createBlankTicketAction(organizationId, selectedProjectId);
           setTicketId(created.id);
+          setTicketProjectId(created.projectId);
         } catch (error) {
           console.error('Failed to create blank ticket:', error);
         }
@@ -118,7 +123,6 @@ export function NewTicketModal({
         await updateTicketFieldAction(ticketId, 'objective', objective);
       } catch (error) {
         console.error('Failed to auto-save objective:', error);
-        toast.error('Failed to save changes.');
       }
     }, 1000);
 
@@ -163,7 +167,7 @@ export function NewTicketModal({
 
   const effectiveMentionPaths = isElectron ? localFileMentionPaths : fileMentionPaths;
 
-  // Focus textarea once ticket creation finishes and textarea is rendered
+  // Focus textarea once ticket creation finishes
   useEffect(() => {
     if (isOpen && !isCreating) {
       requestAnimationFrame(() => {
@@ -172,10 +176,6 @@ export function NewTicketModal({
       });
     }
   }, [isOpen, isCreating, autoResize]);
-
-  function handleChange() {
-    autoResize();
-  }
 
   async function handleSubmit() {
     if (!ticketId) return;
@@ -187,30 +187,53 @@ export function NewTicketModal({
       const selectedProject = projects.find(p => p.id === selectedProjectId);
       if (!selectedProject) throw new Error('Selected project not found');
 
-      // The draft ticket is created when the modal opens. Persist the final project selection.
+      // Persist final project selection
       await setTicketProjectAction(ticketId, selectedProjectId);
 
-      // Generate title: AI-summarised for long objectives, truncated for short ones
+      // Save objective and generate title
       if (objective.trim()) {
+        await updateTicketFieldAction(ticketId, 'objective', objective);
         const title = await generateTicketTitleAction(objective);
         await updateTicketFieldAction(ticketId, 'title', title);
       }
 
+      // Move ticket to next-up so the agent can pick it up
+      await updateTicketStatusAction(ticketId, 'next-up');
+
+      // Ensure we have an agent token, then launch
+      const agentToken = await ensureAgentTokenAction(organizationId);
+      await launchAgent(
+        ticketId,
+        selection.agent,
+        selectedProject.local_working_directory ?? undefined,
+        agentToken,
+        'run',
+        undefined,
+        selection.model ?? undefined,
+        selection.thinking ?? undefined
+      );
+
       setSubmitButtonState('success');
       onOpenChange(false);
 
-      // Reset state for next use
+      // Reset for next use
       setTicketId(null);
+      setTicketProjectId(null);
       setObjective('');
       setSelectedProjectId(defaultProjectId || projects[0]?.id || '');
       setSubmitButtonState('default');
 
-      // Navigate to board view
-      router.push(`${buildProjectPath({ projectId: selectedProjectId })}?view=board`);
+      router.push(buildTicketPath({ projectId: selectedProjectId, ticketId }));
       router.refresh();
     } catch (error) {
       setSubmitButtonState('error');
-      console.error('Failed to submit ticket:', error);
+      console.error('Failed to run ticket:', error);
+      toast.error('Failed to launch agent', {
+        description:
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : 'Check your terminal settings and agent token, then try again.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -226,6 +249,7 @@ export function NewTicketModal({
     }
 
     setTicketId(null);
+    setTicketProjectId(null);
     setObjective('');
     setSelectedProjectId(defaultProjectId || projects[0]?.id || '');
     setSubmitButtonState('default');
@@ -241,9 +265,9 @@ export function NewTicketModal({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[90vh] max-h-screen w-full flex-col gap-4 rounded-lg sm:h-auto sm:max-h-[90vh] sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>New Ticket</DialogTitle>
+          <DialogTitle>Run Ticket</DialogTitle>
           <DialogDescription>
-            Create a new ticket with details and assign it to a project.
+            Describe the task — the agent will start immediately after you submit.
           </DialogDescription>
         </DialogHeader>
 
@@ -255,16 +279,16 @@ export function NewTicketModal({
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-none">
             {/* Objective textarea */}
             <div className="relative flex flex-1 flex-col">
-              <Label htmlFor="ticket-objective" className="mb-2 block text-sm font-medium">
+              <Label htmlFor="quick-run-objective" className="mb-2 block text-sm font-medium">
                 Objective
               </Label>
               <MentionableTextarea
                 ref={textareaRef}
-                id="ticket-objective"
+                id="quick-run-objective"
                 value={objective}
                 onValueChange={setObjective}
                 mentionPaths={effectiveMentionPaths}
-                onChange={handleChange}
+                onChange={() => autoResize()}
                 onMentionSelect={() => {
                   requestAnimationFrame(() => autoResize());
                 }}
@@ -281,7 +305,7 @@ export function NewTicketModal({
 
             {/* Project selector */}
             <div className="space-y-2">
-              <Label htmlFor="ticket-project" className="text-sm font-medium">
+              <Label htmlFor="quick-run-project" className="text-sm font-medium">
                 Project
               </Label>
               <Select
@@ -290,7 +314,7 @@ export function NewTicketModal({
                 disabled={isSubmitting}
               >
                 <SelectTrigger
-                  id="ticket-project"
+                  id="quick-run-project"
                   className="h-auto w-full rounded-full border-border bg-background px-3 py-1.5 text-left shadow-sm hover:bg-accent hover:text-accent-foreground"
                 >
                   <span className="flex items-center gap-2 pr-2">
@@ -317,15 +341,13 @@ export function NewTicketModal({
               </Select>
             </div>
 
-            {/* Agent & model selector — only in Electron */}
-            {isElectron && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Agent & Model</Label>
-                <div className="rounded-md border border-border/40 bg-background p-3">
-                  <AgentModelSelector value={selection} onChange={setSelection} inline={false} />
-                </div>
+            {/* Agent & model selector */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Agent & Model</Label>
+              <div className="rounded-md border border-border/40 bg-background p-3">
+                <AgentModelSelector value={selection} onChange={setSelection} inline={false} />
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -341,9 +363,9 @@ export function NewTicketModal({
           <LoadingButton
             buttonState={submitButtonState}
             setButtonState={setSubmitButtonState}
-            text="Create Ticket"
-            loadingText="Creating…"
-            successText="Created"
+            text="Run"
+            loadingText="Launching…"
+            successText="Launched"
             errorText="Failed"
             onClick={handleSubmit}
             disabled={isCreating || !objective.trim() || !ticketId}

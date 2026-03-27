@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
 import { connectionMethods } from '@/lib/overlord/types';
+import { resolvePreferredStatusNameByType, resolveStatusTypeForName } from '@/lib/ticket-statuses';
 import type { Database, Json } from '@/types/database.types';
 
 type ConnectClient = SupabaseClient<Database>;
@@ -57,11 +58,22 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
   }
 
   const previousStatus = ticket.status;
-  const isResumeAfterDelivery = previousStatus === 'review' || previousStatus === 'complete';
+  const previousStatusType = await resolveStatusTypeForName(
+    supabase,
+    organizationId,
+    previousStatus
+  );
+  const isResumeAfterDelivery =
+    previousStatusType === 'review' || previousStatusType === 'complete';
+  const executeStatusName = await resolvePreferredStatusNameByType(
+    supabase,
+    organizationId,
+    'execute'
+  );
 
   const { error: ticketUpdateError } = await supabase
     .from('tickets')
-    .update({ status: 'execute' })
+    .update({ status: executeStatusName })
     .eq('id', ticketId);
 
   if (ticketUpdateError) {

@@ -3,6 +3,8 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 
 import { type TokenContext } from '../auth.ts';
 
+import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
+
 const PRIORITY_ORDER = ['low', 'medium', 'high', 'urgent'] as const;
 
 export const DEFAULT_EXECUTION_TARGET = 'agent';
@@ -170,13 +172,14 @@ export async function resolveProject(
 async function assignTicketToDraftColumnEnd(
   supabase: SupabaseClient,
   organizationId: number,
-  ticketId: string
+  ticketId: string,
+  draftStatusName: string
 ) {
   const { data: tailTicket, error: tailTicketError } = await supabase
     .from('tickets')
     .select('board_position')
     .eq('organization_id', organizationId)
-    .eq('status', 'draft')
+    .eq('status', draftStatusName)
     .neq('id', ticketId)
     .order('board_position', { ascending: false })
     .limit(1);
@@ -203,6 +206,11 @@ export async function createDraftTicket(
   draft: TicketDraft
 ) {
   const project = await resolveProject(supabase, ctx.organizationId, draft.projectId);
+  const draftStatusName = await resolvePreferredStatusNameByType(
+    supabase,
+    project.organization_id,
+    'draft'
+  );
 
   const { data: createdTicket, error: createTicketError } = await supabase
     .from('tickets')
@@ -212,7 +220,7 @@ export async function createDraftTicket(
       organization_id: project.organization_id,
       priority: draft.priority,
       project_id: project.id,
-      status: 'draft',
+      status: draftStatusName,
       title: draft.title
     })
     .select('id, organization_id, project_id, execution_target, status, title')
@@ -232,7 +240,12 @@ export async function createDraftTicket(
     throw new Error(objectiveError.message);
   }
 
-  await assignTicketToDraftColumnEnd(supabase, project.organization_id, createdTicket.id);
+  await assignTicketToDraftColumnEnd(
+    supabase,
+    project.organization_id,
+    createdTicket.id,
+    draftStatusName
+  );
 
   const ticketReference = createdTicket.id.slice(-8);
   const { error: eventError } = await supabase.from('ticket_events').insert({

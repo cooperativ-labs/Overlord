@@ -26,6 +26,7 @@ import {
 } from '@/lib/helpers/agent-types';
 
 import { useTerminal } from './terminal/TerminalProvider';
+import type { WebAgentMode } from './WebAgentModeButton';
 
 type DiscussTicketButtonProps = {
   ticketId: string;
@@ -34,6 +35,7 @@ type DiscussTicketButtonProps = {
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   workingDirectory?: string | null;
+  webMode?: WebAgentMode;
 };
 
 const defaultAgentButtonStates: Record<LaunchAgentTypeValue, ButtonLoadingState> = {
@@ -50,10 +52,12 @@ export function DiscussTicketButton({
   agentIdentifier,
   agentToken,
   agentFlags,
-  workingDirectory
+  workingDirectory,
+  webMode
 }: DiscussTicketButtonProps) {
   const { isElectron, launchAgent } = useTerminal();
   const [isOpen, setIsOpen] = useState(false);
+  const [webCopied, setWebCopied] = useState(false);
   const [agentButtonStates, setAgentButtonStates] =
     useState<Record<LaunchAgentTypeValue, ButtonLoadingState>>(defaultAgentButtonStates);
   const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
@@ -110,6 +114,28 @@ export function DiscussTicketButton({
             : 'Check your terminal settings and agent token, then try again.'
       });
     }
+  }
+
+  if (!isElectron && webMode !== undefined) {
+    const handleWebDiscuss = async () => {
+      const context = webMode === 'local' ? 'cli' : 'web';
+      const { error, prompt } = await getTicketPromptForCopy(ticketId, 'ask', context);
+      if (error || !prompt) return;
+      await navigator.clipboard.writeText(prompt);
+      setWebCopied(true);
+      setTimeout(() => setWebCopied(false), 2000);
+    };
+
+    return (
+      <Button
+        className="h-8 px-3 text-xs"
+        size="sm"
+        variant="outline"
+        onClick={() => void handleWebDiscuss()}
+      >
+        {webCopied ? 'Copied!' : 'Discuss'}
+      </Button>
+    );
   }
 
   return (

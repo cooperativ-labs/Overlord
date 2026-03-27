@@ -100,10 +100,7 @@ export function buildDiffHref(path: string, workspaceRoot: string, editorScheme:
     path.startsWith('/') || !workspaceRoot ? path : `${workspaceRoot.replace(/\/$/, '')}/${path}`;
   const scheme = editorScheme.split('://')[0];
 
-  if (
-    (scheme === 'vscode' || scheme === 'cursor' || scheme === 'windsurf') &&
-    fullPath.startsWith('/')
-  ) {
+  if ((scheme === 'vscode' || scheme === 'windsurf') && fullPath.startsWith('/')) {
     const fileUri = encodeURIComponent(`file://${fullPath}`);
     return `${scheme}://vscode.git/openChange?path=${fileUri}`;
   }

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { generateAndSetObjectiveTitle, markDraftObjectiveExecuted } from '@/lib/objectives';
 import { buildPromptContext } from '@/lib/overlord/prompt-context';
 import { connectionMethods } from '@/lib/overlord/types';
+import { resolvePreferredStatusNameByType, resolveStatusTypeForName } from '@/lib/ticket-statuses';
 import type { Database, Json } from '@/types/database.types';
 
 type AttachClient = SupabaseClient<Database>;
@@ -96,11 +97,22 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
   }
 
   const previousStatus = ticket.status;
-  const isResumeAfterDelivery = previousStatus === 'review' || previousStatus === 'complete';
+  const previousStatusType = await resolveStatusTypeForName(
+    supabase,
+    organizationId,
+    previousStatus
+  );
+  const isResumeAfterDelivery =
+    previousStatusType === 'review' || previousStatusType === 'complete';
+  const executeStatusName = await resolvePreferredStatusNameByType(
+    supabase,
+    organizationId,
+    'execute'
+  );
 
   const { error: ticketUpdateError } = await supabase
     .from('tickets')
-    .update({ status: 'execute' })
+    .update({ status: executeStatusName })
     .eq('id', ticketId);
 
   if (ticketUpdateError) {

@@ -6,6 +6,7 @@ import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
+import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
@@ -101,6 +102,11 @@ export async function POST(request: Request) {
     }
 
     const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+    const draftStatusName = await resolvePreferredStatusNameByType(
+      supabase,
+      resolvedOrganizationId,
+      'draft'
+    );
 
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')
@@ -113,7 +119,7 @@ export async function POST(request: Request) {
         organization_id: resolvedOrganizationId,
         priority,
         project_id: resolvedProjectId,
-        status: 'draft',
+        status: draftStatusName,
         title: nextTitle
       })
       .select('id, organization_id, project_id, execution_target, status')

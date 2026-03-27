@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 
 import { NewTicketModal } from '@/components/features/NewTicketModal';
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
+import { QuickRunModal } from '@/components/features/QuickRunModal';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/supabase/utils/client';
 
@@ -21,7 +23,9 @@ export function NewTicketButton() {
   const pathname = usePathname();
   const { defaultProject } = useDefaultProject();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isQuickRunOpen, setIsQuickRunOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const { isElectron } = useElectron();
 
   const segments = pathname.split('/').filter(Boolean);
   // Route format: /projects/[projectId]/... or /u/...
@@ -29,9 +33,9 @@ export function NewTicketButton() {
     defaultProject?.id ??
     (segments[0] === 'projects' && typeof segments[1] === 'string' ? segments[1] : undefined);
 
-  // Load projects when modal opens
+  // Load projects when either modal opens
   useEffect(() => {
-    if (!isModalOpen) return;
+    if (!isModalOpen && !isQuickRunOpen) return;
 
     const loadProjects = async () => {
       try {
@@ -50,24 +54,24 @@ export function NewTicketButton() {
     };
 
     loadProjects();
-  }, [isModalOpen]);
+  }, [isModalOpen, isQuickRunOpen]);
 
   useEffect(() => {
     const handleNewTicketHotkey = (event: globalThis.KeyboardEvent) => {
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        !event.altKey &&
-        !event.shiftKey &&
-        event.key === 'n'
-      ) {
-        event.preventDefault();
-        setIsModalOpen(true);
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        if (event.key === 'n') {
+          event.preventDefault();
+          setIsModalOpen(true);
+        } else if (event.key === 'p' && isElectron) {
+          event.preventDefault();
+          setIsQuickRunOpen(true);
+        }
       }
     };
 
     window.addEventListener('keydown', handleNewTicketHotkey);
     return () => window.removeEventListener('keydown', handleNewTicketHotkey);
-  }, []);
+  }, [isElectron]);
 
   return (
     <>
@@ -85,6 +89,15 @@ export function NewTicketButton() {
         defaultProjectId={projectId}
         projects={projects}
       />
+
+      {isElectron && (
+        <QuickRunModal
+          isOpen={isQuickRunOpen}
+          onOpenChange={setIsQuickRunOpen}
+          defaultProjectId={projectId}
+          projects={projects}
+        />
+      )}
     </>
   );
 }

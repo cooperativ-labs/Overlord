@@ -5,6 +5,7 @@ import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
+import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import type { Database, Json } from '@/types/database.types';
 
 type SpawnClient = SupabaseClient<Database>;
@@ -84,6 +85,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
   }
 
   const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+  const draftStatusName = await resolvePreferredStatusNameByType(supabase, organizationId, 'draft');
 
   // Create the ticket
   const { data: ticket, error: ticketError } = await supabase
@@ -97,7 +99,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       organization_id: organizationId,
       priority,
       project_id: resolvedProjectId,
-      status: 'draft',
+      status: draftStatusName,
       title: nextTitle
     })
     .select('id,organization_id,project_id,execution_target,status,ticket_sequence')

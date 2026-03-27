@@ -6,6 +6,11 @@ import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
 import { insertChangeRationales } from './_change-rationales.ts';
+import {
+  resolvePreferredStatusNameByType,
+  resolveStatusNameForPhase,
+  resolveStatusTypeForName
+} from './_status-resolution.ts';
 
 export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
@@ -36,13 +41,23 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     .eq('id', ticketId)
     .single();
 
-  const postDeliveryStatuses = ['review', 'complete'];
-  const isResumeAfterDelivery =
-    currentTicket && postDeliveryStatuses.includes((currentTicket as { status: string }).status);
+  const currentStatusType = currentTicket
+    ? await resolveStatusTypeForName(
+        supabase,
+        ctx.organizationId,
+        (currentTicket as { status: string }).status
+      )
+    : null;
+  const isResumeAfterDelivery = currentStatusType === 'review' || currentStatusType === 'complete';
 
   if (isResumeAfterDelivery) {
+    const executeStatusName = await resolvePreferredStatusNameByType(
+      supabase,
+      ctx.organizationId,
+      'execute'
+    );
     await Promise.all([
-      supabase.from('tickets').update({ status: 'execute' }).eq('id', ticketId),
+      supabase.from('tickets').update({ status: executeStatusName }).eq('id', ticketId),
       supabase
         .from('agent_sessions')
         .update({ session_state: 'active', detached_at: null })
@@ -119,22 +134,22 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
   }
 
   if (phase) {
-    const ticketUpdate: Record<string, unknown> = { status: phase };
+    const targetStatusName = await resolveStatusNameForPhase(supabase, ctx.organizationId, phase);
+    const ticketUpdate: Record<string, unknown> = { status: targetStatusName };
 
     // If moving to a review-type status, place the ticket at the top of that column
-    const { data: statusInfo } = await supabase
-      .from('ticket_statuses')
-      .select('status_type')
-      .eq('organization_id', ctx.organizationId)
-      .eq('name', phase)
-      .maybeSingle();
+    const statusType = await resolveStatusTypeForName(
+      supabase,
+      ctx.organizationId,
+      targetStatusName
+    );
 
-    if ((statusInfo as { status_type: string } | null)?.status_type === 'review') {
+    if (statusType === 'review') {
       const { data: headTickets } = await supabase
         .from('tickets')
         .select('board_position')
         .eq('organization_id', ctx.organizationId)
-        .eq('status', phase)
+        .eq('status', targetStatusName)
         .neq('id', ticketId)
         .order('board_position', { ascending: true })
         .limit(1);

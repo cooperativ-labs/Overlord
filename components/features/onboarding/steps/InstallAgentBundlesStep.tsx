@@ -12,14 +12,14 @@ type Props = {
 };
 
 type BundleStatusEntry = {
-  agent: 'claude' | 'opencode';
+  agent: 'claude' | 'cursor' | 'opencode';
   status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
   version: string | null;
   installedVersion: string | null;
   details: string;
 };
 
-const AGENTS: Array<BundleStatusEntry['agent']> = ['claude', 'opencode'];
+const AGENTS: Array<BundleStatusEntry['agent']> = ['claude', 'cursor', 'opencode'];
 
 function statusBadge(status: BundleStatusEntry['status']) {
   if (status === 'installed') {
@@ -127,8 +127,8 @@ export function InstallAgentBundlesStep({ onContinue }: Props) {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Install agent plugins</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Install the Overlord workflow bundle for Claude and OpenCode. Codex now uses the dedicated
-          Overlord chat plugin instead of a local AGENTS bundle.
+          Install the Overlord workflow bundle for Claude, Cursor, and OpenCode. Codex uses the
+          dedicated Overlord chat plugin instead of a local bundle.
         </p>
       </div>
 

@@ -5,6 +5,10 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
 import { buildPromptContext } from './_prompt-context.ts';
+import {
+  resolvePreferredStatusNameByType,
+  resolveStatusTypeForName
+} from './_status-resolution.ts';
 
 /**
  * Explicit ticket columns returned to agents — excludes internal fields like search_vector.
@@ -96,11 +100,22 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   }
 
   const previousStatus = ticket.status;
-  const isResumeAfterDelivery = previousStatus === 'review' || previousStatus === 'complete';
+  const previousStatusType = await resolveStatusTypeForName(
+    supabase,
+    organizationId,
+    previousStatus
+  );
+  const isResumeAfterDelivery =
+    previousStatusType === 'review' || previousStatusType === 'complete';
+  const executeStatusName = await resolvePreferredStatusNameByType(
+    supabase,
+    organizationId,
+    'execute'
+  );
 
   const { error: ticketUpdateError } = await supabase
     .from('tickets')
-    .update({ status: 'execute' })
+    .update({ status: executeStatusName })
     .eq('id', ticketId);
 
   if (ticketUpdateError) return toolErr('Failed to update ticket status.');

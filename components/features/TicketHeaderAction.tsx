@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import {
   getLaunchAgentTypeByIdentifier,
   type LaunchAgentTypeValue
@@ -11,6 +13,7 @@ import { AgentModelChooserButton } from './AgentModelChooserButton';
 import { CopyTicketPromptButton } from './CopyTicketPromptButton';
 import { DiscussTicketButton } from './DiscussTicketButton';
 import { AgentSplitButtonLive } from './TicketLiveProvider';
+import { type WebAgentMode, WebAgentModeButton } from './WebAgentModeButton';
 
 type TicketHeaderActionProps = {
   ticketId: string;
@@ -44,19 +47,23 @@ export function TicketHeaderAction({
   hasProjectWorkingDirectory
 }: TicketHeaderActionProps) {
   const { isElectron } = useTerminal();
+  const [webMode, setWebMode] = useState<WebAgentMode>('local');
 
   if (!isElectron) {
     return (
       <div className="flex items-center gap-2">
+        <WebAgentModeButton mode={webMode} onModeChange={setWebMode} />
         <DiscussTicketButton
           ticketId={ticketId}
-          organizationId={organizationId}
-          agentIdentifier={agentIdentifier}
           agentToken={agentToken}
           agentFlags={agentFlags}
-          workingDirectory={workingDirectory}
+          webMode={webMode}
         />
-        <CopyTicketPromptButton ticketId={ticketId} variant="default" />
+        <CopyTicketPromptButton
+          ticketId={ticketId}
+          context={webMode === 'local' ? 'cli' : 'web'}
+          variant="default"
+        />
       </div>
     );
   }

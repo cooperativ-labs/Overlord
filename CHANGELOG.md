@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-03-27:12:12
+
+### Added
+- Add an Electron Quick Run flow so users can create a blank ticket, choose the project plus agent/model, and launch work immediately from the new shortcut-driven modal.
+- Add durable Cursor local workflow support with a managed `~/.cursor/rules/overlord-local.mdc` bundle, installer coverage, onboarding copy, and settings controls alongside the existing slash commands.
+- Add a Local/Cloud mode switch to web ticket actions so Discuss and Copy Prompt generate the correct prompt context for browser-based agents.
+
+### Fixed
+- Respect organization-specific ticket status names across ticket creation, attach/connect, protocol update/deliver flows, conversation replies, and executing-ticket feed queries instead of hard-coding `draft`, `execute`, and `review`.
+- Fix Cursor file-change links so they open the target file directly instead of trying to use the broken VS Code diff URI format.
+- Surface install, repair, and removal errors for the local Overlord plugin in Settings so failed actions report what went wrong.
+
+### Changed
+- Expand launcher and prompt handling so Cursor participates in the local bundle/rules workflow while web actions can switch cleanly between local CLI and cloud MCP prompt variants.
+- Update the new-ticket flow in Electron to capture agent/model preferences at creation time and allow copy-only agent actions without requiring local directory access.
+
+### Security
+- None.
+
+### Documentation
+- Replace the Codex-only connector parity guide with a unified connector surfaces reference covering Claude Code, Codex, Cursor, Gemini CLI, and OpenCode.
+
+### Test
+- Add regression coverage for Cursor file-change links so `cursor://file` continues to open direct file paths.
+
+### Chore
+- Bump the package version to `3.1.0` and the agent bundle version to `1.7.0`.
+
 ## [3.0.0] - 2026-03-27:11:08
 
 ### Added
