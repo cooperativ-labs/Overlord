@@ -140,22 +140,24 @@ export function OfflineTicketForm() {
             {queue.length} ticket{queue.length !== 1 ? 's' : ''} queued — will submit when back
             online
           </p>
-          <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
-            {queue.map(ticket => (
-              <div
-                key={ticket.id}
-                className="group flex items-start gap-2 rounded-md border border-border/40 bg-muted/50 px-3 py-2"
-              >
-                <p className="flex-1 text-xs text-foreground line-clamp-2">{ticket.objective}</p>
-                <button
-                  onClick={() => handleRemove(ticket.id)}
-                  className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                  aria-label="Remove queued ticket"
+          <div className="flex flex-col gap-1.5 overflow-y-auto">
+            {[...queue]
+              .sort((a, b) => new Date(b.queuedAt).getTime() - new Date(a.queuedAt).getTime())
+              .map(ticket => (
+                <div
+                  key={ticket.id}
+                  className="group flex items-start gap-2 rounded-md border border-border/40 bg-muted/50 px-3 py-2"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+                  <p className="flex-1 text-xs text-foreground line-clamp-2">{ticket.objective}</p>
+                  <button
+                    onClick={() => handleRemove(ticket.id)}
+                    className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                    aria-label="Remove queued ticket"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
           </div>
         </div>
       )}
