@@ -51,14 +51,28 @@ export async function GET(request: Request, { params }: RouteContext) {
       .eq('id', ticket.project_id)
       .maybeSingle();
     const workingDirectory = project?.local_working_directory ?? null;
-    const { data: draftObjective } = await supabase
+    // Prefer the currently executing objective; fall back to the draft
+    const { data: executingObjective } = await supabase
       .from('objectives')
       .select('objective')
       .eq('ticket_id', ticketId)
-      .eq('is_executed', false)
+      .eq('state', 'executing')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    const currentObjective =
+      executingObjective ??
+      (
+        await supabase
+          .from('objectives')
+          .select('objective')
+          .eq('ticket_id', ticketId)
+          .eq('is_executed', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ).data;
 
     const { searchParams } = new URL(request.url);
     const context = (searchParams.get('context') ?? undefined) as PromptContext | undefined;
@@ -82,7 +96,11 @@ export async function GET(request: Request, { params }: RouteContext) {
     const requestOrigin = new URL(request.url).origin;
     const platformUrl = getPlatformUrl(requestOrigin);
 
-    if (!draftObjective || !draftObjective.objective || draftObjective.objective.trim() === '') {
+    if (
+      !currentObjective ||
+      !currentObjective.objective ||
+      currentObjective.objective.trim() === ''
+    ) {
       return NextResponse.json({ error: 'No objective found for this ticket.' }, { status: 404 });
     }
 
@@ -115,7 +133,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       ticket: {
         id: ticket.id,
         title: ticket.title,
-        objective: draftObjective?.objective,
+        objective: currentObjective?.objective,
         acceptance_criteria: ticket.acceptance_criteria,
         available_tools: ticket.available_tools,
         constraints: ticket.constraints,

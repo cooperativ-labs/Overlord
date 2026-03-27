@@ -346,23 +346,41 @@ async function resolvePromptTicketSource(
     return { error: error?.message ?? 'Ticket not found.' };
   }
 
-  const { data: draftObjective } = await supabase
+  // Prefer the executing objective; fall back to draft
+  const { data: executingObjective } = await supabase
     .from('objectives')
     .select('objective')
     .eq('ticket_id', ticketId)
-    .eq('is_executed', false)
+    .eq('state', 'executing')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (!draftObjective || !draftObjective.objective || draftObjective.objective.trim() === '') {
+  const currentObjective =
+    executingObjective ??
+    (
+      await supabase
+        .from('objectives')
+        .select('objective')
+        .eq('ticket_id', ticketId)
+        .eq('is_executed', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ).data;
+
+  if (
+    !currentObjective ||
+    !currentObjective.objective ||
+    currentObjective.objective.trim() === ''
+  ) {
     return { error: 'No objective found for ticket.' };
   }
 
   return {
     source: {
       ticket,
-      latestObjective: draftObjective.objective
+      latestObjective: currentObjective.objective
     }
   };
 }
@@ -961,7 +979,7 @@ export async function markObjectiveExecutedAction(
 
   const { error: executeError } = await supabase
     .from('objectives')
-    .update({ is_executed: true })
+    .update({ is_executed: true, state: 'executing' })
     .eq('id', objectiveId);
   if (executeError) {
     throw new Error(executeError.message);
@@ -982,7 +1000,8 @@ export async function markObjectiveExecutedAction(
     const { error: insertDraftError } = await supabase.from('objectives').insert({
       ticket_id: ticketId,
       objective: '',
-      is_executed: false
+      is_executed: false,
+      state: 'draft'
     });
     if (insertDraftError) {
       throw new Error(insertDraftError.message);
@@ -1067,17 +1086,17 @@ export async function markObjectiveUnexecutedAction(
   if (emptyUnexecutedIds.length > 0) {
     const { error: updateError } = await supabase
       .from('objectives')
-      .update({ is_executed: true })
+      .update({ is_executed: true, state: 'complete' })
       .in('id', emptyUnexecutedIds);
     if (updateError) {
       throw new Error(updateError.message);
     }
   }
 
-  // 4. Mark the target objective as unexecuted
+  // 4. Mark the target objective as unexecuted (back to draft)
   const { error: unexecuteError } = await supabase
     .from('objectives')
-    .update({ is_executed: false })
+    .update({ is_executed: false, state: 'draft' })
     .eq('id', objectiveId);
 
   if (unexecuteError) {

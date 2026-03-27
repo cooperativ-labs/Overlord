@@ -41,14 +41,27 @@ export function useFeedRealtime() {
         .eq('id', row.ticket_id)
         .single();
 
-      const { data: objective } = await supabase
-        .from('objectives')
-        .select('objective')
-        .eq('ticket_id', row.ticket_id)
-        .eq('is_executed', false)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Prefer the linked objective via objective_id FK, fall back to latest draft
+      let objectiveText: string | null = null;
+      if (row.objective_id) {
+        const { data: linked } = await supabase
+          .from('objectives')
+          .select('objective')
+          .eq('id', row.objective_id)
+          .maybeSingle();
+        objectiveText = linked?.objective ?? null;
+      }
+      if (!objectiveText) {
+        const { data: objective } = await supabase
+          .from('objectives')
+          .select('objective')
+          .eq('ticket_id', row.ticket_id)
+          .eq('is_executed', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        objectiveText = objective?.objective ?? null;
+      }
 
       // Fetch file changes
       const { data: fileChanges } = await supabase
@@ -70,6 +83,7 @@ export function useFeedRealtime() {
         project_id: row.project_id,
         ticket_id: row.ticket_id,
         session_id: row.session_id,
+        objective_id: row.objective_id ?? null,
         agent_type: row.agent_type,
         title: row.title,
         body: row.body,
@@ -87,7 +101,7 @@ export function useFeedRealtime() {
         project_name: project?.name ?? 'Unknown',
         project_color: project?.color ?? '#6b7280',
         ticket_title: ticket?.title ?? null,
-        ticket_objective: objective?.objective ?? null,
+        ticket_objective: objectiveText,
         ticket_sequence: ticket?.ticket_sequence ?? null
       };
     }

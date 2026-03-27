@@ -91,12 +91,26 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     .maybeSingle();
 
   let executedObjective: string | null = null;
+  let executedObjectiveId: string | null = null;
   if (draftObjective) {
     executedObjective = draftObjective.objective;
+    executedObjectiveId = draftObjective.id;
     await supabase
       .from('objectives')
-      .update({ is_executed: true, state: 'executing' })
+      .update({
+        is_executed: true,
+        state: 'executing',
+        agent_identifier: agentIdentifier ?? null
+      })
       .eq('id', draftObjective.id);
+
+    // Create new empty draft objective
+    await supabase.from('objectives').insert({
+      is_executed: false,
+      state: 'draft',
+      objective: '',
+      ticket_id: ticketId
+    });
   }
 
   const previousStatus = ticket.status;

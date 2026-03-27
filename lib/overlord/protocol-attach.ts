@@ -84,7 +84,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     return { error: 'Failed to create session.', status: 500 } as const;
   }
 
-  const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId);
+  const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId, agentIdentifier);
 
   // Fire-and-forget: generate objective title immediately without blocking attach
   if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {

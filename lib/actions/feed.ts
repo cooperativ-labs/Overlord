@@ -10,6 +10,7 @@ export type FeedPost = {
   project_id: string;
   ticket_id: string;
   session_id: string | null;
+  objective_id: string | null;
   agent_type: string | null;
   title: string;
   body: string;
@@ -63,7 +64,8 @@ export async function getFeedPostsAction(options?: {
       `
       *,
       projects!inner(name, color),
-      tickets!inner(title, ticket_sequence)
+      tickets!inner(title, ticket_sequence),
+      objectives(objective)
     `
     )
     .order('created_at', { ascending: false })
@@ -149,10 +151,17 @@ export async function getFeedPostsAction(options?: {
       title: string | null;
       ticket_sequence: number | null;
     } | null;
+    const linkedObjective = row.objectives as { objective: string } | null;
     const storedFilesTouched = Array.isArray(row.files_touched)
       ? (row.files_touched as string[]).filter(Boolean)
       : [];
     const changedFiles = filePathsByTicketId.get(row.ticket_id as string) ?? [];
+
+    // Prefer the linked objective (via objective_id FK), fall back to latest draft
+    const objectiveText =
+      linkedObjective?.objective?.trim() ||
+      latestObjectiveByTicketId.get(row.ticket_id as string) ||
+      null;
 
     return {
       id: row.id as string,
@@ -160,6 +169,7 @@ export async function getFeedPostsAction(options?: {
       project_id: row.project_id as string,
       ticket_id: row.ticket_id as string,
       session_id: row.session_id as string | null,
+      objective_id: (row.objective_id as string | null) ?? null,
       agent_type: row.agent_type as string | null,
       title: row.title as string,
       body: row.body as string,
@@ -177,7 +187,7 @@ export async function getFeedPostsAction(options?: {
       project_name: projects?.name ?? 'Unknown',
       project_color: projects?.color ?? '#6b7280',
       ticket_title: tickets?.title ?? null,
-      ticket_objective: latestObjectiveByTicketId.get(row.ticket_id as string) ?? null,
+      ticket_objective: objectiveText,
       ticket_sequence: tickets?.ticket_sequence ?? null
     };
   });
@@ -251,16 +261,44 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
 
   if (ticketIds.length === 0) return [];
 
-  const { data: sessions, error: sessionsError } = await supabase
-    .from('agent_sessions')
-    .select('ticket_id,session_state,agent_identifier,attached_at')
-    .in('ticket_id', ticketIds)
-    .order('attached_at', { ascending: false });
+  // Fetch agent sessions and executing objectives in parallel
+  const [
+    { data: sessions, error: sessionsError },
+    { data: executingObjectives, error: objectivesError }
+  ] = await Promise.all([
+    supabase
+      .from('agent_sessions')
+      .select('ticket_id,session_state,agent_identifier,attached_at')
+      .in('ticket_id', ticketIds)
+      .order('attached_at', { ascending: false }),
+    supabase
+      .from('objectives')
+      .select('ticket_id,agent_identifier')
+      .in('ticket_id', ticketIds)
+      .eq('state', 'executing')
+      .order('created_at', { ascending: false })
+  ]);
 
   if (sessionsError) {
     console.error('[getExecutingFeedTicketsAction] agent_sessions error:', sessionsError);
     Sentry.captureException(sessionsError);
     throw new Error(sessionsError.message);
+  }
+
+  if (objectivesError) {
+    console.error('[getExecutingFeedTicketsAction] objectives error:', objectivesError);
+    Sentry.captureException(objectivesError);
+  }
+
+  // Build map of executing objective's agent_identifier per ticket
+  const objectiveAgentByTicketId = new Map<string, string>();
+  for (const obj of (executingObjectives ?? []) as Array<{
+    ticket_id: string;
+    agent_identifier: string | null;
+  }>) {
+    if (!objectiveAgentByTicketId.has(obj.ticket_id) && obj.agent_identifier) {
+      objectiveAgentByTicketId.set(obj.ticket_id, obj.agent_identifier);
+    }
   }
 
   const latestAttachedSessionByTicketId = new Map<
@@ -287,7 +325,9 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
     .map(ticket => {
       const project = ticket.projects as { name: string; color: string } | null;
       const session = latestAttachedSessionByTicketId.get(ticket.id);
-      if (!session?.agent_identifier) return null;
+      // Prefer objective's agent_identifier, fall back to session's
+      const runningAgent = objectiveAgentByTicketId.get(ticket.id) ?? session?.agent_identifier;
+      if (!runningAgent) return null;
 
       return {
         id: ticket.id,
@@ -296,8 +336,8 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
         ticket_sequence: ticket.ticket_sequence,
         project_name: project?.name ?? 'Unknown',
         project_color: project?.color ?? '#6b7280',
-        running_agent: session.agent_identifier,
-        attached_at: session.attached_at
+        running_agent: runningAgent,
+        attached_at: session?.attached_at ?? null
       };
     })
     .filter((ticket): ticket is ExecutingFeedTicket => ticket !== null)

@@ -396,6 +396,7 @@ export type Database = {
           human_actions: string[];
           id: string;
           impact_level: string;
+          objective_id: string | null;
           organization_id: number;
           project_id: string;
           session_id: string | null;
@@ -417,6 +418,7 @@ export type Database = {
           human_actions?: string[];
           id?: string;
           impact_level?: string;
+          objective_id?: string | null;
           organization_id: number;
           project_id: string;
           session_id?: string | null;
@@ -438,6 +440,7 @@ export type Database = {
           human_actions?: string[];
           id?: string;
           impact_level?: string;
+          objective_id?: string | null;
           organization_id?: number;
           project_id?: string;
           session_id?: string | null;
@@ -452,6 +455,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'feed_posts_objective_id_fkey';
+            columns: ['objective_id'];
+            isOneToOne: false;
+            referencedRelation: 'objectives';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'feed_posts_organization_id_fkey';
             columns: ['organization_id'];
@@ -619,31 +629,34 @@ export type Database = {
       };
       objectives: {
         Row: {
+          agent_identifier: string | null;
           created_at: string;
           id: string;
           is_executed: boolean;
           objective: string;
-          state: string | null;
+          state: string;
           ticket_id: string;
           title: string | null;
           updated_at: string;
         };
         Insert: {
+          agent_identifier?: string | null;
           created_at?: string;
           id?: string;
           is_executed?: boolean;
           objective?: string;
-          state?: string | null;
+          state?: string;
           ticket_id: string;
           title?: string | null;
           updated_at?: string;
         };
         Update: {
+          agent_identifier?: string | null;
           created_at?: string;
           id?: string;
           is_executed?: boolean;
           objective?: string;
-          state?: string | null;
+          state?: string;
           ticket_id?: string;
           title?: string | null;
           updated_at?: string;

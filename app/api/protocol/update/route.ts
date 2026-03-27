@@ -77,7 +77,15 @@ export async function POST(request: Request) {
           session_id: resolved.session.id,
           summary: 'Ticket resumed — agent continued working after delivery.',
           ticket_id: ticketId
-        })
+        }),
+        // Reactivate the most recently completed objective back to executing
+        supabase
+          .from('objectives')
+          .update({ state: 'executing' })
+          .eq('ticket_id', ticketId)
+          .eq('state', 'complete')
+          .order('created_at', { ascending: false })
+          .limit(1)
       ]);
     }
 

@@ -37,15 +37,28 @@ export async function runLoadContextProtocol(
     } as const;
   }
 
-  // Fetch the current draft objective (not executed — just for reading)
-  const { data: draftObjective } = await supabase
+  // Prefer the executing objective; fall back to draft
+  const { data: executingObjective } = await supabase
     .from('objectives')
     .select('objective')
     .eq('ticket_id', ticketId)
-    .eq('is_executed', false)
+    .eq('state', 'executing')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  const draftObjective =
+    executingObjective ??
+    (
+      await supabase
+        .from('objectives')
+        .select('objective')
+        .eq('ticket_id', ticketId)
+        .eq('is_executed', false)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ).data;
 
   const [{ data: history }, { data: artifacts }, { data: sharedState }] = await Promise.all([
     supabase

@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.0] - 2026-03-27:14:00
+
+### Added
+- Show recent cached feed posts on the Electron offline screen so users can review prior activity while disconnected.
+
+### Fixed
+- None.
+
+### Changed
+- Rearchitected such that objectives are now the atomic element of work
+- Rework the Electron offline screen into a clearer two-column layout with a dedicated ticket section and updated retry messaging.
+- Sort queued offline tickets newest-first so the pending list matches the latest submissions.
+
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `3.3.0`.
+
 ## [3.2.0] - 2026-03-27:13:05
 
 ### Added

@@ -266,13 +266,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Check for existing post for this session (dedup / append)
+    // Check for existing post for this objective or session (dedup / append).
+    // Prefer objective-based dedup when available; fall back to session-based for legacy rows.
     let existingPost: {
       id: string;
       title: string;
       body: string;
       source_event_ids: string[];
     } | null = null;
+
+    // We'll resolve objective later, but try session-based dedup first as a baseline
     if (sessionId) {
       const { data } = await supabase
         .from('feed_posts')
@@ -299,14 +302,29 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Fetch the latest objective from the objectives table
-    const { data: latestObjective } = await supabase
+    // Fetch the most recent executed objective (the one being delivered/completed).
+    // Prefer the executing/complete objective over the draft.
+    const { data: executedObjective } = await supabase
       .from('objectives')
       .select('id, objective')
       .eq('ticket_id', ticketId)
+      .in('state', ['executing', 'complete'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // Fallback to latest objective if no executed one found
+    const latestObjective =
+      executedObjective ??
+      (
+        await supabase
+          .from('objectives')
+          .select('id, objective')
+          .eq('ticket_id', ticketId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ).data;
 
     // Fetch project name
     const { data: project } = await supabase
@@ -466,6 +484,7 @@ Deno.serve(async (req: Request) => {
           human_actions: generated.human_actions,
           files_touched: generated.files_touched,
           tickets_created: ticketsCreatedPayload,
+          objective_id: latestObjective?.id ?? null,
           source_event_ids: mergedEventIds,
           source_window_end: windowEnd,
           updated_at: new Date().toISOString()
@@ -500,6 +519,7 @@ Deno.serve(async (req: Request) => {
           project_id: ticket.project_id,
           ticket_id: ticketId,
           session_id: sessionId ?? null,
+          objective_id: latestObjective?.id ?? null,
           agent_type: agentType,
           title: generated.title,
           body: generated.body,

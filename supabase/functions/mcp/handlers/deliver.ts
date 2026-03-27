@@ -157,7 +157,13 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     supabase
       .from('agent_sessions')
       .update({ detached_at: new Date().toISOString(), session_state: 'completed' })
-      .eq('id', resolved.session.id)
+      .eq('id', resolved.session.id),
+    // Mark executing objective(s) as complete
+    supabase
+      .from('objectives')
+      .update({ state: 'complete' })
+      .eq('ticket_id', ticketId)
+      .eq('state', 'executing')
   ]);
 
   await supabase.from('ticket_events').insert({

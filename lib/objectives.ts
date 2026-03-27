@@ -66,6 +66,7 @@ export async function upsertDraftObjective(
 
   const { error: insertDraftError } = await supabase.from('objectives').insert({
     is_executed: false,
+    state: 'draft',
     objective: normalizedObjective,
     ticket_id: ticketId
   });
@@ -74,7 +75,11 @@ export async function upsertDraftObjective(
   }
 }
 
-export async function markDraftObjectiveExecuted(supabase: ObjectiveClient, ticketId: string) {
+export async function markDraftObjectiveExecuted(
+  supabase: ObjectiveClient,
+  ticketId: string,
+  agentIdentifier?: string
+) {
   const { data: draft, error: draftError } = await supabase
     .from('objectives')
     .select('id,objective,is_executed')
@@ -100,7 +105,11 @@ export async function markDraftObjectiveExecuted(supabase: ObjectiveClient, tick
 
   const { error: executeError } = await supabase
     .from('objectives')
-    .update({ is_executed: true, state: 'executing' })
+    .update({
+      is_executed: true,
+      state: 'executing',
+      agent_identifier: agentIdentifier ?? null
+    })
     .eq('id', draft.id);
   if (executeError) {
     throw new Error(executeError.message);
@@ -108,6 +117,7 @@ export async function markDraftObjectiveExecuted(supabase: ObjectiveClient, tick
 
   const { error: insertDraftError } = await supabase.from('objectives').insert({
     is_executed: false,
+    state: 'draft',
     objective: '',
     ticket_id: ticketId
   });

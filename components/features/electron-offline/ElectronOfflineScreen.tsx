@@ -167,9 +167,7 @@ export function ElectronOfflineScreen({ onRetry }: Props) {
             {isRetrying ? 'Checking...' : 'Try Again'}
           </Button>
 
-          {retryFailed && (
-            <p className="text-xs text-muted-foreground">Still no connection.</p>
-          )}
+          {retryFailed && <p className="text-xs text-muted-foreground">Still no connection.</p>}
         </div>
       </div>
 

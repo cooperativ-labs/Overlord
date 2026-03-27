@@ -202,6 +202,8 @@ export default async function TicketsBoardContent({
   const waitingQuestionByTicket = new Map<string, string>();
   const executedObjectivesCountByTicket = new Map<string, number>();
 
+  const objectiveAgentByTicket = new Map<string, string>();
+
   if (ticketIds.length > 0) {
     const [{ data: sessions }, { data: waitingQuestions }, { data: executedObjectives }] =
       await Promise.all([
@@ -218,10 +220,11 @@ export default async function TicketsBoardContent({
           .eq('is_blocking', true)
           .order('created_at', { ascending: false }),
         supabase
-          .from('ticket_objectives')
-          .select('ticket_id')
+          .from('objectives')
+          .select('ticket_id,state,agent_identifier')
           .in('ticket_id', ticketIds)
           .eq('is_executed', true)
+          .order('created_at', { ascending: false })
       ]);
 
     for (const session of (sessions ?? []) as AgentSessionForBoard[]) {
@@ -239,11 +242,23 @@ export default async function TicketsBoardContent({
       }
     }
 
-    for (const objective of (executedObjectives ?? []) as Array<{ ticket_id: string }>) {
+    for (const objective of (executedObjectives ?? []) as Array<{
+      ticket_id: string;
+      state: string | null;
+      agent_identifier: string | null;
+    }>) {
       executedObjectivesCountByTicket.set(
         objective.ticket_id,
         (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1
       );
+      // Track the executing objective's agent for running_agent derivation
+      if (
+        objective.state === 'executing' &&
+        objective.agent_identifier &&
+        !objectiveAgentByTicket.has(objective.ticket_id)
+      ) {
+        objectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier);
+      }
     }
   }
 
@@ -259,6 +274,9 @@ export default async function TicketsBoardContent({
       const p = getRelationItem(project);
       const session = latestSessionByTicket.get(ticket.id);
       const isAttached = session?.session_state === 'attached';
+      // Prefer the executing objective's agent_identifier; fall back to session's
+      const runningAgent =
+        objectiveAgentByTicket.get(ticket.id) ?? (isAttached ? session.agent_identifier : null);
       return {
         ...ticket,
         assigned_agent: parseTicketAssignedAgent(ticket.assigned_agent),
@@ -269,7 +287,7 @@ export default async function TicketsBoardContent({
         project_color: p?.color ?? null,
         project_everhour_project_id: hasEverhourApiKey ? (p?.everhour_project_id ?? null) : null,
         agent_session_state: session?.session_state ?? null,
-        running_agent: isAttached ? session.agent_identifier : null,
+        running_agent: runningAgent,
         waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
         objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0,
         schedule_id: ticket.schedule_id ?? null

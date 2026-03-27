@@ -68,6 +68,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
   // Create objective in the objectives table
   const { error: objectiveErr } = await supabase.from('objectives').insert({
     is_executed: false,
+    state: 'draft',
     objective: objective,
     ticket_id: created.id
   });
