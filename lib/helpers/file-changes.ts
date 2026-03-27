@@ -17,7 +17,7 @@ function stripTrailingFileAnnotation(path: string): string {
   return trailingAnnotation ? trailingAnnotation[1] : path;
 }
 
-function normalizeFilePath(path: string): string {
+export function normalizeFileLinkPath(path: string): string {
   return stripTrailingFileAnnotation(stripLocationSuffix(path.trim()));
 }
 
@@ -27,7 +27,7 @@ function parseMarkdownLink(line: string): FileChangeEntry | null {
 
   return {
     label: markdownLink[1].trim() || null,
-    path: normalizeFilePath(markdownLink[2]),
+    path: normalizeFileLinkPath(markdownLink[2]),
     note: markdownLink[3]?.trim() || null
   };
 }
@@ -43,13 +43,13 @@ function parseFileChangeLine(line: string): FileChangeEntry | null {
 
   const gitStat = stripped.match(/^(.+?)\s+\|\s+\d+/);
   if (gitStat) {
-    return { path: normalizeFilePath(gitStat[1]), note: null, label: null };
+    return { path: normalizeFileLinkPath(gitStat[1]), note: null, label: null };
   }
 
   const emDash = stripped.match(/^(.+?)\s+[—–]\s+(.+)$/);
   if (emDash) {
     return {
-      path: normalizeFilePath(emDash[1]),
+      path: normalizeFileLinkPath(emDash[1]),
       note: emDash[2].trim(),
       label: null
     };
@@ -68,7 +68,7 @@ function parseFileChangeLine(line: string): FileChangeEntry | null {
         .trim();
       if (rest) {
         return {
-          path: normalizeFilePath(token),
+          path: normalizeFileLinkPath(token),
           note: rest,
           label: null
         };
@@ -77,7 +77,7 @@ function parseFileChangeLine(line: string): FileChangeEntry | null {
     }
   }
 
-  return { path: normalizeFilePath(stripped), note: null, label: null };
+  return { path: normalizeFileLinkPath(stripped), note: null, label: null };
 }
 
 export function parseFileChanges(content: string): FileChangeEntry[] {

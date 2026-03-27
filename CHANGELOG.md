@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-03-27:13:05
+
+### Added
+- Bundle the Overlord Codex plugin with workflow skills, branded assets, and MCP tools so the desktop app can install a durable local Codex integration under `~/.codex/plugins/overlord`.
+
+### Fixed
+- Resolve feed, ticket panel, markdown, and file-change links through a shared external-link helper so editor/file links open correctly in Electron and unsupported links stay suppressed in the web UI.
+- Allow the desktop shell to launch additional editor protocols, including `vscode:`, `cursor:`, `windsurf:`, `zed:`, `subl:`, `txmt:`, `antigravity:`, and `idea:`.
+
+### Changed
+- Move the Codex plugin install target from `~/plugins/overlord` to `~/.codex/plugins/overlord` and update marketplace registration, status copy, and packaging to match.
+- Update the plugin metadata, desktop app docs, and onboarding copy to describe the bundled local workflow skill and managed Codex install surface.
+- Pass workspace and editor context through markdown, feed, and live ticket components so link resolution can adapt to the active environment.
+
+### Security
+- None.
+
+### Documentation
+- Update the connector surface reference and desktop app guide to document the Codex plugin install path and managed files.
+
+### Test
+- Add coverage for external-link resolution across HTTP URLs, repo-style file links, and custom editor schemes.
+
+### Chore
+- Bump the package version to `3.2.0`.
+
 ## [3.1.0] - 2026-03-27:12:12
 
 ### Added

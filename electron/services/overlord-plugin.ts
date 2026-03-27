@@ -64,7 +64,7 @@ type MarketplaceShape = {
 
 const STATE_DIR = path.join(os.homedir(), '.ovld');
 const MANIFEST_PATH = path.join(STATE_DIR, 'overlord-plugin-manifest.json');
-const TARGET_PLUGIN_DIR = path.join(os.homedir(), 'plugins', 'overlord');
+const TARGET_PLUGIN_DIR = path.join(os.homedir(), '.codex', 'plugins', 'overlord');
 const TARGET_PLUGIN_MANIFEST = path.join(TARGET_PLUGIN_DIR, '.codex-plugin', 'plugin.json');
 const TARGET_PLUGIN_MCP = path.join(TARGET_PLUGIN_DIR, '.mcp.json');
 const TARGET_PLUGIN_SCRIPT = path.join(TARGET_PLUGIN_DIR, 'scripts', 'overlord-mcp.mjs');
@@ -78,7 +78,19 @@ const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 
 function sourcePluginDir() {
-  return path.join(app.getAppPath(), 'plugins', 'overlord');
+  const appPath = app.getAppPath();
+  const bundledPath = path.join(appPath, 'plugins', 'overlord');
+
+  if (!app.isPackaged) {
+    return bundledPath;
+  }
+
+  const unpackedPath = path.join(
+    appPath.replace('app.asar', 'app.asar.unpacked'),
+    'plugins',
+    'overlord'
+  );
+  return fs.existsSync(unpackedPath) ? unpackedPath : bundledPath;
 }
 
 function sourcePluginManifest() {
@@ -264,7 +276,7 @@ function upsertMarketplaceEntry() {
     name: 'overlord',
     source: {
       source: 'local',
-      path: './plugins/overlord'
+      path: './.codex/plugins/overlord'
     },
     policy: {
       installation: 'AVAILABLE',
@@ -370,7 +382,7 @@ export function getOverlordPluginStatus(): OverlordPluginStatus {
     status: 'installed',
     version: sourceVersion,
     installedVersion: manifest.version,
-    details: 'Home-local Overlord plugin is installed and up to date.',
+    details: 'Home-local Overlord plugin is installed at ~/.codex/plugins and up to date.',
     currentContentHash: currentHash,
     managedFiles: files,
     existingManagedFiles,

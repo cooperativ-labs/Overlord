@@ -1,3 +1,4 @@
+import { ExternalLink } from '@/components/features/ExternalLink';
 import { buildDiffHref, parseFileChanges } from '@/lib/helpers/file-changes';
 
 type Props = {
@@ -35,14 +36,14 @@ export function FileChangesArtifact({ content, workspaceRoot, editorScheme }: Pr
         return (
           <li className="text-xs" key={path}>
             {href ? (
-              <a
+              <ExternalLink
                 className="inline-flex flex-wrap items-baseline gap-1 rounded hover:underline underline-offset-4 text-primary"
                 href={href}
                 title={`Open diff for ${path} in editor`}
               >
                 <span className="font-medium">{filename}</span>
                 {dir && <span className="text-muted-foreground">{dir}</span>}
-              </a>
+              </ExternalLink>
             ) : (
               <span className="inline-flex flex-wrap items-baseline gap-1">
                 <span className="font-medium text-foreground">{filename}</span>

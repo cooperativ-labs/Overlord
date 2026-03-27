@@ -49,7 +49,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
     slashCommands: false,
     permissions: true,
     details: [
-      'Home-local Overlord chat plugin',
+      'Home-local Overlord chat plugin with bundled Codex skill',
       'Legacy Codex bundle migration cleanup',
       'Permission prefix rules for ovld protocol & curl'
     ]

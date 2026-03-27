@@ -3,38 +3,51 @@
 import { type AnchorHTMLAttributes, type MouseEvent } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
-
-function isHttpUrl(href: string): boolean {
-  return href.startsWith('http://') || href.startsWith('https://');
-}
+import { resolveExternalLinkHref } from '@/lib/helpers/external-links';
 
 type ExternalLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
+  editorScheme?: string | null;
   href: string;
+  workspaceRoot?: string | null;
 };
 
 export function ExternalLink({
+  editorScheme,
   href,
   onClick,
   target,
   rel,
+  workspaceRoot,
   children,
   ...props
 }: ExternalLinkProps) {
   const { api, isElectron } = useElectron();
-  const openExternally = isElectron && isHttpUrl(href);
+  const { resolvedHref, shouldOpenViaApp, suppressInWeb } = resolveExternalLinkHref({
+    editorScheme,
+    href,
+    isElectron,
+    workspaceRoot
+  });
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>) {
     onClick?.(event);
-    if (event.defaultPrevented || !openExternally || !api?.app?.openExternal) return;
+    if (event.defaultPrevented) return;
 
-    event.preventDefault();
-    void api.app.openExternal(href);
+    if (shouldOpenViaApp && api?.app?.openExternal) {
+      event.preventDefault();
+      void api.app.openExternal(resolvedHref);
+      return;
+    }
+
+    if (suppressInWeb) {
+      event.preventDefault();
+    }
   }
 
   return (
     <a
       {...props}
-      href={href}
+      href={suppressInWeb ? undefined : resolvedHref}
       target={target ?? '_blank'}
       rel={rel ?? 'noopener noreferrer'}
       onClick={handleClick}

@@ -38,6 +38,19 @@ export function registerAppIpc({
   connectorUrl,
   platformUrl
 }: RegisterAppIpcOptions): void {
+  const allowedExternalProtocols = new Set([
+    'http:',
+    'https:',
+    'vscode:',
+    'cursor:',
+    'windsurf:',
+    'zed:',
+    'subl:',
+    'txmt:',
+    'antigravity:',
+    'idea:'
+  ]);
+
   function resolveUserPath(filePath: string): string {
     if (filePath.startsWith('~/')) {
       return path.join(os.homedir(), filePath.slice(2));
@@ -87,7 +100,7 @@ export function registerAppIpc({
       return false;
     }
 
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    if (!allowedExternalProtocols.has(parsed.protocol)) {
       return false;
     }
 

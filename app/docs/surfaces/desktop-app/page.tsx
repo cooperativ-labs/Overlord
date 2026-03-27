@@ -27,6 +27,19 @@ The desktop app provides local capabilities that a browser cannot:
 
 This is the surface that makes Overlord useful for real repository work instead of only abstract planning.
 
+## Local agent connectors
+
+The desktop app is also where Overlord manages durable local agent integrations.
+
+For Codex, the desktop app installs the Overlord plugin into:
+
+- \`~/.codex/plugins/overlord\`
+- \`~/.agents/plugins/marketplace.json\`
+- \`~/.codex/rules/default.rules\`
+
+That local plugin bundles the Overlord Codex workflow skill and the MCP bridge that shells into
+the installed \`ovld\` CLI.
+
 ## Change Viewer
 
 The desktop app also includes a built-in diff browser for linked repositories.

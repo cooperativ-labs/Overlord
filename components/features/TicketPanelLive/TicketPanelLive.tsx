@@ -127,7 +127,11 @@ export function TicketPanelLive({
             </Button>
           ) : null}
         </div>
-        <LiveActivityFeed events={events} />
+        <LiveActivityFeed
+          editorScheme={editorScheme}
+          events={events}
+          workspaceRoot={workspaceRoot}
+        />
       </section>
 
       {(sharedState?.length ?? 0) > 0 || fileChanges.length > 0 || artifacts.length > 0 ? (
@@ -140,7 +144,11 @@ export function TicketPanelLive({
               fileChanges={fileChanges}
               workspaceRoot={workspaceRoot}
             />
-            <LiveArtifacts artifacts={artifacts} />
+            <LiveArtifacts
+              artifacts={artifacts}
+              editorScheme={editorScheme}
+              workspaceRoot={workspaceRoot}
+            />
           </div>
         </>
       ) : null}

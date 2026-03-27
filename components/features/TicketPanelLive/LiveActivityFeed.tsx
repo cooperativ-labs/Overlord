@@ -14,7 +14,15 @@ import type { Database } from '@/types/database.types';
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 
-export function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
+export function LiveActivityFeed({
+  editorScheme,
+  events,
+  workspaceRoot
+}: {
+  editorScheme?: string | null;
+  events: TicketEvent[];
+  workspaceRoot?: string | null;
+}) {
   const visibleEvents = events.filter(event => event.event_type !== 'system');
 
   if (!visibleEvents.length) {
@@ -70,6 +78,8 @@ export function LiveActivityFeed({ events }: { events: TicketEvent[] }) {
                         ]
                       : 'text-muted-foreground'
                   )}
+                  editorScheme={editorScheme}
+                  workspaceRoot={workspaceRoot}
                 >
                   {summary}
                 </MarkdownContent>

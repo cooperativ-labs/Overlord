@@ -321,12 +321,12 @@ function DemoCliSettings() {
         {
           label: 'Chat plugin',
           description:
-            'Installs the Overlord chat plugin into your home-local Codex plugin directories, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.',
+            'Installs the Overlord chat plugin into your home-local Codex plugin directories, bundles the Codex workflow skill, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.',
           supportNote:
-            'Managed by the desktop app in ~/.agents/plugins, ~/plugins, and ~/.codex/rules/default.rules.',
+            'Managed by the desktop app in ~/.agents/plugins, ~/.codex/plugins, and ~/.codex/rules/default.rules.',
           status: 'not_installed' as const,
           installFiles:
-            '~/.agents/plugins/marketplace.json, ~/plugins/overlord, ~/.codex/rules/default.rules'
+            '~/.agents/plugins/marketplace.json, ~/.codex/plugins/overlord, ~/.codex/rules/default.rules'
         }
       ]
     },

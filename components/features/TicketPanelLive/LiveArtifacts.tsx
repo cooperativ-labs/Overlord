@@ -4,7 +4,15 @@ import type { Database } from '@/types/database.types';
 
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 
-export function LiveArtifacts({ artifacts }: { artifacts: Artifact[] }) {
+export function LiveArtifacts({
+  artifacts,
+  editorScheme,
+  workspaceRoot
+}: {
+  artifacts: Artifact[];
+  editorScheme?: string | null;
+  workspaceRoot?: string | null;
+}) {
   const visibleArtifacts = artifacts.filter(artifact => artifact.artifact_type !== 'file_changes');
 
   if (!visibleArtifacts.length) return null;
@@ -28,7 +36,12 @@ export function LiveArtifacts({ artifacts }: { artifacts: Artifact[] }) {
               </ExternalLink>
             ) : null}
             {artifact.content ? (
-              <MarkdownContent compact className="mt-1 text-xs text-muted-foreground">
+              <MarkdownContent
+                compact
+                className="mt-1 text-xs text-muted-foreground"
+                editorScheme={editorScheme}
+                workspaceRoot={workspaceRoot}
+              >
                 {artifact.content}
               </MarkdownContent>
             ) : null}

@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight, FileCode2 } from 'lucide-react';
 import { useState } from 'react';
 
+import { ExternalLink } from '@/components/features/ExternalLink';
 import { buildDiffHref } from '@/lib/helpers/file-changes';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
@@ -50,13 +51,13 @@ export function LiveFileChangeCard({
         <div className="border-t px-3 pb-3 pt-2 bg-muted">
           <div className="mb-2">
             {href ? (
-              <a
+              <ExternalLink
                 className="inline-flex items-center gap-2 break-all text-sm font-medium text-primary underline-offset-4 hover:underline"
                 href={href}
                 title={`Open ${fileChange.file_path} in your editor`}
               >
                 {fileChange.file_path}
-              </a>
+              </ExternalLink>
             ) : (
               <p className="break-all text-xs text-muted-foreground">{fileChange.file_path}</p>
             )}

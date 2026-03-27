@@ -11,6 +11,7 @@ files:
   - ".next/standalone/**/*"
   - "bin/**/*"
   - "packages/overlord-cli/**/*"
+  - "plugins/overlord/**/*"
   - "!node_modules"
 
 mac:
@@ -31,5 +32,6 @@ asarUnpack:
   - ".next/standalone/**/*"
   - "bin/**/*"
   - "packages/overlord-cli/**/*"
+  - "plugins/overlord/**/*"
 
 npmRebuild: true

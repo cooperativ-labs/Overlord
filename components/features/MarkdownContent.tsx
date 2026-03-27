@@ -12,6 +12,8 @@ type MarkdownContentProps = {
   className?: string;
   /** Compact mode reduces heading sizes and spacing for inline use */
   compact?: boolean;
+  editorScheme?: string | null;
+  workspaceRoot?: string | null;
 };
 
 /**
@@ -21,7 +23,9 @@ type MarkdownContentProps = {
 export function MarkdownContent({
   children,
   className = '',
-  compact = false
+  compact = false,
+  editorScheme,
+  workspaceRoot
 }: MarkdownContentProps) {
   const proseBaseClasses =
     'prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-p:whitespace-pre-wrap prose-li:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-a:text-primary';
@@ -62,7 +66,12 @@ export function MarkdownContent({
               return <>{linkChildren}</>;
             }
             return (
-              <ExternalLink href={href} {...props}>
+              <ExternalLink
+                editorScheme={editorScheme}
+                href={href}
+                workspaceRoot={workspaceRoot}
+                {...props}
+              >
                 {linkChildren}
               </ExternalLink>
             );

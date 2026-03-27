@@ -15,26 +15,34 @@
     "agents",
     "workflow",
     "protocol",
-    "mcp"
+    "mcp",
+    "codex-plugin"
   ],
+  "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Overlord",
-    "shortDescription": "Run Overlord ticket protocol commands from chat",
-    "longDescription": "Connect Codex chat directly to a local Overlord workspace through the existing `ovld protocol` CLI. The plugin exposes ticket session, progress update, context, delivery, artifact, and follow-up ticket tools so users can drive Overlord workflows conversationally.",
+    "shortDescription": "Run Overlord ticket workflows from Codex chat",
+    "longDescription": "Connect Codex to Overlord's local ticket workflow through the existing `ovld protocol` CLI. The plugin bundles workflow skills plus MCP tools for ticket attachment, progress updates, shared context, artifacts, delivery, and follow-up ticket creation.",
     "developerName": "Cooperativ",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
       "Write"
     ],
-    "websiteURL": "https://github.com/cooperativ/overlord",
-    "privacyPolicyURL": "https://github.com/cooperativ/overlord",
-    "termsOfServiceURL": "https://github.com/cooperativ/overlord",
+    "websiteURL": "https://www.ovld.ai/docs",
+    "privacyPolicyURL": "https://www.ovld.ai/privacy",
+    "termsOfServiceURL": "https://www.ovld.ai/terms",
     "defaultPrompt": [
-      "Attach to Overlord ticket 123 and summarize context",
-      "Post an execute update to this Overlord ticket",
-      "Deliver this Overlord ticket with artifacts"
+      "Attach to Overlord ticket 123 and summarize the context before editing code",
+      "Post an execute update to this Overlord ticket after a meaningful implementation step",
+      "Deliver this Overlord ticket with artifacts and change rationales"
+    ],
+    "brandColor": "#1E6B5C",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/logo.svg",
+    "screenshots": [
+      "./assets/screenshot.svg"
     ]
   }
 }

@@ -208,11 +208,11 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     agentKey: 'codex',
     label: 'Chat plugin',
     description:
-      'Installs the Overlord chat plugin into your home-local Codex plugin directories, migrates legacy Codex bundle config if present, and manages the local permission rules Codex needs for Overlord protocol commands.',
+      'Installs the Overlord chat plugin into your home-local Codex plugin directories, bundles the Codex workflow skill, migrates legacy Codex bundle config if present, and manages the local permission rules Codex needs for Overlord protocol commands.',
     kind: 'service',
     serviceKey: 'overlord-plugin',
     supportNote:
-      'Managed by the desktop app in ~/.agents/plugins, ~/plugins, and ~/.codex/rules/default.rules. Requires ovld to be installed on PATH.'
+      'Managed by the desktop app in ~/.agents/plugins, ~/.codex/plugins, and ~/.codex/rules/default.rules. Requires ovld to be installed on PATH.'
   },
   {
     key: 'cursor:bundle',

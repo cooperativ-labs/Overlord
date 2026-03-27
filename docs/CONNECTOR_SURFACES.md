@@ -105,14 +105,15 @@ Checklist:
   [electron.d.ts](/Users/jake/Development/Cooperativ/Overlord/types/electron.d.ts)
 
 Managed files:
-- `~/plugins/overlord/` — plugin directory (copied from app bundle)
+- `~/.codex/plugins/overlord/` — plugin directory (copied from app bundle)
 - `~/.agents/plugins/marketplace.json` — Codex local plugin registry entry
 - `~/.codex/rules/default.rules` — Overlord permission prefix rules (`ovld protocol`, `curl -sS -X POST`)
 - Plugin install manifest: `~/.ovld/overlord-plugin-manifest.json`
 
 Checklist:
 - Plugin install writes `~/.agents/plugins/marketplace.json`
-- Plugin install writes `~/plugins/overlord`
+- Plugin install writes `~/.codex/plugins/overlord`
+- Plugin bundle includes `skills/` plus install-surface assets in `assets/`
 - Plugin install manages `~/.codex/rules/default.rules`
 - Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
 - Plugin install removes any legacy Codex bundle manifest entry from `~/.ovld/bundle-manifest.json`
@@ -166,7 +167,7 @@ Checklist:
 - Onboarding does not tell users to run `ovld setup codex`
 - Codex onboarding points users to the Desktop app chat plugin install path
 - Codex is not presented as a bundle-backed agent
-- Codex connector features list includes: home-local plugin, legacy bundle migration cleanup, permission prefix rules
+- Codex connector features list includes: home-local plugin with bundled skill, legacy bundle migration cleanup, permission prefix rules
 
 ### 5. CLI legacy compatibility
 

@@ -12,6 +12,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { ExternalLink } from '@/components/features/ExternalLink';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
 import type { FeedPost } from '@/lib/actions/feed';
@@ -141,7 +142,12 @@ export function FeedCard({ post, editorScheme, workspaceRoot }: FeedCardProps) {
           {/* Expanded body */}
           {expanded && (
             <div className="mt-3.5 space-y-3.5">
-              <MarkdownContent compact className="text-[15px] leading-6 text-muted-foreground">
+              <MarkdownContent
+                compact
+                className="text-[15px] leading-6 text-muted-foreground"
+                editorScheme={editorScheme}
+                workspaceRoot={workspaceRoot}
+              >
                 {post.body}
               </MarkdownContent>
 
@@ -234,14 +240,14 @@ export function FeedCard({ post, editorScheme, workspaceRoot }: FeedCardProps) {
               {fileLinks.map(({ path, href }) => {
                 if (href) {
                   return (
-                    <a
+                    <ExternalLink
                       key={path}
                       href={href}
                       title={path}
                       className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5 text-xs underline-offset-4 transition-colors hover:bg-muted hover:underline"
                     >
                       {getCollapsedFileMentionLabel(path)}
-                    </a>
+                    </ExternalLink>
                   );
                 }
 
