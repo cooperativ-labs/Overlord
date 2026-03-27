@@ -3,9 +3,8 @@
 /**
  * Agent bundle setup commands (setup / doctor).
  *
- * Installs durable Overlord workflow configuration for Claude Code, Codex,
- * and OpenCode into their respective config directories.
- * into their respective config directories (~/.claude/, ~/.codex/).
+ * Installs durable Overlord workflow configuration for Claude Code and OpenCode
+ * into their respective config directories.
  */
 
 import crypto from 'node:crypto';
@@ -19,7 +18,7 @@ const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
 const MANIFEST_FILE = path.join(MANIFEST_DIR, 'bundle-manifest.json');
 
-const supportedAgents = ['claude', 'codex', 'opencode'];
+const supportedAgents = ['claude', 'opencode'];
 
 // ---------------------------------------------------------------------------
 // Templates (same content as electron/services/agent-bundle/templates.ts)
@@ -103,69 +102,6 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 - Post at least one update before delivering.
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
-- Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
-`;
-
-const CODEX_AGENTS_SECTION = `# Overlord Local Workflow
-
-If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
-
-## Lifecycle
-
-1. **Attach first** — Always call attach before doing any work:
-   \`\`\`bash
-   ovld protocol attach --ticket-id $TICKET_ID
-   \`\`\`
-   Store \`session.sessionKey\` from the response — it is required for all subsequent calls.
-
-2. **Update during work** — Post at least one progress update before delivering:
-   \`\`\`bash
-   ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
-   \`\`\`
-   Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`.
-   Use \`execute\` while working.
-
-   Pass \`--event-type <type>\` for activity events: \`update\`, \`user_follow_up\`, \`alert\`.
-
-3. **Ask when blocked** — Stop working after calling:
-   \`\`\`bash
-   ovld protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
-   \`\`\`
-
-4. **Deliver last** — Always deliver when done:
-   \`\`\`bash
-   ovld protocol deliver --session-key <sessionKey> \\\\
-     --ticket-id $TICKET_ID \\\\
-     --summary "Narrative: what you did, next steps." \\\\
-     --artifacts-json '[{"type":"next_steps","label":"Next steps","content":"..."}]' \\\\
-     --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
-   \`\`\`
-
-## Change Rationales
-
-Always include \`changeRationales\` when delivering. Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact. Record only meaningful behavioral changes. Overlord stores these as structured rows in the \`file_changes\` table.
-
-\`\`\`bash
-ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \\\\
-  --summary "Recorded rationale details for the latest code changes." --phase execute \\\\
-  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
-\`\`\`
-
-## Context & Artifacts
-
-\`\`\`bash
-ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
-ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-\`\`\`
-
-## Rules
-
-- Always attach first; always deliver when done.
-- Post at least one update before delivering.
-- If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
-- The \`summary\` in deliver is what the PM reads first — write it as a narrative.
 - Use \`write-context\` for facts a future agent session should know.
 - **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
 `;
@@ -340,13 +276,6 @@ function claudePaths() {
   };
 }
 
-function codexPaths() {
-  const base = path.join(os.homedir(), '.codex');
-  return {
-    agentsFile: path.join(base, 'AGENTS.md')
-  };
-}
-
 function openCodePaths() {
   const base = path.join(os.homedir(), '.config', 'opencode');
   return {
@@ -414,33 +343,6 @@ function installClaude() {
     contentHash: contentHash(CLAUDE_SKILL_CONTENT),
     installedAt: new Date().toISOString(),
     files: [paths.skillFile, paths.hookScript, paths.settingsFile]
-  };
-  writeManifest(manifest);
-
-  return { ok: true, backups };
-}
-
-function installCodex() {
-  const paths = codexPaths();
-  const backups = [];
-
-  const backup = backupFile(paths.agentsFile);
-  if (backup) {
-    backups.push(backup);
-    console.log(`  ✓ Backed up: ${paths.agentsFile} → ${path.basename(backup)}`);
-  }
-
-  const existing = readTextFile(paths.agentsFile);
-  const merged = mergeMarkdownSection(existing, CODEX_AGENTS_SECTION);
-  writeTextFile(paths.agentsFile, merged);
-  console.log(`  ✓ Installed agents config: ${paths.agentsFile}`);
-
-  const manifest = readManifest();
-  manifest.codex = {
-    version: BUNDLE_VERSION,
-    contentHash: contentHash(CODEX_AGENTS_SECTION),
-    installedAt: new Date().toISOString(),
-    files: [paths.agentsFile]
   };
   writeManifest(manifest);
 
@@ -589,11 +491,17 @@ export async function runSetupCommand(args) {
   if (agent === '--help' || agent === '-h' || agent === 'help') {
     console.log(`Usage:
   ovld setup claude    Install Overlord bundle for Claude Code
-  ovld setup codex     Install Overlord bundle for Codex
   ovld setup opencode  Install Overlord connector for OpenCode
   ovld setup all       Install for all supported agents
   ovld doctor          Validate installed connectors`);
     return;
+  }
+
+  if (agent === 'codex') {
+    console.error(
+      'Codex no longer uses `ovld setup codex`. Install the Overlord Codex chat plugin from the desktop app Settings -> CLI -> Codex -> Chat plugin, or configure Codex cloud/headless access through Settings -> Agents & MCP.'
+    );
+    process.exit(1);
   }
 
   if (agent === 'all') {
@@ -602,7 +510,6 @@ export async function runSetupCommand(args) {
       console.log(`[${a}]`);
       try {
         if (a === 'claude') installClaude();
-        else if (a === 'codex') installCodex();
         else installOpenCode();
       } catch (err) {
         console.error(`  ✗ Failed: ${err.message}`);
@@ -623,7 +530,6 @@ export async function runSetupCommand(args) {
   console.log(`Installing Overlord agent bundle for ${agent}...\n`);
   try {
     if (agent === 'claude') installClaude();
-    else if (agent === 'codex') installCodex();
     else installOpenCode();
     console.log('\nDone.');
   } catch (err) {

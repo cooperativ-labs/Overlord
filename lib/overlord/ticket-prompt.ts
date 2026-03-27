@@ -10,6 +10,7 @@ import type { AgentConfig } from '@/lib/schemas/agent-config';
 
 export type PromptContext = 'electron' | 'cli' | 'web' | 'paste';
 export type PromptLaunchMode = 'run' | 'ask';
+export type PromptAgent = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 
 export type PromptOptions = {
   /** Supabase functions base URL for the MCP server, e.g. https://xyz.supabase.co/functions/v1/mcp */
@@ -20,15 +21,12 @@ export type PromptOptions = {
   launchMode?: PromptLaunchMode;
   /** Optional agent configurations (flags, preferences) keyed by agent type. */
   agentConfigs?: Record<string, AgentConfig>;
+  /** Optional target agent so prompt guidance can be specialized. */
+  agent?: PromptAgent;
   /** Instruction mode: 'bundle' emits a slim prompt, 'legacy' emits the full protocol walkthrough. */
   instructionMode?: InstructionMode;
 };
 
-/**
- * Builds the full prompt text for attaching a ticket to an LLM (e.g. when the user
- * pastes ticket context into Claude or ChatGPT). Includes ticket details and instructions
- * for the LLM to pass information back via the overlord protocol.
- */
 type Ticket = {
   id: string;
   title: string | null | undefined;
@@ -42,6 +40,7 @@ type Ticket = {
   status: string | null;
   priority: string | number | null;
 };
+
 type BuildTicketPromptMarkdownInput = {
   ticket: Ticket;
   platformUrl: string;
@@ -49,16 +48,29 @@ type BuildTicketPromptMarkdownInput = {
   options?: PromptOptions;
 };
 
+type ProtocolSectionInput = {
+  ticketId: string;
+  context?: PromptContext;
+  launchMode: PromptLaunchMode;
+  agent?: PromptAgent;
+  agentConfigs?: Record<string, AgentConfig>;
+  mcpUrl?: string;
+};
+
+type LocalProtocolFamily = 'bundled' | 'codex' | 'verbose';
+
 export function buildTicketPromptMarkdown({
   ticket,
   platformUrl,
   context,
   options
 }: BuildTicketPromptMarkdownInput): string {
-  const ref = ticket.id;
   const launchMode = options?.launchMode ?? 'run';
-  const instructionMode = options?.instructionMode ?? 'legacy';
-
+  const requestedInstructionMode = options?.instructionMode ?? 'legacy';
+  const instructionMode =
+    options?.agent === 'codex' && requestedInstructionMode === 'bundle'
+      ? 'legacy'
+      : requestedInstructionMode;
   const isLocal = context
     ? context === 'electron' || context === 'cli'
     : platformUrl.startsWith('http://localhost') ||
@@ -71,28 +83,44 @@ export function buildTicketPromptMarkdown({
     launchMode
   });
 
-  // Bundle-backed agents get a slim prompt — protocol details are in their installed config
-  if (isLocal && instructionMode === 'bundle') {
-    const protocolSection = buildSlimLocalProtocolSection(ticket.id, platformUrl, context);
-    return `# Overlord — Agent Instructions
-
-You are an AI coding agent working on ticket **${ref}** via Overlord.
-Complete the work described below, then deliver a summary back to the platform.
-
-${promptContext}
----
-
-${protocolSection}`;
-  }
-
   const protocolSection = isLocal
-    ? buildLocalProtocolSection(ticket.id, platformUrl, options?.agentConfigs, context, launchMode)
-    : buildRemoteProtocolSection(ticket.id, platformUrl, options, launchMode);
+    ? buildLocalProtocolSectionByAgent({
+        ticketId: ticket.id,
+        context,
+        launchMode,
+        agent: options?.agent,
+        agentConfigs: options?.agentConfigs,
+        family: resolveLocalProtocolFamily(options?.agent, instructionMode)
+      })
+    : buildMcpCloudProtocolSection({
+        ticketId: ticket.id,
+        launchMode,
+        mcpUrl: options?.mcpUrl
+      });
 
-  return `# Overlord — Agent Instructions
+  return buildAgentPromptEnvelope({
+    title: ticket.title,
+    ticketId: ticket.id,
+    promptContext,
+    protocolSection
+  });
+}
 
-You are an AI coding agent working on ticket **${ref}** via Overlord.
-Complete the work described below, then deliver a summary back to the platform.
+function buildAgentPromptEnvelope({
+  title,
+  ticketId,
+  promptContext,
+  protocolSection
+}: {
+  title: string | null | undefined;
+  ticketId: string;
+  promptContext: string;
+  protocolSection: string;
+}): string {
+  return `Title: ${title}
+# Overlord Agent Instructions
+
+${buildGeneralAgentInstructions(ticketId)}
 
 ${promptContext}
 ---
@@ -100,28 +128,50 @@ ${promptContext}
 ${protocolSection}`;
 }
 
-/**
- * Slim protocol section for agents with the Overlord local bundle installed.
- * Protocol details live in the agent's installed config (Claude skill / Codex or OpenCode AGENTS.md),
- * so we only include ticket-specific identifiers and a short directive.
- */
-function buildSlimLocalProtocolSection(
-  ticketId: string,
-  platformUrl: string,
-  context?: PromptContext
+function buildGeneralAgentInstructions(ticketId: string): string {
+  return `You are an AI coding agent working on ticket **${ticketId}** via Overlord.
+Complete the work described below, then deliver a summary back to the platform.`;
+}
+
+function resolveLocalProtocolFamily(
+  agent: PromptAgent | undefined,
+  instructionMode: InstructionMode
+): LocalProtocolFamily {
+  if (instructionMode === 'bundle' && (agent === 'claude' || agent === 'opencode')) {
+    return 'bundled';
+  }
+  if (agent === 'codex') {
+    return 'codex';
+  }
+  return 'verbose';
+}
+
+function buildLocalProtocolSectionByAgent(
+  input: ProtocolSectionInput & { family: LocalProtocolFamily }
 ): string {
-  const launchNote =
-    context === 'electron'
-      ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
-      : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
+  if (input.family === 'bundled') {
+    return buildBundledLocalProtocolSection(input);
+  }
+  if (input.family === 'codex') {
+    return buildCodexLocalProtocolSection(input);
+  }
+  return buildVerboseLocalProtocolSection(input);
+}
+
+function buildBundledLocalProtocolSection({
+  ticketId,
+  context,
+  agent
+}: ProtocolSectionInput): string {
+  const skillNote = 'Before doing anything else, look for and invoke the `overlord-local` skill.';
 
   return `## Overlord Protocol
 
 - **Ticket ID:** ${ticketId}
 
-${launchNote}
+${buildLocalLaunchNote(context)}
 
-Use your installed Overlord local workflow instructions. Before doing anything else, look for and invoke the \`overlord-local\` skill — then attach to this ticket.
+Use your installed Overlord local workflow instructions, then attach to this ticket.${skillNote}
 Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
 
 \`\`\`bash
@@ -130,26 +180,76 @@ ovld protocol attach --ticket-id ${ticketId}
 `;
 }
 
-function buildResumeCommandWithFlags(
-  command: string,
-  agent: string,
-  agentConfigs?: Record<string, AgentConfig>
-): string {
-  const flags = agentConfigs?.[agent]?.flags ?? [];
-  return flags.length > 0 ? `${command} ${flags.join(' ')}` : command;
+function buildCodexLocalProtocolSection({
+  ticketId,
+  context,
+  launchMode
+}: ProtocolSectionInput): string {
+  const eventTypeHelp =
+    launchMode === 'ask'
+      ? 'Use `--event-type alert` only for non-blocking warnings. Do not publish `user_follow_up` during normal Ask-mode discussion.'
+      : 'When the user sends a follow-up message after the initial ticket, immediately publish it with `--event-type user_follow_up` before doing anything else.';
+
+  return `## Overlord Protocol
+
+- **Ticket ID:** ${ticketId}
+
+${buildLocalLaunchNote(context)}
+
+### Codex local workflow
+
+- This local Codex setup uses the Overlord chat plugin and local Codex permission rules.
+- For launched ticket work, the authoritative lifecycle is still the \`ovld protocol\` CLI below.
+- Do not look for a local \`overlord-local\` skill or Codex \`AGENTS.md\` bundle.
+
+### 1 — Attach first
+
+\`\`\`bash
+ovld protocol attach --ticket-id ${ticketId}
+\`\`\`
+
+### 2 — Update during work
+
+\`\`\`bash
+ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} --summary "What you did and why." --phase execute
+\`\`\`
+
+${eventTypeHelp}
+
+### 3 — Ask when blocked
+
+\`\`\`bash
+ovld protocol ask --session-key <sessionKey> --ticket-id ${ticketId} --question "Specific question for the PM."
+\`\`\`
+
+### 4 — Deliver last
+
+\`\`\`bash
+ovld protocol deliver --session-key <sessionKey> --ticket-id ${ticketId} --payload-file ./deliver.json
+\`\`\`
+
+Where \`deliver.json\` contains:
+
+\`\`\`json
+{
+  "summary": "Narrative: what you did, next steps.",
+  "artifacts": [{ "type": "next_steps", "label": "Next steps", "content": "..." }],
+  "changeRationales": [{ "label": "Short reviewer-facing title", "file_path": "path/to/file.ts", "summary": "What changed.", "why": "Why it changed.", "impact": "Behavioral or review impact.", "hunks": [{ "header": "@@ -10,6 +10,14 @@" }] }]
+}
+\`\`\`
+
+### Rules
+
+${buildLocalCoreRules(launchMode)}
+`;
 }
 
-function buildLocalProtocolSection(
-  ticketId: string,
-  platformUrl: string,
-  agentConfigs?: Record<string, AgentConfig>,
-  context?: PromptContext,
-  launchMode: PromptLaunchMode = 'run'
-): string {
-  const launchNote =
-    context === 'electron'
-      ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
-      : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
+function buildVerboseLocalProtocolSection({
+  ticketId,
+  context,
+  launchMode,
+  agentConfigs
+}: ProtocolSectionInput): string {
   const claudeResumeCommand = buildResumeCommandWithFlags(
     `ovld restart claude --ticket-id ${ticketId}`,
     'claude',
@@ -165,20 +265,12 @@ function buildLocalProtocolSection(
     'opencode',
     agentConfigs
   );
-  const eventTypeHelp =
-    launchMode === 'ask'
-      ? 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types: `update`, `alert`. Do not post `user_follow_up` events during normal Ask-mode discussion.'
-      : 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types:\n- `update` — standard progress update (default)\n- `user_follow_up` — a message or question from the human user\n- `alert` — surface a warning or non-blocking alert';
-  const askModeRule =
-    launchMode === 'ask'
-      ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms.\n- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
-      : "- **If the user sends you a message during your session, immediately publish a `user_follow_up` activity event with the user's message recorded verbatim in the summary before doing anything else.**";
 
   return `## Overlord Protocol
 
 - **Ticket ID:** ${ticketId}
 
-${launchNote}
+${buildLocalLaunchNote(context)}
 
 ### 1 — Attach (always first)
 
@@ -197,7 +289,7 @@ ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} --summar
 
 Phases: \`draft\`, \`execute\`, \`review\`, \`deliver\`, \`complete\`, \`blocked\`, \`cancelled\`. Use \`execute\` while working. Add \`--payload-json '{"notifications":[...]}'}\` to surface events in the UI. Use \`--external-url https://...\` to store a deep link back to the live agent session. Use \`--external-session-id <id>\` when the agent runtime exposes a native resume/session id.
 
-${eventTypeHelp}
+${buildLocalEventTypeHelp(launchMode)}
 
 #### Change rationales (optional on updates)
 
@@ -217,7 +309,7 @@ ovld protocol update --session-key <sessionKey> --ticket-id ${ticketId} \\
   --change-rationales-json '[{"label":"Add exponential backoff","file_path":"lib/api-client.ts","summary":"Added retry with backoff.","why":"Transient failures caused data loss.","impact":"Requests retry up to 3 times before failing.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
-### 4 — Ask (blocking question — stop working after calling)
+### 3 — Ask (blocking question — stop working after calling)
 
 \`\`\`bash
 ovld protocol ask --session-key <sessionKey> --ticket-id ${ticketId} --question "Specific question for the PM."
@@ -225,25 +317,21 @@ ovld protocol ask --session-key <sessionKey> --ticket-id ${ticketId} --question 
 
 Ticket moves to \`review\` until a human responds. Do not guess.
 
-### 5 — Context (optional, persist across sessions)
+### 4 — Context (optional, persist across sessions)
 
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id ${ticketId}
 ovld protocol write-context --session-key <sessionKey> --ticket-id ${ticketId} --key "descriptive-key" --value '"json-value"'
 \`\`\`
 
-### 6 — Human-only blockers
-
-If you are blocked by human-only work, call \`ask\` with a precise blocker description and request that the PM create a follow-up human ticket.
-
-### 7 — Storage artifacts (optional upload/download)
+### 5 — Storage artifacts (optional upload/download)
 
 \`\`\`bash
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id ${ticketId} --file ./spec.pdf --content-type application/pdf
 ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id ${ticketId} --artifact-id <artifact-id>
 \`\`\`
 
-### 8 — Deliver (always last)
+### 6 — Deliver (always last)
 
 \`\`\`bash
 ovld protocol deliver --session-key <sessionKey> \\
@@ -269,30 +357,7 @@ Where \`deliver.json\` contains:
 }
 \`\`\`
 
-Artifact types: \`next_steps\`, \`test_results\`, \`migration\`, \`note\`, \`url\`, \`decision\`.
-
-#### Change rationales (expected on deliver)
-
-Always include \`changeRationales\` when delivering. Overlord saves them as structured \`file_changes\` rows; they are not just local file content. Each entry should describe one meaningful file change:
-
-\`\`\`json
-[
-  {
-    "label": "Short reviewer-facing title",
-    "file_path": "path/to/file.ts",
-    "summary": "What changed.",
-    "why": "Why it changed.",
-    "impact": "Behavioral or review impact.",
-    "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
-  }
-]
-\`\`\`
-
-Prefer inline flags for small payloads. For quote-sensitive or larger deliveries, prefer \`--payload-file\` so summary, artifacts, and change rationales travel together in one JSON document. Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
-
-Deliver moves the ticket to \`review\`. Do not call if you used \`ask\` and haven't received an answer.
-
-### 9 — Restart command
+### 7 — Restart command
 
 Include in your deliver artifacts. If omitted, \`/api/protocol/deliver\` appends one automatically.
 
@@ -304,33 +369,12 @@ ${codexResumeCommand}
 ${opencodeResumeCommand}
 \`\`\`
 
----
+### Rules
 
-## Rules
-
-- Always attach first; always deliver when done.
-- Post at least one update before delivering.
-- Always include \`changeRationales\` when delivering. Optionally include them on updates during long-running work or via \`ovld protocol record-change-rationales\`.
-- Record \`changeRationales\` only for meaningful behavioral changes. Skip formatting-only noise.
-- Treat \`changeRationales\` as structured ticket content that Overlord persists in the \`file_changes\` table. A file path is the stable link to the changed file.
-- Prefer 1–5 concise \`changeRationales\` for a typical ticket, each tied to a specific file and diff hunk.
-- If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
-- The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
-- Use \`write-context\` for facts a future agent session should know.
-- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
-- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
-${askModeRule}
+${buildLocalCoreRules(launchMode)}
 `;
 }
 
-/**
- * Builds an MCP server configuration block for the remote protocol section.
- * Agents that support MCP (Claude Code, etc.) can configure this server to get
- * native tool access to Overlord.
- *
- * Note: This section intentionally avoids embedding concrete token values. Agents
- * should read `AGENT_TOKEN` from their environment when configuring auth.
- */
 function buildMcpConfigSection(mcpUrl: string, ticketId: string): string {
   const settingsJson = JSON.stringify(
     {
@@ -366,22 +410,16 @@ ${settingsJson}
 - \`create_ticket\` — create a follow-up ticket for human work`;
 }
 
-function buildRemoteProtocolSection(
-  ticketId: string,
-  _platformUrl: string,
-  options?: PromptOptions,
-  launchMode: PromptLaunchMode = 'run'
-): string {
-  const mcpUrl = options?.mcpUrl;
+function buildMcpCloudProtocolSection({
+  ticketId,
+  launchMode,
+  mcpUrl
+}: ProtocolSectionInput): string {
   const mcpSection = mcpUrl ? buildMcpConfigSection(mcpUrl, ticketId) : '';
   const eventTypeHelp =
     launchMode === 'ask'
       ? 'Optional: `eventType`: "update" | "alert" (do not use `user_follow_up` for normal Ask-mode discussion)'
       : 'Optional: `eventType`: "update" | "user_follow_up" | "alert"';
-  const askModeRules =
-    launchMode === 'ask'
-      ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms.\n- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
-      : '- If user sends a message, publish `user_follow_up` event immediately with message verbatim.';
 
   return `## Overlord Protocol (MCP)
 
@@ -439,13 +477,62 @@ ${generateDeliverPayloadExample(ticketId)}
 
 ### Rules
 
-- Always attach first; always deliver when done.
+${buildMcpCoreRules(launchMode)}
+`;
+}
+
+function buildLocalLaunchNote(context?: PromptContext): string {
+  return context === 'electron'
+    ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
+    : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
+}
+
+function buildLocalEventTypeHelp(launchMode: PromptLaunchMode): string {
+  return launchMode === 'ask'
+    ? 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types: `update`, `alert`. Do not post `user_follow_up` events during normal Ask-mode discussion.'
+    : 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types:\n- `update` — standard progress update (default)\n- `user_follow_up` — a message or question from the human user\n- `alert` — surface a warning or non-blocking alert';
+}
+
+function buildAskModeRules(launchMode: PromptLaunchMode): string {
+  return launchMode === 'ask'
+    ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms.\n- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
+    : "- **If the user sends you a message during your session, immediately publish a `user_follow_up` activity event with the user's message recorded verbatim in the summary before doing anything else.**";
+}
+
+function buildLocalCoreRules(launchMode: PromptLaunchMode): string {
+  return `- Always attach first; always deliver when done.
+- Post at least one update before delivering.
+- Always include \`changeRationales\` when delivering.
+- Record \`changeRationales\` only for meaningful behavioral changes. Skip formatting-only noise.
+- If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
+- The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
+- Use \`write-context\` for facts a future agent session should know.
+- **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
+- **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
+${buildAskModeRules(launchMode)}`;
+}
+
+function buildMcpCoreRules(launchMode: PromptLaunchMode): string {
+  const askModeRules =
+    launchMode === 'ask'
+      ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms.\n- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
+      : '- If user sends a message, publish `user_follow_up` event immediately with message verbatim.';
+
+  return `- Always attach first; always deliver when done.
 - Post ≥1 update before delivering.
 - Only include \`changeRationales\` for meaningful behavioral changes.
 - Treat \`changeRationales\` as structured ticket content persisted in the \`file_changes\` table, not as free-form notes.
 - If blocked, create a follow-up ticket.
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
-${askModeRules}
-`;
+${askModeRules}`;
+}
+
+function buildResumeCommandWithFlags(
+  command: string,
+  agent: string,
+  agentConfigs?: Record<string, AgentConfig>
+): string {
+  const flags = agentConfigs?.[agent]?.flags ?? [];
+  return flags.length > 0 ? `${command} ${flags.join(' ')}` : command;
 }

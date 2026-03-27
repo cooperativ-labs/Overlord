@@ -10,7 +10,6 @@ import {
   Link2,
   Monitor,
   Palette,
-  Shield,
   Terminal,
   User,
   X
@@ -69,7 +68,7 @@ const appNavItems: NavItem[] = [
 
 const userNavItems: NavItem[] = [
   { name: 'Profile', icon: User },
-  { name: 'Sessions', icon: Shield }
+  { name: 'Linked Accounts', icon: Link2 }
 ];
 
 const allNavItems = [...workflowNavItems, ...appNavItems, ...userNavItems];
@@ -320,12 +319,14 @@ function DemoCliSettings() {
       label: 'Codex CLI',
       plugins: [
         {
-          label: 'Prompt / skills',
+          label: 'Chat plugin',
           description:
-            'Installs durable Overlord workflow instructions into Codex so ticket lifecycle rules live in local config instead of repeated prompts.',
-          supportNote: 'Managed by the desktop app in your local ~/.codex configuration.',
+            'Installs the Overlord chat plugin into your home-local Codex plugin directories, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.',
+          supportNote:
+            'Managed by the desktop app in ~/.agents/plugins, ~/plugins, and ~/.codex/rules/default.rules.',
           status: 'not_installed' as const,
-          installFiles: '~/.codex/AGENTS.md'
+          installFiles:
+            '~/.agents/plugins/marketplace.json, ~/plugins/overlord, ~/.codex/rules/default.rules'
         }
       ]
     },

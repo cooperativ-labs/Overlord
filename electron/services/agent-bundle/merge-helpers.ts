@@ -92,7 +92,7 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 }
 
 // ---------------------------------------------------------------------------
-// Markdown section merge (for Codex AGENTS.md)
+// Markdown section merge (for OpenCode AGENTS.md)
 // ---------------------------------------------------------------------------
 
 /**

@@ -54,9 +54,9 @@ import { CustomizationPage } from './settings/CustomizationPage';
 import { FeedSettingsPage } from './settings/FeedSettingsPage';
 import { HotkeysPage } from './settings/HotkeysPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
+import { LinkedAccountsPage } from './settings/LinkedAccountsPage';
 import { TerminalPage } from './settings/TerminalPage';
 import { UserProfilePage } from './settings/UserProfilePage';
-import { UserSessionsPage } from './settings/UserSessionsPage';
 import { UserTokensPage } from './settings/UserTokensPage';
 
 type SettingsModalProps = {
@@ -90,7 +90,7 @@ const appNavItems: NavItem[] = [
 
 const userNavItems: NavItem[] = [
   { name: 'Profile', icon: User },
-  { name: 'Sessions', icon: Shield },
+  { name: 'Linked Accounts', icon: Shield },
   { name: 'Agent tokens', icon: KeyRound }
 ];
 
@@ -237,7 +237,7 @@ export function SettingsModal({
               {activeNav === 'Application' && <ApplicationPage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
-              {activeNav === 'Sessions' && <UserSessionsPage open={open} />}
+              {activeNav === 'Linked Accounts' && <LinkedAccountsPage open={open} />}
               {activeNav === 'Agent tokens' && (
                 <UserTokensPage
                   open={open}

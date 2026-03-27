@@ -10,6 +10,7 @@ type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
 const allowedStatusTypes: TicketStatusType[] = ['draft', 'execute', 'review', 'complete'];
 const requiredStatusTypes: TicketStatusType[] = ['draft', 'execute', 'review'];
+const exclusiveStatusTypes: TicketStatusType[] = ['execute', 'review'];
 const statusNamePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function revalidateTicketStatusPaths(projectId: string) {
@@ -48,6 +49,10 @@ function normalizeStatusName(name: string): string {
   return normalized;
 }
 
+function isExclusiveStatusType(statusType: TicketStatusType): boolean {
+  return exclusiveStatusTypes.includes(statusType);
+}
+
 export async function createTicketStatusAction(input: {
   organizationId: number;
   projectId: string;
@@ -68,6 +73,25 @@ export async function createTicketStatusAction(input: {
   const statusType = normalizeStatusType(input.statusType);
 
   const supabase = await createClient();
+
+  if (isExclusiveStatusType(statusType)) {
+    const { data: existingExclusiveStatuses, error: existingExclusiveStatusesError } =
+      await supabase
+        .from('ticket_statuses')
+        .select('name')
+        .eq('organization_id', organizationId)
+        .eq('status_type', statusType)
+        .limit(1);
+
+    if (existingExclusiveStatusesError) {
+      throw new Error(existingExclusiveStatusesError.message);
+    }
+
+    if ((existingExclusiveStatuses?.length ?? 0) > 0) {
+      throw new Error(`Only one ${statusType} status is allowed per organization.`);
+    }
+  }
+
   const { data: tailRows, error: tailError } = await supabase
     .from('ticket_statuses')
     .select('position')

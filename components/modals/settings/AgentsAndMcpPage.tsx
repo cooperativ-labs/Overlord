@@ -21,6 +21,8 @@ type McpAgentConfig = {
   label: string;
   location: string;
   description: string;
+  authMode: 'oauth' | 'token';
+  installSteps?: string[];
   getConfig: (mcpUrl: string, token: string) => string;
 };
 
@@ -30,6 +32,12 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
     location: 'https://claude.ai/customize/connectors',
     description:
       'Create a custom connector in Claude at https://claude.ai/customize/connectors. Use the MCP address below and authenticate with your agent token via OAuth 2.1.',
+    authMode: 'oauth',
+    installSteps: [
+      'Open Claude connector settings and create a new custom connector.',
+      'Paste the Overlord MCP URL as the connector server URL.',
+      'Start the connector login flow and complete the OAuth consent screen.'
+    ],
     getConfig: (mcpUrl, _token) => mcpUrl
   },
   cursor: {
@@ -37,6 +45,12 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
     location: 'mcp.json (global or project-level)',
     description:
       'Add this object to mcp.json in ~/.cursor/ (global) or .cursor/ (project-level). Cursor will use OAuth 2.1 to authenticate with Overlord using your saved credentials.',
+    authMode: 'oauth',
+    installSteps: [
+      'Open your global or project-level Cursor MCP config file.',
+      'Paste the Overlord MCP server object below.',
+      'Restart Cursor or reload MCP servers, then complete the OAuth login flow when prompted.'
+    ],
     getConfig: (mcpUrl, _token) =>
       JSON.stringify(
         {
@@ -51,10 +65,16 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
       )
   },
   codex: {
-    label: 'Codex CLI',
+    label: 'Codex (Headless / Cloud Runtime)',
     location: '~/.codex/config.toml',
     description:
-      'Add this block to ~/.codex/config.toml using `OVERLORD_MCP_URL`. Then set `AGENT_TOKEN` in your shell environment (for example in ~/.zshrc or inline as `AGENT_TOKEN=... codex`) before launching Codex.',
+      'Use this path when Codex runs in a cloud or otherwise non-interactive environment. Add the MCP server block to ~/.codex/config.toml, then provide AGENT_TOKEN through environment variables or your cloud secret manager before launching Codex.',
+    authMode: 'token',
+    installSteps: [
+      'Add the Codex MCP block below to ~/.codex/config.toml or the runtime image that launches Codex.',
+      'Set AGENT_TOKEN and OVERLORD_MCP_URL in the environment or cloud secret store used by that Codex runtime.',
+      'Launch Codex from that environment so it can connect to Overlord without an interactive OAuth browser flow.'
+    ],
     getConfig: (mcpUrl, _token) =>
       `[mcp_servers.overlord]\nurl = "${mcpUrl}"\nbearer_token_env_var = "AGENT_TOKEN"`
   }
@@ -84,6 +104,7 @@ export function AgentsAndMcpPage({
   const [agentTokenCopied, setAgentTokenCopied] = useState(false);
   const [agentEnvSnippetCopied, setAgentEnvSnippetCopied] = useState(false);
   const [agentDomainSnippetCopied, setAgentDomainSnippetCopied] = useState(false);
+  const [codexInstallScriptCopied, setCodexInstallScriptCopied] = useState(false);
 
   const [platformUrl, setPlatformUrl] = useState<string | null>(null);
 
@@ -192,6 +213,24 @@ export function AgentsAndMcpPage({
     setTimeout(() => setAgentDomainSnippetCopied(false), 2000);
   }
 
+  async function handleCopyCodexInstallScript() {
+    const snippetToken = agentToken ?? '<AGENT_TOKEN>';
+    const script = [
+      'mkdir -p ~/.codex',
+      "cat >> ~/.codex/config.toml <<'EOF'",
+      `[mcp_servers.overlord]`,
+      `url = "${mcpUrl}"`,
+      `bearer_token_env_var = "AGENT_TOKEN"`,
+      'EOF',
+      `export OVERLORD_MCP_URL="${mcpUrl}"`,
+      `export AGENT_TOKEN="${snippetToken}"`
+    ].join('\n');
+
+    await navigator.clipboard.writeText(script);
+    setCodexInstallScriptCopied(true);
+    setTimeout(() => setCodexInstallScriptCopied(false), 2000);
+  }
+
   async function handleCopyMcpConfig() {
     const cfg = MCP_AGENT_CONFIGS[selectedMcpAgent];
     if (!cfg) return;
@@ -257,8 +296,9 @@ export function AgentsAndMcpPage({
         <div className="grid gap-1">
           <p className="text-sm font-medium">MCP configuration</p>
           <p className="text-xs text-muted-foreground">
-            Copy the MCP server config snippet to connect your AI coding agent to Overlord. Select
-            your agent to see the right format.
+            Copy the MCP server config snippet to connect your AI coding agent to Overlord. OAuth
+            connectors should use the public MCP URL directly. Headless or cloud runtimes should use
+            the token-based snippets.
           </p>
         </div>
         <Select value={selectedMcpAgent} onValueChange={setSelectedMcpAgent}>
@@ -278,16 +318,19 @@ export function AgentsAndMcpPage({
           <div className="grid gap-3">
             <div className="space-y-2 rounded-md border bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">
-                Use the snippets below to configure your Claude or Codex environments so your AI
-                agent can call Overlord from the cloud runner.
+                Use the snippets below for non-interactive cloud environments, CI runners, or hosted
+                Codex sessions that cannot complete an OAuth browser login.
               </p>
               <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
-                <li>Open Claude or Codex settings and create or update a cloud environment.</li>
-                <li>Paste the environment variables snippet into that environment.</li>
+                <li>Create or update the cloud environment that launches your agent runtime.</li>
                 <li>
-                  Add the domains snippet to allowed domains, and keep the default domain list
-                  enabled if available.
+                  Paste the environment variables snippet into that environment or secret store.
                 </li>
+                <li>
+                  Add the domains snippet to allowed domains if your platform uses outbound domain
+                  allowlists.
+                </li>
+                <li>For Codex, also add the config.toml block or install script shown below.</li>
               </ol>
             </div>
             <div className="space-y-2 rounded-md border bg-muted/30 p-3">
@@ -330,6 +373,39 @@ export function AgentsAndMcpPage({
                 {domainSnippet}
               </pre>
             </div>
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-foreground">Codex install script</p>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyCodexInstallScript()}
+                  className="shrink-0 rounded p-1 hover:bg-muted"
+                  title="Copy Codex install script"
+                >
+                  {codexInstallScriptCopied ? (
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+              </div>
+              <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+                {[
+                  'mkdir -p ~/.codex',
+                  "cat >> ~/.codex/config.toml <<'EOF'",
+                  '[mcp_servers.overlord]',
+                  `url = "${mcpUrl}"`,
+                  'bearer_token_env_var = "AGENT_TOKEN"',
+                  'EOF',
+                  `export OVERLORD_MCP_URL="${mcpUrl}"`,
+                  `export AGENT_TOKEN="${agentToken ?? '<AGENT_TOKEN>'}"`
+                ].join('\n')}
+              </pre>
+              <p className="text-xs text-muted-foreground">
+                Use this for self-serve Codex setup in remote shells, cloud VMs, CI images, or other
+                non-interactive runtimes.
+              </p>
+            </div>
           </div>
         ) : (
           (() => {
@@ -357,6 +433,29 @@ export function AgentsAndMcpPage({
                   {cfg.getConfig(mcpUrl, token)}
                 </pre>
                 <p className="text-xs text-muted-foreground">{cfg.description}</p>
+                <div className="rounded-md border bg-background/60 p-2">
+                  <p className="text-xs font-medium text-foreground">
+                    Auth mode: {cfg.authMode === 'oauth' ? 'OAuth connector login' : 'Bearer token'}
+                  </p>
+                  {cfg.authMode === 'oauth' ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Users should complete the login flow in the client. Do not paste AGENT_TOKEN
+                      into the client config for this path.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Users should inject AGENT_TOKEN through environment variables or secret
+                      management before starting the runtime.
+                    </p>
+                  )}
+                </div>
+                {cfg.installSteps ? (
+                  <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+                    {cfg.installSteps.map(step => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                ) : null}
                 <p className="break-all text-xs text-muted-foreground">
                   Location:{' '}
                   {isLocationUrl(cfg.location) ? (

@@ -15,7 +15,8 @@ export async function POST(request: Request) {
       includeCompleted: parsed.data.includeCompleted,
       limit: parsed.data.limit,
       organizationId: parsed.tokenContext.organizationId,
-      query: parsed.data.query
+      query: parsed.data.query,
+      statuses: parsed.data.statuses
     });
 
     if (error) {

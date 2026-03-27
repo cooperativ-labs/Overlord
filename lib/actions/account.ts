@@ -225,7 +225,9 @@ export async function linkGithubIdentityAction(): Promise<LinkIdentityResult> {
   const { data, error } = await supabase.auth.linkIdentity({
     provider: 'github',
     options: {
-      redirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent('/u?settings=Sessions')}`,
+      redirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent(
+        '/u?settings=Linked Accounts'
+      )}`,
       scopes: 'user:email'
     }
   });

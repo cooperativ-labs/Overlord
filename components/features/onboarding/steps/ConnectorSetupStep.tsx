@@ -16,16 +16,23 @@ type Props = {
   projectDirectory?: string;
 };
 
-type BundleAgent = 'claude' | 'codex' | 'opencode';
+type BundleAgent = 'claude' | 'opencode';
 type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 /** What each agent connector includes. */
 const AGENT_CONNECTOR_FEATURES: Record<
   AgentTypeValue,
-  { bundle: boolean; slashCommands: boolean; permissions: boolean; details: string[] }
+  {
+    bundle: boolean;
+    service: boolean;
+    slashCommands: boolean;
+    permissions: boolean;
+    details: string[];
+  }
 > = {
   claude: {
     bundle: true,
+    service: false,
     slashCommands: true,
     permissions: true,
     details: [
@@ -37,13 +44,19 @@ const AGENT_CONNECTOR_FEATURES: Record<
     ]
   },
   codex: {
-    bundle: true,
+    bundle: false,
+    service: true,
     slashCommands: false,
     permissions: true,
-    details: ['AGENTS.md workflow instructions', 'Permission prefix rules for ovld protocol & curl']
+    details: [
+      'Home-local Overlord chat plugin',
+      'Legacy Codex bundle migration cleanup',
+      'Permission prefix rules for ovld protocol & curl'
+    ]
   },
   cursor: {
     bundle: false,
+    service: false,
     slashCommands: true,
     permissions: true,
     details: [
@@ -53,6 +66,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
   },
   gemini: {
     bundle: false,
+    service: false,
     slashCommands: true,
     permissions: true,
     details: [
@@ -62,6 +76,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
   },
   opencode: {
     bundle: true,
+    service: false,
     slashCommands: true,
     permissions: true,
     details: [
@@ -129,9 +144,10 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
     if (!api) return;
 
     try {
-      const [bundleStatuses, slashStatuses] = await Promise.all([
+      const [bundleStatuses, slashStatuses, pluginStatus] = await Promise.all([
         api.agentBundle?.getAllStatuses() ?? Promise.resolve([]),
-        api.agentSlash?.getAllStatuses() ?? Promise.resolve([])
+        api.agentSlash?.getAllStatuses() ?? Promise.resolve([]),
+        api.overlordPlugin?.getStatus() ?? Promise.resolve(null)
       ]);
 
       setAgentStates(prev => {
@@ -145,6 +161,21 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
           if (next[ss.agent]) {
             next[ss.agent] = { ...next[ss.agent], slashStatus: ss.status };
           }
+        }
+        if (pluginStatus) {
+          next.codex = {
+            ...next.codex,
+            bundleStatus:
+              pluginStatus.status === 'installed'
+                ? 'installed'
+                : pluginStatus.status === 'stale'
+                  ? 'stale'
+                  : pluginStatus.status === 'partial'
+                    ? 'partial'
+                    : pluginStatus.status === 'error'
+                      ? 'error'
+                      : 'not_installed'
+          };
         }
         return next;
       });
@@ -225,6 +256,32 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
       }
     }
 
+    if (agents.includes('codex')) {
+      try {
+        if (api.overlordPlugin) {
+          const result = await api.overlordPlugin.install();
+          setAgentStates(prev => ({
+            ...prev,
+            codex: {
+              ...prev.codex,
+              permissionsConfigured: result.ok,
+              ...(result.ok ? {} : { error: result.error ?? 'Plugin install failed' })
+            }
+          }));
+          if (!result.ok && result.error) {
+            errors.push(`codex plugin: ${result.error}`);
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Plugin install failed';
+        errors.push(`codex plugin: ${msg}`);
+        setAgentStates(prev => ({
+          ...prev,
+          codex: { ...prev.codex, installStatus: 'error' as const, error: msg }
+        }));
+      }
+    }
+
     // Configure permissions for all selected agents
     try {
       if (api.agentPermissions) {
@@ -300,8 +357,12 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
           const isSelected = selectedAgents.has(agentType.value);
           const isInstalled =
             state.installStatus === 'success' ||
+            (features.service && state.bundleStatus === 'installed' && !features.slashCommands) ||
             (features.bundle && state.bundleStatus === 'installed' && !features.slashCommands) ||
-            (features.slashCommands && state.slashStatus === 'installed' && !features.bundle) ||
+            (features.slashCommands &&
+              state.slashStatus === 'installed' &&
+              !features.bundle &&
+              !features.service) ||
             (features.bundle &&
               state.bundleStatus === 'installed' &&
               features.slashCommands &&
@@ -351,7 +412,12 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {features.bundle && (
                       <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
-                        Plugins
+                        Workflow bundle
+                      </span>
+                    )}
+                    {features.service && (
+                      <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+                        Chat plugin
                       </span>
                     )}
                     {features.slashCommands && (

@@ -12,14 +12,14 @@ type Props = {
 };
 
 type BundleStatusEntry = {
-  agent: 'claude' | 'codex' | 'opencode';
+  agent: 'claude' | 'opencode';
   status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
   version: string | null;
   installedVersion: string | null;
   details: string;
 };
 
-const AGENTS: Array<BundleStatusEntry['agent']> = ['claude', 'codex', 'opencode'];
+const AGENTS: Array<BundleStatusEntry['agent']> = ['claude', 'opencode'];
 
 function statusBadge(status: BundleStatusEntry['status']) {
   if (status === 'installed') {
@@ -127,8 +127,8 @@ export function InstallAgentBundlesStep({ onContinue }: Props) {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Install agent plugins</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Install the Overlord workflow bundle for each local agent. This enables shorter prompts
-          and durable permission notifications.
+          Install the Overlord workflow bundle for Claude and OpenCode. Codex now uses the dedicated
+          Overlord chat plugin instead of a local AGENTS bundle.
         </p>
       </div>
 

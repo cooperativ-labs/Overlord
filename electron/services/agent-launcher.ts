@@ -132,12 +132,12 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchMode = input.launchMode ?? 'run';
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
-    input.agent === 'claude' || input.agent === 'codex' || input.agent === 'opencode'
+    input.agent === 'claude' || input.agent === 'opencode'
       ? (input.agent as AgentBundleAgent)
       : null;
   const bundleInstalled = bundleAgent ? isBundleInstalled(bundleAgent) : false;
   const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
-  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}`;
+  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron&agent=${input.agent}${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}`;
   const launchEnv = {
     OVERLORD_URL: connectorUrl,
     OVERLORD_CONNECTOR_URL: connectorUrl,

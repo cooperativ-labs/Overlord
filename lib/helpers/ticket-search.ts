@@ -37,12 +37,14 @@ export async function searchTicketsByTitle(
     organizationId,
     limit = 8,
     query,
+    statuses,
     select = 'id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)'
   }: {
     includeCompleted?: boolean;
     organizationId?: number;
     limit?: number;
     query: string;
+    statuses?: string[];
     select?: string;
   }
 ) {
@@ -58,7 +60,9 @@ export async function searchTicketsByTitle(
   if (organizationId) {
     baseQuery = baseQuery.eq('organization_id', organizationId);
   }
-  if (!includeCompleted) {
+  if (statuses?.length) {
+    baseQuery = baseQuery.in('status', statuses);
+  } else if (!includeCompleted) {
     baseQuery = baseQuery.neq('status', 'complete');
   }
 
@@ -91,7 +95,9 @@ export async function searchTicketsByTitle(
   if (organizationId) {
     fallbackQuery = fallbackQuery.eq('organization_id', organizationId);
   }
-  if (!includeCompleted) {
+  if (statuses?.length) {
+    fallbackQuery = fallbackQuery.in('status', statuses);
+  } else if (!includeCompleted) {
     fallbackQuery = fallbackQuery.neq('status', 'complete');
   }
 

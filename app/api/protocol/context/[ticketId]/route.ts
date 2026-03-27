@@ -13,6 +13,7 @@ import {
   type PromptContext,
   type PromptLaunchMode
 } from '@/lib/overlord/ticket-prompt';
+import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
@@ -65,7 +66,19 @@ export async function GET(request: Request, { params }: RouteContext) {
       searchParams.get('mode') === 'ask'
         ? ('ask' as PromptLaunchMode)
         : ('run' as PromptLaunchMode);
-    const instructionMode = (searchParams.get('instructionMode') ?? 'legacy') as InstructionMode;
+    const agent = (searchParams.get('agent') ?? undefined) as
+      | 'claude'
+      | 'codex'
+      | 'cursor'
+      | 'gemini'
+      | 'opencode'
+      | undefined;
+    const requestedInstructionMode = (searchParams.get('instructionMode') ??
+      'legacy') as InstructionMode;
+    const instructionMode =
+      agent === 'codex' && requestedInstructionMode === 'bundle'
+        ? ('legacy' as InstructionMode)
+        : requestedInstructionMode;
     const requestOrigin = new URL(request.url).origin;
     const platformUrl = getPlatformUrl(requestOrigin);
 
@@ -91,7 +104,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       console.error('Failed to load custom instructions for context prompt:', error);
     }
 
-    let agentConfigs: Record<string, any> = {};
+    let agentConfigs: Record<string, AgentConfig> = {};
     try {
       agentConfigs = await getAllAgentConfigsByUserIdAction(authResult.context.userId, supabase);
     } catch (error) {
@@ -114,7 +127,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { mcpUrl, customInstructions, launchMode, agentConfigs, instructionMode }
+      options: { mcpUrl, customInstructions, launchMode, agentConfigs, agent, instructionMode }
     });
 
     const headers: Record<string, string> = {

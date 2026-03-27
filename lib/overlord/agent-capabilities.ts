@@ -22,7 +22,7 @@ export type AgentCapability = {
  * @param bundleInstalled - Whether the Overlord local bundle is installed for this agent
  */
 export function resolveAgentCapabilities(agent: string, bundleInstalled: boolean): AgentCapability {
-  const bundleSupported = agent === 'claude' || agent === 'codex' || agent === 'opencode';
+  const bundleSupported = agent === 'claude' || agent === 'opencode';
 
   return {
     agent,

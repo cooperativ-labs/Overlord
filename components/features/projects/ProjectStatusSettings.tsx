@@ -38,6 +38,35 @@ import type { Database } from '@/types/database.types';
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
 const statusTypeOptions = ticketStatusTypeOptions;
+const exclusiveStatusTypes: TicketStatusType[] = ['execute', 'review'];
+const preferredStatusTypeOrder: TicketStatusType[] = ['execute', 'review', 'draft', 'complete'];
+
+function isExclusiveStatusType(statusType: TicketStatusType): boolean {
+  return exclusiveStatusTypes.includes(statusType);
+}
+
+function isLockedStatusType(
+  statusType: TicketStatusType,
+  statusTypeUsage: Partial<Record<TicketStatusType, string>>
+): boolean {
+  return isExclusiveStatusType(statusType) && Boolean(statusTypeUsage[statusType]);
+}
+
+function getDefaultStatusType(statuses: StatusRow[]): TicketStatusType {
+  const usedExclusiveTypes = new Set(
+    statuses
+      .filter(status => isExclusiveStatusType(status.statusType))
+      .map(status => status.statusType)
+  );
+
+  for (const statusType of preferredStatusTypeOrder) {
+    if (!isExclusiveStatusType(statusType) || !usedExclusiveTypes.has(statusType)) {
+      return statusType;
+    }
+  }
+
+  return 'draft';
+}
 
 type StatusRow = {
   name: string;
@@ -64,7 +93,9 @@ export function ProjectStatusSettings({
   const [statuses, setStatuses] = useState<StatusRow[]>(initialStatuses);
   const [statusesOpen, setStatusesOpen] = useState(defaultExpanded);
   const [statusName, setStatusName] = useState('');
-  const [statusType, setStatusType] = useState<TicketStatusType>('execute');
+  const [statusType, setStatusType] = useState<TicketStatusType>(() =>
+    getDefaultStatusType(initialStatuses)
+  );
   const [addButtonState, setAddButtonState] = useState<ButtonLoadingState>('default');
   const [pendingDeleteName, setPendingDeleteName] = useState<string | null>(null);
   const [pendingReorder, setPendingReorder] = useState(false);
@@ -76,6 +107,32 @@ export function ProjectStatusSettings({
   useEffect(() => {
     setStatuses(initialStatuses);
   }, [initialStatuses]);
+
+  useEffect(() => {
+    setStatusType(prevStatusType => {
+      if (!isExclusiveStatusType(prevStatusType)) {
+        return prevStatusType;
+      }
+
+      const isStillAvailable = !statuses.some(status => status.statusType === prevStatusType);
+      if (isStillAvailable) {
+        return prevStatusType;
+      }
+
+      return getDefaultStatusType(statuses);
+    });
+  }, [statuses]);
+
+  const statusTypeUsage = statuses.reduce(
+    (usage, status) => {
+      if (isExclusiveStatusType(status.statusType) && !usage[status.statusType]) {
+        usage[status.statusType] = status.name;
+      }
+      return usage;
+    },
+    {} as Partial<Record<TicketStatusType, string>>
+  );
+  const selectedStatusTypeIsTaken = isLockedStatusType(statusType, statusTypeUsage);
 
   async function handleAddStatus() {
     setAddButtonState('loading');
@@ -96,7 +153,17 @@ export function ProjectStatusSettings({
         })
       );
       setStatusName('');
-      setStatusType('execute');
+      setStatusType(currentStatusType => {
+        if (!isExclusiveStatusType(currentStatusType)) {
+          return currentStatusType;
+        }
+
+        const nextStatuses = [...statuses, created];
+        const isStillAvailable = !nextStatuses.some(
+          status => status.statusType === currentStatusType
+        );
+        return isStillAvailable ? currentStatusType : getDefaultStatusType(nextStatuses);
+      });
       setAddButtonState('success');
       router.refresh();
     } catch (cause) {
@@ -280,11 +347,15 @@ export function ProjectStatusSettings({
                 disabled={addButtonState === 'loading'}
                 aria-label="Status type"
               >
-                {statusTypeOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                {statusTypeOptions.map(option => {
+                  const isOptionLocked = isLockedStatusType(option.value, statusTypeUsage);
+
+                  return (
+                    <option key={option.value} value={option.value} disabled={isOptionLocked}>
+                      {option.label}
+                    </option>
+                  );
+                })}
               </select>
               <LoadingButton
                 buttonState={addButtonState}
@@ -297,13 +368,22 @@ export function ProjectStatusSettings({
                 size="sm"
                 variant="outline"
                 onClick={handleAddStatus}
-                disabled={statusName.trim().length === 0}
+                disabled={statusName.trim().length === 0 || selectedStatusTypeIsTaken}
                 className="h-8"
               />
             </div>
             <p className="text-xs text-muted-foreground">
               Names are normalized to lowercase with hyphens and must include at least three
               letters.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Execute and review can only be assigned once per organization.
+              {statusTypeUsage.execute
+                ? ` Execute is already assigned to ${statusTypeUsage.execute}.`
+                : ' Execute is available.'}
+              {statusTypeUsage.review
+                ? ` Review is already assigned to ${statusTypeUsage.review}.`
+                : ' Review is available.'}
             </p>
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
           </div>

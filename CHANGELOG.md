@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-03-27:11:08
+
+### Added
+- Add local Overlord chat plugin management for Codex, including install, repair, uninstall, and migration away from the legacy bundle-based setup.
+- Add a linked accounts settings page so users can connect GitHub, review OAuth identities, and disconnect extra sign-in methods.
+- Add realtime ticket objectives rendering so the ticket panel reflects objective updates without requiring a refresh.
+
+### Fixed
+- Enforce a single execute status and a single review status per organization so workflow states stay canonical.
+- Remove legacy Codex bundle guidance from the setup flow and prompt context in favor of the plugin-based path.
+
+### Changed
+- Rework Codex onboarding, setup copy, and prompt instructions around the Overlord chat plugin and local permission rules instead of `~/.codex/AGENTS.md`.
+- Move ticket objective editing into a dedicated realtime section and keep executed objectives visible in the panel history.
+- Update ticket search and protocol context loading to align with the new agent-specific launch flow.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `3.0.0`.
+
 ## [2.16.0] - 2026-03-26
 
 ### Added

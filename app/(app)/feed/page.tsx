@@ -1,7 +1,7 @@
 import { FeedList } from '@/components/features/feed/FeedList';
+import { getExecutingFeedTicketsAction } from '@/lib/actions/feed';
 import { getEditorSchemeAction } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
-import { getExecutingFeedTicketsAction } from '@/lib/actions/feed';
 import { getEditorScheme } from '@/lib/env';
 
 export default async function FeedPage() {

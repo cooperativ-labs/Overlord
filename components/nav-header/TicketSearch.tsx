@@ -168,65 +168,65 @@ export function TicketSearch({ className }: TicketSearchProps) {
         <TooltipContent side="bottom">Go back ({backShortcutHint})</TooltipContent>
       </Tooltip>
       <div ref={containerRef} className="relative min-w-0 flex-1">
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          placeholder="Search tickets…"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          className={cn(
-            'w-full pr-10 rounded-lg shadow-sm focus:shadow-lg focus:scale-105 transition-height transition-shadow duration-200 ease-in-out'
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            placeholder="Search tickets…"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            className={cn(
+              'w-full pr-10 rounded-lg shadow-sm focus:shadow-lg focus:scale-105 transition-height transition-shadow duration-200 ease-in-out'
+            )}
+            role="combobox"
+            aria-expanded={isOpen}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            onKeyDown={handleKeyDown}
+          />
+          {!isLoading && (
+            <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {searchShortcutHint}
+            </kbd>
           )}
-          role="combobox"
-          aria-expanded={isOpen}
-          aria-controls={listboxId}
-          aria-autocomplete="list"
-          onKeyDown={handleKeyDown}
-        />
-        {!isLoading && (
-          <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {searchShortcutHint}
-          </kbd>
+          {isLoading && (
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+              Loading…
+            </span>
+          )}
+        </div>
+        {isOpen && results.length > 0 && (
+          <ul
+            role="listbox"
+            id={listboxId}
+            className="absolute left-0 top-full mt-6 z-20 w-full overflow-hidden rounded-xl border border-border bg-card shadow-xl scale-105"
+          >
+            {results.map((ticket, index) => {
+              const isActive = index === activeIndex;
+              return (
+                <li
+                  key={ticket.id}
+                  role="option"
+                  aria-selected={isActive}
+                  className={`px-4 py-3 transition hover:bg-muted/90 ${
+                    isActive ? 'bg-primary/10' : 'bg-card'
+                  }`}
+                  onMouseDown={() => selectTicket(ticket)}
+                  onMouseEnter={() => setActiveIndex(index)}
+                >
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {ticket.title || 'Untitled ticket'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {ticket.ticket_sequence
+                      ? `#${ticket.ticket_sequence}`
+                      : getTicketIdentifier(ticket.id)}{' '}
+                    • {ticket.project?.name ?? 'Unknown project'}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
         )}
-        {isLoading && (
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-            Loading…
-          </span>
-        )}
-      </div>
-      {isOpen && results.length > 0 && (
-        <ul
-          role="listbox"
-          id={listboxId}
-          className="absolute left-0 top-full mt-6 z-20 w-full overflow-hidden rounded-xl border border-border bg-card shadow-xl scale-105"
-        >
-          {results.map((ticket, index) => {
-            const isActive = index === activeIndex;
-            return (
-              <li
-                key={ticket.id}
-                role="option"
-                aria-selected={isActive}
-                className={`px-4 py-3 transition hover:bg-muted/90 ${
-                  isActive ? 'bg-primary/10' : 'bg-card'
-                }`}
-                onMouseDown={() => selectTicket(ticket)}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
-                <p className="text-sm font-medium text-foreground truncate">
-                  {ticket.title || 'Untitled ticket'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {ticket.ticket_sequence
-                    ? `#${ticket.ticket_sequence}`
-                    : getTicketIdentifier(ticket.id)}{' '}
-                  • {ticket.project?.name ?? 'Unknown project'}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-      )}
       </div>
     </div>
   );

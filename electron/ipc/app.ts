@@ -19,6 +19,12 @@ import {
 import { configureAgentPermissions } from '../services/agent-permissions';
 import { AppUpdaterService } from '../services/app-updater';
 import { type CliInstallResult, getCliInstallStatus, installCli } from '../services/cli-installer';
+import {
+  getOverlordPluginStatus,
+  installOverlordPlugin,
+  repairOverlordPlugin,
+  uninstallOverlordPlugin
+} from '../services/overlord-plugin';
 import { store } from '../services/settings-store';
 
 type RegisterAppIpcOptions = {
@@ -125,6 +131,22 @@ export function registerAppIpc({
 
   ipcMain.handle('cli:install', async (): Promise<CliInstallResult> => {
     return installCli();
+  });
+
+  ipcMain.handle('overlord-plugin:get-status', () => {
+    return getOverlordPluginStatus();
+  });
+
+  ipcMain.handle('overlord-plugin:install', () => {
+    return installOverlordPlugin();
+  });
+
+  ipcMain.handle('overlord-plugin:repair', () => {
+    return repairOverlordPlugin();
+  });
+
+  ipcMain.handle('overlord-plugin:uninstall', () => {
+    return uninstallOverlordPlugin();
   });
 
   // --- Agent Bundle IPC ---

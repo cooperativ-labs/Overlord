@@ -98,10 +98,25 @@ interface ElectronAPI {
       { ok: true; installPath: string; pathInstruction: string } | { ok: false; error: string }
     >;
   };
+  overlordPlugin?: {
+    getStatus: () => Promise<{
+      status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
+      version: string | null;
+      installedVersion: string | null;
+      details: string;
+      currentContentHash: string;
+      managedFiles: string[];
+      existingManagedFiles: string[];
+      missingManagedFiles: string[];
+    }>;
+    install: () => Promise<{ ok: boolean; installedFiles: string[]; error?: string }>;
+    repair: () => Promise<{ ok: boolean; installedFiles: string[]; error?: string }>;
+    uninstall: () => Promise<{ ok: boolean; removedFiles: string[]; error?: string }>;
+  };
   agentBundle?: {
     getAllStatuses: () => Promise<
       Array<{
-        agent: 'claude' | 'codex' | 'opencode';
+        agent: 'claude' | 'opencode';
         status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
         version: string | null;
         installedVersion: string | null;
@@ -109,35 +124,35 @@ interface ElectronAPI {
         currentContentHash: string;
       }>
     >;
-    getStatus: (agent: 'claude' | 'codex' | 'opencode') => Promise<{
-      agent: 'claude' | 'codex' | 'opencode';
+    getStatus: (agent: 'claude' | 'opencode') => Promise<{
+      agent: 'claude' | 'opencode';
       status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
       version: string | null;
       installedVersion: string | null;
       details: string;
       currentContentHash: string;
     }>;
-    install: (agent: 'claude' | 'codex' | 'opencode') => Promise<{
+    install: (agent: 'claude' | 'opencode') => Promise<{
       ok: boolean;
-      agent: 'claude' | 'codex' | 'opencode';
+      agent: 'claude' | 'opencode';
       backups: string[];
       error?: string;
     }>;
     installAll: () => Promise<
       Array<{
         ok: boolean;
-        agent: 'claude' | 'codex' | 'opencode';
+        agent: 'claude' | 'opencode';
         backups: string[];
         error?: string;
       }>
     >;
-    repair: (agent: 'claude' | 'codex' | 'opencode') => Promise<{
+    repair: (agent: 'claude' | 'opencode') => Promise<{
       ok: boolean;
-      agent: 'claude' | 'codex' | 'opencode';
+      agent: 'claude' | 'opencode';
       backups: string[];
       error?: string;
     }>;
-    uninstall: (agent: 'claude' | 'codex' | 'opencode') => Promise<{ ok: boolean; error?: string }>;
+    uninstall: (agent: 'claude' | 'opencode') => Promise<{ ok: boolean; error?: string }>;
   };
   agentSlash?: {
     getAllStatuses: () => Promise<
@@ -176,7 +191,7 @@ interface ElectronAPI {
     configure: (options?: { projectDirectory?: string }) => Promise<{
       ok: boolean;
       results: Array<{
-        agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+        agent: 'claude' | 'cursor' | 'gemini' | 'opencode';
         ok: boolean;
         filePath: string;
         details: string;

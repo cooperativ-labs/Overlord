@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { LinkGithubIdentityButton } from '@/components/features/account/link-github-identity-button';
 import { PasswordForm } from '@/components/features/account/password-form';
 import { ProfileImageForm } from '@/components/features/account/profile-image-form';
 import { ProfileNameForm } from '@/components/features/account/profile-name-form';
@@ -60,8 +59,6 @@ export function UserProfilePage({ open }: UserProfilePageProps) {
     );
   }
 
-  const hasGithubIdentity = profile.identities.some(identity => identity.provider === 'github');
-
   return (
     <div className="space-y-8">
       {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
@@ -79,33 +76,6 @@ export function UserProfilePage({ open }: UserProfilePageProps) {
           />
           <Separator />
           <ProfileNameForm initialName={profile.name} />
-        </div>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Login methods</h2>
-          <p className="text-muted-foreground text-sm">
-            Connect another sign-in method while you are logged in to the account you want to keep.
-          </p>
-        </div>
-        <div className="rounded-lg border bg-muted/30 p-4">
-          <div className="mb-3">
-            <p className="text-sm font-medium">Connect another login method</p>
-            <p className="text-sm text-muted-foreground">
-              Add GitHub so you can use both password and GitHub sign-in with this same account.
-            </p>
-          </div>
-
-          {hasGithubIdentity ? (
-            <p className="text-sm text-muted-foreground">
-              GitHub is already connected to this account.
-            </p>
-          ) : (
-            <LinkGithubIdentityButton />
-          )}
         </div>
       </div>
 

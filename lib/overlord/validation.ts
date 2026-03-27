@@ -32,7 +32,8 @@ export const listTicketsSchema = z.object({
 export const searchTicketsSchema = z.object({
   query: z.string().trim().max(120).optional().default(''),
   includeCompleted: z.boolean().optional().default(false),
-  limit: z.number().int().min(1).max(20).optional().default(8)
+  limit: z.number().int().min(1).max(20).optional().default(8),
+  statuses: z.array(z.string().trim().max(60)).optional()
 });
 
 export const attachSchema = z.object({

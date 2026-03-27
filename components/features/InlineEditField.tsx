@@ -106,6 +106,12 @@ export function InlineEditField({
   }, [editing]);
 
   useEffect(() => {
+    if (editing) return;
+    setSavedValue(initialValue);
+    setValue(initialValue);
+  }, [editing, initialValue]);
+
+  useEffect(() => {
     if (!canMentionFiles) {
       syncLocalFileMentionPaths(EMPTY_MENTION_PATHS);
       return;

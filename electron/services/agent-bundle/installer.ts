@@ -1,6 +1,6 @@
 /**
  * Agent bundle installer — installs and manages durable Overlord workflow
- * configuration for Claude Code, Codex, and OpenCode.
+ * configuration for Claude Code and OpenCode.
  *
  * Responsibilities:
  * - Detect current install status per agent
@@ -29,7 +29,6 @@ import { installSlashCommands, uninstallSlashCommands } from './slash-commands';
 import {
   BUNDLE_VERSION,
   CLAUDE_SKILL_CONTENT,
-  CODEX_AGENTS_SECTION,
   JSON_MARKER_KEY,
   OPENCODE_AGENTS_SECTION,
   PERMISSION_HOOK_SCRIPT
@@ -39,7 +38,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-export type AgentBundleAgent = 'claude' | 'codex' | 'opencode';
+export type AgentBundleAgent = 'claude' | 'opencode';
 
 export type BundleStatus = 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
 
@@ -69,7 +68,6 @@ type ManifestEntry = {
 
 type BundleManifest = {
   claude?: ManifestEntry;
-  codex?: ManifestEntry;
   opencode?: ManifestEntry;
 };
 
@@ -87,13 +85,6 @@ function claudePaths() {
     skillFile: path.join(base, 'skills', 'overlord-local', 'SKILL.md'),
     settingsFile: path.join(base, 'settings.json'),
     hookScript: path.join(base, 'overlord-permission-hook.sh')
-  };
-}
-
-function codexPaths() {
-  const base = path.join(os.homedir(), '.codex');
-  return {
-    agentsFile: path.join(base, 'AGENTS.md')
   };
 }
 
@@ -128,7 +119,6 @@ function contentHash(content: string): string {
 /** Returns the content hash for the current (bundled) template of a given agent. */
 function currentContentHashForAgent(agent: AgentBundleAgent): string {
   if (agent === 'claude') return contentHash(CLAUDE_SKILL_CONTENT);
-  if (agent === 'codex') return contentHash(CODEX_AGENTS_SECTION);
   return contentHash(OPENCODE_AGENTS_SECTION);
 }
 
@@ -139,12 +129,7 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
 
   if (!entry) {
     // Check if files exist anyway (manual install or pre-manifest)
-    const filesExist =
-      agent === 'claude'
-        ? checkClaudeFilesExist()
-        : agent === 'codex'
-          ? checkCodexFilesExist()
-          : checkOpenCodeFilesExist();
+    const filesExist = agent === 'claude' ? checkClaudeFilesExist() : checkOpenCodeFilesExist();
     if (filesExist) {
       return {
         agent,
@@ -213,23 +198,12 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
 }
 
 export function getAllBundleStatuses(): AgentBundleStatus[] {
-  return [
-    getAgentBundleStatus('claude'),
-    getAgentBundleStatus('codex'),
-    getAgentBundleStatus('opencode')
-  ];
+  return [getAgentBundleStatus('claude'), getAgentBundleStatus('opencode')];
 }
 
 function checkClaudeFilesExist(): boolean {
   const paths = claudePaths();
   return fs.existsSync(paths.skillFile);
-}
-
-function checkCodexFilesExist(): boolean {
-  const paths = codexPaths();
-  if (!fs.existsSync(paths.agentsFile)) return false;
-  const content = readTextFile(paths.agentsFile);
-  return hasOverlordSection(content);
 }
 
 function checkOpenCodeFilesExist(): boolean {
@@ -335,91 +309,6 @@ function installClaude(): InstallResult {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Install: Codex
-// ---------------------------------------------------------------------------
-
-function mergeCodexRules(existingContent: string): string {
-  const start = '# overlord:permissions:start';
-  const end = '# overlord:permissions:end';
-  const managedBlock = [
-    start,
-    'prefix_rule(',
-    '  pattern = ["npx", "overlord", "protocol"],',
-    '  decision = "allow",',
-    '  justification = "Allow all Overlord protocol commands without prompts.",',
-    ')',
-    '',
-    'prefix_rule(',
-    '  pattern = ["ovld", "protocol"],',
-    '  decision = "allow",',
-    '  justification = "Allow all Overlord protocol commands without prompts.",',
-    ')',
-    '',
-    'prefix_rule(',
-    '  pattern = ["curl", "-sS", "-X", "POST"],',
-    '  decision = "allow",',
-    '  justification = "Allow curl protocol POST commands without prompts.",',
-    ')',
-    end
-  ].join('\n');
-
-  const startIndex = existingContent.indexOf(start);
-  const endIndex = existingContent.indexOf(end);
-
-  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-    const before = existingContent.slice(0, startIndex).trimEnd();
-    const after = existingContent.slice(endIndex + end.length).trimStart();
-    if (!before && !after) return `${managedBlock}\n`;
-    if (!before) return `${managedBlock}\n\n${after}`;
-    if (!after) return `${before}\n\n${managedBlock}\n`;
-    return `${before}\n\n${managedBlock}\n\n${after}`;
-  }
-
-  const trimmed = existingContent.trimEnd();
-  if (!trimmed) return `${managedBlock}\n`;
-  return `${trimmed}\n\n${managedBlock}\n`;
-}
-
-function installCodex(): InstallResult {
-  const paths = codexPaths();
-  const rulesFile = path.join(os.homedir(), '.codex', 'rules', 'default.rules');
-  const backups: string[] = [];
-
-  try {
-    // 1. Backup existing AGENTS.md if it exists
-    const backup = backupFile(paths.agentsFile);
-    if (backup) backups.push(backup);
-
-    // 2. Merge Overlord section into AGENTS.md
-    const existing = readTextFile(paths.agentsFile);
-    const merged = mergeMarkdownSection(existing, CODEX_AGENTS_SECTION);
-    writeTextFile(paths.agentsFile, merged);
-
-    // 3. Install permission prefix rules
-    const rulesBackup = backupFile(rulesFile);
-    if (rulesBackup) backups.push(rulesBackup);
-    const existingRules = readTextFile(rulesFile);
-    const mergedRules = mergeCodexRules(existingRules);
-    writeTextFile(rulesFile, mergedRules);
-
-    // 4. Update manifest
-    const manifest = readManifest();
-    manifest.codex = {
-      version: BUNDLE_VERSION,
-      contentHash: contentHash(CODEX_AGENTS_SECTION),
-      installedAt: new Date().toISOString(),
-      files: [paths.agentsFile, rulesFile]
-    };
-    writeManifest(manifest);
-
-    return { ok: true, agent: 'codex', backups };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, agent: 'codex', backups, error: message };
-  }
-}
-
 function installOpenCode(): InstallResult {
   const paths = openCodePaths();
   const backups: string[] = [];
@@ -498,20 +387,14 @@ function installOpenCode(): InstallResult {
  */
 export function installAgentBundle(agent: AgentBundleAgent): InstallResult {
   if (agent === 'claude') return installClaude();
-  if (agent === 'codex') return installCodex();
-  if (agent === 'opencode') return installOpenCode();
-  return { ok: false, agent, backups: [], error: `Unknown agent: ${agent}` };
+  return installOpenCode();
 }
 
 /**
  * Install bundles for all supported agents.
  */
 export function installAllBundles(): InstallResult[] {
-  return [
-    installAgentBundle('claude'),
-    installAgentBundle('codex'),
-    installAgentBundle('opencode')
-  ];
+  return [installAgentBundle('claude'), installAgentBundle('opencode')];
 }
 
 /**
@@ -571,25 +454,6 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
       const slashUninstall = uninstallSlashCommands('claude');
       if (!slashUninstall.ok) {
         return { ok: false, error: slashUninstall.error };
-      }
-    } else if (agent === 'codex') {
-      const paths = codexPaths();
-      // Remove Overlord section from AGENTS.md
-      if (fs.existsSync(paths.agentsFile)) {
-        const existing = readTextFile(paths.agentsFile);
-        // Remove the managed section including markers
-        const startIdx = existing.indexOf('<!-- overlord:managed:start -->');
-        const endIdx = existing.indexOf('<!-- overlord:managed:end -->');
-        if (startIdx !== -1 && endIdx !== -1) {
-          const before = existing.slice(0, startIdx).trimEnd();
-          const after = existing.slice(endIdx + '<!-- overlord:managed:end -->'.length).trimStart();
-          const cleaned = before + (before && after ? '\n\n' : '') + after;
-          if (cleaned.trim()) {
-            writeTextFile(paths.agentsFile, cleaned.trim() + '\n');
-          } else {
-            fs.unlinkSync(paths.agentsFile);
-          }
-        }
       }
     } else if (agent === 'opencode') {
       const paths = openCodePaths();

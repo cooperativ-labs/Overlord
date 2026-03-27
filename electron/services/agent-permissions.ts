@@ -4,12 +4,11 @@ import path from 'path';
 import {
   backupFile,
   readJsonFile,
-  readTextFile,
   writeJsonFile,
   writeTextFile
 } from './agent-bundle/merge-helpers';
 
-export type AgentPermissionAgent = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+export type AgentPermissionAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 export type AgentPermissionResult = {
   agent: AgentPermissionAgent;
@@ -28,9 +27,6 @@ export type ConfigureAgentPermissionsResult = {
   ok: boolean;
   results: AgentPermissionResult[];
 };
-
-const CODEX_START = '# overlord:permissions:start';
-const CODEX_END = '# overlord:permissions:end';
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -87,78 +83,6 @@ function configureClaude(projectDirectory?: string): AgentPermissionResult {
       filePath,
       backups,
       details: 'Failed to update Claude permissions.',
-      error: message
-    };
-  }
-}
-
-function mergeCodexRules(existingContent: string): string {
-  const managedBlock = [
-    CODEX_START,
-    'prefix_rule(',
-    '  pattern = ["npx", "overlord", "protocol"],',
-    '  decision = "allow",',
-    '  justification = "Allow all Overlord protocol commands without prompts.",',
-    ')',
-    '',
-    'prefix_rule(',
-    '  pattern = ["ovld", "protocol"],',
-    '  decision = "allow",',
-    '  justification = "Allow all Overlord protocol commands without prompts.",',
-    ')',
-    '',
-    'prefix_rule(',
-    '  pattern = ["curl", "-sS", "-X", "POST"],',
-    '  decision = "allow",',
-    '  justification = "Allow curl protocol POST commands without prompts.",',
-    ')',
-    CODEX_END
-  ].join('\n');
-
-  const startIndex = existingContent.indexOf(CODEX_START);
-  const endIndex = existingContent.indexOf(CODEX_END);
-
-  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-    const before = existingContent.slice(0, startIndex).trimEnd();
-    const after = existingContent.slice(endIndex + CODEX_END.length).trimStart();
-
-    if (!before && !after) return `${managedBlock}\n`;
-    if (!before) return `${managedBlock}\n\n${after}`;
-    if (!after) return `${before}\n\n${managedBlock}\n`;
-    return `${before}\n\n${managedBlock}\n\n${after}`;
-  }
-
-  const trimmed = existingContent.trimEnd();
-  if (!trimmed) return `${managedBlock}\n`;
-  return `${trimmed}\n\n${managedBlock}\n`;
-}
-
-function configureCodex(): AgentPermissionResult {
-  const backups: string[] = [];
-  const filePath = path.join(os.homedir(), '.codex', 'rules', 'default.rules');
-
-  try {
-    withOptionalBackup(filePath, backups);
-
-    const existing = readTextFile(filePath);
-    const merged = mergeCodexRules(existing);
-    writeTextFile(filePath, merged);
-
-    return {
-      agent: 'codex',
-      ok: true,
-      filePath,
-      backups,
-      details: 'Updated Codex prefix rules for ovld protocol and curl POST.'
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return {
-      agent: 'codex',
-      ok: false,
-      filePath,
-      backups,
-      details: 'Failed to update Codex rules.',
       error: message
     };
   }
@@ -318,7 +242,6 @@ export function configureAgentPermissions(
 ): ConfigureAgentPermissionsResult {
   const results = [
     configureClaude(options.projectDirectory),
-    configureCodex(),
     configureCursor(options.projectDirectory),
     configureGemini(),
     configureOpenCode()

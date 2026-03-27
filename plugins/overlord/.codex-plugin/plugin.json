@@ -1,0 +1,40 @@
+{
+  "name": "overlord",
+  "version": "0.1.0",
+  "description": "Chat-driven access to Overlord ticket protocol workflows.",
+  "author": {
+    "name": "Cooperativ",
+    "url": "https://github.com/cooperativ"
+  },
+  "homepage": "https://github.com/cooperativ/overlord",
+  "repository": "https://github.com/cooperativ/overlord",
+  "license": "UNLICENSED",
+  "keywords": [
+    "overlord",
+    "tickets",
+    "agents",
+    "workflow",
+    "protocol",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Overlord",
+    "shortDescription": "Run Overlord ticket protocol commands from chat",
+    "longDescription": "Connect Codex chat directly to a local Overlord workspace through the existing `ovld protocol` CLI. The plugin exposes ticket session, progress update, context, delivery, artifact, and follow-up ticket tools so users can drive Overlord workflows conversationally.",
+    "developerName": "Cooperativ",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/cooperativ/overlord",
+    "privacyPolicyURL": "https://github.com/cooperativ/overlord",
+    "termsOfServiceURL": "https://github.com/cooperativ/overlord",
+    "defaultPrompt": [
+      "Attach to Overlord ticket 123 and summarize context",
+      "Post an execute update to this Overlord ticket",
+      "Deliver this Overlord ticket with artifacts"
+    ]
+  }
+}

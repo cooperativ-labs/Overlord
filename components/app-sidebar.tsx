@@ -140,7 +140,11 @@ export function AppSidebar({
       return undefined;
     }
 
-    return (['Profile', 'Sessions', 'Agent tokens'] as const).find(
+    if (requestedSection === 'Sessions') {
+      return 'Linked Accounts';
+    }
+
+    return (['Profile', 'Linked Accounts', 'Agent tokens'] as const).find(
       section => section === requestedSection
     );
   }, [searchParams]);

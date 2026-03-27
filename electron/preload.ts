@@ -62,17 +62,20 @@ const electronAPI = {
     getInstallStatus: () => ipcRenderer.invoke('cli:get-install-status'),
     install: () => ipcRenderer.invoke('cli:install')
   },
+  overlordPlugin: {
+    getStatus: () => ipcRenderer.invoke('overlord-plugin:get-status'),
+    install: () => ipcRenderer.invoke('overlord-plugin:install'),
+    repair: () => ipcRenderer.invoke('overlord-plugin:repair'),
+    uninstall: () => ipcRenderer.invoke('overlord-plugin:uninstall')
+  },
   agentBundle: {
     getAllStatuses: () => ipcRenderer.invoke('agent-bundle:get-all-statuses'),
-    getStatus: (agent: 'claude' | 'codex' | 'opencode') =>
+    getStatus: (agent: 'claude' | 'opencode') =>
       ipcRenderer.invoke('agent-bundle:get-status', agent),
-    install: (agent: 'claude' | 'codex' | 'opencode') =>
-      ipcRenderer.invoke('agent-bundle:install', agent),
+    install: (agent: 'claude' | 'opencode') => ipcRenderer.invoke('agent-bundle:install', agent),
     installAll: () => ipcRenderer.invoke('agent-bundle:install-all'),
-    repair: (agent: 'claude' | 'codex' | 'opencode') =>
-      ipcRenderer.invoke('agent-bundle:repair', agent),
-    uninstall: (agent: 'claude' | 'codex' | 'opencode') =>
-      ipcRenderer.invoke('agent-bundle:uninstall', agent)
+    repair: (agent: 'claude' | 'opencode') => ipcRenderer.invoke('agent-bundle:repair', agent),
+    uninstall: (agent: 'claude' | 'opencode') => ipcRenderer.invoke('agent-bundle:uninstall', agent)
   },
   agentSlash: {
     getAllStatuses: () => ipcRenderer.invoke('agent-slash:get-all-statuses'),

@@ -247,9 +247,8 @@ export default function CalendarView({
       const dueDatetime = `${dateKey}T12:00:00.000Z`;
       const clientTicketId = crypto.randomUUID();
 
-      const referenceTicket = localTickets.find(t =>
-        projectId ? t.project_id === projectId : true
-      ) ?? localTickets[0];
+      const referenceTicket =
+        localTickets.find(t => (projectId ? t.project_id === projectId : true)) ?? localTickets[0];
 
       const optimisticTicket: Ticket = {
         id: clientTicketId,

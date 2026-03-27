@@ -46,7 +46,7 @@ type SlashCommandConfig = {
   filePaths: string[];
 };
 
-type BundleAgent = 'claude' | 'codex' | 'opencode';
+type BundleAgent = 'claude' | 'opencode';
 type SlashAgent = 'claude' | 'cursor' | 'gemini' | 'opencode';
 
 type BundleStatusEntry = {
@@ -81,6 +81,15 @@ type AgentPluginInstallOption =
       agentKey: string;
       label: string;
       description: string;
+      kind: 'service';
+      serviceKey: 'overlord-plugin';
+      supportNote?: string;
+    }
+  | {
+      key: string;
+      agentKey: string;
+      label: string;
+      description: string;
       kind: 'slash';
       slashAgent: SlashAgent;
       supportNote?: string;
@@ -91,6 +100,18 @@ type PluginActionMeta = {
   loadingText: string;
   successText: string;
   errorText: string;
+};
+
+type ServiceStatusEntry = {
+  key: 'overlord-plugin';
+  status: 'installed' | 'stale' | 'partial' | 'not_installed' | 'error';
+  version: string | null;
+  installedVersion: string | null;
+  details: string;
+  currentContentHash: string;
+  managedFiles: string[];
+  existingManagedFiles: string[];
+  missingManagedFiles: string[];
 };
 
 const AGENTS = ['claude', 'cursor', 'codex', 'opencode'] as const;
@@ -159,7 +180,6 @@ const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
     '~/.claude/settings.json',
     ...SLASH_COMMAND_CONFIGS.claude.filePaths
   ],
-  codex: ['~/.codex/AGENTS.md'],
   opencode: [
     '~/.config/opencode/AGENTS.md',
     '~/.config/opencode/opencode.json',
@@ -188,14 +208,15 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     supportNote: SLASH_COMMAND_CONFIGS.claude.supportNote
   },
   {
-    key: 'codex:bundle',
+    key: 'codex:overlord-plugin',
     agentKey: 'codex',
-    label: 'Prompt / skills',
+    label: 'Chat plugin',
     description:
-      'Installs durable Overlord workflow instructions into Codex so ticket lifecycle rules live in local config instead of repeated prompts.',
-    kind: 'bundle',
-    bundleAgent: 'codex',
-    supportNote: 'Managed by the desktop app in your local ~/.codex configuration.'
+      'Installs the Overlord chat plugin into your home-local Codex plugin directories, migrates legacy Codex bundle config if present, and manages the local permission rules Codex needs for Overlord protocol commands.',
+    kind: 'service',
+    serviceKey: 'overlord-plugin',
+    supportNote:
+      'Managed by the desktop app in ~/.agents/plugins, ~/plugins, and ~/.codex/rules/default.rules. Requires ovld to be installed on PATH.'
   },
   {
     key: 'cursor:slash',
@@ -354,6 +375,7 @@ export function CliPage({ open }: { open: boolean }) {
   const [cliVersion, setCliVersion] = useState<string | null>(null);
   const [cliIsStale, setCliIsStale] = useState(false);
   const [bundleStatuses, setBundleStatuses] = useState<BundleStatusEntry[]>([]);
+  const [serviceStatuses, setServiceStatuses] = useState<ServiceStatusEntry[]>([]);
   const [installAllBundlesButtonState, setInstallAllBundlesButtonState] =
     useState<ButtonLoadingState>('default');
 
@@ -374,6 +396,16 @@ export function CliPage({ open }: { open: boolean }) {
       setSlashStatuses(statuses);
     } catch {
       // Slash command API not available
+    }
+  }, [isElectron]);
+
+  const loadServiceStatuses = useCallback(async () => {
+    if (!isElectron || !window.electronAPI?.overlordPlugin) return;
+    try {
+      const status = await window.electronAPI.overlordPlugin.getStatus();
+      setServiceStatuses([{ key: 'overlord-plugin', ...status }]);
+    } catch {
+      // Service API not available
     }
   }, [isElectron]);
 
@@ -412,7 +444,8 @@ export function CliPage({ open }: { open: boolean }) {
     if (!open) return;
     void loadBundleStatuses();
     void loadSlashStatuses();
-  }, [open, loadBundleStatuses, loadSlashStatuses]);
+    void loadServiceStatuses();
+  }, [open, loadBundleStatuses, loadSlashStatuses, loadServiceStatuses]);
 
   const setPluginActionButtonState = useCallback((key: string, state: ButtonLoadingState) => {
     setPluginActionButtonStates(current => ({ ...current, [key]: state }));
@@ -579,6 +612,51 @@ export function CliPage({ open }: { open: boolean }) {
     try {
       await window.electronAPI.agentSlash.uninstall(agent);
       await loadSlashStatuses();
+      setPluginActionButtonState(optionKey, 'success');
+    } catch {
+      setPluginActionButtonState(optionKey, 'error');
+    } finally {
+      setActivePluginActionKey(null);
+    }
+  }
+
+  async function handleInstallService(optionKey: string) {
+    if (!window.electronAPI?.overlordPlugin) return;
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
+    try {
+      await window.electronAPI.overlordPlugin.install();
+      await loadServiceStatuses();
+      setPluginActionButtonState(optionKey, 'success');
+    } catch {
+      setPluginActionButtonState(optionKey, 'error');
+    } finally {
+      setActivePluginActionKey(null);
+    }
+  }
+
+  async function handleRepairService(optionKey: string) {
+    if (!window.electronAPI?.overlordPlugin) return;
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
+    try {
+      await window.electronAPI.overlordPlugin.repair();
+      await loadServiceStatuses();
+      setPluginActionButtonState(optionKey, 'success');
+    } catch {
+      setPluginActionButtonState(optionKey, 'error');
+    } finally {
+      setActivePluginActionKey(null);
+    }
+  }
+
+  async function handleUninstallService(optionKey: string) {
+    if (!window.electronAPI?.overlordPlugin) return;
+    setActivePluginActionKey(optionKey);
+    setPluginActionButtonState(optionKey, 'loading');
+    try {
+      await window.electronAPI.overlordPlugin.uninstall();
+      await loadServiceStatuses();
       setPluginActionButtonState(optionKey, 'success');
     } catch {
       setPluginActionButtonState(optionKey, 'error');
@@ -832,6 +910,10 @@ export function CliPage({ open }: { open: boolean }) {
                   const s = bundleStatuses.find(status => status.agent === option.bundleAgent);
                   return s ? { label: option.label, badge: bundleStatusBadge(s.status) } : null;
                 }
+                if (option.kind === 'service') {
+                  const s = serviceStatuses.find(status => status.key === option.serviceKey);
+                  return s ? { label: option.label, badge: bundleStatusBadge(s.status) } : null;
+                }
                 const s = slashStatuses.find(status => status.agent === option.slashAgent);
                 return s ? { label: option.label, badge: slashStatusBadge(s.status) } : null;
               })
@@ -869,22 +951,37 @@ export function CliPage({ open }: { open: boolean }) {
                         option.kind === 'slash'
                           ? slashStatuses.find(status => status.agent === option.slashAgent)
                           : null;
+                      const serviceStatus =
+                        option.kind === 'service'
+                          ? serviceStatuses.find(status => status.key === option.serviceKey)
+                          : null;
                       const actionMeta =
                         option.kind === 'bundle'
                           ? getBundleActionMeta(bundleStatus?.status)
-                          : getSlashActionMeta(slashStatus?.status);
+                          : option.kind === 'service'
+                            ? getBundleActionMeta(serviceStatus?.status)
+                            : getSlashActionMeta(slashStatus?.status);
                       const managedFiles =
                         option.kind === 'bundle'
                           ? BUNDLE_FILE_PATHS[option.bundleAgent]
-                          : (slashStatus?.managedFiles ??
-                            SLASH_COMMAND_CONFIGS[option.slashAgent].filePaths);
+                          : option.kind === 'service'
+                            ? (serviceStatus?.managedFiles ?? [])
+                            : (slashStatus?.managedFiles ??
+                              SLASH_COMMAND_CONFIGS[option.slashAgent].filePaths);
                       const details =
                         option.kind === 'bundle'
                           ? (bundleStatus?.details ??
                             'Prompt and skill bundle details are available in the desktop app.')
-                          : slashStatus?.details;
+                          : option.kind === 'service'
+                            ? (serviceStatus?.details ??
+                              'Plugin installation details are available in the desktop app.')
+                            : slashStatus?.details;
                       const canRunAction =
-                        option.kind === 'bundle' ? Boolean(bundleStatus) : Boolean(slashStatus);
+                        option.kind === 'bundle'
+                          ? Boolean(bundleStatus)
+                          : option.kind === 'service'
+                            ? Boolean(serviceStatus)
+                            : Boolean(slashStatus);
                       const buttonState = pluginActionButtonStates[option.key] ?? 'default';
 
                       return (
@@ -897,9 +994,13 @@ export function CliPage({ open }: { open: boolean }) {
                                   ? bundleStatus
                                     ? bundleStatusBadge(bundleStatus.status)
                                     : null
-                                  : slashStatus
-                                    ? slashStatusBadge(slashStatus.status)
-                                    : null}
+                                  : option.kind === 'service'
+                                    ? serviceStatus
+                                      ? bundleStatusBadge(serviceStatus.status)
+                                      : null
+                                    : slashStatus
+                                      ? slashStatusBadge(slashStatus.status)
+                                      : null}
                               </div>
                               <p className="text-xs text-muted-foreground">{option.description}</p>
                               {option.supportNote ? (
@@ -959,9 +1060,19 @@ export function CliPage({ open }: { open: boolean }) {
                                           bundleStatus?.status === 'error'
                                         ? handleRepairBundle(bundleStatus.agent, option.key)
                                         : handleInstallBundle(option.bundleAgent, option.key)
-                                    : !slashStatus || slashStatus.status === 'not_installed'
-                                      ? handleInstallSlashCommands(option.slashAgent, option.key)
-                                      : handleUninstallSlashCommands(option.slashAgent, option.key))
+                                    : option.kind === 'service'
+                                      ? serviceStatus?.status === 'installed'
+                                        ? handleUninstallService(option.key)
+                                        : serviceStatus?.status === 'partial' ||
+                                            serviceStatus?.status === 'error'
+                                          ? handleRepairService(option.key)
+                                          : handleInstallService(option.key)
+                                      : !slashStatus || slashStatus.status === 'not_installed'
+                                        ? handleInstallSlashCommands(option.slashAgent, option.key)
+                                        : handleUninstallSlashCommands(
+                                            option.slashAgent,
+                                            option.key
+                                          ))
                                 }
                                 disabled={!canRunAction || activePluginActionKey !== null}
                               />

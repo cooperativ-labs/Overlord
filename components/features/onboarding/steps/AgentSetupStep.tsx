@@ -35,9 +35,9 @@ const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
   codex: {
     installCommand: 'npm install -g @openai/codex',
     installLabel: 'Install Codex CLI',
-    overlordSetupCommand: 'ovld setup codex',
+    overlordSetupCommand: 'Settings -> CLI -> Codex -> Chat plugin -> Install',
     overlordSetupDescription:
-      'Injects the Overlord context command into Codex so it picks up your ticket prompt and posts progress back.'
+      'Installs the local Overlord Codex chat plugin, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.'
   },
   cursor: {
     installCommand: 'https://cursor.sh',

@@ -5,13 +5,12 @@ import fs from 'node:fs/promises';
 
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
 import { InlineEditField } from '@/components/features/InlineEditField';
-import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
-import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { DueDateEditor } from '@/components/features/scheduling/DueDateEditor';
 import { ScheduleEditor } from '@/components/features/scheduling/ScheduleEditor';
 import { TicketDocumentUpload } from '@/components/features/TicketDocumentUpload';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
 import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
+import { TicketObjectivesSection } from '@/components/features/TicketObjectivesSection';
 import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
@@ -31,7 +30,6 @@ import {
 } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
-import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/server';
@@ -289,13 +287,6 @@ export async function TicketPanelContent({
         ? (await listProjectFiles(resolvedProjectDirectory)).files
         : [];
   }
-  const objectiveThreadItems = objectives ?? [];
-  const draftObjective = objectiveThreadItems.find(objective => !objective.is_executed) ?? null;
-  const executedObjectives = objectiveThreadItems.filter(
-    objective => objective.is_executed && objective.objective.trim().length > 0
-  );
-  const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
-  const draftObjectiveValue = draftObjective?.objective ?? '';
   const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
 
   return (
@@ -432,52 +423,15 @@ export async function TicketPanelContent({
               {/* <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Objectives
              </h2> */}
-              <div className="px-5">
-                {orderedExecutedObjectives.length > 0 ? (
-                  <div className="mb-3 space-y-2 bg-background rounded-md border">
-                    {orderedExecutedObjectives.map((objective, index) => (
-                      <ObjectiveCollapsibleItem
-                        key={objective.id}
-                        objective={objective}
-                        index={index}
-                        ticketId={ticketId}
-                        isLatest={
-                          index === orderedExecutedObjectives.length - 1 &&
-                          !draftObjectiveValue.trim()
-                        }
-                      />
-                    ))}
-                  </div>
-                ) : null}
+              <TicketObjectivesSection
+                ticketId={ticketId}
+                organizationId={organizationId}
+                objectives={objectives ?? []}
+                objectiveFileMentionPaths={objectiveFileMentionPaths}
+                workingDirectory={workingDirectory}
+              />
 
-                <div className="flex items-start gap-1 w-full">
-                  <InlineEditField
-                    key={draftObjective?.id ?? 'current-objective'}
-                    displayClassName="text-base leading-relaxed"
-                    inputClassName="text-base leading-relaxed"
-                    variant="textarea"
-                    field="objective"
-                    organizationId={organizationId}
-                    fileMentionPaths={objectiveFileMentionPaths}
-                    workingDirectory={workingDirectory}
-                    initialValue={draftObjectiveValue}
-                    multiline
-                    renderMarkdown
-                    placeholder="Click to add an objective…"
-                    ticketId={ticketId}
-                  >
-                    {' '}
-                    <ObjectiveMenuButton
-                      ticketId={ticketId}
-                      objectiveId={draftObjective?.id ?? ''}
-                      isExecuted={!draftObjective || draftObjective.is_executed}
-                      canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
-                    />
-                  </InlineEditField>
-                </div>
-
-                {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
-              </div>
+              {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
             </div>
           </section>
           <section className="flex flex-col px-5 pt-5 ">
