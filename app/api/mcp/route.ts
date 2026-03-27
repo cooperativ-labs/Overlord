@@ -12,7 +12,8 @@ import {
  * on our domain. The protected-resource metadata lives on a sibling catch-all
  * route so OAuth-capable clients can discover auth from the public MCP URL.
  *
- * GET  /api/mcp — returns protected-resource metadata for OAuth discovery
+ * GET  /api/mcp — returns 405 for SSE-capable transport probes, otherwise
+ *                 serves protected-resource metadata for legacy discovery
  * POST /api/mcp — proxies MCP JSON-RPC calls to the edge function
  */
 
@@ -30,14 +31,25 @@ export async function OPTIONS() {
 }
 
 /**
- * GET /api/mcp — OAuth discovery helper.
+ * GET /api/mcp — transport-aware helper.
  *
- * Claude Connectors and other MCP clients may send GET to the MCP endpoint
- * before POST. Instead of returning 405, we return the protected-resource
- * metadata (RFC 9728) so clients can discover authentication requirements
- * directly from the resource URL.
+ * Streamable HTTP clients may open GET requests with `Accept: text/event-stream`
+ * to probe for an SSE transport. We do not offer SSE on the public proxy route,
+ * so those requests must receive 405. For plain JSON GETs, keep serving the
+ * protected-resource metadata as a compatibility fallback.
  */
 export async function GET(request: Request) {
+  if (shouldRejectGetAsUnsupportedStream(request.headers.get('accept'))) {
+    return new Response('Method not allowed', {
+      status: 405,
+      headers: {
+        ...CORS_HEADERS,
+        Allow: 'POST, DELETE, OPTIONS',
+        'Content-Type': 'text/plain; charset=utf-8'
+      }
+    });
+  }
+
   const { origin } = new URL(request.url);
   const metadata = buildAppMcpProtectedResourceMetadata(origin);
 
@@ -85,11 +97,23 @@ export function responseStatusDisallowsBody(status: number): boolean {
   return status === 204 || status === 205 || status === 304;
 }
 
+export function shouldRejectGetAsUnsupportedStream(acceptHeader: string | null): boolean {
+  if (!acceptHeader) return false;
+
+  return acceptHeader
+    .split(',')
+    .map(part => part.trim().toLowerCase())
+    .some(part => part.startsWith('text/event-stream'));
+}
+
 /** Forward relevant headers to the upstream edge function. */
-function forwardHeaders(request: Request): HeadersInit {
+export function forwardHeaders(request: Request): HeadersInit {
   const headers: Record<string, string> = {
     'Content-Type': request.headers.get('content-type') ?? 'application/json'
   };
+
+  const accept = request.headers.get('accept');
+  if (accept) headers['accept'] = accept;
 
   const auth = request.headers.get('authorization');
   if (auth) headers['authorization'] = auth;

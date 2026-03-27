@@ -65,10 +65,10 @@ export function DiffPane({
               Click a changed line to inspect linked rationale.
             </p>
           </div>
-          {file.primaryTicket?.recent_agent ? (
+          {file.primaryTicket?.latest_objective_agent ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Bot className="h-3.5 w-3.5" />
-              {formatAgentName(file.primaryTicket.recent_agent)}
+              {formatAgentName(file.primaryTicket.latest_objective_agent)}
             </div>
           ) : null}
         </div>

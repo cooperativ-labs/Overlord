@@ -49,11 +49,12 @@ function PhaseIndicator({ phase }: { phase: string }) {
 export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicketPanelProps) {
   const [modelOpen, setModelOpen] = useState(false);
   const [visibleActivityCount, setVisibleActivityCount] = useState(0);
-  const ticketShortId = ticket.id.slice(-8);
 
   const agentIcon =
-    ticket.recent_agent === 'codex' ? '/images/icons/codex.svg' : '/images/icons/claude-code.svg';
-  const agentLabel = ticket.recent_agent === 'codex' ? 'Codex' : 'Claude Code';
+    ticket.latest_objective_agent === 'codex'
+      ? '/images/icons/codex.svg'
+      : '/images/icons/claude-code.svg';
+  const agentLabel = ticket.latest_objective_agent === 'codex' ? 'Codex' : 'Claude Code';
 
   // Animate activity cards appearing one by one
   useEffect(() => {
@@ -239,7 +240,7 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
                 {[...DEMO_ACTIVITY]
                   .reverse()
                   .slice(-visibleActivityCount)
-                  .map((event, index, array) => {
+                  .map((event, index) => {
                     // Only animate the newest (top) card
                     const isNewest = index === 0;
                     return (

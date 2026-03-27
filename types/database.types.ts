@@ -633,6 +633,7 @@ export type Database = {
           created_at: string;
           id: string;
           is_executed: boolean;
+          model_identifier: string | null;
           objective: string;
           state: string;
           ticket_id: string;
@@ -644,6 +645,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           is_executed?: boolean;
+          model_identifier?: string | null;
           objective?: string;
           state?: string;
           ticket_id: string;
@@ -655,6 +657,7 @@ export type Database = {
           created_at?: string;
           id?: string;
           is_executed?: boolean;
+          model_identifier?: string | null;
           objective?: string;
           state?: string;
           ticket_id?: string;
@@ -1028,7 +1031,6 @@ export type Database = {
           output_format: string;
           priority: Database['public']['Enums']['ticket_priority'];
           project_id: string;
-          recent_agent: string | null;
           schedule_id: number | null;
           search_vector: unknown;
           status: string;
@@ -1055,7 +1057,6 @@ export type Database = {
           output_format?: string;
           priority?: Database['public']['Enums']['ticket_priority'];
           project_id: string;
-          recent_agent?: string | null;
           schedule_id?: number | null;
           search_vector?: unknown;
           status?: string;
@@ -1082,7 +1083,6 @@ export type Database = {
           output_format?: string;
           priority?: Database['public']['Enums']['ticket_priority'];
           project_id?: string;
-          recent_agent?: string | null;
           schedule_id?: number | null;
           search_vector?: unknown;
           status?: string;

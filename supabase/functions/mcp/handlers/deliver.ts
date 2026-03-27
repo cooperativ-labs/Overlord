@@ -149,7 +149,6 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     supabase
       .from('tickets')
       .update({
-        recent_agent: resolved.session.agent_identifier,
         status: reviewStatusName,
         board_position: topBoardPosition
       })

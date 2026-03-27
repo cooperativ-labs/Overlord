@@ -1,17 +1,26 @@
 'use client';
 
 import { CheckCircle, ChevronDown, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  'id' | 'objective' | 'is_executed' | 'created_at' | 'title' | 'state'
+  | 'id'
+  | 'objective'
+  | 'is_executed'
+  | 'created_at'
+  | 'title'
+  | 'state'
+  | 'agent_identifier'
+  | 'model_identifier'
 >;
 
 type ObjectiveCollapsibleItemProps = {
@@ -29,6 +38,8 @@ export function ObjectiveCollapsibleItem({
 }: ObjectiveCollapsibleItemProps) {
   const executedAt = new Date(objective.created_at).toLocaleString();
   const isExecuting = objective.state === 'executing';
+  const agentType = getAgentTypeByIdentifier(objective.agent_identifier);
+  const modelIdentifier = objective.model_identifier?.trim() || null;
 
   return (
     <Collapsible defaultOpen={isLatest}>
@@ -52,6 +63,24 @@ export function ObjectiveCollapsibleItem({
                   <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
                 ) : objective.state === 'complete' ? (
                   <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                ) : null}
+                {agentType ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex shrink-0 items-center">
+                        <Image
+                          src={agentType.icon}
+                          alt={`${agentType.label} icon`}
+                          width={14}
+                          height={14}
+                          className={cn('h-3.5 w-3.5', agentType.invertDark ? 'dark:invert' : '')}
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {modelIdentifier ?? 'Model unavailable'}
+                    </TooltipContent>
+                  </Tooltip>
                 ) : null}
                 <Tooltip>
                   <TooltipTrigger asChild>

@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { generateTitleWithGemini } from '@/lib/ai/generate-ticket-title';
+import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
-import type { Database } from '@/types/database.types';
+import type { Database, Json } from '@/types/database.types';
 
 type ObjectiveClient = SupabaseClient<Database>;
 
@@ -12,6 +13,12 @@ type DraftObjective = Pick<
 >;
 
 type ObjectiveTimelineItem = Pick<Database['public']['Tables']['objectives']['Row'], 'created_at'>;
+
+type ObjectiveExecutionSnapshot = {
+  agentIdentifier?: string | null;
+  metadata?: Json;
+  ticketAssignedAgent?: Json | null;
+};
 
 function normalizeObjectiveText(value: string | null | undefined): string {
   return (value ?? '').trim();
@@ -24,6 +31,41 @@ function toTimestamp(value: string | null): number {
 
   const timestamp = Date.parse(value);
   return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
+}
+
+function readModelIdentifierFromMetadata(metadata: Json | undefined): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const directModel =
+    typeof metadata.model === 'string' && metadata.model.trim().length > 0 ? metadata.model : null;
+  if (directModel) {
+    return directModel.trim();
+  }
+
+  const nestedSelection = metadata.selection;
+  if (
+    nestedSelection &&
+    typeof nestedSelection === 'object' &&
+    !Array.isArray(nestedSelection) &&
+    typeof nestedSelection.model === 'string' &&
+    nestedSelection.model.trim().length > 0
+  ) {
+    return nestedSelection.model.trim();
+  }
+
+  return null;
+}
+
+function resolveObjectiveModelIdentifier(
+  executionSnapshot?: Pick<ObjectiveExecutionSnapshot, 'metadata' | 'ticketAssignedAgent'>
+): string | null {
+  return (
+    readModelIdentifierFromMetadata(executionSnapshot?.metadata) ??
+    parseTicketAssignedAgent(executionSnapshot?.ticketAssignedAgent ?? null)?.model ??
+    null
+  );
 }
 
 export function sortObjectivesByCreatedAtAscending<T extends ObjectiveTimelineItem>(
@@ -78,7 +120,7 @@ export async function upsertDraftObjective(
 export async function markDraftObjectiveExecuted(
   supabase: ObjectiveClient,
   ticketId: string,
-  agentIdentifier?: string
+  executionSnapshot?: ObjectiveExecutionSnapshot
 ) {
   const { data: draft, error: draftError } = await supabase
     .from('objectives')
@@ -108,7 +150,8 @@ export async function markDraftObjectiveExecuted(
     .update({
       is_executed: true,
       state: 'executing',
-      agent_identifier: agentIdentifier ?? null
+      agent_identifier: executionSnapshot?.agentIdentifier ?? null,
+      model_identifier: resolveObjectiveModelIdentifier(executionSnapshot)
     })
     .eq('id', draft.id);
   if (executeError) {

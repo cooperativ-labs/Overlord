@@ -9,7 +9,7 @@ export type DemoTicket = {
   execution_target: 'agent' | 'human';
   agent_session_state: 'attached' | 'idle' | 'completed' | null;
   running_agent: string | null;
-  recent_agent: string | null;
+  latest_objective_agent: string | null;
   is_read: boolean;
   project_name: string;
   project_color: string;
@@ -219,7 +219,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'agent',
     agent_session_state: null,
     running_agent: null,
-    recent_agent: null,
+    latest_objective_agent: null,
     is_read: true,
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color
@@ -234,7 +234,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'human',
     agent_session_state: null,
     running_agent: null,
-    recent_agent: null,
+    latest_objective_agent: null,
     is_read: true,
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color
@@ -250,7 +250,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'agent',
     agent_session_state: null,
     running_agent: null,
-    recent_agent: null,
+    latest_objective_agent: null,
     is_read: true,
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color
@@ -265,7 +265,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'agent',
     agent_session_state: null,
     running_agent: null,
-    recent_agent: null,
+    latest_objective_agent: null,
     is_read: true,
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color
@@ -282,7 +282,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'agent',
     agent_session_state: null,
     running_agent: null,
-    recent_agent: null,
+    latest_objective_agent: null,
     is_read: true,
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color
@@ -297,7 +297,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'agent',
     agent_session_state: null,
     running_agent: null,
-    recent_agent: null,
+    latest_objective_agent: null,
     is_read: true,
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color
@@ -314,7 +314,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'agent',
     agent_session_state: 'completed',
     running_agent: null,
-    recent_agent: 'claude-code',
+    latest_objective_agent: 'claude-code',
     is_read: false, // Unread!
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color
@@ -329,7 +329,7 @@ export const DEMO_TICKETS: DemoTicket[] = [
     execution_target: 'agent',
     agent_session_state: 'completed',
     running_agent: null,
-    recent_agent: 'claude-code',
+    latest_objective_agent: 'claude-code',
     is_read: true,
     project_name: DEMO_PROJECT.name,
     project_color: DEMO_PROJECT.color

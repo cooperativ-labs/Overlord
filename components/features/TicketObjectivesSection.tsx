@@ -9,7 +9,14 @@ import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  'id' | 'objective' | 'is_executed' | 'created_at' | 'title' | 'state'
+  | 'id'
+  | 'objective'
+  | 'is_executed'
+  | 'created_at'
+  | 'title'
+  | 'state'
+  | 'agent_identifier'
+  | 'model_identifier'
 >;
 
 type TicketObjectivesSectionProps = {

@@ -979,7 +979,7 @@ export async function markObjectiveExecutedAction(
 
   const { error: executeError } = await supabase
     .from('objectives')
-    .update({ is_executed: true, state: 'executing' })
+    .update({ is_executed: true, state: 'complete' })
     .eq('id', objectiveId);
   if (executeError) {
     throw new Error(executeError.message);
@@ -1381,7 +1381,7 @@ ${section('Objective', source.latestObjective)}${section('Acceptance Criteria', 
 }
 
 const TICKET_BOARD_SELECT =
-  'id,title,execution_target,status,priority,assigned_agent,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+  'id,title,execution_target,status,priority,assigned_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
 type RawBoardTicket = {
   id: string;
@@ -1390,7 +1390,6 @@ type RawBoardTicket = {
   status: string;
   priority: string;
   assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
-  recent_agent: string | null;
   is_read: boolean;
   updated_at: string;
   board_position: number;
@@ -1406,7 +1405,7 @@ type RawBoardTicket = {
     | null;
 };
 
-function mapBoardTicket(raw: RawBoardTicket) {
+function mapBoardTicket(raw: RawBoardTicket, latestObjectiveAgent: string | null = null) {
   const p = Array.isArray(raw.project) ? raw.project[0] : raw.project;
   const org = Array.isArray(raw.organization) ? raw.organization[0] : raw.organization;
   return {
@@ -1416,7 +1415,7 @@ function mapBoardTicket(raw: RawBoardTicket) {
     status: raw.status,
     priority: raw.priority,
     assigned_agent: parseTicketAssignedAgent(raw.assigned_agent),
-    recent_agent: raw.recent_agent,
+    latest_objective_agent: latestObjectiveAgent,
     is_read: raw.is_read,
     updated_at: raw.updated_at,
     board_position: raw.board_position,
@@ -1468,7 +1467,34 @@ export async function loadMoreTicketsAction({
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
-  return { tickets: ((data ?? []) as RawBoardTicket[]).map(mapBoardTicket) };
+  const tickets = (data ?? []) as RawBoardTicket[];
+  const ticketIds = tickets.map(ticket => ticket.id);
+  const latestObjectiveAgentByTicket = new Map<string, string | null>();
+
+  if (ticketIds.length > 0) {
+    const { data: objectives, error: objectivesError } = await supabase
+      .from('objectives')
+      .select('ticket_id,agent_identifier')
+      .in('ticket_id', ticketIds)
+      .order('created_at', { ascending: false });
+
+    if (objectivesError) throw new Error(objectivesError.message);
+
+    for (const objective of (objectives ?? []) as Array<{
+      ticket_id: string;
+      agent_identifier: string | null;
+    }>) {
+      if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
+        latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+    }
+  }
+
+  return {
+    tickets: tickets.map(ticket =>
+      mapBoardTicket(ticket, latestObjectiveAgentByTicket.get(ticket.id) ?? null)
+    )
+  };
 }
 
 export async function updateTicketDueDateAction(

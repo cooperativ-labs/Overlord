@@ -62,7 +62,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     let rationaleQuery = supabase
       .from('file_changes')
       .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,title,status,recent_agent,project_id)'
+        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,title,status,project_id)'
       )
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });
@@ -113,6 +113,29 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const events = eventsResult.data ?? [];
     const sessions = sessionsResult.data ?? [];
+    const ticketIds = [...new Set((rationales ?? []).map(row => row.ticket_id))];
+    const latestObjectiveAgentByTicket = new Map<string, string | null>();
+
+    if (ticketIds.length > 0) {
+      const { data: objectives, error: objectivesError } = await supabase
+        .from('objectives')
+        .select('ticket_id,agent_identifier')
+        .in('ticket_id', ticketIds)
+        .order('created_at', { ascending: false });
+
+      if (objectivesError) {
+        return NextResponse.json({ error: objectivesError.message }, { status: 500 });
+      }
+
+      for (const objective of (objectives ?? []) as Array<{
+        ticket_id: string;
+        agent_identifier: string | null;
+      }>) {
+        if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
+          latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+        }
+      }
+    }
 
     const eventsById = new Map((events ?? []).map(event => [event.id, event]));
     const sessionsById = new Map((sessions ?? []).map(session => [session.id, session]));
@@ -132,7 +155,12 @@ export async function GET(request: Request, { params }: RouteContext) {
         label: rationale.label,
         session: sessionsById.get(rationale.session_id) ?? null,
         summary: rationale.summary,
-        ticket: rationale.tickets ?? null,
+        ticket: rationale.tickets
+          ? {
+              ...rationale.tickets,
+              latest_objective_agent: latestObjectiveAgentByTicket.get(rationale.ticket_id) ?? null
+            }
+          : null,
         updated_at: rationale.updated_at,
         why: rationale.why
       }))

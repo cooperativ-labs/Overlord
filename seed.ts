@@ -201,7 +201,6 @@ async function main() {
       status: 'review',
       priority: 'high',
       board_position: 1,
-      recent_agent: 'Claude',
       acceptance_criteria: null,
       assigned_agent: null,
       everhour_task_id: null,
@@ -216,7 +215,6 @@ async function main() {
       status: 'draft',
       priority: 'medium',
       board_position: 2,
-      recent_agent: null,
       acceptance_criteria: null,
       assigned_agent: null,
       everhour_task_id: null,
@@ -231,7 +229,6 @@ async function main() {
       status: 'draft',
       priority: 'low',
       board_position: 3,
-      recent_agent: null,
       acceptance_criteria: null,
       assigned_agent: null,
       everhour_task_id: null,
@@ -248,7 +245,6 @@ async function main() {
       status: 'draft',
       priority: 'medium',
       board_position: 1,
-      recent_agent: null,
       assigned_agent: null,
       acceptance_criteria: null,
       everhour_task_id: null
@@ -262,7 +258,6 @@ async function main() {
       title: 'Audit accessibility issues',
       status: 'draft',
       priority: 'high',
-      recent_agent: 'Codex',
       board_position: 2,
       acceptance_criteria: 'The script runs without errors and resolves all WCAG AA violations.',
       assigned_agent: null,
@@ -277,7 +272,6 @@ async function main() {
       status: 'draft',
       priority: 'medium',
       board_position: 3,
-      recent_agent: null,
       acceptance_criteria:
         'The script runs without errors and migrates all records from the old schema to the new one.',
       everhour_task_id: null,
@@ -292,13 +286,15 @@ async function main() {
       ticket_id: ticketIds[0],
       title: 'CI workflow setup',
       objective: 'Configure GitHub Actions workflows for lint and test jobs.',
-      is_executed: true
+      is_executed: true,
+      agent_identifier: 'Claude'
     },
     {
       ticket_id: ticketIds[0],
       title: 'Deployment wiring',
       objective: 'Add the deploy job and wire in production secrets.',
-      is_executed: true
+      is_executed: true,
+      agent_identifier: 'Claude'
     },
     {
       ticket_id: ticketIds[1],
@@ -318,7 +314,8 @@ async function main() {
     {
       ticket_id: ticketIds[4],
       objective: 'Run axe-core across all pages and resolve WCAG AA violations.',
-      is_executed: false
+      is_executed: false,
+      agent_identifier: 'Codex'
     },
     {
       ticket_id: ticketIds[5],

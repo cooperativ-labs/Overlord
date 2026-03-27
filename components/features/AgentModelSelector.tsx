@@ -4,6 +4,7 @@ import { Check, Info } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import agentModelsCatalog from '@/agent-models.json';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getAllAgentConfigsAction,
@@ -33,6 +34,45 @@ type AgentModelSelectorProps = {
 };
 
 const AGENT_MODEL_SELECTION_EVENT = 'overlord:agent-model-selection-changed';
+const DEFAULT_SELECTION: AgentModelSelection = {
+  agent: 'claude',
+  model: null,
+  thinking: null
+};
+
+type AgentModelsCatalogOverride = {
+  agents?: Partial<
+    Record<string, Array<{ id: string; label: string; thinkingLevels: string[] }> | null>
+  >;
+};
+
+function buildOptimisticModels(): AgentModel[] {
+  const overrides = (agentModelsCatalog as AgentModelsCatalogOverride).agents ?? {};
+  const updatedAt = new Date(0).toISOString();
+
+  return Object.entries(overrides).flatMap(([agentType, entries]) => {
+    if (!Array.isArray(entries)) return [];
+
+    return entries.map((entry, index) => ({
+      id: `${agentType}:${entry.id}`,
+      agent_type: agentType,
+      model_id: entry.id,
+      display_name: entry.label,
+      thinking_options: entry.thinkingLevels,
+      capabilities: { source: 'agent-models.json', optimistic: true },
+      is_recommended: false,
+      sort_order: index,
+      updated_at: updatedAt
+    }));
+  });
+}
+
+const OPTIMISTIC_MODELS = buildOptimisticModels();
+
+let cachedResolvedModels: AgentModel[] | null = null;
+let cachedConfigs: Record<string, AgentConfig> | null = null;
+let cachedLaunchPreference: UserLaunchPreference | null | undefined;
+let cachedSelection: AgentModelSelection | null = null;
 
 function DefaultTooltipLabel() {
   return (
@@ -77,8 +117,10 @@ export function AgentModelSelector({
   onAgentSelect,
   inline = false
 }: AgentModelSelectorProps) {
-  const [models, setModels] = useState<AgentModel[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [models, setModels] = useState<AgentModel[]>(
+    () => cachedResolvedModels ?? OPTIMISTIC_MODELS
+  );
+  const [loading, setLoading] = useState(() => cachedResolvedModels === null);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +128,7 @@ export function AgentModelSelector({
     getAgentModelsAction()
       .then(data => {
         if (!cancelled) {
+          cachedResolvedModels = data;
           setModels(data);
           setLoading(false);
         }
@@ -204,11 +247,7 @@ export function AgentModelSelector({
           <DefaultTooltipLabel />
           {value.model === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
         </button>
-        {loading ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading...</p>
-        ) : currentModels.length === 0 ? (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No models available</p>
-        ) : (
+        {currentModels.length > 0 ? (
           <div className="max-h-[200px] overflow-y-auto">
             {currentModels.map(m => {
               const isSelected = value.model === m.model_id;
@@ -233,6 +272,10 @@ export function AgentModelSelector({
               );
             })}
           </div>
+        ) : loading ? (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">Loading...</p>
+        ) : (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">No models available</p>
         )}
       </div>
 
@@ -283,14 +326,14 @@ export function useAgentModelPreference(): {
   selectAgent: (agent: AgentTypeValue) => void;
   loaded: boolean;
 } {
-  const [selection, setSelection] = useState<AgentModelSelection>({
-    agent: 'claude',
-    model: null,
-    thinking: null
-  });
-  const [configs, setConfigs] = useState<Record<string, AgentConfig>>({});
-  const [launchPreference, setLaunchPreference] = useState<UserLaunchPreference | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [selection, setSelection] = useState<AgentModelSelection>(
+    () => cachedSelection ?? DEFAULT_SELECTION
+  );
+  const [configs, setConfigs] = useState<Record<string, AgentConfig>>(() => cachedConfigs ?? {});
+  const [launchPreference, setLaunchPreference] = useState<UserLaunchPreference | null>(
+    () => cachedLaunchPreference ?? null
+  );
+  const [loaded, setLoaded] = useState(() => cachedSelection !== null);
 
   useEffect(() => {
     let cancelled = false;
@@ -303,9 +346,13 @@ export function useAgentModelPreference(): {
             ? results[0].value
             : ({} as Record<string, AgentConfig>);
         const launchPreference = results[1].status === 'fulfilled' ? results[1].value : null;
+        const resolvedSelection = resolveAgentModelSelection(configs, launchPreference);
+        cachedConfigs = configs;
+        cachedLaunchPreference = launchPreference;
+        cachedSelection = resolvedSelection;
         setConfigs(configs);
         setLaunchPreference(launchPreference);
-        setSelection(resolveAgentModelSelection(configs, launchPreference));
+        setSelection(resolvedSelection);
         setLoaded(true);
       }
     );
@@ -319,9 +366,16 @@ export function useAgentModelPreference(): {
 
     function handleSelectionChange(event: Event) {
       const nextSelection = (event as CustomEvent<AgentModelSelection>).detail;
+      cachedSelection = nextSelection;
       setSelection(nextSelection);
-      setConfigs(current => syncConfigsForSelection(current, nextSelection));
+      setConfigs(current => {
+        const nextConfigs = syncConfigsForSelection(current, nextSelection);
+        cachedConfigs = nextConfigs;
+        return nextConfigs;
+      });
+      cachedLaunchPreference = nextSelection;
       setLaunchPreference(nextSelection);
+      setLoaded(true);
     }
 
     window.addEventListener(AGENT_MODEL_SELECTION_EVENT, handleSelectionChange);
@@ -331,17 +385,27 @@ export function useAgentModelPreference(): {
   }, []);
 
   const updateSelection = useCallback((nextSelection: AgentModelSelection) => {
+    cachedSelection = nextSelection;
     setSelection(nextSelection);
-    setConfigs(current => syncConfigsForSelection(current, nextSelection));
+    setConfigs(current => {
+      const nextConfigs = syncConfigsForSelection(current, nextSelection);
+      cachedConfigs = nextConfigs;
+      return nextConfigs;
+    });
+    cachedLaunchPreference = nextSelection;
     setLaunchPreference(nextSelection);
+    setLoaded(true);
     broadcastAgentModelSelection(nextSelection);
   }, []);
 
   const selectAgent = useCallback(
     (agent: AgentTypeValue) => {
       const nextSelection = resolveAgentSelectionForAgent(configs, agent, launchPreference);
+      cachedSelection = nextSelection;
       setSelection(nextSelection);
+      cachedLaunchPreference = nextSelection;
       setLaunchPreference(nextSelection);
+      setLoaded(true);
       broadcastAgentModelSelection(nextSelection);
       void updateUserLaunchAgentPreferenceAction(agent);
     },

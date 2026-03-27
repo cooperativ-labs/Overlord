@@ -45,7 +45,7 @@ function DemoKanbanCard({
   const isAgentRunning = ticket.agent_session_state === 'attached';
   const hasUnopenedReview = !ticket.is_read;
 
-  const activeAgentIdentifier = ticket.running_agent ?? ticket.recent_agent;
+  const activeAgentIdentifier = ticket.running_agent ?? ticket.latest_objective_agent;
   const agentType = activeAgentIdentifier
     ? activeAgentIdentifier === 'codex'
       ? { icon: '/images/icons/codex.svg', label: 'Codex' }
@@ -269,7 +269,7 @@ export function DemoContent() {
         status: 'execute',
         agent_session_state: 'attached',
         running_agent: 'claude-code',
-        recent_agent: 'claude-code'
+        latest_objective_agent: 'claude-code'
       };
       setTickets(prev => prev.map(t => (t.id === selectedTicket.id ? updatedTicket : t)));
       setSelectedTicket(updatedTicket);

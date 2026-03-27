@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.4.0] - 2026-03-27:18:13
+
+### Added
+- Capture the model used when an objective starts executing so ticket history can preserve the launch context.
+- Prefill the agent model picker with cached and optimistic model data so ticket actions load faster and avoid empty states.
+
+### Fixed
+- Mark executed objectives as complete and keep ticket board and panel agent tracking derived from objective history instead of the removed `recent_agent` field.
+- Reject unsupported `Accept: text/event-stream` probes on the MCP proxy while preserving JSON discovery responses for legacy clients.
+- Keep ticket board agent state aligned with the latest objective and active session data during live updates.
+
+### Changed
+- Replace ticket `recent_agent` usage with objective-derived agent tracking across boards, lists, and ticket panels.
+- Persist the latest objective agent alongside the running agent display so the UI reflects the active execution source more accurately.
+
+### Security
+- None.
+
+### Removed
+- Drop the legacy `recent_agent` ticket field in favor of objective history.
+
+### Deprecated
+- None.
+
+### Performance
+- None.
+
+### Refactor
+- None.
+
+### Test
+- Add regression coverage for MCP GET transport handling and header forwarding.
+
+### Documentation
+- None.
+
+### Chore
+- Bump the package version to `3.4.0`.
+
 ## [3.3.0] - 2026-03-27:14:00
 
 ### Added

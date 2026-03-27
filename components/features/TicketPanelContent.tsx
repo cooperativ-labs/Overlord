@@ -1,6 +1,5 @@
 import { Bot } from 'lucide-react';
 import { headers } from 'next/headers';
-import Image from 'next/image';
 import fs from 'node:fs/promises';
 
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
@@ -15,7 +14,6 @@ import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
-import { Badge } from '@/components/ui/badge';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
@@ -23,15 +21,11 @@ import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
-import { getAgentTypeByIdentifier, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
-import {
-  getAssignedAgentIdentifier,
-  parseTicketAssignedAgent
-} from '@/lib/helpers/ticket-assigned-agent';
+import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
-import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -175,7 +169,7 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('objectives')
-      .select('id,objective,is_executed,created_at,title,state')
+      .select('id,objective,is_executed,created_at,title,state,agent_identifier,model_identifier')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
   ]);
@@ -363,38 +357,6 @@ export async function TicketPanelContent({
                   currentExecutionTarget={ticket.execution_target ?? 'agent'}
                   ticketId={ticketId}
                 />
-
-                {(() => {
-                  const runningAgent =
-                    agentSession?.session_state === 'attached'
-                      ? agentSession.agent_identifier
-                      : null;
-                  const displayAgent =
-                    runningAgent ??
-                    ticket.recent_agent ??
-                    getAssignedAgentIdentifier(assignedAgent) ??
-                    null;
-                  if (!displayAgent) return null;
-                  const agentType = getAgentTypeByIdentifier(displayAgent);
-                  return (
-                    <Badge className="rounded-full gap-1.5" variant="secondary">
-                      {agentType ? (
-                        <>
-                          <Image
-                            src={agentType.icon}
-                            alt={`${agentType.label} icon`}
-                            width={12}
-                            height={12}
-                            className={cn('h-3 w-3', agentType.invertDark ? 'dark:invert' : '')}
-                          />
-                          {agentType.label}
-                        </>
-                      ) : (
-                        displayAgent
-                      )}
-                    </Badge>
-                  );
-                })()}
               </div>
 
               <div className="mb-4 flex flex-wrap items-center gap-2">

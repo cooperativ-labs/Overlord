@@ -6520,6 +6520,20 @@
           "maxLength": null
         },
         {
+          "id": "public.objectives.model_identifier",
+          "name": "model_identifier",
+          "columnName": "model_identifier",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "tickets",
           "type": "tickets",
           "isRequired": true,

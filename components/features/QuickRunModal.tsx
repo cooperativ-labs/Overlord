@@ -67,7 +67,6 @@ export function QuickRunModal({
 }: QuickRunModalProps) {
   const router = useRouter();
   const [ticketId, setTicketId] = useState<string | null>(null);
-  const [ticketProjectId, setTicketProjectId] = useState<string | null>(null);
   const [objective, setObjective] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(
     defaultProjectId || projects[0]?.id || ''
@@ -79,7 +78,7 @@ export function QuickRunModal({
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { api, isElectron } = useElectron();
   const { launchAgent } = useTerminal();
-  const { selection, setSelection } = useAgentModelPreference();
+  const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
   const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
 
   const syncLocalFileMentionPaths = useCallback((nextPaths: string[]) => {
@@ -102,7 +101,6 @@ export function QuickRunModal({
         try {
           const created = await createBlankTicketAction(organizationId, selectedProjectId);
           setTicketId(created.id);
-          setTicketProjectId(created.projectId);
         } catch (error) {
           console.error('Failed to create blank ticket:', error);
         }
@@ -218,7 +216,6 @@ export function QuickRunModal({
 
       // Reset for next use
       setTicketId(null);
-      setTicketProjectId(null);
       setObjective('');
       setSelectedProjectId(defaultProjectId || projects[0]?.id || '');
       setSubmitButtonState('default');
@@ -249,7 +246,6 @@ export function QuickRunModal({
     }
 
     setTicketId(null);
-    setTicketProjectId(null);
     setObjective('');
     setSelectedProjectId(defaultProjectId || projects[0]?.id || '');
     setSubmitButtonState('default');
@@ -368,7 +364,7 @@ export function QuickRunModal({
             successText="Launched"
             errorText="Failed"
             onClick={handleSubmit}
-            disabled={isCreating || !objective.trim() || !ticketId}
+            disabled={isCreating || !objective.trim() || !ticketId || !selectionLoaded}
             className="flex-1 sm:flex-none"
           />
         </DialogFooter>

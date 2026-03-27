@@ -24,7 +24,7 @@ function formatLineNumber(value: number | null) {
   return value === null ? '' : String(value);
 }
 
-function formatAgentName(agent: DemoTicket['recent_agent']) {
+function formatAgentName(agent: DemoTicket['latest_objective_agent']) {
   if (agent === 'claude-code') return 'Claude Code';
   if (agent === 'codex') return 'Codex';
   return 'Agent';
@@ -202,7 +202,7 @@ export function DemoCurrentChangesPage({
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Bot className="h-3.5 w-3.5" />
-                      {formatAgentName(selectedTicket.recent_agent)}
+                      {formatAgentName(selectedTicket.latest_objective_agent)}
                     </div>
                   </div>
                 </div>

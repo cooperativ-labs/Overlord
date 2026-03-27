@@ -43,7 +43,7 @@ export default function TicketListCard({
 
   const activeAgentIdentifier =
     ticket.running_agent ??
-    ticket.recent_agent ??
+    ticket.latest_objective_agent ??
     getAssignedAgentIdentifier(ticket.assigned_agent);
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 

@@ -60,7 +60,7 @@ export type FileChangeRecord = {
   ticket: {
     id: string;
     objective?: string | null;
-    recent_agent?: string | null;
+    latest_objective_agent?: string | null;
     status: string;
     title: string | null;
   } | null;
@@ -77,7 +77,7 @@ export type DiffState = {
 export type TicketSummary = {
   id: string;
   objective?: string | null;
-  recent_agent?: string | null;
+  latest_objective_agent?: string | null;
   status: string | null;
   title: string | null;
 };

@@ -65,7 +65,6 @@ type RawTicket = {
   status: string;
   priority: string;
   assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
-  recent_agent: string | null;
   is_read: boolean;
   updated_at: string;
   board_position: number;
@@ -132,7 +131,7 @@ export default async function TicketsBoardContent({
   const allStatuses = dedupeStatuses(statusesResult.data ?? []);
 
   const ticketSelectFields =
-    'id,title,due_datetime,execution_target,status,priority,assigned_agent,delegate,recent_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+    'id,title,due_datetime,execution_target,status,priority,assigned_agent,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
   const ticketQueriesPromise =
     view === 'calendar'
@@ -201,11 +200,11 @@ export default async function TicketsBoardContent({
   >();
   const waitingQuestionByTicket = new Map<string, string>();
   const executedObjectivesCountByTicket = new Map<string, number>();
-
+  const latestObjectiveAgentByTicket = new Map<string, string | null>();
   const objectiveAgentByTicket = new Map<string, string>();
 
   if (ticketIds.length > 0) {
-    const [{ data: sessions }, { data: waitingQuestions }, { data: executedObjectives }] =
+    const [{ data: sessions }, { data: waitingQuestions }, { data: objectives }] =
       await Promise.all([
         supabase
           .from('agent_sessions')
@@ -221,9 +220,8 @@ export default async function TicketsBoardContent({
           .order('created_at', { ascending: false }),
         supabase
           .from('objectives')
-          .select('ticket_id,state,agent_identifier')
+          .select('ticket_id,state,is_executed,agent_identifier')
           .in('ticket_id', ticketIds)
-          .eq('is_executed', true)
           .order('created_at', { ascending: false })
       ]);
 
@@ -242,16 +240,21 @@ export default async function TicketsBoardContent({
       }
     }
 
-    for (const objective of (executedObjectives ?? []) as Array<{
+    for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       state: string | null;
+      is_executed: boolean | null;
       agent_identifier: string | null;
     }>) {
-      executedObjectivesCountByTicket.set(
-        objective.ticket_id,
-        (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1
-      );
-      // Track the executing objective's agent for running_agent derivation
+      if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
+        latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+      if (objective.is_executed) {
+        executedObjectivesCountByTicket.set(
+          objective.ticket_id,
+          (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1
+        );
+      }
       if (
         objective.state === 'executing' &&
         objective.agent_identifier &&
@@ -287,6 +290,7 @@ export default async function TicketsBoardContent({
         project_color: p?.color ?? null,
         project_everhour_project_id: hasEverhourApiKey ? (p?.everhour_project_id ?? null) : null,
         agent_session_state: session?.session_state ?? null,
+        latest_objective_agent: latestObjectiveAgentByTicket.get(ticket.id) ?? null,
         running_agent: runningAgent,
         waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
         objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0,

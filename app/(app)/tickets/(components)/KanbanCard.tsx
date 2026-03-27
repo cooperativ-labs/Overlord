@@ -41,7 +41,7 @@ export type Ticket = {
   everhour_task_id?: string | null;
   agent_session_state?: SessionState | null;
   running_agent?: string | null;
-  recent_agent?: string | null;
+  latest_objective_agent?: string | null;
   status: string;
   priority: string;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
@@ -167,7 +167,7 @@ function KanbanCardBody({
 }) {
   const activeAgentIdentifier =
     ticket.running_agent ??
-    ticket.recent_agent ??
+    ticket.latest_objective_agent ??
     getAssignedAgentIdentifier(ticket.assigned_agent);
 
   return (

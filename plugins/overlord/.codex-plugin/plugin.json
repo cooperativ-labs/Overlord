@@ -9,15 +9,7 @@
   "homepage": "https://github.com/cooperativ/overlord",
   "repository": "https://github.com/cooperativ/overlord",
   "license": "UNLICENSED",
-  "keywords": [
-    "overlord",
-    "tickets",
-    "agents",
-    "workflow",
-    "protocol",
-    "mcp",
-    "codex-plugin"
-  ],
+  "keywords": ["overlord", "tickets", "agents", "workflow", "protocol", "mcp", "codex-plugin"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
@@ -26,10 +18,7 @@
     "longDescription": "Connect Codex to Overlord's local ticket workflow through the existing `ovld protocol` CLI. The plugin bundles workflow skills plus MCP tools for ticket attachment, progress updates, shared context, artifacts, delivery, and follow-up ticket creation.",
     "developerName": "Cooperativ",
     "category": "Productivity",
-    "capabilities": [
-      "Interactive",
-      "Write"
-    ],
+    "capabilities": ["Interactive", "Write"],
     "websiteURL": "https://www.ovld.ai/docs",
     "privacyPolicyURL": "https://www.ovld.ai/privacy",
     "termsOfServiceURL": "https://www.ovld.ai/terms",
@@ -39,10 +28,8 @@
       "Deliver this Overlord ticket with artifacts and change rationales"
     ],
     "brandColor": "#1E6B5C",
-    "composerIcon": "./assets/icon.svg",
-    "logo": "./assets/logo.svg",
-    "screenshots": [
-      "./assets/screenshot.svg"
-    ]
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "screenshots": ["./assets/screenshot.png"]
   }
 }

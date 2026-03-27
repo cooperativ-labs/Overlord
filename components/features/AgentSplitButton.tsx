@@ -116,10 +116,11 @@ export function AgentSplitButton({
 }: AgentSplitButtonProps) {
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
-  const { selection } = useAgentModelPreference();
+  const { selection, loaded: selectionLoaded } = useAgentModelPreference();
   const { isElectron, launchAgent } = useTerminal();
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
+  const hasResolvedSelection = assignedSelection !== null || selectionLoaded;
 
   const isActive =
     isAgentIdentifierMatch(effectiveSelection.agent, activeAgentIdentifier) &&
@@ -127,7 +128,8 @@ export function AgentSplitButton({
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
   const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';
-  const isDisabled = !canRunAgent && !isCopySelectedAgent;
+  const isDisabled =
+    (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
   const visibleAgents = allowedAgents
     ? AGENT_SELECTOR_VALUES.filter(v => allowedAgents.includes(v))
@@ -155,7 +157,7 @@ export function AgentSplitButton({
     const isCopyCloudValue = agentValue === 'copy-cloud';
     const isCopyValue = isCopyLocalValue || isCopyCloudValue;
 
-    if (!isCopyValue && !canRunAgent) return;
+    if (!isCopyValue && (!canRunAgent || !hasResolvedSelection)) return;
 
     if (isCopyValue) {
       const { error, prompt } = await getTicketPromptForCopy(
@@ -259,7 +261,9 @@ export function AgentSplitButton({
         <span className={cn('inline-flex', isDisabled && 'cursor-not-allowed')}>{runButton}</span>
       </TooltipTrigger>
       <TooltipContent side="top" hidden={!isDisabled}>
-        First set a project directory in the project settings.
+        {!canRunAgent && !isCopySelectedAgent
+          ? 'First set a project directory in the project settings.'
+          : 'Loading your agent model selection.'}
       </TooltipContent>
     </Tooltip>
   );

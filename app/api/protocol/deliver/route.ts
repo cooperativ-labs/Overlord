@@ -70,7 +70,6 @@ export async function POST(request: Request) {
     const artifactCount = artifacts.length;
     const eventId = event.id;
     const sessionId = resolved.session.id;
-    const agentIdentifier = resolved.session.agent_identifier;
     const reviewStatusName = await resolvePreferredStatusNameByType(
       supabase,
       organizationId,
@@ -118,7 +117,6 @@ export async function POST(request: Request) {
             .from('tickets')
             .update({
               is_read: false,
-              recent_agent: agentIdentifier,
               status: reviewStatusName,
               board_position: topBoardPosition
             })

@@ -65,7 +65,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     let fileChangeQuery = supabase
       .from('file_changes')
       .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,title,status,recent_agent,project_id)'
+        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,title,status,project_id)'
       )
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });
@@ -113,6 +113,30 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
+    const ticketIds = [...new Set((fileChanges ?? []).map(row => row.ticket_id))];
+    const latestObjectiveAgentByTicket = new Map<string, string | null>();
+
+    if (ticketIds.length > 0) {
+      const { data: objectives, error: objectivesError } = await supabase
+        .from('objectives')
+        .select('ticket_id,agent_identifier')
+        .in('ticket_id', ticketIds)
+        .order('created_at', { ascending: false });
+
+      if (objectivesError) {
+        return NextResponse.json({ error: objectivesError.message }, { status: 500 });
+      }
+
+      for (const objective of (objectives ?? []) as Array<{
+        ticket_id: string;
+        agent_identifier: string | null;
+      }>) {
+        if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
+          latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+        }
+      }
+    }
+
     const eventsById = new Map((eventsResult.data ?? []).map(event => [event.id, event]));
     const sessionsById = new Map((sessionsResult.data ?? []).map(session => [session.id, session]));
 
@@ -132,7 +156,13 @@ export async function GET(request: Request, { params }: RouteContext) {
           label: fileChange.label,
           session: sessionsById.get(fileChange.session_id) ?? null,
           summary: fileChange.summary,
-          ticket: fileChange.tickets ?? null,
+          ticket: fileChange.tickets
+            ? {
+                ...fileChange.tickets,
+                latest_objective_agent:
+                  latestObjectiveAgentByTicket.get(fileChange.ticket_id) ?? null
+              }
+            : null,
           updated_at: fileChange.updated_at,
           why: fileChange.why
         }))

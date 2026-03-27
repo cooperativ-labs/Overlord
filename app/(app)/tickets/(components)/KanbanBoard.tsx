@@ -530,8 +530,7 @@ export default function KanbanBoard({
           return {
             ...t,
             agent_session_state: session.session_state,
-            running_agent: isAttached ? session.agent_identifier : null,
-            ...(!isAttached ? { recent_agent: session.agent_identifier } : {})
+            running_agent: isAttached ? session.agent_identifier : null
           };
         })
       );
@@ -541,28 +540,39 @@ export default function KanbanBoard({
       const ticketIds = [...ticketIdsRef.current];
       if (ticketIds.length === 0) return;
 
-      const [{ data: sessions }, { data: waitingQuestions }, { data: ticketUpdates }] =
-        await Promise.all([
-          supabase
-            .from('agent_sessions')
-            .select('ticket_id,session_state,agent_identifier,attached_at')
-            .in('ticket_id', ticketIds)
-            .order('attached_at', { ascending: false }),
-          supabase
-            .from('ticket_events')
-            .select('ticket_id,created_at')
-            .in('ticket_id', ticketIds)
-            .eq('event_type', 'question')
-            .eq('is_blocking', true)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('tickets')
-            .select('id,status,title,recent_agent,assigned_agent,is_read,board_position,updated_at')
-            .in('id', ticketIds)
-        ]);
+      const [
+        { data: sessions },
+        { data: waitingQuestions },
+        { data: ticketUpdates },
+        { data: objectives }
+      ] = await Promise.all([
+        supabase
+          .from('agent_sessions')
+          .select('ticket_id,session_state,agent_identifier,attached_at')
+          .in('ticket_id', ticketIds)
+          .order('attached_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('ticket_id,created_at')
+          .in('ticket_id', ticketIds)
+          .eq('event_type', 'question')
+          .eq('is_blocking', true)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('tickets')
+          .select('id,status,title,assigned_agent,is_read,board_position,updated_at')
+          .in('id', ticketIds),
+        supabase
+          .from('objectives')
+          .select('ticket_id,state,is_executed,agent_identifier')
+          .in('ticket_id', ticketIds)
+          .order('created_at', { ascending: false })
+      ]);
 
       if (cancelled) return;
 
+      const latestObjectiveAgentByTicket = new Map<string, string | null>();
+      const executingObjectiveAgentByTicket = new Map<string, string>();
       const sessionByTicket = new Map<
         string,
         Pick<AgentSession, 'session_state' | 'agent_identifier'>
@@ -582,7 +592,6 @@ export default function KanbanBoard({
             id: string;
             status: string | null;
             title: string | null;
-            recent_agent: string | null;
             assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
             is_read: boolean;
             board_position: number;
@@ -591,12 +600,33 @@ export default function KanbanBoard({
         ).map(t => [t.id, t])
       );
 
+      for (const objective of (objectives ?? []) as Array<{
+        ticket_id: string;
+        state: string | null;
+        is_executed: boolean | null;
+        agent_identifier: string | null;
+      }>) {
+        if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
+          latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+        }
+        if (
+          objective.state === 'executing' &&
+          objective.agent_identifier &&
+          !executingObjectiveAgentByTicket.has(objective.ticket_id)
+        ) {
+          executingObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier);
+        }
+      }
+
       setTickets(prev =>
         prev.map(t => {
           const update = ticketUpdateMap.get(t.id);
           if (!update) return t;
           const session = sessionByTicket.get(t.id);
           const isAttached = session?.session_state === 'attached';
+          const runningAgent =
+            executingObjectiveAgentByTicket.get(t.id) ??
+            (isAttached ? session.agent_identifier : null);
           return {
             ...t,
             status: update.status ?? t.status,
@@ -604,15 +634,11 @@ export default function KanbanBoard({
             is_read: update.is_read ?? t.is_read,
             board_position: update.board_position ?? t.board_position,
             updated_at: update.updated_at ?? t.updated_at,
-            recent_agent: update.recent_agent ?? t.recent_agent,
+            latest_objective_agent:
+              latestObjectiveAgentByTicket.get(t.id) ?? t.latest_objective_agent,
             assigned_agent: parseTicketAssignedAgent(update.assigned_agent) ?? t.assigned_agent,
-            ...(session
-              ? {
-                  agent_session_state: session.session_state,
-                  running_agent: isAttached ? session.agent_identifier : null,
-                  ...(!isAttached ? { recent_agent: session.agent_identifier } : {})
-                }
-              : {})
+            agent_session_state: session?.session_state ?? t.agent_session_state ?? null,
+            running_agent: runningAgent
           };
         })
       );
