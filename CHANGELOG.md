@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.7.0] - 2026-03-29:14:07
+
+### Added
+- Add a reusable project execution workspace selector in project settings so Electron projects can switch between local and SSH execution from one control.
+- Add Linux ARM64 support to the Electron build and release upload scripts.
+
+### Fixed
+- Fix SSH agent launches so remote shells receive the prompt context without relying on local temp files that do not exist on the remote machine.
+
+### Changed
+- Update agent launch handling to source common CLI paths and NVM on SSH-backed shells before running remote commands.
+- Preserve passed-in workspace settings in the agent split button when project settings are unavailable, keeping launch behavior consistent across contexts.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version and CLI package version to `3.7.0`.
+
 ## [3.6.0] - 2026-03-29:13:11
 
 ### Added

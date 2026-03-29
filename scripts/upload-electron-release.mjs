@@ -16,6 +16,8 @@
  *   node scripts/upload-electron-release.mjs --platform mac --mac-arch x64
  *                                                         # upload Intel macOS artifacts
  *   node scripts/upload-electron-release.mjs --platform linux # only require/upload Linux artifacts
+ *   node scripts/upload-electron-release.mjs --platform linux --linux-arch arm64
+ *                                                         # upload Linux ARM64 artifacts
  */
 
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -40,11 +42,13 @@ const ARTIFACT_PATTERNS = {
     optional: []
   },
   linux: {
-    required: [
-      { label: 'Linux AppImage', pattern: /^Overlord-.*-linux-x64\.AppImage$/ },
+    required: linuxArch => [
+      { label: 'Linux AppImage', pattern: new RegExp(`^Overlord-.*-linux-${linuxArch}\\.AppImage$`) },
       { label: 'latest-linux.yml', pattern: /^latest-linux\.yml$/ }
     ],
-    optional: [{ label: 'Linux .deb', pattern: /^Overlord-.*-linux-amd64\.deb$/ }]
+    optional: linuxArch => [
+      { label: 'Linux .deb', pattern: new RegExp(`^Overlord-.*-linux-${linuxArch === 'x64' ? 'amd64' : linuxArch}\\.deb$`) }
+    ]
   }
 };
 
@@ -166,6 +170,27 @@ function parseMacArch(args, platform) {
   process.exit(1);
 }
 
+function parseLinuxArch(args, platform) {
+  const explicitLinuxArch = readFlagValue(args, '--linux-arch');
+  if (!explicitLinuxArch) {
+    if (platform !== 'linux') return null;
+    return os.arch() === 'x64' ? 'x64' : 'arm64';
+  }
+
+  if (platform !== 'linux') {
+    console.error('[upload] --linux-arch is only valid with --platform linux.');
+    process.exit(1);
+  }
+
+  if (explicitLinuxArch === 'x64' || explicitLinuxArch === 'arm64') {
+    return explicitLinuxArch;
+  }
+
+  console.error(`[upload] Unsupported --linux-arch value: ${explicitLinuxArch}`);
+  console.error('         Expected one of: x64, arm64');
+  process.exit(1);
+}
+
 function getReleaseArtifacts() {
   const releaseDir = join(ROOT, 'release');
   const files = [];
@@ -187,12 +212,16 @@ function cleanLocalReleaseDir() {
   rmSync(releaseDir, { recursive: true, force: true });
 }
 
-function validateArtifacts(artifacts, platform, macArch) {
+function validateArtifacts(artifacts, platform, arch) {
   const artifactConfig = ARTIFACT_PATTERNS[platform];
   const requiredArtifacts =
     typeof artifactConfig.required === 'function'
-      ? artifactConfig.required(macArch)
+      ? artifactConfig.required(arch)
       : artifactConfig.required;
+  const optionalArtifacts =
+    typeof artifactConfig.optional === 'function'
+      ? artifactConfig.optional(arch)
+      : artifactConfig.optional;
   const artifactNames = artifacts.map(artifact => artifact.name);
   const missingRequired = requiredArtifacts.filter(
     ({ pattern }) => !artifactNames.some(name => pattern.test(name))
@@ -206,7 +235,7 @@ function validateArtifacts(artifacts, platform, macArch) {
     process.exit(1);
   }
 
-  for (const artifact of artifactConfig.optional) {
+  for (const artifact of optionalArtifacts) {
     if (!artifactNames.some(name => artifact.pattern.test(name))) {
       console.warn(`[upload] Optional artifact missing: ${artifact.label}`);
     }
@@ -355,6 +384,7 @@ async function main() {
   const bumpType = args.includes('--major') ? 'major' : args.includes('--minor') ? 'minor' : 'patch';
   const targetPlatform = parsePlatform(args);
   const macArch = parseMacArch(args, targetPlatform);
+  const linuxArch = parseLinuxArch(args, targetPlatform);
 
   loadEnv();
 
@@ -372,7 +402,9 @@ async function main() {
   }
 
   console.log(
-    `[upload] Target platform: ${targetPlatform}${targetPlatform === 'mac' ? ` (${macArch})` : ''}`
+    `[upload] Target platform: ${targetPlatform}${
+      targetPlatform === 'mac' ? ` (${macArch})` : targetPlatform === 'linux' ? ` (${linuxArch})` : ''
+    }`
   );
 
   let version = getPackageVersion();
@@ -407,6 +439,9 @@ async function main() {
   if (targetPlatform === 'mac' && macArch) {
     buildArgs.push('--mac-arch', macArch);
   }
+  if (targetPlatform === 'linux' && linuxArch) {
+    buildArgs.push('--linux-arch', linuxArch);
+  }
   const buildResult = spawnSync('node', buildArgs, { stdio: 'inherit', cwd: ROOT, env: process.env });
   if (buildResult.status !== 0) {
     console.error('[upload] Build failed.');
@@ -418,7 +453,7 @@ async function main() {
     console.error('[upload] No files found in release/.');
     process.exit(1);
   }
-  validateArtifacts(artifacts, targetPlatform, macArch);
+  validateArtifacts(artifacts, targetPlatform, targetPlatform === 'mac' ? macArch : linuxArch);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }

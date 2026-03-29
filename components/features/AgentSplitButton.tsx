@@ -124,14 +124,19 @@ export function AgentSplitButton({
   const { selection, loaded: selectionLoaded } = useAgentModelPreference();
   const { isElectron, launchAgent } = useTerminal();
   const projectSettings = useProjectSettings();
+  const hasProjectSettings = projectSettings !== null;
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
   const hasResolvedSelection = assignedSelection !== null || selectionLoaded;
-  const effectiveWorkingDirectory =
-    projectSettings?.effectiveWorkingDirectory ?? workingDirectory ?? null;
-  const effectiveSshCommand = projectSettings?.effectiveSshCommand ?? sshCommand ?? null;
-  const effectiveRemoteWorkingDirectory =
-    projectSettings?.effectiveRemoteWorkingDirectory ?? remoteWorkingDirectory ?? null;
+  const effectiveWorkingDirectory = hasProjectSettings
+    ? projectSettings.effectiveWorkingDirectory
+    : (workingDirectory ?? null);
+  const effectiveSshCommand = hasProjectSettings
+    ? projectSettings.effectiveSshCommand
+    : (sshCommand ?? null);
+  const effectiveRemoteWorkingDirectory = hasProjectSettings
+    ? projectSettings.effectiveRemoteWorkingDirectory
+    : (remoteWorkingDirectory ?? null);
 
   const isActive =
     isAgentIdentifierMatch(effectiveSelection.agent, activeAgentIdentifier) &&
@@ -140,10 +145,11 @@ export function AgentSplitButton({
   const hasSshConfig = Boolean(effectiveSshCommand?.trim());
   const localDirAccess = useLocalDirectoryAccess({
     workingDirectory: effectiveWorkingDirectory,
-    hasProjectWorkingDirectory:
-      projectSettings?.executionWorkspace === 'local'
+    hasProjectWorkingDirectory: hasProjectSettings
+      ? projectSettings.executionWorkspace === 'local'
         ? Boolean(projectSettings.hasLocalDirectory)
-        : hasProjectWorkingDirectory
+        : false
+      : hasProjectWorkingDirectory
   });
   const canRunAgent = hasSshConfig || localDirAccess;
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';

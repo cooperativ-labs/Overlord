@@ -23,6 +23,8 @@
  *   node scripts/electron-build.mjs --platform mac --mac-arch arm64
  *                                                     → build Apple Silicon macOS artifacts
  *   node scripts/electron-build.mjs --platform linux     → build Linux artifacts
+ *   node scripts/electron-build.mjs --platform linux --linux-arch arm64
+ *                                                     → build Linux ARM64 artifacts
  *   node scripts/electron-build.mjs --dir                → build + unpackaged app dir only
  */
 
@@ -52,14 +54,21 @@ function readFlagValue(flagName) {
 function getElectronBuilderTargetFlag() {
   const requestedPlatform = readFlagValue('--platform');
   const requestedMacArch = readFlagValue('--mac-arch');
+  const requestedLinuxArch = readFlagValue('--linux-arch');
   if (!requestedPlatform) return '';
 
-  if (requestedPlatform === 'mac') return ` --mac${getMacArchFlag(requestedMacArch)}`;
+  if (requestedPlatform === 'mac') {
+    if (requestedLinuxArch) {
+      console.error('\x1b[31m[build] --linux-arch is only valid with --platform linux\x1b[0m');
+      process.exit(1);
+    }
+    return ` --mac${getMacArchFlag(requestedMacArch)}`;
+  }
   if (requestedMacArch) {
     console.error('\x1b[31m[build] --mac-arch is only valid with --platform mac\x1b[0m');
     process.exit(1);
   }
-  if (requestedPlatform === 'linux') return ' --linux';
+  if (requestedPlatform === 'linux') return ` --linux${getLinuxArchFlag(requestedLinuxArch)}`;
 
   console.error(`\x1b[31m[build] Unsupported --platform value: ${requestedPlatform}\x1b[0m`);
   console.error('       Expected one of: mac, linux');
@@ -73,6 +82,17 @@ function getMacArchFlag(requestedMacArch) {
   if (requestedMacArch === 'arm64') return ' --arm64';
 
   console.error(`\x1b[31m[build] Unsupported --mac-arch value: ${requestedMacArch}\x1b[0m`);
+  console.error('       Expected one of: x64, arm64');
+  process.exit(1);
+}
+
+function getLinuxArchFlag(requestedLinuxArch) {
+  if (!requestedLinuxArch) return '';
+
+  if (requestedLinuxArch === 'x64') return ' --x64';
+  if (requestedLinuxArch === 'arm64') return ' --arm64';
+
+  console.error(`\x1b[31m[build] Unsupported --linux-arch value: ${requestedLinuxArch}\x1b[0m`);
   console.error('       Expected one of: x64, arm64');
   process.exit(1);
 }
