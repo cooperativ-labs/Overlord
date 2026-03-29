@@ -19,12 +19,15 @@ import { buildEnrichedCurrentChangeFiles } from '@/components/features/projects/
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import { parseUnifiedDiff } from '@/lib/git/unified-diff';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 
 type CurrentChangesPageProps = {
   projectId: string;
   projectName: string;
   workingDirectory: string | null;
+  sshCommand: string | null;
+  remoteWorkingDirectory: string | null;
   initialFilePath?: string | null;
 };
 
@@ -32,6 +35,8 @@ export function CurrentChangesPage({
   projectId,
   projectName,
   workingDirectory,
+  sshCommand,
+  remoteWorkingDirectory,
   initialFilePath
 }: CurrentChangesPageProps) {
   const { api, isElectron } = useElectron();
@@ -91,12 +96,22 @@ export function CurrentChangesPage({
     setSelectedTicketIds(new Set());
   }
 
+  const hasLocalDirectory =
+    !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
+  const hasSshConfig = !!sshCommand?.trim() && !!remoteWorkingDirectory?.trim();
+
+  function buildGitPayload() {
+    if (hasLocalDirectory) return { directory: workingDirectory! };
+    return {
+      sshCommand: sshCommand ?? undefined,
+      remoteDirectory: remoteWorkingDirectory ?? undefined
+    };
+  }
+
   async function loadStatus(): Promise<GitStatusResponse | null> {
-    if (!api?.filesystem?.getGitStatus || !workingDirectory) return null;
+    if (!api?.filesystem?.getGitStatus || (!hasLocalDirectory && !hasSshConfig)) return null;
     setStatusLoading(true);
-    const result = (await api.filesystem.getGitStatus({
-      directory: workingDirectory
-    })) as GitStatusResponse;
+    const result = (await api.filesystem.getGitStatus(buildGitPayload())) as GitStatusResponse;
     setStatusResponse(result);
     setSelectedPath(current => {
       if (!result.files.length) return null;
@@ -142,7 +157,7 @@ export function CurrentChangesPage({
   }
 
   useEffect(() => {
-    if (!isElectron || !workingDirectory) {
+    if (!isElectron || (!hasLocalDirectory && !hasSshConfig)) {
       setStatusLoading(false);
       return;
     }
@@ -153,7 +168,7 @@ export function CurrentChangesPage({
       await loadFileChanges(files);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isElectron, workingDirectory, projectId, api]);
+  }, [isElectron, workingDirectory, sshCommand, remoteWorkingDirectory, projectId, api]);
 
   useEffect(() => {
     if (filteredFiles.length === 0) {
@@ -170,7 +185,7 @@ export function CurrentChangesPage({
 
   useEffect(() => {
     const selectedFile = statusResponse?.files.find(file => file.path === selectedPath);
-    if (!isElectron || !api?.filesystem?.getGitDiff || !workingDirectory || !selectedFile) {
+    if (!isElectron || !api?.filesystem?.getGitDiff || !selectedFile || (!hasLocalDirectory && !hasSshConfig)) {
       setDiffState({
         error: null,
         isLoading: false,
@@ -184,7 +199,7 @@ export function CurrentChangesPage({
     const run = async () => {
       setDiffState(previous => ({ ...previous, error: null, isLoading: true }));
       const result = (await api.filesystem.getGitDiff({
-        directory: workingDirectory,
+        ...buildGitPayload(),
         originalPath: selectedFile.originalPath ?? undefined,
         path: selectedFile.path,
         status: selectedFile.status
@@ -217,15 +232,17 @@ export function CurrentChangesPage({
     );
   }
 
-  if (!workingDirectory) {
+  if (!hasLocalDirectory && !hasSshConfig) {
     return (
       <UnavailableStateCard
         backHref={backHref}
-        description="Link a project working directory in settings to inspect local uncommitted changes."
+        description="Link a local working directory or configure an SSH remote workspace in project settings to inspect uncommitted changes."
       />
     );
   }
 
+  const displayDirectory =
+    hasLocalDirectory ? workingDirectory! : (remoteWorkingDirectory ?? '');
   const selectedFile = enrichedFiles.find(file => file.path === selectedPath) ?? null;
 
   return (
@@ -281,7 +298,7 @@ export function CurrentChangesPage({
             statusLoading={statusLoading}
             statusResponse={statusResponse}
             tickets={uniqueTickets}
-            workingDirectory={workingDirectory}
+            workingDirectory={displayDirectory}
             onClearTicketFilter={clearTicketFilter}
             onSelectFile={setSelectedPath}
             onToggleTicketFilter={toggleTicketFilter}

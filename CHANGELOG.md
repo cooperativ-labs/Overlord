@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.6.0] - 2026-03-29:13:11
+
+### Added
+- Add npm and npx installation options for the standalone CLI on the downloads page.
+- Add SSH-backed Git status and diff support for linked remote workspaces in the current changes view.
+
+### Fixed
+- None.
+
+### Changed
+- Update the current changes screen to use remote workspace settings when no local directory is available.
+- Launch SSH-backed shell commands through the user's interactive preferred shell so aliases and functions resolve correctly.
+- Refresh CLI download copy to describe the npm-based install path and direct tarball download separately.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version and CLI package version to `3.6.0`.
+
 ## [3.5.1] - 2026-03-29:11:36
 
 ### Added

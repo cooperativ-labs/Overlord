@@ -74,6 +74,35 @@ let cachedConfigs: Record<string, AgentConfig> | null = null;
 let cachedLaunchPreference: UserLaunchPreference | null | undefined;
 let cachedSelection: AgentModelSelection | null = null;
 
+/** Returns the agent model list, using module-level cache to avoid duplicate fetches. */
+export function useAgentModels(): { models: AgentModel[]; loading: boolean } {
+  const [models, setModels] = useState<AgentModel[]>(
+    () => cachedResolvedModels ?? OPTIMISTIC_MODELS
+  );
+  const [loading, setLoading] = useState(() => cachedResolvedModels === null);
+
+  useEffect(() => {
+    if (cachedResolvedModels !== null) return;
+    let cancelled = false;
+    getAgentModelsAction()
+      .then(data => {
+        if (!cancelled) {
+          cachedResolvedModels = data;
+          setModels(data);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { models, loading };
+}
+
 function DefaultTooltipLabel() {
   return (
     <Tooltip>
@@ -117,29 +146,7 @@ export function AgentModelSelector({
   onAgentSelect,
   inline = false
 }: AgentModelSelectorProps) {
-  const [models, setModels] = useState<AgentModel[]>(
-    () => cachedResolvedModels ?? OPTIMISTIC_MODELS
-  );
-  const [loading, setLoading] = useState(() => cachedResolvedModels === null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    getAgentModelsAction()
-      .then(data => {
-        if (!cancelled) {
-          cachedResolvedModels = data;
-          setModels(data);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { models, loading } = useAgentModels();
 
   const modelsByAgent = useMemo(() => {
     const grouped: Record<string, AgentModel[]> = {};

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   CLI_DOWNLOAD_COMMAND,
-  CLI_INSTALL_COMMAND,
+  CLI_NPM_INSTALL_COMMAND,
+  CLI_NPX_COMMAND,
   CURRENT_CLI_VERSION
 } from '@/lib/downloads/cli';
 import {
@@ -172,23 +173,32 @@ export default async function DownloadsPage() {
           <CardHeader>
             <CardTitle>CLI for headless servers</CardTitle>
             <CardDescription>
-              The standalone CLI now tracks the same release version as the desktop app.
+              Install the Overlord CLI via npm. Current version:{' '}
+              <span className="font-mono">{CURRENT_CLI_VERSION}</span>.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <p className="text-sm font-medium">Install version {CURRENT_CLI_VERSION} with curl</p>
-              <pre className="bg-muted overflow-x-auto rounded-lg p-3 text-xs leading-5 whitespace-pre-wrap break-all">
-                <code>{CLI_INSTALL_COMMAND}</code>
+              <p className="text-sm font-medium">Install globally with npm</p>
+              <pre className="bg-muted overflow-x-auto rounded-lg p-3 text-xs leading-5">
+                <code>{CLI_NPM_INSTALL_COMMAND}</code>
               </pre>
               <p className="text-muted-foreground text-sm">
-                This installs `ovld` and `overlord` into `~/.local/bin`. Node 18+ is still required
-                on the target machine.
+                Adds the <code className="text-foreground">ovld</code> and{' '}
+                <code className="text-foreground">overlord</code> commands to your PATH. Requires
+                Node.js 18+.
               </p>
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium">Need the tarball only?</p>
+              <p className="text-sm font-medium">Try without installing</p>
+              <pre className="bg-muted overflow-x-auto rounded-lg p-3 text-xs leading-5">
+                <code>{CLI_NPX_COMMAND}</code>
+              </pre>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Download the tarball directly</p>
               <pre className="bg-muted overflow-x-auto rounded-lg p-3 text-xs leading-5 whitespace-pre-wrap break-all">
                 <code>{CLI_DOWNLOAD_COMMAND}</code>
               </pre>

@@ -105,9 +105,15 @@ function buildLaunchScriptContent(
         .join('\n')
     : '';
 
-  return ['#!/bin/bash', cwd ? `cd ${shellQuote(cwd)}` : null, envLines || null, command]
-    .filter(Boolean)
-    .join('\n');
+  const innerParts = [cwd ? `cd ${shellQuote(cwd)}` : null, envLines || null, command].filter(
+    (x): x is string => Boolean(x)
+  );
+  const innerScript = innerParts.join('\n');
+
+  // Run through the user's preferred shell in interactive mode so that aliases
+  // and functions defined in ~/.zshrc / ~/.bashrc are available. This is
+  // required when the SSH command field contains a shell alias (e.g. "claw").
+  return ['#!/bin/bash', `exec "\${SHELL:-zsh}" -i -c ${shellQuote(innerScript)}`].join('\n');
 }
 
 function writeLaunchScript(command: string, cwd?: string, env?: Record<string, string>) {

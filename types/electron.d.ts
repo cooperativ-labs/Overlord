@@ -38,6 +38,8 @@ interface ElectronAPI {
       originalPath?: string;
       path?: string;
       status?: string;
+      sshCommand?: string;
+      remoteDirectory?: string;
     }) => Promise<{
       diff: string;
       error?: string;
@@ -45,7 +47,11 @@ interface ElectronAPI {
       repoRoot: string | null;
       status: string | null;
     }>;
-    getGitStatus: (options?: { directory?: string }) => Promise<{
+    getGitStatus: (options?: {
+      directory?: string;
+      sshCommand?: string;
+      remoteDirectory?: string;
+    }) => Promise<{
       branch: string | null;
       error?: string;
       files: Array<{

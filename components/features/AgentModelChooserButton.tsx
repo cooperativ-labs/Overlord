@@ -6,11 +6,12 @@ import { useEffect, useState, useTransition } from 'react';
 
 import {
   AgentModelSelector,
-  useAgentModelPreference
+  useAgentModelPreference,
+  useAgentModels
 } from '@/components/features/AgentModelSelector';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { type AgentModel, getAgentModelsAction } from '@/lib/actions/agent-models';
+import type { AgentModel } from '@/lib/actions/agent-models';
 import { updateTicketAssignedAgentAction } from '@/lib/actions/tickets';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
@@ -38,27 +39,11 @@ export function AgentModelChooserButton({
 }) {
   const { selection: preferenceSelection, setSelection: setPreferenceSelection } =
     useAgentModelPreference();
-  const [models, setModels] = useState<AgentModel[]>([]);
+  const { models } = useAgentModels();
   const [selection, setSelection] = useState<AgentModelSelection>(
     initialSelection ?? preferenceSelection
   );
   const [, startTransition] = useTransition();
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getAgentModelsAction()
-      .then(data => {
-        if (!cancelled) {
-          setModels(data);
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const nextSelection = initialSelection ?? preferenceSelection;
