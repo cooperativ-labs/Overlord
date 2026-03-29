@@ -913,5 +913,9 @@ test('no local agent instruction source uses file_changes as an artifact type', 
       content.includes('changeRationales'),
       `${relPath} must reference changeRationales for file change submission`
     );
+    assert.ok(
+      content.includes('ephemeral'),
+      `${relPath} must describe delivery JSON transport files as ephemeral scratch data`
+    );
   }
 });

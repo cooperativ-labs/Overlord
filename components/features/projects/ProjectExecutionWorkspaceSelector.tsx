@@ -53,7 +53,7 @@ export function ProjectExecutionWorkspaceSelector({
       <DropdownMenuContent align="start" className="w-80">
         <DropdownMenuItem
           className="items-start gap-3"
-          onClick={() => {
+          onSelect={() => {
             if (!projectSettings.hasLocalDirectory) {
               projectSettings.openProjectSettings();
               return;
@@ -85,7 +85,7 @@ export function ProjectExecutionWorkspaceSelector({
         </DropdownMenuItem>
         <DropdownMenuItem
           className="items-start gap-3"
-          onClick={() => {
+          onSelect={() => {
             if (!projectSettings.hasSshDirectory) {
               projectSettings.openProjectSettings();
               return;
