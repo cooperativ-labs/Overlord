@@ -1,6 +1,7 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-import { formatStatus, getStatusClasses } from './helpers';
+import { getStatusClasses, getStatusInitial, getStatusTooltipLabel } from './helpers';
 import type { EnrichedCurrentChangeFile } from './types';
 
 type FileListItemProps = {
@@ -39,14 +40,20 @@ export function FileListItem({ file, isSelected, onSelect }: FileListItemProps) 
             </p>
           ) : null}
         </div>
-        <span
-          className={cn(
-            'shrink-0 rounded-full border px-2 py-0.5 text-[10px]',
-            getStatusClasses(file.file.status)
-          )}
-        >
-          {formatStatus(file.file.status)}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              aria-label={getStatusTooltipLabel(file.file.status)}
+              className={cn(
+                'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium uppercase leading-none',
+                getStatusClasses(file.file.status)
+              )}
+            >
+              {getStatusInitial(file.file.status)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{getStatusTooltipLabel(file.file.status)}</TooltipContent>
+        </Tooltip>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         <div className="min-w-0">

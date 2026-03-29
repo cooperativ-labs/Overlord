@@ -22,6 +22,29 @@ export function formatStatus(status: string): string {
   }
 }
 
+export function getStatusInitial(status: string): string {
+  switch (status) {
+    case 'added':
+      return 'a';
+    case 'deleted':
+      return 'd';
+    case 'renamed':
+      return 'r';
+    case 'copied':
+      return 'c';
+    case 'typechange':
+      return 't';
+    case 'untracked':
+      return 'u';
+    default:
+      return 'm';
+  }
+}
+
+export function getStatusTooltipLabel(status: string): string {
+  return formatStatus(status);
+}
+
 export function getStatusClasses(status: string): string {
   switch (status) {
     case 'added':
