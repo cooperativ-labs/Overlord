@@ -158,8 +158,7 @@ export function ProjectSettingsProvider({
       remoteWorkingDirectory,
       effectiveWorkingDirectory:
         resolvedExecutionWorkspace === 'local' ? localWorkingDirectory : null,
-      effectiveSshCommand:
-        resolvedExecutionWorkspace === 'ssh' ? sshCommand : null,
+      effectiveSshCommand: resolvedExecutionWorkspace === 'ssh' ? sshCommand : null,
       effectiveRemoteWorkingDirectory:
         resolvedExecutionWorkspace === 'ssh' ? remoteWorkingDirectory : null
     }),

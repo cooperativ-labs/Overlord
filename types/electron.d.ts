@@ -66,9 +66,13 @@ interface ElectronAPI {
       linkedDirectory: string | null;
       repoRoot: string | null;
     }>;
-    directoryExists: (directory?: string) => Promise<boolean>;
+    directoryExists: (
+      options?: string | { directory?: string; sshCommand?: string; remoteDirectory?: string }
+    ) => Promise<boolean>;
     listProjectFiles: (options?: {
       directory?: string;
+      sshCommand?: string;
+      remoteDirectory?: string;
       maxDepth?: number;
       maxEntriesPerDirectory?: number;
       maxFiles?: number;
@@ -76,6 +80,10 @@ interface ElectronAPI {
       files: string[];
       linkedDirectory: string | null;
       truncated: boolean;
+      error?: string;
+    }>;
+    checkSshConnection: (sshCommand: string) => Promise<{
+      ok: boolean;
       error?: string;
     }>;
   };

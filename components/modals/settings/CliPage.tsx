@@ -456,10 +456,10 @@ export function CliPage({ open }: { open: boolean }) {
           latestVersion,
           updateAvailable
         }) => {
-      setCliInstalled(installed);
-      setCliInstallPath(installPath ?? null);
-      setCliIsStale(isStale ?? false);
-      setCliVersion(version);
+          setCliInstalled(installed);
+          setCliInstallPath(installPath ?? null);
+          setCliIsStale(isStale ?? false);
+          setCliVersion(version);
           setCliInstalledVersion(installedVersion ?? null);
           setCliLatestVersion(latestVersion ?? null);
           setCliUpdateAvailable(updateAvailable ?? false);
@@ -1240,8 +1240,13 @@ export function CliPage({ open }: { open: boolean }) {
           {cliInstalled && !cliIsStale ? (
             <div className="rounded-md border p-3">
               <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                ovld {cliInstalledVersion ? `v${cliInstalledVersion}` : cliVersion ? `v${cliVersion}` : ''} installed at{' '}
-                {cliInstallPath}
+                ovld{' '}
+                {cliInstalledVersion
+                  ? `v${cliInstalledVersion}`
+                  : cliVersion
+                    ? `v${cliVersion}`
+                    : ''}{' '}
+                installed at {cliInstallPath}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Automatically updated when the desktop app updates.
@@ -1249,7 +1254,10 @@ export function CliPage({ open }: { open: boolean }) {
               {cliUpdateAvailable && cliLatestVersion ? (
                 <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
                   New CLI version available: v{cliLatestVersion}. Reinstall the CLI wrapper or run
-                  <code className="ml-1 rounded bg-muted px-1">npm install -g overlord-cli@latest</code>.
+                  <code className="ml-1 rounded bg-muted px-1">
+                    npm install -g overlord-cli@latest
+                  </code>
+                  .
                 </p>
               ) : null}
               {cliInstallMessage ? (

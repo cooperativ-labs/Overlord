@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
+import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { findOpenBlockingQuestions } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
-
-import { useTerminal } from './terminal/TerminalProvider';
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 
@@ -18,13 +18,6 @@ type Props = {
   projectId: string;
   events: TicketEvent[];
   workingDirectory?: string | null;
-};
-
-type FileTreeResponse = {
-  error?: string;
-  files?: string[];
-  linkedDirectory?: string | null;
-  truncated?: boolean;
 };
 
 async function postConversationEntry(
@@ -53,74 +46,24 @@ export function TicketConversationComposer({
   events,
   workingDirectory
 }: Props) {
-  const { isElectron } = useTerminal();
+  const { isElectron } = useElectron();
   const [followUpDraft, setFollowUpDraft] = useState('');
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
-  const [linkedFiles, setLinkedFiles] = useState<string[]>([]);
-  const [fileTreeLoading, setFileTreeLoading] = useState(false);
-  const [fileTreeError, setFileTreeError] = useState<string | null>(null);
-  const [fileTreeTruncated, setFileTreeTruncated] = useState(false);
   const [followUpFile, setFollowUpFile] = useState('');
   const [answerFiles, setAnswerFiles] = useState<Record<string, string>>({});
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const {
+    files: linkedFiles,
+    loading: fileTreeLoading,
+    error: fileTreeError,
+    truncated: fileTreeTruncated
+  } = useWorkspaceFileTree({ workingDirectory });
+
   const openQuestions = useMemo(() => findOpenBlockingQuestions(events), [events]);
   const hasLinkedFiles = linkedFiles.length > 0;
   const fileOptionsListId = `ticket-file-options-${ticketId}`;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchFileTree() {
-      setFileTreeLoading(true);
-      setFileTreeError(null);
-
-      try {
-        if (
-          isElectron &&
-          workingDirectory?.trim() &&
-          window.electronAPI?.filesystem?.listProjectFiles
-        ) {
-          const payload = await window.electronAPI.filesystem.listProjectFiles({
-            directory: workingDirectory.trim()
-          });
-          if (payload.error) {
-            throw new Error(payload.error);
-          }
-          if (cancelled) return;
-          setLinkedFiles(payload.files ?? []);
-          setFileTreeTruncated(Boolean(payload.truncated));
-          return;
-        }
-
-        const response = await fetch(`/api/projects/${projectId}/file-tree`, { cache: 'no-store' });
-        const payload = (await response.json()) as FileTreeResponse;
-
-        if (!response.ok) {
-          throw new Error(payload.error ?? 'Failed to load project files.');
-        }
-
-        if (cancelled) return;
-        setLinkedFiles(payload.files ?? []);
-        setFileTreeTruncated(Boolean(payload.truncated));
-      } catch (error) {
-        if (cancelled) return;
-        setLinkedFiles([]);
-        setFileTreeTruncated(false);
-        setFileTreeError(error instanceof Error ? error.message : 'Failed to load project files.');
-      } finally {
-        if (!cancelled) {
-          setFileTreeLoading(false);
-        }
-      }
-    }
-
-    fetchFileTree();
-    return () => {
-      cancelled = true;
-    };
-  }, [isElectron, projectId, workingDirectory]);
 
   function appendLinkedFile(message: string, filePath: string): string {
     const trimmedPath = filePath.trim();

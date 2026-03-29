@@ -3,7 +3,11 @@ import { headers } from 'next/headers';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
-import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
+import {
+  listProjectFiles,
+  listRemoteProjectFiles,
+  resolveLinkedDirectory
+} from '@/lib/filesystem/project-file-tree';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
@@ -306,7 +310,7 @@ export default async function TicketsBoardContent({
   if (effectiveMentionProjectId && view === 'board') {
     const { data: projectForMentions } = await supabase
       .from('projects')
-      .select('local_working_directory')
+      .select('local_working_directory,ssh_command,remote_working_directory')
       .eq('id', effectiveMentionProjectId)
       .limit(1)
       .maybeSingle();
@@ -325,6 +329,21 @@ export default async function TicketsBoardContent({
             listProjectFiles(resolvedProjectDirectory),
             new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error('File listing timed out')), 3000)
+            )
+          ]);
+          objectiveFileMentionPaths = result.files;
+        } catch {
+          // Non-fatal: file mentions will be unavailable
+        }
+      } else if (projectForMentions?.ssh_command && projectForMentions?.remote_working_directory) {
+        try {
+          const result = await Promise.race([
+            listRemoteProjectFiles(
+              projectForMentions.ssh_command,
+              projectForMentions.remote_working_directory
+            ),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Remote file listing timed out')), 10000)
             )
           ]);
           objectiveFileMentionPaths = result.files;

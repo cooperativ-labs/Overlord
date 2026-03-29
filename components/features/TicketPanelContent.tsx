@@ -20,7 +20,11 @@ import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
-import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
+import {
+  listProjectFiles,
+  listRemoteProjectFiles,
+  resolveLinkedDirectory
+} from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
@@ -279,10 +283,19 @@ export async function TicketPanelContent({
         ? resolvedWorkspaceDirectory
         : null;
     hasProjectWorkingDirectory = projectDirectoryExists;
-    objectiveFileMentionPaths =
-      projectDirectoryExists && resolvedProjectDirectory
-        ? (await listProjectFiles(resolvedProjectDirectory)).files
-        : [];
+    if (projectDirectoryExists && resolvedProjectDirectory) {
+      objectiveFileMentionPaths = (await listProjectFiles(resolvedProjectDirectory)).files;
+    } else if (projectSshCommand && projectRemoteWorkingDirectory) {
+      try {
+        objectiveFileMentionPaths = (
+          await listRemoteProjectFiles(projectSshCommand, projectRemoteWorkingDirectory)
+        ).files;
+      } catch {
+        objectiveFileMentionPaths = [];
+      }
+    } else {
+      objectiveFileMentionPaths = [];
+    }
   }
   const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
 

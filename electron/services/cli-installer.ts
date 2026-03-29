@@ -1,9 +1,9 @@
 import { app } from 'electron';
-import { execFile } from 'node:child_process';
 import fs from 'fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import os from 'os';
 import path from 'path';
-import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
@@ -141,7 +141,9 @@ export async function getCliInstallStatus(): Promise<CliInstallStatus> {
         version,
         installedVersion,
         latestVersion,
-        updateAvailable: Boolean(latestVersion && installedVersion && latestVersion !== installedVersion)
+        updateAvailable: Boolean(
+          latestVersion && installedVersion && latestVersion !== installedVersion
+        )
       };
     }
   }

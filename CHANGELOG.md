@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.10.0] - 2026-03-29:19:20
+
+### Added
+- Add SSH-backed project file tree loading so remote workspaces can provide file mentions and linked-file pickers without requiring a local checkout.
+- Add a shared workspace file-tree hook for Electron editors and ticket flows so blank tickets, inline objective editing, new ticket, quick run, and conversation replies all resolve files from the active local or SSH workspace.
+
+### Fixed
+- Fix project file-tree APIs and Electron IPC fallbacks so projects without an available local directory can still list files from their configured SSH workspace.
+- Fix current-changes inspection for workspace-aware projects so status and diff loading consistently reuse the active local or remote workspace payload.
+
+### Changed
+- Update ticket board and ticket panel file-mention loading to prefer local directories when available and fall back to configured SSH workspaces when they are not.
+- Update project pickers and Electron preload types to carry SSH command and remote working directory metadata where file-tree and CLI flows need it.
+
+### Security
+- None.
+
+### Refactor
+- Extract shared SSH shell parsing and escaping utilities so Electron IPC and server-side file-tree code build remote commands consistently.
+- Centralize workspace file-tree fetching logic instead of duplicating Electron-specific file loading across multiple components.
+
+### Chore
+- Bump the package version and CLI package version to `3.10.0`.
+
 ## [3.9.0] - 2026-03-29:18:11
 
 ### Added

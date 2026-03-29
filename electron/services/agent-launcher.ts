@@ -225,15 +225,14 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // For remote (SSH) launches, inline the context via base64 to avoid referencing
   // a local temp file that doesn't exist on the remote server.
   const isRemote = Boolean(input.sshCommand?.trim());
-  const contextRef = isRemote
-    ? '"$_OVLD_CTX"'
-    : `"$(cat ${shellQuote(contextFile)})"`;
+  const contextRef = isRemote ? '"$_OVLD_CTX"' : `"$(cat ${shellQuote(contextFile)})"`;
 
   if (input.agent === 'claude') {
     // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
     // so we don't need to pass a temporary --settings file.
     // For SSH, skip the local settings file — it won't exist on the remote.
-    const settingsArg = bundleInstalled || isRemote ? '' : ` --settings ${shellQuote(settingsFile)}`;
+    const settingsArg =
+      bundleInstalled || isRemote ? '' : ` --settings ${shellQuote(settingsFile)}`;
     command = `claude --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
     command = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;

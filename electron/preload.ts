@@ -29,14 +29,19 @@ const electronAPI = {
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },
   filesystem: {
-    directoryExists: (directory?: string) =>
-      ipcRenderer.invoke('filesystem:directory-exists', directory),
+    directoryExists: (
+      options?: string | { directory?: string; sshCommand?: string; remoteDirectory?: string }
+    ) => ipcRenderer.invoke('filesystem:directory-exists', options),
     listProjectFiles: (options?: {
       directory?: string;
+      sshCommand?: string;
+      remoteDirectory?: string;
       maxDepth?: number;
       maxEntriesPerDirectory?: number;
       maxFiles?: number;
     }) => ipcRenderer.invoke('filesystem:list-project-files', options),
+    checkSshConnection: (sshCommand: string) =>
+      ipcRenderer.invoke('filesystem:check-ssh-connection', sshCommand),
     getGitStatus: (options?: {
       directory?: string;
       sshCommand?: string;
