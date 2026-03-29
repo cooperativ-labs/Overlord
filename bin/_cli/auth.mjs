@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global console, fetch, process, setTimeout, URL, URLSearchParams */
 
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -8,6 +9,7 @@ import { buildAuthHeaders, clearCredentials, loadCredentials, loadRuntime, saveC
 
 const DEFAULT_OVERLORD_URL = process.env.OVERLORD_URL ?? 'http://localhost:3000';
 const DEFAULT_CLI_REDIRECT_URI = 'http://127.0.0.1:45619/callback';
+const DEFAULT_DEVICE_POLL_INTERVAL_SECONDS = 5;
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
@@ -170,6 +172,45 @@ async function fetchAuthConfig(platformUrl, localSecret) {
   };
 }
 
+async function requestDeviceAuthorization(platformUrl, localSecret) {
+  const res = await fetch(`${platformUrl}/api/auth/device/request`, {
+    method: 'POST',
+    headers: buildAuthHeaders('', localSecret)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Device authorization request failed (${res.status}): ${snippet(text)}`);
+  }
+
+  return readJsonOrThrow(res, 'Device authorization request', platformUrl);
+}
+
+async function pollDeviceAuthorization(platformUrl, deviceCode, localSecret) {
+  const res = await fetch(`${platformUrl}/api/auth/device/poll`, {
+    method: 'POST',
+    headers: {
+      ...buildAuthHeaders('', localSecret),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ device_code: deviceCode })
+  });
+
+  const body = await readJsonOrThrow(res, 'Device authorization poll', platformUrl);
+
+  if (res.ok) return body;
+
+  if (res.status === 400 || res.status === 404 || res.status === 429) {
+    return body;
+  }
+
+  throw new Error(`Device authorization poll failed (${res.status}): ${snippet(JSON.stringify(body))}`);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function exchangeCodeForSupabaseTokens(supabaseUrl, clientId, code, codeVerifier, redirectUri) {
   const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
     method: 'POST',
@@ -219,35 +260,98 @@ function openBrowser(url) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Public auth commands
-// ---------------------------------------------------------------------------
+function printDeviceAuthorizationInstructions(verificationUri, userCode, logger = console) {
+  logger.log('  Verification URL:', verificationUri);
+  logger.log('  Authorization code:', userCode);
+  logger.log('\nOpen the verification URL in any browser to approve this CLI login.\n');
+}
 
-export async function authLogin() {
-  const runtime = loadRuntime();
-  const platformUrl = process.env.OVERLORD_URL ?? runtime?.platform_url ?? DEFAULT_OVERLORD_URL;
-  const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
+export async function authLoginViaDeviceFlow(
+  platformUrl,
+  localSecret,
+  {
+    browserOpener = openBrowser,
+    logger = console,
+    sleepFn = sleep,
+    stdout = process.stdout
+  } = {}
+) {
+  const deviceAuth = await requestDeviceAuthorization(platformUrl, localSecret);
+  const verificationUri = String(deviceAuth.verification_uri ?? '').trim();
+  const userCode = String(deviceAuth.user_code ?? '').trim();
+  const deviceCode = String(deviceAuth.device_code ?? '').trim();
 
-  console.log('Starting Overlord CLI authorization...\n');
-
-  // 1. Discover OAuth config from the platform
-  let supabaseUrl, cliClientId, cliRedirectUri, resolvedPlatformUrl;
-  try {
-    const config = await fetchAuthConfig(platformUrl, localSecret);
-    supabaseUrl = config.supabase_url;
-    cliClientId = config.cli_client_id;
-    cliRedirectUri = config.cli_redirect_uri;
-    resolvedPlatformUrl = config.platform_url ?? platformUrl;
-  } catch (err) {
-    console.error(`\nError: ${err.message}`);
-    process.exit(1);
+  if (!verificationUri || !userCode || !deviceCode) {
+    throw new Error('Device authorization response was missing required fields.');
   }
 
+  const initialPollIntervalSeconds = Number(deviceAuth.interval);
+  let pollIntervalSeconds =
+    Number.isFinite(initialPollIntervalSeconds) && initialPollIntervalSeconds > 0
+      ? initialPollIntervalSeconds
+      : DEFAULT_DEVICE_POLL_INTERVAL_SECONDS;
+
+  printDeviceAuthorizationInstructions(verificationUri, userCode, logger);
+  logger.log('Opening browser...\n');
+  browserOpener(verificationUri);
+
+  stdout.write('Waiting for browser authorization');
+
+  for (;;) {
+    await sleepFn(pollIntervalSeconds * 1000);
+
+    const result = await pollDeviceAuthorization(platformUrl, deviceCode, localSecret);
+    const status = String(result?.status ?? '');
+
+    if (status === 'pending') {
+      stdout.write('.');
+      continue;
+    }
+
+    if (status === 'slow_down') {
+      stdout.write('.');
+      const nextInterval = Number(result?.interval);
+      if (Number.isFinite(nextInterval) && nextInterval > 0) {
+        pollIntervalSeconds = nextInterval;
+      } else {
+        pollIntervalSeconds += 1;
+      }
+      continue;
+    }
+
+    if (status === 'authorized') {
+      logger.log('\n');
+      return {
+        access_token: result.access_token,
+        platform_url: result.platform_url ?? platformUrl
+      };
+    }
+
+    if (status === 'expired') {
+      throw new Error('Authorization request expired. Please run `ovld auth login` again.');
+    }
+
+    if (result?.error) {
+      throw new Error(String(result.error));
+    }
+
+    throw new Error(`Unexpected device authorization status: ${status || 'unknown'}`);
+  }
+}
+
+export async function authLoginViaOAuthLoopback(platformUrl, localSecret) {
+  // 1. Discover OAuth config from the platform
+  let supabaseUrl, cliClientId, cliRedirectUri, resolvedPlatformUrl;
+  const config = await fetchAuthConfig(platformUrl, localSecret);
+  supabaseUrl = config.supabase_url;
+  cliClientId = config.cli_client_id;
+  cliRedirectUri = config.cli_redirect_uri;
+  resolvedPlatformUrl = config.platform_url ?? platformUrl;
+
   if (!supabaseUrl || !cliClientId) {
-    console.error(
-      '\nError: OAuth is not configured for CLI login. Set SUPABASE_OAUTH_CLI_CLIENT_ID on the Overlord server.'
+    throw new Error(
+      'OAuth is not configured for CLI login. Set SUPABASE_OAUTH_CLI_CLIENT_ID on the Overlord server.'
     );
-    process.exit(1);
   }
 
   // 2. PKCE parameters + state
@@ -256,14 +360,7 @@ export async function authLogin() {
   const state = generateState();
 
   // 3. Use exact loopback redirect URI (Supabase does not support wildcard callback URLs)
-  let redirectTarget;
-  try {
-    redirectTarget = parseLoopbackRedirectUri(cliRedirectUri ?? DEFAULT_CLI_REDIRECT_URI);
-  } catch (err) {
-    console.error(`\nError: ${err.message}`);
-    process.exit(1);
-  }
-
+  const redirectTarget = parseLoopbackRedirectUri(cliRedirectUri ?? DEFAULT_CLI_REDIRECT_URI);
   const { host, port, callbackPath, redirectUri } = redirectTarget;
 
   // 4. Build the Supabase OAuth authorization URL
@@ -285,47 +382,69 @@ export async function authLogin() {
 
   // 6. Wait for the auth code
   let authCode;
-  try {
-    process.stdout.write('Waiting for browser authorization');
-    authCode = await callbackPromise;
-    console.log('\n');
-  } catch (err) {
-    console.error(`\n\nAuthorization failed: ${err.message}`);
-    process.exit(1);
-  }
+  process.stdout.write('Waiting for browser authorization');
+  authCode = await callbackPromise;
+  console.log('\n');
 
   // 7. Exchange auth code → Supabase tokens
-  let supabaseTokens;
-  try {
-    supabaseTokens = await exchangeCodeForSupabaseTokens(
-      supabaseUrl,
-      cliClientId,
-      authCode,
-      codeVerifier,
-      redirectUri
-    );
-  } catch (err) {
-    console.error(`\nError exchanging code for tokens: ${err.message}`);
-    process.exit(1);
-  }
+  const supabaseTokens = await exchangeCodeForSupabaseTokens(
+    supabaseUrl,
+    cliClientId,
+    authCode,
+    codeVerifier,
+    redirectUri
+  );
 
   // 8. Exchange Supabase access token → Overlord agent_token
-  let agentTokenData;
-  try {
-    agentTokenData = await exchangeForAgentToken(
-      resolvedPlatformUrl,
-      supabaseTokens.access_token,
-      localSecret
-    );
-  } catch (err) {
-    console.error(`\nError obtaining agent token: ${err.message}`);
-    process.exit(1);
-  }
+  const agentTokenData = await exchangeForAgentToken(
+    resolvedPlatformUrl,
+    supabaseTokens.access_token,
+    localSecret
+  );
 
-  // 9. Persist credentials (same format — backward-compatible)
-  saveCredentials({
+  return {
     access_token: agentTokenData.access_token,
     platform_url: agentTokenData.platform_url ?? resolvedPlatformUrl
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public auth commands
+// ---------------------------------------------------------------------------
+
+export async function authLogin() {
+  const runtime = loadRuntime();
+  const platformUrl = process.env.OVERLORD_URL ?? runtime?.platform_url ?? DEFAULT_OVERLORD_URL;
+  const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
+
+  console.log('Starting Overlord CLI authorization...\n');
+  let credentials;
+  try {
+    credentials = await authLoginViaDeviceFlow(platformUrl, localSecret);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const canFallbackToLoopback =
+      message.includes('Device authorization request failed (404)') ||
+      message.includes('Device authorization request failed (405)');
+
+    if (!canFallbackToLoopback) {
+      console.error(`\nAuthorization failed: ${message}`);
+      process.exit(1);
+    }
+
+    console.log('Device authorization is unavailable on this server. Falling back to loopback OAuth.\n');
+
+    try {
+      credentials = await authLoginViaOAuthLoopback(platformUrl, localSecret);
+    } catch (fallbackErr) {
+      console.error(`\nAuthorization failed: ${fallbackErr.message}`);
+      process.exit(1);
+    }
+  }
+
+  saveCredentials({
+    access_token: credentials.access_token,
+    platform_url: credentials.platform_url ?? platformUrl
   });
 
   console.log('Logged in successfully!');
@@ -354,7 +473,7 @@ export async function runAuthCommand(subcommand) {
     console.log(`ovld auth <subcommand>
 
 Subcommands:
-  login    Authorize the CLI via browser (OAuth PKCE flow)
+  login    Authorize the CLI via browser (works locally or over SSH)
   status   Show current login status
   logout   Remove stored credentials
 `);

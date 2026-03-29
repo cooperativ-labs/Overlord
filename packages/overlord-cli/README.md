@@ -20,6 +20,7 @@ overlord help
 ```
 
 The CLI exposes the same command set under both names.
+`ovld auth login` opens a browser when possible and also prints a verification URL/code so login can be completed from another machine over SSH.
 
 Common commands:
 
