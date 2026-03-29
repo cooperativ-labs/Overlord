@@ -27,6 +27,8 @@ type TicketPanelHeaderProps = {
   geminiCommand: string;
   opencodeCommand: string;
   workingDirectory: string | null;
+  sshCommand: string | null;
+  remoteWorkingDirectory: string | null;
   hasProjectWorkingDirectory: boolean;
   closePath: string;
   isAgentRunning?: boolean;
@@ -46,6 +48,8 @@ export function TicketPanelHeader({
   geminiCommand,
   opencodeCommand,
   workingDirectory,
+  sshCommand,
+  remoteWorkingDirectory,
   hasProjectWorkingDirectory,
   closePath,
   isAgentRunning = false
@@ -91,6 +95,8 @@ export function TicketPanelHeader({
           geminiCommand={geminiCommand}
           opencodeCommand={opencodeCommand}
           workingDirectory={workingDirectory}
+          sshCommand={sshCommand}
+          remoteWorkingDirectory={remoteWorkingDirectory}
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         />
 

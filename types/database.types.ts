@@ -792,6 +792,8 @@ export type Database = {
           local_working_directory: string | null;
           name: string;
           organization_id: number;
+          remote_working_directory: string | null;
+          ssh_command: string | null;
           updated_at: string;
         };
         Insert: {
@@ -802,6 +804,8 @@ export type Database = {
           local_working_directory?: string | null;
           name: string;
           organization_id: number;
+          remote_working_directory?: string | null;
+          ssh_command?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -812,6 +816,8 @@ export type Database = {
           local_working_directory?: string | null;
           name?: string;
           organization_id?: number;
+          remote_working_directory?: string | null;
+          ssh_command?: string | null;
           updated_at?: string;
         };
         Relationships: [

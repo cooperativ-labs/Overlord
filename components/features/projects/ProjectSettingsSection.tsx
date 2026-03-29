@@ -1,6 +1,6 @@
 'use client';
 
-import { Folder, GitCompareArrows, Settings } from 'lucide-react';
+import { Folder, GitCompareArrows, Server, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -25,13 +25,17 @@ type ProjectSettingsSectionProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
+  initialSshCommand: string | null;
+  initialRemoteWorkingDirectory: string | null;
 };
 
 export function ProjectSettingsSection({
   projectId,
   initialName,
   initialColor,
-  initialWorkingDirectory
+  initialWorkingDirectory,
+  initialSshCommand,
+  initialRemoteWorkingDirectory
 }: ProjectSettingsSectionProps) {
   const { api, isElectron } = useElectron();
   const router = useRouter();
@@ -235,6 +239,18 @@ export function ProjectSettingsSection({
                   {hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
                 </span>
               </button>
+
+              {initialSshCommand ? (
+                <span
+                  className="mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground md:mt-0"
+                  title={`SSH: ${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`}
+                >
+                  <Server className="h-3 w-3" />
+                  <span className="truncate">
+                    {initialRemoteWorkingDirectory || initialSshCommand}
+                  </span>
+                </span>
+              ) : null}
 
               <Button
                 type="button"

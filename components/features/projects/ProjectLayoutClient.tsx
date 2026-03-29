@@ -19,6 +19,8 @@ type ProjectLayoutClientProps = {
   projectName: string;
   projectColor: string;
   projectWorkingDirectory: string | null;
+  projectSshCommand: string | null;
+  projectRemoteWorkingDirectory: string | null;
   projectEverhourProjectId: string | null;
   statuses: Array<{
     name: string;
@@ -37,6 +39,8 @@ export function ProjectLayoutClient({
   projectName,
   projectColor,
   projectWorkingDirectory,
+  projectSshCommand,
+  projectRemoteWorkingDirectory,
   projectEverhourProjectId,
   statuses,
   hasEverhourApiKey
@@ -95,6 +99,8 @@ export function ProjectLayoutClient({
       initialName={projectName}
       initialColor={projectColor}
       initialWorkingDirectory={projectWorkingDirectory}
+      initialSshCommand={projectSshCommand}
+      initialRemoteWorkingDirectory={projectRemoteWorkingDirectory}
       initialEverhourProjectId={projectEverhourProjectId}
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}
@@ -105,6 +111,8 @@ export function ProjectLayoutClient({
           initialName={projectName}
           initialColor={projectColor}
           initialWorkingDirectory={projectWorkingDirectory}
+          initialSshCommand={projectSshCommand}
+          initialRemoteWorkingDirectory={projectRemoteWorkingDirectory}
         />
         {selectedSegment === 'current-changes' ? children : board}
         {selectedSegment === 'current-changes' ? null : children}

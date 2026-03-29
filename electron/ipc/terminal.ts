@@ -360,6 +360,8 @@ export function registerTerminalIpc(): void {
         flags?: string[];
         model?: string;
         thinking?: string;
+        sshCommand?: string;
+        remoteWorkingDirectory?: string;
       }
     ) => {
       const { command, cwd, env } = await prepareAgentLaunch({
@@ -370,7 +372,9 @@ export function registerTerminalIpc(): void {
         launchMode: payload.launchMode,
         flags: payload.flags,
         model: payload.model,
-        thinking: payload.thinking
+        thinking: payload.thinking,
+        sshCommand: payload.sshCommand,
+        remoteWorkingDirectory: payload.remoteWorkingDirectory
       });
 
       const scriptPath = writeLaunchScript(command, cwd, env);

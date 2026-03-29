@@ -141,7 +141,9 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('projects')
-      .select('id,name,color,everhour_project_id,local_working_directory')
+      .select(
+        'id,name,color,everhour_project_id,local_working_directory,ssh_command,remote_working_directory'
+      )
       .eq('organization_id', organizationId)
       .order('name', { ascending: true }),
     ticket.schedule_id
@@ -237,9 +239,10 @@ export async function TicketPanelContent({
     );
   }
 
-  const projectWorkingDirectory = projectOptions.find(
-    project => project.id === activeProjectId
-  )?.local_working_directory;
+  const activeProject = projectOptions.find(project => project.id === activeProjectId);
+  const projectWorkingDirectory = activeProject?.local_working_directory;
+  const projectSshCommand = activeProject?.ssh_command ?? null;
+  const projectRemoteWorkingDirectory = activeProject?.remote_working_directory ?? null;
   const configuredProjectDirectory =
     typeof projectWorkingDirectory === 'string' && projectWorkingDirectory.trim().length > 0
       ? projectWorkingDirectory.trim()
@@ -307,6 +310,8 @@ export async function TicketPanelContent({
           geminiCommand={gemini}
           opencodeCommand={opencode}
           workingDirectory={workingDirectory}
+          sshCommand={projectSshCommand}
+          remoteWorkingDirectory={projectRemoteWorkingDirectory}
           hasProjectWorkingDirectory={hasProjectWorkingDirectory}
           closePath={closePath}
           isAgentRunning={agentSession?.session_state === 'attached'}

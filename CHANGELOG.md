@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.5.0] - 2026-03-29:09:33
+
+### Added
+- Add SSH remote workspace support for projects so agents can launch on a remote server with a configured SSH command and remote working directory.
+- Route agent launch commands through the configured remote workspace when SSH is enabled.
+
+### Fixed
+- None.
+
+### Changed
+- Show the configured remote workspace in project settings and project headers so SSH-backed projects are easier to recognize.
+- Update ticket launch controls and agent selection UI to respect remote workspace configuration.
+- Simplify file-change hunk popovers to surface linked review tickets and their objectives more directly.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version to `3.5.0`.
+
 ## [3.4.0] - 2026-03-27:18:13
 
 ### Added

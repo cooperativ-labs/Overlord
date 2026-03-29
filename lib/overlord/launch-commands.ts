@@ -111,6 +111,20 @@ export function selectRestartSessionCommand(
   return commands.codex;
 }
 
+/**
+ * Wraps an existing launch command to run on a remote server via SSH.
+ * If no sshCommand is provided, returns the original command unchanged.
+ */
+export function buildSshWrappedCommand(
+  baseCommand: string,
+  sshCommand: string | null | undefined,
+  remoteWorkingDirectory?: string | null
+): string {
+  if (!sshCommand?.trim()) return baseCommand;
+  const cdPart = remoteWorkingDirectory?.trim() ? `cd ${remoteWorkingDirectory.trim()} && ` : '';
+  return `${sshCommand.trim()} '${cdPart}${baseCommand.replace(/'/g, "'\\''")}'`;
+}
+
 export function buildNativeResumeCommand(
   agentIdentifier: string | null | undefined,
   externalSessionId: string | null | undefined

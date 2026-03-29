@@ -14,7 +14,9 @@ type TerminalContextValue = {
     launchMode?: 'run' | 'ask',
     flags?: string[],
     model?: string,
-    thinking?: string
+    thinking?: string,
+    sshCommand?: string,
+    remoteWorkingDirectory?: string
   ) => Promise<void>;
 };
 
@@ -32,7 +34,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       launchMode: 'run' | 'ask' = 'run',
       flags?: string[],
       model?: string,
-      thinking?: string
+      thinking?: string,
+      sshCommand?: string,
+      remoteWorkingDirectory?: string
     ) => {
       if (!api) return;
       await api.terminal.launchAgent(
@@ -43,7 +47,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
         launchMode,
         flags,
         model,
-        thinking
+        thinking,
+        sshCommand,
+        remoteWorkingDirectory
       );
     },
     [api]

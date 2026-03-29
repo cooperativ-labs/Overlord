@@ -45,6 +45,8 @@ type AgentSplitButtonProps = {
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   commands?: Record<LaunchAgentTypeValue, string>;
   workingDirectory?: string | null;
+  sshCommand?: string | null;
+  remoteWorkingDirectory?: string | null;
   activeAgentIdentifier?: string | null;
   assignedSelection?: TicketAssignedAgent | null;
   hasProjectWorkingDirectory?: boolean;
@@ -107,6 +109,8 @@ export function AgentSplitButton({
   agentFlags,
   commands,
   workingDirectory,
+  sshCommand,
+  remoteWorkingDirectory,
   activeAgentIdentifier,
   assignedSelection,
   hasProjectWorkingDirectory,
@@ -126,7 +130,9 @@ export function AgentSplitButton({
     isAgentIdentifierMatch(effectiveSelection.agent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
-  const canRunAgent = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
+  const hasSshConfig = Boolean(sshCommand?.trim());
+  const localDirAccess = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
+  const canRunAgent = hasSshConfig || localDirAccess;
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';
   const isDisabled =
     (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
@@ -191,7 +197,11 @@ export function AgentSplitButton({
           'run',
           agentFlags?.[agentValue],
           options?.useStoredModelPreference ? (effectiveSelection.model ?? undefined) : undefined,
-          options?.useStoredModelPreference ? (effectiveSelection.thinking ?? undefined) : undefined
+          options?.useStoredModelPreference
+            ? (effectiveSelection.thinking ?? undefined)
+            : undefined,
+          sshCommand ?? undefined,
+          remoteWorkingDirectory ?? undefined
         );
       } catch (error) {
         console.error('Failed to launch agent:', error);

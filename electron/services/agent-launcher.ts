@@ -30,6 +30,10 @@ type LaunchAgentInput = {
   model?: string;
   /** Preferred thinking/effort level (e.g. 'high', 'max'). Passed as agent-specific flag. */
   thinking?: string;
+  /** SSH command to connect to remote server (e.g. "ssh user@host"). */
+  sshCommand?: string;
+  /** Working directory path on the remote server. */
+  remoteWorkingDirectory?: string;
 };
 
 type LaunchAgentResult = {
@@ -233,6 +237,27 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt "$(cat ${shellQuote(contextFile)})"`;
   } else {
     throw new Error(`Unknown agent type: ${input.agent}`);
+  }
+
+  // When SSH is configured, wrap the command to run on the remote server.
+  // The launch script will SSH into the server, cd to the remote directory,
+  // set env vars, and run the agent command remotely.
+  if (input.sshCommand?.trim()) {
+    const remoteCwd = input.remoteWorkingDirectory?.trim();
+    const envExports = Object.entries(launchEnv)
+      .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
+      .join('; ');
+    const cdPart = remoteCwd ? `cd ${shellQuote(remoteCwd)} && ` : '';
+    const remoteScript = `${cdPart}${envExports}; ${command}`;
+    const sshWrappedCommand = `${input.sshCommand.trim()} ${shellQuote(remoteScript)}`;
+
+    return {
+      command: sshWrappedCommand,
+      // No local cwd needed — the command runs remotely
+      cwd: undefined,
+      // No local env vars needed — they're exported inside the SSH session
+      env: {}
+    };
   }
 
   return {

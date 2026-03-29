@@ -1,0 +1,8 @@
+slug: rn-button-component
+name: rn-button-component
+description: Ensures buttons use the unified Button component with proper state
+  management, icon support, and glass effect integration. Apply when creating or
+  modifying buttons in the app.
+tags: []
+compat: []
+sha256: 806ee855fc4b1ff57896526e31912b2fcfa8c3403e65f0ae55b1c951f08ff292

@@ -1,0 +1,8 @@
+slug: expo-router
+name: expo-router
+description: Patterns for Expo Router including Stack configuration, native
+  tabs, and file-based routing best practices. Apply when working with
+  navigation, routing, or screen configuration.
+tags: []
+compat: []
+sha256: 202b315c374ae6e07427c443e1c698459ede0a79ca2596d5551ee7d21854d0fe

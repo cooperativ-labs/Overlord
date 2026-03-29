@@ -28,6 +28,8 @@ type TicketHeaderActionProps = {
   geminiCommand: string;
   opencodeCommand: string;
   workingDirectory: string | null;
+  sshCommand: string | null;
+  remoteWorkingDirectory: string | null;
   hasProjectWorkingDirectory: boolean;
 };
 
@@ -44,6 +46,8 @@ export function TicketHeaderAction({
   geminiCommand,
   opencodeCommand,
   workingDirectory,
+  sshCommand,
+  remoteWorkingDirectory,
   hasProjectWorkingDirectory
 }: TicketHeaderActionProps) {
   const { isElectron } = useTerminal();
@@ -98,6 +102,8 @@ export function TicketHeaderAction({
           opencode: opencodeCommand
         }}
         workingDirectory={workingDirectory}
+        sshCommand={sshCommand}
+        remoteWorkingDirectory={remoteWorkingDirectory}
         hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         size="sm"
       />

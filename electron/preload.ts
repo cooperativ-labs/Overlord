@@ -10,7 +10,9 @@ const electronAPI = {
       launchMode?: 'run' | 'ask',
       flags?: string[],
       model?: string,
-      thinking?: string
+      thinking?: string,
+      sshCommand?: string,
+      remoteWorkingDirectory?: string
     ) =>
       ipcRenderer.invoke('terminal:launch-agent', {
         ticketId,
@@ -20,7 +22,9 @@ const electronAPI = {
         launchMode,
         flags,
         model,
-        thinking
+        thinking,
+        sshCommand,
+        remoteWorkingDirectory
       }),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },

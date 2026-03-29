@@ -12,6 +12,8 @@ export type SidebarProject = {
   color: string;
   organizationId: number;
   localWorkingDirectory: string | null;
+  sshCommand: string | null;
+  remoteWorkingDirectory: string | null;
 };
 
 function revalidateProjectPaths(projectId: string) {
@@ -27,7 +29,9 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
 
   const { data, error } = await supabase
     .from('projects')
-    .select('id,name,color,organization_id,local_working_directory')
+    .select(
+      'id,name,color,organization_id,local_working_directory,ssh_command,remote_working_directory'
+    )
     .order('name', { ascending: true });
 
   if (error || !data) {
@@ -40,7 +44,9 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
     name: project.name,
     color: project.color,
     organizationId: project.organization_id,
-    localWorkingDirectory: project.local_working_directory
+    localWorkingDirectory: project.local_working_directory,
+    sshCommand: project.ssh_command,
+    remoteWorkingDirectory: project.remote_working_directory
   }));
 }
 
@@ -149,6 +155,36 @@ export async function deleteProjectAction(input: { projectId: string }): Promise
 
   revalidatePath('/projects');
   revalidatePath('/u');
+}
+
+export async function updateProjectSshConfigAction(input: {
+  projectId: string;
+  sshCommand: string | null;
+  remoteWorkingDirectory: string | null;
+}): Promise<void> {
+  const sshCommand =
+    typeof input.sshCommand === 'string' && input.sshCommand.trim().length > 0
+      ? input.sshCommand.trim()
+      : null;
+  const remoteWorkingDirectory =
+    typeof input.remoteWorkingDirectory === 'string' &&
+    input.remoteWorkingDirectory.trim().length > 0
+      ? input.remoteWorkingDirectory.trim()
+      : null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ ssh_command: sshCommand, remote_working_directory: remoteWorkingDirectory })
+    .eq('id', input.projectId)
+    .select('organization_id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to update project SSH configuration.');
+  }
+
+  revalidateProjectPaths(input.projectId);
 }
 
 export async function createProject(input: {

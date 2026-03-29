@@ -63,6 +63,8 @@ type ProjectSettingsModalProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
+  initialSshCommand: string | null;
+  initialRemoteWorkingDirectory: string | null;
   initialEverhourProjectId: string | null;
   initialStatuses: Array<{
     name: string;
@@ -82,6 +84,8 @@ export function ProjectSettingsModal({
   initialName,
   initialColor,
   initialWorkingDirectory,
+  initialSshCommand,
+  initialRemoteWorkingDirectory,
   initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey,
@@ -174,6 +178,8 @@ export function ProjectSettingsModal({
                   projectId={projectId}
                   organizationId={organizationId}
                   initialWorkingDirectory={initialWorkingDirectory}
+                  initialSshCommand={initialSshCommand}
+                  initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
                   initialStatuses={initialStatuses}
                 />
               )}

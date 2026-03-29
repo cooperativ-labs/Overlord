@@ -62,7 +62,7 @@ export function DiffPane({
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">{file.path}</p>
             <p className="text-xs text-muted-foreground">
-              Click a changed line to inspect linked rationale.
+              Click a changed line to see which review ticket changed it.
             </p>
           </div>
           {file.primaryTicket?.latest_objective_agent ? (
@@ -185,7 +185,7 @@ export function DiffPane({
                     <span className="truncate">{hunk.header}</span>
                     {matches.length > 0 ? (
                       <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
-                        {matches.length} linked
+                        {matches.length} matched
                       </span>
                     ) : file.tickets.length > 0 ? (
                       <span className="rounded-full border border-muted-foreground/20 bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">

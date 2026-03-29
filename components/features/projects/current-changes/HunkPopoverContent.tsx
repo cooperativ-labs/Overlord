@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { Badge } from '@/components/ui/badge';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 
 import type { FileChangeRecord, TicketSummary } from './types';
@@ -11,83 +12,67 @@ type HunkPopoverContentProps = {
 };
 
 export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopoverContentProps) {
-  if (matches.length === 0) {
-    if (fileTickets && fileTickets.length > 0) {
-      return (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">No rationale for this hunk</p>
-          <p className="text-xs text-muted-foreground">
-            This hunk doesn&apos;t have a specific rationale, but the file was changed by{' '}
-            {fileTickets.length === 1 ? 'this ticket' : 'these tickets'}:
-          </p>
-          <div className="space-y-1">
-            {fileTickets.map(ticket => (
-              <Link
-                key={ticket.id}
-                className="block rounded-md border px-3 py-2 text-xs font-medium text-primary hover:bg-muted/60"
-                href={buildTicketPath({ projectId, ticketId: ticket.id })}
-              >
-                {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
-              </Link>
-            ))}
-          </div>
-        </div>
-      );
-    }
+  const matchedTickets = Array.from(
+    new Map(
+      matches
+        .flatMap(match => (match.ticket ? [match.ticket] : []))
+        .map(ticket => [ticket.id, ticket] as const)
+    ).values()
+  );
+  const tickets = matchedTickets.length > 0 ? matchedTickets : (fileTickets ?? []);
 
+  if (tickets.length === 0) {
     return (
       <div className="space-y-1">
-        <p className="text-sm font-medium">No rationale recorded</p>
+        <p className="text-sm font-medium">No linked ticket yet</p>
         <p className="text-xs text-muted-foreground">
-          This changed hunk does not have a linked Overlord rationale yet.
+          This changed line does not map to a review ticket yet.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="max-h-96 space-y-3 overflow-auto">
-      {matches.map(match => (
-        <div key={match.id} className="space-y-2 rounded-lg border p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-sm font-medium text-foreground">{match.label}</p>
-              <p className="text-xs text-muted-foreground">{match.summary}</p>
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">
+          {matchedTickets.length > 0
+            ? tickets.length === 1
+              ? 'Line linked to ticket'
+              : 'Line linked to tickets'
+            : tickets.length === 1
+              ? 'File linked to ticket'
+              : 'File linked to tickets'}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {matchedTickets.length > 0
+            ? 'This changed line falls within a review ticket-linked change.'
+            : 'This line has no direct match, so showing the file-level review tickets instead.'}
+        </p>
+      </div>
+
+      <div className="max-h-96 space-y-2 overflow-auto">
+        {tickets.map(ticket => (
+          <div key={ticket.id} className="rounded-lg border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                href={buildTicketPath({ projectId, ticketId: ticket.id })}
+              >
+                {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+              </Link>
+              {ticket.status ? (
+                <Badge variant="outline" className="rounded-full text-[10px]">
+                  {ticket.status}
+                </Badge>
+              ) : null}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                {match.confidence}
-              </span>
-            </div>
-          </div>
-          <div className="space-y-1 text-xs">
-            <p>
-              <span className="font-medium text-foreground">Why:</span> {match.why}
-            </p>
-            <p>
-              <span className="font-medium text-foreground">Impact:</span> {match.impact}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {ticket.objective?.trim() || 'No ticket objective yet.'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            {match.ticket ? (
-              <>
-                <Link
-                  className="rounded underline-offset-4 hover:underline"
-                  href={buildTicketPath({ projectId, ticketId: match.ticket.id })}
-                >
-                  {match.ticket.title?.trim() || `Ticket ${match.ticket.id.slice(-8)}`}
-                </Link>
-                <span className="rounded-full border px-1.5 py-0.5 text-[9px]">
-                  {match.ticket.status}
-                </span>
-              </>
-            ) : null}
-            {match.event ? <span>{match.event.event_type}</span> : null}
-            {match.session ? <span>{match.session.agent_identifier}</span> : null}
-            <span>{new Date(match.created_at).toLocaleString()}</span>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

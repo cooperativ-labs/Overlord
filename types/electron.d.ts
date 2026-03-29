@@ -26,7 +26,9 @@ interface ElectronAPI {
       launchMode?: 'run' | 'ask',
       flags?: string[],
       model?: string,
-      thinking?: string
+      thinking?: string,
+      sshCommand?: string,
+      remoteWorkingDirectory?: string
     ) => Promise<void>;
     chooseDirectory: () => Promise<string | null>;
   };

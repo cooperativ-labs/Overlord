@@ -25,6 +25,8 @@ type ProjectSettingsProviderProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
+  initialSshCommand: string | null;
+  initialRemoteWorkingDirectory: string | null;
   initialEverhourProjectId: string | null;
   initialStatuses: Array<{
     name: string;
@@ -42,6 +44,8 @@ export function ProjectSettingsProvider({
   initialName,
   initialColor,
   initialWorkingDirectory,
+  initialSshCommand,
+  initialRemoteWorkingDirectory,
   initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey
@@ -67,6 +71,8 @@ export function ProjectSettingsProvider({
         initialName={initialName}
         initialColor={initialColor}
         initialWorkingDirectory={initialWorkingDirectory}
+        initialSshCommand={initialSshCommand}
+        initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
         initialEverhourProjectId={initialEverhourProjectId}
         initialStatuses={initialStatuses}
         hasEverhourApiKey={hasEverhourApiKey}

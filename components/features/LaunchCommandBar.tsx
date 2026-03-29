@@ -37,6 +37,8 @@ type Props = {
   geminiCommand: string;
   opencodeCommand: string;
   workingDirectory?: string | null;
+  sshCommand?: string | null;
+  remoteWorkingDirectory?: string | null;
   className?: string;
   activeAgentIdentifier?: string | null;
   hasProjectWorkingDirectory?: boolean;
@@ -126,6 +128,8 @@ export function LaunchCommandBar({
   geminiCommand,
   opencodeCommand,
   workingDirectory,
+  sshCommand,
+  remoteWorkingDirectory,
   className,
   activeAgentIdentifier,
   hasProjectWorkingDirectory,
@@ -161,6 +165,8 @@ export function LaunchCommandBar({
         agentFlags={agentFlags}
         commands={commands}
         workingDirectory={workingDirectory}
+        sshCommand={sshCommand}
+        remoteWorkingDirectory={remoteWorkingDirectory}
         activeAgentIdentifier={activeAgentIdentifier}
         hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         agentSessionState={agentSessionState}

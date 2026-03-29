@@ -7568,6 +7568,34 @@
           "maxLength": null
         },
         {
+          "id": "public.projects.ssh_command",
+          "name": "ssh_command",
+          "columnName": "ssh_command",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.projects.remote_working_directory",
+          "name": "remote_working_directory",
+          "columnName": "remote_working_directory",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "organizations",
           "type": "organizations",
           "isRequired": true,
@@ -10818,20 +10846,6 @@
           "isGenerated": false,
           "sequence": false,
           "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.tickets.recent_agent",
-          "name": "recent_agent",
-          "columnName": "recent_agent",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
           "isId": false,
           "maxLength": null
         },

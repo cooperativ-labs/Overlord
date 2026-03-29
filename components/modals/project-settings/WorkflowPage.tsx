@@ -8,7 +8,10 @@ import { ProjectStatusSettings } from '@/components/features/projects/ProjectSta
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
-import { updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
+import {
+  updateProjectSshConfigAction,
+  updateProjectWorkingDirectoryAction
+} from '@/lib/actions/projects';
 import {
   isWorkingDirectoryNone,
   WORKING_DIRECTORY_NONE
@@ -22,6 +25,8 @@ type WorkflowPageProps = {
   projectId: string;
   organizationId: number;
   initialWorkingDirectory: string | null;
+  initialSshCommand: string | null;
+  initialRemoteWorkingDirectory: string | null;
   initialStatuses: Array<{
     name: string;
     position: number;
@@ -34,6 +39,8 @@ export function WorkflowPage({
   projectId,
   organizationId,
   initialWorkingDirectory,
+  initialSshCommand,
+  initialRemoteWorkingDirectory,
   initialStatuses
 }: WorkflowPageProps) {
   const { api, isElectron } = useElectron();
@@ -47,11 +54,34 @@ export function WorkflowPage({
   const hasSavedWorkingDirectory =
     savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
 
+  // SSH remote workspace state
+  const [sshCommand, setSshCommand] = useState(initialSshCommand ?? '');
+  const [savedSshCommand, setSavedSshCommand] = useState(initialSshCommand ?? '');
+  const [remoteWorkingDirectory, setRemoteWorkingDirectory] = useState(
+    initialRemoteWorkingDirectory ?? ''
+  );
+  const [savedRemoteWorkingDirectory, setSavedRemoteWorkingDirectory] = useState(
+    initialRemoteWorkingDirectory ?? ''
+  );
+  const [sshSaveState, setSshSaveState] = useState<ButtonLoadingState>('default');
+  const [sshError, setSshError] = useState<string | null>(null);
+  const hasSshConfig = savedSshCommand.trim().length > 0;
+  const sshHasUnsavedChanges =
+    sshCommand.trim() !== savedSshCommand ||
+    remoteWorkingDirectory.trim() !== savedRemoteWorkingDirectory;
+
   useEffect(() => {
     const next = initialWorkingDirectory ?? '';
     setWorkingDirectory(next);
     setSavedWorkingDirectory(next);
   }, [initialWorkingDirectory]);
+
+  useEffect(() => {
+    setSshCommand(initialSshCommand ?? '');
+    setSavedSshCommand(initialSshCommand ?? '');
+    setRemoteWorkingDirectory(initialRemoteWorkingDirectory ?? '');
+    setSavedRemoteWorkingDirectory(initialRemoteWorkingDirectory ?? '');
+  }, [initialSshCommand, initialRemoteWorkingDirectory]);
 
   async function handleSaveWorkingDirectory(nextValue?: string) {
     const normalized = (nextValue ?? workingDirectory).trim();
@@ -124,6 +154,51 @@ export function WorkflowPage({
     }
   }
 
+  async function handleSaveSshConfig() {
+    const normalizedSsh = sshCommand.trim();
+    const normalizedRemote = remoteWorkingDirectory.trim();
+    if (normalizedSsh === savedSshCommand && normalizedRemote === savedRemoteWorkingDirectory)
+      return;
+
+    setSshSaveState('loading');
+    setSshError(null);
+    try {
+      await updateProjectSshConfigAction({
+        projectId,
+        sshCommand: normalizedSsh || null,
+        remoteWorkingDirectory: normalizedRemote || null
+      });
+      setSavedSshCommand(normalizedSsh);
+      setSavedRemoteWorkingDirectory(normalizedRemote);
+      setSshSaveState('success');
+      router.refresh();
+    } catch (error) {
+      setSshSaveState('error');
+      setSshError(error instanceof Error ? error.message : 'Failed to update SSH configuration.');
+    }
+  }
+
+  async function handleClearSshConfig() {
+    setSshSaveState('loading');
+    setSshError(null);
+    try {
+      await updateProjectSshConfigAction({
+        projectId,
+        sshCommand: null,
+        remoteWorkingDirectory: null
+      });
+      setSshCommand('');
+      setSavedSshCommand('');
+      setRemoteWorkingDirectory('');
+      setSavedRemoteWorkingDirectory('');
+      setSshSaveState('success');
+      router.refresh();
+    } catch (error) {
+      setSshSaveState('error');
+      setSshError(error instanceof Error ? error.message : 'Failed to clear SSH configuration.');
+    }
+  }
+
   return (
     <>
       {isElectron ? (
@@ -185,6 +260,60 @@ export function WorkflowPage({
           ) : null}
         </div>
       ) : null}
+
+      {/* SSH / Remote workspace */}
+      <div className="grid gap-2">
+        <label className="text-xs font-medium text-muted-foreground">SSH / Remote workspace</label>
+        <p className="text-xs text-muted-foreground">
+          Launch agents on a remote server via SSH. The{' '}
+          <code className="rounded bg-muted px-1">ovld</code> CLI must be installed on the remote
+          server.
+        </p>
+        <div className="grid gap-2">
+          <input
+            type="text"
+            value={sshCommand}
+            onChange={e => setSshCommand(e.target.value)}
+            placeholder="e.g. ssh user@10.0.0.5"
+            className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <input
+            type="text"
+            value={remoteWorkingDirectory}
+            onChange={e => setRemoteWorkingDirectory(e.target.value)}
+            placeholder="Remote path, e.g. /home/user/projects/myapp"
+            className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={handleSaveSshConfig}
+              disabled={sshSaveState === 'loading' || !sshHasUnsavedChanges}
+            >
+              {sshSaveState === 'loading' ? 'Saving…' : 'Save'}
+            </Button>
+            {hasSshConfig ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground"
+                onClick={handleClearSshConfig}
+                disabled={sshSaveState === 'loading'}
+              >
+                Clear
+              </Button>
+            ) : null}
+            {sshSaveState === 'success' ? (
+              <span className="text-xs text-emerald-600">Saved</span>
+            ) : null}
+          </div>
+        </div>
+        {sshError ? <p className="text-xs text-destructive">{sshError}</p> : null}
+      </div>
 
       <ProjectStatusSettings
         organizationId={organizationId}
