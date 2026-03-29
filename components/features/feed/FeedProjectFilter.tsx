@@ -23,7 +23,7 @@ type FeedProjectFilterProps = {
 export function FeedProjectFilter({ projects, value, onChange }: FeedProjectFilterProps) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[150px]">
+      <SelectTrigger className="w-[150px] backdrop-blur-sm">
         <SelectValue placeholder="All Projects" />
       </SelectTrigger>
       <SelectContent>
