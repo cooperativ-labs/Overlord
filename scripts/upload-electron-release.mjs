@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global Buffer, console, process */
 /**
  * Bump package version (semver), build the Electron app, and upload artifacts
  * to the app-downloads storage bucket under electron/<version>/.
@@ -12,6 +13,8 @@
  *   node scripts/upload-electron-release.mjs --major          # bump major
  *   node scripts/upload-electron-release.mjs --no-bump        # use current version
  *   node scripts/upload-electron-release.mjs --platform mac   # only require/upload macOS artifacts
+ *   node scripts/upload-electron-release.mjs --platform mac --mac-arch x64
+ *                                                         # upload Intel macOS artifacts
  *   node scripts/upload-electron-release.mjs --platform linux # only require/upload Linux artifacts
  */
 
@@ -28,9 +31,9 @@ const BUCKET = 'app-downloads';
 const PREFIX = 'electron';
 const ARTIFACT_PATTERNS = {
   mac: {
-    required: [
-      { label: 'macOS DMG', pattern: /^Overlord-.*-mac-arm64\.dmg$/ },
-      { label: 'macOS ZIP', pattern: /^Overlord-.*-mac-arm64\.zip$/ },
+    required: macArch => [
+      { label: 'macOS DMG', pattern: new RegExp(`^Overlord-.*-mac-${macArch}\\.dmg$`) },
+      { label: 'macOS ZIP', pattern: new RegExp(`^Overlord-.*-mac-${macArch}\\.zip$`) },
       { label: 'latest-mac.yml', pattern: /^latest-mac\.yml$/ }
     ],
     optional: []
@@ -95,6 +98,14 @@ function getPackageVersion() {
   return pkg.version;
 }
 
+function syncCliPackageVersion(version) {
+  const cliPkgPath = join(ROOT, 'packages', 'overlord-cli', 'package.json');
+  const cliPkg = JSON.parse(readFileSync(cliPkgPath, 'utf8'));
+  if (cliPkg.version === version) return;
+  cliPkg.version = version;
+  writeFileSync(cliPkgPath, JSON.stringify(cliPkg, null, 2) + '\n', 'utf8');
+}
+
 function readFlagValue(args, flagName) {
   const inline = args.find(arg => arg.startsWith(`${flagName}=`));
   if (inline) {
@@ -129,6 +140,27 @@ function parsePlatform(args) {
   process.exit(1);
 }
 
+function parseMacArch(args, platform) {
+  const explicitMacArch = readFlagValue(args, '--mac-arch');
+  if (!explicitMacArch) {
+    if (platform !== 'mac') return null;
+    return os.arch() === 'x64' ? 'x64' : 'arm64';
+  }
+
+  if (platform !== 'mac') {
+    console.error('[upload] --mac-arch is only valid with --platform mac.');
+    process.exit(1);
+  }
+
+  if (explicitMacArch === 'x64' || explicitMacArch === 'arm64') {
+    return explicitMacArch;
+  }
+
+  console.error(`[upload] Unsupported --mac-arch value: ${explicitMacArch}`);
+  console.error('         Expected one of: x64, arm64');
+  process.exit(1);
+}
+
 function getReleaseArtifacts() {
   const releaseDir = join(ROOT, 'release');
   const files = [];
@@ -150,10 +182,14 @@ function cleanLocalReleaseDir() {
   rmSync(releaseDir, { recursive: true, force: true });
 }
 
-function validateArtifacts(artifacts, platform) {
+function validateArtifacts(artifacts, platform, macArch) {
   const artifactConfig = ARTIFACT_PATTERNS[platform];
+  const requiredArtifacts =
+    typeof artifactConfig.required === 'function'
+      ? artifactConfig.required(macArch)
+      : artifactConfig.required;
   const artifactNames = artifacts.map(artifact => artifact.name);
-  const missingRequired = artifactConfig.required.filter(
+  const missingRequired = requiredArtifacts.filter(
     ({ pattern }) => !artifactNames.some(name => pattern.test(name))
   );
 
@@ -296,11 +332,24 @@ function prefixLatestYamlPaths(content, version) {
     .join('\n');
 }
 
+function getMacManifestFileNames(macArch) {
+  const archManifest = `latest-mac-${macArch}.yml`;
+  return macArch === 'arm64' ? [archManifest, 'latest-mac.yml'] : [archManifest];
+}
+
+function getManifestTargets(platform, macArch, fileName) {
+  if (platform === 'mac' && fileName === 'latest-mac.yml') {
+    return getMacManifestFileNames(macArch);
+  }
+  return [fileName];
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const noBump = args.includes('--no-bump');
   const bumpType = args.includes('--major') ? 'major' : args.includes('--minor') ? 'minor' : 'patch';
   const targetPlatform = parsePlatform(args);
+  const macArch = parseMacArch(args, targetPlatform);
 
   loadEnv();
 
@@ -317,7 +366,9 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`[upload] Target platform: ${targetPlatform}`);
+  console.log(
+    `[upload] Target platform: ${targetPlatform}${targetPlatform === 'mac' ? ` (${macArch})` : ''}`
+  );
 
   let version = getPackageVersion();
 
@@ -333,16 +384,19 @@ async function main() {
     console.log(`[upload] Using current version ${version} (no bump).`);
   }
 
+  syncCliPackageVersion(version);
+  console.log(`[upload] Synced packages/overlord-cli/package.json to ${version}.`);
+
   console.log('[upload] Cleaning local release directory...');
   cleanLocalReleaseDir();
 
   console.log('[upload] Running Electron build...');
   const { spawnSync } = await import('node:child_process');
-  const buildResult = spawnSync('node', ['scripts/electron-build.mjs', '--platform', targetPlatform], {
-    stdio: 'inherit',
-    cwd: ROOT,
-    env: process.env
-  });
+  const buildArgs = ['scripts/electron-build.mjs', '--platform', targetPlatform];
+  if (targetPlatform === 'mac' && macArch) {
+    buildArgs.push('--mac-arch', macArch);
+  }
+  const buildResult = spawnSync('node', buildArgs, { stdio: 'inherit', cwd: ROOT, env: process.env });
   if (buildResult.status !== 0) {
     console.error('[upload] Build failed.');
     process.exit(buildResult.status ?? 1);
@@ -353,7 +407,7 @@ async function main() {
     console.error('[upload] No files found in release/.');
     process.exit(1);
   }
-  validateArtifacts(artifacts, targetPlatform);
+  validateArtifacts(artifacts, targetPlatform, macArch);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }
@@ -363,15 +417,20 @@ async function main() {
   console.log(`[upload] Uploading ${artifacts.length} file(s) to ${BUCKET}/${versionPrefix}/...`);
 
   for (const { path: filePath, name } of artifacts) {
-    const storagePath = `${versionPrefix}/${name}`;
-    process.stdout.write(`  ${name} ... `);
-    try {
-      await uploadFile(supabase, filePath, storagePath);
-      console.log('ok');
-    } catch (e) {
-      console.log('FAIL');
-      console.error(e.message);
-      process.exit(1);
+    const storageTargets = getManifestTargets(targetPlatform, macArch, name).map(
+      targetName => `${versionPrefix}/${targetName}`
+    );
+
+    for (const storagePath of storageTargets) {
+      process.stdout.write(`  ${name} -> ${storagePath} ... `);
+      try {
+        await uploadFile(supabase, filePath, storagePath);
+        console.log('ok');
+      } catch (e) {
+        console.log('FAIL');
+        console.error(e.message);
+        process.exit(1);
+      }
     }
   }
 
@@ -380,17 +439,22 @@ async function main() {
     targetPlatform === 'mac' ? /^latest-mac\.yml$/ : /^latest-linux\.yml$/;
   const latestYml = artifacts.filter((artifact) => latestManifestPattern.test(artifact.name));
   for (const { path: filePath, name } of latestYml) {
-    const storagePath = `${PREFIX}/${name}`;
     const latestYml = readFileSync(filePath, 'utf8');
     const normalizedLatestYml = prefixLatestYamlPaths(latestYml, version);
-    process.stdout.write(`  ${name} -> ${storagePath} ... `);
-    try {
-      await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
-      console.log('ok');
-    } catch (e) {
-      console.log('FAIL');
-      console.error(e.message);
-      process.exit(1);
+
+    const manifestTargets = getManifestTargets(targetPlatform, macArch, name);
+
+    for (const manifestFileName of manifestTargets) {
+      const storagePath = `${PREFIX}/${manifestFileName}`;
+      process.stdout.write(`  ${name} -> ${storagePath} ... `);
+      try {
+        await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
+        console.log('ok');
+      } catch (e) {
+        console.log('FAIL');
+        console.error(e.message);
+        process.exit(1);
+      }
     }
   }
 

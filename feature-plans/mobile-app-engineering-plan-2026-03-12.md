@@ -42,28 +42,7 @@ The codebase already has core ingredients we can build around: `ticket_events`, 
 
 ## Recommendation
 
-### 1. Build the mobile app in the monorepo now
-
-The repository already contains web, Electron, CLI, Supabase, and shared-package patterns. The right move is not "create yet another repo and migrate later"; it is to **formalize the monorepo shape now** and add `apps/mobile`.
-
-Recommended target structure:
-
-```text
-apps/
-  web/                  # Next.js app
-  mobile/               # Expo 55 app
-  desktop/              # Electron shell and desktop services
-packages/
-  shared/               # Types, schemas, helpers, ticket/feed models
-  api-client/           # Typed client wrappers for mobile/web/desktop
-  protocol/             # Prompt/protocol builders and shared ticket actions
-  ui-core/              # Design tokens, cross-platform constants
-supabase/
-  migrations/
-  functions/
-```
-
-### 2. Treat feed + notifications as the product center
+### 1. Treat feed + notifications as the product center
 
 The prior plan emphasized tickets broadly. The new plan should shift the center of gravity to:
 
@@ -71,7 +50,7 @@ The prior plan emphasized tickets broadly. The new plan should shift the center 
 - Push notifications deep-linking into feed entries and ticket threads
 - High-signal event summaries instead of forcing users to browse ticket lists first
 
-### 3. Treat SSH as a first-class mobile workflow, not a side setting
+### 2. Treat SSH as a first-class mobile workflow, not a side setting
 
 The mobile app should own:
 

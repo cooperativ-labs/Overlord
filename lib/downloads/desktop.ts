@@ -7,6 +7,7 @@ export type DesktopVariant = {
   description: string;
   fileName: string;
   formatLabel: string;
+  manifestFileName?: string;
   supportLabel?: string;
   isRecommended?: boolean;
 };
@@ -31,25 +32,45 @@ export const desktopPlatforms: DesktopPlatformEntry[] = [
   {
     id: 'macos',
     label: 'macOS',
-    description: 'Apple Silicon builds with signed DMG and ZIP artifacts.',
-    manifestFileName: 'latest-mac.yml',
+    description: 'Signed macOS builds for both Apple Silicon and Intel Macs.',
+    manifestFileName: 'latest-mac-arm64.yml',
     variants: [
       {
-        id: 'dmg',
-        label: 'Download .dmg',
-        description: 'Standard macOS installer for Apple Silicon machines.',
+        id: 'dmg-arm64',
+        label: 'Download Apple Silicon .dmg',
+        description: 'Standard macOS installer for M-series and other Apple Silicon machines.',
         fileName: `Overlord-${CURRENT_DESKTOP_VERSION}-mac-arm64.dmg`,
         formatLabel: '.dmg',
+        manifestFileName: 'latest-mac-arm64.yml',
         supportLabel: 'Apple Silicon',
         isRecommended: true
       },
       {
-        id: 'zip',
-        label: 'Download .zip',
-        description: 'Portable archive for manual installs or debugging.',
+        id: 'zip-arm64',
+        label: 'Download Apple Silicon .zip',
+        description: 'Portable Apple Silicon archive for manual installs or debugging.',
         fileName: `Overlord-${CURRENT_DESKTOP_VERSION}-mac-arm64.zip`,
         formatLabel: '.zip',
+        manifestFileName: 'latest-mac-arm64.yml',
         supportLabel: 'Apple Silicon'
+      },
+      {
+        id: 'dmg-x64',
+        label: 'Download Intel .dmg',
+        description: 'Standard macOS installer for Intel-based Macs.',
+        fileName: `Overlord-${CURRENT_DESKTOP_VERSION}-mac-x64.dmg`,
+        formatLabel: '.dmg',
+        manifestFileName: 'latest-mac-x64.yml',
+        supportLabel: 'Intel'
+      },
+      {
+        id: 'zip-x64',
+        label: 'Download Intel .zip',
+        description: 'Portable Intel archive for manual installs or debugging.',
+        fileName: `Overlord-${CURRENT_DESKTOP_VERSION}-mac-x64.zip`,
+        formatLabel: '.zip',
+        manifestFileName: 'latest-mac-x64.yml',
+        supportLabel: 'Intel'
       }
     ]
   },

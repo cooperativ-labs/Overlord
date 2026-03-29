@@ -18,6 +18,10 @@
  * Usage:
  *   node scripts/electron-build.mjs                       → build for the current host platform
  *   node scripts/electron-build.mjs --platform mac       → build macOS artifacts
+ *   node scripts/electron-build.mjs --platform mac --mac-arch x64
+ *                                                     → build Intel macOS artifacts
+ *   node scripts/electron-build.mjs --platform mac --mac-arch arm64
+ *                                                     → build Apple Silicon macOS artifacts
  *   node scripts/electron-build.mjs --platform linux     → build Linux artifacts
  *   node scripts/electron-build.mjs --dir                → build + unpackaged app dir only
  */
@@ -47,13 +51,29 @@ function readFlagValue(flagName) {
 
 function getElectronBuilderTargetFlag() {
   const requestedPlatform = readFlagValue('--platform');
+  const requestedMacArch = readFlagValue('--mac-arch');
   if (!requestedPlatform) return '';
 
-  if (requestedPlatform === 'mac') return ' --mac';
+  if (requestedPlatform === 'mac') return ` --mac${getMacArchFlag(requestedMacArch)}`;
+  if (requestedMacArch) {
+    console.error('\x1b[31m[build] --mac-arch is only valid with --platform mac\x1b[0m');
+    process.exit(1);
+  }
   if (requestedPlatform === 'linux') return ' --linux';
 
   console.error(`\x1b[31m[build] Unsupported --platform value: ${requestedPlatform}\x1b[0m`);
   console.error('       Expected one of: mac, linux');
+  process.exit(1);
+}
+
+function getMacArchFlag(requestedMacArch) {
+  if (!requestedMacArch) return '';
+
+  if (requestedMacArch === 'x64') return ' --x64';
+  if (requestedMacArch === 'arm64') return ' --arm64';
+
+  console.error(`\x1b[31m[build] Unsupported --mac-arch value: ${requestedMacArch}\x1b[0m`);
+  console.error('       Expected one of: x64, arm64');
   process.exit(1);
 }
 

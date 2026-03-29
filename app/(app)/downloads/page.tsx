@@ -6,6 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  CLI_DOWNLOAD_COMMAND,
+  CLI_INSTALL_COMMAND,
+  CURRENT_CLI_VERSION
+} from '@/lib/downloads/cli';
+import {
   CURRENT_DESKTOP_VERSION,
   desktopPlatforms,
   getDesktopManifestUrl,
@@ -16,7 +21,8 @@ import { detectDesktopPlatform } from '@/lib/downloads/platform';
 import { cn } from '@/lib/utils';
 
 const recommendedMessages = {
-  macos: 'We detected macOS and highlighted the Apple Silicon installer first.',
+  macos:
+    'We detected macOS and highlighted the Apple Silicon installer first. Intel downloads are listed below if your Mac uses an Intel chip.',
   linux:
     'We detected Linux and highlighted the portable AppImage first. Linux downloads are currently in beta.',
   windows:
@@ -73,7 +79,8 @@ export default async function DownloadsPage() {
                 </p>
                 {recommendedPlatform.id === 'macos' ? (
                   <p className="text-muted-foreground mt-2 text-sm">
-                    Intel mac builds are not published yet.
+                    If your Mac uses an Intel chip, choose one of the Intel downloads in the full
+                    list below.
                   </p>
                 ) : null}
               </div>
@@ -138,6 +145,14 @@ export default async function DownloadsPage() {
                         {variant.label}
                       </a>
                     </Button>
+                    {variant.manifestFileName ? (
+                      <Button variant="ghost" asChild>
+                        <a href={getDesktopManifestUrl(variant.manifestFileName)}>
+                          <ArrowUpRight />
+                          View {variant.manifestFileName}
+                        </a>
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -154,11 +169,42 @@ export default async function DownloadsPage() {
 
       <Card className="mt-6">
         <CardHeader>
+          <CardTitle>CLI for headless servers</CardTitle>
+          <CardDescription>
+            The standalone CLI now tracks the same release version as the desktop app.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Install version {CURRENT_CLI_VERSION} with curl</p>
+            <pre className="bg-muted overflow-x-auto rounded-lg p-3 text-xs leading-5 whitespace-pre-wrap break-all">
+              <code>{CLI_INSTALL_COMMAND}</code>
+            </pre>
+            <p className="text-muted-foreground text-sm">
+              This installs `ovld` and `overlord` into `~/.local/bin`. Node 18+ is still required on
+              the target machine.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Need the tarball only?</p>
+            <pre className="bg-muted overflow-x-auto rounded-lg p-3 text-xs leading-5 whitespace-pre-wrap break-all">
+              <code>{CLI_DOWNLOAD_COMMAND}</code>
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
           <CardTitle>Compatibility notes</CardTitle>
           <CardDescription>Current desktop packaging support by platform.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>macOS downloads currently target Apple Silicon only.</p>
+          <p>
+            macOS downloads are available for both Apple Silicon and Intel Macs. Check About This
+            Mac if you are unsure which chip your machine uses.
+          </p>
           <p>
             Linux downloads are in beta. AppImage is the recommended default; `.deb` is available
             for Debian-based systems.
