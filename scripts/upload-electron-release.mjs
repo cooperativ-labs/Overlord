@@ -24,6 +24,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import semver from 'semver';
+import { deriveCliVersion } from '../lib/helpers/cli-versioning.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -101,9 +102,13 @@ function getPackageVersion() {
 function syncCliPackageVersion(version) {
   const cliPkgPath = join(ROOT, 'packages', 'overlord-cli', 'package.json');
   const cliPkg = JSON.parse(readFileSync(cliPkgPath, 'utf8'));
-  if (cliPkg.version === version) return;
-  cliPkg.version = version;
-  writeFileSync(cliPkgPath, JSON.stringify(cliPkg, null, 2) + '\n', 'utf8');
+  const nextVersion = deriveCliVersion(version, cliPkg.version);
+  if (nextVersion !== cliPkg.version) {
+    cliPkg.version = nextVersion;
+    writeFileSync(cliPkgPath, JSON.stringify(cliPkg, null, 2) + '\n', 'utf8');
+  }
+
+  return cliPkg.version;
 }
 
 function readFlagValue(args, flagName) {
@@ -384,8 +389,14 @@ async function main() {
     console.log(`[upload] Using current version ${version} (no bump).`);
   }
 
-  syncCliPackageVersion(version);
-  console.log(`[upload] Synced packages/overlord-cli/package.json to ${version}.`);
+  const syncedCliVersion = syncCliPackageVersion(version);
+  if (syncedCliVersion === version) {
+    console.log(`[upload] Synced packages/overlord-cli/package.json to ${syncedCliVersion}.`);
+  } else {
+    console.log(
+      `[upload] Kept CLI package version at ${syncedCliVersion} while desktop is ${version}.`
+    );
+  }
 
   console.log('[upload] Cleaning local release directory...');
   cleanLocalReleaseDir();

@@ -46,6 +46,29 @@ type FeedPostPayload = {
   tickets_created: Array<{ id: string; sequence: number; title: string }>;
 };
 
+type FeedPostContext = {
+  projectName: string;
+  ticketTitle: string | null;
+  ticketObjective: string | null;
+  acceptanceCriteria: string | null;
+  constraints: string | null;
+  feedPostInstructions: string | null;
+  events: Array<{ created_at: string; event_type: string; summary: string | null }>;
+  rationales: Array<{
+    file_path: string;
+    summary: string;
+    why: string;
+    impact: string;
+  }>;
+  spawnedTickets: Array<{
+    id: string;
+    title: string | null;
+    ticket_sequence: number;
+    delegate: string | null;
+  }>;
+  existingPost?: { title: string; body: string } | null;
+};
+
 function sanitizeStringArray(value: unknown, limit: number): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -133,6 +156,52 @@ function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
   };
 }
 
+function stripJsonFences(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('```')) return trimmed;
+
+  return trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+}
+
+function extractJsonObject(text: string): string {
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return text.trim();
+  }
+
+  return text.slice(firstBrace, lastBrace + 1).trim();
+}
+
+function repairJsonText(text: string): string {
+  return text
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_-]*)(\s*:)/g, '$1"$2"$3');
+}
+
+function parseGeminiJson(text: string): unknown | null {
+  const candidates = [
+    text,
+    stripJsonFences(text),
+    extractJsonObject(text),
+    repairJsonText(stripJsonFences(extractJsonObject(text))),
+    repairJsonText(text)
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
+}
+
 async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
   if (!gemini) {
     console.error('[generate-feed-post] GEMINI_API_KEY not set');
@@ -157,35 +226,61 @@ async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
       return null;
     }
 
-    return normalizeFeedPostPayload(JSON.parse(text));
+    const parsed = parseGeminiJson(text);
+    if (!parsed) {
+      console.error('[generate-feed-post] Gemini response could not be parsed as JSON');
+      return null;
+    }
+
+    return normalizeFeedPostPayload(parsed);
   } catch (err) {
     console.error('[generate-feed-post] Gemini generation failed:', err);
     return null;
   }
 }
 
-function buildPrompt(context: {
-  projectName: string;
-  ticketTitle: string | null;
-  ticketObjective: string | null;
-  acceptanceCriteria: string | null;
-  constraints: string | null;
-  feedPostInstructions: string | null;
-  events: Array<{ created_at: string; event_type: string; summary: string | null }>;
-  rationales: Array<{
-    file_path: string;
-    summary: string;
-    why: string;
-    impact: string;
-  }>;
-  spawnedTickets: Array<{
-    id: string;
-    title: string | null;
-    ticket_sequence: number;
-    delegate: string | null;
-  }>;
-  existingPost?: { title: string; body: string } | null;
-}): string {
+function buildFallbackFeedPost(context: FeedPostContext): FeedPostPayload {
+  const eventCount = context.events.length;
+  const rationaleCount = context.rationales.length;
+  const spawnedCount = context.spawnedTickets.length;
+  const primaryObjective = context.ticketObjective ?? context.ticketTitle ?? 'ticket';
+  const objectiveSummary = context.ticketObjective?.trim() || context.ticketTitle?.trim() || 'the ticket';
+  const changedFiles = [
+    ...new Set(
+      context.rationales
+        .map(r => r.file_path.trim())
+        .filter(Boolean)
+    )
+  ].slice(0, 8);
+  const completedObjective = context.events.find(e => e.event_type === 'update' && e.summary)?.summary;
+
+  return {
+    title: `Progress update: ${primaryObjective.slice(0, 60)}`,
+    body: [
+      `- ${completedObjective ?? `Updated ${objectiveSummary}`}.`,
+      `- ${eventCount} ticket event${eventCount === 1 ? '' : 's'} were recorded.`,
+      rationaleCount > 0
+        ? `- Code changes were captured for ${rationaleCount} file change${rationaleCount === 1 ? '' : 's'}.`
+        : '- No code changes were recorded in this session.',
+      spawnedCount > 0
+        ? `- ${spawnedCount} spawned ticket${spawnedCount === 1 ? '' : 's'} were linked to this work.`
+        : '- No follow-up tickets were spawned.',
+      context.existingPost ? '- Gemini was unavailable, so this post was refreshed with a deterministic summary.' : '- Gemini was unavailable, so this post was created with a deterministic summary.'
+    ].join('\n'),
+    tags: ['fallback', 'bugfix', 'feed'],
+    impact_level: eventCount > 0 || rationaleCount > 0 ? 'notable' : 'minor',
+    tradeoffs: [],
+    human_actions: [],
+    files_touched: changedFiles,
+    tickets_created: context.spawnedTickets.map(t => ({
+      id: t.id,
+      sequence: t.ticket_sequence,
+      title: t.title ?? 'Untitled'
+    }))
+  };
+}
+
+function buildPrompt(context: FeedPostContext): string {
   const eventLines = context.events
     .map(e => `[${e.created_at}] ${e.event_type}: ${e.summary ?? '(no summary)'}`)
     .join('\n');
@@ -432,8 +527,8 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Build prompt and call Gemini
-    const prompt = buildPrompt({
+    // Build the synthesis context once so Gemini and the fallback share the same inputs.
+    const feedContext: FeedPostContext = {
       projectName: project?.name ?? 'Unknown Project',
       ticketTitle: ticket.title,
       ticketObjective: latestObjective?.objective ?? null,
@@ -444,16 +539,12 @@ Deno.serve(async (req: Request) => {
       rationales: rationales ?? [],
       spawnedTickets,
       existingPost: existingPost ? { title: existingPost.title, body: existingPost.body } : null
-    });
+    };
 
-    const generated = await callGemini(prompt);
+    const prompt = buildPrompt(feedContext);
 
-    if (!generated) {
-      return new Response(JSON.stringify({ ok: false, error: 'Gemini generation failed' }), {
-        status: 502,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
-      });
-    }
+    // Fall back to a deterministic post so feed visibility does not depend on Gemini availability.
+    const generated = (await callGemini(prompt)) ?? buildFallbackFeedPost(feedContext);
 
     // Compute event window
     const allEvents = events ?? [];

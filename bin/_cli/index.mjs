@@ -8,6 +8,7 @@ import { runProtocolCommand } from './protocol.mjs';
 import { runDoctorCommand, runSetupCommand } from './setup.mjs';
 import { runTicketCommand } from './ticket.mjs';
 import { runTicketsCommand } from './tickets.mjs';
+import { runVersionCommand } from './version.mjs';
 
 function printHelp(primaryCommand) {
   console.log(`Overlord CLI
@@ -27,6 +28,7 @@ Usage:
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
   ${primaryCommand} setup <agent|all>          Install Overlord agent connector
   ${primaryCommand} doctor                     Validate installed agent connectors
+  ${primaryCommand} version                    Show the installed CLI version
   ${primaryCommand} help                       Show this help message
 
 Agents:
@@ -105,6 +107,11 @@ export async function runCli({ primaryCommand }) {
 
   if (command === 'doctor') {
     await runDoctorCommand();
+    return;
+  }
+
+  if (command === 'version') {
+    runVersionCommand();
     return;
   }
 

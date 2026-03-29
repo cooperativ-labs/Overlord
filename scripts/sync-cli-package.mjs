@@ -4,6 +4,7 @@
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deriveCliVersion } from '../lib/helpers/cli-versioning.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -22,9 +23,12 @@ function syncCliVersion() {
   const cliPkgPath = join(CLI_PACKAGE_ROOT, 'package.json');
   const appPkg = readJson(appPkgPath);
   const cliPkg = readJson(cliPkgPath);
+  const nextVersion = deriveCliVersion(appPkg.version, cliPkg.version);
 
-  cliPkg.version = appPkg.version;
-  writeJson(cliPkgPath, cliPkg);
+  if (nextVersion !== cliPkg.version) {
+    cliPkg.version = nextVersion;
+    writeJson(cliPkgPath, cliPkg);
+  }
 
   return cliPkg.version;
 }
@@ -46,4 +50,4 @@ function syncCliFiles() {
 const syncedVersion = syncCliVersion();
 syncCliFiles();
 
-console.log(`[cli:sync] Synced CLI package files and set version to ${syncedVersion}.`);
+console.log(`[cli:sync] Synced CLI package files; version is ${syncedVersion}.`);
