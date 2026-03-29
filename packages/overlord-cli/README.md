@@ -54,12 +54,6 @@ ovld doctor
 - `setup` - install the Overlord connector or plugin bundle for a supported agent
 - `doctor` - verify installed agent connectors and check whether a newer CLI version is available
 
-## Publishing
+## License
 
-This package is published from the repository root with:
-
-```bash
-yarn cli:publish
-```
-
-That script syncs the package payload and then runs `npm publish --access public` from `packages/overlord-cli/`.
+Permission is granted to use this software for any purpose, free of charge. You may not modify, distribute, sublicense, or sell copies of the software without explicit permission from the author.

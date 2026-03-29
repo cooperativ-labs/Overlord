@@ -1,6 +1,6 @@
 {
   "name": "overlord-cli",
-  "version": "3.5.3",
+  "version": "3.5.4",
   "description": "Overlord CLI — launch AI agents on tickets from anywhere",
   "type": "module",
   "bin": {
@@ -23,7 +23,7 @@
     "agents",
     "cli"
   ],
-  "license": "MIT",
+  "license": "Proprietary",
   "repository": {
     "type": "git",
     "url": "https://github.com/cooperativ/overlord"
