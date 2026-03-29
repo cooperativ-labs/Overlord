@@ -7,6 +7,9 @@
     "ovld": "bin/ovld.mjs",
     "overlord": "bin/ovld.mjs"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "bin/"
   ],

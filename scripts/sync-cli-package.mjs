@@ -38,7 +38,7 @@ function syncCliFiles() {
   copyFileSync(join(sourceRoot, 'ovld.mjs'), join(targetRoot, 'ovld.mjs'));
 
   for (const entry of readdirSync(join(sourceRoot, '_cli'))) {
-    if (!entry.endsWith('.mjs')) continue;
+    if (!entry.endsWith('.mjs') || entry === 'setup.mjs') continue;
     copyFileSync(join(sourceRoot, '_cli', entry), join(targetCliDir, entry));
   }
 }

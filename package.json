@@ -63,7 +63,7 @@
     "install-agent-permissions": "node scripts/install-agent-permissions.mjs",
     "verify-agent-permissions": "node scripts/verify-agent-permissions.mjs",
     "cli:sync": "node scripts/sync-cli-package.mjs",
-    "cli:publish": "yarn cli:sync && cd packages/overlord-cli && npm publish"
+    "cli:publish": "node scripts/publish-overlord-cli.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

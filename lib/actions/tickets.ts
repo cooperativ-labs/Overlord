@@ -1029,10 +1029,21 @@ export async function markObjectiveExecutedAction(
   }
 
   await supabase.from('ticket_events').insert({
-    event_type: 'system',
-    summary: 'Objective marked executed.',
+    event_type: 'update',
+    summary: 'Objective marked complete.',
     ticket_id: ticketId
   });
+
+  try {
+    await supabase.functions.invoke('generate-feed-post', {
+      body: { ticketId, organizationId: ticket.organization_id }
+    });
+  } catch (feedError) {
+    console.error('[markObjectiveExecuted] feed post generation failed:', feedError);
+    Sentry.captureException(feedError, {
+      extra: { ticketId, objectiveId, organizationId: ticket.organization_id }
+    });
+  }
 
   revalidateTicketBoards();
   revalidatePath(
