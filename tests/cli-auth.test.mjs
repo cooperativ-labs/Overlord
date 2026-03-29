@@ -25,7 +25,6 @@ async function withTempHome(callback) {
 }
 
 for (const modulePath of [
-  'bin/_cli/auth.mjs',
   'packages/overlord-cli/bin/_cli/auth.mjs'
 ]) {
   test(`${modulePath} authLoginViaDeviceFlow opens the verification URL and polls until authorized`, async () => {

@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.9.0] - 2026-03-29:18:11
+
+### Added
+- Make `packages/overlord-cli/bin/ovld.mjs` the canonical bundled CLI entrypoint for both the npm package and the Electron app.
+
+### Fixed
+- Fix Electron CLI installation so packaged and development builds both install the bundled CLI from the maintained package path instead of the removed root `bin` copy.
+
+### Changed
+- Update app packaging and root package bin mappings to ship the CLI directly from `packages/overlord-cli`.
+- Simplify CLI sync logic so release prep only keeps the CLI package version aligned with the app version.
+
+### Security
+- None.
+
+### Removed
+- Remove the legacy duplicated root `bin/_cli` bundle from app packaging and test coverage.
+
+### Test
+- Update CLI auth, credentials, new-ticket, and protocol deliver tests to target the canonical packaged CLI modules.
+
+### Chore
+- Bump the package version and CLI package version to `3.9.0`.
+
 ## [3.7.0] - 2026-03-29:14:07
 
 ### Added

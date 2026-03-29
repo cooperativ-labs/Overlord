@@ -72,12 +72,12 @@ function resolveInstallDir(): string {
 function getBundledCliPath(): string | null {
   const isPackaged = app.isPackaged;
   if (!isPackaged) {
-    // Dev: bin is at project root (getAppPath = directory containing package.json)
-    return path.join(app.getAppPath(), 'bin', 'ovld.mjs');
+    // Dev: CLI source lives in packages/overlord-cli
+    return path.join(app.getAppPath(), 'packages', 'overlord-cli', 'bin', 'ovld.mjs');
   }
   const appPath = app.getAppPath();
   const unpackedPath = appPath.replace('app.asar', 'app.asar.unpacked');
-  const cliPath = path.join(unpackedPath, 'bin', 'ovld.mjs');
+  const cliPath = path.join(unpackedPath, 'packages', 'overlord-cli', 'bin', 'ovld.mjs');
   return fs.existsSync(cliPath) ? cliPath : null;
 }
 

@@ -2,12 +2,12 @@
   "name": "overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "private": true,
   "main": "dist-electron/main.js",
   "bin": {
-    "overlord": "bin/ovld.mjs",
-    "ovld": "bin/ovld.mjs"
+    "overlord": "packages/overlord-cli/bin/ovld.mjs",
+    "ovld": "packages/overlord-cli/bin/ovld.mjs"
   },
   "scripts": {
     "start": "supabase start",

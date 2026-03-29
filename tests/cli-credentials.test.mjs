@@ -42,7 +42,6 @@ async function withTempHome(callback) {
 }
 
 for (const modulePath of [
-  'bin/_cli/credentials.mjs',
   'packages/overlord-cli/bin/_cli/credentials.mjs'
 ]) {
   test(
