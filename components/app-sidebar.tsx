@@ -104,6 +104,21 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
   );
 }
 
+function ElectronCollapsedTrafficLights() {
+  return (
+    <div className="pointer-events-none absolute left-2 top-2 z-20 hidden md:block group-data-[collapsible=icon]:pointer-events-auto group-data-[collapsible=icon]:flex">
+      <div
+        aria-hidden="true"
+        className="group/traffic-lights flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-sidebar/90 px-1 shadow-sm backdrop-blur transition-[width,padding,border-color,background-color] duration-200 ease-out hover:w-16 hover:justify-start hover:gap-1.5 hover:px-2"
+      >
+        <span className="h-2 w-2 shrink-0 rounded-full bg-[#ff5f57] transition-transform duration-200 group-hover/traffic-lights:scale-110" />
+        <span className="h-2 w-2 shrink-0 rounded-full bg-[#febc2e] transition-transform duration-200 group-hover/traffic-lights:scale-110" />
+        <span className="h-2 w-2 shrink-0 rounded-full bg-[#28c840] transition-transform duration-200 group-hover/traffic-lights:scale-110" />
+      </div>
+    </div>
+  );
+}
+
 export function AppSidebar({
   isAdmin,
   user,
@@ -213,7 +228,8 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="electron-sidebar-offset">
+      <SidebarHeader className="electron-sidebar-offset relative">
+        {isElectron ? <ElectronCollapsedTrafficLights /> : null}
         <TeamSwitcher organizations={organizations} selectedOrgId={selectedOrgId} />
       </SidebarHeader>
       <SidebarContent>
