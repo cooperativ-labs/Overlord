@@ -11,7 +11,8 @@
     "access": "public"
   },
   "files": [
-    "bin/"
+    "bin/",
+    "plugins/"
   ],
   "engines": {
     "node": ">=18"

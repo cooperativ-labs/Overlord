@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -122,16 +123,28 @@ export function AgentSplitButton({
   const [isLaunching, setIsLaunching] = useState(false);
   const { selection, loaded: selectionLoaded } = useAgentModelPreference();
   const { isElectron, launchAgent } = useTerminal();
+  const projectSettings = useProjectSettings();
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
   const hasResolvedSelection = assignedSelection !== null || selectionLoaded;
+  const effectiveWorkingDirectory =
+    projectSettings?.effectiveWorkingDirectory ?? workingDirectory ?? null;
+  const effectiveSshCommand = projectSettings?.effectiveSshCommand ?? sshCommand ?? null;
+  const effectiveRemoteWorkingDirectory =
+    projectSettings?.effectiveRemoteWorkingDirectory ?? remoteWorkingDirectory ?? null;
 
   const isActive =
     isAgentIdentifierMatch(effectiveSelection.agent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
-  const hasSshConfig = Boolean(sshCommand?.trim());
-  const localDirAccess = useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDirectory });
+  const hasSshConfig = Boolean(effectiveSshCommand?.trim());
+  const localDirAccess = useLocalDirectoryAccess({
+    workingDirectory: effectiveWorkingDirectory,
+    hasProjectWorkingDirectory:
+      projectSettings?.executionWorkspace === 'local'
+        ? Boolean(projectSettings.hasLocalDirectory)
+        : hasProjectWorkingDirectory
+  });
   const canRunAgent = hasSshConfig || localDirAccess;
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';
   const isDisabled =
@@ -192,7 +205,7 @@ export function AgentSplitButton({
         await launchAgent(
           ticketId,
           agentValue,
-          workingDirectory ?? undefined,
+          effectiveWorkingDirectory ?? undefined,
           resolvedAgentToken,
           'run',
           agentFlags?.[agentValue],
@@ -200,8 +213,8 @@ export function AgentSplitButton({
           options?.useStoredModelPreference
             ? (effectiveSelection.thinking ?? undefined)
             : undefined,
-          sshCommand ?? undefined,
-          remoteWorkingDirectory ?? undefined
+          effectiveSshCommand ?? undefined,
+          effectiveRemoteWorkingDirectory ?? undefined
         );
       } catch (error) {
         console.error('Failed to launch agent:', error);

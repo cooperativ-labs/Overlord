@@ -27,7 +27,7 @@ Usage:
   ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
   ${primaryCommand} setup <agent|all>          Install Overlord agent connector
-  ${primaryCommand} doctor                     Validate installed agent connectors
+  ${primaryCommand} doctor                     Validate installed agent connectors and check for CLI updates
   ${primaryCommand} version                    Show the installed CLI version
   ${primaryCommand} help                       Show this help message
 

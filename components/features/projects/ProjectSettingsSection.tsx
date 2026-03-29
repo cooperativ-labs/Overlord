@@ -1,6 +1,6 @@
 'use client';
 
-import { Folder, GitCompareArrows, Server, Settings } from 'lucide-react';
+import { ChevronDown, Folder, GitCompareArrows, Server, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -8,14 +8,16 @@ import { ProjectColorSetter } from '@/components/features/projects/ProjectColorS
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  updateProjectColorAction,
-  updateProjectNameAction,
-  updateProjectWorkingDirectoryAction
-} from '@/lib/actions/projects';
+import { updateProjectColorAction, updateProjectNameAction } from '@/lib/actions/projects';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
@@ -37,7 +39,7 @@ export function ProjectSettingsSection({
   initialSshCommand,
   initialRemoteWorkingDirectory
 }: ProjectSettingsSectionProps) {
-  const { api, isElectron } = useElectron();
+  const { isElectron } = useElectron();
   const router = useRouter();
   const pathname = usePathname();
   const projectSettings = useProjectSettings();
@@ -45,12 +47,9 @@ export function ProjectSettingsSection({
   const [savedName, setSavedName] = useState(initialName);
   const [nameEditing, setNameEditing] = useState(false);
   const [savedColor, setSavedColor] = useState(initialColor);
-  const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [nameSaveState, setNameSaveState] = useState<ButtonLoadingState>('default');
   const [colorSaveState, setColorSaveState] = useState<ButtonLoadingState>('default');
-  const [workingDirectorySaveState, setWorkingDirectorySaveState] =
-    useState<ButtonLoadingState>('default');
   const [nameError, setNameError] = useState<string | null>(null);
   const [colorError, setColorError] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
@@ -68,6 +67,13 @@ export function ProjectSettingsSection({
     : isCurrentChangesView
       ? 'Open Work Board'
       : 'Open Current Changes';
+  const localDirectoryLabel = hasSavedWorkingDirectory ? savedWorkingDirectory : 'configure';
+  const hasSshDirectory = Boolean(initialSshCommand?.trim());
+  const sshDirectoryLabel = initialRemoteWorkingDirectory?.trim() || 'configure';
+  const activeExecutionWorkspace = projectSettings?.executionWorkspace ?? 'local';
+  const executionWorkspaceLabel =
+    activeExecutionWorkspace === 'ssh' ? 'SSH directory' : 'Local directory';
+  const ExecutionWorkspaceIcon = activeExecutionWorkspace === 'ssh' ? Server : Folder;
 
   useEffect(() => {
     setSavedColor(initialColor);
@@ -75,7 +81,6 @@ export function ProjectSettingsSection({
 
   useEffect(() => {
     const next = initialWorkingDirectory ?? '';
-    setWorkingDirectory(next);
     setSavedWorkingDirectory(next);
   }, [initialWorkingDirectory]);
 
@@ -128,35 +133,6 @@ export function ProjectSettingsSection({
       setColorSaveState('error');
       setColorError(error instanceof Error ? error.message : 'Failed to update color.');
     }
-  }
-
-  async function handleSaveWorkingDirectory(nextValue?: string) {
-    const normalized = (nextValue ?? workingDirectory).trim();
-    if (normalized === savedWorkingDirectory) {
-      return;
-    }
-
-    setWorkingDirectorySaveState('loading');
-    try {
-      await updateProjectWorkingDirectoryAction({
-        projectId,
-        workingDirectory: normalized || null
-      });
-      setSavedWorkingDirectory(normalized);
-      setWorkingDirectory(normalized);
-      setWorkingDirectorySaveState('success');
-      router.refresh();
-    } catch {
-      setWorkingDirectorySaveState('error');
-    }
-  }
-
-  async function handleChooseDirectory() {
-    if (!isElectron || !api) return;
-    const chosenPath = await api.terminal.chooseDirectory();
-    if (!chosenPath) return;
-    setWorkingDirectory(chosenPath);
-    await handleSaveWorkingDirectory(chosenPath);
   }
 
   return (
@@ -222,35 +198,96 @@ export function ProjectSettingsSection({
           </div>
           {isElectron ? (
             <>
-              <button
-                type="button"
-                className={cn(
-                  'mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
-                  hasSavedWorkingDirectory
-                    ? 'border-border'
-                    : 'border-dashed border-muted-foreground/60 italic'
-                )}
-                onClick={handleChooseDirectory}
-                disabled={workingDirectorySaveState === 'loading'}
-                title={hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
-              >
-                <Folder className="h-3 w-3" />
-                <span className="truncate">
-                  {hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
-                </span>
-              </button>
-
-              {initialSshCommand ? (
-                <span
-                  className="mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground md:mt-0"
-                  title={`SSH: ${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`}
-                >
-                  <Server className="h-3 w-3" />
-                  <span className="truncate">
-                    {initialRemoteWorkingDirectory || initialSshCommand}
-                  </span>
-                </span>
-              ) : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'mt-1 inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
+                      projectSettings?.hasLocalDirectory || projectSettings?.hasSshDirectory
+                        ? 'border-border'
+                        : 'border-dashed border-muted-foreground/60'
+                    )}
+                    aria-label="Select project execution workspace"
+                    title="Choose where project jobs should execute"
+                  >
+                    <ExecutionWorkspaceIcon className="h-3 w-3" />
+                    <span>{executionWorkspaceLabel}</span>
+                    <ChevronDown className="h-3 w-3 text-muted-foreground/80" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-80">
+                  <DropdownMenuItem
+                    className="items-start gap-3"
+                    onClick={() => {
+                      if (!projectSettings) return;
+                      if (!projectSettings.hasLocalDirectory) {
+                        projectSettings.openProjectSettings();
+                        return;
+                      }
+                      projectSettings.setExecutionWorkspace('local');
+                    }}
+                  >
+                    <Folder className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-foreground">Local directory</span>
+                        {activeExecutionWorkspace === 'local' ? (
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-primary">
+                            Active
+                          </span>
+                        ) : null}
+                      </div>
+                      <p
+                        className={cn(
+                          'truncate text-xs',
+                          projectSettings?.hasLocalDirectory
+                            ? 'text-muted-foreground'
+                            : 'italic text-muted-foreground/80'
+                        )}
+                      >
+                        {localDirectoryLabel}
+                      </p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="items-start gap-3"
+                    onClick={() => {
+                      if (!projectSettings) return;
+                      if (!projectSettings.hasSshDirectory) {
+                        projectSettings.openProjectSettings();
+                        return;
+                      }
+                      projectSettings.setExecutionWorkspace('ssh');
+                    }}
+                  >
+                    <Server className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-foreground">SSH directory</span>
+                        {activeExecutionWorkspace === 'ssh' ? (
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-primary">
+                            Active
+                          </span>
+                        ) : null}
+                      </div>
+                      <p
+                        className={cn(
+                          'truncate text-xs',
+                          hasSshDirectory ? 'text-muted-foreground' : 'italic text-muted-foreground/80'
+                        )}
+                        title={
+                          hasSshDirectory
+                            ? `${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`
+                            : 'Configure SSH workspace'
+                        }
+                      >
+                        {sshDirectoryLabel}
+                      </p>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <Button
                 type="button"

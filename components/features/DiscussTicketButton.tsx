@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { Button } from '@/components/ui/button';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import {
@@ -56,10 +57,15 @@ export function DiscussTicketButton({
   webMode
 }: DiscussTicketButtonProps) {
   const { isElectron, launchAgent } = useTerminal();
+  const projectSettings = useProjectSettings();
   const [isOpen, setIsOpen] = useState(false);
   const [webCopied, setWebCopied] = useState(false);
   const [agentButtonStates, setAgentButtonStates] =
     useState<Record<LaunchAgentTypeValue, ButtonLoadingState>>(defaultAgentButtonStates);
+  const effectiveWorkingDirectory =
+    projectSettings?.effectiveWorkingDirectory ?? workingDirectory ?? null;
+  const effectiveSshCommand = projectSettings?.effectiveSshCommand ?? null;
+  const effectiveRemoteWorkingDirectory = projectSettings?.effectiveRemoteWorkingDirectory ?? null;
   const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
   const launchAgents = [
     preferredAgent,
@@ -89,10 +95,14 @@ export function DiscussTicketButton({
         await launchAgent(
           ticketId,
           agentValue,
-          workingDirectory ?? undefined,
+          effectiveWorkingDirectory ?? undefined,
           resolvedAgentToken,
           'ask',
-          agentFlags?.[agentValue]
+          agentFlags?.[agentValue],
+          undefined,
+          undefined,
+          effectiveSshCommand ?? undefined,
+          effectiveRemoteWorkingDirectory ?? undefined
         );
       } else {
         const { error, prompt } = await getTicketPromptForCopy(ticketId, 'ask', 'web');

@@ -35,7 +35,7 @@ const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
   codex: {
     installCommand: 'npm install -g @openai/codex',
     installLabel: 'Install Codex CLI',
-    overlordSetupCommand: 'Settings -> CLI -> Codex -> Chat plugin -> Install',
+    overlordSetupCommand: 'ovld setup codex',
     overlordSetupDescription:
       'Installs the local Overlord Codex chat plugin, migrates any legacy Codex bundle config, and manages the Codex permission rules used for Overlord protocol commands.'
   },
@@ -44,14 +44,14 @@ const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
     installLabel: 'Download Cursor',
     overlordSetupCommand: 'ovld setup cursor',
     overlordSetupDescription:
-      'Writes a .cursorrules file and MCP config that give Cursor access to your Overlord ticket context.'
+      'Installs the Overlord Cursor rule bundle, slash commands, and permission allow rules used for ticket lifecycle commands.'
   },
   gemini: {
     installCommand: 'npm install -g @google/gemini-cli',
     installLabel: 'Install Gemini CLI',
     overlordSetupCommand: 'ovld setup gemini',
     overlordSetupDescription:
-      'Adds the Overlord tool extension to Gemini CLI so it can read and update tickets as it works.'
+      'Installs Gemini slash commands and policy rules so it can run Overlord ticket lifecycle commands without repeated prompts.'
   },
   opencode: {
     installCommand: 'npm install -g opencode-ai',

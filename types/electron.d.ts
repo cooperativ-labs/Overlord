@@ -95,6 +95,9 @@ interface ElectronAPI {
       installPath?: string;
       isStale?: boolean;
       version: string;
+      installedVersion?: string | null;
+      latestVersion?: string | null;
+      updateAvailable?: boolean;
     }>;
     install: () => Promise<
       { ok: true; installPath: string; pathInstruction: string } | { ok: false; error: string }

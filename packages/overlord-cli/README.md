@@ -29,6 +29,9 @@ ovld auth login
 ovld attach
 ovld create "Investigate the failing build"
 ovld prompt "Draft a fix for the onboarding flow"
+ovld setup codex
+ovld setup cursor
+ovld setup gemini
 ovld setup all
 ovld doctor
 ```
@@ -48,8 +51,8 @@ ovld doctor
 - `ticket` - work with a single ticket
 - `protocol` - run ticket lifecycle commands
 - `connect`, `restart`, `run`, `resume`, `context` - launch or resume an agent session
-- `setup` - install the Overlord connector for a supported agent
-- `doctor` - verify installed agent connectors
+- `setup` - install the Overlord connector or plugin bundle for a supported agent
+- `doctor` - verify installed agent connectors and check whether a newer CLI version is available
 
 ## Publishing
 
