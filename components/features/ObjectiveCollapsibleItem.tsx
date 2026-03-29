@@ -53,7 +53,7 @@ export function ObjectiveCollapsibleItem({
           <CollapsibleTrigger asChild>
             <button
               className={cn(
-                'relative flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left  overflow-hidde',
+                'relative flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left overflow-hidden min-w-0',
                 !isExecuting && 'hover:bg-background'
               )}
               type="button"

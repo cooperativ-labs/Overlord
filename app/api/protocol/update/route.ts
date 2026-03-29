@@ -78,14 +78,25 @@ export async function POST(request: Request) {
           summary: 'Ticket resumed — agent continued working after delivery.',
           ticket_id: ticketId
         }),
-        // Reactivate the most recently completed objective back to executing
+        // Reactivate only the most recently completed objective back to executing.
+        // PostgREST ignores .order()/.limit() on UPDATE, so we first fetch the ID
+        // of the latest complete objective and then update by primary key.
         supabase
           .from('objectives')
-          .update({ state: 'executing' })
+          .select('id')
           .eq('ticket_id', ticketId)
           .eq('state', 'complete')
           .order('created_at', { ascending: false })
           .limit(1)
+          .single()
+          .then(({ data: latestObjective }) => {
+            if (latestObjective?.id) {
+              return supabase
+                .from('objectives')
+                .update({ state: 'executing' })
+                .eq('id', latestObjective.id);
+            }
+          })
       ]);
     }
 

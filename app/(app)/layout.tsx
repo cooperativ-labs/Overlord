@@ -64,6 +64,7 @@ export default async function RootLayout({
     profileSettings?.default_project_id ?? cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
   const selectedOrgIdStr = cookieStore.get(SELECTED_ORG_COOKIE)?.value ?? null;
   const selectedOrgId = selectedOrgIdStr ? Number(selectedOrgIdStr) : null;
+  const sidebarDefaultOpen = cookieStore.get('sidebar_state')?.value !== 'false';
 
   let tutorialAutoOpen = false;
   let tutorialAutoStep = 1;
@@ -126,7 +127,7 @@ export default async function RootLayout({
                 initialState={onboardingState}
               >
                 <SystemNotificationProvider>
-                  <SidebarProvider defaultOpen className="h-dvh min-h-0">
+                  <SidebarProvider defaultOpen={sidebarDefaultOpen} className="h-dvh min-h-0">
                     {user ? (
                       <div className="flex h-full w-full flex-col overflow-hidden">
                         <OfflineTicketProcessor />
