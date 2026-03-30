@@ -269,7 +269,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     // since SSH non-interactive shells don't source shell profile files.
     const pathSetup =
       'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"; [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null';
-    const contextDecode = `_OVLD_CTX=$(printf '%s' '${contextB64}' | base64 --decode)`;
+    const contextDecode = `export _OVLD_CTX=$(printf '%s' '${contextB64}' | base64 --decode)`;
     const remoteLaunchEnv = { ...launchEnv, ...codexLaunchEnv };
     const envExports = Object.entries(remoteLaunchEnv)
       .map(([key, value]) => `export ${key}=${shellQuote(value)}`)

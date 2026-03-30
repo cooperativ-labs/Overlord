@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.14.0] - 2026-03-30:09:29
+
+### Fixed
+- added export to agent-launcher.
+
+
 ## [3.13.0] - 2026-03-30:08:29
 
 ### Added
