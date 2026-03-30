@@ -31,7 +31,7 @@ This is the surface that makes Overlord useful for real repository work instead 
 
 The desktop app is also where Overlord manages durable local agent integrations.
 
-For Codex, the desktop app installs the Overlord plugin into:
+For Codex, the desktop app can install the Overlord plugin into:
 
 - \`~/.codex/plugins/overlord\`
 - \`~/.agents/plugins/marketplace.json\`
@@ -39,6 +39,9 @@ For Codex, the desktop app installs the Overlord plugin into:
 
 That local plugin bundles the Overlord Codex workflow skill and the MCP bridge that shells into
 the installed \`ovld\` CLI.
+
+If you already installed the npm CLI, you can install the same local Codex plugin with
+\`ovld setup codex\`.
 
 ## Change Viewer
 

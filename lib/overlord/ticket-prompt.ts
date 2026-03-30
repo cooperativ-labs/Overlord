@@ -239,6 +239,8 @@ Where \`deliver.json\` contains:
 }
 \`\`\`
 
+Treat \`deliver.json\` as ephemeral scratch data only. Create it outside the repository when practical, never commit it, and remove it after the deliver call.
+
 ### Rules
 
 ${buildLocalCoreRules(launchMode)}
@@ -294,7 +296,7 @@ ${buildLocalEventTypeHelp(launchMode)}
 
 #### Change rationales (optional on updates)
 
-Record \`changeRationales\` for meaningful behavioral changes during long-running work. These are structured protocol payloads that Overlord persists as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated rationale command. Use a JSON file only as a transport convenience for large payloads.
+Record \`changeRationales\` for meaningful behavioral changes during long-running work. These are structured protocol payloads that Overlord persists as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated rationale command. Use a JSON file only as a transport convenience for large payloads, and treat it as ephemeral scratch data rather than a repository file.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id ${ticketId} \\
@@ -357,6 +359,8 @@ Where \`deliver.json\` contains:
   "changeRationales": [{ "label": "Short reviewer-facing title", "file_path": "path/to/file.ts", "summary": "What changed.", "why": "Why it changed.", "impact": "Behavioral or review impact.", "hunks": [{ "header": "@@ -10,6 +10,14 @@" }] }]
 }
 \`\`\`
+
+Treat \`deliver.json\` as ephemeral scratch data only. Create it outside the repository when practical, never commit it, and remove it after the deliver call.
 
 ### 7 — Restart command
 

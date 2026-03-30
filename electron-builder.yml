@@ -9,7 +9,6 @@ afterSign: scripts/notarize.cjs
 files:
   - "dist-electron/**/*"
   - ".next/standalone/**/*"
-  - "bin/**/*"
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
   - "!node_modules"
@@ -30,7 +29,6 @@ linux:
 
 asarUnpack:
   - ".next/standalone/**/*"
-  - "bin/**/*"
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
 

@@ -22,6 +22,8 @@ Agents use the CLI to:
 - post progress updates
 - ask blocking questions
 - deliver final results
+- install local agent integrations with \`ovld setup <agent>\`
+- validate local agent integrations and check for CLI updates with \`ovld doctor\`
 
 ## Why it exists
 

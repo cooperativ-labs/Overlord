@@ -4,10 +4,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import { parseShellCommand, shellEscape } from '../../lib/ssh/shell-utils';
+
 const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_DEPTH = 8;
 const DEFAULT_MAX_ENTRIES_PER_DIRECTORY = 5000;
 const DEFAULT_GIT_TIMEOUT_MS = 15_000;
+const DEFAULT_SSH_FILE_TIMEOUT_MS = 30_000;
 const execFileAsync = promisify(execFile);
 
 const IGNORED_DIRECTORY_NAMES = new Set([
@@ -295,6 +298,172 @@ async function getGitDiff(
   return { diff: result.output, repoRoot };
 }
 
+async function runRemoteGitCommand(
+  sshParts: string[],
+  remoteDirectory: string,
+  args: string[],
+  options: { allowFailure?: boolean } = {}
+): Promise<{ ok: boolean; output: string }> {
+  const gitCmd = ['git', ...args].map(shellEscape).join(' ');
+  const remoteScript = `cd ${shellEscape(remoteDirectory)} && ${gitCmd}`;
+  const [sshBin, ...sshArgs] = sshParts;
+  try {
+    const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, remoteScript], {
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: DEFAULT_GIT_TIMEOUT_MS
+    });
+    return { ok: true, output: stdout };
+  } catch (error) {
+    if (options.allowFailure) {
+      const output =
+        error instanceof Error && 'stdout' in error && typeof error.stdout === 'string'
+          ? error.stdout
+          : '';
+      return { ok: false, output };
+    }
+    throw error;
+  }
+}
+
+async function resolveRemoteGitRepo(
+  sshParts: string[],
+  remoteDirectory: string
+): Promise<{ branch: string | null; repoRoot: string }> {
+  const topLevel = await runRemoteGitCommand(sshParts, remoteDirectory, [
+    'rev-parse',
+    '--show-toplevel'
+  ]);
+  const repoRoot = topLevel.output.trim();
+  if (!repoRoot) {
+    throw new Error('Remote directory is not inside a Git repository.');
+  }
+  const branchResult = await runRemoteGitCommand(
+    sshParts,
+    repoRoot,
+    ['symbolic-ref', '--quiet', '--short', 'HEAD'],
+    { allowFailure: true }
+  );
+  return {
+    branch: branchResult.ok ? branchResult.output.trim() || null : null,
+    repoRoot
+  };
+}
+
+async function readRemoteUntrackedFileStats(
+  sshParts: string[],
+  remoteFilePath: string
+): Promise<GitFileStats | null> {
+  const [sshBin, ...sshArgs] = sshParts;
+  try {
+    const remoteScript = `awk 'END{print NR}' ${shellEscape(remoteFilePath)}`;
+    const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, remoteScript], {
+      maxBuffer: 1024 * 1024,
+      timeout: DEFAULT_GIT_TIMEOUT_MS
+    });
+    const lines = Number.parseInt(stdout.trim(), 10);
+    return { linesAdded: Number.isNaN(lines) ? null : lines, linesRemoved: 0 };
+  } catch {
+    return null;
+  }
+}
+
+async function getRemoteGitFileStats(
+  sshParts: string[],
+  repoRoot: string,
+  files: GitStatusFile[]
+): Promise<Map<string, GitFileStats>> {
+  const trackedResult = await runRemoteGitCommand(
+    sshParts,
+    repoRoot,
+    ['-c', 'core.quotepath=false', 'diff', '--numstat', '--find-renames', '--find-copies', 'HEAD'],
+    { allowFailure: true }
+  );
+  const stats = parseNumStat(trackedResult.output);
+  await Promise.all(
+    files.map(async file => {
+      if (file.status !== 'untracked' || stats.has(file.path)) return;
+      const remoteFilePath = `${repoRoot}/${file.path}`;
+      const untrackedStats = await readRemoteUntrackedFileStats(sshParts, remoteFilePath);
+      if (untrackedStats) stats.set(file.path, untrackedStats);
+    })
+  );
+  return stats;
+}
+
+async function getRemoteGitStatus(sshCommand: string, remoteDirectory: string) {
+  const sshParts = parseShellCommand(sshCommand);
+  const { branch, repoRoot } = await resolveRemoteGitRepo(sshParts, remoteDirectory);
+  const statusResult = await runRemoteGitCommand(sshParts, repoRoot, [
+    'status',
+    '--porcelain=v1',
+    '-z',
+    '--untracked-files=all'
+  ]);
+  const files = parseGitStatus(statusResult.output);
+  const fileStats = await getRemoteGitFileStats(sshParts, repoRoot, files);
+  return {
+    branch,
+    files: files.map(file => {
+      const stats = fileStats.get(file.path);
+      return {
+        ...file,
+        linesAdded: stats?.linesAdded ?? null,
+        linesRemoved: stats?.linesRemoved ?? null
+      };
+    }),
+    repoRoot
+  };
+}
+
+async function getRemoteGitDiff(
+  sshCommand: string,
+  remoteDirectory: string,
+  relativePath: string,
+  status?: string,
+  originalPath?: string
+) {
+  const sshParts = parseShellCommand(sshCommand);
+  const { repoRoot } = await resolveRemoteGitRepo(sshParts, remoteDirectory);
+  const normalizedPath = toPosixPath(relativePath.trim());
+  const normalizedOriginalPath = originalPath?.trim() ? toPosixPath(originalPath.trim()) : null;
+  if (!normalizedPath) throw new Error('A file path is required.');
+
+  if (status === 'untracked') {
+    const fullRemotePath = `${repoRoot}/${normalizedPath}`;
+    const result = await runRemoteGitCommand(
+      sshParts,
+      repoRoot,
+      ['diff', '--no-index', '--no-ext-diff', '--unified=3', '--', '/dev/null', fullRemotePath],
+      { allowFailure: true }
+    );
+    return { diff: result.output, repoRoot };
+  }
+
+  if ((status === 'renamed' || status === 'copied') && normalizedOriginalPath) {
+    const result = await runRemoteGitCommand(sshParts, repoRoot, [
+      'diff',
+      '--no-ext-diff',
+      '--unified=3',
+      '--find-renames',
+      'HEAD',
+      '--',
+      normalizedOriginalPath,
+      normalizedPath
+    ]);
+    return { diff: result.output, repoRoot };
+  }
+
+  const result = await runRemoteGitCommand(sshParts, repoRoot, [
+    'diff',
+    '--no-ext-diff',
+    '--unified=3',
+    'HEAD',
+    '--',
+    normalizedPath
+  ]);
+  return { diff: result.output, repoRoot };
+}
+
 async function listProjectFiles(
   rootDirectory: string,
   options?: { maxDepth?: number; maxEntriesPerDirectory?: number; maxFiles?: number }
@@ -358,14 +527,106 @@ async function listProjectFiles(
   return { files, truncated };
 }
 
-export function registerFilesystemIpc(): void {
-  ipcMain.handle('filesystem:directory-exists', async (_event, directory?: string) => {
-    const resolvedDirectory = normalizeDirectory(directory);
-    if (!resolvedDirectory) return false;
+async function listRemoteProjectFiles(
+  sshCommand: string,
+  remoteDirectory: string,
+  options?: { maxFiles?: number; maxDepth?: number }
+): Promise<{ files: string[]; truncated: boolean }> {
+  const maxFiles = options?.maxFiles ?? DEFAULT_MAX_FILES;
+  const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const sshParts = parseShellCommand(sshCommand);
+  const [sshBin, ...sshArgs] = sshParts;
 
-    const stat = await fs.stat(resolvedDirectory).catch(() => null);
-    return Boolean(stat?.isDirectory());
+  const ignoredDirs = [...IGNORED_DIRECTORY_NAMES].map(d => `-name ${shellEscape(d)}`).join(' -o ');
+  const findCmd = [
+    `cd ${shellEscape(remoteDirectory)}`,
+    `find . -maxdepth ${maxDepth}`,
+    `\\( ${ignoredDirs} -o -name '.*' \\) -prune`,
+    `-o -type f -print`,
+    `| head -n ${maxFiles + 1}`,
+    `| sort`
+  ].join(' && ');
+
+  const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, findCmd], {
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: DEFAULT_SSH_FILE_TIMEOUT_MS
   });
+
+  let files = stdout
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => (line.startsWith('./') ? line.slice(2) : line));
+
+  let truncated = false;
+  if (files.length > maxFiles) {
+    files = files.slice(0, maxFiles);
+    truncated = true;
+  }
+
+  return { files, truncated };
+}
+
+async function remoteDirectoryExists(
+  sshCommand: string,
+  remoteDirectory: string
+): Promise<boolean> {
+  const sshParts = parseShellCommand(sshCommand);
+  const [sshBin, ...sshArgs] = sshParts;
+  const remoteScript = `test -d ${shellEscape(remoteDirectory)} && echo EXISTS`;
+  try {
+    const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, remoteScript], {
+      timeout: 10_000
+    });
+    return stdout.trim() === 'EXISTS';
+  } catch {
+    return false;
+  }
+}
+
+async function checkSshConnection(sshCommand: string): Promise<{ ok: boolean; error?: string }> {
+  const sshParts = parseShellCommand(sshCommand);
+  const [sshBin, ...sshArgs] = sshParts;
+  try {
+    const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, 'echo OK'], {
+      timeout: 5_000
+    });
+    return { ok: stdout.trim() === 'OK' };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'SSH connection failed.'
+    };
+  }
+}
+
+export function registerFilesystemIpc(): void {
+  ipcMain.handle(
+    'filesystem:directory-exists',
+    async (
+      _event,
+      payload?: string | { directory?: string; sshCommand?: string; remoteDirectory?: string }
+    ) => {
+      // Support legacy bare-string signature and new object signature
+      if (typeof payload === 'string' || payload === undefined) {
+        const resolvedDirectory = normalizeDirectory(payload);
+        if (!resolvedDirectory) return false;
+        const stat = await fs.stat(resolvedDirectory).catch(() => null);
+        return Boolean(stat?.isDirectory());
+      }
+
+      if (payload.sshCommand?.trim()) {
+        const remoteDir = payload.remoteDirectory?.trim() ?? '';
+        if (!remoteDir) return false;
+        return remoteDirectoryExists(payload.sshCommand.trim(), remoteDir);
+      }
+
+      const resolvedDirectory = normalizeDirectory(payload.directory);
+      if (!resolvedDirectory) return false;
+      const stat = await fs.stat(resolvedDirectory).catch(() => null);
+      return Boolean(stat?.isDirectory());
+    }
+  );
 
   ipcMain.handle(
     'filesystem:list-project-files',
@@ -373,11 +634,40 @@ export function registerFilesystemIpc(): void {
       _event,
       payload?: {
         directory?: string;
+        sshCommand?: string;
+        remoteDirectory?: string;
         maxDepth?: number;
         maxEntriesPerDirectory?: number;
         maxFiles?: number;
       }
     ) => {
+      if (payload?.sshCommand?.trim()) {
+        const remoteDir = payload.remoteDirectory?.trim() ?? '';
+        if (!remoteDir) {
+          return {
+            files: [],
+            linkedDirectory: null,
+            truncated: false,
+            error: 'Remote working directory is required when using SSH.'
+          };
+        }
+        try {
+          const { files, truncated } = await listRemoteProjectFiles(
+            payload.sshCommand.trim(),
+            remoteDir,
+            payload
+          );
+          return { files, linkedDirectory: remoteDir, truncated };
+        } catch (error) {
+          return {
+            files: [],
+            linkedDirectory: remoteDir,
+            truncated: false,
+            error: error instanceof Error ? error.message : 'Failed to list remote project files.'
+          };
+        }
+      }
+
       const resolvedDirectory = normalizeDirectory(payload?.directory);
       if (!resolvedDirectory) {
         return {
@@ -397,52 +687,83 @@ export function registerFilesystemIpc(): void {
     }
   );
 
-  ipcMain.handle('filesystem:get-git-status', async (_event, payload?: { directory?: string }) => {
-    const resolvedDirectory = normalizeDirectory(payload?.directory);
-    if (!resolvedDirectory) {
-      return {
-        branch: null,
-        files: [],
-        linkedDirectory: null,
-        repoRoot: null,
-        error: 'Linked directory does not exist or is not a directory.'
-      };
+  ipcMain.handle('filesystem:check-ssh-connection', async (_event, sshCommand?: string) => {
+    if (!sshCommand?.trim()) {
+      return { ok: false, error: 'SSH command is required.' };
     }
-
-    try {
-      const result = await getGitStatus(resolvedDirectory);
-      return {
-        ...result,
-        linkedDirectory: resolvedDirectory
-      };
-    } catch (error) {
-      return {
-        branch: null,
-        files: [],
-        linkedDirectory: resolvedDirectory,
-        repoRoot: null,
-        error: error instanceof Error ? error.message : 'Failed to read Git status.'
-      };
-    }
+    return checkSshConnection(sshCommand.trim());
   });
+
+  ipcMain.handle(
+    'filesystem:get-git-status',
+    async (
+      _event,
+      payload?: { directory?: string; sshCommand?: string; remoteDirectory?: string }
+    ) => {
+      if (payload?.sshCommand?.trim()) {
+        const remoteDir = payload.remoteDirectory?.trim() ?? '';
+        if (!remoteDir) {
+          return {
+            branch: null,
+            files: [],
+            linkedDirectory: null,
+            repoRoot: null,
+            error: 'Remote working directory is required when using SSH.'
+          };
+        }
+        try {
+          const result = await getRemoteGitStatus(payload.sshCommand.trim(), remoteDir);
+          return { ...result, linkedDirectory: remoteDir };
+        } catch (error) {
+          return {
+            branch: null,
+            files: [],
+            linkedDirectory: remoteDir,
+            repoRoot: null,
+            error: error instanceof Error ? error.message : 'Failed to read remote Git status.'
+          };
+        }
+      }
+
+      const resolvedDirectory = normalizeDirectory(payload?.directory);
+      if (!resolvedDirectory) {
+        return {
+          branch: null,
+          files: [],
+          linkedDirectory: null,
+          repoRoot: null,
+          error: 'Linked directory does not exist or is not a directory.'
+        };
+      }
+      try {
+        const result = await getGitStatus(resolvedDirectory);
+        return { ...result, linkedDirectory: resolvedDirectory };
+      } catch (error) {
+        return {
+          branch: null,
+          files: [],
+          linkedDirectory: resolvedDirectory,
+          repoRoot: null,
+          error: error instanceof Error ? error.message : 'Failed to read Git status.'
+        };
+      }
+    }
+  );
 
   ipcMain.handle(
     'filesystem:get-git-diff',
     async (
       _event,
-      payload?: { directory?: string; originalPath?: string; path?: string; status?: string }
-    ) => {
-      const resolvedDirectory = normalizeDirectory(payload?.directory);
-      const relativePath = payload?.path?.trim();
-      if (!resolvedDirectory) {
-        return {
-          diff: '',
-          path: null,
-          repoRoot: null,
-          status: payload?.status ?? null,
-          error: 'Linked directory does not exist or is not a directory.'
-        };
+      payload?: {
+        directory?: string;
+        originalPath?: string;
+        path?: string;
+        status?: string;
+        sshCommand?: string;
+        remoteDirectory?: string;
       }
+    ) => {
+      const relativePath = payload?.path?.trim();
       if (!relativePath) {
         return {
           diff: '',
@@ -453,6 +774,47 @@ export function registerFilesystemIpc(): void {
         };
       }
 
+      if (payload?.sshCommand?.trim()) {
+        const remoteDir = payload.remoteDirectory?.trim() ?? '';
+        if (!remoteDir) {
+          return {
+            diff: '',
+            path: relativePath,
+            repoRoot: null,
+            status: payload?.status ?? null,
+            error: 'Remote working directory is required when using SSH.'
+          };
+        }
+        try {
+          const result = await getRemoteGitDiff(
+            payload.sshCommand.trim(),
+            remoteDir,
+            relativePath,
+            payload?.status,
+            payload?.originalPath
+          );
+          return { ...result, path: relativePath, status: payload?.status ?? null };
+        } catch (error) {
+          return {
+            diff: '',
+            path: relativePath,
+            repoRoot: null,
+            status: payload?.status ?? null,
+            error: error instanceof Error ? error.message : 'Failed to read remote Git diff.'
+          };
+        }
+      }
+
+      const resolvedDirectory = normalizeDirectory(payload?.directory);
+      if (!resolvedDirectory) {
+        return {
+          diff: '',
+          path: null,
+          repoRoot: null,
+          status: payload?.status ?? null,
+          error: 'Linked directory does not exist or is not a directory.'
+        };
+      }
       try {
         const result = await getGitDiff(
           resolvedDirectory,
@@ -460,11 +822,7 @@ export function registerFilesystemIpc(): void {
           payload?.status,
           payload?.originalPath
         );
-        return {
-          ...result,
-          path: relativePath,
-          status: payload?.status ?? null
-        };
+        return { ...result, path: relativePath, status: payload?.status ?? null };
       } catch (error) {
         return {
           diff: '',

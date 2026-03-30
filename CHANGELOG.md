@@ -2,6 +2,107 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.11.0] - 2026-03-30:06:36
+
+### Added
+- None.
+
+### Fixed
+- Force SSH-backed agent launches to allocate a PTY by parsing the configured SSH command, adding `-tt` only when the invocation is `ssh` (or a full path ending in `/ssh`) and lacks `-t`, and rewrapping the command with proper quoting so remote agents retain stdin-enabled terminals.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+## [3.10.0] - 2026-03-29:19:20
+
+### Added
+- Add SSH-backed project file tree loading so remote workspaces can provide file mentions and linked-file pickers without requiring a local checkout.
+- Add a shared workspace file-tree hook for Electron editors and ticket flows so blank tickets, inline objective editing, new ticket, quick run, and conversation replies all resolve files from the active local or SSH workspace.
+
+### Fixed
+- Fix project file-tree APIs and Electron IPC fallbacks so projects without an available local directory can still list files from their configured SSH workspace.
+- Fix current-changes inspection for workspace-aware projects so status and diff loading consistently reuse the active local or remote workspace payload.
+
+### Changed
+- Update ticket board and ticket panel file-mention loading to prefer local directories when available and fall back to configured SSH workspaces when they are not.
+- Update project pickers and Electron preload types to carry SSH command and remote working directory metadata where file-tree and CLI flows need it.
+
+### Security
+- None.
+
+### Refactor
+- Extract shared SSH shell parsing and escaping utilities so Electron IPC and server-side file-tree code build remote commands consistently.
+- Centralize workspace file-tree fetching logic instead of duplicating Electron-specific file loading across multiple components.
+
+### Chore
+- Bump the package version and CLI package version to `3.10.0`.
+
+## [3.9.0] - 2026-03-29:18:11
+
+### Added
+- Make `packages/overlord-cli/bin/ovld.mjs` the canonical bundled CLI entrypoint for both the npm package and the Electron app.
+
+### Fixed
+- Fix Electron CLI installation so packaged and development builds both install the bundled CLI from the maintained package path instead of the removed root `bin` copy.
+
+### Changed
+- Update app packaging and root package bin mappings to ship the CLI directly from `packages/overlord-cli`.
+- Simplify CLI sync logic so release prep only keeps the CLI package version aligned with the app version.
+
+### Security
+- None.
+
+### Removed
+- Remove the legacy duplicated root `bin/_cli` bundle from app packaging and test coverage.
+
+### Test
+- Update CLI auth, credentials, new-ticket, and protocol deliver tests to target the canonical packaged CLI modules.
+
+### Chore
+- Bump the package version and CLI package version to `3.9.0`.
+
+## [3.7.0] - 2026-03-29:14:07
+
+### Added
+- Add a reusable project execution workspace selector in project settings so Electron projects can switch between local and SSH execution from one control.
+- Add Linux ARM64 support to the Electron build and release upload scripts.
+
+### Fixed
+- Fix SSH agent launches so remote shells receive the prompt context without relying on local temp files that do not exist on the remote machine.
+
+### Changed
+- Update agent launch handling to source common CLI paths and NVM on SSH-backed shells before running remote commands.
+- Preserve passed-in workspace settings in the agent split button when project settings are unavailable, keeping launch behavior consistent across contexts.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version and CLI package version to `3.7.0`.
+
+## [3.6.0] - 2026-03-29:13:11
+
+### Added
+- Add npm and npx installation options for the standalone CLI on the downloads page.
+- Add SSH-backed Git status and diff support for linked remote workspaces in the current changes view.
+
+### Fixed
+- None.
+
+### Changed
+- Update the current changes screen to use remote workspace settings when no local directory is available.
+- Launch SSH-backed shell commands through the user's interactive preferred shell so aliases and functions resolve correctly.
+- Refresh CLI download copy to describe the npm-based install path and direct tarball download separately.
+
+### Security
+- None.
+
+### Chore
+- Bump the package version and CLI package version to `3.6.0`.
+
 ## [3.5.1] - 2026-03-29:11:36
 
 ### Added

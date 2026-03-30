@@ -244,15 +244,14 @@ function buildFallbackFeedPost(context: FeedPostContext): FeedPostPayload {
   const rationaleCount = context.rationales.length;
   const spawnedCount = context.spawnedTickets.length;
   const primaryObjective = context.ticketObjective ?? context.ticketTitle ?? 'ticket';
-  const objectiveSummary = context.ticketObjective?.trim() || context.ticketTitle?.trim() || 'the ticket';
+  const objectiveSummary =
+    context.ticketObjective?.trim() || context.ticketTitle?.trim() || 'the ticket';
   const changedFiles = [
-    ...new Set(
-      context.rationales
-        .map(r => r.file_path.trim())
-        .filter(Boolean)
-    )
+    ...new Set(context.rationales.map(r => r.file_path.trim()).filter(Boolean))
   ].slice(0, 8);
-  const completedObjective = context.events.find(e => e.event_type === 'update' && e.summary)?.summary;
+  const completedObjective = context.events.find(
+    e => e.event_type === 'update' && e.summary
+  )?.summary;
 
   return {
     title: `Progress update: ${primaryObjective.slice(0, 60)}`,
@@ -265,7 +264,9 @@ function buildFallbackFeedPost(context: FeedPostContext): FeedPostPayload {
       spawnedCount > 0
         ? `- ${spawnedCount} spawned ticket${spawnedCount === 1 ? '' : 's'} were linked to this work.`
         : '- No follow-up tickets were spawned.',
-      context.existingPost ? '- Gemini was unavailable, so this post was refreshed with a deterministic summary.' : '- Gemini was unavailable, so this post was created with a deterministic summary.'
+      context.existingPost
+        ? '- Gemini was unavailable, so this post was refreshed with a deterministic summary.'
+        : '- Gemini was unavailable, so this post was created with a deterministic summary.'
     ].join('\n'),
     tags: ['fallback', 'bugfix', 'feed'],
     impact_level: eventCount > 0 || rationaleCount > 0 ? 'notable' : 'minor',

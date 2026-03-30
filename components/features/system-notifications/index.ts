@@ -4,3 +4,4 @@ export { SystemNotificationRoot } from './SystemNotificationRoot';
 export type { SystemNotification, SystemNotificationType } from './types';
 export { useAgentBundleNotifications } from './useAgentBundleNotifications';
 export { useAppUpdateNotifications } from './useAppUpdateNotifications';
+export { useCliUpdateNotifications } from './useCliUpdateNotifications';

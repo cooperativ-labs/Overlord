@@ -383,6 +383,9 @@ export function CliPage({ open }: { open: boolean }) {
   const [cliInstallMessage, setCliInstallMessage] = useState<string | null>(null);
   const [cliVersion, setCliVersion] = useState<string | null>(null);
   const [cliIsStale, setCliIsStale] = useState(false);
+  const [cliInstalledVersion, setCliInstalledVersion] = useState<string | null>(null);
+  const [cliLatestVersion, setCliLatestVersion] = useState<string | null>(null);
+  const [cliUpdateAvailable, setCliUpdateAvailable] = useState(false);
   const [bundleStatuses, setBundleStatuses] = useState<BundleStatusEntry[]>([]);
   const [serviceStatuses, setServiceStatuses] = useState<ServiceStatusEntry[]>([]);
   const [installAllBundlesButtonState, setInstallAllBundlesButtonState] =
@@ -441,12 +444,27 @@ export function CliPage({ open }: { open: boolean }) {
 
   useEffect(() => {
     if (!open || !isElectron || !api?.cli) return;
-    void api.cli.getInstallStatus().then(({ installed, installPath, isStale, version }) => {
-      setCliInstalled(installed);
-      setCliInstallPath(installPath ?? null);
-      setCliIsStale(isStale ?? false);
-      setCliVersion(version);
-    });
+    void api.cli
+      .getInstallStatus()
+      .then(
+        ({
+          installed,
+          installPath,
+          isStale,
+          version,
+          installedVersion,
+          latestVersion,
+          updateAvailable
+        }) => {
+          setCliInstalled(installed);
+          setCliInstallPath(installPath ?? null);
+          setCliIsStale(isStale ?? false);
+          setCliVersion(version);
+          setCliInstalledVersion(installedVersion ?? null);
+          setCliLatestVersion(latestVersion ?? null);
+          setCliUpdateAvailable(updateAvailable ?? false);
+        }
+      );
   }, [api, isElectron, open]);
 
   useEffect(() => {
@@ -1222,11 +1240,26 @@ export function CliPage({ open }: { open: boolean }) {
           {cliInstalled && !cliIsStale ? (
             <div className="rounded-md border p-3">
               <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                ovld {cliVersion ? `v${cliVersion}` : ''} installed at {cliInstallPath}
+                ovld{' '}
+                {cliInstalledVersion
+                  ? `v${cliInstalledVersion}`
+                  : cliVersion
+                    ? `v${cliVersion}`
+                    : ''}{' '}
+                installed at {cliInstallPath}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Automatically updated when the desktop app updates.
               </p>
+              {cliUpdateAvailable && cliLatestVersion ? (
+                <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
+                  New CLI version available: v{cliLatestVersion}. Reinstall the CLI wrapper or run
+                  <code className="ml-1 rounded bg-muted px-1">
+                    npm install -g overlord-cli@latest
+                  </code>
+                  .
+                </p>
+              ) : null}
               {cliInstallMessage ? (
                 <p className="mt-1 text-xs text-muted-foreground">{cliInstallMessage}</p>
               ) : null}

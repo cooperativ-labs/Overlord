@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseNumberedSelection, sortProjects } from '../bin/_cli/new-ticket.mjs';
+import { parseNumberedSelection, sortProjects } from '../packages/overlord-cli/bin/_cli/new-ticket.mjs';
 
 test('parseNumberedSelection accepts in-range numeric input', () => {
   assert.equal(parseNumberedSelection('1', 3), 0);

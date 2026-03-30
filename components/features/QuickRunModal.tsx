@@ -9,6 +9,7 @@ import {
   useAgentModelPreference
 } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,6 @@ import {
   updateTicketFieldAction,
   updateTicketStatusAction
 } from '@/lib/actions/tickets';
-import { areStringArraysEqual } from '@/lib/helpers/array-utils';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import type { EditableTextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
@@ -46,6 +46,8 @@ type ProjectOption = {
   color: string;
   everhour_project_id: string | null;
   local_working_directory?: string | null;
+  ssh_command?: string | null;
+  remote_working_directory?: string | null;
 };
 
 type QuickRunModalProps = {
@@ -79,13 +81,14 @@ export function QuickRunModal({
   const { api, isElectron } = useElectron();
   const { launchAgent } = useTerminal();
   const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
-  const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
 
-  const syncLocalFileMentionPaths = useCallback((nextPaths: string[]) => {
-    setLocalFileMentionPaths(current =>
-      areStringArraysEqual(current, nextPaths) ? current : nextPaths
-    );
-  }, []);
+  const selectedProjectForFileTree = projects.find(p => p.id === selectedProjectId);
+  const { files: effectiveMentionPaths } = useWorkspaceFileTree({
+    fileMentionPaths,
+    workingDirectory: selectedProjectForFileTree?.local_working_directory,
+    sshCommand: selectedProjectForFileTree?.ssh_command,
+    remoteWorkingDirectory: selectedProjectForFileTree?.remote_working_directory
+  });
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current as EditableTextareaHandle | null;
@@ -130,40 +133,6 @@ export function QuickRunModal({
       }
     };
   }, [ticketId, objective]);
-
-  // Load file mention paths via Electron IPC when selected project changes
-  useEffect(() => {
-    if (!isElectron || !api?.filesystem?.listProjectFiles) {
-      syncLocalFileMentionPaths(fileMentionPaths);
-      return;
-    }
-
-    const selectedProject = projects.find(p => p.id === selectedProjectId);
-    const directory = selectedProject?.local_working_directory?.trim() ?? '';
-    if (!directory) {
-      syncLocalFileMentionPaths(fileMentionPaths);
-      return;
-    }
-
-    let cancelled = false;
-    void api.filesystem
-      .listProjectFiles({ directory })
-      .then(result => {
-        if (cancelled) return;
-        syncLocalFileMentionPaths(
-          result.error ? fileMentionPaths : (result.files ?? EMPTY_FILE_MENTION_PATHS)
-        );
-      })
-      .catch(() => {
-        if (!cancelled) syncLocalFileMentionPaths(fileMentionPaths);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, fileMentionPaths, isElectron, projects, selectedProjectId, syncLocalFileMentionPaths]);
-
-  const effectiveMentionPaths = isElectron ? localFileMentionPaths : fileMentionPaths;
 
   // Focus textarea once ticket creation finishes
   useEffect(() => {

@@ -3,12 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
-import { useElectron } from '@/components/features/terminal/useElectron';
+import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { Card, CardContent } from '@/components/ui/card';
-import { areStringArraysEqual } from '@/lib/helpers/array-utils';
 import type { TextareaHandle } from '@/lib/types/text-control';
-
-const EMPTY_PATHS: string[] = [];
 
 type BlankTicketCardProps = {
   inputId: string;
@@ -45,15 +42,12 @@ export default function BlankTicketCard({
 }: BlankTicketCardProps) {
   const [value, setValue] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [localFileMentionPaths, setLocalFileMentionPaths] = useState<string[]>(fileMentionPaths);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { api, isElectron } = useElectron();
 
-  const syncLocalFileMentionPaths = useCallback((nextPaths: string[]) => {
-    setLocalFileMentionPaths(current =>
-      areStringArraysEqual(current, nextPaths) ? current : nextPaths
-    );
-  }, []);
+  const { files: effectiveMentionPaths } = useWorkspaceFileTree({
+    fileMentionPaths,
+    workingDirectory
+  });
 
   useEffect(() => {
     if (focusTrigger === 0) return;
@@ -63,37 +57,6 @@ export default function BlankTicketCard({
     const cursor = textArea.value.length;
     textArea.setSelectionRange(cursor, cursor);
   }, [focusTrigger]);
-
-  // In Electron, fetch file mention paths locally via IPC
-  useEffect(() => {
-    if (!isElectron || !api?.filesystem?.listProjectFiles) {
-      syncLocalFileMentionPaths(fileMentionPaths);
-      return;
-    }
-
-    const directory = workingDirectory?.trim() ?? '';
-    if (!directory) {
-      syncLocalFileMentionPaths(fileMentionPaths);
-      return;
-    }
-
-    let cancelled = false;
-    void api.filesystem
-      .listProjectFiles({ directory })
-      .then(result => {
-        if (cancelled) return;
-        syncLocalFileMentionPaths(result.error ? fileMentionPaths : (result.files ?? EMPTY_PATHS));
-      })
-      .catch(() => {
-        if (!cancelled) syncLocalFileMentionPaths(fileMentionPaths);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, fileMentionPaths, isElectron, syncLocalFileMentionPaths, workingDirectory]);
-
-  const effectiveMentionPaths = isElectron ? localFileMentionPaths : fileMentionPaths;
 
   const handleBlur = useCallback(
     async (currentValue: string) => {

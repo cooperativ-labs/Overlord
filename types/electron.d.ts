@@ -38,6 +38,8 @@ interface ElectronAPI {
       originalPath?: string;
       path?: string;
       status?: string;
+      sshCommand?: string;
+      remoteDirectory?: string;
     }) => Promise<{
       diff: string;
       error?: string;
@@ -45,7 +47,11 @@ interface ElectronAPI {
       repoRoot: string | null;
       status: string | null;
     }>;
-    getGitStatus: (options?: { directory?: string }) => Promise<{
+    getGitStatus: (options?: {
+      directory?: string;
+      sshCommand?: string;
+      remoteDirectory?: string;
+    }) => Promise<{
       branch: string | null;
       error?: string;
       files: Array<{
@@ -60,9 +66,13 @@ interface ElectronAPI {
       linkedDirectory: string | null;
       repoRoot: string | null;
     }>;
-    directoryExists: (directory?: string) => Promise<boolean>;
+    directoryExists: (
+      options?: string | { directory?: string; sshCommand?: string; remoteDirectory?: string }
+    ) => Promise<boolean>;
     listProjectFiles: (options?: {
       directory?: string;
+      sshCommand?: string;
+      remoteDirectory?: string;
       maxDepth?: number;
       maxEntriesPerDirectory?: number;
       maxFiles?: number;
@@ -70,6 +80,10 @@ interface ElectronAPI {
       files: string[];
       linkedDirectory: string | null;
       truncated: boolean;
+      error?: string;
+    }>;
+    checkSshConnection: (sshCommand: string) => Promise<{
+      ok: boolean;
       error?: string;
     }>;
   };
@@ -95,6 +109,9 @@ interface ElectronAPI {
       installPath?: string;
       isStale?: boolean;
       version: string;
+      installedVersion?: string | null;
+      latestVersion?: string | null;
+      updateAvailable?: boolean;
     }>;
     install: () => Promise<
       { ok: true; installPath: string; pathInstruction: string } | { ok: false; error: string }

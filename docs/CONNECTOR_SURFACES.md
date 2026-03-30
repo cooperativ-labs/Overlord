@@ -164,8 +164,8 @@ Checklist:
   [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
 
 Checklist:
-- Onboarding does not tell users to run `ovld setup codex`
-- Codex onboarding points users to the Desktop app chat plugin install path
+- Onboarding tells CLI users they can run `ovld setup codex`
+- Codex onboarding points CLI users to `ovld setup codex`
 - Codex is not presented as a bundle-backed agent
 - Codex connector features list includes: home-local plugin with bundled skill, legacy bundle migration cleanup, permission prefix rules
 
@@ -175,8 +175,8 @@ Checklist:
   [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs)
 
 Checklist:
-- `ovld setup codex` exits with an error message pointing to the Desktop app
-- Help text does not advertise Codex as a bundle-supported setup target
+- `ovld setup codex` installs the local Codex plugin bundle
+- Help text advertises Codex as a supported setup target
 
 ### 6. Demo / product copy
 
@@ -360,12 +360,12 @@ Checklist:
 
 Checklist:
 - `ovld setup claude` installs bundle for Claude Code
+- `ovld setup codex` installs the local Codex plugin bundle
 - `ovld setup opencode` installs bundle for OpenCode
-- `ovld setup cursor` installs slash commands for Cursor
-- `ovld setup gemini` installs TOML slash commands for Gemini CLI
-- `ovld setup all` installs all supported agents (claude + opencode only; slash-only agents are separate)
-- `ovld setup codex` → exits with error directing user to the Desktop app
-- `ovld doctor` validates installed bundle statuses for `claude` and `opencode`
+- `ovld setup cursor` installs Cursor rules, slash commands, and permission allow rules
+- `ovld setup gemini` installs Gemini TOML slash commands and policy rules
+- `ovld setup all` installs all supported agents (claude + codex + opencode; slash-only agents are separate)
+- `ovld doctor` validates installed bundle statuses for `claude`, `codex`, `cursor`, `gemini`, and `opencode`
 
 ### Settings UI
 
@@ -399,7 +399,7 @@ When changing connector integration, verify the relevant agent(s):
 - Installing the plugin cleans up legacy Codex bundle remnants
 - Launching Codex from Overlord produces Codex-specific workflow instructions in the prompt
 - Codex cloud instructions produce a valid MCP config snippet (`~/.codex/config.toml`)
-- No user-facing page advertises `ovld setup codex` or `~/.codex/AGENTS.md` as the current local Codex path
+- User-facing pages advertise `ovld setup codex` as the CLI install path and do not reference `~/.codex/AGENTS.md` as the local Codex path
 
 **Cursor**
 - Slash commands written to `~/.cursor/commands/` (Markdown format)

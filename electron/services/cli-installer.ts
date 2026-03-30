@@ -1,7 +1,11 @@
 import { app } from 'electron';
 import fs from 'fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import os from 'os';
 import path from 'path';
+
+const execFileAsync = promisify(execFile);
 
 const WRAPPER_SCRIPT = `#!/bin/sh
 # Overlord CLI wrapper - installed by Overlord desktop app
@@ -11,6 +15,16 @@ exec node "%CLI_PATH%" "$@"
 export type CliInstallResult =
   | { ok: true; installPath: string; pathInstruction: string }
   | { ok: false; error: string };
+
+type CliInstallStatus = {
+  installed: boolean;
+  installPath?: string;
+  isStale?: boolean;
+  version: string;
+  installedVersion?: string | null;
+  latestVersion?: string | null;
+  updateAvailable?: boolean;
+};
 
 const USER_LOCAL_BIN = path.join(os.homedir(), '.local', 'bin');
 
@@ -58,12 +72,12 @@ function resolveInstallDir(): string {
 function getBundledCliPath(): string | null {
   const isPackaged = app.isPackaged;
   if (!isPackaged) {
-    // Dev: bin is at project root (getAppPath = directory containing package.json)
-    return path.join(app.getAppPath(), 'bin', 'ovld.mjs');
+    // Dev: CLI source lives in packages/overlord-cli
+    return path.join(app.getAppPath(), 'packages', 'overlord-cli', 'bin', 'ovld.mjs');
   }
   const appPath = app.getAppPath();
   const unpackedPath = appPath.replace('app.asar', 'app.asar.unpacked');
-  const cliPath = path.join(unpackedPath, 'bin', 'ovld.mjs');
+  const cliPath = path.join(unpackedPath, 'packages', 'overlord-cli', 'bin', 'ovld.mjs');
   return fs.existsSync(cliPath) ? cliPath : null;
 }
 
@@ -71,14 +85,41 @@ function isPathConfiguredFor(dir: string): boolean {
   return getPathEntries().includes(dir);
 }
 
-export function getCliInstallStatus(): {
-  installed: boolean;
-  installPath?: string;
-  isStale?: boolean;
-  version: string;
-} {
+async function readInstalledCliVersion(wrapperPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(wrapperPath, ['version'], {
+      timeout: 2500,
+      env: process.env
+    });
+    const match = stdout.match(/Overlord CLI ([^\s]+)/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchLatestCliVersion(): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2500);
+  try {
+    const response = await fetch('https://registry.npmjs.org/overlord-cli/latest', {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' }
+    });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { version?: unknown };
+    return typeof payload.version === 'string' ? payload.version : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getCliInstallStatus(): Promise<CliInstallStatus> {
   const version = app.getVersion();
   const bundledPath = getBundledCliPath();
+  const latestVersion = await fetchLatestCliVersion();
 
   for (const installDir of getInstallDirCandidates()) {
     const wrapperPath = path.join(installDir, 'ovld');
@@ -92,11 +133,22 @@ export function getCliInstallStatus(): {
           isStale = true;
         }
       }
-      return { installed: true, installPath: wrapperPath, isStale, version };
+      const installedVersion = await readInstalledCliVersion(wrapperPath);
+      return {
+        installed: true,
+        installPath: wrapperPath,
+        isStale,
+        version,
+        installedVersion,
+        latestVersion,
+        updateAvailable: Boolean(
+          latestVersion && installedVersion && latestVersion !== installedVersion
+        )
+      };
     }
   }
 
-  return { installed: false, version };
+  return { installed: false, version, latestVersion, updateAvailable: false };
 }
 
 export async function installCli(): Promise<CliInstallResult> {

@@ -29,6 +29,9 @@ ovld auth login
 ovld attach
 ovld create "Investigate the failing build"
 ovld prompt "Draft a fix for the onboarding flow"
+ovld setup codex
+ovld setup cursor
+ovld setup gemini
 ovld setup all
 ovld doctor
 ```
@@ -48,15 +51,9 @@ ovld doctor
 - `ticket` - work with a single ticket
 - `protocol` - run ticket lifecycle commands
 - `connect`, `restart`, `run`, `resume`, `context` - launch or resume an agent session
-- `setup` - install the Overlord connector for a supported agent
-- `doctor` - verify installed agent connectors
+- `setup` - install the Overlord connector or plugin bundle for a supported agent
+- `doctor` - verify installed agent connectors and check whether a newer CLI version is available
 
-## Publishing
+## License
 
-This package is published from the repository root with:
-
-```bash
-yarn cli:publish
-```
-
-That script syncs the package payload and then runs `npm publish --access public` from `packages/overlord-cli/`.
+Permission is granted to use this software for any purpose, free of charge. You may not modify, distribute, sublicense, or sell copies of the software without explicit permission from the author.

@@ -1,10 +1,17 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
+
+import { parseShellCommand, shellEscape } from '@/lib/ssh/shell-utils';
+
+const execFileAsync = promisify(execFile);
 
 const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_DEPTH = 8;
 const DEFAULT_MAX_ENTRIES_PER_DIRECTORY = 5000;
+const DEFAULT_SSH_FILE_TIMEOUT_MS = 30_000;
 
 const IGNORED_DIRECTORY_NAMES = new Set([
   '.git',
@@ -98,5 +105,45 @@ export async function listProjectFiles(
   }
 
   await walk(rootDirectory, 0);
+  return { files, truncated };
+}
+
+export async function listRemoteProjectFiles(
+  sshCommand: string,
+  remoteDirectory: string,
+  options: FileTreeOptions = {}
+): Promise<{ files: string[]; truncated: boolean }> {
+  const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
+  const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const sshParts = parseShellCommand(sshCommand);
+  const [sshBin, ...sshArgs] = sshParts;
+
+  const ignoredDirs = [...IGNORED_DIRECTORY_NAMES].map(d => `-name ${shellEscape(d)}`).join(' -o ');
+  const findCmd = [
+    `cd ${shellEscape(remoteDirectory)}`,
+    `find . -maxdepth ${maxDepth}`,
+    `\\( ${ignoredDirs} -o -name '.*' \\) -prune`,
+    `-o -type f -print`,
+    `| head -n ${maxFiles + 1}`,
+    `| sort`
+  ].join(' && ');
+
+  const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, findCmd], {
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: DEFAULT_SSH_FILE_TIMEOUT_MS
+  });
+
+  let files = stdout
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => (line.startsWith('./') ? line.slice(2) : line));
+
+  let truncated = false;
+  if (files.length > maxFiles) {
+    files = files.slice(0, maxFiles);
+    truncated = true;
+  }
+
   return { files, truncated };
 }

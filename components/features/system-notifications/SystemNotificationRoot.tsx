@@ -2,6 +2,7 @@
 
 import { SystemNotificationBanner } from './SystemNotificationBanner';
 import { useAppUpdateNotifications } from './useAppUpdateNotifications';
+import { useCliUpdateNotifications } from './useCliUpdateNotifications';
 
 /**
  * Root component that renders the system notification banner and
@@ -11,6 +12,7 @@ import { useAppUpdateNotifications } from './useAppUpdateNotifications';
  */
 export function SystemNotificationRoot() {
   useAppUpdateNotifications();
+  useCliUpdateNotifications();
 
   return <SystemNotificationBanner />;
 }

@@ -353,7 +353,7 @@ test('CLI returns immediate actionable error when server is unreachable', async 
   );
 });
 
-for (const modulePath of ['bin/_cli/protocol.mjs', 'packages/overlord-cli/bin/_cli/protocol.mjs']) {
+for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
   test(
     `${modulePath} deliver succeeds without change rationales when git has no changes`,
     { concurrency: false },
@@ -912,6 +912,10 @@ test('no local agent instruction source uses file_changes as an artifact type', 
     assert.ok(
       content.includes('changeRationales'),
       `${relPath} must reference changeRationales for file change submission`
+    );
+    assert.ok(
+      content.includes('ephemeral'),
+      `${relPath} must describe delivery JSON transport files as ephemeral scratch data`
     );
   }
 });

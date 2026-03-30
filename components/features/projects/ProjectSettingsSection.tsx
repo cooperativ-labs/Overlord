@@ -1,10 +1,11 @@
 'use client';
 
-import { Folder, GitCompareArrows, Server, Settings } from 'lucide-react';
+import { GitCompareArrows, Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { ProjectColorSetter } from '@/components/features/projects/ProjectColorSetter';
+import { ProjectExecutionWorkspaceSelector } from '@/components/features/projects/ProjectExecutionWorkspaceSelector';
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,12 @@ export function ProjectSettingsSection({
     : isCurrentChangesView
       ? 'Open Work Board'
       : 'Open Current Changes';
+  const localDirectoryLabel = hasSavedWorkingDirectory ? savedWorkingDirectory : 'configure';
+  const hasSshDirectory = Boolean(initialSshCommand?.trim());
+  const sshDirectoryLabel = initialRemoteWorkingDirectory?.trim() || 'configure';
+  const sshTitle = hasSshDirectory
+    ? `${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`
+    : 'Configure SSH workspace';
 
   useEffect(() => {
     setSavedColor(initialColor);
@@ -185,40 +192,11 @@ export function ProjectSettingsSection({
           </div>
           {isElectron ? (
             <>
-              <button
-                type="button"
-                className={cn(
-                  'mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
-                  hasSavedWorkingDirectory
-                    ? 'border-border'
-                    : 'border-dashed border-muted-foreground/60 italic'
-                )}
-                onClick={() => projectSettings?.openProjectSettings('Workflow')}
-                title={
-                  hasSavedWorkingDirectory
-                    ? `${savedWorkingDirectory} (open workflow settings)`
-                    : 'Add a project directory in workflow settings'
-                }
-              >
-                <Folder className="h-3 w-3" />
-                <span className="truncate">
-                  {hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
-                </span>
-              </button>
-
-              {initialSshCommand ? (
-                <button
-                  type="button"
-                  className="mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground md:mt-0"
-                  onClick={() => projectSettings?.openProjectSettings('Workflow')}
-                  title={`SSH: ${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`}
-                >
-                  <Server className="h-3 w-3" />
-                  <span className="truncate">
-                    {initialRemoteWorkingDirectory || initialSshCommand}
-                  </span>
-                </button>
-              ) : null}
+              <ProjectExecutionWorkspaceSelector
+                localDirectoryLabel={localDirectoryLabel}
+                sshDirectoryLabel={sshDirectoryLabel}
+                sshTitle={sshTitle}
+              />
 
               <Button
                 type="button"

@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { parseShellCommand } from '../../lib/ssh/shell-utils';
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
@@ -222,19 +223,26 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // Build model/thinking flags per agent
   const modelThinkingFlags = buildModelThinkingFlags(input.agent, input.model, input.thinking);
 
+  // For remote (SSH) launches, inline the context via base64 to avoid referencing
+  // a local temp file that doesn't exist on the remote server.
+  const isRemote = Boolean(input.sshCommand?.trim());
+  const contextRef = isRemote ? '"$_OVLD_CTX"' : `"$(cat ${shellQuote(contextFile)})"`;
+
   if (input.agent === 'claude') {
     // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
     // so we don't need to pass a temporary --settings file.
-    const settingsArg = bundleInstalled ? '' : ` --settings ${shellQuote(settingsFile)}`;
-    command = `claude --append-system-prompt "$(cat ${shellQuote(contextFile)})"${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
+    // For SSH, skip the local settings file — it won't exist on the remote.
+    const settingsArg =
+      bundleInstalled || isRemote ? '' : ` --settings ${shellQuote(settingsFile)}`;
+    command = `claude --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
-    command = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
+    command = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else if (input.agent === 'cursor') {
-    command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
+    command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else if (input.agent === 'gemini') {
-    command = `gemini${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} "$(cat ${shellQuote(contextFile)})"`;
+    command = `gemini${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else if (input.agent === 'opencode') {
-    command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt "$(cat ${shellQuote(contextFile)})"`;
+    command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt ${contextRef}`;
   } else {
     throw new Error(`Unknown agent type: ${input.agent}`);
   }
@@ -242,14 +250,34 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // When SSH is configured, wrap the command to run on the remote server.
   // The launch script will SSH into the server, cd to the remote directory,
   // set env vars, and run the agent command remotely.
-  if (input.sshCommand?.trim()) {
+  if (isRemote) {
     const remoteCwd = input.remoteWorkingDirectory?.trim();
+    // Base64-encode the context so it can be decoded on the remote without
+    // needing the local temp file (which doesn't exist on the remote server).
+    const contextB64 = Buffer.from(contextMarkdown).toString('base64');
+    // Augment PATH with common CLI install locations and source NVM if available,
+    // since SSH non-interactive shells don't source shell profile files.
+    const pathSetup =
+      'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"; [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null';
+    const contextDecode = `_OVLD_CTX=$(printf '%s' '${contextB64}' | base64 --decode)`;
     const envExports = Object.entries(launchEnv)
       .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
       .join('; ');
     const cdPart = remoteCwd ? `cd ${shellQuote(remoteCwd)} && ` : '';
-    const remoteScript = `${cdPart}${envExports}; ${command}`;
-    const sshWrappedCommand = `${input.sshCommand.trim()} ${shellQuote(remoteScript)}`;
+    const remoteScript = `${pathSetup}; ${cdPart}${envExports}; ${contextDecode}; ${command}`;
+    // Force PTY allocation so the remote agent gets a working terminal for
+    // stdin.  Without -tt, SSH runs the remote command without a pseudo-terminal
+    // and interactive CLIs (claude, codex, etc.) fail with "stdin is not a terminal".
+    const sshParts = parseShellCommand(input.sshCommand!.trim());
+    const sshBin = sshParts[0] ?? 'ssh';
+    if (sshBin === 'ssh' || sshBin.endsWith('/ssh')) {
+      // Only inject if -t / -tt isn't already present
+      if (!sshParts.some(p => /^-[A-Za-z]*t/.test(p))) {
+        sshParts.splice(1, 0, '-tt');
+      }
+    }
+    const sshBase = sshParts.map(p => (p.includes(' ') ? shellQuote(p) : p)).join(' ');
+    const sshWrappedCommand = `${sshBase} ${shellQuote(remoteScript)}`;
 
     return {
       command: sshWrappedCommand,
