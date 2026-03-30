@@ -2,13 +2,14 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useState } from 'react';
 
+import type { ProjectSettingsNavSection } from '@/components/modals/ProjectSettingsModal';
 import { ProjectSettingsModal } from '@/components/modals/ProjectSettingsModal';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
 type ProjectSettingsContextValue = {
-  openProjectSettings: () => void;
+  openProjectSettings: (initialNav?: ProjectSettingsNavSection) => void;
 };
 
 const ProjectSettingsContext = createContext<ProjectSettingsContextValue | null>(null);
@@ -51,8 +52,10 @@ export function ProjectSettingsProvider({
   hasEverhourApiKey
 }: ProjectSettingsProviderProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalInitialNav, setModalInitialNav] = useState<ProjectSettingsNavSection | undefined>();
 
-  const openProjectSettings = useCallback(() => {
+  const openProjectSettings = useCallback((initialNav?: ProjectSettingsNavSection) => {
+    setModalInitialNav(initialNav);
     setModalOpen(true);
   }, []);
 
@@ -76,6 +79,7 @@ export function ProjectSettingsProvider({
         initialEverhourProjectId={initialEverhourProjectId}
         initialStatuses={initialStatuses}
         hasEverhourApiKey={hasEverhourApiKey}
+        initialNav={modalInitialNav}
       />
     </ProjectSettingsContext.Provider>
   );

@@ -3,7 +3,6 @@
 import { GitBranch, Link2, Newspaper, Settings, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { useElectron } from '@/components/features/terminal/useElectron';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -91,13 +90,17 @@ export function ProjectSettingsModal({
   hasEverhourApiKey,
   initialNav
 }: ProjectSettingsModalProps) {
-  const { isElectron } = useElectron();
-  const [activeNav, setActiveNav] = useState<string>('General');
+  const [activeNav, setActiveNav] = useState<string>('Workflow');
 
   useEffect(() => {
-    if (!open || !initialNav) return;
-    if (!navItems.some(item => item.name === initialNav)) return;
-    setActiveNav(initialNav);
+    if (!open) return;
+
+    if (initialNav && navItems.some(item => item.name === initialNav)) {
+      setActiveNav(initialNav);
+      return;
+    }
+
+    setActiveNav('Workflow');
   }, [open, initialNav]);
 
   return (

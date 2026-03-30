@@ -11,11 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  updateProjectColorAction,
-  updateProjectNameAction,
-  updateProjectWorkingDirectoryAction
-} from '@/lib/actions/projects';
+import { updateProjectColorAction, updateProjectNameAction } from '@/lib/actions/projects';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
@@ -37,7 +33,7 @@ export function ProjectSettingsSection({
   initialSshCommand,
   initialRemoteWorkingDirectory
 }: ProjectSettingsSectionProps) {
-  const { api, isElectron } = useElectron();
+  const { isElectron } = useElectron();
   const router = useRouter();
   const pathname = usePathname();
   const projectSettings = useProjectSettings();
@@ -45,12 +41,9 @@ export function ProjectSettingsSection({
   const [savedName, setSavedName] = useState(initialName);
   const [nameEditing, setNameEditing] = useState(false);
   const [savedColor, setSavedColor] = useState(initialColor);
-  const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [nameSaveState, setNameSaveState] = useState<ButtonLoadingState>('default');
   const [colorSaveState, setColorSaveState] = useState<ButtonLoadingState>('default');
-  const [workingDirectorySaveState, setWorkingDirectorySaveState] =
-    useState<ButtonLoadingState>('default');
   const [nameError, setNameError] = useState<string | null>(null);
   const [colorError, setColorError] = useState<string | null>(null);
   const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
@@ -75,7 +68,6 @@ export function ProjectSettingsSection({
 
   useEffect(() => {
     const next = initialWorkingDirectory ?? '';
-    setWorkingDirectory(next);
     setSavedWorkingDirectory(next);
   }, [initialWorkingDirectory]);
 
@@ -128,35 +120,6 @@ export function ProjectSettingsSection({
       setColorSaveState('error');
       setColorError(error instanceof Error ? error.message : 'Failed to update color.');
     }
-  }
-
-  async function handleSaveWorkingDirectory(nextValue?: string) {
-    const normalized = (nextValue ?? workingDirectory).trim();
-    if (normalized === savedWorkingDirectory) {
-      return;
-    }
-
-    setWorkingDirectorySaveState('loading');
-    try {
-      await updateProjectWorkingDirectoryAction({
-        projectId,
-        workingDirectory: normalized || null
-      });
-      setSavedWorkingDirectory(normalized);
-      setWorkingDirectory(normalized);
-      setWorkingDirectorySaveState('success');
-      router.refresh();
-    } catch {
-      setWorkingDirectorySaveState('error');
-    }
-  }
-
-  async function handleChooseDirectory() {
-    if (!isElectron || !api) return;
-    const chosenPath = await api.terminal.chooseDirectory();
-    if (!chosenPath) return;
-    setWorkingDirectory(chosenPath);
-    await handleSaveWorkingDirectory(chosenPath);
   }
 
   return (
@@ -213,7 +176,7 @@ export function ProjectSettingsSection({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0"
-                onClick={projectSettings.openProjectSettings}
+                onClick={() => projectSettings.openProjectSettings()}
                 aria-label="Project settings"
               >
                 <Settings className="h-3.5 w-3.5" />
@@ -230,9 +193,12 @@ export function ProjectSettingsSection({
                     ? 'border-border'
                     : 'border-dashed border-muted-foreground/60 italic'
                 )}
-                onClick={handleChooseDirectory}
-                disabled={workingDirectorySaveState === 'loading'}
-                title={hasSavedWorkingDirectory ? savedWorkingDirectory : 'Add a project directory'}
+                onClick={() => projectSettings?.openProjectSettings('Workflow')}
+                title={
+                  hasSavedWorkingDirectory
+                    ? `${savedWorkingDirectory} (open workflow settings)`
+                    : 'Add a project directory in workflow settings'
+                }
               >
                 <Folder className="h-3 w-3" />
                 <span className="truncate">
@@ -241,15 +207,17 @@ export function ProjectSettingsSection({
               </button>
 
               {initialSshCommand ? (
-                <span
+                <button
+                  type="button"
                   className="mt-1 inline-flex max-w-xs items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground md:mt-0"
+                  onClick={() => projectSettings?.openProjectSettings('Workflow')}
                   title={`SSH: ${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`}
                 >
                   <Server className="h-3 w-3" />
                   <span className="truncate">
                     {initialRemoteWorkingDirectory || initialSshCommand}
                   </span>
-                </span>
+                </button>
               ) : null}
 
               <Button
