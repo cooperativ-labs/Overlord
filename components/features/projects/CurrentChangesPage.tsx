@@ -26,8 +26,6 @@ type CurrentChangesPageProps = {
   projectId: string;
   projectName: string;
   workingDirectory: string | null;
-  sshCommand: string | null;
-  remoteWorkingDirectory: string | null;
   initialFilePath?: string | null;
 };
 
@@ -35,8 +33,6 @@ export function CurrentChangesPage({
   projectId,
   projectName,
   workingDirectory,
-  sshCommand,
-  remoteWorkingDirectory,
   initialFilePath
 }: CurrentChangesPageProps) {
   const { api, isElectron } = useElectron();
@@ -97,15 +93,8 @@ export function CurrentChangesPage({
   }
 
   const hasLocalDirectory = !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
-  const hasSshConfig = !!sshCommand?.trim() && !!remoteWorkingDirectory?.trim();
-  const canInspectChanges = hasLocalDirectory || hasSshConfig;
-  const gitPayload = useMemo(() => {
-    if (hasLocalDirectory) return { directory: workingDirectory! };
-    return {
-      sshCommand: sshCommand ?? undefined,
-      remoteDirectory: remoteWorkingDirectory ?? undefined
-    };
-  }, [hasLocalDirectory, remoteWorkingDirectory, sshCommand, workingDirectory]);
+  const canInspectChanges = hasLocalDirectory;
+  const gitPayload = useMemo(() => ({ directory: workingDirectory! }), [workingDirectory]);
 
   async function loadStatus(): Promise<GitStatusResponse | null> {
     if (!api?.filesystem?.getGitStatus || !canInspectChanges) return null;
@@ -167,15 +156,7 @@ export function CurrentChangesPage({
       await loadFileChanges(files);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    api,
-    canInspectChanges,
-    isElectron,
-    projectId,
-    remoteWorkingDirectory,
-    sshCommand,
-    workingDirectory
-  ]);
+  }, [api, canInspectChanges, isElectron, projectId, workingDirectory]);
 
   useEffect(() => {
     if (filteredFiles.length === 0) {
@@ -243,12 +224,12 @@ export function CurrentChangesPage({
     return (
       <UnavailableStateCard
         backHref={backHref}
-        description="Link a local working directory or configure an SSH remote workspace in project settings to inspect uncommitted changes."
+        description="Link a local working directory in project settings to inspect uncommitted changes."
       />
     );
   }
 
-  const displayDirectory = hasLocalDirectory ? workingDirectory! : (remoteWorkingDirectory ?? '');
+  const displayDirectory = workingDirectory!;
   const selectedFile = enrichedFiles.find(file => file.path === selectedPath) ?? null;
 
   return (

@@ -43,8 +43,6 @@ type ProjectOption = {
   color: string;
   everhour_project_id: string | null;
   local_working_directory?: string | null;
-  ssh_command?: string | null;
-  remote_working_directory?: string | null;
 };
 
 type NewTicketModalProps = {
@@ -75,15 +73,13 @@ export function NewTicketModal({
   const [submitButtonState, setSubmitButtonState] = useState<ButtonLoadingState>('default');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { api, isElectron } = useElectron();
+  const { isElectron } = useElectron();
   const { selection, setSelection } = useAgentModelPreference();
 
   const selectedProjectForFileTree = projects.find(p => p.id === selectedProjectId);
   const { files: effectiveMentionPaths } = useWorkspaceFileTree({
     fileMentionPaths,
-    workingDirectory: selectedProjectForFileTree?.local_working_directory,
-    sshCommand: selectedProjectForFileTree?.ssh_command,
-    remoteWorkingDirectory: selectedProjectForFileTree?.remote_working_directory
+    workingDirectory: selectedProjectForFileTree?.local_working_directory
   });
 
   // Auto-resize textarea

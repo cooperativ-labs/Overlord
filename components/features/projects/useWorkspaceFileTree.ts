@@ -12,12 +12,8 @@ const EMPTY_PATHS: string[] = [];
 type UseWorkspaceFileTreeOptions = {
   /** Server-provided file paths to use as fallback when Electron IPC is unavailable */
   fileMentionPaths?: string[];
-  /** Override working directory (used when ProjectSettingsContext is unavailable) */
+  /** Override local working directory (used when ProjectSettingsContext is unavailable) */
   workingDirectory?: string | null;
-  /** Override SSH command (used when ProjectSettingsContext is unavailable) */
-  sshCommand?: string | null;
-  /** Override remote working directory (used when ProjectSettingsContext is unavailable) */
-  remoteWorkingDirectory?: string | null;
   /** Whether file tree loading is enabled (defaults to true) */
   enabled?: boolean;
 };
@@ -32,9 +28,8 @@ type UseWorkspaceFileTreeResult = {
 /**
  * Centralized hook for loading project file trees, workspace-aware.
  *
- * Automatically uses ProjectSettingsContext when available to determine
- * whether to fetch files from a local directory or via SSH. Falls back
- * to prop overrides for components rendered outside a project layout.
+ * File mentions and tree browsing always use the project's local workspace.
+ * Falls back to prop overrides for components rendered outside a project layout.
  */
 export function useWorkspaceFileTree(
   options: UseWorkspaceFileTreeOptions = {}
@@ -42,20 +37,15 @@ export function useWorkspaceFileTree(
   const {
     fileMentionPaths = EMPTY_PATHS,
     workingDirectory: propWorkingDirectory,
-    sshCommand: propSshCommand,
-    remoteWorkingDirectory: propRemoteWorkingDirectory,
     enabled = true
   } = options;
 
   const { api, isElectron } = useElectron();
   const projectSettings = useProjectSettings();
 
-  // Resolve effective values: prefer context, fall back to props
+  // File mentions intentionally ignore the execution workspace selector.
   const effectiveWorkingDirectory =
-    projectSettings?.effectiveWorkingDirectory ?? propWorkingDirectory ?? null;
-  const effectiveSshCommand = projectSettings?.effectiveSshCommand ?? propSshCommand ?? null;
-  const effectiveRemoteWorkingDirectory =
-    projectSettings?.effectiveRemoteWorkingDirectory ?? propRemoteWorkingDirectory ?? null;
+    projectSettings?.localWorkingDirectory ?? propWorkingDirectory ?? null;
 
   const [files, setFiles] = useState<string[]>(fileMentionPaths);
   const [loading, setLoading] = useState(false);
@@ -77,21 +67,9 @@ export function useWorkspaceFileTree(
       return;
     }
 
-    // Build the IPC payload based on workspace type
-    let payload: {
-      directory?: string;
-      sshCommand?: string;
-      remoteDirectory?: string;
-    } | null = null;
-
-    if (effectiveSshCommand?.trim() && effectiveRemoteWorkingDirectory?.trim()) {
-      payload = {
-        sshCommand: effectiveSshCommand.trim(),
-        remoteDirectory: effectiveRemoteWorkingDirectory.trim()
-      };
-    } else if (effectiveWorkingDirectory?.trim()) {
-      payload = { directory: effectiveWorkingDirectory.trim() };
-    }
+    const payload = effectiveWorkingDirectory?.trim()
+      ? { directory: effectiveWorkingDirectory.trim() }
+      : null;
 
     if (!payload) {
       syncFiles(fileMentionPaths);
@@ -126,16 +104,7 @@ export function useWorkspaceFileTree(
     return () => {
       cancelled = true;
     };
-  }, [
-    api,
-    effectiveRemoteWorkingDirectory,
-    effectiveSshCommand,
-    effectiveWorkingDirectory,
-    enabled,
-    fileMentionPaths,
-    isElectron,
-    syncFiles
-  ]);
+  }, [api, effectiveWorkingDirectory, enabled, fileMentionPaths, isElectron, syncFiles]);
 
   return { files, loading, error, truncated };
 }

@@ -37,7 +37,7 @@ export function ProjectExecutionWorkspaceSelector({
 
   const activeExecutionWorkspace = projectSettings.executionWorkspace;
   const executionWorkspaceLabel =
-    activeExecutionWorkspace === 'ssh' ? 'SSH directory' : 'Local directory';
+    activeExecutionWorkspace === 'ssh' ? 'Execute over SSH' : 'Execute locally';
   const ExecutionWorkspaceIcon = activeExecutionWorkspace === 'ssh' ? Server : Folder;
 
   async function checkConnection(workspace: 'local' | 'ssh') {
@@ -125,7 +125,7 @@ export function ProjectExecutionWorkspaceSelector({
             <Folder className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">Local directory</span>
+                <span className="text-sm font-medium text-foreground">Execute locally</span>
                 {activeExecutionWorkspace === 'local' ? (
                   <span className="text-[10px] font-medium uppercase tracking-wide text-primary">
                     Active
@@ -158,7 +158,7 @@ export function ProjectExecutionWorkspaceSelector({
             <Server className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">SSH directory</span>
+                <span className="text-sm font-medium text-foreground">Execute over SSH</span>
                 {activeExecutionWorkspace === 'ssh' ? (
                   <span className="text-[10px] font-medium uppercase tracking-wide text-primary">
                     Active

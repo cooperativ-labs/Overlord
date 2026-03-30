@@ -32,10 +32,6 @@ type Props = {
   fileMentionPaths?: string[];
   /** Optional absolute directory used for local Electron file mention suggestions */
   workingDirectory?: string | null;
-  /** Optional SSH command used for remote Electron file mention suggestions */
-  sshCommand?: string | null;
-  /** Optional remote directory used for remote Electron file mention suggestions */
-  remoteWorkingDirectory?: string | null;
   variant?: 'default' | 'textarea';
   children?: React.ReactNode;
 };
@@ -52,8 +48,6 @@ export function InlineEditField({
   renderMarkdown = false,
   fileMentionPaths = EMPTY_MENTION_PATHS,
   workingDirectory,
-  sshCommand,
-  remoteWorkingDirectory,
   variant = 'default',
   children
 }: Props) {
@@ -69,8 +63,6 @@ export function InlineEditField({
   const { files: workspaceFiles } = useWorkspaceFileTree({
     fileMentionPaths,
     workingDirectory,
-    sshCommand,
-    remoteWorkingDirectory,
     enabled: canMentionFiles
   });
   const effectiveMentionPaths = canMentionFiles ? workspaceFiles : [];

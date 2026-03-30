@@ -16,7 +16,7 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
 
   const { data: project, error } = await supabase
     .from('projects')
-    .select('id,name,local_working_directory,ssh_command,remote_working_directory')
+    .select('id,name,local_working_directory')
     .eq('id', projectId)
     .maybeSingle();
 
@@ -29,8 +29,6 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
       projectId={project.id}
       projectName={project.name}
       workingDirectory={project.local_working_directory}
-      sshCommand={project.ssh_command}
-      remoteWorkingDirectory={project.remote_working_directory}
       initialFilePath={initialFilePath ?? null}
     />
   );

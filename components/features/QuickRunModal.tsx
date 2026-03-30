@@ -11,7 +11,6 @@ import {
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
-import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -46,8 +45,6 @@ type ProjectOption = {
   color: string;
   everhour_project_id: string | null;
   local_working_directory?: string | null;
-  ssh_command?: string | null;
-  remote_working_directory?: string | null;
 };
 
 type QuickRunModalProps = {
@@ -78,16 +75,13 @@ export function QuickRunModal({
   const [submitButtonState, setSubmitButtonState] = useState<ButtonLoadingState>('default');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { api, isElectron } = useElectron();
   const { launchAgent } = useTerminal();
   const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
 
   const selectedProjectForFileTree = projects.find(p => p.id === selectedProjectId);
   const { files: effectiveMentionPaths } = useWorkspaceFileTree({
     fileMentionPaths,
-    workingDirectory: selectedProjectForFileTree?.local_working_directory,
-    sshCommand: selectedProjectForFileTree?.ssh_command,
-    remoteWorkingDirectory: selectedProjectForFileTree?.remote_working_directory
+    workingDirectory: selectedProjectForFileTree?.local_working_directory
   });
 
   const autoResize = useCallback(() => {

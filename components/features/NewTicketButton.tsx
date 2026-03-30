@@ -42,9 +42,7 @@ export function NewTicketButton() {
         const supabase = createClient();
         const { data: projectsData } = await supabase
           .from('projects')
-          .select(
-            'id,name,color,everhour_project_id,local_working_directory,ssh_command,remote_working_directory'
-          )
+          .select('id,name,color,everhour_project_id,local_working_directory')
           .order('created_at', { ascending: true });
 
         if (projectsData) {

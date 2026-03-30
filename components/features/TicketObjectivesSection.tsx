@@ -25,8 +25,6 @@ type TicketObjectivesSectionProps = {
   objectives: ObjectiveRow[];
   objectiveFileMentionPaths: string[];
   workingDirectory: string | null;
-  sshCommand?: string | null;
-  remoteWorkingDirectory?: string | null;
 };
 
 export function TicketObjectivesSection({
@@ -34,9 +32,7 @@ export function TicketObjectivesSection({
   organizationId,
   objectives: initialObjectives,
   objectiveFileMentionPaths,
-  workingDirectory,
-  sshCommand,
-  remoteWorkingDirectory
+  workingDirectory
 }: TicketObjectivesSectionProps) {
   const objectives = useTicketObjectivesRealtime({
     ticketId,
@@ -84,8 +80,6 @@ export function TicketObjectivesSection({
             variant="textarea"
             fileMentionPaths={objectiveFileMentionPaths}
             workingDirectory={workingDirectory}
-            sshCommand={sshCommand}
-            remoteWorkingDirectory={remoteWorkingDirectory}
           >
             {' '}
             <ObjectiveMenuButton

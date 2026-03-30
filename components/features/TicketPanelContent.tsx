@@ -20,11 +20,7 @@ import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
-import {
-  listProjectFiles,
-  listRemoteProjectFiles,
-  resolveLinkedDirectory
-} from '@/lib/filesystem/project-file-tree';
+import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
@@ -285,14 +281,6 @@ export async function TicketPanelContent({
     hasProjectWorkingDirectory = projectDirectoryExists;
     if (projectDirectoryExists && resolvedProjectDirectory) {
       objectiveFileMentionPaths = (await listProjectFiles(resolvedProjectDirectory)).files;
-    } else if (projectSshCommand && projectRemoteWorkingDirectory) {
-      try {
-        objectiveFileMentionPaths = (
-          await listRemoteProjectFiles(projectSshCommand, projectRemoteWorkingDirectory)
-        ).files;
-      } catch {
-        objectiveFileMentionPaths = [];
-      }
     } else {
       objectiveFileMentionPaths = [];
     }
@@ -410,8 +398,6 @@ export async function TicketPanelContent({
                 objectives={objectives ?? []}
                 objectiveFileMentionPaths={objectiveFileMentionPaths}
                 workingDirectory={workingDirectory}
-                sshCommand={projectSshCommand}
-                remoteWorkingDirectory={projectRemoteWorkingDirectory}
               />
 
               {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}

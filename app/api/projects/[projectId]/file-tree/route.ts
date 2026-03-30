@@ -2,11 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs/promises';
 
 import { assertOrgMembership } from '@/app/api/projects/_lib';
-import {
-  listProjectFiles,
-  listRemoteProjectFiles,
-  resolveLinkedDirectory
-} from '@/lib/filesystem/project-file-tree';
+import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { createClient } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -26,7 +22,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id,organization_id,local_working_directory,ssh_command,remote_working_directory')
+      .select('id,organization_id,local_working_directory')
       .eq('id', projectId)
       .single();
 
@@ -41,30 +37,12 @@ export async function GET(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
-    // Try local directory first
     const resolvedRoot = resolveLinkedDirectory(project.local_working_directory);
     if (resolvedRoot) {
       const stat = await fs.stat(resolvedRoot).catch(() => null);
       if (stat?.isDirectory()) {
         const { files, truncated } = await listProjectFiles(resolvedRoot);
         return NextResponse.json({ files, linkedDirectory: resolvedRoot, truncated });
-      }
-    }
-
-    // Fall back to SSH if configured
-    const sshCommand = project.ssh_command?.trim();
-    const remoteDir = project.remote_working_directory?.trim();
-    if (sshCommand && remoteDir) {
-      try {
-        const { files, truncated } = await listRemoteProjectFiles(sshCommand, remoteDir);
-        return NextResponse.json({ files, linkedDirectory: remoteDir, truncated });
-      } catch (error) {
-        return NextResponse.json({
-          files: [],
-          linkedDirectory: remoteDir,
-          truncated: false,
-          error: error instanceof Error ? error.message : 'Failed to list remote project files.'
-        });
       }
     }
 
