@@ -17,9 +17,10 @@ import type { Database } from '@/types/database.types';
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 export type ProjectExecutionWorkspace = 'local' | 'ssh';
 
-const PROJECT_EXECUTION_WORKSPACE_KEY = 'overlord-project-execution-workspace';
+export const PROJECT_EXECUTION_WORKSPACE_KEY = 'overlord-project-execution-workspace';
+export const WORKSPACE_CHANGED_EVENT = 'overlord-workspace-changed';
 
-function resolveExecutionWorkspace(
+export function resolveExecutionWorkspace(
   preferredWorkspace: ProjectExecutionWorkspace,
   hasLocalDirectory: boolean,
   hasSshDirectory: boolean
@@ -139,11 +140,19 @@ export function ProjectSettingsProvider({
 
   const setExecutionWorkspace = useCallback(
     (workspace: ProjectExecutionWorkspace) => {
-      setExecutionWorkspaceState(
-        resolveExecutionWorkspace(workspace, hasLocalDirectory, hasSshDirectory)
-      );
+      const resolved = resolveExecutionWorkspace(workspace, hasLocalDirectory, hasSshDirectory);
+      setExecutionWorkspaceState(resolved);
+      // Dispatch a custom event so components outside this provider (e.g. the SidePanel)
+      // can react to workspace changes via useWorkspacePreference.
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent(WORKSPACE_CHANGED_EVENT, {
+            detail: { projectId, workspace: resolved }
+          })
+        );
+      }
     },
-    [hasLocalDirectory, hasSshDirectory]
+    [hasLocalDirectory, hasSshDirectory, projectId]
   );
 
   const value: ProjectSettingsContextValue = useMemo(

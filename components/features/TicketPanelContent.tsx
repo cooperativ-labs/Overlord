@@ -312,6 +312,7 @@ export async function TicketPanelContent({
         <TicketPanelHeader
           ticketId={ticketId}
           ticketIdentifier={ticketIdentifier}
+          projectId={activeProjectId}
           organizationId={organizationId}
           agentToken={agentToken}
           agentFlags={agentFlags}

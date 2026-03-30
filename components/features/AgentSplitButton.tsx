@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
+import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +41,7 @@ type AgentSplitButtonProps = {
   selectedAgent: AgentSelectorValue;
   onSelectAgent: (agent: AgentSelectorValue) => void;
   ticketId: string;
+  projectId?: string | null;
   organizationId?: number;
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
@@ -105,6 +106,7 @@ export function AgentSplitButton({
   selectedAgent,
   onSelectAgent,
   ticketId,
+  projectId,
   organizationId,
   agentToken,
   agentFlags,
@@ -123,20 +125,18 @@ export function AgentSplitButton({
   const [isLaunching, setIsLaunching] = useState(false);
   const { selection, loaded: selectionLoaded } = useAgentModelPreference();
   const { isElectron, launchAgent } = useTerminal();
-  const projectSettings = useProjectSettings();
-  const hasProjectSettings = projectSettings !== null;
+  const workspace = useWorkspacePreference({
+    projectId,
+    workingDirectory,
+    sshCommand,
+    remoteWorkingDirectory
+  });
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
   const hasResolvedSelection = assignedSelection !== null || selectionLoaded;
-  const effectiveWorkingDirectory = hasProjectSettings
-    ? projectSettings.effectiveWorkingDirectory
-    : (workingDirectory ?? null);
-  const effectiveSshCommand = hasProjectSettings
-    ? projectSettings.effectiveSshCommand
-    : (sshCommand ?? null);
-  const effectiveRemoteWorkingDirectory = hasProjectSettings
-    ? projectSettings.effectiveRemoteWorkingDirectory
-    : (remoteWorkingDirectory ?? null);
+  const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
+  const effectiveSshCommand = workspace.effectiveSshCommand;
+  const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
 
   const isActive =
     isAgentIdentifierMatch(effectiveSelection.agent, activeAgentIdentifier) &&
@@ -145,11 +145,10 @@ export function AgentSplitButton({
   const hasSshConfig = Boolean(effectiveSshCommand?.trim());
   const localDirAccess = useLocalDirectoryAccess({
     workingDirectory: effectiveWorkingDirectory,
-    hasProjectWorkingDirectory: hasProjectSettings
-      ? projectSettings.executionWorkspace === 'local'
-        ? Boolean(projectSettings.hasLocalDirectory)
-        : false
-      : hasProjectWorkingDirectory
+    hasProjectWorkingDirectory:
+      workspace.executionWorkspace === 'local'
+        ? Boolean(workspace.hasLocalDirectory)
+        : (hasProjectWorkingDirectory ?? false)
   });
   const canRunAgent = hasSshConfig || localDirAccess;
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';

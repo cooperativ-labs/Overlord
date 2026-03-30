@@ -16,6 +16,7 @@ import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 type TicketPanelHeaderProps = {
   ticketId: string;
   ticketIdentifier: string;
+  projectId: string;
   organizationId: number;
   agentToken: string | null;
   agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>>;
@@ -37,6 +38,7 @@ type TicketPanelHeaderProps = {
 export function TicketPanelHeader({
   ticketId,
   ticketIdentifier,
+  projectId,
   organizationId,
   agentToken,
   agentFlags,
@@ -84,6 +86,7 @@ export function TicketPanelHeader({
       <div className="flex items-center justify-end gap-2">
         <TicketHeaderAction
           ticketId={ticketId}
+          projectId={projectId}
           organizationId={organizationId}
           agentToken={agentToken}
           agentFlags={agentFlags}

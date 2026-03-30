@@ -17,6 +17,7 @@ import { type WebAgentMode, WebAgentModeButton } from './WebAgentModeButton';
 
 type TicketHeaderActionProps = {
   ticketId: string;
+  projectId: string;
   organizationId: number;
   agentToken: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
@@ -35,6 +36,7 @@ type TicketHeaderActionProps = {
 
 export function TicketHeaderAction({
   ticketId,
+  projectId,
   organizationId,
   agentToken,
   agentFlags,
@@ -77,11 +79,14 @@ export function TicketHeaderAction({
       <AgentModelChooserButton ticketId={ticketId} initialSelection={assignedAgent} />
       <DiscussTicketButton
         ticketId={ticketId}
+        projectId={projectId}
         organizationId={organizationId}
         agentIdentifier={agentIdentifier}
         agentToken={agentToken}
         agentFlags={agentFlags}
         workingDirectory={workingDirectory}
+        sshCommand={sshCommand}
+        remoteWorkingDirectory={remoteWorkingDirectory}
       />
       <AgentSplitButtonLive
         defaultAgent={
@@ -91,6 +96,7 @@ export function TicketHeaderAction({
         }
         assignedSelection={assignedAgent}
         ticketId={ticketId}
+        projectId={projectId}
         organizationId={organizationId}
         agentToken={agentToken}
         agentFlags={agentFlags}

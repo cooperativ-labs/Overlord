@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
+import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import { Button } from '@/components/ui/button';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import {
@@ -31,11 +31,14 @@ import type { WebAgentMode } from './WebAgentModeButton';
 
 type DiscussTicketButtonProps = {
   ticketId: string;
+  projectId?: string | null;
   organizationId?: number;
   agentIdentifier?: string | null;
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   workingDirectory?: string | null;
+  sshCommand?: string | null;
+  remoteWorkingDirectory?: string | null;
   webMode?: WebAgentMode;
 };
 
@@ -49,23 +52,30 @@ const defaultAgentButtonStates: Record<LaunchAgentTypeValue, ButtonLoadingState>
 
 export function DiscussTicketButton({
   ticketId,
+  projectId,
   organizationId,
   agentIdentifier,
   agentToken,
   agentFlags,
   workingDirectory,
+  sshCommand,
+  remoteWorkingDirectory,
   webMode
 }: DiscussTicketButtonProps) {
   const { isElectron, launchAgent } = useTerminal();
-  const projectSettings = useProjectSettings();
+  const workspace = useWorkspacePreference({
+    projectId,
+    workingDirectory,
+    sshCommand,
+    remoteWorkingDirectory
+  });
   const [isOpen, setIsOpen] = useState(false);
   const [webCopied, setWebCopied] = useState(false);
   const [agentButtonStates, setAgentButtonStates] =
     useState<Record<LaunchAgentTypeValue, ButtonLoadingState>>(defaultAgentButtonStates);
-  const effectiveWorkingDirectory =
-    projectSettings?.effectiveWorkingDirectory ?? workingDirectory ?? null;
-  const effectiveSshCommand = projectSettings?.effectiveSshCommand ?? null;
-  const effectiveRemoteWorkingDirectory = projectSettings?.effectiveRemoteWorkingDirectory ?? null;
+  const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
+  const effectiveSshCommand = workspace.effectiveSshCommand;
+  const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
   const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
   const launchAgents = [
     preferredAgent,
