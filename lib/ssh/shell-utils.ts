@@ -32,6 +32,39 @@ export function parseShellCommand(command: string): string[] {
   return result;
 }
 
+function isSshBinary(value: string | undefined): boolean {
+  return value === 'ssh' || value?.endsWith('/ssh') === true;
+}
+
+function isLikelySshDestination(value: string): boolean {
+  // Accept common shorthand forms like "host", "user@host", "1.2.3.4",
+  // and bracketed IPv6 hosts while avoiding shell commands/paths.
+  return (
+    value.length > 0 &&
+    !value.includes('/') &&
+    !value.includes('\\') &&
+    !/['"`$&|;()<>{}\s]/.test(value)
+  );
+}
+
+export function parseSshCommand(command: string, options?: { forceTty?: boolean }): string[] {
+  const rawParts = parseShellCommand(command.trim());
+  if (rawParts.length === 0) return [];
+
+  const normalizedParts =
+    isSshBinary(rawParts[0]) || !isLikelySshDestination(rawParts[0] ?? '')
+      ? [...rawParts]
+      : ['ssh', ...rawParts];
+
+  if (options?.forceTty && isSshBinary(normalizedParts[0])) {
+    if (!normalizedParts.some(part => /^-[A-Za-z]*t/.test(part))) {
+      normalizedParts.splice(1, 0, '-tt');
+    }
+  }
+
+  return normalizedParts;
+}
+
 export function shellEscape(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }

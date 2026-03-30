@@ -17,6 +17,8 @@ export type PromptOptions = {
   mcpUrl?: string;
   /** Optional user-level custom instructions to prepend to the prompt */
   customInstructions?: string | null;
+  /** Optional working directory to surface in the prompt context. */
+  workingDirectory?: string | null;
   /** Launch mode for this prompt. Ask mode guides the agent to ask and stop. */
   launchMode?: PromptLaunchMode;
   /** Optional agent configurations (flags, preferences) keyed by agent type. */
@@ -80,6 +82,7 @@ export function buildTicketPromptMarkdown({
   const { promptContext } = buildPromptContext({
     ticket,
     customInstructions: options?.customInstructions,
+    workingDirectory: options?.workingDirectory,
     launchMode
   });
 
@@ -161,11 +164,7 @@ function buildLocalProtocolSectionByAgent(
   return buildVerboseLocalProtocolSection(input);
 }
 
-function buildBundledLocalProtocolSection({
-  ticketId,
-  context,
-  agent
-}: ProtocolSectionInput): string {
+function buildBundledLocalProtocolSection({ ticketId, context }: ProtocolSectionInput): string {
   return `## Overlord Protocol
 
 - **Ticket ID:** ${ticketId}

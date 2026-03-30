@@ -2,16 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.11.0] - 2026-03-30:06:36
+## [3.12.0] - 2026-03-30:06:36
 
 ### Added
 - None.
 
 ### Fixed
 - Force SSH-backed agent launches to allocate a PTY by parsing the configured SSH command, adding `-tt` only when the invocation is `ssh` (or a full path ending in `/ssh`) and lacks `-t`, and rewrapping the command with proper quoting so remote agents retain stdin-enabled terminals.
+- Keep Codex remote launches interactive by running the command through an Expect script when available (with a plain fallback) so the prompt context still gets injected over SSH.
 
 ### Changed
-- None.
+- Forward workspace=ssh when fetching ticket context, include each project's remote working directory in the attach response, and surface that directory in the generated prompt so SSH-backed sessions land in the expected path.
+- Swap to the new `parseSshCommand` helper across the filesystem helpers and agent launcher so every SSH invocation shares the same quoting logic and can default to `ssh` when the destination looks like a host.
 
 ### Security
 - None.

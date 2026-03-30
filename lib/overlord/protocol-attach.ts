@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 
 import { generateAndSetObjectiveTitle, markDraftObjectiveExecuted } from '@/lib/objectives';
 import { buildPromptContext } from '@/lib/overlord/prompt-context';
@@ -9,6 +10,58 @@ import type { Database, Json } from '@/types/database.types';
 
 type AttachClient = SupabaseClient<Database>;
 type ConnectionMethod = (typeof connectionMethods)[number];
+
+function normalizeDirectoryForComparison(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  let normalized = trimmed;
+  if (normalized.startsWith('~')) {
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+    normalized = home + normalized.slice(1);
+  }
+
+  normalized = path.resolve(normalized);
+  if (normalized.length > 1 && normalized.endsWith(path.sep)) {
+    normalized = normalized.slice(0, -1);
+  }
+
+  return normalized.toLowerCase();
+}
+
+function isMetadataRecord(value: Json): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveSessionWorkingDirectory(input: {
+  localWorkingDirectory: string | null | undefined;
+  remoteWorkingDirectory: string | null | undefined;
+  metadata: Json;
+}): string | null {
+  const localWorkingDirectory = input.localWorkingDirectory?.trim() || null;
+  const remoteWorkingDirectory = input.remoteWorkingDirectory?.trim() || null;
+
+  if (!remoteWorkingDirectory) {
+    return localWorkingDirectory;
+  }
+
+  const cwdValue =
+    isMetadataRecord(input.metadata) && typeof input.metadata.cwd === 'string'
+      ? input.metadata.cwd
+      : null;
+
+  const normalizedCwd = normalizeDirectoryForComparison(cwdValue);
+  const normalizedRemote = normalizeDirectoryForComparison(remoteWorkingDirectory);
+  if (
+    normalizedCwd &&
+    normalizedRemote &&
+    (normalizedCwd === normalizedRemote || normalizedCwd.startsWith(`${normalizedRemote}/`))
+  ) {
+    return remoteWorkingDirectory;
+  }
+
+  return localWorkingDirectory ?? remoteWorkingDirectory;
+}
 
 /**
  * Explicit ticket columns returned to agents — excludes internal fields like search_vector.
@@ -186,7 +239,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       .limit(12),
     supabase
       .from('projects')
-      .select('local_working_directory')
+      .select('local_working_directory,remote_working_directory')
       .eq('id', ticket.project_id)
       .maybeSingle(),
     supabase.from('profiles').select('custom_agent_instructions').eq('id', userId).maybeSingle()
@@ -202,7 +255,11 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     artifacts: artifacts ?? [],
     sharedState: sharedState ?? [],
     customInstructions: profile?.custom_agent_instructions ?? null,
-    workingDirectory: project?.local_working_directory ?? null
+    workingDirectory: resolveSessionWorkingDirectory({
+      localWorkingDirectory: project?.local_working_directory,
+      remoteWorkingDirectory: project?.remote_working_directory,
+      metadata
+    })
   });
 
   return {

@@ -47,10 +47,9 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const { data: project } = await supabase
       .from('projects')
-      .select('local_working_directory')
+      .select('local_working_directory,remote_working_directory')
       .eq('id', ticket.project_id)
       .maybeSingle();
-    const workingDirectory = project?.local_working_directory ?? null;
     // Prefer the currently executing objective; fall back to the draft
     const { data: executingObjective } = await supabase
       .from('objectives')
@@ -89,10 +88,15 @@ export async function GET(request: Request, { params }: RouteContext) {
       | undefined;
     const requestedInstructionMode = (searchParams.get('instructionMode') ??
       'legacy') as InstructionMode;
+    const requestedWorkspace = searchParams.get('workspace')?.trim().toLowerCase();
     const instructionMode =
       agent === 'codex' && requestedInstructionMode === 'bundle'
         ? ('legacy' as InstructionMode)
         : requestedInstructionMode;
+    const workingDirectory =
+      requestedWorkspace === 'ssh'
+        ? (project?.remote_working_directory ?? project?.local_working_directory ?? null)
+        : (project?.local_working_directory ?? null);
     const requestOrigin = new URL(request.url).origin;
     const platformUrl = getPlatformUrl(requestOrigin);
 
@@ -145,7 +149,15 @@ export async function GET(request: Request, { params }: RouteContext) {
       },
       platformUrl,
       context,
-      options: { mcpUrl, customInstructions, launchMode, agentConfigs, agent, instructionMode }
+      options: {
+        mcpUrl,
+        customInstructions,
+        workingDirectory,
+        launchMode,
+        agentConfigs,
+        agent,
+        instructionMode
+      }
     });
 
     const headers: Record<string, string> = {

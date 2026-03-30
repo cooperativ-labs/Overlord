@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { parseShellCommand, shellEscape } from '../../lib/ssh/shell-utils';
+import { parseSshCommand, shellEscape } from '../../lib/ssh/shell-utils';
 
 const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_DEPTH = 8;
@@ -391,7 +391,7 @@ async function getRemoteGitFileStats(
 }
 
 async function getRemoteGitStatus(sshCommand: string, remoteDirectory: string) {
-  const sshParts = parseShellCommand(sshCommand);
+  const sshParts = parseSshCommand(sshCommand);
   const { branch, repoRoot } = await resolveRemoteGitRepo(sshParts, remoteDirectory);
   const statusResult = await runRemoteGitCommand(sshParts, repoRoot, [
     'status',
@@ -422,7 +422,7 @@ async function getRemoteGitDiff(
   status?: string,
   originalPath?: string
 ) {
-  const sshParts = parseShellCommand(sshCommand);
+  const sshParts = parseSshCommand(sshCommand);
   const { repoRoot } = await resolveRemoteGitRepo(sshParts, remoteDirectory);
   const normalizedPath = toPosixPath(relativePath.trim());
   const normalizedOriginalPath = originalPath?.trim() ? toPosixPath(originalPath.trim()) : null;
@@ -534,7 +534,7 @@ async function listRemoteProjectFiles(
 ): Promise<{ files: string[]; truncated: boolean }> {
   const maxFiles = options?.maxFiles ?? DEFAULT_MAX_FILES;
   const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const sshParts = parseShellCommand(sshCommand);
+  const sshParts = parseSshCommand(sshCommand);
   const [sshBin, ...sshArgs] = sshParts;
 
   const ignoredDirs = [...IGNORED_DIRECTORY_NAMES].map(d => `-name ${shellEscape(d)}`).join(' -o ');
@@ -571,7 +571,7 @@ async function remoteDirectoryExists(
   sshCommand: string,
   remoteDirectory: string
 ): Promise<boolean> {
-  const sshParts = parseShellCommand(sshCommand);
+  const sshParts = parseSshCommand(sshCommand);
   const [sshBin, ...sshArgs] = sshParts;
   const remoteScript = `test -d ${shellEscape(remoteDirectory)} && echo EXISTS`;
   try {
@@ -585,7 +585,7 @@ async function remoteDirectoryExists(
 }
 
 async function checkSshConnection(sshCommand: string): Promise<{ ok: boolean; error?: string }> {
-  const sshParts = parseShellCommand(sshCommand);
+  const sshParts = parseSshCommand(sshCommand);
   const [sshBin, ...sshArgs] = sshParts;
   try {
     const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, 'echo OK'], {

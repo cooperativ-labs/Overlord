@@ -2,7 +2,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { parseShellCommand } from '../../lib/ssh/shell-utils';
+import { parseSshCommand } from '../../lib/ssh/shell-utils';
+
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
@@ -126,6 +127,7 @@ function buildModelThinkingFlags(agent: AgentType, model?: string, thinking?: st
  */
 export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<LaunchAgentResult> {
   const connectorUrl = getConnectorUrl();
+  const isRemote = Boolean(input.sshCommand?.trim());
   // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
   const agentToken =
     normalizeAgentToken(input.agentToken) || normalizeAgentToken(process.env.AGENT_TOKEN);
@@ -142,7 +144,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       : null;
   const bundleInstalled = bundleAgent ? isBundleInstalled(bundleAgent) : false;
   const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
-  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron&agent=${input.agent}${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}`;
+  const workspaceParam = isRemote ? '&workspace=ssh' : '';
+  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron&agent=${input.agent}${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}${workspaceParam}`;
   const launchEnv = {
     OVERLORD_URL: connectorUrl,
     OVERLORD_CONNECTOR_URL: connectorUrl,
@@ -222,10 +225,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // Build model/thinking flags per agent
   const modelThinkingFlags = buildModelThinkingFlags(input.agent, input.model, input.thinking);
+  const codexBaseCommand = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''}`;
 
   // For remote (SSH) launches, inline the context via base64 to avoid referencing
   // a local temp file that doesn't exist on the remote server.
-  const isRemote = Boolean(input.sshCommand?.trim());
   const contextRef = isRemote ? '"$_OVLD_CTX"' : `"$(cat ${shellQuote(contextFile)})"`;
 
   if (input.agent === 'claude') {
@@ -236,7 +239,12 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       bundleInstalled || isRemote ? '' : ` --settings ${shellQuote(settingsFile)}`;
     command = `claude --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
-    command = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
+    command = buildInteractiveCodexCommand(codexBaseCommand, {
+      contextSource: isRemote
+        ? { type: 'env', value: '_OVLD_CTX' }
+        : { type: 'file', value: contextFile },
+      fallbackPromptRef: contextRef
+    });
   } else if (input.agent === 'cursor') {
     command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else if (input.agent === 'gemini') {
@@ -268,14 +276,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     // Force PTY allocation so the remote agent gets a working terminal for
     // stdin.  Without -tt, SSH runs the remote command without a pseudo-terminal
     // and interactive CLIs (claude, codex, etc.) fail with "stdin is not a terminal".
-    const sshParts = parseShellCommand(input.sshCommand!.trim());
-    const sshBin = sshParts[0] ?? 'ssh';
-    if (sshBin === 'ssh' || sshBin.endsWith('/ssh')) {
-      // Only inject if -t / -tt isn't already present
-      if (!sshParts.some(p => /^-[A-Za-z]*t/.test(p))) {
-        sshParts.splice(1, 0, '-tt');
-      }
-    }
+    const sshParts = parseSshCommand(input.sshCommand!.trim(), { forceTty: true });
     const sshBase = sshParts.map(p => (p.includes(' ') ? shellQuote(p) : p)).join(' ');
     const sshWrappedCommand = `${sshBase} ${shellQuote(remoteScript)}`;
 
@@ -370,6 +371,43 @@ function writePermissionRequestHookFiles(tag: string): {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildInteractiveCodexCommand(
+  codexCommand: string,
+  options: {
+    contextSource: { type: 'env'; value: string } | { type: 'file'; value: string };
+    fallbackPromptRef: string;
+  }
+): string {
+  const expectScript = [
+    'set timeout -1',
+    'set prompt_source [lindex $argv 0]',
+    'set codex_cmd [lindex $argv 1]',
+    'if {$prompt_source eq "__OVLD_ENV__"} {',
+    '  set overlord_prompt $env(_OVLD_CTX)',
+    '} else {',
+    '  set fh [open $prompt_source r]',
+    '  set overlord_prompt [read $fh]',
+    '  close $fh',
+    '}',
+    'spawn sh -lc $codex_cmd',
+    'sleep 1',
+    'send -- $overlord_prompt',
+    'send -- "\\r"',
+    'interact'
+  ].join('\n');
+
+  const sourceArg =
+    options.contextSource.type === 'env' ? '__OVLD_ENV__' : options.contextSource.value;
+
+  return [
+    'if command -v expect >/dev/null 2>&1; then',
+    `expect -c ${shellQuote(expectScript)} -- ${shellQuote(sourceArg)} ${shellQuote(codexCommand)};`,
+    'else',
+    `${codexCommand} ${options.fallbackPromptRef};`,
+    'fi'
+  ].join(' ');
 }
 
 function toTomlString(value: string): string {

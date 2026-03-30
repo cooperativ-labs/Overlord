@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { parseShellCommand, shellEscape } from '@/lib/ssh/shell-utils';
+import { parseSshCommand, shellEscape } from '@/lib/ssh/shell-utils';
 
 const execFileAsync = promisify(execFile);
 
@@ -115,7 +115,7 @@ export async function listRemoteProjectFiles(
 ): Promise<{ files: string[]; truncated: boolean }> {
   const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
-  const sshParts = parseShellCommand(sshCommand);
+  const sshParts = parseSshCommand(sshCommand);
   const [sshBin, ...sshArgs] = sshParts;
 
   const ignoredDirs = [...IGNORED_DIRECTORY_NAMES].map(d => `-name ${shellEscape(d)}`).join(' -o ');

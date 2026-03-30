@@ -274,7 +274,7 @@ export function WorkflowPage({
             type="text"
             value={sshCommand}
             onChange={e => setSshCommand(e.target.value)}
-            placeholder="e.g. ssh user@10.0.0.5"
+            placeholder="e.g. user@10.0.0.5 or ssh user@10.0.0.5"
             className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
           />
           <input
