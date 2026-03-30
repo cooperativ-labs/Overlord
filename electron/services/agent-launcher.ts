@@ -142,7 +142,12 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     input.agent === 'claude' || input.agent === 'cursor' || input.agent === 'opencode'
       ? (input.agent as AgentBundleAgent)
       : null;
-  const bundleInstalled = bundleAgent ? isBundleInstalled(bundleAgent) : false;
+  const bundleInstalled =
+    input.agent === 'codex'
+      ? isCodexPluginInstalled()
+      : bundleAgent
+        ? isBundleInstalled(bundleAgent)
+        : false;
   const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
   const workspaceParam = isRemote ? '&workspace=ssh' : '';
   const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron&agent=${input.agent}${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}${workspaceParam}`;
@@ -387,6 +392,12 @@ function writePermissionRequestHookFiles(tag: string): {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function isCodexPluginInstalled(): boolean {
+  return fs.existsSync(
+    path.join(os.homedir(), '.codex', 'plugins', 'overlord', '.codex-plugin', 'plugin.json')
+  );
 }
 
 function buildInteractiveCodexCommand(options: { fallbackPromptRef: string }): string {

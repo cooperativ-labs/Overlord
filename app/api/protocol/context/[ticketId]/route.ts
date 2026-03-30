@@ -86,13 +86,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       | 'gemini'
       | 'opencode'
       | undefined;
-    const requestedInstructionMode = (searchParams.get('instructionMode') ??
-      'legacy') as InstructionMode;
+    const instructionMode = (searchParams.get('instructionMode') ?? 'legacy') as InstructionMode;
     const requestedWorkspace = searchParams.get('workspace')?.trim().toLowerCase();
-    const instructionMode =
-      agent === 'codex' && requestedInstructionMode === 'bundle'
-        ? ('legacy' as InstructionMode)
-        : requestedInstructionMode;
     const workingDirectory =
       requestedWorkspace === 'ssh'
         ? (project?.remote_working_directory ?? project?.local_working_directory ?? null)

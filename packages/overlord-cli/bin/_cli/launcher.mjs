@@ -6,11 +6,35 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 import { runAttachCommand } from './attach.mjs';
 
-async function fetchContext(platformUrl, agentToken, localSecret, ticketId) {
-  const url = `${platformUrl}/api/protocol/context/${ticketId}?context=cli`;
+function getInstructionMode(agent) {
+  if (agent === 'codex') {
+    const pluginManifest = path.join(
+      os.homedir(),
+      '.codex',
+      'plugins',
+      'overlord',
+      '.codex-plugin',
+      'plugin.json'
+    );
+    return fs.existsSync(pluginManifest) ? 'bundle' : 'legacy';
+  }
+
+  return 'legacy';
+}
+
+async function fetchContext(platformUrl, agentToken, localSecret, ticketId, agent) {
+  const params = new URLSearchParams({
+    context: 'cli',
+    agent,
+    instructionMode: getInstructionMode(agent)
+  });
+  const url = `${platformUrl}/api/protocol/context/${ticketId}?${params.toString()}`;
   const response = await fetch(url, {
     headers: buildAuthHeaders(agentToken, localSecret)
   });
@@ -78,7 +102,7 @@ async function runAgent(agent, mode = 'run') {
   }
 
   const { platformUrl, agentToken, localSecret } = resolveAuth();
-  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId);
+  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId, agent);
 
   const childEnv = { ...process.env, AGENT_IDENTIFIER: agentIdentifierMap[agent] };
 

@@ -68,11 +68,7 @@ export function buildTicketPromptMarkdown({
   options
 }: BuildTicketPromptMarkdownInput): string {
   const launchMode = options?.launchMode ?? 'run';
-  const requestedInstructionMode = options?.instructionMode ?? 'legacy';
-  const instructionMode =
-    options?.agent === 'codex' && requestedInstructionMode === 'bundle'
-      ? 'legacy'
-      : requestedInstructionMode;
+  const instructionMode = options?.instructionMode ?? 'legacy';
   const isLocal = context
     ? context === 'electron' || context === 'cli'
     : platformUrl.startsWith('http://localhost') ||
@@ -142,7 +138,7 @@ function resolveLocalProtocolFamily(
 ): LocalProtocolFamily {
   if (
     instructionMode === 'bundle' &&
-    (agent === 'claude' || agent === 'cursor' || agent === 'opencode')
+    (agent === 'claude' || agent === 'codex' || agent === 'cursor' || agent === 'opencode')
   ) {
     return 'bundled';
   }
