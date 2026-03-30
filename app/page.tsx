@@ -6,6 +6,8 @@ import {
   Eye,
   Play,
   Rocket,
+  Server,
+  Smartphone,
   TerminalSquare
 } from 'lucide-react';
 import type { Metadata } from 'next';
@@ -19,7 +21,7 @@ import { createClient } from '@/supabase/utils/server';
 export const metadata: Metadata = {
   title: 'Overlord | Agent Work, Organized',
   description:
-    'Overlord gives AI-assisted engineering work a shared ticket workflow across the web app, desktop app, CLI, and MCP.'
+    'Overlord organizes AI-assisted engineering work across the web app, desktop app, CLI, MCP, and new personal-server and mobile workflows.'
 };
 
 const agentIcons = [
@@ -83,27 +85,66 @@ const heroBoardColumns = [
     title: 'Draft',
     count: 2,
     cards: [
-      { title: 'Add ticket inbox filters', color: '#60a5fa', active: false },
-      { title: 'Refine review summaries', color: '#38bdf8', active: false }
+      { title: 'Personal server via SSH', color: '#60a5fa', active: false },
+      { title: 'CLI on Raspberry Pi', color: '#38bdf8', active: false }
     ]
   },
   {
     title: 'Execute',
     count: 1,
-    cards: [{ title: 'Desktop terminal attach flow', color: '#34d399', active: true }]
+    cards: [{ title: 'iPhone agent control', color: '#34d399', active: true }]
   },
   {
     title: 'Review',
     count: 1,
-    cards: [{ title: 'Current Changes annotations', color: '#f59e0b', active: false }]
+    cards: [{ title: 'SSH-backed current changes', color: '#f59e0b', active: false }]
   }
 ] as const;
 
 const heroTerminalLines = [
-  '$ ovld run ticket-184',
-  'Attaching Codex to ticket...',
-  'Posting progress update...',
-  'Streaming changes back to review'
+  '$ ovld run ticket-184 --ssh home-server',
+  'Attaching Codex to a personal server over SSH...',
+  'Posting progress update from a Raspberry Pi runner...',
+  'Streaming changes back to the web app and iPhone'
+] as const;
+
+const featureHighlights = [
+  {
+    icon: Server,
+    eyebrow: 'Own your runtime',
+    title: 'Run Overlord on a personal server over SSH.',
+    description:
+      'Point Overlord at your own machine with the SSH key already on your computer and keep agent work under your control.',
+    bullets: [
+      'Use the SSH key already on your laptop to connect quickly',
+      'Keep work running on a home server instead of a hosted machine',
+      'Treat Overlord as your control plane while execution stays near your code'
+    ]
+  },
+  {
+    icon: TerminalSquare,
+    eyebrow: 'Small-footprint CLI',
+    title: 'The CLI fits Raspberry Pis, older Macs, and home servers.',
+    description:
+      'The command-line workflow is lightweight enough for lower-powered hardware while still giving agents a stable ticket protocol.',
+    bullets: [
+      'Works well on Raspberry Pis and other low-power Linux boxes',
+      'Keeps older Macs and spare home servers in the loop',
+      'Uses the same ovld workflow you already rely on elsewhere'
+    ]
+  },
+  {
+    icon: Smartphone,
+    eyebrow: 'Pocket control',
+    title: 'A new iPhone app keeps remote agent work close at hand.',
+    description:
+      'Start, monitor, and steer agent work from iPhone while the actual execution runs on your own server via SSH.',
+    bullets: [
+      'Check progress without opening a laptop',
+      'Review work running on your own server wherever you are',
+      'Stay connected to remote agent jobs while they keep moving'
+    ]
+  }
 ] as const;
 
 function HeroDashboardGraphic() {
@@ -268,16 +309,16 @@ export default async function HomePage() {
         <section className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center">
           <div className="animate-in fade-in slide-in-from-bottom-6 max-w-5xl space-y-8 duration-700">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
-              Web app + Desktop + CLI + MCP
+              Web app + Desktop + CLI + MCP + Mobile
             </div>
 
             <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[0.94] tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">
-              Stop juggling agents.
+              Run agent work on your own server.
             </h1>
 
             <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
-              Create tickets, run agents, and review changes in one dashboard with deep terminal
-              integration.
+              Create tickets, run agents over SSH on hardware you control, and review changes in one
+              dashboard with deep terminal integration.
             </p>
 
             <HeroDashboardGraphic />
@@ -328,6 +369,60 @@ export default async function HomePage() {
                   <Image src={agent.src} alt={agent.alt} width={16} height={16} />
                   <span>{agent.alt}</span>
                 </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Feature highlights */}
+        <section className="mx-auto max-w-6xl pb-10 pt-2">
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.55)] backdrop-blur sm:p-8">
+            <div className="max-w-3xl">
+              <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
+                New deployment paths
+              </p>
+              <h2 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Overlord now fits the hardware you already own.
+              </h2>
+              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+                The homepage now makes the product story explicit: run Overlord through SSH on a
+                personal server, use a CLI that works on smaller machines, and keep remote agent
+                work in reach from iPhone.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-4 lg:grid-cols-3">
+              {featureHighlights.map(feature => (
+                <article
+                  key={feature.title}
+                  className="group rounded-3xl border border-white/10 bg-[#07101d]/70 p-5 transition-colors hover:border-white/15 hover:bg-[#07101d]/90"
+                >
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="flex size-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
+                      <feature.icon className="size-5" />
+                    </div>
+                    <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                      {feature.eyebrow}
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-semibold tracking-tight text-white">
+                    {feature.title}
+                  </h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-300">{feature.description}</p>
+
+                  <ul className="mt-5 space-y-2.5">
+                    {feature.bullets.map(bullet => (
+                      <li
+                        key={bullet}
+                        className="flex items-start gap-2 text-sm leading-6 text-slate-300"
+                      >
+                        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-sky-400/70" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
               ))}
             </div>
           </div>
