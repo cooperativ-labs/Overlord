@@ -236,7 +236,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // For remote (SSH) launches, inline the context via base64 to avoid referencing
   // a local temp file that doesn't exist on the remote server.
-  const contextRef = isRemote ? '"$_OVLD_CTX"' : `"$(cat ${shellQuote(contextFile)})"`;
+  const contextRef = isRemote
+    ? '"$(cat "$_OVLD_CTX_FILE")"'
+    : `"$(cat ${shellQuote(contextFile)})"`;
 
   if (input.agent === 'claude') {
     // When the bundle is installed, the durable hook is in ~/.claude/settings.json,
@@ -269,13 +271,24 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     // since SSH non-interactive shells don't source shell profile files.
     const pathSetup =
       'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"; [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null';
-    const contextDecode = `export _OVLD_CTX=$(printf '%s' '${contextB64}' | base64 --decode)`;
+    const remoteContextSetup = [
+      'export _OVLD_CTX_FILE=$(mktemp "${TMPDIR:-/tmp}/overlord-codex-ctx.XXXXXX")',
+      'trap \'rm -f "$_OVLD_CTX_FILE"\' EXIT',
+      `if printf '%s' '${contextB64}' | base64 --decode > "$_OVLD_CTX_FILE" 2>/dev/null; then`,
+      '  :',
+      `elif printf '%s' '${contextB64}' | base64 -d > "$_OVLD_CTX_FILE" 2>/dev/null; then`,
+      '  :',
+      'else',
+      '  echo "Failed to decode Overlord prompt context on the remote host."',
+      '  exit 1',
+      'fi'
+    ].join('; ');
     const remoteLaunchEnv = { ...launchEnv, ...codexLaunchEnv };
     const envExports = Object.entries(remoteLaunchEnv)
       .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
       .join('; ');
     const cdPart = remoteCwd ? `cd ${shellQuote(remoteCwd)} && ` : '';
-    const remoteScript = `${pathSetup}; ${cdPart}${envExports}; ${contextDecode}; ${command}`;
+    const remoteScript = `${pathSetup}; ${cdPart}${envExports}; ${remoteContextSetup}; ${command}`;
     // Force PTY allocation so the remote agent gets a working terminal for
     // stdin.  Without -tt, SSH runs the remote command without a pseudo-terminal
     // and interactive CLIs (claude, codex, etc.) fail with "stdin is not a terminal".
@@ -379,12 +392,12 @@ function shellQuote(value: string): string {
 function buildInteractiveCodexCommand(options: { fallbackPromptRef: string }): string {
   const expectScript = [
     'set timeout -1',
-    'if {[info exists env(_OVLD_CTX)]} {',
-    '  set overlord_prompt $env(_OVLD_CTX)',
-    '} elseif {[info exists env(_OVLD_CTX_FILE)]} {',
+    'if {[info exists env(_OVLD_CTX_FILE)]} {',
     '  set fh [open $env(_OVLD_CTX_FILE) r]',
     '  set overlord_prompt [read $fh]',
     '  close $fh',
+    '} elseif {[info exists env(_OVLD_CTX)]} {',
+    '  set overlord_prompt $env(_OVLD_CTX)',
     '} else {',
     '  send_user "Missing Overlord Codex prompt context.\\n"',
     '  exit 1',

@@ -410,6 +410,8 @@ export async function TicketPanelContent({
                 objectives={objectives ?? []}
                 objectiveFileMentionPaths={objectiveFileMentionPaths}
                 workingDirectory={workingDirectory}
+                sshCommand={projectSshCommand}
+                remoteWorkingDirectory={projectRemoteWorkingDirectory}
               />
 
               {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
