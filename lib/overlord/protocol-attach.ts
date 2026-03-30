@@ -29,7 +29,7 @@ function normalizeDirectoryForComparison(value: string | null | undefined): stri
   return normalized.toLowerCase();
 }
 
-function isMetadataRecord(value: Json): value is Record<string, unknown> {
+function isMetadataRecord(value: Json): value is Record<string, Json | undefined> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
