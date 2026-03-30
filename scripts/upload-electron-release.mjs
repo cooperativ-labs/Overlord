@@ -1,30 +1,23 @@
 #!/usr/bin/env node
 /* global Buffer, console, process */
 /**
- * Bump package version (semver), build the Electron app, and upload artifacts
- * to the app-downloads storage bucket under electron/<version>/.
+ * Build and upload the full Electron desktop release matrix.
  *
- * Requires: SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY
- * (or SUPABASE_SECRET_KEY). Load from .env.prod or set in the environment.
+ * Fixed targets:
+ *   - macOS arm64
+ *   - macOS x64
+ *   - Linux x64
+ *   - Linux arm64
  *
- * Usage:
- *   node scripts/upload-electron-release.mjs                  # bump patch, build host platform, upload
- *   node scripts/upload-electron-release.mjs --minor          # bump minor
- *   node scripts/upload-electron-release.mjs --major          # bump major
- *   node scripts/upload-electron-release.mjs --no-bump        # use current version
- *   node scripts/upload-electron-release.mjs --all            # build and upload every supported macOS arch
- *   node scripts/upload-electron-release.mjs --platform mac   # only require/upload macOS artifacts
- *   node scripts/upload-electron-release.mjs --platform mac --mac-arch x64
- *                                                         # upload Intel macOS artifacts
- *   node scripts/upload-electron-release.mjs --platform linux # only require/upload Linux artifacts
- *   node scripts/upload-electron-release.mjs --platform linux --linux-arch arm64
- *                                                         # upload Linux ARM64 artifacts
+ * This script bumps the patch version, syncs the CLI package version, builds
+ * each target, uploads the artifacts to app-downloads/electron/<version>/,
+ * and publishes the root update manifests once per platform.
  */
 
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import semver from 'semver';
 import { deriveCliVersion } from '../lib/helpers/cli-versioning.mjs';
@@ -33,9 +26,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const BUCKET = 'app-downloads';
 const PREFIX = 'electron';
+const RELEASE_TARGETS = [
+  { platform: 'mac', arch: 'arm64', publishRootManifest: true },
+  { platform: 'mac', arch: 'x64', publishRootManifest: false },
+  { platform: 'linux', arch: 'x64', publishRootManifest: true },
+  { platform: 'linux', arch: 'arm64', publishRootManifest: false }
+];
+
 const ARTIFACT_PATTERNS = {
   mac: {
-    required: macArch => [
+    required: (macArch) => [
       { label: 'macOS DMG', pattern: new RegExp(`^Overlord-.*-mac-${macArch}\\.dmg$`) },
       { label: 'macOS ZIP', pattern: new RegExp(`^Overlord-.*-mac-${macArch}\\.zip$`) },
       { label: 'latest-mac.yml', pattern: /^latest-mac\.yml$/ }
@@ -43,12 +43,15 @@ const ARTIFACT_PATTERNS = {
     optional: []
   },
   linux: {
-    required: linuxArch => [
+    required: (linuxArch) => [
       { label: 'Linux AppImage', pattern: new RegExp(`^Overlord-.*-linux-${linuxArch}\\.AppImage$`) },
       { label: 'latest-linux.yml', pattern: /^latest-linux\.yml$/ }
     ],
-    optional: linuxArch => [
-      { label: 'Linux .deb', pattern: new RegExp(`^Overlord-.*-linux-${linuxArch === 'x64' ? 'amd64' : linuxArch}\\.deb$`) }
+    optional: (linuxArch) => [
+      {
+        label: 'Linux .deb',
+        pattern: new RegExp(`^Overlord-.*-linux-${linuxArch === 'x64' ? 'amd64' : linuxArch}\\.deb$`)
+      }
     ]
   }
 };
@@ -94,7 +97,7 @@ function loadEnv() {
     const content = readFileSync(envPath, 'utf8');
     Object.assign(process.env, parseDotenv(content));
   } catch {
-    // .env.prod optional if vars already set
+    // .env.prod is optional if the required vars already exist in the environment.
   }
 }
 
@@ -116,130 +119,14 @@ function syncCliPackageVersion(version) {
   return cliPkg.version;
 }
 
-function readFlagValue(args, flagName) {
-  const inline = args.find(arg => arg.startsWith(`${flagName}=`));
-  if (inline) {
-    return inline.slice(flagName.length + 1);
-  }
-
-  const index = args.indexOf(flagName);
-  if (index === -1) return null;
-  return args[index + 1] ?? null;
-}
-
-function detectDefaultPlatform() {
-  const hostPlatform = os.platform();
-  if (hostPlatform === 'darwin') return 'mac';
-  if (hostPlatform === 'linux') return 'linux';
-
-  console.error(`[upload] Unsupported host platform: ${hostPlatform}`);
-  console.error('         Pass --platform mac or --platform linux explicitly.');
-  process.exit(1);
-}
-
-function parsePlatform(args) {
-  const explicitPlatform = readFlagValue(args, '--platform');
-  if (!explicitPlatform) return detectDefaultPlatform();
-
-  if (explicitPlatform === 'mac' || explicitPlatform === 'linux') {
-    return explicitPlatform;
-  }
-
-  console.error(`[upload] Unsupported --platform value: ${explicitPlatform}`);
-  console.error('         Expected one of: mac, linux');
-  process.exit(1);
-}
-
-function parseAllFlag(args) {
-  return args.includes('--all');
-}
-
-function parseMacArch(args, platform) {
-  const explicitMacArch = readFlagValue(args, '--mac-arch');
-  if (!explicitMacArch) {
-    if (platform !== 'mac') return null;
-    return os.arch() === 'x64' ? 'x64' : 'arm64';
-  }
-
-  if (platform !== 'mac') {
-    console.error('[upload] --mac-arch is only valid with --platform mac.');
-    process.exit(1);
-  }
-
-  if (explicitMacArch === 'x64' || explicitMacArch === 'arm64') {
-    return explicitMacArch;
-  }
-
-  console.error(`[upload] Unsupported --mac-arch value: ${explicitMacArch}`);
-  console.error('         Expected one of: x64, arm64');
-  process.exit(1);
-}
-
-function getMacArchsToProcess(args, platform, all) {
-  const explicitMacArch = readFlagValue(args, '--mac-arch');
-
-  if (all) {
-    if (platform !== 'mac') {
-      console.error('[upload] --all is only valid with macOS releases.');
-      process.exit(1);
-    }
-    if (explicitMacArch) {
-      console.error('[upload] --all cannot be combined with --mac-arch.');
-      process.exit(1);
-    }
-    return ['arm64', 'x64'];
-  }
-
-  return [parseMacArch(args, platform)].filter(Boolean);
-}
-
-function parseLinuxArch(args, platform) {
-  const explicitLinuxArch = readFlagValue(args, '--linux-arch');
-  if (!explicitLinuxArch) {
-    if (platform !== 'linux') return null;
-    return os.arch() === 'x64' ? 'x64' : 'arm64';
-  }
-
-  if (platform !== 'linux') {
-    console.error('[upload] --linux-arch is only valid with --platform linux.');
-    process.exit(1);
-  }
-
-  if (explicitLinuxArch === 'x64' || explicitLinuxArch === 'arm64') {
-    return explicitLinuxArch;
-  }
-
-  console.error(`[upload] Unsupported --linux-arch value: ${explicitLinuxArch}`);
-  console.error('         Expected one of: x64, arm64');
-  process.exit(1);
-}
-
-function getLinuxArchsToProcess(args, platform, all) {
-  const explicitLinuxArch = readFlagValue(args, '--linux-arch');
-
-  if (all) {
-    if (platform !== 'linux') {
-      console.error('[upload] --all is only valid with Linux releases.');
-      process.exit(1);
-    }
-    if (explicitLinuxArch) {
-      console.error('[upload] --all cannot be combined with --linux-arch.');
-      process.exit(1);
-    }
-    return ['x64', 'arm64'];
-  }
-
-  return [parseLinuxArch(args, platform)].filter(Boolean);
-}
-
 function getReleaseArtifacts() {
   const releaseDir = join(ROOT, 'release');
   const files = [];
   try {
     const entries = readdirSync(releaseDir, { withFileTypes: true });
-    for (const e of entries) {
-      if (e.isFile()) {
-        files.push({ path: join(releaseDir, e.name), name: e.name });
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        files.push({ path: join(releaseDir, entry.name), name: entry.name });
       }
     }
   } catch (err) {
@@ -255,17 +142,14 @@ function cleanLocalReleaseDir() {
 
 function validateArtifacts(artifacts, platform, arch) {
   const artifactConfig = ARTIFACT_PATTERNS[platform];
-  const requiredArtifacts =
-    typeof artifactConfig.required === 'function'
-      ? artifactConfig.required(arch)
-      : artifactConfig.required;
+  const requiredArtifacts = artifactConfig.required(arch);
   const optionalArtifacts =
     typeof artifactConfig.optional === 'function'
       ? artifactConfig.optional(arch)
       : artifactConfig.optional;
-  const artifactNames = artifacts.map(artifact => artifact.name);
+  const artifactNames = artifacts.map((artifact) => artifact.name);
   const missingRequired = requiredArtifacts.filter(
-    ({ pattern }) => !artifactNames.some(name => pattern.test(name))
+    ({ pattern }) => !artifactNames.some((name) => pattern.test(name))
   );
 
   if (missingRequired.length > 0) {
@@ -277,15 +161,10 @@ function validateArtifacts(artifacts, platform, arch) {
   }
 
   for (const artifact of optionalArtifacts) {
-    if (!artifactNames.some(name => artifact.pattern.test(name))) {
+    if (!artifactNames.some((name) => artifact.pattern.test(name))) {
       console.warn(`[upload] Optional artifact missing: ${artifact.label}`);
     }
   }
-}
-
-async function uploadFile(supabase, filePath, storagePath) {
-  const buffer = readFileSync(filePath);
-  return uploadBuffer(supabase, buffer, storagePath);
 }
 
 async function uploadBuffer(supabase, buffer, storagePath) {
@@ -294,6 +173,189 @@ async function uploadBuffer(supabase, buffer, storagePath) {
     .upload(storagePath, buffer, { upsert: true, contentType: 'application/octet-stream' });
   if (error) throw new Error(`Upload failed ${storagePath}: ${error.message}`);
   return data;
+}
+
+async function uploadFile(supabase, filePath, storagePath) {
+  return uploadBuffer(supabase, readFileSync(filePath), storagePath);
+}
+
+function prefixLatestYamlPaths(content, version) {
+  const rewrite = (line, key) => {
+    const regex = new RegExp(`^(\\s*(?:-\\s+)?${key}:\\s*)(['"]?)([^'"\\n]+)\\2(\\s*)$`);
+    const match = line.match(regex);
+    if (!match) return line;
+    const [, prefix, quote, value, suffix] = match;
+    const trimmed = value.trim();
+    if (!trimmed) return line;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return line;
+    if (trimmed.startsWith(`${version}/`)) return line;
+    return `${prefix}${quote}${version}/${trimmed}${quote}${suffix}`;
+  };
+
+  return content
+    .split('\n')
+    .map((line) => rewrite(rewrite(line, 'url'), 'path'))
+    .join('\n');
+}
+
+function getManifestUploadNames(platform, arch) {
+  if (platform === 'mac') {
+    return arch === 'arm64' ? ['latest-mac-arm64.yml', 'latest-mac.yml'] : ['latest-mac-x64.yml'];
+  }
+
+  return arch === 'x64' ? ['latest-linux-x64.yml'] : ['latest-linux-arm64.yml'];
+}
+
+function getRootManifestName(platform) {
+  return platform === 'mac' ? 'latest-mac.yml' : 'latest-linux.yml';
+}
+
+function getBuildArgs(target) {
+  const args = ['scripts/electron-build.mjs', '--platform', target.platform];
+  if (target.platform === 'mac') {
+    args.push('--mac-arch', target.arch);
+  } else {
+    args.push('--linux-arch', target.arch);
+  }
+  return args;
+}
+
+function parseBumpMode(args) {
+  const hasMinor = args.includes('--minor');
+  const hasMajor = args.includes('--major');
+  const hasNoBump = args.includes('--no-bump');
+
+  if ([hasMinor, hasMajor, hasNoBump].filter(Boolean).length > 1) {
+    console.error('[upload] Choose only one of --minor, --major, or --no-bump.');
+    process.exit(1);
+  }
+
+  if (hasMinor) return 'minor';
+  if (hasMajor) return 'major';
+  if (hasNoBump) return 'no-bump';
+  return 'patch';
+}
+
+async function buildAndUploadTarget(supabase, version, target) {
+  cleanLocalReleaseDir();
+
+  console.log(`[upload] Building ${target.platform} ${target.arch}...`);
+  const buildResult = spawnSync('node', getBuildArgs(target), {
+    stdio: 'inherit',
+    cwd: ROOT,
+    env: process.env
+  });
+  if (buildResult.status !== 0) {
+    console.error('[upload] Build failed.');
+    process.exit(buildResult.status ?? 1);
+  }
+
+  const artifacts = getReleaseArtifacts();
+  if (artifacts.length === 0) {
+    console.error('[upload] No files found in release/.');
+    process.exit(1);
+  }
+
+  validateArtifacts(artifacts, target.platform, target.arch);
+
+  const versionPrefix = `${PREFIX}/${version}`;
+  const rootManifestName = getRootManifestName(target.platform);
+  const manifestUploadNames = getManifestUploadNames(target.platform, target.arch);
+
+  console.log(`[upload] Uploading ${artifacts.length} file(s) to ${BUCKET}/${versionPrefix}/...`);
+
+  for (const { path: filePath, name } of artifacts) {
+    if (name === rootManifestName) {
+      const raw = readFileSync(filePath, 'utf8');
+      const normalizedLatestYml = prefixLatestYamlPaths(raw, version);
+
+      for (const manifestName of manifestUploadNames) {
+        const storagePath = `${versionPrefix}/${manifestName}`;
+        process.stdout.write(`  ${name} -> ${storagePath} ... `);
+        try {
+          await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
+          console.log('ok');
+        } catch (err) {
+          console.log('FAIL');
+          console.error(err.message);
+          process.exit(1);
+        }
+      }
+      continue;
+    }
+
+    const storagePath = `${versionPrefix}/${name}`;
+    process.stdout.write(`  ${name} -> ${storagePath} ... `);
+    try {
+      await uploadFile(supabase, filePath, storagePath);
+      console.log('ok');
+    } catch (err) {
+      console.log('FAIL');
+      console.error(err.message);
+      process.exit(1);
+    }
+  }
+
+  if (!target.publishRootManifest) {
+    return;
+  }
+
+  const rootManifestPath = artifacts.find((artifact) => artifact.name === rootManifestName)?.path;
+  if (!rootManifestPath) {
+    console.error(`[upload] Missing ${rootManifestName} after build.`);
+    process.exit(1);
+  }
+
+  const raw = readFileSync(rootManifestPath, 'utf8');
+  const normalizedLatestYml = prefixLatestYamlPaths(raw, version);
+  const storagePath = `${PREFIX}/${rootManifestName}`;
+  process.stdout.write(`  ${rootManifestName} -> ${storagePath} ... `);
+  try {
+    await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
+    console.log('ok');
+  } catch (err) {
+    console.log('FAIL');
+    console.error(err.message);
+    process.exit(1);
+  }
+}
+
+async function pruneOldVersions(supabase) {
+  const rootPath = PREFIX;
+  const entries = await listStorageEntries(supabase, rootPath);
+
+  const versionDirs = entries
+    .filter(isDirectoryEntry)
+    .map((entry) => entry.name)
+    .filter((name) => semver.valid(name));
+
+  if (versionDirs.length === 0) {
+    console.log(`[upload] No existing versions found in ${BUCKET}/${rootPath}/`);
+    return;
+  }
+
+  const sortedVersions = versionDirs.sort(semver.rcompare);
+  console.log(`[upload] All versions: ${sortedVersions.join(', ')}`);
+
+  const versionsToKeep = sortedVersions.slice(0, 3);
+  const versionsToDelete = sortedVersions.slice(3);
+
+  if (versionsToDelete.length === 0) {
+    console.log('[upload] No old versions to prune.');
+    return;
+  }
+
+  console.log(`[upload] Keeping: ${versionsToKeep.join(', ')}`);
+  console.log(`[upload] Pruning ${versionsToDelete.length} old version(s): ${versionsToDelete.join(', ')}`);
+
+  for (const version of versionsToDelete) {
+    const versionPath = `${PREFIX}/${version}`;
+    const filePaths = await listFilePathsRecursively(supabase, versionPath);
+    if (filePaths.length > 0) {
+      console.log(`[upload] Deleting ${filePaths.length} file(s) from version ${version}...`);
+      await removeStoragePaths(supabase, filePaths);
+    }
+  }
 }
 
 function isDirectoryEntry(entry) {
@@ -347,86 +409,9 @@ async function removeStoragePaths(supabase, paths) {
   }
 }
 
-async function pruneOldVersions(supabase) {
-  const rootPath = PREFIX;
-  const entries = await listStorageEntries(supabase, rootPath);
-  
-  // Filter for directories that are valid semver
-  const versionDirs = entries
-    .filter(isDirectoryEntry)
-    .map(e => e.name)
-    .filter(name => semver.valid(name));
-
-  if (versionDirs.length === 0) {
-    console.log(`[upload] No existing versions found in ${BUCKET}/${rootPath}/`);
-    return;
-  }
-
-  // Sort versions descending (newest first)
-  const sortedVersions = versionDirs.sort(semver.rcompare);
-  console.log(`[upload] All versions: ${sortedVersions.join(', ')}`);
-
-  // Keep top 3 (current + 2 previous)
-  const versionsToKeep = sortedVersions.slice(0, 3);
-  const versionsToDelete = sortedVersions.slice(3);
-
-  if (versionsToDelete.length === 0) {
-    console.log('[upload] No old versions to prune.');
-    return;
-  }
-
-  console.log(`[upload] Keeping: ${versionsToKeep.join(', ')}`);
-  console.log(`[upload] Pruning ${versionsToDelete.length} old version(s): ${versionsToDelete.join(', ')}`);
-
-  for (const v of versionsToDelete) {
-    const versionPath = `${PREFIX}/${v}`;
-    const filePaths = await listFilePathsRecursively(supabase, versionPath);
-    if (filePaths.length > 0) {
-      console.log(`[upload] Deleting ${filePaths.length} file(s) from version ${v}...`);
-      await removeStoragePaths(supabase, filePaths);
-    }
-  }
-}
-
-function prefixLatestYamlPaths(content, version) {
-  const rewrite = (line, key) => {
-    const regex = new RegExp(`^(\\s*(?:-\\s+)?${key}:\\s*)(['"]?)([^'"\\n]+)\\2(\\s*)$`);
-    const match = line.match(regex);
-    if (!match) return line;
-    const [, prefix, quote, value, suffix] = match;
-    const trimmed = value.trim();
-    if (!trimmed) return line;
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return line;
-    if (trimmed.startsWith(`${version}/`)) return line;
-    return `${prefix}${quote}${version}/${trimmed}${quote}${suffix}`;
-  };
-
-  return content
-    .split('\n')
-    .map((line) => rewrite(rewrite(line, 'url'), 'path'))
-    .join('\n');
-}
-
-function getMacManifestFileNames(macArch) {
-  const archManifest = `latest-mac-${macArch}.yml`;
-  return macArch === 'arm64' ? [archManifest, 'latest-mac.yml'] : [archManifest];
-}
-
-function getManifestTargets(platform, macArch, fileName) {
-  if (platform === 'mac' && fileName === 'latest-mac.yml') {
-    return getMacManifestFileNames(macArch);
-  }
-  return [fileName];
-}
-
 async function main() {
   const args = process.argv.slice(2);
-  const noBump = args.includes('--no-bump');
-  const all = parseAllFlag(args);
-  const bumpType = args.includes('--major') ? 'major' : args.includes('--minor') ? 'minor' : 'patch';
-  const targetPlatform = parsePlatform(args);
-  const macArchs = getMacArchsToProcess(args, targetPlatform, all);
-  const linuxArchs = getLinuxArchsToProcess(args, targetPlatform, all);
+  const bumpMode = parseBumpMode(args);
 
   loadEnv();
 
@@ -443,32 +428,18 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(
-    `[upload] Target platform: ${targetPlatform}${
-      targetPlatform === 'mac'
-        ? all
-          ? ` (all: ${macArchs.join(', ')})`
-          : ` (${macArchs[0]})`
-        : targetPlatform === 'linux'
-          ? all
-            ? ` (all: ${linuxArchs.join(', ')})`
-            : ` (${linuxArchs[0]})`
-          : ''
-    }`
-  );
-
   let version = getPackageVersion();
+  if (bumpMode === 'no-bump') {
+    console.log(`[upload] Using current version ${version} (no bump).`);
+  } else {
+    const nextVersion = VERSION_BUMP[bumpMode](version);
+    console.log(`[upload] Bumping version ${version} -> ${nextVersion} (${bumpMode}).`);
 
-  if (!noBump) {
-    const next = VERSION_BUMP[bumpType](version);
-    console.log(`[upload] Bumping version ${version} -> ${next} (${bumpType})`);
     const pkgPath = join(ROOT, 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    pkg.version = next;
+    pkg.version = nextVersion;
     writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
-    version = next;
-  } else {
-    console.log(`[upload] Using current version ${version} (no bump).`);
+    version = nextVersion;
   }
 
   const syncedCliVersion = syncCliPackageVersion(version);
@@ -484,108 +455,21 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  const versionPrefix = `${PREFIX}/${version}`;
+  console.log(
+    `[upload] Building and uploading ${RELEASE_TARGETS.length} release target(s): ${RELEASE_TARGETS.map(
+      (target) => `${target.platform}/${target.arch}`
+    ).join(', ')}`
+  );
 
-  async function buildAndUploadArch(targetArch, shouldPublishRootManifest) {
-    cleanLocalReleaseDir();
-
-    console.log(`[upload] Running Electron build for ${targetPlatform} ${targetArch}...`);
-    const { spawnSync } = await import('node:child_process');
-    const buildArgs = ['scripts/electron-build.mjs', '--platform', targetPlatform];
-    if (targetPlatform === 'mac') {
-      buildArgs.push('--mac-arch', targetArch);
-    } else if (targetPlatform === 'linux') {
-      buildArgs.push('--linux-arch', targetArch);
-    }
-
-    const buildResult = spawnSync('node', buildArgs, { stdio: 'inherit', cwd: ROOT, env: process.env });
-    if (buildResult.status !== 0) {
-      console.error('[upload] Build failed.');
-      process.exit(buildResult.status ?? 1);
-    }
-
-    const artifacts = getReleaseArtifacts();
-    if (artifacts.length === 0) {
-      console.error('[upload] No files found in release/.');
-      process.exit(1);
-    }
-
-    validateArtifacts(artifacts, targetPlatform, targetArch);
-
-    console.log(
-      `[upload] Uploading ${artifacts.length} file(s) to ${BUCKET}/${versionPrefix}/...`
-    );
-
-    for (const { path: filePath, name } of artifacts) {
-      const storageTargets = getManifestTargets(targetPlatform, targetArch, name).map(
-        targetName => `${versionPrefix}/${targetName}`
-      );
-      const rootManifestPath = `${PREFIX}/${
-        targetPlatform === 'mac' ? 'latest-mac.yml' : 'latest-linux.yml'
-      }`;
-
-      for (const storagePath of storageTargets) {
-        if (!shouldPublishRootManifest && storagePath === rootManifestPath) {
-          continue;
-        }
-
-        process.stdout.write(`  ${name} -> ${storagePath} ... `);
-        try {
-          await uploadFile(supabase, filePath, storagePath);
-          console.log('ok');
-        } catch (e) {
-          console.log('FAIL');
-          console.error(e.message);
-          process.exit(1);
-        }
-      }
-    }
-
-    if (!shouldPublishRootManifest) {
-      return;
-    }
-
-    // Upload latest*.yml to electron/ (no version prefix) for electron-updater
-    const latestManifestPattern =
-      targetPlatform === 'mac' ? /^latest-mac\.yml$/ : /^latest-linux\.yml$/;
-    const latestYml = artifacts.filter((artifact) => latestManifestPattern.test(artifact.name));
-    for (const { path: filePath, name } of latestYml) {
-      const latestYml = readFileSync(filePath, 'utf8');
-      const normalizedLatestYml = prefixLatestYamlPaths(latestYml, version);
-
-      const manifestTargets = getManifestTargets(targetPlatform, targetArch, name);
-
-      for (const manifestFileName of manifestTargets) {
-        const storagePath = `${PREFIX}/${manifestFileName}`;
-        process.stdout.write(`  ${name} -> ${storagePath} ... `);
-        try {
-          await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
-          console.log('ok');
-        } catch (e) {
-          console.log('FAIL');
-          console.error(e.message);
-          process.exit(1);
-        }
-      }
-    }
-  }
-
-  if (targetPlatform === 'mac' && all) {
-    for (const [index, arch] of macArchs.entries()) {
-      await buildAndUploadArch(arch, index === 0);
-    }
-  } else if (targetPlatform === 'linux' && all) {
-    for (const [index, arch] of linuxArchs.entries()) {
-      await buildAndUploadArch(arch, index === 0);
-    }
-  } else {
-    const arch = targetPlatform === 'mac' ? macArchs[0] : linuxArchs[0];
-    await buildAndUploadArch(arch, true);
+  for (const target of RELEASE_TARGETS) {
+    await buildAndUploadTarget(supabase, version, target);
   }
 
   await pruneOldVersions(supabase);
 
-  console.log(`[upload] Done. Version ${version} is available at ${supabaseUrl}/storage/v1/object/public/${BUCKET}/${PREFIX}/`);
+  console.log(
+    `[upload] Done. Version ${version} is available at ${supabaseUrl}/storage/v1/object/public/${BUCKET}/${PREFIX}/`
+  );
 }
 
 main().catch((err) => {

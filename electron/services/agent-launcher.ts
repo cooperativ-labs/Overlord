@@ -226,6 +226,13 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // Build model/thinking flags per agent
   const modelThinkingFlags = buildModelThinkingFlags(input.agent, input.model, input.thinking);
   const codexBaseCommand = `codex${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''}`;
+  const codexLaunchEnv =
+    input.agent === 'codex'
+      ? {
+          _OVLD_CODEX_CMD: codexBaseCommand,
+          ...(isRemote ? {} : { _OVLD_CTX_FILE: contextFile })
+        }
+      : {};
 
   // For remote (SSH) launches, inline the context via base64 to avoid referencing
   // a local temp file that doesn't exist on the remote server.
@@ -239,12 +246,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       bundleInstalled || isRemote ? '' : ` --settings ${shellQuote(settingsFile)}`;
     command = `claude --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
-    command = buildInteractiveCodexCommand(codexBaseCommand, {
-      contextSource: isRemote
-        ? { type: 'env', value: '_OVLD_CTX' }
-        : { type: 'file', value: contextFile },
-      fallbackPromptRef: contextRef
-    });
+    command = buildInteractiveCodexCommand({ fallbackPromptRef: contextRef });
   } else if (input.agent === 'cursor') {
     command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else if (input.agent === 'gemini') {
@@ -268,7 +270,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     const pathSetup =
       'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"; [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null';
     const contextDecode = `_OVLD_CTX=$(printf '%s' '${contextB64}' | base64 --decode)`;
-    const envExports = Object.entries(launchEnv)
+    const remoteLaunchEnv = { ...launchEnv, ...codexLaunchEnv };
+    const envExports = Object.entries(remoteLaunchEnv)
       .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
       .join('; ');
     const cdPart = remoteCwd ? `cd ${shellQuote(remoteCwd)} && ` : '';
@@ -292,7 +295,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   return {
     command,
     cwd: resolvedCwd,
-    env: launchEnv
+    env: { ...launchEnv, ...codexLaunchEnv }
   };
 }
 
@@ -373,39 +376,35 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function buildInteractiveCodexCommand(
-  codexCommand: string,
-  options: {
-    contextSource: { type: 'env'; value: string } | { type: 'file'; value: string };
-    fallbackPromptRef: string;
-  }
-): string {
+function buildInteractiveCodexCommand(options: { fallbackPromptRef: string }): string {
   const expectScript = [
     'set timeout -1',
-    'set prompt_source [lindex $argv 0]',
-    'set codex_cmd [lindex $argv 1]',
-    'if {$prompt_source eq "__OVLD_ENV__"} {',
+    'if {[info exists env(_OVLD_CTX)]} {',
     '  set overlord_prompt $env(_OVLD_CTX)',
-    '} else {',
-    '  set fh [open $prompt_source r]',
+    '} elseif {[info exists env(_OVLD_CTX_FILE)]} {',
+    '  set fh [open $env(_OVLD_CTX_FILE) r]',
     '  set overlord_prompt [read $fh]',
     '  close $fh',
+    '} else {',
+    '  send_user "Missing Overlord Codex prompt context.\\n"',
+    '  exit 1',
     '}',
-    'spawn sh -lc $codex_cmd',
+    'if {![info exists env(_OVLD_CODEX_CMD)]} {',
+    '  send_user "Missing Overlord Codex launch command.\\n"',
+    '  exit 1',
+    '}',
+    'spawn sh -lc $env(_OVLD_CODEX_CMD)',
     'sleep 1',
     'send -- $overlord_prompt',
     'send -- "\\r"',
     'interact'
   ].join('\n');
 
-  const sourceArg =
-    options.contextSource.type === 'env' ? '__OVLD_ENV__' : options.contextSource.value;
-
   return [
     'if command -v expect >/dev/null 2>&1; then',
-    `expect -c ${shellQuote(expectScript)} -- ${shellQuote(sourceArg)} ${shellQuote(codexCommand)};`,
+    `expect -c ${shellQuote(expectScript)};`,
     'else',
-    `${codexCommand} ${options.fallbackPromptRef};`,
+    `$_OVLD_CODEX_CMD ${options.fallbackPromptRef};`,
     'fi'
   ].join(' ');
 }

@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.13.0] - 2026-03-30:08:29
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Refactor
+- Tighten metadata typing for protocol attach payloads so ticket metadata handling is safer and more precise.
+
 ## [3.12.0] - 2026-03-30:06:36
 
 ### Added
