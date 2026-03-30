@@ -12,6 +12,7 @@
  *   node scripts/upload-electron-release.mjs --minor          # bump minor
  *   node scripts/upload-electron-release.mjs --major          # bump major
  *   node scripts/upload-electron-release.mjs --no-bump        # use current version
+ *   node scripts/upload-electron-release.mjs --all            # build and upload every supported macOS arch
  *   node scripts/upload-electron-release.mjs --platform mac   # only require/upload macOS artifacts
  *   node scripts/upload-electron-release.mjs --platform mac --mac-arch x64
  *                                                         # upload Intel macOS artifacts
@@ -149,6 +150,10 @@ function parsePlatform(args) {
   process.exit(1);
 }
 
+function parseAllFlag(args) {
+  return args.includes('--all');
+}
+
 function parseMacArch(args, platform) {
   const explicitMacArch = readFlagValue(args, '--mac-arch');
   if (!explicitMacArch) {
@@ -170,6 +175,24 @@ function parseMacArch(args, platform) {
   process.exit(1);
 }
 
+function getMacArchsToProcess(args, platform, all) {
+  const explicitMacArch = readFlagValue(args, '--mac-arch');
+
+  if (all) {
+    if (platform !== 'mac') {
+      console.error('[upload] --all is only valid with macOS releases.');
+      process.exit(1);
+    }
+    if (explicitMacArch) {
+      console.error('[upload] --all cannot be combined with --mac-arch.');
+      process.exit(1);
+    }
+    return ['arm64', 'x64'];
+  }
+
+  return [parseMacArch(args, platform)].filter(Boolean);
+}
+
 function parseLinuxArch(args, platform) {
   const explicitLinuxArch = readFlagValue(args, '--linux-arch');
   if (!explicitLinuxArch) {
@@ -189,6 +212,24 @@ function parseLinuxArch(args, platform) {
   console.error(`[upload] Unsupported --linux-arch value: ${explicitLinuxArch}`);
   console.error('         Expected one of: x64, arm64');
   process.exit(1);
+}
+
+function getLinuxArchsToProcess(args, platform, all) {
+  const explicitLinuxArch = readFlagValue(args, '--linux-arch');
+
+  if (all) {
+    if (platform !== 'linux') {
+      console.error('[upload] --all is only valid with Linux releases.');
+      process.exit(1);
+    }
+    if (explicitLinuxArch) {
+      console.error('[upload] --all cannot be combined with --linux-arch.');
+      process.exit(1);
+    }
+    return ['x64', 'arm64'];
+  }
+
+  return [parseLinuxArch(args, platform)].filter(Boolean);
 }
 
 function getReleaseArtifacts() {
@@ -381,10 +422,11 @@ function getManifestTargets(platform, macArch, fileName) {
 async function main() {
   const args = process.argv.slice(2);
   const noBump = args.includes('--no-bump');
+  const all = parseAllFlag(args);
   const bumpType = args.includes('--major') ? 'major' : args.includes('--minor') ? 'minor' : 'patch';
   const targetPlatform = parsePlatform(args);
-  const macArch = parseMacArch(args, targetPlatform);
-  const linuxArch = parseLinuxArch(args, targetPlatform);
+  const macArchs = getMacArchsToProcess(args, targetPlatform, all);
+  const linuxArchs = getLinuxArchsToProcess(args, targetPlatform, all);
 
   loadEnv();
 
@@ -403,7 +445,15 @@ async function main() {
 
   console.log(
     `[upload] Target platform: ${targetPlatform}${
-      targetPlatform === 'mac' ? ` (${macArch})` : targetPlatform === 'linux' ? ` (${linuxArch})` : ''
+      targetPlatform === 'mac'
+        ? all
+          ? ` (all: ${macArchs.join(', ')})`
+          : ` (${macArchs[0]})`
+        : targetPlatform === 'linux'
+          ? all
+            ? ` (all: ${linuxArchs.join(', ')})`
+            : ` (${linuxArchs[0]})`
+          : ''
     }`
   );
 
@@ -430,78 +480,107 @@ async function main() {
     );
   }
 
-  console.log('[upload] Cleaning local release directory...');
-  cleanLocalReleaseDir();
-
-  console.log('[upload] Running Electron build...');
-  const { spawnSync } = await import('node:child_process');
-  const buildArgs = ['scripts/electron-build.mjs', '--platform', targetPlatform];
-  if (targetPlatform === 'mac' && macArch) {
-    buildArgs.push('--mac-arch', macArch);
-  }
-  if (targetPlatform === 'linux' && linuxArch) {
-    buildArgs.push('--linux-arch', linuxArch);
-  }
-  const buildResult = spawnSync('node', buildArgs, { stdio: 'inherit', cwd: ROOT, env: process.env });
-  if (buildResult.status !== 0) {
-    console.error('[upload] Build failed.');
-    process.exit(buildResult.status ?? 1);
-  }
-
-  const artifacts = getReleaseArtifacts();
-  if (artifacts.length === 0) {
-    console.error('[upload] No files found in release/.');
-    process.exit(1);
-  }
-  validateArtifacts(artifacts, targetPlatform, targetPlatform === 'mac' ? macArch : linuxArch);
-
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
   const versionPrefix = `${PREFIX}/${version}`;
-  console.log(`[upload] Uploading ${artifacts.length} file(s) to ${BUCKET}/${versionPrefix}/...`);
 
-  for (const { path: filePath, name } of artifacts) {
-    const storageTargets = getManifestTargets(targetPlatform, macArch, name).map(
-      targetName => `${versionPrefix}/${targetName}`
+  async function buildAndUploadArch(targetArch, shouldPublishRootManifest) {
+    cleanLocalReleaseDir();
+
+    console.log(`[upload] Running Electron build for ${targetPlatform} ${targetArch}...`);
+    const { spawnSync } = await import('node:child_process');
+    const buildArgs = ['scripts/electron-build.mjs', '--platform', targetPlatform];
+    if (targetPlatform === 'mac') {
+      buildArgs.push('--mac-arch', targetArch);
+    } else if (targetPlatform === 'linux') {
+      buildArgs.push('--linux-arch', targetArch);
+    }
+
+    const buildResult = spawnSync('node', buildArgs, { stdio: 'inherit', cwd: ROOT, env: process.env });
+    if (buildResult.status !== 0) {
+      console.error('[upload] Build failed.');
+      process.exit(buildResult.status ?? 1);
+    }
+
+    const artifacts = getReleaseArtifacts();
+    if (artifacts.length === 0) {
+      console.error('[upload] No files found in release/.');
+      process.exit(1);
+    }
+
+    validateArtifacts(artifacts, targetPlatform, targetArch);
+
+    console.log(
+      `[upload] Uploading ${artifacts.length} file(s) to ${BUCKET}/${versionPrefix}/...`
     );
 
-    for (const storagePath of storageTargets) {
-      process.stdout.write(`  ${name} -> ${storagePath} ... `);
-      try {
-        await uploadFile(supabase, filePath, storagePath);
-        console.log('ok');
-      } catch (e) {
-        console.log('FAIL');
-        console.error(e.message);
-        process.exit(1);
+    for (const { path: filePath, name } of artifacts) {
+      const storageTargets = getManifestTargets(targetPlatform, targetArch, name).map(
+        targetName => `${versionPrefix}/${targetName}`
+      );
+      const rootManifestPath = `${PREFIX}/${
+        targetPlatform === 'mac' ? 'latest-mac.yml' : 'latest-linux.yml'
+      }`;
+
+      for (const storagePath of storageTargets) {
+        if (!shouldPublishRootManifest && storagePath === rootManifestPath) {
+          continue;
+        }
+
+        process.stdout.write(`  ${name} -> ${storagePath} ... `);
+        try {
+          await uploadFile(supabase, filePath, storagePath);
+          console.log('ok');
+        } catch (e) {
+          console.log('FAIL');
+          console.error(e.message);
+          process.exit(1);
+        }
+      }
+    }
+
+    if (!shouldPublishRootManifest) {
+      return;
+    }
+
+    // Upload latest*.yml to electron/ (no version prefix) for electron-updater
+    const latestManifestPattern =
+      targetPlatform === 'mac' ? /^latest-mac\.yml$/ : /^latest-linux\.yml$/;
+    const latestYml = artifacts.filter((artifact) => latestManifestPattern.test(artifact.name));
+    for (const { path: filePath, name } of latestYml) {
+      const latestYml = readFileSync(filePath, 'utf8');
+      const normalizedLatestYml = prefixLatestYamlPaths(latestYml, version);
+
+      const manifestTargets = getManifestTargets(targetPlatform, targetArch, name);
+
+      for (const manifestFileName of manifestTargets) {
+        const storagePath = `${PREFIX}/${manifestFileName}`;
+        process.stdout.write(`  ${name} -> ${storagePath} ... `);
+        try {
+          await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
+          console.log('ok');
+        } catch (e) {
+          console.log('FAIL');
+          console.error(e.message);
+          process.exit(1);
+        }
       }
     }
   }
 
-  // Upload latest*.yml to electron/ (no version prefix) for electron-updater
-  const latestManifestPattern =
-    targetPlatform === 'mac' ? /^latest-mac\.yml$/ : /^latest-linux\.yml$/;
-  const latestYml = artifacts.filter((artifact) => latestManifestPattern.test(artifact.name));
-  for (const { path: filePath, name } of latestYml) {
-    const latestYml = readFileSync(filePath, 'utf8');
-    const normalizedLatestYml = prefixLatestYamlPaths(latestYml, version);
-
-    const manifestTargets = getManifestTargets(targetPlatform, macArch, name);
-
-    for (const manifestFileName of manifestTargets) {
-      const storagePath = `${PREFIX}/${manifestFileName}`;
-      process.stdout.write(`  ${name} -> ${storagePath} ... `);
-      try {
-        await uploadBuffer(supabase, Buffer.from(normalizedLatestYml, 'utf8'), storagePath);
-        console.log('ok');
-      } catch (e) {
-        console.log('FAIL');
-        console.error(e.message);
-        process.exit(1);
-      }
+  if (targetPlatform === 'mac' && all) {
+    for (const [index, arch] of macArchs.entries()) {
+      await buildAndUploadArch(arch, index === 0);
     }
+  } else if (targetPlatform === 'linux' && all) {
+    for (const [index, arch] of linuxArchs.entries()) {
+      await buildAndUploadArch(arch, index === 0);
+    }
+  } else {
+    const arch = targetPlatform === 'mac' ? macArchs[0] : linuxArchs[0];
+    await buildAndUploadArch(arch, true);
   }
 
   await pruneOldVersions(supabase);

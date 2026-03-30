@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.11.0] - 2026-03-30:06:36
+
+### Added
+- None.
+
+### Fixed
+- Force SSH-backed agent launches to allocate a PTY by parsing the configured SSH command, adding `-tt` only when the invocation is `ssh` (or a full path ending in `/ssh`) and lacks `-t`, and rewrapping the command with proper quoting so remote agents retain stdin-enabled terminals.
+
+### Changed
+- None.
+
+### Security
+- None.
+
 ## [3.10.0] - 2026-03-29:19:20
 
 ### Added

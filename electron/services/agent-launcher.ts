@@ -2,6 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+import { parseShellCommand } from '../../lib/ssh/shell-utils';
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
@@ -264,7 +265,19 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       .join('; ');
     const cdPart = remoteCwd ? `cd ${shellQuote(remoteCwd)} && ` : '';
     const remoteScript = `${pathSetup}; ${cdPart}${envExports}; ${contextDecode}; ${command}`;
-    const sshWrappedCommand = `${input.sshCommand!.trim()} ${shellQuote(remoteScript)}`;
+    // Force PTY allocation so the remote agent gets a working terminal for
+    // stdin.  Without -tt, SSH runs the remote command without a pseudo-terminal
+    // and interactive CLIs (claude, codex, etc.) fail with "stdin is not a terminal".
+    const sshParts = parseShellCommand(input.sshCommand!.trim());
+    const sshBin = sshParts[0] ?? 'ssh';
+    if (sshBin === 'ssh' || sshBin.endsWith('/ssh')) {
+      // Only inject if -t / -tt isn't already present
+      if (!sshParts.some(p => /^-[A-Za-z]*t/.test(p))) {
+        sshParts.splice(1, 0, '-tt');
+      }
+    }
+    const sshBase = sshParts.map(p => (p.includes(' ') ? shellQuote(p) : p)).join(' ');
+    const sshWrappedCommand = `${sshBase} ${shellQuote(remoteScript)}`;
 
     return {
       command: sshWrappedCommand,
