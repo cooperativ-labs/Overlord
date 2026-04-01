@@ -191,8 +191,8 @@ run('yarn electron:build-web', buildEnv);
 // Step 4 — Copy Next.js assets into standalone output
 // ---------------------------------------------------------------------------
 
-run('cp -r apps/web/.next/static apps/web/.next/standalone/.next/static');
-run('cp -r apps/web/public apps/web/.next/standalone/public');
+run('cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static');
+run('cp -r apps/web/public apps/web/.next/standalone/apps/web/public');
 
 // ---------------------------------------------------------------------------
 // Step 4.5 — Clean up standalone output (remove build-time-only packages)

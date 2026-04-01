@@ -16,7 +16,16 @@ function getServerPath(): string {
   const appPath = app.getAppPath();
   // When asar is used, unpacked files are in app.asar.unpacked instead of app.asar
   const unpackedPath = appPath.replace('app.asar', 'app.asar.unpacked');
-  return path.join(unpackedPath, 'apps', 'web', '.next', 'standalone', 'server.js');
+  return path.join(
+    unpackedPath,
+    'apps',
+    'web',
+    '.next',
+    'standalone',
+    'apps',
+    'web',
+    'server.js'
+  );
 }
 
 function getPortStateFilePath(): string {
