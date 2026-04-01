@@ -2824,6 +2824,118 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@overlord/desktop@workspace:apps/desktop":
+  version: 0.0.0-use.local
+  resolution: "@overlord/desktop@workspace:apps/desktop"
+  languageName: unknown
+  linkType: soft
+
+"@overlord/mobile@workspace:apps/mobile":
+  version: 0.0.0-use.local
+  resolution: "@overlord/mobile@workspace:apps/mobile"
+  languageName: unknown
+  linkType: soft
+
+"@overlord/shared@workspace:packages/shared":
+  version: 0.0.0-use.local
+  resolution: "@overlord/shared@workspace:packages/shared"
+  languageName: unknown
+  linkType: soft
+
+"@overlord/ticket-card@workspace:apps/ticket-card":
+  version: 0.0.0-use.local
+  resolution: "@overlord/ticket-card@workspace:apps/ticket-card"
+  languageName: unknown
+  linkType: soft
+
+"@overlord/web@workspace:apps/web":
+  version: 0.0.0-use.local
+  resolution: "@overlord/web@workspace:apps/web"
+  languageName: unknown
+  linkType: soft
+
+"@overlord/workspace@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@overlord/workspace@workspace:."
+  dependencies:
+    "@dnd-kit/core": "npm:^6.3.1"
+    "@dnd-kit/sortable": "npm:^10.0.0"
+    "@dnd-kit/utilities": "npm:^3.2.2"
+    "@eslint/js": "npm:^10.0.1"
+    "@google/genai": "npm:^1.46.0"
+    "@modelcontextprotocol/ext-apps": "npm:^1.2.2"
+    "@modelcontextprotocol/sdk": "npm:^1.27.1"
+    "@sentry/nextjs": "npm:^10.38.0"
+    "@serwist/turbopack": "npm:^9.5.6"
+    "@snaplet/copycat": "npm:^6.0.0"
+    "@snaplet/seed": "npm:^0.98.0"
+    "@supabase/ssr": "npm:^0.8.0"
+    "@supabase/supabase-js": "npm:^2.95.3"
+    "@tailwindcss/postcss": "npm:^4.1.18"
+    "@tailwindcss/typography": "npm:^0.5.19"
+    "@tailwindcss/vite": "npm:^4.2.2"
+    "@types/browser-image-compression": "npm:^1.0.13"
+    "@types/date-fns": "npm:^2.6.3"
+    "@types/katex": "npm:^0.16.8"
+    "@types/node": "npm:^25.2.3"
+    "@types/pg": "npm:^8.16.0"
+    "@types/react": "npm:^19.2.14"
+    "@types/react-dom": "npm:^19.2.3"
+    "@vercel/analytics": "npm:^2.0.1"
+    "@vitejs/plugin-react": "npm:^6.0.1"
+    autoprefixer: "npm:^10.4.24"
+    browser-image-compression: "npm:^2.0.2"
+    class-variance-authority: "npm:^0.7.1"
+    clsx: "npm:^2.1.1"
+    concurrently: "npm:^9.2.1"
+    date-fns: "npm:^4.1.0"
+    dotenv: "npm:^17.3.1"
+    electron: "npm:^40.6.0"
+    electron-builder: "npm:^26.8.1"
+    electron-updater: "npm:^6.8.3"
+    esbuild: "npm:^0.27.3"
+    eslint: "npm:^10.0.0"
+    eslint-config-next: "npm:^16.1.6"
+    eslint-formatter-table: "npm:^7.32.1"
+    eslint-plugin-import: "npm:^2.32.0"
+    eslint-plugin-prettier: "npm:^5.5.5"
+    eslint-plugin-react: "npm:^7.37.5"
+    eslint-plugin-react-hooks: "npm:^7.0.1"
+    eslint-plugin-simple-import-sort: "npm:^12.1.1"
+    eslint-plugin-sort-imports-es6-autofix: "npm:^0.6.0"
+    lucide-react: "npm:^0.575.0"
+    next: "npm:^16.1.6"
+    next-themes: "npm:^0.4.6"
+    pg: "npm:^8.18.0"
+    postcss: "npm:^8.5.6"
+    prettier: "npm:^3.8.1"
+    radix-ui: "npm:^1.4.3"
+    react: "npm:^19.2.4"
+    react-dom: "npm:^19.2.4"
+    react-markdown: "npm:^10.1.0"
+    react-resizable-panels: "npm:^4"
+    remark-gfm: "npm:^4.0.1"
+    resend: "npm:^6.9.2"
+    serwist: "npm:^9.5.6"
+    shadcn: "npm:^3.8.4"
+    sonner: "npm:^2.0.7"
+    sunpeak: "npm:^0.16.28"
+    tailwind: "npm:^4.0.0"
+    tailwind-merge: "npm:^3.4.0"
+    tailwindcss: "npm:^4.1.18"
+    tailwindcss-animate: "npm:^1.0.7"
+    tw-animate-css: "npm:^1.4.0"
+    typescript: "npm:^5.9.3"
+    vercel: "npm:^50.17.1"
+    vite: "npm:^8.0.1"
+    wait-on: "npm:^8.0.3"
+    zod: "npm:^4.3.6"
+  bin:
+    overlord: packages/overlord-cli/bin/ovld.mjs
+    ovld: packages/overlord-cli/bin/ovld.mjs
+  languageName: unknown
+  linkType: soft
+
 "@oxc-project/types@npm:=0.120.0":
   version: 0.120.0
   resolution: "@oxc-project/types@npm:0.120.0"
@@ -14669,82 +14781,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"overlord@workspace:.":
+"overlord-cli@workspace:packages/overlord-cli":
   version: 0.0.0-use.local
-  resolution: "overlord@workspace:."
-  dependencies:
-    "@dnd-kit/core": "npm:^6.3.1"
-    "@dnd-kit/sortable": "npm:^10.0.0"
-    "@dnd-kit/utilities": "npm:^3.2.2"
-    "@eslint/js": "npm:^10.0.1"
-    "@google/genai": "npm:^1.46.0"
-    "@modelcontextprotocol/ext-apps": "npm:^1.2.2"
-    "@modelcontextprotocol/sdk": "npm:^1.27.1"
-    "@sentry/nextjs": "npm:^10.38.0"
-    "@serwist/turbopack": "npm:^9.5.6"
-    "@snaplet/copycat": "npm:^6.0.0"
-    "@snaplet/seed": "npm:^0.98.0"
-    "@supabase/ssr": "npm:^0.8.0"
-    "@supabase/supabase-js": "npm:^2.95.3"
-    "@tailwindcss/postcss": "npm:^4.1.18"
-    "@tailwindcss/typography": "npm:^0.5.19"
-    "@tailwindcss/vite": "npm:^4.2.2"
-    "@types/browser-image-compression": "npm:^1.0.13"
-    "@types/date-fns": "npm:^2.6.3"
-    "@types/katex": "npm:^0.16.8"
-    "@types/node": "npm:^25.2.3"
-    "@types/pg": "npm:^8.16.0"
-    "@types/react": "npm:^19.2.14"
-    "@types/react-dom": "npm:^19.2.3"
-    "@vercel/analytics": "npm:^2.0.1"
-    "@vitejs/plugin-react": "npm:^6.0.1"
-    autoprefixer: "npm:^10.4.24"
-    browser-image-compression: "npm:^2.0.2"
-    class-variance-authority: "npm:^0.7.1"
-    clsx: "npm:^2.1.1"
-    concurrently: "npm:^9.2.1"
-    date-fns: "npm:^4.1.0"
-    dotenv: "npm:^17.3.1"
-    electron: "npm:^40.6.0"
-    electron-builder: "npm:^26.8.1"
-    electron-updater: "npm:^6.8.3"
-    esbuild: "npm:^0.27.3"
-    eslint: "npm:^10.0.0"
-    eslint-config-next: "npm:^16.1.6"
-    eslint-formatter-table: "npm:^7.32.1"
-    eslint-plugin-import: "npm:^2.32.0"
-    eslint-plugin-prettier: "npm:^5.5.5"
-    eslint-plugin-react: "npm:^7.37.5"
-    eslint-plugin-react-hooks: "npm:^7.0.1"
-    eslint-plugin-simple-import-sort: "npm:^12.1.1"
-    eslint-plugin-sort-imports-es6-autofix: "npm:^0.6.0"
-    lucide-react: "npm:^0.575.0"
-    next: "npm:^16.1.6"
-    next-themes: "npm:^0.4.6"
-    pg: "npm:^8.18.0"
-    postcss: "npm:^8.5.6"
-    prettier: "npm:^3.8.1"
-    radix-ui: "npm:^1.4.3"
-    react: "npm:^19.2.4"
-    react-dom: "npm:^19.2.4"
-    react-markdown: "npm:^10.1.0"
-    react-resizable-panels: "npm:^4"
-    remark-gfm: "npm:^4.0.1"
-    resend: "npm:^6.9.2"
-    serwist: "npm:^9.5.6"
-    shadcn: "npm:^3.8.4"
-    sonner: "npm:^2.0.7"
-    sunpeak: "npm:^0.16.28"
-    tailwind: "npm:^4.0.0"
-    tailwind-merge: "npm:^3.4.0"
-    tailwindcss: "npm:^4.1.18"
-    tailwindcss-animate: "npm:^1.0.7"
-    tw-animate-css: "npm:^1.4.0"
-    typescript: "npm:^5.9.3"
-    vercel: "npm:^50.17.1"
-    vite: "npm:^8.0.1"
-    wait-on: "npm:^8.0.3"
-    zod: "npm:^4.3.6"
+  resolution: "overlord-cli@workspace:packages/overlord-cli"
   bin:
     overlord: bin/ovld.mjs
     ovld: bin/ovld.mjs

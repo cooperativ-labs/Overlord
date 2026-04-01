@@ -1,4 +1,4 @@
-import { buildAppMcpProtectedResourceMetadata } from '../../../../lib/mcp/oauth-metadata';
+import { buildAppMcpProtectedResourceMetadata } from '@/lib/mcp/oauth-metadata';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',

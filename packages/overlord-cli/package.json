@@ -4,8 +4,8 @@
   "description": "Overlord CLI — launch AI agents on tickets from anywhere",
   "type": "module",
   "bin": {
-    "ovld": "bin/ovld.mjs",
-    "overlord": "bin/ovld.mjs"
+    "overlord": "bin/ovld.mjs",
+    "ovld": "bin/ovld.mjs"
   },
   "publishConfig": {
     "access": "public"
