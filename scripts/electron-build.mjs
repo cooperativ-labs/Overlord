@@ -185,7 +185,7 @@ const buildEnv = {
   NODE_ENV: 'production'
 };
 
-run('yarn workspace @overlord/web build', buildEnv);
+run('yarn electron:build-web', buildEnv);
 
 // ---------------------------------------------------------------------------
 // Step 4 — Copy Next.js assets into standalone output
