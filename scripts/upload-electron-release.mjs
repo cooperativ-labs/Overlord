@@ -93,11 +93,11 @@ function parseDotenv(content) {
 
 function loadEnv() {
   try {
-    const envPath = join(ROOT, '.env.prod');
+    const envPath = join(ROOT, 'apps', 'web', '.env.prod');
     const content = readFileSync(envPath, 'utf8');
     Object.assign(process.env, parseDotenv(content));
   } catch {
-    // .env.prod is optional if the required vars already exist in the environment.
+    // apps/web/.env.prod is optional if the required vars already exist in the environment.
   }
 }
 

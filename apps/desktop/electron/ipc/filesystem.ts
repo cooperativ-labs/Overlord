@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { parseSshCommand, shellEscape } from '../../lib/ssh/shell-utils';
+import { parseSshCommand, shellEscape } from '../../../../lib/ssh/shell-utils';
 
 const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_DEPTH = 8;

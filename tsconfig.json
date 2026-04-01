@@ -19,32 +19,38 @@
     "noFallthroughCasesInSwitch": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
-    },
+      "@/app/*": ["./apps/web/app/*"],
+      "@/components/*": ["./apps/web/components/*"],
+      "@/lib/*": ["./lib/*"],
+      "@/supabase/*": ["./supabase/*"],
+      "@/types/*": ["./types/*"],
+      "@/agent-models": ["./agent-models.json"],
+      "@/agent-models.json": ["./agent-models.json"]
+    }
   },
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    "agent-models.json",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "scripts/**/*.ts",
+    "supabase/**/*.ts",
+    "supabase/**/*.tsx",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "types/**/*.ts",
+    "types/**/*.tsx",
+    "seed.ts"
   ],
   "exclude": [
     "node_modules",
-    "electron",
-    "dist-electron",
+    "apps/desktop/dist-electron",
+    "apps/ticket-card/dist",
+    "apps/ticket-card/node_modules",
+    "apps/web/.next",
     "seed.config.ts",
-    "seed.ts",
-    "scripts/**",
-    "supabase/functions/**",
     "public/sw.js",
     "public/swe-worker*.js"
   ]

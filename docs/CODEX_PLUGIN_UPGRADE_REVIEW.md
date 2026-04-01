@@ -84,7 +84,7 @@ Recommended next step:
 
 - When an Overlord app or connector is provisioned, add `.app.json` and point the manifest's
   `"apps"` field at it
-- The existing `mcp-apps/ticket-card` app is the clearest first candidate for that mapping
+- The existing `apps/ticket-card` app is the clearest first candidate for that mapping
 
 Why it matters:
 

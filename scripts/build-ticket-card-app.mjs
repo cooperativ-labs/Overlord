@@ -1,6 +1,6 @@
 /**
  * Reads the Sunpeak-built ticket-card HTML and metadata from
- * mcp-apps/ticket-card/dist/ and generates the edge function resource file
+ * apps/ticket-card/dist/ and generates the edge function resource file
  * at supabase/functions/mcp/ui/ticket-card-resource.ts.
  *
  * Run after `yarn sunpeak:ticket-card:build`:
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 
-const distDir = path.join(repoRoot, 'mcp-apps/ticket-card/dist/ticket-card');
+const distDir = path.join(repoRoot, 'apps/ticket-card/dist/ticket-card');
 const outputFile = path.join(repoRoot, 'supabase/functions/mcp/ui/ticket-card-resource.ts');
 
 // Stable URI used by tool metadata in tools.ts — do not change.

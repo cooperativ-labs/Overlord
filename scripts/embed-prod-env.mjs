@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* global console, process */
 /**
- * Reads .env.prod and generates electron/_prod-env.generated.ts
+ * Reads apps/web/.env.prod and generates apps/desktop/electron/_prod-env.generated.ts
  * using the same Electron runtime allowlist as the production build script.
  *
  * Prefer `node scripts/electron-build.mjs` for full packaging.
@@ -38,12 +38,12 @@ function parseDotenv(content) {
   return vars;
 }
 
-const envFile = resolve(ROOT, '.env.prod');
+const envFile = resolve(ROOT, 'apps', 'web', '.env.prod');
 let envVars;
 try {
   envVars = parseDotenv(readFileSync(envFile, 'utf8'));
 } catch {
-  console.error(`[embed-prod-env] ERROR: .env.prod not found at ${envFile}`);
+  console.error(`[embed-prod-env] ERROR: apps/web/.env.prod not found at ${envFile}`);
   process.exit(1);
 }
 
@@ -62,8 +62,8 @@ ${entries}
 };
 `;
 
-const outFile = resolve(ROOT, 'electron', '_prod-env.generated.ts');
+const outFile = resolve(ROOT, 'apps', 'desktop', 'electron', '_prod-env.generated.ts');
 writeFileSync(outFile, output, 'utf8');
 console.log(
-  `[embed-prod-env] Written ${Object.keys(runtimeEnvVars).length} allowlisted vars to electron/_prod-env.generated.ts`
+  `[embed-prod-env] Written ${Object.keys(runtimeEnvVars).length} allowlisted vars to apps/desktop/electron/_prod-env.generated.ts`
 );

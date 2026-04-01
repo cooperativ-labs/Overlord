@@ -10,7 +10,9 @@ export default [
   js.configs.recommended,
   {
     ignores: [
-        '.next/**',
+        'apps/web/.next/**',
+        'apps/desktop/dist-electron/**',
+        'apps/ticket-card/dist/**',
         'node_modules/**',
         'dist/**',
         'build/**',
@@ -24,7 +26,9 @@ export default [
       parserOptions: {
         project: [
           'tsconfig.json',
-          'electron/tsconfig.json',
+          'apps/web/tsconfig.json',
+          'apps/desktop/tsconfig.json',
+          'apps/ticket-card/tsconfig.json',
           'scripts/tsconfig.json',
           'supabase/functions/tsconfig.json'
         ],

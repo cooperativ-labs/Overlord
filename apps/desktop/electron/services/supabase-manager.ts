@@ -18,7 +18,7 @@ export class SupabaseManager {
     }
 
     if (!app.isPackaged) {
-      // Dev Electron process runs from `<repo>/dist-electron/services`.
+      // Dev Electron process runs from `<repo>/apps/desktop/dist-electron/services`.
       this.projectDir = path.resolve(__dirname, '..', '..');
       return;
     }

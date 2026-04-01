@@ -3,12 +3,12 @@ productName: Overlord
 artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 directories:
   output: release
-  buildResources: electron/resources
+  buildResources: apps/desktop/electron/resources
 afterSign: scripts/notarize.cjs
 
 files:
-  - "dist-electron/**/*"
-  - ".next/standalone/**/*"
+  - "apps/desktop/dist-electron/**/*"
+  - "apps/web/.next/standalone/**/*"
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
   - "!node_modules"
@@ -18,17 +18,17 @@ mac:
     - dmg
     - zip
   category: public.app-category.developer-tools
-  icon: public/images/512.png
+  icon: apps/web/public/images/512.png
 
 linux:
   target:
     - AppImage
     - deb
   category: Development
-  icon: public/images/512.png
+  icon: apps/web/public/images/512.png
 
 asarUnpack:
-  - ".next/standalone/**/*"
+  - "apps/web/.next/standalone/**/*"
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
 

@@ -4,7 +4,7 @@ describe('ticket title helpers', () => {
   it('collapses file mentions to filenames when deriving a title', () => {
     expect(
       deriveTitleFromObjective(
-        'Update @app/(app)/tickets/(components)/BlankTicketCard.tsx to improve title generation'
+        'Update @apps/web/app/(app)/tickets/(components)/BlankTicketCard.tsx to improve title generation'
       )
     ).toBe('Update @BlankTicketCard.tsx to improve title generation');
   });

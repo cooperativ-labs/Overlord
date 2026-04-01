@@ -9,7 +9,7 @@ import { RUNTIME_ENV_ALLOWLIST } from './electron-runtime-allowlist.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
-const GENERATED_ENV_PATH = resolve(ROOT, 'electron/_prod-env.generated.ts');
+const GENERATED_ENV_PATH = resolve(ROOT, 'apps/desktop/electron/_prod-env.generated.ts');
 
 const FORBIDDEN_KEY_PATTERNS = [
   /\bSUPABASE_SECRET_KEY\b/,
@@ -41,8 +41,8 @@ if (!RUNTIME_ENV_ALLOWLIST || RUNTIME_ENV_ALLOWLIST.length === 0) {
   fail('RUNTIME_ENV_ALLOWLIST is empty or missing in scripts/electron-runtime-allowlist.mjs.');
 }
 
-if (isTracked('electron/_prod-env.generated.ts')) {
-  fail('electron/_prod-env.generated.ts must not be tracked in git.');
+if (isTracked('apps/desktop/electron/_prod-env.generated.ts')) {
+  fail('apps/desktop/electron/_prod-env.generated.ts must not be tracked in git.');
 }
 
 if (existsSync(GENERATED_ENV_PATH)) {

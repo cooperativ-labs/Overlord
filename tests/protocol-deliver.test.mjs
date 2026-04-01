@@ -881,7 +881,7 @@ test('no local agent instruction source uses file_changes as an artifact type', 
   const { readFileSync } = await import('node:fs');
 
   const filesToCheck = [
-    'electron/services/agent-bundle/templates.ts',
+    'apps/desktop/electron/services/agent-bundle/templates.ts',
     'packages/overlord-cli/bin/_cli/setup.mjs',
     'lib/overlord/ticket-prompt.ts'
   ];

@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { parseSshCommand } from '../../lib/ssh/shell-utils';
+import { parseSshCommand } from '../../../../lib/ssh/shell-utils';
 
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 

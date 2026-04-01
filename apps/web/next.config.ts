@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { withSerwist } from '@serwist/turbopack';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,6 +32,10 @@ const securityHeaders = async () => [
 export default withSerwist({
   reactStrictMode: true,
   output: 'standalone',
+  experimental: {
+    externalDir: true
+  },
+  outputFileTracingRoot: path.join(process.cwd(), '../..'),
   headers: securityHeaders,
   images: {
     remotePatterns: [
