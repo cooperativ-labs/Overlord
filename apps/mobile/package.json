@@ -1,7 +1,40 @@
 {
   "name": "@overlord/mobile",
+  "version": "1.0.0",
   "private": true,
+  "main": "expo-router/entry",
   "scripts": {
-    "type-check": "node -e \"console.log('Mobile workspace scaffolded; no app implementation yet.')\""
+    "dev": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "clean": "rm -rf ios/build && npx expo run:ios --clean",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "@react-navigation/bottom-tabs": "^7.3.9",
+    "@react-navigation/native": "^7.1.8",
+    "@supabase/supabase-js": "^2.95.3",
+    "expo": "~55.0.9",
+    "expo-constants": "~55.0.9",
+    "expo-font": "~55.0.4",
+    "expo-linking": "~55.0.4",
+    "expo-notifications": "~55.0.6",
+    "expo-router": "~5.1.11",
+    "expo-secure-store": "~55.0.3",
+    "expo-splash-screen": "~55.0.8",
+    "expo-status-bar": "~55.0.3",
+    "react": "19.2.0",
+    "react-native": "0.83.4",
+    "react-native-reanimated": "~3.18.0",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.12.0",
+    "react-native-url-polyfill": "^2.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@types/react": "^19.2.14",
+    "typescript": "^5.9.3"
   }
 }

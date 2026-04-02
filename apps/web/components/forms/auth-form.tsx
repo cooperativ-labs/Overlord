@@ -68,6 +68,7 @@ export function AuthForm({ className, mode, error: initialError, message, next }
         navigateAfterAuth(result.redirect);
       }
     } catch {
+      setFormError('Something went wrong. Please try again.');
       setSignInButtonState('error');
     }
   };
@@ -88,6 +89,7 @@ export function AuthForm({ className, mode, error: initialError, message, next }
         router.push(result.redirect);
       }
     } catch {
+      setFormError('Something went wrong. Please try again.');
       setSignUpButtonState('error');
     }
   };
@@ -105,6 +107,7 @@ export function AuthForm({ className, mode, error: initialError, message, next }
         globalThis.location.assign(result.url);
       }
     } catch {
+      setFormError('Something went wrong. Please try again.');
       setGithubButtonState('error');
     }
   };
