@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.21.0] - 2026-04-03:20:33
+
+### Added
+- Add a mobile agent/model chooser so tickets can set or update the assigned agent and model directly from the create and detail flows.
+- Add native iOS SSH key generation and on-device key installation for mobile server setup, including Secure Enclave fallback support and Tailscale-aware prompts.
+
+### Fixed
+- None.
+
+### Changed
+- Update the mobile ticket create and ticket detail screens to use the shared agent/model chooser and persist assigned-agent changes in-app.
+- Switch mobile SSH setup from the Supabase edge function to the native iOS SSH installer so the phone handles key installation directly.
+- Refresh the CLI install wrapper, desktop installer, and `doctor` output to require Node 20+ and point at the versioned standalone CLI copy.
+- Update the mobile Servers screen to refresh on focus and show the new server detail and add flows consistently.
+
+### Security
+- None.
+
+### Removed
+- Remove the `install-ssh-key` edge function in favor of the native iOS SSH installer.
+
+### Refactor
+- Split the mobile agent/model selection logic into a reusable chooser plus shared normalization helpers.
+- Consolidate the Secure Enclave SSH bridge around optional native loading and a direct public-key installation API.
+- Centralize CLI version and wrapper checks in the desktop installer and CLI entrypoint.
+
+### Documentation
+- Update the CLI README and desktop CLI settings copy to describe the Node 20+ requirement and wrapper reinstall behavior.
+
+### Chore
+- Bump the workspace and CLI package versions to 3.21.0.
+- Add a debug iOS device build script for the mobile app and adjust the mobile clean script to use Expo prebuild cleanup.
+
 ## [3.20.0] - 2026-04-03:18:30
 
 ### Added

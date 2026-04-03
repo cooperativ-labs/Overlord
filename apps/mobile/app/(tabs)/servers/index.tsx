@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -49,9 +49,11 @@ export default function ServersScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    loadServers();
-  }, [loadServers]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadServers();
+    }, [loadServers])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

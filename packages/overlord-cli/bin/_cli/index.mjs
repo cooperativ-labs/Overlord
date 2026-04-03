@@ -9,6 +9,18 @@ import { runTicketCommand } from './ticket.mjs';
 import { runTicketsCommand } from './tickets.mjs';
 import { runVersionCommand } from './version.mjs';
 
+const MIN_NODE_MAJOR = 20;
+
+function assertSupportedNodeVersion() {
+  const major = Number.parseInt(process.versions.node.split('.')[0] ?? '', 10);
+  if (Number.isNaN(major) || major < MIN_NODE_MAJOR) {
+    throw new Error(
+      `Overlord CLI requires Node.js ${MIN_NODE_MAJOR} or newer. Found ${process.version}.\n` +
+      `Update Node before running \`ovld\`. If you installed the desktop wrapper, you can also point it at a newer runtime with \`OVLD_NODE_BIN=/path/to/node\`.`
+    );
+  }
+}
+
 function printHelp(primaryCommand) {
   console.log(`Overlord CLI
 
@@ -52,6 +64,7 @@ Run a subcommand with --help for more detail.
 }
 
 export async function runCli({ primaryCommand }) {
+  assertSupportedNodeVersion();
   const [command, ...rest] = process.argv.slice(2);
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {

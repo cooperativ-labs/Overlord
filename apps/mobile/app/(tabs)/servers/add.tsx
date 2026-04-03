@@ -18,11 +18,36 @@ import { colors } from '@/lib/colors';
 import { useAuth } from '@/lib/auth-context';
 import { getSupabase } from '@/lib/supabase';
 import {
-  isSecureEnclaveAvailable,
   generateKey,
+  installPublicKey,
 } from '@/modules/secure-enclave-ssh';
 
 type Step = 'form' | 'generating' | 'install_key' | 'saving';
+
+function parseServerPort(rawPort: string): number {
+  const trimmed = rawPort.trim();
+  if (!trimmed) return 22;
+
+  const parsed = parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : NaN;
+}
+
+function isLikelyTailscaleHost(rawHost: string): boolean {
+  const host = rawHost.trim().toLowerCase();
+  if (!host) return false;
+  if (host.endsWith('.ts.net')) return true;
+
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4Match) return false;
+
+  const octets = ipv4Match.slice(1).map(value => Number.parseInt(value, 10));
+  if (octets.some(value => Number.isNaN(value) || value < 0 || value > 255)) {
+    return false;
+  }
+
+  const [first, second] = octets;
+  return first === 100 && second >= 64 && second <= 127;
+}
 
 export default function AddServerScreen() {
   const router = useRouter();
@@ -31,7 +56,7 @@ export default function AddServerScreen() {
   // Form fields
   const [label, setLabel] = useState('');
   const [host, setHost] = useState('');
-  const [port, setPort] = useState('22');
+  const [port, setPort] = useState('');
   const [username, setUsername] = useState('');
 
   // SSH key installation
@@ -39,6 +64,7 @@ export default function AddServerScreen() {
   const [publicKey, setPublicKey] = useState('');
   const [fingerprint, setFingerprint] = useState('');
   const [keyTag, setKeyTag] = useState('');
+  const [isHardwareBacked, setIsHardwareBacked] = useState(false);
   const [password, setPassword] = useState('');
   const [installing, setInstalling] = useState(false);
 
@@ -46,19 +72,10 @@ export default function AddServerScreen() {
     label.trim().length > 0 &&
     host.trim().length > 0 &&
     username.trim().length > 0 &&
-    parseInt(port, 10) > 0;
+    Number.isFinite(parseServerPort(port));
 
   async function handleGenerateKey() {
     if (!canSubmit) return;
-
-    const enclaveAvailable = isSecureEnclaveAvailable();
-    if (!enclaveAvailable) {
-      Alert.alert(
-        'Secure Enclave Unavailable',
-        'This device does not support hardware-backed key generation. SSH keys require a device with a Secure Enclave (iPhone 5s or later).'
-      );
-      return;
-    }
 
     setStep('generating');
 
@@ -70,6 +87,7 @@ export default function AddServerScreen() {
       setKeyTag(tag);
       setPublicKey(result.publicKeyOpenSSH);
       setFingerprint(result.fingerprint);
+      setIsHardwareBacked(result.isHardwareBacked);
       setStep('install_key');
     } catch (error) {
       setStep('form');
@@ -82,32 +100,26 @@ export default function AddServerScreen() {
 
   async function handleInstallKey() {
     if (!password.trim()) {
-      Alert.alert('Password Required', 'Enter your server password to install the SSH key. This password is used once and is not stored.');
+      Alert.alert(
+        'Password Required',
+        isLikelyTailscaleHost(host)
+          ? "Enter your server password, or any placeholder if this host only accepts Tailscale SSH. The value is used once and is not stored."
+          : 'Enter your server password to install the SSH key. This password is used once and is not stored.'
+      );
       return;
     }
 
     setInstalling(true);
 
     try {
-      // Call Supabase edge function to install the key on the server
-      const supabase = getSupabase();
-      const { data, error } = await supabase.functions.invoke('install-ssh-key', {
-        body: {
-          host: host.trim(),
-          port: parseInt(port, 10),
-          username: username.trim(),
-          password: password,
-          publicKey: publicKey,
-        },
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to install SSH key');
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
+      // SSH directly from the device to install the public key
+      await installPublicKey(
+        host.trim(),
+        parseServerPort(port),
+        username.trim(),
+        password,
+        publicKey
+      );
 
       // Key installed successfully — save the server
       await saveServer(true);
@@ -134,7 +146,7 @@ export default function AddServerScreen() {
 
       // Get the user's organization
       const { data: orgMember, error: orgError } = await supabase
-        .from('organization_members')
+        .from('members')
         .select('organization_id')
         .eq('user_id', user!.id)
         .limit(1)
@@ -149,13 +161,13 @@ export default function AddServerScreen() {
         organization_id: orgMember.organization_id,
         label: label.trim(),
         host: host.trim(),
-        port: parseInt(port, 10),
+        port: parseServerPort(port),
         username: username.trim(),
         ssh_public_key: publicKey || null,
         ssh_key_fingerprint: fingerprint || null,
         secure_enclave_tag: keyTag || null,
         key_installed: keyInstalled,
-        status: keyInstalled ? 'key_installed' : publicKey ? 'pending' : 'pending',
+        status: keyInstalled ? 'key_installed' : 'pending',
       });
 
       if (insertError) {
@@ -197,9 +209,9 @@ export default function AddServerScreen() {
         >
           {/* Info Banner */}
           <View style={styles.infoBanner}>
-            <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+            <Ionicons name="key-outline" size={18} color={colors.primary} />
             <Text style={styles.infoBannerText}>
-              An SSH key will be generated in your device's Secure Enclave. The private key never leaves the hardware.
+              An SSH key pair will be generated on your device. When available, the private key is stored in the Secure Enclave hardware.
             </Text>
           </View>
 
@@ -236,11 +248,14 @@ export default function AddServerScreen() {
           {/* Port */}
           <View style={styles.section}>
             <Text style={styles.label}>Port</Text>
+            <Text style={styles.helperText}>
+              Leave blank for port 22. Tailscale SSH always uses port 22.
+            </Text>
             <TextInput
               style={styles.input}
               value={port}
               onChangeText={setPort}
-              placeholder="22"
+              placeholder="22 (default)"
               placeholderTextColor={colors.mutedForeground}
               keyboardType="number-pad"
               returnKeyType="next"
@@ -314,7 +329,14 @@ export default function AddServerScreen() {
           {/* Key Generated Banner */}
           <View style={styles.successBanner}>
             <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-            <Text style={styles.successBannerText}>SSH key generated successfully</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.successBannerText}>SSH key generated successfully</Text>
+              {!isHardwareBacked && (
+                <Text style={[styles.successBannerText, { fontWeight: '400', fontSize: 12, marginTop: 2 }]}>
+                  Software-backed key (Secure Enclave not available on this device)
+                </Text>
+              )}
+            </View>
           </View>
 
           {/* Fingerprint */}
@@ -339,21 +361,40 @@ export default function AddServerScreen() {
 
           {/* Password for key installation */}
           <View style={styles.section}>
-            <Text style={styles.label}>Server Password</Text>
+            <Text style={styles.label}>
+              {isLikelyTailscaleHost(host) ? 'Password / Tailscale Fallback' : 'Server Password'}
+            </Text>
             <Text style={styles.helperText}>
-              Enter your password once to install the SSH key. The password is not stored.
+              {isLikelyTailscaleHost(host)
+                ? "If this host uses Tailscale SSH, Overlord will try Tailscale's password-compatibility mode automatically. The password is never stored."
+                : 'Enter your password once to install the SSH key. The password is not stored.'}
             </Text>
             <TextInput
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="Enter server password"
+              placeholder={
+                isLikelyTailscaleHost(host)
+                  ? 'Enter password or any placeholder'
+                  : 'Enter server password'
+              }
               placeholderTextColor={colors.mutedForeground}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
             />
           </View>
+
+          {isLikelyTailscaleHost(host) ? (
+            <View style={styles.infoBanner}>
+              <Ionicons name="git-network-outline" size={18} color={colors.primary} />
+              <Text style={styles.infoBannerText}>
+                This looks like a Tailscale host. Tailscale SSH only listens on port 22, and installing this key updates the host&apos;s regular
+                {' '}~/.ssh/authorized_keys{` `}
+                file for non-Tailscale SSH access later.
+              </Text>
+            </View>
+          ) : null}
 
           {/* Install Key Button */}
           <Pressable

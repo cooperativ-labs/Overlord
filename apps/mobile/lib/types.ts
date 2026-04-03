@@ -5,6 +5,7 @@
 
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TicketExecutionTarget = 'agent' | 'human';
+export type LaunchAgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 export type TicketEventType =
   | 'system'
   | 'question'
@@ -20,9 +21,27 @@ export type TicketEventType =
   | 'ticket_reopened';
 
 export interface AssignedAgent {
-  agent?: string;
-  model?: string;
-  thinking?: boolean;
+  agent?: LaunchAgentType;
+  model?: string | null;
+  thinking?: string | null;
+}
+
+export interface AgentModelSelection {
+  agent: LaunchAgentType;
+  model: string | null;
+  thinking: string | null;
+}
+
+export interface AgentModelRecord {
+  id: string;
+  agent_type: LaunchAgentType;
+  model_id: string;
+  display_name: string;
+  thinking_options: string[];
+  is_offered: boolean;
+  is_recommended: boolean;
+  sort_order: number;
+  updated_at: string;
 }
 
 /** Subset of feed_posts used in the feed list. */

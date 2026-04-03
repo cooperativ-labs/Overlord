@@ -12,10 +12,16 @@ import {
   View,
 } from 'react-native';
 
+import { AgentModelChooser } from '@/components/AgentModelChooser';
+import {
+  createAssignedAgent,
+  formatAssignedAgentLabel,
+  selectionFromAssignedAgent
+} from '@/lib/agent-models';
 import { colors } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { getSupabase } from '@/lib/supabase';
-import type { AssignedAgent, Objective, TicketDetail, TicketEvent } from '@/lib/types';
+import type { AgentModelSelection, TicketDetail, Objective, TicketEvent } from '@/lib/types';
 
 const eventIcons: Record<string, { name: string; color: string }> = {
   system: { name: 'settings-outline', color: colors.mutedForeground },
@@ -39,14 +45,6 @@ const objectiveStateColors: Record<string, string> = {
   complete: colors.success,
 };
 
-function formatAgentLabel(agent: AssignedAgent | null): string | null {
-  if (!agent?.agent) return null;
-  const parts = [agent.agent];
-  if (agent.model) parts.push(agent.model);
-  if (agent.thinking) parts.push('(thinking)');
-  return parts.join(' · ');
-}
-
 export default function TicketDetailScreen() {
   const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
@@ -55,6 +53,9 @@ export default function TicketDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [objectiveDraft, setObjectiveDraft] = useState('');
   const [savingObjective, setSavingObjective] = useState(false);
+  const [assignedSelection, setAssignedSelection] = useState<AgentModelSelection | null>(null);
+  const [savingAssignedAgent, setSavingAssignedAgent] = useState(false);
+  const [expandedObjectiveIds, setExpandedObjectiveIds] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
     const supabase = getSupabase();
@@ -101,13 +102,23 @@ export default function TicketDetailScreen() {
     [objectives]
   );
   const executedObjectives = useMemo(
-    () => objectives.filter(objective => objective.is_executed),
+    () =>
+      objectives
+        .filter(objective => objective.is_executed)
+        .slice()
+        .sort((left, right) => {
+          return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+        }),
     [objectives]
   );
 
   useEffect(() => {
     setObjectiveDraft(draftObjective?.objective ?? '');
   }, [draftObjective?.id, draftObjective?.objective]);
+
+  useEffect(() => {
+    setAssignedSelection(selectionFromAssignedAgent(ticket?.assigned_agent));
+  }, [ticket?.assigned_agent]);
 
   async function handleSaveObjective() {
     const trimmedObjective = objectiveDraft.trim();
@@ -167,6 +178,62 @@ export default function TicketDetailScreen() {
     }
   }
 
+  async function handleAssignedAgentChange(nextSelection: AgentModelSelection) {
+    if (!ticket || savingAssignedAgent) return;
+
+    const supabase = getSupabase();
+    const previousAssignedAgent = ticket.assigned_agent;
+    const nextAssignedAgent = createAssignedAgent(nextSelection);
+
+    setAssignedSelection(nextSelection);
+    setTicket(current =>
+      current
+        ? {
+            ...current,
+            assigned_agent: nextAssignedAgent
+          }
+        : current
+    );
+    setSavingAssignedAgent(true);
+
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ assigned_agent: nextAssignedAgent })
+        .eq('id', ticket.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { error: eventError } = await supabase.from('ticket_events').insert({
+        event_type: 'system',
+        summary: 'Assigned agent updated.',
+        ticket_id: ticket.id
+      });
+
+      if (eventError) {
+        console.error('Failed to record assigned agent update:', eventError.message);
+      }
+    } catch (error) {
+      setAssignedSelection(selectionFromAssignedAgent(previousAssignedAgent));
+      setTicket(current =>
+        current
+          ? {
+              ...current,
+              assigned_agent: previousAssignedAgent
+            }
+          : current
+      );
+      Alert.alert(
+        'Unable to update assigned agent',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      setSavingAssignedAgent(false);
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -183,7 +250,7 @@ export default function TicketDetailScreen() {
     );
   }
 
-  const agentLabel = formatAgentLabel(ticket.assigned_agent);
+  const agentLabel = formatAssignedAgentLabel(ticket.assigned_agent);
   const normalizedObjectiveDraft = objectiveDraft.trim();
   const normalizedSavedDraft = (draftObjective?.objective ?? '').trim();
   const objectiveActionLabel = draftObjective
@@ -194,6 +261,14 @@ export default function TicketDetailScreen() {
   const hasObjectiveChanges = normalizedObjectiveDraft !== normalizedSavedDraft;
   const canSaveObjective =
     !savingObjective && normalizedObjectiveDraft.length > 0 && hasObjectiveChanges;
+
+  function toggleObjectiveExpanded(objectiveId: string) {
+    setExpandedObjectiveIds(current =>
+      current.includes(objectiveId)
+        ? current.filter(id => id !== objectiveId)
+        : [...current, objectiveId]
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -243,7 +318,75 @@ export default function TicketDetailScreen() {
         )}
       </View>
 
-      {/* Draft objective */}
+      {/* Assigned agent */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Assigned Agent</Text>
+          {savingAssignedAgent ? (
+            <View style={styles.inlineStatus}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.inlineStatusText}>Saving...</Text>
+            </View>
+          ) : null}
+        </View>
+        <AgentModelChooser
+          value={assignedSelection}
+          onChange={handleAssignedAgentChange}
+          helperText="Tap the button to choose the agent and model."
+          disabled={savingAssignedAgent}
+        />
+      </View>
+
+      {/* Objective history */}
+      {executedObjectives.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Objectives</Text>
+          {executedObjectives.map((obj) => (
+            <View key={obj.id} style={styles.objectiveCard}>
+              <Pressable
+                onPress={() => toggleObjectiveExpanded(obj.id)}
+                style={({ pressed }) => [styles.objectiveCardHeader, pressed && styles.pressed]}
+              >
+                <View style={styles.objectiveHeaderLeft}>
+                  <View
+                    style={[
+                      styles.objectiveStateDot,
+                      { backgroundColor: objectiveStateColors[obj.state] ?? colors.mutedForeground },
+                    ]}
+                  />
+                  <View style={styles.objectiveHeaderTextWrap}>
+                    <Text style={styles.objectiveTitle}>{obj.title ?? 'Objective'}</Text>
+                    <View style={styles.objectiveMetaRow}>
+                      <Text style={styles.objectiveMeta}>{obj.state}</Text>
+                      {obj.agent_identifier && (
+                        <>
+                          <Text style={styles.objectiveMetaSep}>·</Text>
+                          <Text style={styles.objectiveMeta}>{obj.agent_identifier}</Text>
+                        </>
+                      )}
+                      {obj.model_identifier && (
+                        <>
+                          <Text style={styles.objectiveMetaSep}>·</Text>
+                          <Text style={styles.objectiveMeta}>{obj.model_identifier}</Text>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                </View>
+                <Ionicons
+                  name={expandedObjectiveIds.includes(obj.id) ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.mutedForeground}
+                />
+              </Pressable>
+              {expandedObjectiveIds.includes(obj.id) ? (
+                <Text style={styles.objectiveText}>{obj.objective}</Text>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      )}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Draft Objective</Text>
         <TextInput
@@ -271,44 +414,6 @@ export default function TicketDetailScreen() {
           )}
         </Pressable>
       </View>
-
-      {/* Objective history */}
-      {executedObjectives.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Objectives</Text>
-          {executedObjectives.map((obj) => (
-            <View key={obj.id} style={styles.objectiveCard}>
-              <View style={styles.objectiveHeader}>
-                <View
-                  style={[
-                    styles.objectiveStateDot,
-                    { backgroundColor: objectiveStateColors[obj.state] ?? colors.mutedForeground },
-                  ]}
-                />
-                <Text style={styles.objectiveState}>{obj.state}</Text>
-                {obj.agent_identifier && (
-                  <>
-                    <Text style={styles.objectiveMetaSep}>·</Text>
-                    <Text style={styles.objectiveMeta}>{obj.agent_identifier}</Text>
-                  </>
-                )}
-                {obj.model_identifier && (
-                  <>
-                    <Text style={styles.objectiveMetaSep}>·</Text>
-                    <Text style={styles.objectiveMeta}>{obj.model_identifier}</Text>
-                  </>
-                )}
-              </View>
-              {obj.title && (
-                <Text style={styles.objectiveTitle}>{obj.title}</Text>
-              )}
-              <Text style={styles.objectiveText} numberOfLines={4}>
-                {obj.objective}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
 
       {/* Context */}
       {ticket.context.trim() !== '' && (
@@ -454,6 +559,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 12,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  inlineStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inlineStatusText: {
+    color: colors.mutedForeground,
+    fontSize: 13,
+  },
   sectionBody: {
     color: colors.foreground,
     fontSize: 15,
@@ -498,22 +618,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  objectiveHeader: {
+  objectiveCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  objectiveHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  objectiveHeaderTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  objectiveMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    flexWrap: 'wrap',
+    gap: 0,
+    marginTop: 2,
+  },
+  pressed: {
+    opacity: 0.82,
   },
   objectiveStateDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  objectiveState: {
-    color: colors.secondaryForeground,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'capitalize',
+    marginTop: 4,
   },
   objectiveMetaSep: {
     color: colors.mutedForeground,
@@ -527,12 +663,12 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
   },
   objectiveText: {
     color: colors.secondaryForeground,
     fontSize: 14,
     lineHeight: 20,
+    marginTop: 8,
   },
   noActivity: {
     color: colors.mutedForeground,

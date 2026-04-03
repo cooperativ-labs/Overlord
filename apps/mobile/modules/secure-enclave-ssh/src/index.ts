@@ -1,9 +1,16 @@
-import { requireNativeModule, Platform } from 'expo-modules-core';
+import { Platform, requireOptionalNativeModule } from 'expo-modules-core';
 
 interface SecureEnclaveKeyResult {
   tag: string;
   publicKeyOpenSSH: string;
   fingerprint: string;
+  isHardwareBacked: boolean;
+}
+
+interface SSHInstallResult {
+  success: boolean;
+  message: string;
+  output: string;
 }
 
 interface SecureEnclaveSSHModuleType {
@@ -12,10 +19,17 @@ interface SecureEnclaveSSHModuleType {
   getPublicKey(tag: string): Promise<SecureEnclaveKeyResult | null>;
   deleteKey(tag: string): boolean;
   signData(tag: string, base64Data: string): Promise<string>;
+  installPublicKey(
+    host: string,
+    port: number,
+    username: string,
+    password: string,
+    publicKey: string
+  ): Promise<SSHInstallResult>;
 }
 
 const nativeModule: SecureEnclaveSSHModuleType | null =
-  Platform.OS === 'ios' ? requireNativeModule('SecureEnclaveSSH') : null;
+  Platform.OS === 'ios' ? requireOptionalNativeModule('SecureEnclaveSSH') : null;
 
 /**
  * Check if the Secure Enclave is available on this device.
@@ -27,15 +41,17 @@ export function isSecureEnclaveAvailable(): boolean {
 }
 
 /**
- * Generate a new ECDSA P-256 SSH key pair in the iOS Secure Enclave.
- * The private key never leaves the Secure Enclave hardware.
+ * Generate a new ECDSA P-256 SSH key pair.
+ * Uses the Secure Enclave when available, otherwise falls back to Keychain-based software keys.
  *
  * @param tag - Unique identifier for the key (e.g., "com.cooperativ.overlord.ssh.{serverId}")
- * @returns The public key in OpenSSH format and its fingerprint
+ * @returns The public key in OpenSSH format, its fingerprint, and whether the key is hardware-backed
  */
 export async function generateKey(tag: string): Promise<SecureEnclaveKeyResult> {
   if (!nativeModule) {
-    throw new Error('Secure Enclave is only available on iOS');
+    throw new Error(
+      'SSH key module is unavailable. Rebuild the iOS app so the native module is included.'
+    );
   }
   return nativeModule.generateKey(tag);
 }
@@ -48,7 +64,9 @@ export async function generateKey(tag: string): Promise<SecureEnclaveKeyResult> 
  */
 export async function getPublicKey(tag: string): Promise<SecureEnclaveKeyResult | null> {
   if (!nativeModule) {
-    throw new Error('Secure Enclave is only available on iOS');
+    throw new Error(
+      'Secure Enclave SSH is unavailable. Rebuild the iOS app so the native module is included.'
+    );
   }
   return nativeModule.getPublicKey(tag);
 }
@@ -74,9 +92,31 @@ export function deleteKey(tag: string): boolean {
  */
 export async function signData(tag: string, base64Data: string): Promise<string> {
   if (!nativeModule) {
-    throw new Error('Secure Enclave is only available on iOS');
+    throw new Error(
+      'Secure Enclave SSH is unavailable. Rebuild the iOS app so the native module is included.'
+    );
   }
   return nativeModule.signData(tag, base64Data);
 }
 
-export type { SecureEnclaveKeyResult };
+/**
+ * Install an SSH public key on a remote server via password authentication.
+ * Connects directly from the device using the native iOS SSH client wrapper, appends the key to authorized_keys,
+ * and disconnects. The password is used once and never stored.
+ */
+export async function installPublicKey(
+  host: string,
+  port: number,
+  username: string,
+  password: string,
+  publicKey: string
+): Promise<SSHInstallResult> {
+  if (!nativeModule) {
+    throw new Error(
+      'SSH module is unavailable. Rebuild the iOS app so the native module is included.'
+    );
+  }
+  return nativeModule.installPublicKey(host, port, username, password, publicKey);
+}
+
+export type { SecureEnclaveKeyResult, SSHInstallResult };

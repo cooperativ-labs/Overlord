@@ -12,29 +12,46 @@ public class SecureEnclaveSSHModule: Module {
       return SecureEnclave.isAvailable
     }
 
-    /// Generate a new ECDSA P-256 key pair in the Secure Enclave.
-    /// Returns { tag, publicKeyOpenSSH, fingerprint }
-    AsyncFunction("generateKey") { (tag: String) -> [String: String] in
+    /// Generate a new ECDSA P-256 key pair.
+    /// Uses the Secure Enclave when available, falls back to software Keychain keys.
+    /// Returns { tag, publicKeyOpenSSH, fingerprint, isHardwareBacked }
+    AsyncFunction("generateKey") { (tag: String) -> [String: Any] in
       // Remove any existing key with this tag
       Self.deleteKeyFromKeychain(tag: tag)
 
-      let accessControl = SecAccessControlCreateWithFlags(
-        kCFAllocatorDefault,
-        kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-        [.privateKeyUsage],
-        nil
-      )!
+      let useSecureEnclave = SecureEnclave.isAvailable
+      var attributes: [String: Any]
 
-      let attributes: [String: Any] = [
-        kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-        kSecAttrKeySizeInBits as String: 256,
-        kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
-        kSecPrivateKeyAttrs as String: [
-          kSecAttrIsPermanent as String: true,
-          kSecAttrApplicationTag as String: tag.data(using: .utf8)!,
-          kSecAttrAccessControl as String: accessControl,
-        ] as [String: Any]
-      ]
+      if useSecureEnclave {
+        let accessControl = SecAccessControlCreateWithFlags(
+          kCFAllocatorDefault,
+          kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+          [.privateKeyUsage],
+          nil
+        )!
+
+        attributes = [
+          kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+          kSecAttrKeySizeInBits as String: 256,
+          kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+          kSecPrivateKeyAttrs as String: [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrApplicationTag as String: tag.data(using: .utf8)!,
+            kSecAttrAccessControl as String: accessControl,
+          ] as [String: Any]
+        ]
+      } else {
+        // Software-based fallback — key stored in Keychain, not Secure Enclave
+        attributes = [
+          kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+          kSecAttrKeySizeInBits as String: 256,
+          kSecPrivateKeyAttrs as String: [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrApplicationTag as String: tag.data(using: .utf8)!,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+          ] as [String: Any]
+        ]
+      }
 
       var error: Unmanaged<CFError>?
       guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
@@ -55,12 +72,13 @@ public class SecureEnclaveSSHModule: Module {
         "tag": tag,
         "publicKeyOpenSSH": openSSHKey,
         "fingerprint": fingerprint,
+        "isHardwareBacked": useSecureEnclave,
       ]
     }
 
-    /// Get the public key for an existing Secure Enclave key by tag.
-    /// Returns { tag, publicKeyOpenSSH, fingerprint } or null if not found.
-    AsyncFunction("getPublicKey") { (tag: String) -> [String: String]? in
+    /// Get the public key for an existing key by tag.
+    /// Returns { tag, publicKeyOpenSSH, fingerprint, isHardwareBacked } or null if not found.
+    AsyncFunction("getPublicKey") { (tag: String) -> [String: Any]? in
       guard let privateKey = Self.loadKeyFromKeychain(tag: tag) else {
         return nil
       }
@@ -75,6 +93,7 @@ public class SecureEnclaveSSHModule: Module {
         "tag": tag,
         "publicKeyOpenSSH": openSSHKey,
         "fingerprint": fingerprint,
+        "isHardwareBacked": SecureEnclave.isAvailable,
       ]
     }
 
@@ -111,6 +130,53 @@ public class SecureEnclaveSSHModule: Module {
 
       return (signature as Data).base64EncodedString()
     }
+
+    /// Install a public key on a remote server via SSH password authentication.
+    /// Connects directly from the device, runs the command to append the key to authorized_keys,
+    /// then disconnects. The password is never stored.
+    AsyncFunction("installPublicKey") { (host: String, port: Int, username: String, password: String, publicKey: String) -> [String: Any] in
+      return try await withCheckedThrowingContinuation { continuation in
+        DispatchQueue.global(qos: .userInitiated).async {
+          let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+          let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+          let resolvedPort = port > 0 ? port : 22
+          let isTailscaleHost = Self.isLikelyTailscaleHost(trimmedHost)
+
+          guard !trimmedHost.isEmpty else {
+            continuation.resume(throwing: NSError(
+              domain: "SecureEnclaveSSH",
+              code: 10,
+              userInfo: [NSLocalizedDescriptionKey: "Invalid host address."]
+            ))
+            return
+          }
+
+          guard !trimmedUsername.isEmpty else {
+            continuation.resume(throwing: NSError(
+              domain: "SecureEnclaveSSH",
+              code: 11,
+              userInfo: [NSLocalizedDescriptionKey: "A username is required."]
+            ))
+            return
+          }
+
+          do {
+            let installResult = try Self.installPublicKeyViaSSH(
+              host: trimmedHost,
+              port: resolvedPort,
+              username: trimmedUsername,
+              password: password,
+              publicKey: publicKey,
+              allowTailscaleFallback: isTailscaleHost
+            )
+
+            continuation.resume(returning: installResult)
+          } catch {
+            continuation.resume(throwing: error)
+          }
+        }
+      }
+    }
   }
 
   // MARK: - Keychain Helpers
@@ -139,6 +205,197 @@ public class SecureEnclaveSSHModule: Module {
 
     let status = SecItemDelete(query as CFDictionary)
     return status == errSecSuccess || status == errSecItemNotFound
+  }
+
+  // MARK: - SSH Installation
+
+  private static func installPublicKeyViaSSH(
+    host: String,
+    port: Int,
+    username: String,
+    password: String,
+    publicKey: String,
+    allowTailscaleFallback: Bool
+  ) throws -> [String: Any] {
+    let strategies = authenticationStrategies(
+      username: username,
+      password: password,
+      allowTailscaleFallback: allowTailscaleFallback
+    )
+
+    var lastAuthenticationError: NSError?
+    var lastAuthenticationDetails: String?
+    var sawAuthenticationFailure = false
+
+    for strategy in strategies {
+      do {
+        return try OVLDSSHKeyInstaller.installPublicKey(
+          onHost: host,
+          port: port,
+          username: strategy.username,
+          password: strategy.password,
+          publicKey: publicKey,
+          authenticationMethod: strategy.method
+        )
+      } catch {
+        let nsError = error as NSError
+        let stage = nsError.userInfo["stage"] as? String
+        if stage == "authenticate" {
+          sawAuthenticationFailure = true
+          let supportedMethods = (nsError.userInfo["supportedAuthenticationMethods"] as? [String] ?? [])
+            .joined(separator: ", ")
+          let methodDetails = supportedMethods.isEmpty ? nil : "Server supports: \(supportedMethods)."
+          let strategyDetails = "\(strategy.description) failed. \(nsError.localizedDescription)"
+          lastAuthenticationDetails = [strategyDetails, methodDetails].compactMap { $0 }.joined(separator: " ")
+          lastAuthenticationError = nsError
+          continue
+        }
+
+        throw connectionError(
+          host: host,
+          port: port,
+          details: nsError.localizedDescription,
+          isTailscaleHost: allowTailscaleFallback
+        )
+      }
+    }
+
+    guard sawAuthenticationFailure else {
+      throw connectionError(
+        host: host,
+        port: port,
+        details: lastAuthenticationDetails ?? lastAuthenticationError?.localizedDescription,
+        isTailscaleHost: allowTailscaleFallback
+      )
+    }
+
+    throw authenticationError(
+      host: host,
+      port: port,
+      username: username,
+      password: password,
+      lastError: lastAuthenticationError,
+      details: lastAuthenticationDetails,
+      isTailscaleHost: allowTailscaleFallback
+    )
+  }
+
+  private static func authenticationStrategies(
+    username: String,
+    password: String,
+    allowTailscaleFallback: Bool
+  ) -> [(username: String, password: String, description: String, method: OVLDSSHAuthenticationMethod)] {
+    var strategies: [(username: String, password: String, description: String, method: OVLDSSHAuthenticationMethod)] = [
+      (
+        username: username,
+        password: password,
+        description: "Password authentication",
+        method: .password
+      ),
+      (
+        username: username,
+        password: password,
+        description: "Keyboard-interactive authentication",
+        method: .keyboardInteractive
+      ),
+    ]
+
+    if allowTailscaleFallback && !username.contains("+password") {
+      let tailscaleUsername = "\(username)+password"
+      strategies.append(
+        (
+          username: tailscaleUsername,
+          password: password.isEmpty ? "tailscale" : password,
+          description: "Tailscale password-compatibility authentication",
+          method: .password
+        )
+      )
+      strategies.append(
+        (
+          username: tailscaleUsername,
+          password: password.isEmpty ? "tailscale" : password,
+          description: "Tailscale keyboard-interactive authentication",
+          method: .keyboardInteractive
+        )
+      )
+    }
+
+    return strategies
+  }
+
+  private static func connectionError(
+    host: String,
+    port: Int,
+    details: String?,
+    isTailscaleHost: Bool
+  ) -> NSError {
+    let baseMessage = "Could not connect to \(host):\(port)."
+    let tailscaleNote = isTailscaleHost
+      ? " Tailscale SSH only uses port 22, and the phone must be connected to the same tailnet."
+      : ""
+
+    let messageParts = [
+      baseMessage,
+      details,
+      tailscaleNote.isEmpty ? "Check the host address and port." : "Check the host address, make sure Tailscale is connected on this phone, and confirm the host is reachable over the tailnet."
+    ]
+
+    return NSError(
+      domain: "SecureEnclaveSSH",
+      code: 10,
+      userInfo: [NSLocalizedDescriptionKey: messageParts.compactMap { $0 }.joined(separator: " ")]
+    )
+  }
+
+  private static func authenticationError(
+    host: String,
+    port: Int,
+    username: String,
+    password: String,
+    lastError: NSError?,
+    details: String?,
+    isTailscaleHost: Bool
+  ) -> NSError {
+    let baseMessage = isTailscaleHost
+      ? "Authentication failed for \(username)@\((host)):\(port). Overlord retried using Tailscale's password-compatibility mode."
+      : "Authentication failed. Check your username and password."
+    let tailscaleNote = isTailscaleHost
+      ? " Tailscale SSH ignores normal server passwords; this flow only works if your tailnet policy allows SSH for this user."
+      : ""
+    let fallbackHint = isTailscaleHost && password.isEmpty
+      ? " Tailscale-compatible clients can use any placeholder password."
+      : ""
+
+    let messageParts: [String?] = [
+      baseMessage,
+      details ?? lastError?.localizedDescription,
+      tailscaleNote + fallbackHint
+    ]
+
+    let message = messageParts
+      .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
+
+    return NSError(
+      domain: "SecureEnclaveSSH",
+      code: 11,
+      userInfo: [NSLocalizedDescriptionKey: message]
+    )
+  }
+
+  private static func isLikelyTailscaleHost(_ host: String) -> Bool {
+    let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if trimmedHost.hasSuffix(".ts.net") {
+      return true
+    }
+
+    let octets = trimmedHost.split(separator: ".").compactMap { Int($0) }
+    guard octets.count == 4 else {
+      return false
+    }
+
+    return octets[0] == 100 && (64...127).contains(octets[1])
   }
 
   // MARK: - SSH Key Format Conversion

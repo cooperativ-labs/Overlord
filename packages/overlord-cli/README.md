@@ -12,6 +12,8 @@ Install it globally so the `ovld` and `overlord` commands are available on your 
 npm install -g overlord-cli
 ```
 
+Use Node.js 20 or newer for every CLI install or update.
+
 ## Usage
 
 ```bash
@@ -38,7 +40,7 @@ ovld doctor
 
 ## Requirements
 
-- Node.js 24 or newer
+- Node.js 20 or newer
 - Access to an Overlord instance when using authenticated commands
 
 ## Commands

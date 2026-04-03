@@ -14,9 +14,11 @@ import {
   View,
 } from 'react-native';
 
+import { AgentModelChooser } from '@/components/AgentModelChooser';
+import { createAssignedAgent } from '@/lib/agent-models';
 import { colors } from '@/lib/colors';
 import { getSupabase } from '@/lib/supabase';
-import type { TicketPriority } from '@/lib/types';
+import type { AgentModelSelection, TicketPriority } from '@/lib/types';
 
 type Project = {
   id: string;
@@ -47,6 +49,7 @@ export default function CreateTicketScreen() {
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [assignedSelection, setAssignedSelection] = useState<AgentModelSelection | null>(null);
 
   useEffect(() => {
     async function loadProjects() {
@@ -101,6 +104,7 @@ export default function CreateTicketScreen() {
           priority,
           organization_id: selectedProject.organization_id,
           project_id: selectedProjectId,
+          assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null,
         })
         .select('id, organization_id')
         .single();
@@ -279,6 +283,17 @@ export default function CreateTicketScreen() {
               );
             })}
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Assigned Agent</Text>
+          <AgentModelChooser
+            value={assignedSelection}
+            onChange={setAssignedSelection}
+            onResolvedSelectionChange={setAssignedSelection}
+            helperText="New tickets start with your saved desktop agent/model preference, but you can override it here."
+            disabled={submitting}
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

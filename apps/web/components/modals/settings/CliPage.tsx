@@ -1249,15 +1249,14 @@ export function CliPage({ open }: { open: boolean }) {
                 installed at {cliInstallPath}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Automatically updated when the desktop app updates.
+                Managed by the desktop app. Reinstall here if the app reports that the wrapper is
+                outdated.
               </p>
               {cliUpdateAvailable && cliLatestVersion ? (
                 <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
-                  New CLI version available: v{cliLatestVersion}. Reinstall the CLI wrapper or run
-                  <code className="ml-1 rounded bg-muted px-1">
-                    npm install -g overlord-cli@latest
-                  </code>
-                  .
+                  New CLI version available: v{cliLatestVersion}. Reinstall the CLI wrapper so the
+                  installed `ovld` command points at the latest standalone CLI copy. If you manage
+                  the CLI manually outside the desktop app, update it with Node 20+.
                 </p>
               ) : null}
               {cliInstallMessage ? (

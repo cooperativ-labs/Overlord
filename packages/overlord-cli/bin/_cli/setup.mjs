@@ -32,6 +32,7 @@ const CODEX_TARGET_RULES = path.join(os.homedir(), '.codex', 'rules', 'default.r
 const CODEX_LEGACY_AGENTS = path.join(os.homedir(), '.codex', 'AGENTS.md');
 const CODEX_RULES_START = '# overlord:permissions:start';
 const CODEX_RULES_END = '# overlord:permissions:end';
+const REQUIRED_NODE_MAJOR = 20;
 
 const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
 
@@ -971,6 +972,10 @@ function doctorAgent(agent) {
   return true;
 }
 
+function currentNodeMajor() {
+  return Number.parseInt(process.versions.node.split('.')[0] ?? '', 10);
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -1033,6 +1038,16 @@ export async function runSetupCommand(args) {
 export async function runDoctorCommand() {
   console.log('Overlord agent bundle status:\n');
   let allOk = true;
+  const nodeMajor = currentNodeMajor();
+  if (Number.isNaN(nodeMajor) || nodeMajor < REQUIRED_NODE_MAJOR) {
+    console.log(
+      `  ✗ node: unsupported runtime (${process.version}; requires Node.js ${REQUIRED_NODE_MAJOR}+)`
+    );
+    allOk = false;
+  } else {
+    console.log(`  ✓ node: ${process.version}`);
+  }
+  console.log();
   for (const agent of supportedAgents) {
     if (!doctorAgent(agent)) allOk = false;
   }
@@ -1046,6 +1061,8 @@ export async function runDoctorCommand() {
   if (latestCliVersion) {
     console.log();
     console.log(`CLI update available: ${latestCliVersion}`);
-    console.log('Run `npm install -g overlord-cli@latest` to update.');
+    console.log(
+      `Update with Node.js ${REQUIRED_NODE_MAJOR}+ and reinstall the installed CLI wrapper if needed.`
+    );
   }
 }

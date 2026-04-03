@@ -2095,6 +2095,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - SecureEnclaveSSH (0.1.0):
+    - ExpoModulesCore
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -2190,6 +2192,7 @@ DEPENDENCIES:
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
+  - SecureEnclaveSSH (from `../modules/secure-enclave-ssh/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 EXTERNAL SOURCES:
@@ -2376,6 +2379,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-reanimated"
   RNScreens:
     :path: "../node_modules/react-native-screens"
+  SecureEnclaveSSH:
+    :path: "../modules/secure-enclave-ssh/ios"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -2471,6 +2476,7 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: f5e7bd03378745362370df30eb19f644de428948
   RNReanimated: 171d7a70692998b17cea51918b0104fbe94a3da7
   RNScreens: bd2d42698ceb9fffa8d89210488dc5c5bdf5a651
+  SecureEnclaveSSH: a37070ee7867c8030b269e2060acc4d4888e33b4
   Yoga: acd565934addf7423687593ec490bd4491b2a802
 
 PODFILE CHECKSUM: 186ac21da61f40271e65631378448e879639f1b1
