@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.19.0] - 2026-04-03:17:58
+
+### Added
+- Add an admin model offerings panel that lets admins toggle which synced agent models appear in the app.
+
+### Fixed
+- None.
+
+### Changed
+- Update the public agent model selector and supporting actions to honor the new `is_offered` flag.
+- Load admin agent models alongside access requests and feedback so the admin page can manage model visibility in one place.
+
+### Security
+- None.
+
+### Removed
+- None.
+
+### Deprecated
+- None.
+
+### Performance
+- None.
+
+### Refactor
+- Simplify agent model catalog helpers into a single offered-model filter and remove the catalog override path.
+
+### Test
+- Add coverage for offered-model filtering and the Electron release retention helpers.
+
+### Documentation
+- None.
+
+### Chore
+- Bump workspace and CLI versions to 3.19.0.
+- Tighten CLI publish and Electron release tooling for the standalone package and the macOS arm64 upload flow.
+
 ## [3.18.0] - 2026-04-03:15:07
 
 ### Added

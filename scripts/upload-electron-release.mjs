@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 /* global Buffer, console, process */
 /**
- * Build and upload the full Electron desktop release matrix.
+ * Build and upload the macOS ARM Electron desktop release.
  *
- * Fixed targets:
+ * Fixed target:
  *   - macOS arm64
- *   - macOS x64
- *   - Linux x64
- *   - Linux arm64
  *
  * This script bumps the patch version, syncs the CLI package version, builds
- * each target, uploads the artifacts to app-downloads/electron/<version>/,
- * and publishes the root update manifests once per platform.
+ * the Apple Silicon macOS target, uploads the artifacts to
+ * app-downloads/electron/<version>/, and publishes the root update manifest.
  */
 
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -26,12 +23,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const BUCKET = 'app-downloads';
 const PREFIX = 'electron';
-const RELEASE_TARGETS = [
-  { platform: 'mac', arch: 'arm64', publishRootManifest: true },
-  { platform: 'mac', arch: 'x64', publishRootManifest: false },
-  { platform: 'linux', arch: 'x64', publishRootManifest: true },
-  { platform: 'linux', arch: 'arm64', publishRootManifest: false }
-];
+const RETAIN_VERSION_COUNT = 3;
+const RELEASE_TARGETS = [{ platform: 'mac', arch: 'arm64', publishRootManifest: true }];
 
 const ARTIFACT_PATTERNS = {
   mac: {
@@ -324,24 +317,18 @@ async function pruneOldVersions(supabase) {
   const rootPath = PREFIX;
   const entries = await listStorageEntries(supabase, rootPath);
 
-  const versionDirs = entries
-    .filter(isDirectoryEntry)
-    .map((entry) => entry.name)
-    .filter((name) => semver.valid(name));
+  const versionDirs = getStoredVersions(entries);
 
   if (versionDirs.length === 0) {
     console.log(`[upload] No existing versions found in ${BUCKET}/${rootPath}/`);
     return;
   }
 
-  const sortedVersions = versionDirs.sort(semver.rcompare);
+  const { sortedVersions, versionsToKeep, versionsToDelete } = getVersionRetentionPlan(versionDirs);
   console.log(`[upload] All versions: ${sortedVersions.join(', ')}`);
 
-  const versionsToKeep = sortedVersions.slice(0, 3);
-  const versionsToDelete = sortedVersions.slice(3);
-
   if (versionsToDelete.length === 0) {
-    console.log('[upload] No old versions to prune.');
+    console.log(`[upload] No old versions to prune. Keeping newest ${RETAIN_VERSION_COUNT}.`);
     return;
   }
 
@@ -360,6 +347,22 @@ async function pruneOldVersions(supabase) {
 
 function isDirectoryEntry(entry) {
   return entry?.id == null || entry?.metadata == null;
+}
+
+function getStoredVersions(entries) {
+  return entries
+    .filter(isDirectoryEntry)
+    .map((entry) => entry.name)
+    .filter((name) => semver.valid(name));
+}
+
+function getVersionRetentionPlan(versionDirs, retainCount = RETAIN_VERSION_COUNT) {
+  const sortedVersions = [...versionDirs].sort(semver.rcompare);
+  return {
+    sortedVersions,
+    versionsToKeep: sortedVersions.slice(0, retainCount),
+    versionsToDelete: sortedVersions.slice(retainCount)
+  };
 }
 
 async function listStorageEntries(supabase, path) {
@@ -472,7 +475,18 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+export {
+  RETAIN_VERSION_COUNT,
+  getStoredVersions,
+  getVersionRetentionPlan,
+  isDirectoryEntry,
+  parseBumpMode,
+  prefixLatestYamlPaths
+};

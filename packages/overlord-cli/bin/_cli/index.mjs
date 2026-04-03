@@ -3,7 +3,6 @@
 import { runAttachCommand } from './attach.mjs';
 import { runAuthCommand } from './auth.mjs';
 import { runLauncherCommand } from './launcher.mjs';
-import { runCreateCommand, runPromptCommand } from './new-ticket.mjs';
 import { runProtocolCommand } from './protocol.mjs';
 import { runDoctorCommand, runSetupCommand } from './setup.mjs';
 import { runTicketCommand } from './ticket.mjs';
@@ -67,11 +66,13 @@ export async function runCli({ primaryCommand }) {
   }
 
   if (command === 'create') {
+    const { runCreateCommand } = await import('./new-ticket.mjs');
     await runCreateCommand(rest);
     return;
   }
 
   if (command === 'prompt') {
+    const { runPromptCommand } = await import('./new-ticket.mjs');
     await runPromptCommand(rest);
     return;
   }

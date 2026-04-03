@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import readline from 'node:readline/promises';
+import readline from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
@@ -90,6 +90,19 @@ async function promptForSelection({ items, label, prompt, renderItem }) {
   }
 
   const rl = readline.createInterface({ input, output });
+  const question = promptText =>
+    new Promise((resolve, reject) => {
+      const handleError = error => {
+        rl.off('error', handleError);
+        reject(error);
+      };
+
+      rl.once('error', handleError);
+      rl.question(promptText, answer => {
+        rl.off('error', handleError);
+        resolve(answer);
+      });
+    });
 
   try {
     while (true) {
@@ -98,7 +111,7 @@ async function promptForSelection({ items, label, prompt, renderItem }) {
         output.write(`  ${index + 1}. ${renderItem(item, index)}\n`);
       });
 
-      const answer = await rl.question(`\n${prompt} `);
+      const answer = await question(`\n${prompt} `);
       const selectedIndex = parseNumberedSelection(answer, items.length);
       if (selectedIndex !== null) {
         return items[selectedIndex];

@@ -1,0 +1,2 @@
+# Published files are controlled by package.json "files".
+# This file exists to prevent npm's .gitignore fallback warning.

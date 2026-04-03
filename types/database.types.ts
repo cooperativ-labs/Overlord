@@ -34,6 +34,7 @@ export type Database = {
           capabilities: Json | null;
           display_name: string;
           id: string;
+          is_offered: boolean;
           is_recommended: boolean | null;
           model_id: string;
           sort_order: number | null;
@@ -45,6 +46,7 @@ export type Database = {
           capabilities?: Json | null;
           display_name: string;
           id?: string;
+          is_offered?: boolean;
           is_recommended?: boolean | null;
           model_id: string;
           sort_order?: number | null;
@@ -56,6 +58,7 @@ export type Database = {
           capabilities?: Json | null;
           display_name?: string;
           id?: string;
+          is_offered?: boolean;
           is_recommended?: boolean | null;
           model_id?: string;
           sort_order?: number | null;

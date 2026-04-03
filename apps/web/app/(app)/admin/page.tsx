@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 
+import { AgentModelOfferingsPanel } from '@/components/features/admin/AgentModelOfferingsPanel';
+import { getAdminAgentModelsAction } from '@/lib/actions/admin-agent-models';
 import { ADMIN_EMAIL, isAdminEmail } from '@/lib/auth/admin';
 import { createClient } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -30,12 +32,14 @@ function formatDateTime(value: string): string {
 async function loadAdminData(): Promise<{
   accessRequests: AccessRequestRow[];
   feedbackItems: FeedbackRow[];
+  agentModels: Awaited<ReturnType<typeof getAdminAgentModelsAction>>;
 }> {
   const service = createServiceRoleClient();
 
   const [
     { data: accessRequests, error: accessError },
-    { data: feedbackItems, error: feedbackError }
+    { data: feedbackItems, error: feedbackError },
+    agentModels
   ] = await Promise.all([
     service
       .from('early_access_requests')
@@ -44,7 +48,8 @@ async function loadAdminData(): Promise<{
     service
       .from('feedback')
       .select('id, description, screenshot_paths, user_id, created_at')
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }),
+    getAdminAgentModelsAction()
   ]);
 
   if (accessError) {
@@ -80,6 +85,7 @@ async function loadAdminData(): Promise<{
   );
 
   return {
+    agentModels,
     accessRequests: accessRequests ?? [],
     feedbackItems: feedbackWithEmails
   };
@@ -107,7 +113,7 @@ export default async function AdminPage() {
     redirect('/');
   }
 
-  const { accessRequests, feedbackItems } = await loadAdminData();
+  const { accessRequests, feedbackItems, agentModels } = await loadAdminData();
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-slate-50">
@@ -122,6 +128,8 @@ export default async function AdminPage() {
             product feedback in one place.
           </p>
         </section>
+
+        <AgentModelOfferingsPanel initialModels={agentModels} />
 
         <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">

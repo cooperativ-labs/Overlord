@@ -4,7 +4,6 @@ import { Check, Info } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import agentModelsCatalog from '@/agent-models.json';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   getAllAgentConfigsAction,
@@ -39,47 +38,7 @@ const DEFAULT_SELECTION: AgentModelSelection = {
   model: null,
   thinking: null
 };
-
-type AgentModelsCatalogOverride = {
-  agents?: Partial<
-    Record<string, Array<{ id: string; label: string; thinkingLevels: string[] }> | null>
-  >;
-};
-
-function getCatalogAgentValues(): AgentTypeValue[] {
-  const overrides = (agentModelsCatalog as AgentModelsCatalogOverride).agents;
-  if (!overrides) return [...LAUNCH_AGENT_VALUES];
-
-  const configuredAgents = Object.keys(overrides).filter((agent): agent is AgentTypeValue =>
-    LAUNCH_AGENT_VALUES.includes(agent as AgentTypeValue)
-  );
-
-  return configuredAgents.length > 0 ? configuredAgents : [...LAUNCH_AGENT_VALUES];
-}
-
-function buildOptimisticModels(): AgentModel[] {
-  const overrides = (agentModelsCatalog as AgentModelsCatalogOverride).agents ?? {};
-  const updatedAt = new Date(0).toISOString();
-
-  return Object.entries(overrides).flatMap(([agentType, entries]) => {
-    if (!Array.isArray(entries)) return [];
-
-    return entries.map((entry, index) => ({
-      id: `${agentType}:${entry.id}`,
-      agent_type: agentType,
-      model_id: entry.id,
-      display_name: entry.label,
-      thinking_options: entry.thinkingLevels,
-      capabilities: { source: 'agent-models.json', optimistic: true },
-      is_recommended: false,
-      sort_order: index,
-      updated_at: updatedAt
-    }));
-  });
-}
-
-const OPTIMISTIC_MODELS = buildOptimisticModels();
-const CATALOG_AGENT_VALUES = getCatalogAgentValues();
+const AGENT_SELECTOR_VALUES = [...LAUNCH_AGENT_VALUES];
 
 let cachedResolvedModels: AgentModel[] | null = null;
 let cachedConfigs: Record<string, AgentConfig> | null = null;
@@ -88,9 +47,7 @@ let cachedSelection: AgentModelSelection | null = null;
 
 /** Returns the agent model list, using module-level cache to avoid duplicate fetches. */
 export function useAgentModels(): { models: AgentModel[]; loading: boolean } {
-  const [models, setModels] = useState<AgentModel[]>(
-    () => cachedResolvedModels ?? OPTIMISTIC_MODELS
-  );
+  const [models, setModels] = useState<AgentModel[]>(() => cachedResolvedModels ?? []);
   const [loading, setLoading] = useState(() => cachedResolvedModels === null);
 
   useEffect(() => {
@@ -221,7 +178,7 @@ export function AgentModelSelector({
         <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Agent
         </p>
-        {CATALOG_AGENT_VALUES.map(agentValue => {
+        {AGENT_SELECTOR_VALUES.map(agentValue => {
           const agent = AGENT_TYPES.find(a => a.value === agentValue)!;
           const isSelected = value.agent === agentValue;
           return (

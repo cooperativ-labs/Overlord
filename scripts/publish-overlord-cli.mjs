@@ -26,6 +26,8 @@ if (!existsSync(README_PATH)) {
 }
 
 run('node', ['scripts/sync-cli-package.mjs']);
-run('npm', ['publish', '--access', 'public'], { cwd: CLI_PACKAGE_ROOT });
+run('npm', ['publish', '--access', 'public', '--workspaces=false'], {
+  cwd: CLI_PACKAGE_ROOT
+});
 
 console.log('[cli:publish] Published overlord-cli to npm.');
