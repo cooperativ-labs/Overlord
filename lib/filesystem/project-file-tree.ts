@@ -1,10 +1,14 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 const DEFAULT_MAX_FILES = 2000;
 const DEFAULT_MAX_DEPTH = 8;
 const DEFAULT_MAX_ENTRIES_PER_DIRECTORY = 5000;
+const DEFAULT_GIT_TIMEOUT_MS = 15_000;
+const execFileAsync = promisify(execFile);
 
 const IGNORED_DIRECTORY_NAMES = new Set([
   '.git',
@@ -37,6 +41,76 @@ type FileTreeOptions = {
   maxFiles?: number;
 };
 
+async function runGitCommand(
+  cwd: string,
+  args: string[],
+  options: { allowFailure?: boolean } = {}
+): Promise<{ ok: boolean; output: string }> {
+  try {
+    const { stdout } = await execFileAsync('git', args, {
+      cwd,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: DEFAULT_GIT_TIMEOUT_MS
+    });
+    return { ok: true, output: stdout };
+  } catch (error) {
+    if (options.allowFailure) {
+      const output =
+        error instanceof Error && 'stdout' in error && typeof error.stdout === 'string'
+          ? error.stdout
+          : '';
+      return { ok: false, output };
+    }
+    throw error;
+  }
+}
+
+async function listGitProjectFiles(
+  rootDirectory: string,
+  maxFiles: number
+): Promise<{ files: string[]; truncated: boolean } | null> {
+  const topLevelResult = await runGitCommand(rootDirectory, ['rev-parse', '--show-toplevel'], {
+    allowFailure: true
+  });
+  const repoRoot = topLevelResult.output.trim();
+  if (!topLevelResult.ok || !repoRoot) {
+    return null;
+  }
+
+  const relativeRoot = path.relative(repoRoot, rootDirectory);
+  const normalizedRelativeRoot =
+    relativeRoot && relativeRoot !== '.' ? toPosixPath(relativeRoot) : null;
+  const gitArgs = ['-C', repoRoot, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'];
+
+  if (normalizedRelativeRoot) {
+    gitArgs.push('--', normalizedRelativeRoot);
+  }
+
+  const filesResult = await runGitCommand(repoRoot, gitArgs, { allowFailure: true });
+  if (!filesResult.ok) {
+    return null;
+  }
+
+  let files = filesResult.output
+    .split('\0')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => {
+      const absolutePath = path.join(repoRoot, entry);
+      return toPosixPath(path.relative(rootDirectory, absolutePath));
+    })
+    .filter(entry => entry.length > 0 && !entry.startsWith('../') && entry !== '..');
+
+  files.sort((left, right) => left.localeCompare(right));
+
+  const truncated = files.length > maxFiles;
+  if (truncated) {
+    files = files.slice(0, maxFiles);
+  }
+
+  return { files, truncated };
+}
+
 export async function listProjectFiles(
   rootDirectory: string,
   options: FileTreeOptions = {}
@@ -45,6 +119,11 @@ export async function listProjectFiles(
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
   const maxEntriesPerDirectory =
     options.maxEntriesPerDirectory ?? DEFAULT_MAX_ENTRIES_PER_DIRECTORY;
+  const gitFiles = await listGitProjectFiles(rootDirectory, maxFiles);
+  if (gitFiles) {
+    return gitFiles;
+  }
+
   const files: string[] = [];
   let truncated = false;
 

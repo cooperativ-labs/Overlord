@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.20.0] - 2026-04-03:18:30
+
+### Added
+- Add a mobile Servers area for listing, creating, and inspecting remote SSH connections.
+- Add Secure Enclave-backed SSH key generation on iOS, plus the companion edge function that installs the public key on the target server.
+
+### Fixed
+- None.
+
+### Changed
+- Update mobile tab routing and server detail layouts so the Servers section behaves like a first-class workspace screen.
+- Switch project file-tree loading to Git-aware discovery for both local and remote workspaces so tracked files, hidden tracked files, and nested repo files resolve more reliably.
+- Extend the database schema and mobile types to store server connection state, fingerprints, and Secure Enclave metadata.
+
+### Security
+- None.
+
+### Refactor
+- Centralize Git-backed file-tree enumeration in the shared filesystem helpers and reuse the same fallback behavior on the desktop IPC side.
+- Split the mobile SSH server flow into dedicated list, add, and detail screens with a native Secure Enclave module wrapper.
+
+### Test
+- Add filesystem coverage for Git-backed project file-tree discovery and path scoping inside repositories.
+
+### Documentation
+- None.
+
+### Chore
+- Bump the workspace and CLI package versions to 3.20.0.
+
 ## [3.19.0] - 2026-04-03:17:58
 
 ### Added

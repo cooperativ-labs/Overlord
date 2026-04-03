@@ -37,9 +37,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="servers/index"
+        name="servers"
         options={{
           title: 'Servers',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="server-outline" size={size} color={color} />
           ),

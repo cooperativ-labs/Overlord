@@ -469,6 +469,46 @@ async function listProjectFiles(
   options?: { maxDepth?: number; maxEntriesPerDirectory?: number; maxFiles?: number }
 ): Promise<{ files: string[]; truncated: boolean }> {
   const maxFiles = options?.maxFiles ?? DEFAULT_MAX_FILES;
+  const repoRootResult = await runGitCommand(rootDirectory, ['rev-parse', '--show-toplevel'], {
+    allowFailure: true
+  });
+  const repoRoot = repoRootResult.output.trim();
+  if (repoRootResult.ok && repoRoot) {
+    const relativeRoot = path.relative(repoRoot, rootDirectory);
+    const normalizedRelativeRoot =
+      relativeRoot && relativeRoot !== '.' ? toPosixPath(relativeRoot) : null;
+    const repoAwareArgs = [
+      '-C',
+      repoRoot,
+      'ls-files',
+      '-z',
+      '--cached',
+      '--others',
+      '--exclude-standard'
+    ];
+    if (normalizedRelativeRoot) {
+      repoAwareArgs.push('--', normalizedRelativeRoot);
+    }
+
+    const repoAwareResult = await runGitCommand(repoRoot, repoAwareArgs, { allowFailure: true });
+    if (repoAwareResult.ok) {
+      let files = repoAwareResult.output
+        .split('\0')
+        .map(entry => entry.trim())
+        .filter(Boolean)
+        .map(entry => toPosixPath(path.relative(rootDirectory, path.join(repoRoot, entry))))
+        .filter(entry => entry.length > 0 && !entry.startsWith('../') && entry !== '..')
+        .sort((left, right) => left.localeCompare(right));
+
+      const truncated = files.length > maxFiles;
+      if (truncated) {
+        files = files.slice(0, maxFiles);
+      }
+
+      return { files, truncated };
+    }
+  }
+
   const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
   const maxEntriesPerDirectory =
     options?.maxEntriesPerDirectory ?? DEFAULT_MAX_ENTRIES_PER_DIRECTORY;
@@ -536,6 +576,34 @@ async function listRemoteProjectFiles(
   const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
   const sshParts = parseSshCommand(sshCommand);
   const [sshBin, ...sshArgs] = sshParts;
+
+  const gitCmd = [
+    `cd ${shellEscape(remoteDirectory)}`,
+    `git rev-parse --show-toplevel >/dev/null 2>&1`,
+    `git ls-files -z --cached --others --exclude-standard -- .`
+  ].join(' && ');
+
+  try {
+    const { stdout } = await execFileAsync(sshBin ?? 'ssh', [...sshArgs, gitCmd], {
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: DEFAULT_SSH_FILE_TIMEOUT_MS
+    });
+
+    let files = stdout
+      .split('\0')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
+
+    const truncated = files.length > maxFiles;
+    if (truncated) {
+      files = files.slice(0, maxFiles);
+    }
+
+    return { files, truncated };
+  } catch {
+    // Fall back to the generic filesystem walker for non-git directories or older shells.
+  }
 
   const ignoredDirs = [...IGNORED_DIRECTORY_NAMES].map(d => `-name ${shellEscape(d)}`).join(' -o ');
   const findCmd = [

@@ -883,6 +883,68 @@ export type Database = {
           }
         ];
       };
+      servers: {
+        Row: {
+          created_at: string;
+          host: string;
+          id: string;
+          key_installed: boolean;
+          label: string;
+          last_connected_at: string | null;
+          organization_id: number;
+          port: number;
+          secure_enclave_tag: string | null;
+          ssh_key_fingerprint: string | null;
+          ssh_public_key: string | null;
+          status: string;
+          updated_at: string;
+          user_id: string;
+          username: string;
+        };
+        Insert: {
+          created_at?: string;
+          host: string;
+          id?: string;
+          key_installed?: boolean;
+          label: string;
+          last_connected_at?: string | null;
+          organization_id: number;
+          port?: number;
+          secure_enclave_tag?: string | null;
+          ssh_key_fingerprint?: string | null;
+          ssh_public_key?: string | null;
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+          username: string;
+        };
+        Update: {
+          created_at?: string;
+          host?: string;
+          id?: string;
+          key_installed?: boolean;
+          label?: string;
+          last_connected_at?: string | null;
+          organization_id?: number;
+          port?: number;
+          secure_enclave_tag?: string | null;
+          ssh_key_fingerprint?: string | null;
+          ssh_public_key?: string | null;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+          username?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'servers_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       shared_state: {
         Row: {
           created_at: string;

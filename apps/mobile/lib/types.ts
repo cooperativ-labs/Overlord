@@ -113,3 +113,25 @@ export interface TicketEvent {
   is_blocking: boolean;
   created_at: string;
 }
+
+/** SSH server connection status. */
+export type ServerStatus = 'pending' | 'connected' | 'error' | 'key_installed';
+
+/** SSH server connection record. */
+export interface Server {
+  id: string;
+  user_id: string;
+  organization_id: number;
+  label: string;
+  host: string;
+  port: number;
+  username: string;
+  ssh_public_key: string | null;
+  ssh_key_fingerprint: string | null;
+  secure_enclave_tag: string | null;
+  key_installed: boolean;
+  last_connected_at: string | null;
+  status: ServerStatus;
+  created_at: string;
+  updated_at: string;
+}
