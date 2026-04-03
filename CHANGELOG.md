@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.18.0] - 2026-04-03:15:07
+
+### Added
+- Add a mobile quick-create ticket flow with a modal editor, project picker, and priority selection.
+- Add mobile ticket-detail drafting so users can create or update the next objective and log the change in ticket history.
+- Add richer mobile feed cards with expandable details, realtime inserts, and an in-execution summary for active tickets.
+
+### Fixed
+- Keep the desktop app pointed at the correct standalone `server.js` path after packaging.
+- Redirect users into the mobile feed after successful sign-in so authentication completes in-app.
+
+### Changed
+- Refresh the mobile tickets tab with realtime, foreground, and polling updates, plus a header action that opens ticket creation.
+- Update the mobile feed and ticket detail screens to surface richer post metadata, objective history, and linked ticket context.
+- Limit the web agent model selector to agents present in the configured catalog.
+- Align the workspace scripts and CLI/package metadata with the current mobile and packaging layout.
+
+### Security
+- None.
+
+### Refactor
+- Extract mobile realtime and executing-ticket loading into reusable hooks and a shared execution section component.
+- Simplify the Electron standalone server path construction and clean up Next.js config imports.
+
+### Test
+- Expand file-change helper coverage for wrapped bullet-style file paths.
+
+### Documentation
+- Update the CLI README to require Node 24 or newer.
+
+### Chore
+- Bump the workspace and CLI package versions to 3.18.0.
+- Add mobile iOS device and production build scripts at the workspace level.
+
 ## [3.14.0] - 2026-03-30:09:29
 
 ### Fixed

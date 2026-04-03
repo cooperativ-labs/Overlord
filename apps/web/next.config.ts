@@ -1,6 +1,5 @@
-import path from 'node:path';
-
 import { withSerwist } from '@serwist/turbopack';
+import path from 'node:path';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 if (!supabaseUrl) {

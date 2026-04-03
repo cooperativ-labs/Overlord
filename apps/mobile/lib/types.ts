@@ -34,6 +34,17 @@ export interface FeedPost {
   agent_type: string | null;
   tags: string[];
   files_touched: string[];
+  human_actions: string[];
+  tradeoffs: Array<{
+    decision: string;
+    alternatives_considered: string;
+    rationale: string;
+  }>;
+  tickets_created: Array<{
+    id: string;
+    sequence: number;
+    title: string;
+  }>;
   ticket_id: string;
   created_at: string;
 }
@@ -73,11 +84,24 @@ export interface TicketDetail {
 export interface Objective {
   id: string;
   objective: string;
+  is_executed: boolean;
   title: string | null;
   state: string;
   agent_identifier: string | null;
   model_identifier: string | null;
   created_at: string;
+}
+
+/** A ticket currently being executed by an agent. */
+export interface ExecutingFeedTicket {
+  id: string;
+  project_id: string;
+  title: string | null;
+  ticket_sequence: number | null;
+  project_name: string;
+  project_color: string;
+  running_agent: string;
+  attached_at: string | null;
 }
 
 /** Ticket event in the activity timeline. */

@@ -86,7 +86,9 @@ describe('file change helpers', () => {
 
   it('extracts file path from bulleted line with trailing description', () => {
     expect(
-      parseFileChanges('- apps/web/components/features/FileChangesArtifact.tsx updated rendering logic')
+      parseFileChanges(
+        '- apps/web/components/features/FileChangesArtifact.tsx updated rendering logic'
+      )
     ).toEqual([
       {
         label: null,

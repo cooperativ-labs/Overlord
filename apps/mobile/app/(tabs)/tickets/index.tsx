@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Stack, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -51,6 +52,10 @@ export default function TicketsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const handleCreateTicket = useCallback(() => {
+    router.push('/(tabs)/tickets/create' as never);
+  }, [router]);
+
   const fetchTickets = async () => {
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -73,6 +78,38 @@ export default function TicketsScreen() {
     fetchTickets().finally(() => setLoading(false));
   }, []);
 
+  // Realtime subscription for ticket changes
+  useEffect(() => {
+    const supabase = getSupabase();
+
+    const channel = supabase
+      .channel('tickets-list-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tickets' },
+        () => void fetchTickets()
+      )
+      .subscribe();
+
+    // Poll every 20 seconds as fallback
+    const pollId = setInterval(() => {
+      void fetchTickets();
+    }, 20_000);
+
+    // Refresh when app comes to foreground
+    const appStateSubscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        void fetchTickets();
+      }
+    });
+
+    return () => {
+      clearInterval(pollId);
+      appStateSubscription.remove();
+      void supabase.removeChannel(channel);
+    };
+  }, []);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchTickets();
@@ -89,6 +126,15 @@ export default function TicketsScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable onPress={handleCreateTicket} hitSlop={8}>
+              <Ionicons name="add-circle" size={28} color={colors.primary} />
+            </Pressable>
+          ),
+        }}
+      />
       <FlatList
         data={tickets}
         keyExtractor={(item) => item.id}

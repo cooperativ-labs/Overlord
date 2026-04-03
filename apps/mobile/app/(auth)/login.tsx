@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,6 +16,7 @@ import { colors } from '@/lib/colors';
 import { useAuth } from '@/lib/auth-context';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,6 +31,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await signIn(email, password);
+      router.replace('/(tabs)/feed');
     } catch (error) {
       Alert.alert('Sign In Failed', error instanceof Error ? error.message : 'An error occurred');
     } finally {

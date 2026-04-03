@@ -1,6 +1,6 @@
 {
   "name": "overlord-cli",
-  "version": "3.17.0",
+  "version": "3.18.0",
   "description": "Overlord CLI — launch AI agents on tickets from anywhere",
   "type": "module",
   "bin": {
@@ -15,7 +15,7 @@
     "plugins/"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "keywords": [
     "overlord",

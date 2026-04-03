@@ -1,9 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { colors } from '@/lib/colors';
+import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { getSupabase } from '@/lib/supabase';
 import type { AssignedAgent, Objective, TicketDetail, TicketEvent } from '@/lib/types';
 
@@ -43,42 +53,119 @@ export default function TicketDetailScreen() {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [events, setEvents] = useState<TicketEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [objectiveDraft, setObjectiveDraft] = useState('');
+  const [savingObjective, setSavingObjective] = useState(false);
+
+  const loadData = useCallback(async () => {
+    const supabase = getSupabase();
+    const [ticketRes, objectivesRes, eventsRes] = await Promise.all([
+      supabase
+        .from('tickets')
+        .select('id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id')
+        .eq('id', ticketId)
+        .single(),
+      supabase
+        .from('objectives')
+        .select(
+          'id, objective, is_executed, title, state, agent_identifier, model_identifier, created_at'
+        )
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('ticket_events')
+        .select('id, event_type, summary, phase, is_blocking, created_at')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: false })
+        .limit(30),
+    ]);
+
+    if (ticketRes.data) setTicket(ticketRes.data as unknown as TicketDetail);
+    if (objectivesRes.data) setObjectives(objectivesRes.data);
+    if (eventsRes.data) setEvents(eventsRes.data as TicketEvent[]);
+    if (ticketRes.error) {
+      Alert.alert('Unable to load ticket', ticketRes.error.message);
+    } else if (eventsRes.error) {
+      Alert.alert('Unable to load activity', eventsRes.error.message);
+    }
+  }, [ticketId]);
 
   useEffect(() => {
-    async function load() {
-      const supabase = getSupabase();
-      const [ticketRes, objectivesRes, eventsRes] = await Promise.all([
-        supabase
-          .from('tickets')
-          .select('id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id')
-          .eq('id', ticketId)
-          .single(),
-        supabase
-          .from('objectives')
-          .select('id, objective, title, state, agent_identifier, model_identifier, created_at')
-          .eq('ticket_id', ticketId)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('ticket_events')
-          .select('id, event_type, summary, phase, is_blocking, created_at')
-          .eq('ticket_id', ticketId)
-          .order('created_at', { ascending: false })
-          .limit(30),
-      ]);
+    loadData().finally(() => setLoading(false));
+  }, [loadData]);
 
-      if (ticketRes.data) setTicket(ticketRes.data as unknown as TicketDetail);
-      if (objectivesRes.data) setObjectives(objectivesRes.data);
-      if (eventsRes.data) setEvents(eventsRes.data as TicketEvent[]);
-      if (ticketRes.error) {
-        Alert.alert('Unable to load ticket', ticketRes.error.message);
-      } else if (eventsRes.error) {
-        Alert.alert('Unable to load activity', eventsRes.error.message);
-      }
-      setLoading(false);
+  // Realtime updates for ticket detail
+  useTicketRealtime(ticketId, loadData);
+
+  const draftObjective = useMemo(
+    () => objectives.find(objective => !objective.is_executed) ?? null,
+    [objectives]
+  );
+  const executedObjectives = useMemo(
+    () => objectives.filter(objective => objective.is_executed),
+    [objectives]
+  );
+
+  useEffect(() => {
+    setObjectiveDraft(draftObjective?.objective ?? '');
+  }, [draftObjective?.id, draftObjective?.objective]);
+
+  async function handleSaveObjective() {
+    const trimmedObjective = objectiveDraft.trim();
+    if (!trimmedObjective) {
+      Alert.alert('Objective required', 'Enter an objective before saving.');
+      return;
     }
 
-    load();
-  }, [ticketId]);
+    setSavingObjective(true);
+
+    try {
+      const supabase = getSupabase();
+      const hasExistingDraft = Boolean(draftObjective);
+
+      if (draftObjective) {
+        const { error } = await supabase
+          .from('objectives')
+          .update({ objective: trimmedObjective })
+          .eq('id', draftObjective.id);
+
+        if (error) {
+          throw new Error(error.message);
+        }
+      } else {
+        const { error } = await supabase.from('objectives').insert({
+          ticket_id: ticketId,
+          objective: trimmedObjective,
+          state: 'draft',
+          is_executed: false,
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+      }
+
+      const { error: eventError } = await supabase.from('ticket_events').insert({
+        event_type: 'system',
+        summary: hasExistingDraft
+          ? 'Objective updated from mobile.'
+          : 'Objective created from mobile.',
+        ticket_id: ticketId,
+      });
+
+      if (eventError) {
+        console.error('Failed to record objective save event:', eventError.message);
+      }
+
+      await loadData();
+    } catch (error) {
+      Alert.alert(
+        'Unable to save objective',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      setSavingObjective(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -97,6 +184,16 @@ export default function TicketDetailScreen() {
   }
 
   const agentLabel = formatAgentLabel(ticket.assigned_agent);
+  const normalizedObjectiveDraft = objectiveDraft.trim();
+  const normalizedSavedDraft = (draftObjective?.objective ?? '').trim();
+  const objectiveActionLabel = draftObjective
+    ? normalizedSavedDraft
+      ? 'Update Objective'
+      : 'Save Objective'
+    : 'Create Objective';
+  const hasObjectiveChanges = normalizedObjectiveDraft !== normalizedSavedDraft;
+  const canSaveObjective =
+    !savingObjective && normalizedObjectiveDraft.length > 0 && hasObjectiveChanges;
 
   return (
     <ScrollView style={styles.container}>
@@ -146,11 +243,40 @@ export default function TicketDetailScreen() {
         )}
       </View>
 
-      {/* Objectives */}
-      {objectives.length > 0 && (
+      {/* Draft objective */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Draft Objective</Text>
+        <TextInput
+          style={styles.objectiveEditor}
+          value={objectiveDraft}
+          onChangeText={setObjectiveDraft}
+          placeholder="Write the next objective..."
+          placeholderTextColor={colors.mutedForeground}
+          multiline
+          textAlignVertical="top"
+        />
+        <Pressable
+          onPress={handleSaveObjective}
+          disabled={!canSaveObjective}
+          style={({ pressed }) => [
+            styles.objectiveActionButton,
+            !canSaveObjective && styles.objectiveActionButtonDisabled,
+            pressed && canSaveObjective && styles.objectiveActionButtonPressed,
+          ]}
+        >
+          {savingObjective ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <Text style={styles.objectiveActionText}>{objectiveActionLabel}</Text>
+          )}
+        </Pressable>
+      </View>
+
+      {/* Objective history */}
+      {executedObjectives.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Objectives</Text>
-          {objectives.map((obj) => (
+          {executedObjectives.map((obj) => (
             <View key={obj.id} style={styles.objectiveCard}>
               <View style={styles.objectiveHeader}>
                 <View
@@ -332,6 +458,37 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     fontSize: 15,
     lineHeight: 22,
+  },
+  objectiveEditor: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    minHeight: 120,
+    color: colors.foreground,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  objectiveActionButton: {
+    marginTop: 12,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  objectiveActionButtonDisabled: {
+    opacity: 0.45,
+  },
+  objectiveActionButtonPressed: {
+    opacity: 0.8,
+  },
+  objectiveActionText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   objectiveCard: {
     backgroundColor: colors.card,

@@ -38,7 +38,7 @@ ovld doctor
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 24 or newer
 - Access to an Overlord instance when using authenticated commands
 
 ## Commands

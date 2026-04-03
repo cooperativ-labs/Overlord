@@ -27,9 +27,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tickets/index"
+        name="tickets"
         options={{
           title: 'Tickets',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="ticket-outline" size={size} color={color} />
           ),

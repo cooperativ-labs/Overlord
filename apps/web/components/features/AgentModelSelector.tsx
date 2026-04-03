@@ -46,6 +46,17 @@ type AgentModelsCatalogOverride = {
   >;
 };
 
+function getCatalogAgentValues(): AgentTypeValue[] {
+  const overrides = (agentModelsCatalog as AgentModelsCatalogOverride).agents;
+  if (!overrides) return [...LAUNCH_AGENT_VALUES];
+
+  const configuredAgents = Object.keys(overrides).filter((agent): agent is AgentTypeValue =>
+    LAUNCH_AGENT_VALUES.includes(agent as AgentTypeValue)
+  );
+
+  return configuredAgents.length > 0 ? configuredAgents : [...LAUNCH_AGENT_VALUES];
+}
+
 function buildOptimisticModels(): AgentModel[] {
   const overrides = (agentModelsCatalog as AgentModelsCatalogOverride).agents ?? {};
   const updatedAt = new Date(0).toISOString();
@@ -68,6 +79,7 @@ function buildOptimisticModels(): AgentModel[] {
 }
 
 const OPTIMISTIC_MODELS = buildOptimisticModels();
+const CATALOG_AGENT_VALUES = getCatalogAgentValues();
 
 let cachedResolvedModels: AgentModel[] | null = null;
 let cachedConfigs: Record<string, AgentConfig> | null = null;
@@ -209,7 +221,7 @@ export function AgentModelSelector({
         <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Agent
         </p>
-        {LAUNCH_AGENT_VALUES.map(agentValue => {
+        {CATALOG_AGENT_VALUES.map(agentValue => {
           const agent = AGENT_TYPES.find(a => a.value === agentValue)!;
           const isSelected = value.agent === agentValue;
           return (

@@ -2,7 +2,7 @@
   "name": "@overlord/workspace",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "3.17.0",
+  "version": "3.18.0",
   "private": true,
   "main": "apps/desktop/dist-electron/main.js",
   "workspaces": [
@@ -21,6 +21,8 @@
     "dev:desktop": "yarn electron:dev",
     "dev:mobile": "yarn workspace @overlord/mobile dev",
     "mobile:ios": "yarn workspace @overlord/mobile ios",
+    "mobile:ios:device": "yarn workspace @overlord/mobile ios:device",
+    "mobile:ios:prod": "yarn workspace @overlord/mobile ios:prod",
     "mobile:android": "yarn workspace @overlord/mobile android",
     "mobile:clean": "yarn workspace @overlord/mobile clean",
     "sunpeak:ticket-card:dev": "yarn workspace @overlord/ticket-card dev",

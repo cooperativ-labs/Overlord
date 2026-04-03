@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "expo start",
     "ios": "expo run:ios",
+    "ios:device": "bash scripts/build-prod-device.sh",
+    "ios:prod": "bash scripts/build-prod-device.sh",
     "android": "expo run:android",
     "clean": "rm -rf ios/build && npx expo run:ios --clean",
     "type-check": "tsc --noEmit",
