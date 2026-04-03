@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/lib/colors';
 import type { ExecutingFeedTicket } from '@/lib/types';
@@ -24,6 +25,8 @@ type Props = {
 };
 
 export function ExecutingTicketsSection({ tickets }: Props) {
+  const router = useRouter();
+
   if (tickets.length === 0) return null;
 
   return (
@@ -34,7 +37,18 @@ export function ExecutingTicketsSection({ tickets }: Props) {
       </View>
 
       {tickets.map(ticket => (
-        <View key={ticket.id} style={styles.card}>
+        <Pressable
+          key={ticket.id}
+          style={styles.card}
+          onPress={() =>
+            router.push({
+              pathname: '/(tabs)/tickets/[ticketId]',
+              params: { ticketId: ticket.id },
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Open ticket ${ticket.ticket_sequence ? `#${ticket.ticket_sequence} ` : ''}${ticket.title ?? 'Untitled ticket'}`}
+        >
           <View style={styles.projectRow}>
             <View style={[styles.projectDot, { backgroundColor: ticket.project_color }]} />
             <Text style={styles.projectName} numberOfLines={1}>
@@ -51,7 +65,7 @@ export function ExecutingTicketsSection({ tickets }: Props) {
             <Ionicons name="hardware-chip-outline" size={12} color={colors.mutedForeground} />
             <Text style={styles.agentText}>{getAgentLabel(ticket.running_agent)}</Text>
           </View>
-        </View>
+        </Pressable>
       ))}
     </View>
   );

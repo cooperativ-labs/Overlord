@@ -187,7 +187,6 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     { data: artifacts },
     { data: sharedState },
     { data: recentEvents },
-    { data: project },
     { data: profile }
   ] = await Promise.all([
     supabase
@@ -216,23 +215,17 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       .neq('event_type', 'system')
       .order('created_at', { ascending: false })
       .limit(12),
-    supabase
-      .from('projects')
-      .select('local_working_directory')
-      .eq('id', ticket.project_id)
-      .maybeSingle(),
     supabase.from('profiles').select('custom_agent_instructions').eq('id', ctx.userId).maybeSingle()
   ]);
 
-  const resolvedTicket = { ...ticket, objective: executedObjective ?? ticket.objective };
+  const resolvedTicket = { ...ticket, objective: executedObjective ?? null };
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: resolvedTicket,
     recentEvents: recentEvents ?? [],
     history: history ?? [],
     artifacts: artifacts ?? [],
     sharedState: sharedState ?? [],
-    customInstructions: profile?.custom_agent_instructions ?? null,
-    workingDirectory: project?.local_working_directory ?? null
+    customInstructions: profile?.custom_agent_instructions ?? null
   });
 
   return toolOk({
