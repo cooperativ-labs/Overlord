@@ -116,7 +116,10 @@ function buildRemoteLaunchCommand({
   agentToken: string;
 }): string {
   const windowName = `ticket-${ticketSequence ?? ticketId.slice(0, 8)}`;
-  const launcher = [
+  // Source shell profile so nvm/node/ovld are in PATH, then run the
+  // launch command. If it fails, keep the tmux window open with the
+  // error visible instead of closing immediately.
+  const innerCmd = [
     `OVERLORD_URL=${quoteShell(platformUrl)}`,
     `AGENT_TOKEN=${quoteShell(agentToken)}`,
     `TICKET_ID=${quoteShell(ticketId)}`,
@@ -125,6 +128,14 @@ function buildRemoteLaunchCommand({
     '--ticket-id',
     ticketId
   ].join(' ');
+  const profileSetup = [
+    '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"',
+    '[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"',
+    '[ -f "$HOME/.profile" ] && . "$HOME/.profile"',
+    'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
+    '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"'
+  ].join('; ');
+  const launcher = `${profileSetup}; ${innerCmd}; EXIT_CODE=$?; if [ $EXIT_CODE -ne 0 ]; then echo ""; echo "[ovld connect exited with code $EXIT_CODE]"; echo "Press Enter to close this window..."; read; fi`;
 
   return [
     'CURRENT_PATH="$(tmux list-panes -a -F \'#{?pane_active,1,0} #{pane_current_path}\' 2>/dev/null | awk \'$1 == 1 { $1 = \"\"; sub(/^ /, \"\"); print; exit }\')"',
