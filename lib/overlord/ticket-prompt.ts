@@ -136,14 +136,15 @@ function resolveLocalProtocolFamily(
   agent: PromptAgent | undefined,
   instructionMode: InstructionMode
 ): LocalProtocolFamily {
-  if (
-    instructionMode === 'bundle' &&
-    (agent === 'claude' || agent === 'codex' || agent === 'cursor' || agent === 'opencode')
-  ) {
-    return 'bundled';
-  }
   if (agent === 'codex') {
     return 'codex';
+  }
+
+  if (
+    instructionMode === 'bundle' &&
+    (agent === 'claude' || agent === 'cursor' || agent === 'opencode')
+  ) {
+    return 'bundled';
   }
   return 'verbose';
 }

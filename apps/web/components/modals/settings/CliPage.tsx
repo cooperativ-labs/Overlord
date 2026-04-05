@@ -1256,7 +1256,8 @@ export function CliPage({ open }: { open: boolean }) {
                 <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
                   New CLI version available: v{cliLatestVersion}. Reinstall the CLI wrapper so the
                   installed `ovld` command points at the latest standalone CLI copy. If you manage
-                  the CLI manually outside the desktop app, update it with Node 20+.
+                  the CLI manually outside the desktop app, run `ovld update` to install the newest
+                  npm release with Node 20+.
                 </p>
               ) : null}
               {cliInstallMessage ? (

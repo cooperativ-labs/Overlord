@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   card: {
     width: '100%',
@@ -62,26 +62,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 12,
+    gap: 12
   },
   title: {
     color: colors.foreground,
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '700'
   },
   body: {
     color: colors.secondaryForeground,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 22
   },
   code: {
     color: colors.destructive,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 20
   },
   hint: {
     color: colors.mutedForeground,
     fontSize: 14,
-    lineHeight: 20,
-  },
+    lineHeight: 20
+  }
 });

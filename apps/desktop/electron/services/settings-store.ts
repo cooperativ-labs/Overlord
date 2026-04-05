@@ -7,6 +7,7 @@ export type ExternalTerminalApp =
   | 'terminal'
   | 'iterm'
   | 'warp'
+  | 'tmux'
   | 'ghostty'
   | 'alacritty'
   | 'kitty'
@@ -21,6 +22,10 @@ interface StoreData {
   externalTerminalLaunchMode: ExternalTerminalLaunchMode;
   externalTerminalCustomHotkey: string;
   customExternalTerminalApp: string;
+  serverExternalTerminalApp: ExternalTerminalApp;
+  serverExternalTerminalLaunchMode: ExternalTerminalLaunchMode;
+  serverExternalTerminalCustomHotkey: string;
+  customServerExternalTerminalApp: string;
   windowBounds: { width: number; height: number; x?: number; y?: number };
   [key: string]: unknown;
 }
@@ -30,6 +35,10 @@ const defaults: StoreData = {
   externalTerminalLaunchMode: 'tab',
   externalTerminalCustomHotkey: '',
   customExternalTerminalApp: '',
+  serverExternalTerminalApp: 'default',
+  serverExternalTerminalLaunchMode: 'tab',
+  serverExternalTerminalCustomHotkey: '',
+  customServerExternalTerminalApp: '',
   windowBounds: { width: 1400, height: 900 }
 };
 
@@ -57,6 +66,47 @@ function migrateLegacySettings(raw: Record<string, unknown>): {
       raw.externalTerminalLaunchMode.length > 0
         ? (raw.externalTerminalLaunchMode as ExternalTerminalLaunchMode)
         : defaults.externalTerminalLaunchMode;
+  }
+
+  const localTerminalApp =
+    typeof next.externalTerminalApp === 'string' && next.externalTerminalApp.length > 0
+      ? next.externalTerminalApp
+      : defaults.externalTerminalApp;
+  const localLaunchMode =
+    typeof next.externalTerminalLaunchMode === 'string' &&
+    next.externalTerminalLaunchMode.length > 0
+      ? next.externalTerminalLaunchMode
+      : defaults.externalTerminalLaunchMode;
+  const localCustomHotkey =
+    typeof next.externalTerminalCustomHotkey === 'string'
+      ? next.externalTerminalCustomHotkey
+      : defaults.externalTerminalCustomHotkey;
+  const localCustomApp =
+    typeof next.customExternalTerminalApp === 'string'
+      ? next.customExternalTerminalApp
+      : defaults.customExternalTerminalApp;
+
+  if (
+    typeof raw.serverExternalTerminalApp !== 'string' ||
+    raw.serverExternalTerminalApp.length === 0
+  ) {
+    changed = true;
+    next.serverExternalTerminalApp = localTerminalApp;
+  }
+  if (
+    typeof raw.serverExternalTerminalLaunchMode !== 'string' ||
+    raw.serverExternalTerminalLaunchMode.length === 0
+  ) {
+    changed = true;
+    next.serverExternalTerminalLaunchMode = localLaunchMode;
+  }
+  if (typeof raw.serverExternalTerminalCustomHotkey !== 'string') {
+    changed = true;
+    next.serverExternalTerminalCustomHotkey = localCustomHotkey;
+  }
+  if (typeof raw.customServerExternalTerminalApp !== 'string') {
+    changed = true;
+    next.customServerExternalTerminalApp = localCustomApp;
   }
 
   if ('terminalMode' in next) {

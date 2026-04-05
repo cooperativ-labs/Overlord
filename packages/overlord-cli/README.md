@@ -13,6 +13,7 @@ npm install -g overlord-cli
 ```
 
 Use Node.js 20 or newer for every CLI install or update.
+Run `ovld update` any time you want to refresh the global npm install to the latest release.
 
 ## Usage
 
@@ -31,6 +32,7 @@ ovld auth login
 ovld attach
 ovld create "Investigate the failing build"
 ovld prompt "Draft a fix for the onboarding flow"
+ovld update
 ovld setup codex
 ovld setup cursor
 ovld setup gemini
@@ -54,6 +56,7 @@ ovld doctor
 - `protocol` - run ticket lifecycle commands
 - `connect`, `restart`, `run`, `resume`, `context` - launch or resume an agent session
 - `setup` - install the Overlord connector or plugin bundle for a supported agent
+- `update` - install the latest CLI release from npm
 - `doctor` - verify installed agent connectors and check whether a newer CLI version is available
 
 ## License

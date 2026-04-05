@@ -34,6 +34,42 @@ function buildOpenApplicationCommand(app: string, args?: string[]) {
   return `open -a ${shellQuote(app)}${argSegment}`;
 }
 
+function buildNewInstanceApplicationCommand(app: string, args?: string[]) {
+  const argSegment = args && args.length > 0 ? ` --args ${args.map(shellQuote).join(' ')}` : '';
+  return `open -n -a ${shellQuote(app)}${argSegment}`;
+}
+
+type TerminalSettingsProfile = {
+  termApp: string;
+  launchMode: string;
+  customHotkeyValue: string;
+  customApp: string;
+};
+
+function getTerminalSettingsProfile(isRemote: boolean): TerminalSettingsProfile {
+  const prefix = isRemote ? 'server' : '';
+  const appKey = prefix ? 'serverExternalTerminalApp' : 'externalTerminalApp';
+  const launchModeKey = prefix ? 'serverExternalTerminalLaunchMode' : 'externalTerminalLaunchMode';
+  const customHotkeyKey = prefix
+    ? 'serverExternalTerminalCustomHotkey'
+    : 'externalTerminalCustomHotkey';
+  const customAppKey = prefix ? 'customServerExternalTerminalApp' : 'customExternalTerminalApp';
+
+  return {
+    termApp: store.get(appKey, 'default') as string,
+    launchMode: store.get(launchModeKey, 'window') as string,
+    customHotkeyValue: store.get(customHotkeyKey, '') as string,
+    customApp: store.get(customAppKey, '') as string
+  };
+}
+
+function isTmuxLikeTerminalApp(termApp: string, customApp?: string): boolean {
+  if (termApp === 'tmux' || termApp === 'cmux') return true;
+  if (termApp !== 'custom') return false;
+  const normalized = customApp?.trim().toLowerCase() ?? '';
+  return normalized.includes('tmux') || normalized.includes('cmux');
+}
+
 async function runShellCommandWithFallback(
   commands: string[],
   errorMessage: string
@@ -135,7 +171,10 @@ function writeLaunchScript(command: string, cwd?: string, env?: Record<string, s
   return scriptPath;
 }
 
-async function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
+async function launchScriptInExternalTerminal(
+  scriptPath: string,
+  isRemote: boolean
+): Promise<void> {
   const launchCmd = [
     `if [ -f ${shellQuote(scriptPath)} ]; then`,
     `bash ${shellQuote(scriptPath)};`,
@@ -144,13 +183,13 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
     'echo "Re-run the launch command from Overlord to generate a new script.";',
     'fi'
   ].join(' ');
-  const termApp = store.get('externalTerminalApp', 'default') as string;
-  const launchMode = store.get('externalTerminalLaunchMode', 'window') as string;
+  const profile = getTerminalSettingsProfile(isRemote);
+  const { termApp, launchMode, customHotkeyValue, customApp } = profile;
   const openInTab = launchMode === 'tab';
   const isCustomLaunchMode = launchMode === 'custom';
-  const customHotkeyValue = store.get('externalTerminalCustomHotkey', '') as string;
   const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);
   const escapedLaunchCmd = launchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const shouldForceNewInstance = isTmuxLikeTerminalApp(termApp, customApp);
 
   let script: string;
 
@@ -255,8 +294,23 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
           runAppleScript(baseScript).finally(() => resolve());
         }, 1000);
       });
+    case 'tmux':
+      await runShellCommand(buildNewInstanceApplicationCommand('Terminal'));
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const tmuxLaunchCmd = `tmux new-session bash ${shellQuote(scriptPath)}`;
+          const escapedTmuxLaunchCmd = tmuxLaunchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          runAppleScript(
+            `tell application "System Events" to keystroke "${escapedTmuxLaunchCmd}" & return`
+          ).finally(() => resolve());
+        }, 1000);
+      });
     case 'cmux':
-      await runShellCommand(buildOpenApplicationCommand('cmux'));
+      await runShellCommand(
+        shouldForceNewInstance
+          ? buildNewInstanceApplicationCommand('cmux')
+          : buildOpenApplicationCommand('cmux')
+      );
       return new Promise(resolve => {
         setTimeout(() => {
           const baseScript = hotkeyScript
@@ -271,7 +325,6 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
         }, 1000);
       });
     case 'custom': {
-      const customApp = store.get('customExternalTerminalApp', '') as string;
       if (!customApp) {
         script =
           isCustomLaunchMode && hotkeyScript
@@ -307,7 +360,11 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
         return runAppleScript(script);
       }
 
-      await runShellCommand(buildOpenApplicationCommand(customApp));
+      await runShellCommand(
+        shouldForceNewInstance
+          ? buildNewInstanceApplicationCommand(customApp)
+          : buildOpenApplicationCommand(customApp)
+      );
       return new Promise(resolve => {
         setTimeout(() => {
           runAppleScript(
@@ -370,6 +427,7 @@ export function registerTerminalIpc(): void {
         remoteWorkingDirectory?: string;
       }
     ) => {
+      const isRemote = Boolean(payload.sshCommand?.trim());
       const { command, cwd, env } = await prepareAgentLaunch({
         ticketId: payload.ticketId,
         agent: payload.agent,
@@ -384,7 +442,7 @@ export function registerTerminalIpc(): void {
       });
 
       const scriptPath = writeLaunchScript(command, cwd, env);
-      return launchScriptInExternalTerminal(scriptPath);
+      return launchScriptInExternalTerminal(scriptPath, isRemote);
     }
   );
 

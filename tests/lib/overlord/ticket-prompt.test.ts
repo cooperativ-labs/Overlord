@@ -10,7 +10,7 @@ describe('Codex bundle prompt routing', () => {
     });
   });
 
-  it('uses the bundled local protocol instructions for Codex bundle launches', () => {
+  it('uses the Codex local protocol instructions for Codex bundle launches', () => {
     const prompt = buildTicketPromptMarkdown({
       ticket: {
         id: 'ticket-123',
@@ -33,8 +33,8 @@ describe('Codex bundle prompt routing', () => {
       }
     });
 
-    expect(prompt).toContain('Use your installed Overlord local workflow instructions');
-    expect(prompt).toContain('look for and invoke the overlord-local skill');
-    expect(prompt).not.toContain('### Codex local workflow');
+    expect(prompt).toContain('### Codex local workflow');
+    expect(prompt).toContain('Do not look for a local `overlord-local` skill');
+    expect(prompt).not.toContain('look for and invoke the overlord-local skill');
   });
 });

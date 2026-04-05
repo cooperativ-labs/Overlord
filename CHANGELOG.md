@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.22.0] - 2026-04-05:15:28
+
+### Added
+- Add a rebuilt native mobile SSH module for on-device key generation, storage, and server connection verification.
+- Add an `ovld update` command that installs the latest CLI release from npm and surfaces update notices in interactive shells.
+
+### Fixed
+- Fix Codex bundle launches so they use the correct local workflow instructions when the plugin is installed.
+
+### Changed
+- Update the mobile server add and detail flows to use the native SSH path and persist server credentials on-device.
+- Split desktop terminal preferences into separate local and server profiles, including tmux-aware launch options.
+- Update the CLI help text and settings copy to surface the new `ovld update` workflow.
+
+### Security
+- None.
+
+### Removed
+- Remove the legacy `secure-enclave-ssh` mobile module in favor of the rebuilt `apps/mobile/modules/ssh` implementation.
+
+### Test
+- Add coverage for the CLI update flow and Codex bundle prompt routing.
+
+### Documentation
+- Update the CLI docs to mention `ovld update` alongside setup and doctor commands.
+
+### Chore
+- Bump the workspace and CLI package versions to 3.22.0.
+
 ## [3.21.0] - 2026-04-03:20:33
 
 ### Added

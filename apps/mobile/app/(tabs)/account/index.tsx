@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/lib/colors';
 import { useAuth } from '@/lib/auth-context';
+import { colors } from '@/lib/colors';
 
 export default function AccountScreen() {
   const { user, signOut } = useAuth();
@@ -13,8 +13,8 @@ export default function AccountScreen() {
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: signOut,
-      },
+        onPress: signOut
+      }
     ]);
   };
 
@@ -53,11 +53,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 24,
+    paddingTop: 24
   },
   profileSection: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 24
   },
   avatar: {
     width: 72,
@@ -68,12 +68,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border
   },
   email: {
     color: colors.foreground,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '500'
   },
   menuSection: {
     marginTop: 16,
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
+    overflow: 'hidden'
   },
   menuItem: {
     flexDirection: 'row',
@@ -91,14 +91,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: 12,
+    gap: 12
   },
   menuItemLast: {
-    borderBottomWidth: 0,
+    borderBottomWidth: 0
   },
   menuText: {
     flex: 1,
     color: colors.foreground,
-    fontSize: 16,
-  },
+    fontSize: 16
+  }
 });

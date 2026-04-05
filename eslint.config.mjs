@@ -10,7 +10,7 @@ export default [
   js.configs.recommended,
   {
     ignores: [
-        'apps/web/.next/**',
+        '**/.next/**',
         'apps/desktop/dist-electron/**',
         'apps/ticket-card/dist/**',
         'node_modules/**',
@@ -26,6 +26,7 @@ export default [
       parserOptions: {
         project: [
           'tsconfig.json',
+          'apps/mobile/tsconfig.json',
           'apps/web/tsconfig.json',
           'apps/desktop/tsconfig.json',
           'apps/ticket-card/tsconfig.json',

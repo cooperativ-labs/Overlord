@@ -7,7 +7,7 @@ export default function ServersLayout() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.background },
-        headerTintColor: colors.foreground,
+        headerTintColor: colors.foreground
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Servers' }} />

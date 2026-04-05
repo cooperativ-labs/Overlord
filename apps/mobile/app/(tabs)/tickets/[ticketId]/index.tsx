@@ -9,7 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from 'react-native';
 
 import { AgentModelChooser } from '@/components/AgentModelChooser';
@@ -21,7 +21,7 @@ import {
 import { colors } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { getSupabase } from '@/lib/supabase';
-import type { AgentModelSelection, TicketDetail, Objective, TicketEvent } from '@/lib/types';
+import type { AgentModelSelection, Objective, TicketDetail, TicketEvent } from '@/lib/types';
 
 const eventIcons: Record<string, { name: string; color: string }> = {
   system: { name: 'settings-outline', color: colors.mutedForeground },
@@ -35,14 +35,14 @@ const eventIcons: Record<string, { name: string; color: string }> = {
   status_change: { name: 'swap-horizontal-outline', color: colors.primary },
   alert: { name: 'warning-outline', color: colors.destructive },
   user_follow_up: { name: 'person-outline', color: '#f59e0b' },
-  ticket_reopened: { name: 'refresh-outline', color: '#f59e0b' },
+  ticket_reopened: { name: 'refresh-outline', color: '#f59e0b' }
 };
 
 const objectiveStateColors: Record<string, string> = {
   draft: colors.mutedForeground,
   executing: colors.primary,
   blocked: colors.destructive,
-  complete: colors.success,
+  complete: colors.success
 };
 
 export default function TicketDetailScreen() {
@@ -62,7 +62,9 @@ export default function TicketDetailScreen() {
     const [ticketRes, objectivesRes, eventsRes] = await Promise.all([
       supabase
         .from('tickets')
-        .select('id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id')
+        .select(
+          'id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
+        )
         .eq('id', ticketId)
         .single(),
       supabase
@@ -77,7 +79,7 @@ export default function TicketDetailScreen() {
         .select('id, event_type, summary, phase, is_blocking, created_at')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false })
-        .limit(30),
+        .limit(30)
     ]);
 
     if (ticketRes.data) setTicket(ticketRes.data as unknown as TicketDetail);
@@ -147,7 +149,7 @@ export default function TicketDetailScreen() {
           ticket_id: ticketId,
           objective: trimmedObjective,
           state: 'draft',
-          is_executed: false,
+          is_executed: false
         });
 
         if (error) {
@@ -160,7 +162,7 @@ export default function TicketDetailScreen() {
         summary: hasExistingDraft
           ? 'Objective updated from mobile.'
           : 'Objective created from mobile.',
-        ticket_id: ticketId,
+        ticket_id: ticketId
       });
 
       if (eventError) {
@@ -278,7 +280,7 @@ export default function TicketDetailScreen() {
           headerShown: true,
           headerBackTitle: 'Tickets',
           headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.foreground,
+          headerTintColor: colors.foreground
         }}
       />
 
@@ -294,7 +296,9 @@ export default function TicketDetailScreen() {
           </View>
           <View style={styles.chip}>
             <Ionicons
-              name={ticket.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'}
+              name={
+                ticket.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
+              }
               size={12}
               color={colors.secondaryForeground}
               style={{ marginRight: 4 }}
@@ -341,7 +345,7 @@ export default function TicketDetailScreen() {
       {executedObjectives.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Objectives</Text>
-          {executedObjectives.map((obj) => (
+          {executedObjectives.map(obj => (
             <View key={obj.id} style={styles.objectiveCard}>
               <Pressable
                 onPress={() => toggleObjectiveExpanded(obj.id)}
@@ -351,7 +355,7 @@ export default function TicketDetailScreen() {
                   <View
                     style={[
                       styles.objectiveStateDot,
-                      { backgroundColor: objectiveStateColors[obj.state] ?? colors.mutedForeground },
+                      { backgroundColor: objectiveStateColors[obj.state] ?? colors.mutedForeground }
                     ]}
                   />
                   <View style={styles.objectiveHeaderTextWrap}>
@@ -404,7 +408,7 @@ export default function TicketDetailScreen() {
           style={({ pressed }) => [
             styles.objectiveActionButton,
             !canSaveObjective && styles.objectiveActionButtonDisabled,
-            pressed && canSaveObjective && styles.objectiveActionButtonPressed,
+            pressed && canSaveObjective && styles.objectiveActionButtonPressed
           ]}
         >
           {savingObjective ? (
@@ -445,7 +449,7 @@ export default function TicketDetailScreen() {
         {events.length === 0 ? (
           <Text style={styles.noActivity}>No activity yet</Text>
         ) : (
-          events.map((event) => {
+          events.map(event => {
             const icon = eventIcons[event.event_type] ?? { name: 'ellipse', color: colors.primary };
             return (
               <View
@@ -471,9 +475,7 @@ export default function TicketDetailScreen() {
                     {event.summary}
                   </Text>
                 )}
-                <Text style={styles.eventTime}>
-                  {new Date(event.created_at).toLocaleString()}
-                </Text>
+                <Text style={styles.eventTime}>{new Date(event.created_at).toLocaleString()}</Text>
               </View>
             );
           })
@@ -486,33 +488,33 @@ export default function TicketDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   errorText: {
     color: colors.mutedForeground,
-    fontSize: 16,
+    fontSize: 16
   },
   header: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border
   },
   title: {
     color: colors.foreground,
     fontSize: 22,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 12
   },
   metaRow: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: 'wrap'
   },
   chip: {
     flexDirection: 'row',
@@ -520,36 +522,36 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 6,
+    borderRadius: 6
   },
   chipText: {
     color: colors.secondaryForeground,
     fontSize: 13,
     fontWeight: '500',
-    textTransform: 'capitalize',
+    textTransform: 'capitalize'
   },
   agentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 10,
+    marginTop: 10
   },
   agentText: {
     color: colors.mutedForeground,
-    fontSize: 13,
+    fontSize: 13
   },
   dueRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 6,
+    marginTop: 6
   },
   dueText: {
     color: colors.mutedForeground,
-    fontSize: 13,
+    fontSize: 13
   },
   section: {
-    padding: 16,
+    padding: 16
   },
   sectionTitle: {
     color: colors.mutedForeground,
@@ -557,27 +559,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 12,
+    marginBottom: 12
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 12
   },
   inlineStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 6
   },
   inlineStatusText: {
     color: colors.mutedForeground,
-    fontSize: 13,
+    fontSize: 13
   },
   sectionBody: {
     color: colors.foreground,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 22
   },
   objectiveEditor: {
     backgroundColor: colors.card,
@@ -588,7 +590,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
     color: colors.foreground,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 22
   },
   objectiveActionButton: {
     marginTop: 12,
@@ -597,18 +599,18 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 16
   },
   objectiveActionButtonDisabled: {
-    opacity: 0.45,
+    opacity: 0.45
   },
   objectiveActionButtonPressed: {
-    opacity: 0.8,
+    opacity: 0.8
   },
   objectiveActionText: {
     color: '#ffffff',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   objectiveCard: {
     backgroundColor: colors.card,
@@ -616,63 +618,63 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border
   },
   objectiveCardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 10
   },
   objectiveHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     flex: 1,
-    minWidth: 0,
+    minWidth: 0
   },
   objectiveHeaderTextWrap: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 0
   },
   objectiveMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 0,
-    marginTop: 2,
+    marginTop: 2
   },
   pressed: {
-    opacity: 0.82,
+    opacity: 0.82
   },
   objectiveStateDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginTop: 4,
+    marginTop: 4
   },
   objectiveMetaSep: {
     color: colors.mutedForeground,
-    fontSize: 12,
+    fontSize: 12
   },
   objectiveMeta: {
     color: colors.mutedForeground,
-    fontSize: 12,
+    fontSize: 12
   },
   objectiveTitle: {
     color: colors.foreground,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   objectiveText: {
     color: colors.secondaryForeground,
     fontSize: 14,
     lineHeight: 20,
-    marginTop: 8,
+    marginTop: 8
   },
   noActivity: {
     color: colors.mutedForeground,
-    fontSize: 14,
+    fontSize: 14
   },
   eventCard: {
     backgroundColor: colors.card,
@@ -680,51 +682,51 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border
   },
   eventBlocking: {
     borderColor: colors.destructive,
-    borderWidth: 1,
+    borderWidth: 1
   },
   eventHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 4
   },
   eventType: {
     color: colors.foreground,
     fontSize: 14,
     fontWeight: '600',
-    textTransform: 'capitalize',
+    textTransform: 'capitalize'
   },
   eventPhase: {
     color: colors.mutedForeground,
-    fontSize: 13,
+    fontSize: 13
   },
   blockingBadge: {
     backgroundColor: colors.destructive,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    marginLeft: 'auto',
+    marginLeft: 'auto'
   },
   blockingText: {
     color: '#ffffff',
     fontSize: 10,
     fontWeight: '700',
-    textTransform: 'uppercase',
+    textTransform: 'uppercase'
   },
   eventSummary: {
     color: colors.secondaryForeground,
     fontSize: 14,
     lineHeight: 20,
     marginTop: 4,
-    marginBottom: 4,
+    marginBottom: 4
   },
   eventTime: {
     color: colors.mutedForeground,
     fontSize: 12,
-    marginTop: 4,
-  },
+    marginTop: 4
+  }
 });

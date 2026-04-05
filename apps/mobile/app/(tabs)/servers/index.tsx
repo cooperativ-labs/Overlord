@@ -9,7 +9,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 
 import { colors } from '@/lib/colors';
@@ -18,9 +18,8 @@ import type { Server, ServerStatus } from '@/lib/types';
 
 const statusConfig: Record<ServerStatus, { label: string; color: string }> = {
   pending: { label: 'Pending', color: colors.mutedForeground },
-  key_installed: { label: 'Key Installed', color: colors.primary },
   connected: { label: 'Connected', color: colors.success },
-  error: { label: 'Error', color: colors.destructive },
+  error: { label: 'Error', color: colors.destructive }
 };
 
 export default function ServersScreen() {
@@ -76,7 +75,8 @@ export default function ServersScreen() {
             {item.label}
           </Text>
           <Text style={styles.serverHost} numberOfLines={1}>
-            {item.username}@{item.host}:{item.port}
+            {item.username}@{item.host}:{item.port} ·{' '}
+            {item.transport === 'ssh' ? 'SSH' : 'Tailscale SSH'}
           </Text>
         </View>
         <View style={styles.serverStatus}>
@@ -107,7 +107,7 @@ export default function ServersScreen() {
             >
               <Ionicons name="add" size={28} color={colors.primary} />
             </Pressable>
-          ),
+          )
         }}
       />
 
@@ -116,7 +116,7 @@ export default function ServersScreen() {
           <Ionicons name="server-outline" size={48} color={colors.mutedForeground} />
           <Text style={styles.emptyText}>No servers yet</Text>
           <Text style={styles.emptySubtext}>
-            Add a server to manage SSH connections with hardware-backed keys
+            Add a server to verify SSH or Tailscale SSH access before launching remote agent jobs
           </Text>
           <Pressable
             style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
@@ -129,7 +129,7 @@ export default function ServersScreen() {
       ) : (
         <FlatList
           data={servers}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           renderItem={renderServer}
           contentContainerStyle={styles.list}
           refreshControl={
@@ -148,17 +148,17 @@ export default function ServersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   centered: {
     flex: 1,
     backgroundColor: colors.background,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'center'
   },
   list: {
     padding: 16,
-    gap: 12,
+    gap: 12
   },
   serverCard: {
     backgroundColor: colors.card,
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 12
   },
   serverIcon: {
     width: 44,
@@ -176,53 +176,53 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: colors.secondary,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'center'
   },
   serverInfo: {
-    flex: 1,
+    flex: 1
   },
   serverLabel: {
     color: colors.foreground,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   serverHost: {
     color: colors.mutedForeground,
     fontSize: 13,
-    marginTop: 2,
+    marginTop: 2
   },
   serverStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 6
   },
   statusDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 4
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '500'
   },
   empty: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 32
   },
   emptyText: {
     color: colors.foreground,
     fontSize: 18,
     fontWeight: '600',
-    marginTop: 16,
+    marginTop: 16
   },
   emptySubtext: {
     color: colors.mutedForeground,
     fontSize: 14,
     textAlign: 'center',
     marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 24
   },
   addButton: {
     backgroundColor: colors.primary,
@@ -231,11 +231,11 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 10
   },
   addButtonText: {
     color: colors.primaryForeground,
     fontSize: 16,
-    fontWeight: '600',
-  },
+    fontWeight: '600'
+  }
 });

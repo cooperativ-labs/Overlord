@@ -10,7 +10,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 
 import { colors } from '@/lib/colors';
@@ -25,7 +25,7 @@ const statusColors: Record<string, string> = {
   complete: colors.success,
   blocked: colors.destructive,
   cancelled: colors.mutedForeground,
-  icebox: colors.mutedForeground,
+  icebox: colors.mutedForeground
 };
 
 function formatAgentLabel(agent: AssignedAgent | null): string | null {
@@ -60,7 +60,9 @@ export default function TicketsScreen() {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('tickets')
-      .select('id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, updated_at')
+      .select(
+        'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, updated_at'
+      )
       .order('updated_at', { ascending: false })
       .limit(50);
 
@@ -132,12 +134,12 @@ export default function TicketsScreen() {
             <Pressable onPress={handleCreateTicket} hitSlop={8}>
               <Ionicons name="add-circle" size={28} color={colors.primary} />
             </Pressable>
-          ),
+          )
         }}
       />
       <FlatList
         data={tickets}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -160,14 +162,16 @@ export default function TicketsScreen() {
                 <View
                   style={[
                     styles.statusDot,
-                    { backgroundColor: statusColors[item.status] ?? colors.mutedForeground },
+                    { backgroundColor: statusColors[item.status] ?? colors.mutedForeground }
                   ]}
                 />
                 <Text style={styles.status}>{item.status}</Text>
                 <View style={{ flex: 1 }} />
                 <View style={styles.targetBadge}>
                   <Ionicons
-                    name={item.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'}
+                    name={
+                      item.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
+                    }
                     size={12}
                     color={colors.secondaryForeground}
                   />
@@ -182,7 +186,11 @@ export default function TicketsScreen() {
                 {agentLabel && (
                   <>
                     <Text style={styles.metaSep}>·</Text>
-                    <Ionicons name="hardware-chip-outline" size={11} color={colors.mutedForeground} />
+                    <Ionicons
+                      name="hardware-chip-outline"
+                      size={11}
+                      color={colors.mutedForeground}
+                    />
                     <Text style={styles.meta}>{agentLabel}</Text>
                   </>
                 )}
@@ -208,16 +216,16 @@ export default function TicketsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   list: {
-    padding: 16,
+    padding: 16
   },
   card: {
     backgroundColor: colors.card,
@@ -225,30 +233,30 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-    gap: 6,
+    gap: 6
   },
   sequence: {
     color: colors.mutedForeground,
     fontSize: 13,
     fontWeight: '600',
-    fontVariant: ['tabular-nums'],
+    fontVariant: ['tabular-nums']
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginLeft: 4,
+    marginLeft: 4
   },
   status: {
     color: colors.secondaryForeground,
     fontSize: 13,
-    textTransform: 'capitalize',
+    textTransform: 'capitalize'
   },
   targetBadge: {
     flexDirection: 'row',
@@ -257,56 +265,56 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 6
   },
   targetText: {
     color: colors.secondaryForeground,
     fontSize: 11,
     fontWeight: '500',
-    textTransform: 'capitalize',
+    textTransform: 'capitalize'
   },
   title: {
     color: colors.foreground,
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 6,
+    marginBottom: 6
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 4
   },
   meta: {
     color: colors.mutedForeground,
     fontSize: 13,
-    textTransform: 'capitalize',
+    textTransform: 'capitalize'
   },
   metaSep: {
     color: colors.mutedForeground,
-    fontSize: 13,
+    fontSize: 13
   },
   dueText: {
     color: colors.mutedForeground,
     fontSize: 12,
-    marginTop: 6,
+    marginTop: 6
   },
   dueOverdue: {
     color: colors.destructive,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'center'
   },
   empty: {
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 32
   },
   emptyText: {
     color: colors.foreground,
     fontSize: 18,
     fontWeight: '600',
-    marginTop: 16,
-  },
+    marginTop: 16
+  }
 });

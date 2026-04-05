@@ -8,7 +8,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 
 import { ExecutingTicketsSection } from '@/components/ExecutingTicketsSection';
@@ -22,18 +22,18 @@ const impactConfig: Record<string, { label: string; color: string; backgroundCol
   minor: {
     label: 'Minor',
     color: colors.mutedForeground,
-    backgroundColor: colors.muted,
+    backgroundColor: colors.muted
   },
   notable: {
     label: 'Notable',
     color: '#60a5fa',
-    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+    backgroundColor: 'rgba(59, 130, 246, 0.16)'
   },
   significant: {
     label: 'Significant',
     color: '#fbbf24',
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-  },
+    backgroundColor: 'rgba(245, 158, 11, 0.16)'
+  }
 };
 
 export default function FeedScreen() {
@@ -77,7 +77,7 @@ export default function FeedScreen() {
   };
 
   const toggleExpanded = (postId: string) => {
-    setExpandedPostIds((prev) => {
+    setExpandedPostIds(prev => {
       const next = new Set(prev);
       if (next.has(postId)) {
         next.delete(postId);
@@ -107,7 +107,7 @@ export default function FeedScreen() {
     <View style={styles.container}>
       <FlatList
         data={allPosts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={item => item.id}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -143,18 +143,8 @@ export default function FeedScreen() {
                       <Text style={styles.badgeText}>{item.agent_type}</Text>
                     </View>
                   )}
-                  <View
-                    style={[
-                      styles.impactBadge,
-                      { backgroundColor: impact.backgroundColor },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.impactDot,
-                        { backgroundColor: impact.color },
-                      ]}
-                    />
+                  <View style={[styles.impactBadge, { backgroundColor: impact.backgroundColor }]}>
+                    <View style={[styles.impactDot, { backgroundColor: impact.color }]} />
                     <Text style={[styles.impactText, { color: impact.color }]}>{impact.label}</Text>
                   </View>
                 </View>
@@ -185,9 +175,7 @@ export default function FeedScreen() {
                     </View>
                   ))}
                   {humanActions.length > 2 && (
-                    <Text style={styles.humanActionsMore}>
-                      +{humanActions.length - 2} more
-                    </Text>
+                    <Text style={styles.humanActionsMore}>+{humanActions.length - 2} more</Text>
                   )}
                 </View>
               )}
@@ -234,7 +222,7 @@ export default function FeedScreen() {
                     <Ionicons name="git-branch-outline" size={16} color="#c084fc" />
                     <Text style={styles.calloutVioletTitle}>Tickets created</Text>
                   </View>
-                  {ticketsCreated.map((ticket) => (
+                  {ticketsCreated.map(ticket => (
                     <View key={ticket.id} style={styles.listRow}>
                       <Text style={styles.listBullet}>{'\u2022'}</Text>
                       <Text style={styles.calloutVioletText}>
@@ -247,7 +235,7 @@ export default function FeedScreen() {
 
               {tags.length > 0 && (
                 <View style={styles.tagsRow}>
-                  {(isExpanded ? tags : tags.slice(0, 3)).map((tag) => (
+                  {(isExpanded ? tags : tags.slice(0, 3)).map(tag => (
                     <View key={tag} style={styles.tag}>
                       <Text style={styles.tagText}>{tag}</Text>
                     </View>
@@ -268,7 +256,7 @@ export default function FeedScreen() {
                   </View>
                   {isExpanded && (
                     <View style={styles.fileChipsRow}>
-                      {filesTouched.map((filePath) => (
+                      {filesTouched.map(filePath => (
                         <View key={filePath} style={styles.fileChip}>
                           <Text style={styles.fileChipText} numberOfLines={1}>
                             {filePath}
@@ -300,16 +288,16 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   list: {
-    paddingBottom: 16,
+    paddingBottom: 16
   },
   card: {
     backgroundColor: colors.card,
@@ -318,40 +306,40 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginHorizontal: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 8
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexShrink: 1,
+    flexShrink: 1
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 8
   },
   badge: {
     backgroundColor: colors.secondary,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 6
   },
   badgeText: {
     color: colors.secondaryForeground,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '500'
   },
   impactDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: 3
   },
   impactBadge: {
     flexDirection: 'row',
@@ -359,26 +347,26 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 4
   },
   impactText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   timestamp: {
     color: colors.mutedForeground,
-    fontSize: 12,
+    fontSize: 12
   },
   title: {
     color: colors.foreground,
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 4
   },
   body: {
     color: colors.secondaryForeground,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 20
   },
   humanActionsPreview: {
     marginTop: 12,
@@ -387,22 +375,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    gap: 6,
+    gap: 6
   },
   humanActionsPreviewText: {
     color: '#bfdbfe',
     fontSize: 13,
     flex: 1,
-    lineHeight: 18,
+    lineHeight: 18
   },
   humanActionsMore: {
     color: '#93c5fd',
     fontSize: 12,
-    marginLeft: 12,
+    marginLeft: 12
   },
   sectionStack: {
     gap: 10,
-    marginTop: 12,
+    marginTop: 12
   },
   calloutBlue: {
     marginTop: 12,
@@ -411,7 +399,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    gap: 6,
+    gap: 6
   },
   calloutAmber: {
     backgroundColor: 'rgba(245, 158, 11, 0.12)',
@@ -419,7 +407,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    gap: 6,
+    gap: 6
   },
   calloutViolet: {
     marginTop: 12,
@@ -428,130 +416,130 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    gap: 6,
+    gap: 6
   },
   calloutHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 8
   },
   calloutBlueTitle: {
     color: '#bfdbfe',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   calloutBlueText: {
     color: '#bfdbfe',
     fontSize: 13,
     flex: 1,
-    lineHeight: 18,
+    lineHeight: 18
   },
   calloutAmberTitle: {
     color: '#fde68a',
     fontSize: 14,
     fontWeight: '600',
-    flex: 1,
+    flex: 1
   },
   calloutAmberText: {
     color: '#fde68a',
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 18
   },
   calloutVioletTitle: {
     color: '#e9d5ff',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   calloutVioletText: {
     color: '#e9d5ff',
     fontSize: 13,
     flex: 1,
-    lineHeight: 18,
+    lineHeight: 18
   },
   listRow: {
     flexDirection: 'row',
     gap: 8,
-    alignItems: 'flex-start',
+    alignItems: 'flex-start'
   },
   listBullet: {
     color: colors.mutedForeground,
-    marginTop: 1,
+    marginTop: 1
   },
   tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 10,
+    marginTop: 10
   },
   tag: {
     backgroundColor: colors.muted,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 4
   },
   tagText: {
     color: colors.mutedForeground,
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '500'
   },
   moreText: {
     color: colors.mutedForeground,
     fontSize: 11,
-    alignSelf: 'center',
+    alignSelf: 'center'
   },
   filesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 4
   },
   filesBlock: {
     marginTop: 8,
-    gap: 8,
+    gap: 8
   },
   filesSummaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 4
   },
   filesText: {
     color: colors.mutedForeground,
-    fontSize: 12,
+    fontSize: 12
   },
   fileChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 6
   },
   fileChip: {
     maxWidth: '100%',
     backgroundColor: colors.muted,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 6
   },
   fileChipText: {
     color: colors.secondaryForeground,
-    fontSize: 12,
+    fontSize: 12
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'center'
   },
   empty: {
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 32
   },
   emptyText: {
     color: colors.foreground,
     fontSize: 18,
     fontWeight: '600',
-    marginTop: 16,
+    marginTop: 16
   },
   emptySubtext: {
     color: colors.mutedForeground,
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 8,
-  },
+    marginTop: 8
+  }
 });

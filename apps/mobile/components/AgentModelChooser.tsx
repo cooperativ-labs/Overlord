@@ -131,7 +131,9 @@ export function AgentModelChooser({
   const selectedModel = currentModels.find(model => model.model_id === effectiveSelection.model);
   const showThinking = effectiveSelection.agent !== 'codex';
   const thinkingOptions = showThinking ? (selectedModel?.thinking_options ?? []) : [];
-  const selectedAgentOption = AGENT_OPTIONS.find(option => option.value === effectiveSelection.agent);
+  const selectedAgentOption = AGENT_OPTIONS.find(
+    option => option.value === effectiveSelection.agent
+  );
 
   return (
     <View style={styles.container}>
@@ -148,7 +150,10 @@ export function AgentModelChooser({
       >
         <View style={styles.selectorButtonLeft}>
           <Ionicons
-            name={(selectedAgentOption?.icon ?? 'hardware-chip-outline') as keyof typeof Ionicons.glyphMap}
+            name={
+              (selectedAgentOption?.icon ??
+                'hardware-chip-outline') as keyof typeof Ionicons.glyphMap
+            }
             size={16}
             color={colors.foreground}
           />
@@ -298,7 +303,6 @@ export function AgentModelChooser({
           ) : null}
         </View>
       ) : null}
-
     </View>
   );
 }
@@ -493,5 +497,5 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     fontSize: 14,
     lineHeight: 20
-  },
+  }
 });

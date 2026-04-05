@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkForCliUpdate, getCurrentCliVersion, printCliUpdateNotice } from './cli-update.mjs';
 
 const BUNDLE_VERSION = '1.8.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -280,11 +281,6 @@ function readJsonFileOrNull(filePath) {
   }
 }
 
-function localCliVersion() {
-  const cliPackage = readJsonFileOrNull(path.resolve(__dirname, '..', '..', 'package.json'));
-  return typeof cliPackage?.version === 'string' ? cliPackage.version : null;
-}
-
 function writeJsonFile(filePath, data) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -481,28 +477,6 @@ function currentContentHashForAgent(agent) {
   return contentHash(
     [OPENCODE_AGENTS_SECTION, ...slashCommandFiles('opencode').map(file => file.content)].join('\n')
   );
-}
-
-async function checkForCliUpdate() {
-  const currentVersion = localCliVersion();
-  if (!currentVersion) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
-  try {
-    const response = await fetch('https://registry.npmjs.org/overlord-cli/latest', {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' }
-    });
-    if (!response.ok) return null;
-    const payload = await response.json();
-    const latestVersion = typeof payload?.version === 'string' ? payload.version : null;
-    if (!latestVersion) return null;
-    return latestVersion === currentVersion ? null : latestVersion;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 function codexSourcePluginDir() {
@@ -1035,7 +1009,7 @@ export async function runSetupCommand(args) {
   }
 }
 
-export async function runDoctorCommand() {
+export async function runDoctorCommand({ latestCliVersion = null } = {}) {
   console.log('Overlord agent bundle status:\n');
   let allOk = true;
   const nodeMajor = currentNodeMajor();
@@ -1051,18 +1025,15 @@ export async function runDoctorCommand() {
   for (const agent of supportedAgents) {
     if (!doctorAgent(agent)) allOk = false;
   }
-  const latestCliVersion = await checkForCliUpdate();
+  const updateVersion = latestCliVersion ?? (await checkForCliUpdate());
   console.log();
   if (allOk) {
     console.log('All bundles are up to date.');
   } else {
     console.log('Run `ovld setup <agent>` or `ovld setup all` to install/repair.');
   }
-  if (latestCliVersion) {
+  if (updateVersion) {
     console.log();
-    console.log(`CLI update available: ${latestCliVersion}`);
-    console.log(
-      `Update with Node.js ${REQUIRED_NODE_MAJOR}+ and reinstall the installed CLI wrapper if needed.`
-    );
+    printCliUpdateNotice(updateVersion, { currentVersion: getCurrentCliVersion(), stream: process.stdout });
   }
 }

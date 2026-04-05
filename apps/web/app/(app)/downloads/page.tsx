@@ -186,7 +186,11 @@ export default async function DownloadsPage() {
               <p className="text-muted-foreground text-sm">
                 Adds the <code className="text-foreground">ovld</code> and{' '}
                 <code className="text-foreground">overlord</code> commands to your PATH. Requires
-                Node.js 18+.
+                Node.js 20+.
+              </p>
+              <p className="text-muted-foreground text-sm">
+                To update an existing global install, run{' '}
+                <code className="text-foreground">ovld update</code>.
               </p>
             </div>
 

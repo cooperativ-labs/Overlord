@@ -11,10 +11,10 @@ export default function TabLayout() {
         headerTintColor: colors.foreground,
         tabBarStyle: {
           backgroundColor: colors.background,
-          borderTopColor: colors.border,
+          borderTopColor: colors.border
         },
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarInactiveTintColor: colors.mutedForeground
       }}
     >
       <Tabs.Screen
@@ -23,7 +23,7 @@ export default function TabLayout() {
           title: 'Feed',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="newspaper-outline" size={size} color={color} />
-          ),
+          )
         }}
       />
       <Tabs.Screen
@@ -33,7 +33,7 @@ export default function TabLayout() {
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="ticket-outline" size={size} color={color} />
-          ),
+          )
         }}
       />
       <Tabs.Screen
@@ -43,7 +43,7 @@ export default function TabLayout() {
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="server-outline" size={size} color={color} />
-          ),
+          )
         }}
       />
       <Tabs.Screen
@@ -52,7 +52,7 @@ export default function TabLayout() {
           title: 'Account',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
-          ),
+          )
         }}
       />
     </Tabs>

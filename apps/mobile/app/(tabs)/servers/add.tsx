@@ -11,25 +11,32 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from 'react-native';
 
-import { colors } from '@/lib/colors';
 import { useAuth } from '@/lib/auth-context';
+import { colors } from '@/lib/colors';
+import { saveServerDeviceCredential } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
-import {
-  generateKey,
-  installPublicKey,
-} from '@/modules/secure-enclave-ssh';
+import type { ServerStatus, ServerTransport } from '@/lib/types';
+import { generateKey, installPublicKey, verifyConnection } from '@/modules/ssh';
 
-type Step = 'form' | 'generating' | 'install_key' | 'saving';
+type Step = 'form' | 'generating' | 'configure' | 'saving';
+
+interface SaveServerInput {
+  status: ServerStatus;
+  hostKeyFingerprint?: string | null;
+  lastError?: string | null;
+  lastConnectedAt?: string | null;
+  lastVerifiedAt?: string | null;
+}
 
 function parseServerPort(rawPort: string): number {
   const trimmed = rawPort.trim();
   if (!trimmed) return 22;
 
-  const parsed = parseInt(trimmed, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : NaN;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
 function isLikelyTailscaleHost(rawHost: string): boolean {
@@ -53,34 +60,38 @@ export default function AddServerScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  // Form fields
   const [label, setLabel] = useState('');
   const [host, setHost] = useState('');
   const [port, setPort] = useState('');
   const [username, setUsername] = useState('');
+  const [transport, setTransport] = useState<ServerTransport>('ssh');
 
-  // SSH key installation
   const [step, setStep] = useState<Step>('form');
   const [publicKey, setPublicKey] = useState('');
   const [fingerprint, setFingerprint] = useState('');
   const [keyTag, setKeyTag] = useState('');
   const [isHardwareBacked, setIsHardwareBacked] = useState(false);
   const [password, setPassword] = useState('');
-  const [installing, setInstalling] = useState(false);
+  const [working, setWorking] = useState(false);
 
+  const resolvedPort = parseServerPort(port);
   const canSubmit =
     label.trim().length > 0 &&
     host.trim().length > 0 &&
     username.trim().length > 0 &&
-    Number.isFinite(parseServerPort(port));
+    Number.isFinite(resolvedPort);
 
-  async function handleGenerateKey() {
+  async function handleContinue() {
     if (!canSubmit) return;
+
+    if (transport === 'tailscale_ssh') {
+      setStep('configure');
+      return;
+    }
 
     setStep('generating');
 
     try {
-      // Generate a unique tag for this server's key
       const tag = `com.cooperativ.overlord.ssh.${Date.now()}`;
       const result = await generateKey(tag);
 
@@ -88,103 +99,225 @@ export default function AddServerScreen() {
       setPublicKey(result.publicKeyOpenSSH);
       setFingerprint(result.fingerprint);
       setIsHardwareBacked(result.isHardwareBacked);
-      setStep('install_key');
+      setStep('configure');
     } catch (error) {
       setStep('form');
       Alert.alert(
         'Key Generation Failed',
-        error instanceof Error ? error.message : 'Failed to generate SSH key'
+        error instanceof Error ? error.message : 'Failed to generate the device SSH key.'
       );
     }
   }
 
-  async function handleInstallKey() {
-    if (!password.trim()) {
-      Alert.alert(
-        'Password Required',
-        isLikelyTailscaleHost(host)
-          ? "Enter your server password, or any placeholder if this host only accepts Tailscale SSH. The value is used once and is not stored."
-          : 'Enter your server password to install the SSH key. This password is used once and is not stored.'
-      );
-      return;
+  async function saveServer(record: SaveServerInput) {
+    if (!user) {
+      throw new Error('You must be signed in to add a server.');
     }
 
-    setInstalling(true);
-
-    try {
-      // SSH directly from the device to install the public key
-      await installPublicKey(
-        host.trim(),
-        parseServerPort(port),
-        username.trim(),
-        password,
-        publicKey
-      );
-
-      // Key installed successfully — save the server
-      await saveServer(true);
-    } catch (error) {
-      Alert.alert(
-        'Key Installation Failed',
-        (error instanceof Error ? error.message : 'Failed to install SSH key') +
-          '\n\nYou can save the server and install the key manually later.'
-      );
-    } finally {
-      setInstalling(false);
-    }
-  }
-
-  async function handleSaveWithoutInstalling() {
-    await saveServer(false);
-  }
-
-  async function saveServer(keyInstalled: boolean) {
     setStep('saving');
 
     try {
       const supabase = getSupabase();
 
-      // Get the user's organization
       const { data: orgMember, error: orgError } = await supabase
         .from('members')
         .select('organization_id')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .limit(1)
         .single();
 
       if (orgError || !orgMember) {
-        throw new Error('Could not determine your organization');
+        throw new Error('Could not determine your organization.');
       }
 
-      const { error: insertError } = await supabase.from('servers').insert({
-        user_id: user!.id,
-        organization_id: orgMember.organization_id,
-        label: label.trim(),
-        host: host.trim(),
-        port: parseServerPort(port),
-        username: username.trim(),
-        ssh_public_key: publicKey || null,
-        ssh_key_fingerprint: fingerprint || null,
-        secure_enclave_tag: keyTag || null,
-        key_installed: keyInstalled,
-        status: keyInstalled ? 'key_installed' : 'pending',
-      });
+      const { data, error: insertError } = await supabase
+        .from('servers')
+        .insert({
+          user_id: user.id,
+          organization_id: orgMember.organization_id,
+          label: label.trim(),
+          host: host.trim(),
+          port: resolvedPort,
+          username: username.trim(),
+          transport,
+          host_key_fingerprint: record.hostKeyFingerprint ?? null,
+          status: record.status,
+          last_error: record.lastError ?? null,
+          last_connected_at: record.lastConnectedAt ?? null,
+          last_verified_at: record.lastVerifiedAt ?? null
+        })
+        .select('id')
+        .single();
 
-      if (insertError) {
-        throw new Error(insertError.message);
+      if (insertError || !data) {
+        throw new Error(insertError?.message ?? 'Failed to save the server profile.');
+      }
+
+      if (transport === 'ssh') {
+        if (!keyTag || !publicKey || !fingerprint) {
+          throw new Error('The device SSH key is missing. Generate a key and try again.');
+        }
+
+        await saveServerDeviceCredential({
+          serverId: data.id,
+          keyTag,
+          publicKey,
+          publicKeyFingerprint: fingerprint,
+          isHardwareBacked,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      return data.id;
+    } catch (error) {
+      setStep('configure');
+      throw error;
+    }
+  }
+
+  async function handleInstallAndVerify() {
+    if (!password.trim()) {
+      Alert.alert(
+        'Password Required',
+        'Enter the server password once to install this device key. The password is never stored.'
+      );
+      return;
+    }
+
+    setWorking(true);
+
+    try {
+      const installResult = await installPublicKey(
+        host.trim(),
+        resolvedPort,
+        username.trim(),
+        password,
+        publicKey
+      );
+
+      const verificationTime = new Date().toISOString();
+
+      try {
+        const verifyResult = await verifyConnection({
+          host: host.trim(),
+          port: resolvedPort,
+          username: username.trim(),
+          transport: 'ssh',
+          keyTag,
+          expectedHostKeyFingerprint: installResult.hostKeyFingerprint
+        });
+
+        await saveServer({
+          status: 'connected',
+          hostKeyFingerprint: verifyResult.hostKeyFingerprint,
+          lastConnectedAt: verificationTime,
+          lastVerifiedAt: verificationTime,
+          lastError: null
+        });
+      } catch (verifyError) {
+        try {
+          await saveServer({
+            status: 'error',
+            hostKeyFingerprint: installResult.hostKeyFingerprint,
+            lastError:
+              verifyError instanceof Error
+                ? verifyError.message
+                : 'The server key installed, but Overlord CLI verification failed.'
+          });
+        } catch (saveError) {
+          Alert.alert(
+            'Verification Failed',
+            saveError instanceof Error
+              ? saveError.message
+              : 'Failed to save the verification error.'
+          );
+          return;
+        }
       }
 
       router.back();
     } catch (error) {
-      setStep('install_key');
       Alert.alert(
-        'Failed to Save',
-        error instanceof Error ? error.message : 'An unexpected error occurred'
+        'Key Installation Failed',
+        (error instanceof Error ? error.message : 'Failed to install the SSH key.') +
+          '\n\nYou can still save the server profile and install the key manually later.'
       );
+    } finally {
+      setWorking(false);
     }
   }
 
-  // Step 1: Form to collect server info
+  async function handleVerifyTailscaleAndSave() {
+    if (!password.trim()) {
+      Alert.alert(
+        'Password Required',
+        "Enter your Tailscale SSH compatibility password, or any placeholder if the host only checks the '+password' username mode."
+      );
+      return;
+    }
+
+    setWorking(true);
+
+    try {
+      const verifyResult = await verifyConnection({
+        host: host.trim(),
+        port: resolvedPort,
+        username: username.trim(),
+        transport: 'tailscale_ssh',
+        password
+      });
+
+      const verificationTime = new Date().toISOString();
+      await saveServer({
+        status: 'connected',
+        hostKeyFingerprint: verifyResult.hostKeyFingerprint,
+        lastConnectedAt: verificationTime,
+        lastVerifiedAt: verificationTime,
+        lastError: null
+      });
+
+      router.back();
+    } catch (error) {
+      try {
+        await saveServer({
+          status: 'error',
+          lastError:
+            error instanceof Error
+              ? error.message
+              : 'Failed to verify the Tailscale SSH connection.'
+        });
+      } catch (saveError) {
+        Alert.alert(
+          'Verification Failed',
+          saveError instanceof Error ? saveError.message : 'Failed to save the verification error.'
+        );
+        return;
+      }
+      router.back();
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleSaveWithoutVerification() {
+    setWorking(true);
+
+    try {
+      await saveServer({
+        status: 'pending',
+        lastError: null
+      });
+      router.back();
+    } catch (error) {
+      Alert.alert(
+        'Failed to Save',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      setWorking(false);
+    }
+  }
+
   if (step === 'form' || step === 'generating') {
     return (
       <KeyboardAvoidingView
@@ -198,7 +331,7 @@ export default function AddServerScreen() {
             headerShown: true,
             headerBackTitle: 'Cancel',
             headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.foreground,
+            headerTintColor: colors.foreground
           }}
         />
 
@@ -207,15 +340,37 @@ export default function AddServerScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Info Banner */}
           <View style={styles.infoBanner}>
-            <Ionicons name="key-outline" size={18} color={colors.primary} />
+            <Ionicons
+              name={transport === 'ssh' ? 'key-outline' : 'git-network-outline'}
+              size={18}
+              color={colors.primary}
+            />
             <Text style={styles.infoBannerText}>
-              An SSH key pair will be generated on your device. When available, the private key is stored in the Secure Enclave hardware.
+              {transport === 'ssh'
+                ? 'SSH mode generates a device-specific P-256 key. When supported, the private key stays in the Secure Enclave.'
+                : 'Tailscale SSH mode skips device-key installation and verifies the server directly over the tailnet.'}
             </Text>
           </View>
 
-          {/* Label */}
+          <View style={styles.section}>
+            <Text style={styles.label}>Connection Mode</Text>
+            <View style={styles.segmentedControl}>
+              <TransportButton
+                active={transport === 'ssh'}
+                icon="key-outline"
+                label="SSH"
+                onPress={() => setTransport('ssh')}
+              />
+              <TransportButton
+                active={transport === 'tailscale_ssh'}
+                icon="git-network-outline"
+                label="Tailscale SSH"
+                onPress={() => setTransport('tailscale_ssh')}
+              />
+            </View>
+          </View>
+
           <View style={styles.section}>
             <Text style={styles.label}>Label</Text>
             <TextInput
@@ -229,7 +384,6 @@ export default function AddServerScreen() {
             />
           </View>
 
-          {/* Host */}
           <View style={styles.section}>
             <Text style={styles.label}>Host</Text>
             <TextInput
@@ -243,13 +397,18 @@ export default function AddServerScreen() {
               keyboardType="url"
               returnKeyType="next"
             />
+            {isLikelyTailscaleHost(host) && transport === 'ssh' ? (
+              <Text style={styles.helperText}>
+                This looks like a Tailscale host. Use SSH mode only if you want a normal SSH daemon
+                on the tailnet. Otherwise switch to Tailscale SSH mode.
+              </Text>
+            ) : null}
           </View>
 
-          {/* Port */}
           <View style={styles.section}>
             <Text style={styles.label}>Port</Text>
             <Text style={styles.helperText}>
-              Leave blank for port 22. Tailscale SSH always uses port 22.
+              Leave blank for port 22. Tailscale SSH compatibility also uses port 22.
             </Text>
             <TextInput
               style={styles.input}
@@ -262,7 +421,6 @@ export default function AddServerScreen() {
             />
           </View>
 
-          {/* Username */}
           <View style={styles.section}>
             <Text style={styles.label}>Username</Text>
             <TextInput
@@ -277,25 +435,30 @@ export default function AddServerScreen() {
             />
           </View>
 
-          {/* Submit */}
           <Pressable
             style={({ pressed }) => [
               styles.primaryButton,
               (!canSubmit || step === 'generating') && styles.disabledButton,
-              pressed && canSubmit && { opacity: 0.7 },
+              pressed && canSubmit && { opacity: 0.7 }
             ]}
-            onPress={handleGenerateKey}
+            onPress={handleContinue}
             disabled={!canSubmit || step === 'generating'}
           >
             {step === 'generating' ? (
               <>
                 <ActivityIndicator size="small" color={colors.primaryForeground} />
-                <Text style={styles.primaryButtonText}>Generating Key...</Text>
+                <Text style={styles.primaryButtonText}>Generating Device Key...</Text>
               </>
             ) : (
               <>
-                <Ionicons name="key-outline" size={20} color={colors.primaryForeground} />
-                <Text style={styles.primaryButtonText}>Generate SSH Key & Continue</Text>
+                <Ionicons
+                  name={transport === 'ssh' ? 'key-outline' : 'arrow-forward'}
+                  size={20}
+                  color={colors.primaryForeground}
+                />
+                <Text style={styles.primaryButtonText}>
+                  {transport === 'ssh' ? 'Generate Device Key & Continue' : 'Continue'}
+                </Text>
               </>
             )}
           </Pressable>
@@ -304,8 +467,7 @@ export default function AddServerScreen() {
     );
   }
 
-  // Step 2: Install key on server
-  if (step === 'install_key') {
+  if (step === 'configure') {
     return (
       <KeyboardAvoidingView
         style={styles.container}
@@ -314,10 +476,10 @@ export default function AddServerScreen() {
       >
         <Stack.Screen
           options={{
-            title: 'Install SSH Key',
+            title: transport === 'ssh' ? 'Install & Verify' : 'Verify Connection',
             headerShown: true,
             headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.foreground,
+            headerTintColor: colors.foreground
           }}
         />
 
@@ -326,117 +488,170 @@ export default function AddServerScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Key Generated Banner */}
-          <View style={styles.successBanner}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.successBannerText}>SSH key generated successfully</Text>
-              {!isHardwareBacked && (
-                <Text style={[styles.successBannerText, { fontWeight: '400', fontSize: 12, marginTop: 2 }]}>
-                  Software-backed key (Secure Enclave not available on this device)
+          {transport === 'ssh' ? (
+            <>
+              <View style={styles.successBanner}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.successBannerText}>
+                    Device SSH key generated successfully
+                  </Text>
+                  {!isHardwareBacked ? (
+                    <Text
+                      style={[
+                        styles.successBannerText,
+                        { fontWeight: '400', fontSize: 12, marginTop: 2 }
+                      ]}
+                    >
+                      Software-backed key (Secure Enclave not available on this device)
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.label}>Key Fingerprint</Text>
+                <View style={styles.fingerprintBox}>
+                  <Text style={styles.fingerprintText} selectable>
+                    {fingerprint}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.label}>Public Key</Text>
+                <View style={styles.publicKeyBox}>
+                  <Text style={styles.publicKeyText} numberOfLines={3} selectable>
+                    {publicKey}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.label}>Server Password</Text>
+                <Text style={styles.helperText}>
+                  Enter your password once so Overlord can add this device key to{' '}
+                  ~/.ssh/authorized_keys{` `}and then verify that `ovld` is installed.
                 </Text>
-              )}
-            </View>
-          </View>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter server password"
+                  placeholderTextColor={colors.mutedForeground}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
 
-          {/* Fingerprint */}
-          <View style={styles.section}>
-            <Text style={styles.label}>Key Fingerprint</Text>
-            <View style={styles.fingerprintBox}>
-              <Text style={styles.fingerprintText} selectable>
-                {fingerprint}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  working && styles.disabledButton,
+                  pressed && !working && { opacity: 0.7 }
+                ]}
+                onPress={handleInstallAndVerify}
+                disabled={working}
+              >
+                {working ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.primaryForeground} />
+                    <Text style={styles.primaryButtonText}>Installing & Verifying...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons
+                      name="cloud-upload-outline"
+                      size={20}
+                      color={colors.primaryForeground}
+                    />
+                    <Text style={styles.primaryButtonText}>Install Key & Verify Overlord CLI</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.7 }]}
+                onPress={handleSaveWithoutVerification}
+                disabled={working}
+              >
+                <Text style={styles.secondaryButtonText}>Save Without Installing Yet</Text>
+              </Pressable>
+
+              <Text style={styles.manualHint}>
+                You can still add the public key manually on the server and verify the connection
+                later.
               </Text>
-            </View>
-          </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.infoBanner}>
+                <Ionicons name="git-network-outline" size={18} color={colors.primary} />
+                <Text style={styles.infoBannerText}>
+                  Tailscale SSH mode does not install a device key. Overlord will verify the host,
+                  pin the server host key, and check that the remote machine has `ovld` installed.
+                </Text>
+              </View>
 
-          {/* Public Key (collapsed) */}
-          <View style={styles.section}>
-            <Text style={styles.label}>Public Key</Text>
-            <View style={styles.publicKeyBox}>
-              <Text style={styles.publicKeyText} numberOfLines={3} selectable>
-                {publicKey}
-              </Text>
-            </View>
-          </View>
+              <View style={styles.section}>
+                <Text style={styles.label}>Password / Compatibility Value</Text>
+                <Text style={styles.helperText}>
+                  Use the password required by the server, or any placeholder value if your
+                  Tailscale SSH policy only checks the `username+password` compatibility mode.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Enter password or placeholder"
+                  placeholderTextColor={colors.mutedForeground}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
 
-          {/* Password for key installation */}
-          <View style={styles.section}>
-            <Text style={styles.label}>
-              {isLikelyTailscaleHost(host) ? 'Password / Tailscale Fallback' : 'Server Password'}
-            </Text>
-            <Text style={styles.helperText}>
-              {isLikelyTailscaleHost(host)
-                ? "If this host uses Tailscale SSH, Overlord will try Tailscale's password-compatibility mode automatically. The password is never stored."
-                : 'Enter your password once to install the SSH key. The password is not stored.'}
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder={
-                isLikelyTailscaleHost(host)
-                  ? 'Enter password or any placeholder'
-                  : 'Enter server password'
-              }
-              placeholderTextColor={colors.mutedForeground}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  working && styles.disabledButton,
+                  pressed && !working && { opacity: 0.7 }
+                ]}
+                onPress={handleVerifyTailscaleAndSave}
+                disabled={working}
+              >
+                {working ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.primaryForeground} />
+                    <Text style={styles.primaryButtonText}>Verifying...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={20}
+                      color={colors.primaryForeground}
+                    />
+                    <Text style={styles.primaryButtonText}>Verify & Save</Text>
+                  </>
+                )}
+              </Pressable>
 
-          {isLikelyTailscaleHost(host) ? (
-            <View style={styles.infoBanner}>
-              <Ionicons name="git-network-outline" size={18} color={colors.primary} />
-              <Text style={styles.infoBannerText}>
-                This looks like a Tailscale host. Tailscale SSH only listens on port 22, and installing this key updates the host&apos;s regular
-                {' '}~/.ssh/authorized_keys{` `}
-                file for non-Tailscale SSH access later.
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Install Key Button */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              installing && styles.disabledButton,
-              pressed && !installing && { opacity: 0.7 },
-            ]}
-            onPress={handleInstallKey}
-            disabled={installing}
-          >
-            {installing ? (
-              <>
-                <ActivityIndicator size="small" color={colors.primaryForeground} />
-                <Text style={styles.primaryButtonText}>Installing Key...</Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="cloud-upload-outline" size={20} color={colors.primaryForeground} />
-                <Text style={styles.primaryButtonText}>Install Key on Server</Text>
-              </>
-            )}
-          </Pressable>
-
-          {/* Save without installing */}
-          <Pressable
-            style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.7 }]}
-            onPress={handleSaveWithoutInstalling}
-            disabled={installing}
-          >
-            <Text style={styles.secondaryButtonText}>Save Without Installing</Text>
-          </Pressable>
-
-          <Text style={styles.manualHint}>
-            You can also manually add the public key to your server's ~/.ssh/authorized_keys file.
-          </Text>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.7 }]}
+                onPress={handleSaveWithoutVerification}
+                disabled={working}
+              >
+                <Text style={styles.secondaryButtonText}>Save Without Verifying</Text>
+              </Pressable>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     );
   }
 
-  // Step 3: Saving
   return (
     <View style={styles.centered}>
       <Stack.Screen
@@ -444,7 +659,7 @@ export default function AddServerScreen() {
           title: 'Saving...',
           headerShown: true,
           headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.foreground,
+          headerTintColor: colors.foreground
         }}
       />
       <ActivityIndicator size="large" color={colors.primary} />
@@ -453,27 +668,59 @@ export default function AddServerScreen() {
   );
 }
 
+function TransportButton({
+  active,
+  icon,
+  label,
+  onPress
+}: {
+  active: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.transportButton,
+        active && styles.transportButtonActive,
+        pressed && { opacity: 0.8 }
+      ]}
+      onPress={onPress}
+    >
+      <Ionicons
+        name={icon}
+        size={18}
+        color={active ? colors.primaryForeground : colors.foreground}
+      />
+      <Text style={[styles.transportButtonText, active && { color: colors.primaryForeground }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   scrollView: {
-    flex: 1,
+    flex: 1
   },
   scrollContent: {
-    padding: 16,
+    padding: 16
   },
   centered: {
     flex: 1,
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
+    gap: 16
   },
   savingText: {
     color: colors.mutedForeground,
-    fontSize: 16,
+    fontSize: 16
   },
   infoBanner: {
     flexDirection: 'row',
@@ -484,13 +731,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primary + '30',
     padding: 14,
-    marginBottom: 24,
+    marginBottom: 24
   },
   infoBannerText: {
     flex: 1,
     color: colors.primary,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 18
   },
   successBanner: {
     flexDirection: 'row',
@@ -501,15 +748,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.success + '30',
     padding: 14,
-    marginBottom: 24,
+    marginBottom: 24
   },
   successBannerText: {
     color: colors.success,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 24
   },
   label: {
     color: colors.mutedForeground,
@@ -517,88 +764,112 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 10,
+    marginBottom: 10
   },
   helperText: {
     color: colors.mutedForeground,
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 10,
+    marginBottom: 10
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    gap: 12
+  },
+  transportButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingVertical: 14,
+    paddingHorizontal: 12
+  },
+  transportButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  transportButtonText: {
+    color: colors.foreground,
+    fontSize: 14,
+    fontWeight: '600'
   },
   input: {
     backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     color: colors.foreground,
+    fontSize: 16
+  },
+  primaryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10
+  },
+  primaryButtonText: {
+    color: colors.primaryForeground,
     fontSize: 16,
+    fontWeight: '600'
+  },
+  secondaryButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingVertical: 15,
+    alignItems: 'center'
+  },
+  secondaryButtonText: {
+    color: colors.foreground,
+    fontSize: 15,
+    fontWeight: '500'
+  },
+  disabledButton: {
+    opacity: 0.5
   },
   fingerprintBox: {
     backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
+    padding: 14
   },
   fingerprintText: {
     color: colors.foreground,
-    fontSize: 13,
     fontFamily: 'Menlo',
+    fontSize: 12
   },
   publicKeyBox: {
     backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
+    padding: 14
   },
   publicKeyText: {
-    color: colors.mutedForeground,
-    fontSize: 11,
+    color: colors.foreground,
     fontFamily: 'Menlo',
-    lineHeight: 16,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  primaryButtonText: {
-    color: colors.primaryForeground,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  secondaryButton: {
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-  secondaryButtonText: {
-    color: colors.secondaryForeground,
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 16
   },
   manualHint: {
-    color: colors.mutedForeground,
-    fontSize: 12,
+    marginTop: 12,
     textAlign: 'center',
-    lineHeight: 17,
-    paddingHorizontal: 16,
-  },
+    color: colors.mutedForeground,
+    fontSize: 13,
+    lineHeight: 18
+  }
 });

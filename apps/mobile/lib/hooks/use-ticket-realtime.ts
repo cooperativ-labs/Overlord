@@ -23,7 +23,12 @@ export function useTicketRealtime(ticketId: string, onUpdate: () => void) {
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'ticket_events', filter: `ticket_id=eq.${ticketId}` },
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ticket_events',
+          filter: `ticket_id=eq.${ticketId}`
+        },
         () => onUpdateRef.current()
       )
       .on(
@@ -33,7 +38,12 @@ export function useTicketRealtime(ticketId: string, onUpdate: () => void) {
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'agent_sessions', filter: `ticket_id=eq.${ticketId}` },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'agent_sessions',
+          filter: `ticket_id=eq.${ticketId}`
+        },
         () => onUpdateRef.current()
       )
       .subscribe(status => {

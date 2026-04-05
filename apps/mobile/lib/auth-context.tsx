@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const {
-      data: { subscription },
+      data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: session?.user ?? null,
         loading,
         signIn,
-        signOut,
+        signOut
       }}
     >
       {children}

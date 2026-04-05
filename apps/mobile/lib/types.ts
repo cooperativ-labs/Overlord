@@ -133,8 +133,21 @@ export interface TicketEvent {
   created_at: string;
 }
 
+/** Supported remote connection transports. */
+export type ServerTransport = 'ssh' | 'tailscale_ssh';
+
 /** SSH server connection status. */
-export type ServerStatus = 'pending' | 'connected' | 'error' | 'key_installed';
+export type ServerStatus = 'pending' | 'connected' | 'error';
+
+/** Device-local credential metadata for a server profile. */
+export interface DeviceServerCredential {
+  serverId: string;
+  keyTag: string;
+  publicKey: string;
+  publicKeyFingerprint: string;
+  isHardwareBacked: boolean;
+  createdAt: string;
+}
 
 /** SSH server connection record. */
 export interface Server {
@@ -145,11 +158,11 @@ export interface Server {
   host: string;
   port: number;
   username: string;
-  ssh_public_key: string | null;
-  ssh_key_fingerprint: string | null;
-  secure_enclave_tag: string | null;
-  key_installed: boolean;
+  transport: ServerTransport;
+  host_key_fingerprint: string | null;
   last_connected_at: string | null;
+  last_verified_at: string | null;
+  last_error: string | null;
   status: ServerStatus;
   created_at: string;
   updated_at: string;

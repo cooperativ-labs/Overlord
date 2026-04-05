@@ -9,11 +9,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from 'react-native';
 
-import { colors } from '@/lib/colors';
 import { useAuth } from '@/lib/auth-context';
+import { colors } from '@/lib/colors';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -89,25 +89,25 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   inner: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 24
   },
   title: {
     fontSize: 32,
     fontWeight: '700',
     color: colors.foreground,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 8
   },
   subtitle: {
     fontSize: 16,
     color: colors.mutedForeground,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 32
   },
   input: {
     backgroundColor: colors.card,
@@ -118,21 +118,21 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: colors.foreground,
-    marginBottom: 12,
+    marginBottom: 12
   },
   button: {
     backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 8
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.7
   },
   buttonText: {
     color: colors.primaryForeground,
     fontSize: 16,
-    fontWeight: '600',
-  },
+    fontWeight: '600'
+  }
 });

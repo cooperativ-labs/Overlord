@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { version } = require('../../package.json');
+import { getCurrentCliVersion } from './cli-update.mjs';
 
 export function runVersionCommand() {
-  console.log(`Overlord CLI ${version}`);
+  console.log(`Overlord CLI ${getCurrentCliVersion()}`);
 }

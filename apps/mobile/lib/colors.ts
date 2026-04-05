@@ -11,5 +11,5 @@ export const colors = {
   mutedForeground: '#71717a',
   border: '#27272a',
   destructive: '#ef4444',
-  success: '#22c55e',
+  success: '#22c55e'
 } as const;

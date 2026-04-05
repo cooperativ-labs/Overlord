@@ -2,6 +2,7 @@
 
 import { runAttachCommand } from './attach.mjs';
 import { runAuthCommand } from './auth.mjs';
+import { checkForCliUpdate, printCliUpdateNotice, runCliUpdateCommand } from './cli-update.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 import { runProtocolCommand } from './protocol.mjs';
 import { runDoctorCommand, runSetupCommand } from './setup.mjs';
@@ -38,6 +39,7 @@ Usage:
   ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
   ${primaryCommand} setup <agent|all>          Install Overlord agent connector
+  ${primaryCommand} update                    Install the latest CLI version from npm
   ${primaryCommand} doctor                     Validate installed agent connectors and check for CLI updates
   ${primaryCommand} version                    Show the installed CLI version
   ${primaryCommand} help                       Show this help message
@@ -66,6 +68,15 @@ Run a subcommand with --help for more detail.
 export async function runCli({ primaryCommand }) {
   assertSupportedNodeVersion();
   const [command, ...rest] = process.argv.slice(2);
+  const shouldCheckForUpdate =
+    Boolean(process.stdout.isTTY || process.stderr.isTTY) &&
+    command !== 'doctor' &&
+    command !== 'update';
+  const latestCliVersion = shouldCheckForUpdate ? await checkForCliUpdate() : null;
+
+  if (latestCliVersion && command !== 'doctor' && command !== 'update') {
+    printCliUpdateNotice(latestCliVersion);
+  }
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     printHelp(primaryCommand);
@@ -119,8 +130,18 @@ export async function runCli({ primaryCommand }) {
     return;
   }
 
+  if (command === 'update') {
+    if (rest[0] === '--help' || rest[0] === '-h' || rest[0] === 'help') {
+      console.log(`Usage:
+  ${primaryCommand} update   Install the latest CLI version from npm`);
+      return;
+    }
+    await runCliUpdateCommand();
+    return;
+  }
+
   if (command === 'doctor') {
-    await runDoctorCommand();
+    await runDoctorCommand({ latestCliVersion });
     return;
   }
 

@@ -76,7 +76,10 @@ export function normalizeAgentModels(rows: Record<string, unknown>[]): AgentMode
   return rows
     .map(row => {
       const agentType = row.agent_type;
-      if (typeof agentType !== 'string' || !LAUNCH_AGENT_VALUES.includes(agentType as LaunchAgentType)) {
+      if (
+        typeof agentType !== 'string' ||
+        !LAUNCH_AGENT_VALUES.includes(agentType as LaunchAgentType)
+      ) {
         return null;
       }
 

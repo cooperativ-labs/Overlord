@@ -7,7 +7,7 @@ export default function TicketsLayout() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: colors.background },
-        headerTintColor: colors.foreground,
+        headerTintColor: colors.foreground
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Tickets' }} />

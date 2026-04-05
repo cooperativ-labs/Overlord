@@ -11,7 +11,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from 'react-native';
 
 import { AgentModelChooser } from '@/components/AgentModelChooser';
@@ -30,14 +30,14 @@ const priorities: { value: TicketPriority; label: string }[] = [
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
-  { value: 'urgent', label: 'Urgent' },
+  { value: 'urgent', label: 'Urgent' }
 ];
 
 const priorityColors: Record<TicketPriority, string> = {
   low: colors.mutedForeground,
   medium: colors.primary,
   high: '#f59e0b',
-  urgent: colors.destructive,
+  urgent: colors.destructive
 };
 
 export default function CreateTicketScreen() {
@@ -81,7 +81,7 @@ export default function CreateTicketScreen() {
     const trimmedObjective = objective.trim();
     if (!trimmedObjective || !selectedProjectId) return;
 
-    const selectedProject = projects.find((p) => p.id === selectedProjectId);
+    const selectedProject = projects.find(p => p.id === selectedProjectId);
     if (!selectedProject) return;
 
     setSubmitting(true);
@@ -91,9 +91,7 @@ export default function CreateTicketScreen() {
 
       // Generate a simple title from the objective
       const title =
-        trimmedObjective.length > 80
-          ? trimmedObjective.substring(0, 77) + '...'
-          : trimmedObjective;
+        trimmedObjective.length > 80 ? trimmedObjective.substring(0, 77) + '...' : trimmedObjective;
 
       // Insert the ticket
       const { data: ticket, error: ticketError } = await supabase
@@ -104,7 +102,7 @@ export default function CreateTicketScreen() {
           priority,
           organization_id: selectedProject.organization_id,
           project_id: selectedProjectId,
-          assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null,
+          assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null
         })
         .select('id, organization_id')
         .single();
@@ -117,7 +115,7 @@ export default function CreateTicketScreen() {
       const { error: objectiveError } = await supabase.from('objectives').insert({
         ticket_id: ticket.id,
         objective: trimmedObjective,
-        state: 'draft',
+        state: 'draft'
       });
 
       if (objectiveError) {
@@ -128,7 +126,7 @@ export default function CreateTicketScreen() {
       await supabase.from('ticket_events').insert({
         event_type: 'system',
         summary: 'Ticket created from mobile.',
-        ticket_id: ticket.id,
+        ticket_id: ticket.id
       });
 
       router.back();
@@ -142,7 +140,7 @@ export default function CreateTicketScreen() {
     }
   }
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const selectedProject = projects.find(p => p.id === selectedProjectId);
   const canSubmit = objective.trim().length > 0 && selectedProjectId && !submitting;
 
   return (
@@ -170,7 +168,7 @@ export default function CreateTicketScreen() {
                 <Text style={styles.submitButton}>Create</Text>
               )}
             </Pressable>
-          ),
+          )
         }}
       />
 
@@ -219,7 +217,7 @@ export default function CreateTicketScreen() {
               </Pressable>
               {showProjectPicker && (
                 <View style={styles.pickerList}>
-                  {projects.map((project) => {
+                  {projects.map(project => {
                     const isSelected = project.id === selectedProjectId;
                     return (
                       <Pressable
@@ -233,7 +231,7 @@ export default function CreateTicketScreen() {
                         <Text
                           style={[
                             styles.pickerItemText,
-                            isSelected && styles.pickerItemTextSelected,
+                            isSelected && styles.pickerItemTextSelected
                           ]}
                         >
                           {project.name}
@@ -254,7 +252,7 @@ export default function CreateTicketScreen() {
         <View style={styles.section}>
           <Text style={styles.label}>Priority</Text>
           <View style={styles.priorityRow}>
-            {priorities.map((p) => {
+            {priorities.map(p => {
               const isSelected = p.value === priority;
               return (
                 <Pressable
@@ -263,20 +261,15 @@ export default function CreateTicketScreen() {
                     styles.priorityChip,
                     isSelected && {
                       backgroundColor: priorityColors[p.value] + '20',
-                      borderColor: priorityColors[p.value],
-                    },
+                      borderColor: priorityColors[p.value]
+                    }
                   ]}
                   onPress={() => setPriority(p.value)}
                 >
                   <View
                     style={[styles.priorityDot, { backgroundColor: priorityColors[p.value] }]}
                   />
-                  <Text
-                    style={[
-                      styles.priorityText,
-                      isSelected && { color: colors.foreground },
-                    ]}
-                  >
+                  <Text style={[styles.priorityText, isSelected && { color: colors.foreground }]}>
                     {p.label}
                   </Text>
                 </Pressable>
@@ -303,16 +296,16 @@ export default function CreateTicketScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.background
   },
   scrollView: {
-    flex: 1,
+    flex: 1
   },
   scrollContent: {
-    padding: 16,
+    padding: 16
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 24
   },
   label: {
     color: colors.mutedForeground,
@@ -320,7 +313,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 10,
+    marginBottom: 10
   },
   objectiveInput: {
     backgroundColor: colors.card,
@@ -331,7 +324,7 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     fontSize: 16,
     lineHeight: 24,
-    minHeight: 140,
+    minHeight: 140
   },
   selector: {
     backgroundColor: colors.card,
@@ -341,11 +334,11 @@ const styles = StyleSheet.create({
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'space-between'
   },
   selectorText: {
     color: colors.foreground,
-    fontSize: 16,
+    fontSize: 16
   },
   pickerList: {
     marginTop: 8,
@@ -353,7 +346,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
+    overflow: 'hidden'
   },
   pickerItem: {
     padding: 14,
@@ -361,22 +354,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.border
   },
   pickerItemSelected: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.secondary
   },
   pickerItemText: {
     color: colors.secondaryForeground,
-    fontSize: 16,
+    fontSize: 16
   },
   pickerItemTextSelected: {
     color: colors.foreground,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   priorityRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 8
   },
   priorityChip: {
     flex: 1,
@@ -389,31 +382,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 8
   },
   priorityDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: 4
   },
   priorityText: {
     color: colors.secondaryForeground,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '600'
   },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 16,
+    padding: 16
   },
   loadingText: {
     color: colors.mutedForeground,
-    fontSize: 14,
+    fontSize: 14
   },
   submitButton: {
     color: colors.primary,
     fontSize: 17,
-    fontWeight: '600',
-  },
+    fontWeight: '600'
+  }
 });

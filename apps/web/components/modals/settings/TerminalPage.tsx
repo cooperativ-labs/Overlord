@@ -21,11 +21,20 @@ import {
   getEditorSchemeLabel
 } from '@/lib/helpers/editor-scheme';
 
+type TerminalSettingsProfileId = 'local' | 'server';
+type TerminalProfileState = {
+  terminalApp: string;
+  terminalLaunchMode: string;
+  terminalCustomHotkey: string;
+  customTerminalApp: string;
+};
+
 const externalTerminalAppOptions = [
   { value: 'default', label: 'System Default' },
   { value: 'terminal', label: 'Terminal' },
   { value: 'iterm', label: 'iTerm2' },
   { value: 'warp', label: 'Warp' },
+  { value: 'tmux', label: 'tmux' },
   { value: 'ghostty', label: 'Ghostty' },
   { value: 'alacritty', label: 'Alacritty' },
   { value: 'kitty', label: 'Kitty' },
@@ -40,12 +49,44 @@ const externalTerminalLaunchModeOptions = [
   { value: 'custom', label: 'Custom' }
 ] as const;
 
+const DEFAULT_TERMINAL_PROFILE: TerminalProfileState = {
+  terminalApp: 'default',
+  terminalLaunchMode: 'tab',
+  terminalCustomHotkey: '',
+  customTerminalApp: ''
+};
+
+const TERMINAL_PROFILE_KEYS: Record<
+  TerminalSettingsProfileId,
+  {
+    app: string;
+    launchMode: string;
+    customHotkey: string;
+    customApp: string;
+  }
+> = {
+  local: {
+    app: 'externalTerminalApp',
+    launchMode: 'externalTerminalLaunchMode',
+    customHotkey: 'externalTerminalCustomHotkey',
+    customApp: 'customExternalTerminalApp'
+  },
+  server: {
+    app: 'serverExternalTerminalApp',
+    launchMode: 'serverExternalTerminalLaunchMode',
+    customHotkey: 'serverExternalTerminalCustomHotkey',
+    customApp: 'customServerExternalTerminalApp'
+  }
+};
+
 export function TerminalPage({ open }: { open: boolean }) {
   const { api, isElectron } = useElectron();
-  const [terminalApp, setTerminalApp] = useState('default');
-  const [terminalLaunchMode, setTerminalLaunchMode] = useState('window');
-  const [terminalCustomHotkey, setTerminalCustomHotkey] = useState('');
-  const [customTerminalApp, setCustomTerminalApp] = useState('');
+  const [terminalProfiles, setTerminalProfiles] = useState<
+    Record<TerminalSettingsProfileId, TerminalProfileState>
+  >({
+    local: DEFAULT_TERMINAL_PROFILE,
+    server: DEFAULT_TERMINAL_PROFILE
+  });
   const [editorScheme, setEditorScheme] = useState(DEFAULT_EDITOR_SCHEME);
   const [editorSchemeLoading, setEditorSchemeLoading] = useState(false);
   const [editorSchemeError, setEditorSchemeError] = useState<string | null>(null);
@@ -89,50 +130,100 @@ export function TerminalPage({ open }: { open: boolean }) {
     }
   }
 
-  const supportsLaunchModeSelection =
-    terminalApp !== 'ghostty' && terminalApp !== 'alacritty' && terminalApp !== 'kitty';
-
-  const selectedTerminalLabel =
-    externalTerminalAppOptions.find(opt => opt.value === terminalApp)?.label ?? 'your terminal';
-
   useEffect(() => {
     if (!api || !open) return;
     Promise.all([
-      api.settings.get<string>('externalTerminalApp'),
-      api.settings.get<string>('externalTerminalLaunchMode'),
-      api.settings.get<string>('customExternalTerminalApp'),
-      api.settings.get<string>('externalTerminalCustomHotkey')
-    ]).then(([appValue, launchModeValue, customAppValue, customHotkeyValue]) => {
-      if (appValue) setTerminalApp(appValue);
-      if (launchModeValue) setTerminalLaunchMode(launchModeValue);
-      if (typeof customAppValue === 'string') setCustomTerminalApp(customAppValue);
-      if (typeof customHotkeyValue === 'string') setTerminalCustomHotkey(customHotkeyValue);
-    });
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.app),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.launchMode),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customApp),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customHotkey),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.app),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.launchMode),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customApp),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customHotkey)
+    ]).then(
+      ([
+        localAppValue,
+        localLaunchModeValue,
+        localCustomAppValue,
+        localCustomHotkeyValue,
+        serverAppValue,
+        serverLaunchModeValue,
+        serverCustomAppValue,
+        serverCustomHotkeyValue
+      ]) => {
+        setTerminalProfiles({
+          local: {
+            terminalApp: localAppValue || DEFAULT_TERMINAL_PROFILE.terminalApp,
+            terminalLaunchMode: localLaunchModeValue || DEFAULT_TERMINAL_PROFILE.terminalLaunchMode,
+            customTerminalApp:
+              typeof localCustomAppValue === 'string'
+                ? localCustomAppValue
+                : DEFAULT_TERMINAL_PROFILE.customTerminalApp,
+            terminalCustomHotkey:
+              typeof localCustomHotkeyValue === 'string'
+                ? localCustomHotkeyValue
+                : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey
+          },
+          server: {
+            terminalApp: serverAppValue || localAppValue || DEFAULT_TERMINAL_PROFILE.terminalApp,
+            terminalLaunchMode:
+              serverLaunchModeValue ||
+              localLaunchModeValue ||
+              DEFAULT_TERMINAL_PROFILE.terminalLaunchMode,
+            customTerminalApp:
+              typeof serverCustomAppValue === 'string'
+                ? serverCustomAppValue
+                : typeof localCustomAppValue === 'string'
+                  ? localCustomAppValue
+                  : DEFAULT_TERMINAL_PROFILE.customTerminalApp,
+            terminalCustomHotkey:
+              typeof serverCustomHotkeyValue === 'string'
+                ? serverCustomHotkeyValue
+                : typeof localCustomHotkeyValue === 'string'
+                  ? localCustomHotkeyValue
+                  : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey
+          }
+        });
+      }
+    );
   }, [api, open]);
 
-  async function handleTerminalAppChange(value: string) {
-    setTerminalApp(value);
-    await api?.settings.set('externalTerminalApp', value);
+  async function updateTerminalProfile(
+    profileId: TerminalSettingsProfileId,
+    field: keyof TerminalProfileState,
+    value: string
+  ) {
+    setTerminalProfiles(current => ({
+      ...current,
+      [profileId]: {
+        ...current[profileId],
+        [field]: value
+      }
+    }));
+    const profileKeys = TERMINAL_PROFILE_KEYS[profileId];
+    const settingKey =
+      field === 'terminalApp'
+        ? profileKeys.app
+        : field === 'terminalLaunchMode'
+          ? profileKeys.launchMode
+          : field === 'terminalCustomHotkey'
+            ? profileKeys.customHotkey
+            : profileKeys.customApp;
+    await api?.settings.set(settingKey, value);
   }
 
-  async function handleTerminalLaunchModeChange(value: string) {
-    setTerminalLaunchMode(value);
-    await api?.settings.set('externalTerminalLaunchMode', value);
-  }
-
-  async function handleTerminalCustomHotkeyChange(value: string) {
-    setTerminalCustomHotkey(value);
-    await api?.settings.set('externalTerminalCustomHotkey', value);
-  }
-
-  function handleTerminalCustomHotkeyKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+  function handleTerminalCustomHotkeyKeyDown(
+    profileId: TerminalSettingsProfileId,
+    event: KeyboardEvent<HTMLInputElement>
+  ) {
     event.preventDefault();
     event.stopPropagation();
 
     if (event.key === 'Tab') return;
 
     if (event.key === 'Backspace' || event.key === 'Delete') {
-      void handleTerminalCustomHotkeyChange('');
+      void updateTerminalProfile(profileId, 'terminalCustomHotkey', '');
       return;
     }
 
@@ -159,12 +250,14 @@ export function TerminalPage({ open }: { open: boolean }) {
 
     if (parts.length === 0) return;
 
-    void handleTerminalCustomHotkeyChange(parts.join(' + '));
+    void updateTerminalProfile(profileId, 'terminalCustomHotkey', parts.join(' + '));
   }
 
-  async function handleCustomTerminalAppChange(value: string) {
-    setCustomTerminalApp(value);
-    await api?.settings.set('customExternalTerminalApp', value);
+  function isTmuxLikeProfile(profile: TerminalProfileState) {
+    if (profile.terminalApp === 'tmux' || profile.terminalApp === 'cmux') return true;
+    if (profile.terminalApp !== 'custom') return false;
+    const normalized = profile.customTerminalApp.trim().toLowerCase();
+    return normalized.includes('tmux') || normalized.includes('cmux');
   }
 
   return (
@@ -195,82 +288,127 @@ export function TerminalPage({ open }: { open: boolean }) {
           Overlord now launches agents in your system terminal instead of an in-app terminal.
         </p>
       </div>
-      <div className="grid gap-2">
-        <Label htmlFor="terminal-app">External terminal application</Label>
-        <Select value={terminalApp} onValueChange={handleTerminalAppChange} disabled={!isElectron}>
-          <SelectTrigger id="terminal-app">
-            <SelectValue placeholder="Select terminal" />
-          </SelectTrigger>
-          <SelectContent>
-            {externalTerminalAppOptions.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {terminalApp === 'custom' && (
-          <div className="grid gap-2">
-            <Label htmlFor="custom-terminal-app">Custom terminal name or path</Label>
-            <Input
-              id="custom-terminal-app"
-              placeholder="Example: cmux or /Applications/cmux.app"
-              value={customTerminalApp}
-              onChange={event => void handleCustomTerminalAppChange(event.target.value)}
-              disabled={!isElectron}
-            />
-            <p className="text-xs text-muted-foreground">
-              Overlord will open this app and type the launch command into the active terminal
-              session.
-            </p>
+      {(['local', 'server'] as const).map(profileId => {
+        const profile = terminalProfiles[profileId];
+        const isTmuxLike = isTmuxLikeProfile(profile);
+        const supportsLaunchModeSelection =
+          !isTmuxLike &&
+          profile.terminalApp !== 'ghostty' &&
+          profile.terminalApp !== 'alacritty' &&
+          profile.terminalApp !== 'kitty';
+        const selectedTerminalLabel =
+          externalTerminalAppOptions.find(opt => opt.value === profile.terminalApp)?.label ??
+          'your terminal';
+        const prefix = profileId === 'local' ? 'local' : 'server';
+
+        return (
+          <div key={profileId} className="grid gap-4 rounded-lg border p-4">
+            <div className="grid gap-1">
+              <h3 className="text-sm font-medium">
+                {profileId === 'local' ? 'Local terminal settings' : 'Server terminal settings'}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {profileId === 'local'
+                  ? 'Used when the project runs in a local working directory.'
+                  : 'Used when the project runs through SSH on a server workspace.'}
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor={`${prefix}-terminal-app`}>External terminal application</Label>
+              <Select
+                value={profile.terminalApp}
+                onValueChange={value => void updateTerminalProfile(profileId, 'terminalApp', value)}
+                disabled={!isElectron}
+              >
+                <SelectTrigger id={`${prefix}-terminal-app`}>
+                  <SelectValue placeholder="Select terminal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {externalTerminalAppOptions.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {profile.terminalApp === 'custom' && (
+                <div className="grid gap-2">
+                  <Label htmlFor={`${prefix}-custom-terminal-app`}>
+                    Custom terminal name or path
+                  </Label>
+                  <Input
+                    id={`${prefix}-custom-terminal-app`}
+                    placeholder="Example: cmux or /Applications/cmux.app"
+                    value={profile.customTerminalApp}
+                    onChange={event =>
+                      void updateTerminalProfile(profileId, 'customTerminalApp', event.target.value)
+                    }
+                    disabled={!isElectron}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Overlord will open this app and type the launch command into the active terminal
+                    session.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="grid gap-2">
+              {supportsLaunchModeSelection && (
+                <>
+                  <Label htmlFor={`${prefix}-terminal-launch-mode`}>When opening a terminal</Label>
+                  <Select
+                    value={profile.terminalLaunchMode}
+                    onValueChange={value =>
+                      void updateTerminalProfile(profileId, 'terminalLaunchMode', value)
+                    }
+                    disabled={!isElectron}
+                  >
+                    <SelectTrigger id={`${prefix}-terminal-launch-mode`}>
+                      <SelectValue placeholder="Select behavior" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {externalTerminalLaunchModeOptions.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
+              {supportsLaunchModeSelection && profile.terminalLaunchMode === 'custom' && (
+                <div className="mt-2 grid gap-2">
+                  <Label htmlFor={`${prefix}-terminal-custom-hotkey`}>Custom hotkey</Label>
+                  <Input
+                    id={`${prefix}-terminal-custom-hotkey`}
+                    placeholder="Press the key combination to use (e.g. Cmd + D)"
+                    value={profile.terminalCustomHotkey}
+                    onKeyDown={event => handleTerminalCustomHotkeyKeyDown(profileId, event)}
+                    readOnly
+                    disabled={!isElectron}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your
+                    preferred split or focus behavior, then type the launch command.
+                  </p>
+                </div>
+              )}
+              {!supportsLaunchModeSelection && (
+                <p className="text-xs text-muted-foreground">
+                  {isTmuxLike
+                    ? 'tmux-based terminals always open a fresh instance so multiple agent runs can coexist.'
+                    : 'This terminal opens directly into a new session for each launch.'}
+                </p>
+              )}
+              {supportsLaunchModeSelection && profile.terminalLaunchMode !== 'custom' && (
+                <p className="text-xs text-muted-foreground">
+                  Choose the app and whether launches open in a new window or tab.
+                </p>
+              )}
+            </div>
           </div>
-        )}
-      </div>
-      <div className="grid gap-2">
-        {supportsLaunchModeSelection && (
-          <>
-            <Label htmlFor="terminal-launch-mode">When opening a terminal</Label>
-            <Select
-              value={terminalLaunchMode}
-              onValueChange={handleTerminalLaunchModeChange}
-              disabled={!isElectron}
-            >
-              <SelectTrigger id="terminal-launch-mode">
-                <SelectValue placeholder="Select behavior" />
-              </SelectTrigger>
-              <SelectContent>
-                {externalTerminalLaunchModeOptions.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </>
-        )}
-        {supportsLaunchModeSelection && terminalLaunchMode === 'custom' && (
-          <div className="mt-2 grid gap-2">
-            <Label htmlFor="terminal-custom-hotkey">Custom hotkey</Label>
-            <Input
-              id="terminal-custom-hotkey"
-              placeholder="Press the key combination to use (e.g. Cmd + D)"
-              value={terminalCustomHotkey}
-              onKeyDown={handleTerminalCustomHotkeyKeyDown}
-              readOnly
-              disabled={!isElectron}
-            />
-            <p className="text-xs text-muted-foreground">
-              Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your
-              preferred split or focus behavior, then type the launch command.
-            </p>
-          </div>
-        )}
-        {supportsLaunchModeSelection && terminalLaunchMode !== 'custom' && (
-          <p className="text-xs text-muted-foreground">
-            Choose the app and whether launches open in a new window or tab.
-          </p>
-        )}
-      </div>
+        );
+      })}
       <div className="grid gap-2">
         <Label htmlFor="editor-scheme-select">File links</Label>
         <Select value={editorScheme} onValueChange={setEditorScheme} disabled={editorSchemeLoading}>

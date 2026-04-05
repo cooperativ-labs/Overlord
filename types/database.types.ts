@@ -887,16 +887,16 @@ export type Database = {
         Row: {
           created_at: string;
           host: string;
+          host_key_fingerprint: string | null;
           id: string;
-          key_installed: boolean;
           label: string;
           last_connected_at: string | null;
+          last_error: string | null;
+          last_verified_at: string | null;
           organization_id: number;
           port: number;
-          secure_enclave_tag: string | null;
-          ssh_key_fingerprint: string | null;
-          ssh_public_key: string | null;
           status: string;
+          transport: string;
           updated_at: string;
           user_id: string;
           username: string;
@@ -904,16 +904,16 @@ export type Database = {
         Insert: {
           created_at?: string;
           host: string;
+          host_key_fingerprint?: string | null;
           id?: string;
-          key_installed?: boolean;
           label: string;
           last_connected_at?: string | null;
+          last_error?: string | null;
+          last_verified_at?: string | null;
           organization_id: number;
           port?: number;
-          secure_enclave_tag?: string | null;
-          ssh_key_fingerprint?: string | null;
-          ssh_public_key?: string | null;
           status?: string;
+          transport?: string;
           updated_at?: string;
           user_id: string;
           username: string;
@@ -921,16 +921,16 @@ export type Database = {
         Update: {
           created_at?: string;
           host?: string;
+          host_key_fingerprint?: string | null;
           id?: string;
-          key_installed?: boolean;
           label?: string;
           last_connected_at?: string | null;
+          last_error?: string | null;
+          last_verified_at?: string | null;
           organization_id?: number;
           port?: number;
-          secure_enclave_tag?: string | null;
-          ssh_key_fingerprint?: string | null;
-          ssh_public_key?: string | null;
           status?: string;
+          transport?: string;
           updated_at?: string;
           user_id?: string;
           username?: string;
