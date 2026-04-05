@@ -3,7 +3,6 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -13,7 +12,7 @@ import {
 } from 'react-native';
 
 import { colors } from '@/lib/colors';
-import { getSupabase } from '@/lib/supabase';
+import { useServerConnections } from '@/lib/server-connections-context';
 import type { Server, ServerStatus } from '@/lib/types';
 
 const statusConfig: Record<ServerStatus, { label: string; color: string }> = {
@@ -24,40 +23,19 @@ const statusConfig: Record<ServerStatus, { label: string; color: string }> = {
 
 export default function ServersScreen() {
   const router = useRouter();
-  const [servers, setServers] = useState<Server[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { servers, loading, refresh } = useServerConnections();
   const [refreshing, setRefreshing] = useState(false);
-
-  const loadServers = useCallback(async () => {
-    try {
-      const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from('servers')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        Alert.alert('Failed to load servers', error.message);
-        return;
-      }
-
-      setServers(data ?? []);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      void loadServers();
-    }, [loadServers])
+      void refresh();
+    }, [refresh])
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadServers();
-  }, [loadServers]);
+    refresh().finally(() => setRefreshing(false));
+  }, [refresh]);
 
   function renderServer({ item }: { item: Server }) {
     const status = statusConfig[item.status] ?? statusConfig.pending;

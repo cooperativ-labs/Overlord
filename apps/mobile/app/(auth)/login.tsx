@@ -14,6 +14,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { colors } from '@/lib/colors';
+import { supabaseRuntimeInfo } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -33,7 +34,11 @@ export default function LoginScreen() {
       await signIn(email, password);
       router.replace('/(tabs)/feed');
     } catch (error) {
-      Alert.alert('Sign In Failed', error instanceof Error ? error.message : 'An error occurred');
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      const debugContext = __DEV__
+        ? `\n\nSupabase host: ${supabaseRuntimeInfo.host}\nKey: ${supabaseRuntimeInfo.publishableKeyPrefix}...`
+        : '';
+      Alert.alert('Sign In Failed', `${message}${debugContext}`);
     } finally {
       setLoading(false);
     }
@@ -81,6 +86,12 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Sign In</Text>
           )}
         </Pressable>
+
+        {__DEV__ ? (
+          <Text style={styles.debugInfo}>
+            Debug bundle: {supabaseRuntimeInfo.host} ({supabaseRuntimeInfo.publishableKeyPrefix}...)
+          </Text>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   );
@@ -134,5 +145,11 @@ const styles = StyleSheet.create({
     color: colors.primaryForeground,
     fontSize: 16,
     fontWeight: '600'
+  },
+  debugInfo: {
+    marginTop: 16,
+    color: colors.mutedForeground,
+    fontSize: 12,
+    textAlign: 'center'
   }
 });

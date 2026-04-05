@@ -1,6 +1,8 @@
 export type {
   SSHInstallResult,
   SSHKeyResult,
+  RunCommandParams,
+  RunCommandResult,
   VerifyConnectionParams,
   VerifyConnectionResult
 } from './src/index';
@@ -10,5 +12,6 @@ export {
   installPublicKey,
   isSecureEnclaveAvailable,
   isSSHSupported,
+  runCommand,
   verifyConnection
 } from './src/index';

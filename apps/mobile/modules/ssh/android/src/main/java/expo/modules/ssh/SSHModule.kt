@@ -27,5 +27,9 @@ class SSHModule : Module() {
     AsyncFunction("verifyConnection") { _: Map<String, Any> ->
       throw CodedException("SSH_UNSUPPORTED", "SSH connection verification is only available on iOS.", null)
     }
+
+    AsyncFunction("runCommand") { _: Map<String, Any> ->
+      throw CodedException("SSH_UNSUPPORTED", "SSH remote command execution is only available on iOS.", null)
+    }
   }
 }

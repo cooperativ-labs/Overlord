@@ -46,7 +46,7 @@
 		<true/>
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Overlord uses Face ID to protect your SSH keys stored in the Secure Enclave.</string>
+	<string>Use Face ID to authenticate</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

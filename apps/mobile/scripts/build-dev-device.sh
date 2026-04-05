@@ -24,7 +24,16 @@ set -a
 source "$ENV_PROD"
 set +a
 
-EXPO_NO_DOTENV=1 npx expo run:ios --device --configuration Debug
+export EXPO_NO_DOTENV=1
+
+# Debug builds load JavaScript from Metro instead of embedding a bundle. Build the
+# native app without launching a packager first, then start a fresh Metro session
+# with the production env and a cleared cache so EXPO_PUBLIC_* values stay in sync.
+export RCT_NO_LAUNCH_PACKAGER=1
+npx expo run:ios --device --configuration Debug --no-bundler
 
 echo ""
 echo "✅ Debug build (prod backend) installed to device!"
+echo "🚇 Starting Metro with production variables (cache cleared)..."
+
+exec npx expo start --dev-client --clear

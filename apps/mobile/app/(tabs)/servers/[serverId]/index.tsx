@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,12 +13,13 @@ import {
 } from 'react-native';
 
 import { colors } from '@/lib/colors';
+import { useServerConnections } from '@/lib/server-connections-context';
 import {
   deleteServerDeviceCredential,
   getServerDeviceCredential
 } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
-import type { DeviceServerCredential, Server, ServerStatus } from '@/lib/types';
+import type { DeviceServerCredential, ServerStatus } from '@/lib/types';
 import { deleteKey, verifyConnection } from '@/modules/ssh';
 
 const statusConfig: Record<ServerStatus, { label: string; color: string; icon: string }> = {
@@ -30,37 +31,30 @@ const statusConfig: Record<ServerStatus, { label: string; color: string; icon: s
 export default function ServerDetailScreen() {
   const { serverId } = useLocalSearchParams<{ serverId: string }>();
   const router = useRouter();
+  const { getServerById, loading: loadingServers, refresh } = useServerConnections();
 
-  const [server, setServer] = useState<Server | null>(null);
   const [credential, setCredential] = useState<DeviceServerCredential | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingCredential, setLoadingCredential] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [password, setPassword] = useState('');
+  const server = getServerById(serverId);
 
-  const loadServer = useCallback(async () => {
+  const loadCredential = useCallback(async () => {
     try {
-      const supabase = getSupabase();
-      const [{ data, error }, localCredential] = await Promise.all([
-        supabase.from('servers').select('*').eq('id', serverId).single(),
-        getServerDeviceCredential(serverId)
-      ]);
-
-      if (error) {
-        Alert.alert('Failed to load server', error.message);
-        return;
-      }
-
-      setServer(data);
+      const localCredential = await getServerDeviceCredential(serverId);
       setCredential(localCredential);
     } finally {
-      setLoading(false);
+      setLoadingCredential(false);
     }
   }, [serverId]);
 
-  useEffect(() => {
-    void loadServer();
-  }, [loadServer]);
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+      void loadCredential();
+    }, [loadCredential, refresh])
+  );
 
   function handleShowPublicKey() {
     if (!credential?.publicKey) return;
@@ -133,7 +127,7 @@ export default function ServerDetailScreen() {
         lastVerifiedAt: verificationTime
       });
 
-      await loadServer();
+      await refresh();
     } catch (error) {
       try {
         await updateServerVerification('error', {
@@ -149,7 +143,7 @@ export default function ServerDetailScreen() {
         );
       }
 
-      await loadServer();
+      await refresh();
     } finally {
       setVerifying(false);
     }
@@ -175,6 +169,7 @@ export default function ServerDetailScreen() {
               Alert.alert('Failed to delete', error.message);
               return;
             }
+            await refresh();
             router.back();
           } finally {
             setDeleting(false);
@@ -184,7 +179,7 @@ export default function ServerDetailScreen() {
     ]);
   }
 
-  if (loading) {
+  if (loadingServers || loadingCredential) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />

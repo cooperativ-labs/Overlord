@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AuthProvider } from '@/lib/auth-context';
 import { colors } from '@/lib/colors';
+import { ServerConnectionsProvider } from '@/lib/server-connections-context';
 import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
 
 SplashScreen.preventAutoHideAsync();
@@ -37,11 +38,13 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(auth)" />
-      </Stack>
-      <StatusBar style="light" />
+      <ServerConnectionsProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="(auth)" />
+        </Stack>
+        <StatusBar style="light" />
+      </ServerConnectionsProvider>
     </AuthProvider>
   );
 }

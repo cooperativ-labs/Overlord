@@ -16,6 +16,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { colors } from '@/lib/colors';
+import { useServerConnections } from '@/lib/server-connections-context';
 import { saveServerDeviceCredential } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
 import type { ServerStatus, ServerTransport } from '@/lib/types';
@@ -59,6 +60,7 @@ function isLikelyTailscaleHost(rawHost: string): boolean {
 export default function AddServerScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { refresh } = useServerConnections();
 
   const [label, setLabel] = useState('');
   const [host, setHost] = useState('');
@@ -235,6 +237,7 @@ export default function AddServerScreen() {
         }
       }
 
+      await refresh();
       router.back();
     } catch (error) {
       Alert.alert(
@@ -276,6 +279,7 @@ export default function AddServerScreen() {
         lastError: null
       });
 
+      await refresh();
       router.back();
     } catch (error) {
       try {
@@ -293,6 +297,7 @@ export default function AddServerScreen() {
         );
         return;
       }
+      await refresh();
       router.back();
     } finally {
       setWorking(false);
@@ -307,6 +312,7 @@ export default function AddServerScreen() {
         status: 'pending',
         lastError: null
       });
+      await refresh();
       router.back();
     } catch (error) {
       Alert.alert(

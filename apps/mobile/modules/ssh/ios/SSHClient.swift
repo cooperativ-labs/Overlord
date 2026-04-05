@@ -187,6 +187,109 @@ final class SSHClient {
     return result
   }
 
+  /// Authenticate to a server and execute an arbitrary remote command.
+  ///
+  /// For SSH transport: authenticates with the device key (Secure Enclave signing).
+  /// For Tailscale SSH: authenticates with password.
+  ///
+  /// - Returns: `{ hostKeyFingerprint, output }`
+  static func runCommand(
+    host: String,
+    port: Int,
+    username: String,
+    transport: String,
+    command: String,
+    keyTag: String?,
+    password: String?,
+    expectedHostKeyFingerprint: String?
+  ) throws -> [String: Any] {
+    let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedCommand = command.trimmingCharacters(in: .whitespacesAndNewlines)
+    let resolvedPort = port > 0 ? port : 22
+
+    guard !trimmedHost.isEmpty else {
+      throw SSHError.connection("Invalid host address.", stage: "validate")
+    }
+    guard !trimmedUsername.isEmpty else {
+      throw SSHError.connection("A username is required.", stage: "validate")
+    }
+    guard !trimmedCommand.isEmpty else {
+      throw SSHError.connection("A remote command is required.", stage: "validate")
+    }
+
+    try Self.initLibssh2()
+
+    let socket = try Self.connectTCP(host: trimmedHost, port: resolvedPort)
+    defer { Self.closeSocket(socket) }
+
+    let session = try Self.createSession(socket: socket)
+    defer { Self.closeSession(session) }
+
+    let hostKeyFingerprint = Self.extractHostKeyFingerprint(session: session)
+
+    if let expectedHostKeyFingerprint,
+      !expectedHostKeyFingerprint.isEmpty,
+      let hostKeyFingerprint,
+      hostKeyFingerprint != expectedHostKeyFingerprint
+    {
+      throw SSHError.connection(
+        "Host key fingerprint mismatch. Expected \(expectedHostKeyFingerprint), got \(hostKeyFingerprint).",
+        stage: "hostkey"
+      )
+    }
+
+    if transport == "ssh", let keyTag = keyTag {
+      try Self.authenticateWithKey(
+        session: session,
+        username: trimmedUsername,
+        keyTag: keyTag
+      )
+    } else if let password = password {
+      let isTailscale = Self.isLikelyTailscaleHost(trimmedHost)
+      let strategies = Self.authStrategies(
+        username: trimmedUsername,
+        password: password,
+        allowTailscale: isTailscale
+      )
+
+      var authenticated = false
+      for strategy in strategies {
+        do {
+          try Self.authenticate(
+            session: session,
+            username: strategy.username,
+            password: strategy.password,
+            method: strategy.method
+          )
+          authenticated = true
+          break
+        } catch {
+          continue
+        }
+      }
+
+      if !authenticated {
+        throw SSHError.authentication(
+          "Authentication failed. Check your credentials.",
+          stage: "authenticate"
+        )
+      }
+    } else {
+      throw SSHError.authentication(
+        "No authentication method available. Provide a keyTag or password.",
+        stage: "authenticate"
+      )
+    }
+
+    let output = try Self.executeCommand(session: session, command: trimmedCommand)
+
+    return [
+      "hostKeyFingerprint": hostKeyFingerprint ?? "unknown",
+      "output": output,
+    ]
+  }
+
   // MARK: - Private: Connect & Install Flow
 
   private static func connectAndInstall(

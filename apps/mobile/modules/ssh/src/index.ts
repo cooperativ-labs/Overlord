@@ -32,6 +32,22 @@ export interface VerifyConnectionResult {
   ovldVersion?: string;
 }
 
+export interface RunCommandParams {
+  host: string;
+  port: number;
+  username: string;
+  transport: 'ssh' | 'tailscale_ssh';
+  command: string;
+  keyTag?: string;
+  password?: string;
+  expectedHostKeyFingerprint?: string | null;
+}
+
+export interface RunCommandResult {
+  hostKeyFingerprint: string;
+  output: string;
+}
+
 // --- Module ---
 
 const SSHNative = requireNativeModule('SSH');
@@ -64,4 +80,8 @@ export async function verifyConnection(
   params: VerifyConnectionParams
 ): Promise<VerifyConnectionResult> {
   return SSHNative.verifyConnection(params);
+}
+
+export async function runCommand(params: RunCommandParams): Promise<RunCommandResult> {
+  return SSHNative.runCommand(params);
 }

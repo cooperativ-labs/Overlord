@@ -18,6 +18,16 @@ const ExpoSecureStoreAdapter = {
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ?? '';
 
+function getSupabaseHost(url: string) {
+  if (!url) return 'missing';
+
+  try {
+    return new URL(url).host;
+  } catch {
+    return 'invalid-url';
+  }
+}
+
 const missingSupabaseConfig = [
   !supabaseUrl ? 'EXPO_PUBLIC_SUPABASE_URL' : null,
   !supabasePublishableKey ? 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY' : null
@@ -27,6 +37,11 @@ export const supabaseConfigError =
   missingSupabaseConfig.length > 0
     ? `Missing required Expo env var${missingSupabaseConfig.length > 1 ? 's' : ''}: ${missingSupabaseConfig.join(', ')}`
     : null;
+
+export const supabaseRuntimeInfo = {
+  host: getSupabaseHost(supabaseUrl),
+  publishableKeyPrefix: supabasePublishableKey ? supabasePublishableKey.slice(0, 20) : 'missing'
+};
 
 let supabaseClient: SupabaseClient | null = null;
 
