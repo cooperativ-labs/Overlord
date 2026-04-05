@@ -16,11 +16,12 @@ import { colors } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import {
   deleteServerDeviceCredential,
-  getServerDeviceCredential
+  getServerDeviceCredential,
+  saveServerDeviceCredential
 } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
 import type { DeviceServerCredential, ServerStatus } from '@/lib/types';
-import { deleteKey, verifyConnection } from '@/modules/ssh';
+import { deleteKey, generateKey, installPublicKey, verifyConnection } from '@/modules/ssh';
 
 const statusConfig: Record<ServerStatus, { label: string; color: string; icon: string }> = {
   pending: { label: 'Pending Verification', color: colors.mutedForeground, icon: 'time-outline' },
@@ -87,15 +88,102 @@ export default function ServerDetailScreen() {
     }
   }
 
+  // Whether this SSH server needs key installation (no credential, or never verified)
+  const needsKeyInstall =
+    server?.transport === 'ssh' && (!credential?.keyTag || server.status !== 'connected');
+
+  async function handleInstallKeyAndVerify() {
+    if (!server) return;
+
+    if (!password.trim()) {
+      Alert.alert(
+        'Password Required',
+        'Enter the server password so Overlord can install this device\'s SSH key. The password is used once and never stored.'
+      );
+      return;
+    }
+
+    setVerifying(true);
+
+    try {
+      // Generate a device key if we don't have one for this server
+      let currentKeyTag = credential?.keyTag;
+      let currentPublicKey = credential?.publicKey;
+      let currentFingerprint = credential?.publicKeyFingerprint;
+      let isHardwareBacked = credential?.isHardwareBacked ?? false;
+
+      if (!currentKeyTag) {
+        const tag = `com.cooperativ.overlord.ssh.${Date.now()}`;
+        const keyResult = await generateKey(tag);
+        currentKeyTag = tag;
+        currentPublicKey = keyResult.publicKeyOpenSSH;
+        currentFingerprint = keyResult.fingerprint;
+        isHardwareBacked = keyResult.isHardwareBacked;
+      }
+
+      // Install the public key on the server using password auth
+      const installResult = await installPublicKey(
+        server.host,
+        server.port,
+        server.username,
+        password,
+        currentPublicKey!
+      );
+
+      // Verify the key works via pubkey auth
+      const verifyResult = await verifyConnection({
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        transport: 'ssh',
+        keyTag: currentKeyTag,
+        expectedHostKeyFingerprint: installResult.hostKeyFingerprint
+      });
+
+      // Save/update the device credential
+      await saveServerDeviceCredential({
+        serverId,
+        keyTag: currentKeyTag,
+        publicKey: currentPublicKey!,
+        publicKeyFingerprint: currentFingerprint!,
+        isHardwareBacked,
+        createdAt: credential?.createdAt ?? new Date().toISOString()
+      });
+
+      const verificationTime = new Date().toISOString();
+      await updateServerVerification('connected', {
+        hostKeyFingerprint: verifyResult.hostKeyFingerprint,
+        lastError: null,
+        lastConnectedAt: verificationTime,
+        lastVerifiedAt: verificationTime
+      });
+
+      // Reload credential so the UI updates
+      await loadCredential();
+      setPassword('');
+      await refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to install the SSH key.';
+
+      try {
+        await updateServerVerification('error', { lastError: message });
+      } catch {
+        // Ignore update failures
+      }
+
+      Alert.alert('Key Installation Failed', message);
+      await refresh();
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function handleVerify() {
     if (!server) return;
 
-    if (server.transport === 'ssh' && !credential?.keyTag) {
-      Alert.alert(
-        'Device Key Required',
-        'This device does not have the SSH key for this server. Re-add the server from this phone to install a local key.'
-      );
-      return;
+    // For SSH servers that need key installation, use the install flow
+    if (needsKeyInstall) {
+      return handleInstallKeyAndVerify();
     }
 
     if (server.transport === 'tailscale_ssh' && !password.trim()) {
@@ -129,11 +217,31 @@ export default function ServerDetailScreen() {
 
       await refresh();
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to verify the server connection.';
+
+      // If key auth failed, suggest reinstalling the key
+      if (
+        server.transport === 'ssh' &&
+        (message.includes('authentication') ||
+          message.includes('public key') ||
+          message.includes('signature'))
+      ) {
+        try {
+          await updateServerVerification('error', { lastError: message });
+        } catch {
+          // Ignore
+        }
+        await refresh();
+        Alert.alert(
+          'Key Auth Failed',
+          'The SSH key on this device may not be installed on the server. Enter your server password below and tap "Install Key & Connect" to reinstall it.'
+        );
+        return;
+      }
+
       try {
-        await updateServerVerification('error', {
-          lastError:
-            error instanceof Error ? error.message : 'Failed to verify the server connection.'
-        });
+        await updateServerVerification('error', { lastError: message });
       } catch (updateError) {
         Alert.alert(
           'Verification Failed',
@@ -282,18 +390,25 @@ export default function ServerDetailScreen() {
       ) : null}
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Verify</Text>
+        <Text style={styles.sectionTitle}>
+          {needsKeyInstall ? 'Connect' : 'Verify'}
+        </Text>
         <View style={styles.card}>
           <Text style={styles.helperText}>
-            Verification connects to the server, checks the pinned host key, and runs `ovld
-            --version`.
+            {needsKeyInstall
+              ? 'Enter your server password to install this device\'s SSH key and verify the connection. The password is used once and never stored.'
+              : 'Verification connects to the server, checks the pinned host key, and runs `ovld --version`.'}
           </Text>
-          {server.transport === 'tailscale_ssh' ? (
+          {needsKeyInstall || server.transport === 'tailscale_ssh' ? (
             <TextInput
               style={styles.input}
               value={password}
               onChangeText={setPassword}
-              placeholder="Password or placeholder value"
+              placeholder={
+                server.transport === 'tailscale_ssh'
+                  ? 'Password or placeholder value'
+                  : 'Enter server password'
+              }
               placeholderTextColor={colors.mutedForeground}
               secureTextEntry
               autoCapitalize="none"
@@ -312,16 +427,20 @@ export default function ServerDetailScreen() {
             {verifying ? (
               <>
                 <ActivityIndicator size="small" color={colors.primaryForeground} />
-                <Text style={styles.primaryButtonText}>Verifying...</Text>
+                <Text style={styles.primaryButtonText}>
+                  {needsKeyInstall ? 'Installing & Verifying...' : 'Verifying...'}
+                </Text>
               </>
             ) : (
               <>
                 <Ionicons
-                  name="checkmark-circle-outline"
+                  name={needsKeyInstall ? 'key-outline' : 'checkmark-circle-outline'}
                   size={18}
                   color={colors.primaryForeground}
                 />
-                <Text style={styles.primaryButtonText}>Verify Connection</Text>
+                <Text style={styles.primaryButtonText}>
+                  {needsKeyInstall ? 'Install Key & Connect' : 'Verify Connection'}
+                </Text>
               </>
             )}
           </Pressable>
