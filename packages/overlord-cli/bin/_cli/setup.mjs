@@ -965,7 +965,7 @@ export async function runSetupCommand(args) {
   ovld setup gemini    Install Overlord slash commands and policy rules for Gemini CLI
   ovld setup opencode  Install Overlord connector for OpenCode
   ovld setup all       Install for all supported agents
-  ovld doctor          Validate installed connectors`);
+  ovld doctor          Validate installed connectors and check for CLI updates`);
     return;
   }
 

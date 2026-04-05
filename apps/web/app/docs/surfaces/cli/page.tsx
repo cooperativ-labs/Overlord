@@ -17,12 +17,19 @@ export default function CliPage() {
 
 Agents use the CLI to:
 
+- discover the project that matches the current working directory
 - attach a session to a ticket
+- create lightweight ticket sessions without full context
+- load ticket context without creating a session
+- spawn a follow-up ticket from the current workspace
 - fetch the latest ticket context
 - post progress updates
+- record structured change rationales
 - ask blocking questions
+- read and write shared ticket context
 - deliver final results
 - install or update the CLI with \`ovld update\`
+- upload and download ticket artifacts
 - install local agent integrations with \`ovld setup <agent>\`
 - validate local agent integrations and check for CLI updates with \`ovld doctor\`
 

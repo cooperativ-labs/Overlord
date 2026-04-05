@@ -490,11 +490,11 @@ export function DemoContent() {
               </Button>
               <Button variant="outline" className="gap-2" onClick={handleDiscuss}>
                 <TerminalSquare className="h-4 w-4" />
-                ovld discuss
+                ovld attach
               </Button>
               <Button variant="outline" className="gap-2" onClick={handleRun}>
                 <TerminalSquare className="h-4 w-4" />
-                ovld run
+                ovld connect
               </Button>
             </div>
 

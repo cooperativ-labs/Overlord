@@ -630,6 +630,18 @@ function DemoCliSettings() {
             interactive ticket picker + agent launcher
           </li>
           <li className="break-words">
+            <code className="break-all rounded bg-muted px-1">
+              ovld create &quot;&lt;objective&gt;&quot;
+            </code>{' '}
+            create a ticket with interactive project selection
+          </li>
+          <li className="break-words">
+            <code className="break-all rounded bg-muted px-1">
+              ovld prompt &quot;&lt;objective&gt;&quot;
+            </code>{' '}
+            create a ticket, then pick and launch an agent
+          </li>
+          <li className="break-words">
             <code className="rounded bg-muted px-1">ovld auth</code> login, status, logout
           </li>
           <li className="break-words">
@@ -642,8 +654,8 @@ function DemoCliSettings() {
             <code className="break-all rounded bg-muted px-1">
               ovld protocol &lt;subcommand&gt;
             </code>{' '}
-            attach, connect, load-context, spawn, update, ask, read-context, write-context, deliver,
-            artifact-upload-file
+            discover-project, attach, connect, load-context, spawn, update,
+            record-change-rationales, ask, read-context, write-context, deliver, artifact-upload-file
           </li>
           <li className="break-words">
             <code className="break-all rounded bg-muted px-1">ovld connect &lt;agent&gt;</code>{' '}
@@ -657,12 +669,26 @@ function DemoCliSettings() {
             <code className="rounded bg-muted px-1">ovld context</code> print ticket context
             (requires TICKET_ID)
           </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1">ovld setup &lt;agent|all&gt;</code> install
+            local agent integrations
+          </li>
+          <li className="break-words">
+            <code className="rounded bg-muted px-1">ovld doctor</code> validate installed
+            connectors and check for CLI updates
+          </li>
         </ul>
         <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
         <ul className="grid gap-1 text-muted-foreground">
           <li className="break-words">
             <code className="rounded bg-muted px-1">ovld attach</code> — interactive: search
             tickets, pick agent
+          </li>
+          <li className="break-words">
+            <code className="break-all rounded bg-muted px-1">
+              ovld protocol discover-project
+            </code>{' '}
+            — resolve the project from the current working directory
           </li>
           <li className="break-words">
             <code className="break-all rounded bg-muted px-1">
@@ -680,7 +706,7 @@ function DemoCliSettings() {
             <code className="break-all rounded bg-muted px-1">
               ovld protocol spawn --objective &quot;...&quot; --execution-target agent
             </code>{' '}
-            — create and connect to a ticket in one call
+            — create and attach to a ticket in one call
           </li>
           <li className="break-words">
             <code className="break-all rounded bg-muted px-1">

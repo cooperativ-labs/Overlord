@@ -593,7 +593,7 @@ export type TerminalLine = {
 };
 
 export const DISCUSS_TERMINAL_LINES: TerminalLine[] = [
-  { text: '$ ovld discuss --ticket-id demo-003c', type: 'command', delay: 0 },
+  { text: '$ ovld attach demo-003c', type: 'command', delay: 0 },
   { text: '', type: 'system', delay: 400 },
   { text: 'Starting your agent...', type: 'system', delay: 600 },
   { text: 'Reading ticket context and project guidance.', type: 'agent', delay: 1200 },
@@ -609,11 +609,11 @@ export const DISCUSS_TERMINAL_LINES: TerminalLine[] = [
     delay: 2600
   },
   { text: '', type: 'system', delay: 3200 },
-  { text: 'What would you like to discuss?', type: 'info', delay: 3400 }
+  { text: 'Pick an agent to launch on this ticket.', type: 'info', delay: 3400 }
 ];
 
 export const RUN_TERMINAL_LINES: TerminalLine[] = [
-  { text: '$ ovld run claude --ticket-id demo-003c', type: 'command', delay: 0 },
+  { text: '$ ovld connect claude --ticket-id demo-003c', type: 'command', delay: 0 },
   { text: '', type: 'system', delay: 400 },
   { text: 'Starting your agent...', type: 'system', delay: 600 },
   { text: 'Attaching to ticket ID: demo-003c', type: 'agent', delay: 1200 },
@@ -649,19 +649,23 @@ export const RUN_TERMINAL_LINES: TerminalLine[] = [
 export const OVLD_COMMANDS_TERMINAL_LINES: TerminalLine[] = [
   { text: '$ ovld --help', type: 'command', delay: 0 },
   { text: '', type: 'system', delay: 300 },
-  { text: 'ovld - Overlord CLI for ticket-driven agent work', type: 'system', delay: 500 },
+  { text: 'Overlord CLI', type: 'system', delay: 500 },
   { text: '', type: 'system', delay: 600 },
-  { text: 'COMMANDS:', type: 'info', delay: 800 },
-  { text: '  run <agent>     Launch an agent to execute a ticket', type: 'system', delay: 1000 },
-  { text: '  discuss <agent> Start a discussion about a ticket', type: 'system', delay: 1100 },
-  { text: '  protocol        Low-level protocol commands', type: 'system', delay: 1200 },
-  { text: '  restart         Resume a previous agent session', type: 'system', delay: 1300 },
+  { text: 'Primary command: ovld', type: 'system', delay: 700 },
+  { text: '', type: 'system', delay: 760 },
+  { text: 'Usage:', type: 'info', delay: 800 },
+  { text: '  ovld attach [ticketId] [agent]  Search tickets and launch an agent (interactive)', type: 'system', delay: 1000 },
+  { text: '  ovld create "<objective>"       Create a ticket with numbered project selection', type: 'system', delay: 1100 },
+  { text: '  ovld prompt "<objective>"       Create a ticket, then launch an agent on it', type: 'system', delay: 1200 },
+  { text: '  ovld auth <subcommand>          Login, logout, or check auth status', type: 'system', delay: 1300 },
+  { text: '  ovld protocol <subcommand>      Agent workflow commands', type: 'system', delay: 1400 },
+  { text: '  ovld connect <agent>            Launch an agent on a ticket', type: 'system', delay: 1500 },
+  { text: '  ovld restart <agent>            Resume an agent session', type: 'system', delay: 1600 },
+  { text: '  ovld setup <agent|all>          Install Overlord agent connector', type: 'system', delay: 1700 },
+  { text: '  ovld doctor                     Validate installed agent connectors and check for CLI updates', type: 'system', delay: 1800 },
   { text: '', type: 'system', delay: 1500 },
-  { text: 'PROTOCOL SUBCOMMANDS:', type: 'info', delay: 1700 },
-  { text: '  attach          Attach to a ticket and start a session', type: 'system', delay: 1800 },
-  { text: '  update          Post a progress update', type: 'system', delay: 1900 },
-  { text: '  ask             Ask a blocking question', type: 'system', delay: 2000 },
-  { text: '  deliver         Deliver work and move to review', type: 'system', delay: 2100 },
+  { text: 'Agents:', type: 'info', delay: 1700 },
+  { text: '  Use ovld protocol help for ticket lifecycle commands.', type: 'system', delay: 1800 },
   { text: '', type: 'system', delay: 2300 },
-  { text: 'Run ovld <command> --help for more details.', type: 'info', delay: 2500 }
+  { text: 'Run a subcommand with --help for more detail.', type: 'info', delay: 2500 }
 ];

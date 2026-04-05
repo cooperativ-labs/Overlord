@@ -33,6 +33,9 @@ ovld attach
 ovld create "Investigate the failing build"
 ovld prompt "Draft a fix for the onboarding flow"
 ovld update
+ovld protocol discover-project
+ovld protocol attach --ticket-id <ticket-id>
+ovld protocol update --session-key <session-key> --ticket-id <ticket-id> --summary "Working on it" --phase execute
 ovld setup codex
 ovld setup cursor
 ovld setup gemini
@@ -53,8 +56,9 @@ ovld doctor
 - `auth` - log in, log out, or check auth status
 - `tickets` - list or create tickets
 - `ticket` - work with a single ticket
-- `protocol` - run ticket lifecycle commands
-- `connect`, `restart`, `run`, `resume`, `context` - launch or resume an agent session
+- `protocol` - run ticket lifecycle commands such as `discover-project`, `attach`, `connect`, `load-context`, `spawn`, `update`, `record-change-rationales`, `ask`, `read-context`, `write-context`, `deliver`, and artifact upload/download helpers
+- `connect`, `restart`, `context` - launch or resume an agent session or print ticket context
+- `run`, `resume` - legacy aliases for `connect` and `restart`
 - `setup` - install the Overlord connector or plugin bundle for a supported agent
 - `update` - install the latest CLI release from npm
 - `doctor` - verify installed agent connectors and check whether a newer CLI version is available

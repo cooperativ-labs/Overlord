@@ -15,18 +15,24 @@ export default function ProtocolPage() {
       {`
 ## Core commands
 
-The protocol surface centers on a small set of actions:
+The protocol surface currently includes:
 
+- discover-project
 - attach
+- connect
+- load-context
+- spawn
 - update
+- record-change-rationales
 - ask
+- read-context
+- write-context
 - deliver
-- context
-- artifacts
+- artifact upload and download helpers
 
 ## What these commands do
 
-They let an agent bind to a ticket, report progress, ask for help, and return final work in a structured way.
+They let an agent resolve the right project, bind to a ticket, report progress, persist file-level rationale, share reusable context, manage artifacts, ask for help, and return final work in a structured way.
 
 ## Related pages
 
