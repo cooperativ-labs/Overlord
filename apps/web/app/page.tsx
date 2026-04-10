@@ -274,7 +274,7 @@ export default async function HomePage() {
                 className="shrink-0 overflow-hidden"
               />
             </div>
-            <p className="font-[family-name:var(--font-display)] text-lg font-semibold">Overlord</p>
+            <p className="hidden sm:block font-[family-name:var(--font-display)] text-lg font-semibold">Overlord</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -294,12 +294,12 @@ export default async function HomePage() {
             </Button>
             <Button
               asChild
-              size="lg"
-              className="rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100 whitespace-nowrap"
+              size="sm"
+              className="rounded-full bg-white px-4 text-slate-950 hover:bg-slate-100 whitespace-nowrap text-sm"
             >
               <Link href="/early-access">
-                Get Early Access
-                <ArrowRight />
+                Get Access
+                <ArrowRight className="size-3.5" />
               </Link>
             </Button>
           </div>
