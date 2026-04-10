@@ -82,30 +82,30 @@ const workflowSteps = [
 
 const heroBoardColumns = [
   {
-    title: 'Draft',
+    title: 'Next Up',
     count: 2,
     cards: [
-      { title: 'Personal server via SSH', color: '#60a5fa', active: false },
-      { title: 'CLI on Raspberry Pi', color: '#38bdf8', active: false }
+      { title: 'Add CSV export to reports', color: '#60a5fa', active: false },
+      { title: 'Refactor auth middleware', color: '#38bdf8', active: false }
     ]
   },
   {
     title: 'Execute',
     count: 1,
-    cards: [{ title: 'iPhone agent control', color: '#34d399', active: true }]
+    cards: [{ title: 'Dark mode toggle', color: '#34d399', active: true }]
   },
   {
     title: 'Review',
     count: 1,
-    cards: [{ title: 'SSH-backed current changes', color: '#f59e0b', active: false }]
+    cards: [{ title: 'Payment flow redesign', color: '#f59e0b', active: false }]
   }
 ] as const;
 
 const heroTerminalLines = [
-  '$ ovld run ticket-184 --ssh home-server',
-  'Attaching Codex to a personal server over SSH...',
-  'Posting progress update from a Raspberry Pi runner...',
-  'Streaming changes back to the web app and iPhone'
+  '$ ovld protocol attach --ticket-id ticket-184',
+  'Attaching Claude Code to ticket...',
+  'Agent posted: Implementing dark mode',
+  'Streaming diff to review queue'
 ] as const;
 
 const featureHighlights = [
@@ -288,14 +288,14 @@ export default async function HomePage() {
             <Button
               asChild
               variant="ghost"
-              className="text-slate-300 hover:bg-white/5 hover:text-white"
+              className="hidden sm:inline-flex text-slate-300 hover:bg-white/5 hover:text-white"
             >
               <Link href="/login">Sign in</Link>
             </Button>
             <Button
               asChild
               size="lg"
-              className="rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100"
+              className="rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100 whitespace-nowrap"
             >
               <Link href="/early-access">
                 Get Early Access
@@ -309,16 +309,16 @@ export default async function HomePage() {
         <section className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center">
           <div className="animate-in fade-in slide-in-from-bottom-6 max-w-5xl space-y-8 duration-700">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
-              Web app + Desktop + CLI + MCP + Mobile
+              Web App · Desktop · CLI · MCP
             </div>
 
             <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[0.94] tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">
-              Run agent work on your own server.
+              Agent Work, Organized.
             </h1>
 
             <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
-              Create tickets, run agents over SSH on hardware you control, and review changes in one
-              dashboard with deep terminal integration.
+              Create tickets, assign agents, and review diffs — all in one place. Overlord keeps the
+              full delivery record while agents work in the tools they already know.
             </p>
 
             <HeroDashboardGraphic />

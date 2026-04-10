@@ -38,7 +38,7 @@ Usage:
   ${primaryCommand} connect <agent>            Launch an agent on a ticket
   ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
-  ${primaryCommand} setup <agent|all>          Install Overlord agent connector
+  ${primaryCommand} setup [agent|all]          Install Overlord agent connector (interactive if no args)
   ${primaryCommand} update                    Install the latest CLI version from npm
   ${primaryCommand} doctor                     Validate installed agent connectors and check for CLI updates
   ${primaryCommand} version                    Show the installed CLI version

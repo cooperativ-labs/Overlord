@@ -951,6 +951,392 @@ function currentNodeMajor() {
 }
 
 // ---------------------------------------------------------------------------
+// Interactive checkbox prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Run an interactive checkbox list (multiselect with spacebar).
+ *
+ * @param {object}   opts
+ * @param {string}   opts.message    - Prompt message shown above the list
+ * @param {string[]} opts.choices    - List of choice labels
+ * @param {string[]} [opts.defaults] - Initially selected choices
+ * @returns {Promise<string[]>} - Array of selected choice labels
+ */
+function runCheckboxPrompt({ message, choices, defaults = [] }) {
+  return new Promise(resolve => {
+    const hide = '\x1b[?25l';
+    const show = '\x1b[?25h';
+    const saveCursor = '\x1b7';
+    const restoreCursor = '\x1b8';
+    const eraseBelow = '\x1b[J';
+    const cyan = s => `\x1b[36m${s}\x1b[0m`;
+    const bold = s => `\x1b[1m${s}\x1b[0m`;
+    const dim = s => `\x1b[2m${s}\x1b[0m`;
+
+    let cursorIdx = 0;
+    let selected = new Set(defaults);
+    let hasRendered = false;
+
+    function render() {
+      const lines = [];
+      lines.push(bold(message));
+      lines.push(dim('  ↑↓ navigate · Space toggle · Enter confirm · Esc cancel'));
+      lines.push('');
+
+      for (let i = 0; i < choices.length; i++) {
+        const choice = choices[i];
+        const isSelected = selected.has(choice);
+        const isCursor = i === cursorIdx;
+        const checkbox = isSelected ? '[✓]' : '[ ]';
+        const marker = isCursor ? cyan('▶') : ' ';
+        const label = isCursor ? bold(choice) : choice;
+        lines.push(`  ${marker} ${checkbox} ${label}`);
+      }
+
+      if (hasRendered) {
+        process.stdout.write(restoreCursor + eraseBelow);
+      }
+      process.stdout.write(saveCursor + lines.join('\n'));
+      hasRendered = true;
+    }
+
+    function cleanup() {
+      if (hasRendered) {
+        process.stdout.write(restoreCursor + eraseBelow);
+      }
+      process.stdin.setRawMode(false);
+      process.stdin.removeAllListeners('data');
+      process.stdout.write(show);
+    }
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    process.stdout.write(hide);
+    render();
+
+    process.stdin.on('data', key => {
+      // Ctrl-C / Ctrl-D → exit
+      if (key === '\x03' || key === '\x04') {
+        cleanup();
+        process.exit(0);
+      }
+
+      // Escape → cancel
+      if (key === '\x1b') {
+        cleanup();
+        resolve([]);
+        return;
+      }
+
+      // Enter → confirm selection
+      if (key === '\r' || key === '\n') {
+        cleanup();
+        resolve(Array.from(selected));
+        return;
+      }
+
+      // Arrow up
+      if (key === '\x1b[A') {
+        cursorIdx = (cursorIdx - 1 + choices.length) % choices.length;
+        render();
+        return;
+      }
+
+      // Arrow down
+      if (key === '\x1b[B') {
+        cursorIdx = (cursorIdx + 1) % choices.length;
+        render();
+        return;
+      }
+
+      // Spacebar → toggle selection
+      if (key === ' ') {
+        const choice = choices[cursorIdx];
+        if (selected.has(choice)) {
+          selected.delete(choice);
+        } else {
+          selected.add(choice);
+        }
+        render();
+        return;
+      }
+    });
+  });
+}
+
+/**
+ * Ask a yes/no question interactively.
+ *
+ * @param {string} question - The question to ask
+ * @param {boolean} defaultYes - Default answer if user just presses Enter
+ * @returns {Promise<boolean>} - true if yes, false if no
+ */
+function askYesNo(question, defaultYes = true) {
+  return new Promise(resolve => {
+    const hide = '\x1b[?25l';
+    const show = '\x1b[?25h';
+    const saveCursor = '\x1b7';
+    const restoreCursor = '\x1b8';
+    const eraseBelow = '\x1b[J';
+    const cyan = s => `\x1b[36m${s}\x1b[0m`;
+    const bold = s => `\x1b[1m${s}\x1b[0m`;
+    const dim = s => `\x1b[2m${s}\x1b[0m`;
+
+    const choices = ['Yes', 'No'];
+    let cursorIdx = defaultYes ? 0 : 1;
+    let hasRendered = false;
+
+    function render() {
+      const lines = [];
+      lines.push(bold(question));
+      lines.push('');
+
+      for (let i = 0; i < choices.length; i++) {
+        const choice = choices[i];
+        const isCursor = i === cursorIdx;
+        const marker = isCursor ? cyan('▶') : ' ';
+        const label = isCursor ? bold(choice) : choice;
+        lines.push(`  ${marker} ${label}`);
+      }
+
+      lines.push('');
+      lines.push(dim('  ↑↓ navigate · Enter confirm · Esc cancel'));
+
+      if (hasRendered) {
+        process.stdout.write(restoreCursor + eraseBelow);
+      }
+      process.stdout.write(saveCursor + lines.join('\n'));
+      hasRendered = true;
+    }
+
+    function cleanup() {
+      if (hasRendered) {
+        process.stdout.write(restoreCursor + eraseBelow);
+      }
+      process.stdin.setRawMode(false);
+      process.stdin.removeAllListeners('data');
+      process.stdout.write(show);
+    }
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    process.stdout.write(hide);
+    render();
+
+    process.stdin.on('data', key => {
+      // Ctrl-C / Ctrl-D → exit
+      if (key === '\x03' || key === '\x04') {
+        cleanup();
+        process.exit(0);
+      }
+
+      // Escape → cancel (default to No)
+      if (key === '\x1b') {
+        cleanup();
+        resolve(false);
+        return;
+      }
+
+      // Enter → confirm selection
+      if (key === '\r' || key === '\n') {
+        cleanup();
+        resolve(cursorIdx === 0);
+        return;
+      }
+
+      // Arrow up
+      if (key === '\x1b[A') {
+        cursorIdx = (cursorIdx - 1 + choices.length) % choices.length;
+        render();
+        return;
+      }
+
+      // Arrow down
+      if (key === '\x1b[B') {
+        cursorIdx = (cursorIdx + 1) % choices.length;
+        render();
+        return;
+      }
+
+      // y/Y → yes
+      if (key === 'y' || key === 'Y') {
+        cleanup();
+        resolve(true);
+        return;
+      }
+
+      // n/N → no
+      if (key === 'n' || key === 'N') {
+        cleanup();
+        resolve(false);
+        return;
+      }
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Agent permissions installation
+// ---------------------------------------------------------------------------
+
+function getPlatformUrl() {
+  // Check for OVERLORD_URL env var first, otherwise default to localhost
+  return process.env.OVERLORD_URL || 'http://localhost:3000';
+}
+
+function installAgentPermissions(agents, platformUrl) {
+  console.log(`\nInstalling agent permissions for: ${agents.join(', ')}`);
+  console.log(`Platform URL: ${platformUrl}\n`);
+
+  for (const agent of agents) {
+    if (agent === 'claude') {
+      installClaudePermissions(platformUrl);
+    } else if (agent === 'opencode') {
+      installOpenCodePermissions(platformUrl);
+    } else if (agent === 'codex') {
+      installCodexPermissions(platformUrl);
+    }
+    // cursor and gemini don't have permission configuration
+  }
+}
+
+function installClaudePermissions(platformUrl) {
+  const settingsPath = path.join(process.cwd(), '.claude', 'settings.local.json');
+  console.log(`--- Claude Code ---`);
+  console.log(`Settings file: ${settingsPath}`);
+
+  let settings = { permissions: { allow: [] } };
+  if (fs.existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    } catch (e) {
+      console.error(`  ERROR: Could not parse ${settingsPath}: ${e.message}`);
+      return false;
+    }
+    if (!settings.permissions) settings.permissions = {};
+    if (!Array.isArray(settings.permissions.allow)) settings.permissions.allow = [];
+  }
+
+  const PROTOCOL_ENDPOINTS = [
+    'attach', 'update', 'ask', 'read-context', 'write-context', 'deliver',
+    'create-ticket', 'list-tickets', 'record-change-rationales', 'spawn',
+    'discover-project', 'load-context', 'artifact-upload-file', 'artifact-download-url'
+  ];
+
+  const entries = [];
+  for (const endpoint of PROTOCOL_ENDPOINTS) {
+    entries.push(`Bash(curl -s -X POST "${platformUrl}/api/protocol/${endpoint}":*)`);
+  }
+  entries.push(`Bash(curl -s -H 'Authorization::*)`);
+  for (const endpoint of PROTOCOL_ENDPOINTS) {
+    entries.push(`Bash(curl -s -X POST "$OVERLORD_URL/api/protocol/${endpoint}":*)`);
+  }
+  entries.push(`Bash(curl -s -H "Authorization::*)`);
+
+  const existing = new Set(settings.permissions.allow);
+  const toAdd = entries.filter((e) => !existing.has(e));
+
+  if (toAdd.length === 0) {
+    console.log('  All required permissions already present. Nothing to do.\n');
+    return true;
+  }
+
+  console.log(`  Adding ${toAdd.length} permission entries:`);
+  for (const entry of toAdd) {
+    console.log(`    + ${entry}`);
+  }
+
+  // Backup
+  if (fs.existsSync(settingsPath)) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = `${settingsPath}.backup-${ts}`;
+    fs.copyFileSync(settingsPath, backupPath);
+    console.log(`  Backup: ${backupPath}`);
+  }
+
+  settings.permissions.allow = [...settings.permissions.allow, ...toAdd];
+
+  const dir = path.dirname(settingsPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  console.log('  Settings updated.\n');
+  return true;
+}
+
+function installOpenCodePermissions(_platformUrl) {
+  console.log(`--- OpenCode ---`);
+  const configPath = path.join(os.homedir(), '.config', 'opencode', 'opencode.json');
+  console.log(`Config file: ${configPath}`);
+
+  let config = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    } catch (e) {
+      console.error(`  ERROR: Could not parse ${configPath}: ${e.message}`);
+      return false;
+    }
+  }
+
+  const existingPermission =
+    config.permission && typeof config.permission === 'object' ? config.permission : {};
+  const existingBash =
+    existingPermission.bash && typeof existingPermission.bash === 'object'
+      ? existingPermission.bash
+      : {};
+
+  const next = {
+    ...config,
+    $schema: 'https://opencode.ai/config.json',
+    permission: {
+      ...existingPermission,
+      bash: {
+        '*': 'ask',
+        ...existingBash,
+        'ovld protocol *': 'allow',
+        'curl -sS -X POST *': 'allow',
+        'curl -s -X POST *': 'allow'
+      }
+    }
+  };
+
+  if (fs.existsSync(configPath)) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = `${configPath}.backup-${ts}`;
+    fs.copyFileSync(configPath, backupPath);
+    console.log(`  Backup: ${backupPath}`);
+  }
+
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(next, null, 2) + '\n');
+  console.log('  Config updated.\n');
+  return true;
+}
+
+function installCodexPermissions(platformUrl) {
+  console.log(`--- Codex ---`);
+  console.log('  Codex does not support file-based permission configuration.');
+  console.log('  To warm up permissions, run the following commands once inside a Codex session:');
+  console.log('  (Codex will prompt for approval; approve each one to persist the prefix.)\n');
+
+  const PROTOCOL_ENDPOINTS = [
+    'attach', 'update', 'ask', 'read-context', 'write-context', 'deliver',
+    'create-ticket', 'list-tickets'
+  ];
+
+  for (const endpoint of PROTOCOL_ENDPOINTS) {
+    console.log(`  curl -s -X POST "${platformUrl}/api/protocol/${endpoint}" -H "Content-Type: application/json" -H "Authorization: Bearer \\$AGENT_TOKEN" -d '{}'`);
+  }
+  console.log(`  curl -s -H "Authorization: Bearer \\$AGENT_TOKEN" "${platformUrl}/api/protocol/context/test"`);
+  console.log();
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -959,6 +1345,7 @@ export async function runSetupCommand(args) {
 
   if (agent === '--help' || agent === '-h' || agent === 'help') {
     console.log(`Usage:
+  ovld setup           Interactive setup (select agents and configure permissions)
   ovld setup claude    Install Overlord bundle for Claude Code
   ovld setup codex     Install Overlord Codex plugin bundle
   ovld setup cursor    Install Overlord rules, slash commands, and permissions for Cursor
@@ -969,8 +1356,92 @@ export async function runSetupCommand(args) {
     return;
   }
 
+  // Interactive mode when called without arguments
+  if (!agent) {
+    console.log('Welcome to Overlord agent setup!\n');
+
+    // Step 1: Select agents to install
+    const agentLabels = supportedAgents.map(a => {
+      const descriptions = {
+        claude: 'Claude Code',
+        codex: 'Codex',
+        cursor: 'Cursor',
+        gemini: 'Gemini CLI',
+        opencode: 'OpenCode'
+      };
+      return `${a.padEnd(10)} - ${descriptions[a] || a}`;
+    });
+
+    const selectedLabels = await runCheckboxPrompt({
+      message: 'Select agent connectors to install (Space to toggle, Enter to confirm):',
+      choices: agentLabels,
+      defaults: []
+    });
+
+    if (selectedLabels.length === 0) {
+      console.log('\nNo agents selected. Setup cancelled.');
+      return;
+    }
+
+    // Extract agent names from selected labels
+    const selectedAgents = selectedLabels.map(label => label.split('-')[0].trim());
+
+    // Step 2: Install selected agents
+    console.log(`\nInstalling Overlord agent bundles for: ${selectedAgents.join(', ')}...\n`);
+
+    const installedAgents = [];
+    for (const a of selectedAgents) {
+      console.log(`[${a}]`);
+      try {
+        if (a === 'claude') installClaude();
+        else if (a === 'codex') installCodex();
+        else if (a === 'cursor') installCursor();
+        else if (a === 'gemini') installGemini();
+        else installOpenCode();
+        installedAgents.push(a);
+      } catch (err) {
+        console.error(`  ✗ Failed: ${err.message}`);
+      }
+      console.log();
+    }
+
+    if (installedAgents.length === 0) {
+      console.log('No agents were successfully installed.');
+      return;
+    }
+
+    // Step 3: Offer to configure agent permissions
+    const agentsThatNeedPermissions = installedAgents.filter(a =>
+      ['claude', 'codex', 'opencode'].includes(a)
+    );
+
+    if (agentsThatNeedPermissions.length > 0) {
+      console.log('Agent connectors installed successfully!\n');
+
+      const shouldInstallPermissions = await askYesNo(
+        'Would you like to configure agent permissions for Overlord protocol access?',
+        true
+      );
+
+      if (shouldInstallPermissions) {
+        const platformUrl = getPlatformUrl();
+        installAgentPermissions(agentsThatNeedPermissions, platformUrl);
+        console.log('✓ Agent permissions configured.\n');
+      } else {
+        console.log('\nSkipped agent permissions configuration.');
+        console.log('You can run the permission installer later with:');
+        console.log('  node scripts/install-agent-permissions.mjs\n');
+      }
+    }
+
+    console.log('Setup complete! Run `ovld doctor` to verify your installation.');
+    return;
+  }
+
   if (agent === 'all') {
     console.log('Installing Overlord agent bundle for all supported agents...\n');
+    const installedAgents = [];
+
     for (const a of supportedAgents) {
       console.log(`[${a}]`);
       try {
@@ -979,11 +1450,30 @@ export async function runSetupCommand(args) {
         else if (a === 'cursor') installCursor();
         else if (a === 'gemini') installGemini();
         else installOpenCode();
+        installedAgents.push(a);
       } catch (err) {
         console.error(`  ✗ Failed: ${err.message}`);
       }
       console.log();
     }
+
+    // Offer permissions setup for 'all' command too
+    const agentsThatNeedPermissions = installedAgents.filter(a =>
+      ['claude', 'codex', 'opencode'].includes(a)
+    );
+
+    if (agentsThatNeedPermissions.length > 0) {
+      const shouldInstallPermissions = await askYesNo(
+        '\nWould you like to configure agent permissions for Overlord protocol access?',
+        true
+      );
+
+      if (shouldInstallPermissions) {
+        const platformUrl = getPlatformUrl();
+        installAgentPermissions(agentsThatNeedPermissions, platformUrl);
+      }
+    }
+
     console.log('Done.');
     return;
   }
@@ -1003,6 +1493,19 @@ export async function runSetupCommand(args) {
     else if (agent === 'gemini') installGemini();
     else installOpenCode();
     console.log('\nDone.');
+
+    // Offer permissions setup for single agent install too
+    if (['claude', 'codex', 'opencode'].includes(agent)) {
+      const shouldInstallPermissions = await askYesNo(
+        '\nWould you like to configure agent permissions for Overlord protocol access?',
+        true
+      );
+
+      if (shouldInstallPermissions) {
+        const platformUrl = getPlatformUrl();
+        installAgentPermissions([agent], platformUrl);
+      }
+    }
   } catch (err) {
     console.error(`\nFailed: ${err.message}`);
     process.exit(1);
