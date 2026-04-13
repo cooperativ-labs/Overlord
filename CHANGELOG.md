@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.23.0] - 2026-04-13:10:30
+
+### Added
+- Add interactive prompts to the agent permissions installation flow in the CLI setup command.
+- Add SSH key installation and verification flow to the mobile ServerDetailScreen with enhanced error handling.
+
+### Fixed
+- Fix mobile ticket detail screen to properly persist assigned agent/model changes.
+- Improve SSH key password handling and error prompts in server connection flows.
+
+### Changed
+- Update HomePage component to improve responsiveness by hiding the "Overlord" title on smaller screens and adjusting button sizes for better mobile user experience.
+- Enhance remote ticket launch command with shell profile sourcing for nvm compatibility.
+- Improve error handling in remote ticket launch command to retain tmux window on failure with exit code display and user confirmation prompts.
+- Update CLI setup command to provide interactive feedback during installation and permissions setup.
+- Refactor mobile server detail and ticket detail screens with improved UI state management.
+
+### Security
+- None.
+
+### Performance
+- Optimize mobile server connection context updates to reduce unnecessary re-renders.
+
+### Test
+- None.
+
+### Documentation
+- None.
+
+### Chore
+- Bump the workspace and CLI package versions to 3.23.0.
+
 ## [3.22.0] - 2026-04-05:15:28
 
 ### Added

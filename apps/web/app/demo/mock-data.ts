@@ -654,15 +654,51 @@ export const OVLD_COMMANDS_TERMINAL_LINES: TerminalLine[] = [
   { text: 'Primary command: ovld', type: 'system', delay: 700 },
   { text: '', type: 'system', delay: 760 },
   { text: 'Usage:', type: 'info', delay: 800 },
-  { text: '  ovld attach [ticketId] [agent]  Search tickets and launch an agent (interactive)', type: 'system', delay: 1000 },
-  { text: '  ovld create "<objective>"       Create a ticket with numbered project selection', type: 'system', delay: 1100 },
-  { text: '  ovld prompt "<objective>"       Create a ticket, then launch an agent on it', type: 'system', delay: 1200 },
-  { text: '  ovld auth <subcommand>          Login, logout, or check auth status', type: 'system', delay: 1300 },
-  { text: '  ovld protocol <subcommand>      Agent workflow commands', type: 'system', delay: 1400 },
-  { text: '  ovld connect <agent>            Launch an agent on a ticket', type: 'system', delay: 1500 },
-  { text: '  ovld restart <agent>            Resume an agent session', type: 'system', delay: 1600 },
-  { text: '  ovld setup <agent|all>          Install Overlord agent connector', type: 'system', delay: 1700 },
-  { text: '  ovld doctor                     Validate installed agent connectors and check for CLI updates', type: 'system', delay: 1800 },
+  {
+    text: '  ovld attach [ticketId] [agent]  Search tickets and launch an agent (interactive)',
+    type: 'system',
+    delay: 1000
+  },
+  {
+    text: '  ovld create "<objective>"       Create a ticket with numbered project selection',
+    type: 'system',
+    delay: 1100
+  },
+  {
+    text: '  ovld prompt "<objective>"       Create a ticket, then launch an agent on it',
+    type: 'system',
+    delay: 1200
+  },
+  {
+    text: '  ovld auth <subcommand>          Login, logout, or check auth status',
+    type: 'system',
+    delay: 1300
+  },
+  {
+    text: '  ovld protocol <subcommand>      Agent workflow commands',
+    type: 'system',
+    delay: 1400
+  },
+  {
+    text: '  ovld connect <agent>            Launch an agent on a ticket',
+    type: 'system',
+    delay: 1500
+  },
+  {
+    text: '  ovld restart <agent>            Resume an agent session',
+    type: 'system',
+    delay: 1600
+  },
+  {
+    text: '  ovld setup <agent|all>          Install Overlord agent connector',
+    type: 'system',
+    delay: 1700
+  },
+  {
+    text: '  ovld doctor                     Validate installed agent connectors and check for CLI updates',
+    type: 'system',
+    delay: 1800
+  },
   { text: '', type: 'system', delay: 1500 },
   { text: 'Agents:', type: 'info', delay: 1700 },
   { text: '  Use ovld protocol help for ticket lifecycle commands.', type: 'system', delay: 1800 },

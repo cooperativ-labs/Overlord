@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -57,9 +58,44 @@ export default function ServerDetailScreen() {
     }, [loadCredential, refresh])
   );
 
-  function handleShowPublicKey() {
+  const [copied, setCopied] = useState(false);
+  const [generatingKey, setGeneratingKey] = useState(false);
+
+  async function handleCopyPublicKey() {
     if (!credential?.publicKey) return;
-    Alert.alert('Public Key', credential.publicKey, [{ text: 'OK' }]);
+    await Clipboard.setStringAsync(credential.publicKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleGenerateAndCopyKey() {
+    if (!server) return;
+    setGeneratingKey(true);
+    try {
+      const tag = `com.cooperativ.overlord.ssh.${Date.now()}`;
+      const keyResult = await generateKey(tag);
+
+      await saveServerDeviceCredential({
+        serverId,
+        keyTag: tag,
+        publicKey: keyResult.publicKeyOpenSSH,
+        publicKeyFingerprint: keyResult.fingerprint,
+        isHardwareBacked: keyResult.isHardwareBacked,
+        createdAt: new Date().toISOString()
+      });
+
+      await loadCredential();
+      await Clipboard.setStringAsync(keyResult.publicKeyOpenSSH);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      Alert.alert(
+        'Key Generation Failed',
+        error instanceof Error ? error.message : 'Failed to generate the device SSH key.'
+      );
+    } finally {
+      setGeneratingKey(false);
+    }
   }
 
   async function updateServerVerification(
@@ -98,7 +134,7 @@ export default function ServerDetailScreen() {
     if (!password.trim()) {
       Alert.alert(
         'Password Required',
-        'Enter the server password so Overlord can install this device\'s SSH key. The password is used once and never stored.'
+        "Enter the server password so Overlord can install this device's SSH key. The password is used once and never stored."
       );
       return;
     }
@@ -346,16 +382,49 @@ export default function ServerDetailScreen() {
               />
               <Pressable
                 style={({ pressed }) => [styles.copyKeyButton, pressed && { opacity: 0.7 }]}
-                onPress={handleShowPublicKey}
+                onPress={handleCopyPublicKey}
               >
-                <Ionicons name="copy-outline" size={16} color={colors.primary} />
-                <Text style={styles.copyKeyText}>Show Public Key</Text>
+                <Ionicons
+                  name={copied ? 'checkmark-circle' : 'copy-outline'}
+                  size={16}
+                  color={copied ? colors.success : colors.primary}
+                />
+                <Text style={[styles.copyKeyText, copied && { color: colors.success }]}>
+                  {copied ? 'Copied!' : 'Copy Public Key'}
+                </Text>
               </Pressable>
             </>
           ) : (
-            <Text style={styles.noKeyText}>
-              This device does not have a local SSH key for the server.
-            </Text>
+            <>
+              <Text style={styles.noKeyText}>
+                This device does not have a local SSH key for this server.
+              </Text>
+              <Text style={styles.noKeyHint}>
+                If password login is disabled on your server, generate a key here and copy it to
+                install manually.
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.generateKeyButton,
+                  generatingKey && styles.disabledButton,
+                  pressed && !generatingKey && { opacity: 0.7 }
+                ]}
+                onPress={handleGenerateAndCopyKey}
+                disabled={generatingKey}
+              >
+                {generatingKey ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.primaryForeground} />
+                    <Text style={styles.generateKeyButtonText}>Generating...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="key-outline" size={16} color={colors.primaryForeground} />
+                    <Text style={styles.generateKeyButtonText}>Generate Key & Copy</Text>
+                  </>
+                )}
+              </Pressable>
+            </>
           )}
         </View>
       </View>
@@ -390,13 +459,11 @@ export default function ServerDetailScreen() {
       ) : null}
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          {needsKeyInstall ? 'Connect' : 'Verify'}
-        </Text>
+        <Text style={styles.sectionTitle}>{needsKeyInstall ? 'Connect' : 'Verify'}</Text>
         <View style={styles.card}>
           <Text style={styles.helperText}>
             {needsKeyInstall
-              ? 'Enter your server password to install this device\'s SSH key and verify the connection. The password is used once and never stored.'
+              ? "Enter your server password to install this device's SSH key and verify the connection. The password is used once and never stored."
               : 'Verification connects to the server, checks the pinned host key, and runs `ovld --version`.'}
           </Text>
           {needsKeyInstall || server.transport === 'tailscale_ssh' ? (
@@ -580,6 +647,26 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     fontSize: 14,
     lineHeight: 20
+  },
+  noKeyHint: {
+    color: colors.mutedForeground,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  generateKeyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16
+  },
+  generateKeyButtonText: {
+    color: colors.primaryForeground,
+    fontSize: 14,
+    fontWeight: '600'
   },
   helperText: {
     color: colors.mutedForeground,

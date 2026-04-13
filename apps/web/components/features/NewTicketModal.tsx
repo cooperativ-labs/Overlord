@@ -217,7 +217,7 @@ export function NewTicketModal({
             <p className="text-sm text-muted-foreground">Creating ticket…</p>
           </div>
         ) : (
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-none">
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-1 sm:min-h-0">
             {/* Objective textarea */}
             <div className="relative flex flex-1 flex-col">
               <Label htmlFor="ticket-objective" className="mb-2 block text-sm font-medium">

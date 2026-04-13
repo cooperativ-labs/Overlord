@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -75,6 +76,14 @@ export default function AddServerScreen() {
   const [isHardwareBacked, setIsHardwareBacked] = useState(false);
   const [password, setPassword] = useState('');
   const [working, setWorking] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyPublicKey() {
+    if (!publicKey) return;
+    await Clipboard.setStringAsync(publicKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   const resolvedPort = parseServerPort(port);
   const canSubmit =
@@ -531,6 +540,19 @@ export default function AddServerScreen() {
                     {publicKey}
                   </Text>
                 </View>
+                <Pressable
+                  style={({ pressed }) => [styles.copyKeyButton, pressed && { opacity: 0.7 }]}
+                  onPress={handleCopyPublicKey}
+                >
+                  <Ionicons
+                    name={copied ? 'checkmark-circle' : 'copy-outline'}
+                    size={16}
+                    color={copied ? colors.success : colors.primary}
+                  />
+                  <Text style={[styles.copyKeyLabel, copied && { color: colors.success }]}>
+                    {copied ? 'Copied!' : 'Copy Public Key'}
+                  </Text>
+                </Pressable>
               </View>
 
               <View style={styles.section}>
@@ -870,6 +892,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Menlo',
     fontSize: 11,
     lineHeight: 16
+  },
+  copyKeyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8
+  },
+  copyKeyLabel: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500'
   },
   manualHint: {
     marginTop: 12,

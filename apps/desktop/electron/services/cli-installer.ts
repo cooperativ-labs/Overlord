@@ -7,16 +7,19 @@ import path from 'path';
 
 const execFileAsync = promisify(execFile);
 const REQUIRED_NODE_MAJOR = 20;
+const WRAPPER_VERSION = 2;
 const OVLD_HOME = path.join(os.homedir(), '.ovld');
 const CLI_INSTALL_ROOT = path.join(OVLD_HOME, 'cli');
 
 const WRAPPER_SCRIPT = `#!/bin/sh
 # Overlord CLI wrapper - installed by Overlord desktop app
-NODE_BIN="\${OVLD_NODE_BIN:-node}"
-CLI_DIR="%CLI_DIR%"
+# ovld-wrapper-version: ${WRAPPER_VERSION}
+DEFAULT_NODE_BIN=%NODE_BIN%
+NODE_BIN="\${OVLD_NODE_BIN:-$DEFAULT_NODE_BIN}"
+CLI_DIR=%CLI_DIR%
 
 if ! command -v "$NODE_BIN" >/dev/null 2>&1; then
-  echo "Overlord CLI requires Node.js ${REQUIRED_NODE_MAJOR} or newer, but '$NODE_BIN' was not found on PATH." >&2
+  echo "Overlord CLI requires Node.js ${REQUIRED_NODE_MAJOR} or newer, but '$NODE_BIN' was not found." >&2
   exit 1
 fi
 
@@ -52,12 +55,22 @@ type CliInstallStatus = {
 
 const USER_LOCAL_BIN = path.join(os.homedir(), '.local', 'bin');
 
+type NodeRuntime = {
+  binPath: string;
+  source: 'env' | 'bundled' | 'path' | 'common';
+  version: string;
+};
+
 function getPathEntries(): string[] {
   const value = process.env.PATH ?? '';
   return value
     .split(path.delimiter)
     .map(entry => entry.trim())
     .filter(Boolean);
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function isWritableDirectory(dir: string): boolean {
@@ -85,6 +98,117 @@ function getInstallDirCandidates(): string[] {
   const pathCandidates = getPathEntries().filter(isGlobalBinCandidate);
   const fallbackCandidates = [USER_LOCAL_BIN, path.join(os.homedir(), 'bin')];
   return [...new Set([...primaryCandidates, ...pathCandidates, ...fallbackCandidates])];
+}
+
+function getBundledNodeCandidates(): string[] {
+  const candidates: string[] = [];
+  const resourcesPath = process.resourcesPath;
+
+  if (resourcesPath) {
+    candidates.push(path.join(resourcesPath, 'node', 'bin', 'node'));
+    candidates.push(
+      path.join(resourcesPath, 'node', `${process.platform}-${process.arch}`, 'bin', 'node')
+    );
+  }
+
+  const appPath = app.getAppPath();
+  const unpackedPath = appPath.replace('app.asar', 'app.asar.unpacked');
+  candidates.push(path.join(unpackedPath, 'node', 'bin', 'node'));
+  candidates.push(
+    path.join(unpackedPath, 'node', `${process.platform}-${process.arch}`, 'bin', 'node')
+  );
+
+  return candidates;
+}
+
+function getCommonNodeCandidates(): string[] {
+  const candidates = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    '/opt/local/bin/node',
+    path.join(os.homedir(), '.volta', 'bin', 'node'),
+    path.join(os.homedir(), '.asdf', 'shims', 'node'),
+    path.join(os.homedir(), '.mise', 'shims', 'node'),
+    path.join(os.homedir(), '.local', 'share', 'mise', 'shims', 'node')
+  ];
+
+  const nvmDir = process.env.NVM_DIR ?? path.join(os.homedir(), '.nvm');
+  const nvmVersionsDir = path.join(nvmDir, 'versions', 'node');
+  try {
+    const nvmCandidates = fs
+      .readdirSync(nvmVersionsDir)
+      .filter(entry => entry.startsWith('v'))
+      .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }))
+      .map(entry => path.join(nvmVersionsDir, entry, 'bin', 'node'));
+    candidates.push(...nvmCandidates);
+  } catch {
+    // NVM is optional.
+  }
+
+  return candidates;
+}
+
+async function resolvePathNode(): Promise<string | null> {
+  try {
+    const command = process.platform === 'win32' ? 'where.exe' : '/bin/sh';
+    const args = process.platform === 'win32' ? ['node'] : ['-lc', 'command -v node'];
+    const { stdout } = await execFileAsync(command, args, {
+      env: process.env,
+      timeout: 1000
+    });
+    return (
+      stdout
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .find(Boolean) ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function getNodeVersion(binPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(binPath, ['-v'], {
+      env: process.env,
+      timeout: 1500
+    });
+    const version = stdout.trim();
+    return version || null;
+  } catch {
+    return null;
+  }
+}
+
+function getNodeMajor(version: string): number {
+  const major = Number.parseInt(version.replace(/^v/, '').split('.')[0] ?? '', 10);
+  return Number.isNaN(major) ? 0 : major;
+}
+
+async function findCompatibleNodeRuntime(): Promise<NodeRuntime | null> {
+  const pathNode = await resolvePathNode();
+  const candidates: Array<{ binPath: string; source: NodeRuntime['source'] }> = [
+    ...(process.env.OVLD_NODE_BIN
+      ? [{ binPath: process.env.OVLD_NODE_BIN, source: 'env' as const }]
+      : []),
+    ...getBundledNodeCandidates().map(binPath => ({ binPath, source: 'bundled' as const })),
+    ...(pathNode ? [{ binPath: pathNode, source: 'path' as const }] : []),
+    ...getCommonNodeCandidates().map(binPath => ({ binPath, source: 'common' as const }))
+  ];
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.binPath)) continue;
+    seen.add(candidate.binPath);
+
+    const version = await getNodeVersion(candidate.binPath);
+    if (version && getNodeMajor(version) >= REQUIRED_NODE_MAJOR) {
+      return { ...candidate, version };
+    }
+  }
+
+  return null;
 }
 
 function resolveInstallDir(): string {
@@ -180,6 +304,8 @@ export async function getCliInstallStatus(): Promise<CliInstallStatus> {
           const content = fs.readFileSync(wrapperPath, 'utf8');
           isStale =
             !content.includes(expectedCliDir) ||
+            !content.includes(`ovld-wrapper-version: ${WRAPPER_VERSION}`) ||
+            !content.includes('OVLD_NODE_BIN') ||
             !fs.existsSync(path.join(expectedCliDir, 'bin', 'ovld.mjs'));
         } catch {
           isStale = true;
@@ -213,13 +339,23 @@ export async function installCli(): Promise<CliInstallResult> {
   const installDir = resolveInstallDir();
   const wrapperPath = path.join(installDir, 'ovld');
   const installedCliDir = syncInstalledCliCopy(bundledCliDir, bundledCliVersion);
+  const nodeRuntime = await findCompatibleNodeRuntime();
+  if (!nodeRuntime) {
+    return {
+      ok: false,
+      error: `Could not find Node.js ${REQUIRED_NODE_MAJOR} or newer. Install Node ${REQUIRED_NODE_MAJOR}+ or set OVLD_NODE_BIN to a compatible Node binary.`
+    };
+  }
 
   try {
     if (!fs.existsSync(installDir)) {
       fs.mkdirSync(installDir, { recursive: true });
     }
 
-    const script = WRAPPER_SCRIPT.replace('%CLI_DIR%', installedCliDir);
+    const script = WRAPPER_SCRIPT.replace('%CLI_DIR%', shellQuote(installedCliDir)).replace(
+      '%NODE_BIN%',
+      shellQuote(nodeRuntime.binPath)
+    );
     fs.writeFileSync(wrapperPath, script, { mode: 0o755 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -227,10 +363,10 @@ export async function installCli(): Promise<CliInstallResult> {
   }
 
   const pathInstruction = isPathConfiguredFor(installDir)
-    ? `Installed globally at ${installDir}. You can now run ovld from any repository.`
+    ? `Installed globally at ${installDir}. You can now run ovld from any repository. It will use ${nodeRuntime.version} from ${nodeRuntime.binPath}.`
     : installDir === USER_LOCAL_BIN
-      ? 'Installed to ~/.local/bin. Add it to PATH if needed (e.g. in ~/.zshrc: export PATH="$HOME/.local/bin:$PATH").'
-      : `Installed to ${installDir}. Ensure it is included in your PATH.`;
+      ? `Installed to ~/.local/bin. Add it to PATH if needed (e.g. in ~/.zshrc: export PATH="$HOME/.local/bin:$PATH"). It will use ${nodeRuntime.version} from ${nodeRuntime.binPath}.`
+      : `Installed to ${installDir}. Ensure it is included in your PATH. It will use ${nodeRuntime.version} from ${nodeRuntime.binPath}.`;
 
   return {
     ok: true,

@@ -1,8 +1,8 @@
 export type {
-  SSHInstallResult,
-  SSHKeyResult,
   RunCommandParams,
   RunCommandResult,
+  SSHInstallResult,
+  SSHKeyResult,
   VerifyConnectionParams,
   VerifyConnectionResult
 } from './src/index';

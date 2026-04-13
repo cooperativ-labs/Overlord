@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import { AppState } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
@@ -13,7 +21,9 @@ interface ServerConnectionsContextValue {
   getServerById: (serverId: string) => Server | null;
 }
 
-const ServerConnectionsContext = createContext<ServerConnectionsContextValue | undefined>(undefined);
+const ServerConnectionsContext = createContext<ServerConnectionsContextValue | undefined>(
+  undefined
+);
 
 export function ServerConnectionsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -112,12 +122,15 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
 
   const value = useMemo<ServerConnectionsContextValue>(() => {
     const connectedSSHServers = servers.filter(
-      server => server.status === 'connected' && (server.transport === 'ssh' || server.transport === 'tailscale_ssh')
+      server =>
+        server.status === 'connected' &&
+        (server.transport === 'ssh' || server.transport === 'tailscale_ssh')
     );
 
     if (servers.length > 0) {
       const excluded = servers.filter(
-        s => !(s.status === 'connected' && (s.transport === 'ssh' || s.transport === 'tailscale_ssh'))
+        s =>
+          !(s.status === 'connected' && (s.transport === 'ssh' || s.transport === 'tailscale_ssh'))
       );
       console.log(
         `[ServerConnections] connectedSSHServers: ${connectedSSHServers.length}/${servers.length}`,
@@ -149,9 +162,7 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
   }, [loading, refresh, servers]);
 
   return (
-    <ServerConnectionsContext.Provider value={value}>
-      {children}
-    </ServerConnectionsContext.Provider>
+    <ServerConnectionsContext.Provider value={value}>{children}</ServerConnectionsContext.Provider>
   );
 }
 

@@ -655,7 +655,8 @@ function DemoCliSettings() {
               ovld protocol &lt;subcommand&gt;
             </code>{' '}
             discover-project, attach, connect, load-context, spawn, update,
-            record-change-rationales, ask, read-context, write-context, deliver, artifact-upload-file
+            record-change-rationales, ask, read-context, write-context, deliver,
+            artifact-upload-file
           </li>
           <li className="break-words">
             <code className="break-all rounded bg-muted px-1">ovld connect &lt;agent&gt;</code>{' '}
@@ -674,8 +675,8 @@ function DemoCliSettings() {
             local agent integrations
           </li>
           <li className="break-words">
-            <code className="rounded bg-muted px-1">ovld doctor</code> validate installed
-            connectors and check for CLI updates
+            <code className="rounded bg-muted px-1">ovld doctor</code> validate installed connectors
+            and check for CLI updates
           </li>
         </ul>
         <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
@@ -685,9 +686,7 @@ function DemoCliSettings() {
             tickets, pick agent
           </li>
           <li className="break-words">
-            <code className="break-all rounded bg-muted px-1">
-              ovld protocol discover-project
-            </code>{' '}
+            <code className="break-all rounded bg-muted px-1">ovld protocol discover-project</code>{' '}
             — resolve the project from the current working directory
           </li>
           <li className="break-words">

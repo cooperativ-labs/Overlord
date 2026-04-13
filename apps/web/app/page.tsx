@@ -274,7 +274,9 @@ export default async function HomePage() {
                 className="shrink-0 overflow-hidden"
               />
             </div>
-            <p className="hidden sm:block font-[family-name:var(--font-display)] text-lg font-semibold">Overlord</p>
+            <p className="hidden sm:block font-[family-name:var(--font-display)] text-lg font-semibold">
+              Overlord
+            </p>
           </div>
 
           <div className="flex items-center gap-3">

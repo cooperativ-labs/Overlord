@@ -27,7 +27,13 @@ import {
   saveServerDeviceCredential
 } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
-import type { AgentModelSelection, Objective, Server, TicketDetail, TicketEvent } from '@/lib/types';
+import type {
+  AgentModelSelection,
+  Objective,
+  Server,
+  TicketDetail,
+  TicketEvent
+} from '@/lib/types';
 import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from '@/modules/ssh';
 
 const eventIcons: Record<string, { name: string; color: string }> = {
@@ -319,7 +325,10 @@ export default function TicketDetailScreen() {
         password,
         keyResult.publicKeyOpenSSH
       );
-      console.log('[TicketDetail] Key installed, host fingerprint:', installResult.hostKeyFingerprint);
+      console.log(
+        '[TicketDetail] Key installed, host fingerprint:',
+        installResult.hostKeyFingerprint
+      );
 
       // 3. Try to verify the key works via pubkey auth
       let keyAuthWorks = false;
@@ -700,10 +709,7 @@ export default function TicketDetailScreen() {
           {!loadingServers && allServers.length > 0 && availableServers.length === 0 && (
             <Text style={styles.sshBannerDetail}>
               {allServers.length} server{allServers.length !== 1 ? 's' : ''} found but none are
-              connected.{' '}
-              {allServers
-                .map(s => `${s.label}: ${s.status}/${s.transport}`)
-                .join(', ')}
+              connected. {allServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')}
             </Text>
           )}
           {!loadingServers && allServers.length === 0 && (
@@ -750,11 +756,13 @@ export default function TicketDetailScreen() {
               !resolvedAssignedSelection) &&
               styles.launchServerButtonDisabled,
             pressed &&
-              !(savingAssignedAgent ||
+              !(
+                savingAssignedAgent ||
                 loadingServers ||
                 launchingServerId !== null ||
                 !isSSHSupported ||
-                !resolvedAssignedSelection) &&
+                !resolvedAssignedSelection
+              ) &&
               styles.launchServerButtonPressed
           ]}
         >
