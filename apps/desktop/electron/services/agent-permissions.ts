@@ -54,7 +54,12 @@ function configureClaude(projectDirectory?: string): AgentPermissionResult {
         : {};
 
     const existingAllow = asStringArray(permissions.allow);
-    const required = ['Bash(ovld protocol:*)', 'Bash(curl -sS -X POST:*)'];
+    const required = [
+      'Bash(ovld protocol:*)',
+      'Bash(curl -sS -X POST:*)',
+      'Read(/tmp/*)',
+      'Write(/tmp/*)'
+    ];
 
     const mergedAllow = Array.from(new Set([...existingAllow, ...required]));
 
@@ -73,7 +78,7 @@ function configureClaude(projectDirectory?: string): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: `Added ${required.length} allow rules for protocol shell commands.`
+      details: `Added ${required.length} allow rules for protocol shell commands and /tmp file access.`
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -104,7 +109,12 @@ function configureCursor(projectDirectory?: string): AgentPermissionResult {
         : {};
 
     const existingAllow = asStringArray(permissions.allow);
-    const required = ['Shell(ovld protocol:*)', 'Shell(curl -sS -X POST:*)'];
+    const required = [
+      'Shell(ovld protocol:*)',
+      'Shell(curl -sS -X POST:*)',
+      'Read(/tmp/*)',
+      'Write(/tmp/*)'
+    ];
 
     const mergedAllow = Array.from(new Set([...existingAllow, ...required]));
 
@@ -123,7 +133,7 @@ function configureCursor(projectDirectory?: string): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: `Added ${required.length} allowed shell command patterns.`
+      details: `Added ${required.length} allowed shell command patterns and /tmp file access.`
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -158,6 +168,18 @@ function configureGemini(): AgentPermissionResult {
       'commandPrefix = "curl -sS -X POST"',
       'decision = "allow"',
       'priority = 900',
+      '',
+      '[[rule]]',
+      'toolName = "read_file"',
+      'pathPrefix = "/tmp/"',
+      'decision = "allow"',
+      'priority = 900',
+      '',
+      '[[rule]]',
+      'toolName = "write_file"',
+      'pathPrefix = "/tmp/"',
+      'decision = "allow"',
+      'priority = 900',
       ''
     ].join('\n');
 
@@ -168,7 +190,7 @@ function configureGemini(): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: 'Installed Gemini policy rules for ovld protocol and curl POST.'
+      details: 'Installed Gemini policy rules for ovld protocol, curl POST, and /tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -210,7 +232,13 @@ function configureOpenCode(): AgentPermissionResult {
           ...bashPermission,
           'ovld protocol *': 'allow',
           'curl -sS -X POST *': 'allow',
-          'curl -s -X POST *': 'allow'
+          'curl -s -X POST *': 'allow',
+          'cat /tmp/*': 'allow',
+          'echo * /tmp/*': 'allow',
+          'tee /tmp/*': 'allow',
+          'cp * /tmp/*': 'allow',
+          'mv * /tmp/*': 'allow',
+          'rm /tmp/*': 'allow'
         }
       }
     };
@@ -222,7 +250,7 @@ function configureOpenCode(): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: 'Updated OpenCode bash permissions for ovld protocol and curl POST.'
+      details: 'Updated OpenCode bash permissions for ovld protocol, curl POST, and /tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
