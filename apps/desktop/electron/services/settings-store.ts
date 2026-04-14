@@ -15,6 +15,15 @@ export type ExternalTerminalApp =
   | 'cmux'
   | 'custom';
 export type ExternalTerminalLaunchMode = 'window' | 'tab' | 'custom';
+export type TmuxHostTerminalApp =
+  | 'terminal'
+  | 'iterm'
+  | 'warp'
+  | 'ghostty'
+  | 'alacritty'
+  | 'kitty'
+  | 'hyper'
+  | 'custom';
 
 interface StoreData {
   terminalMode?: 'embedded' | 'external';
@@ -22,23 +31,37 @@ interface StoreData {
   externalTerminalLaunchMode: ExternalTerminalLaunchMode;
   externalTerminalCustomHotkey: string;
   customExternalTerminalApp: string;
+  externalTerminalTmuxHostApp: TmuxHostTerminalApp;
+  customExternalTerminalTmuxHostApp: string;
+  externalTerminalTmuxCommand: string;
   serverExternalTerminalApp: ExternalTerminalApp;
   serverExternalTerminalLaunchMode: ExternalTerminalLaunchMode;
   serverExternalTerminalCustomHotkey: string;
   customServerExternalTerminalApp: string;
+  serverExternalTerminalTmuxHostApp: TmuxHostTerminalApp;
+  customServerExternalTerminalTmuxHostApp: string;
+  serverExternalTerminalTmuxCommand: string;
   windowBounds: { width: number; height: number; x?: number; y?: number };
   [key: string]: unknown;
 }
+
+const DEFAULT_TMUX_COMMAND = 'tmux new-session bash {script}';
 
 const defaults: StoreData = {
   externalTerminalApp: 'default',
   externalTerminalLaunchMode: 'tab',
   externalTerminalCustomHotkey: '',
   customExternalTerminalApp: '',
+  externalTerminalTmuxHostApp: 'terminal',
+  customExternalTerminalTmuxHostApp: '',
+  externalTerminalTmuxCommand: DEFAULT_TMUX_COMMAND,
   serverExternalTerminalApp: 'default',
   serverExternalTerminalLaunchMode: 'tab',
   serverExternalTerminalCustomHotkey: '',
   customServerExternalTerminalApp: '',
+  serverExternalTerminalTmuxHostApp: 'terminal',
+  customServerExternalTerminalTmuxHostApp: '',
+  serverExternalTerminalTmuxCommand: DEFAULT_TMUX_COMMAND,
   windowBounds: { width: 1400, height: 900 }
 };
 
@@ -85,6 +108,19 @@ function migrateLegacySettings(raw: Record<string, unknown>): {
     typeof next.customExternalTerminalApp === 'string'
       ? next.customExternalTerminalApp
       : defaults.customExternalTerminalApp;
+  const localTmuxHostApp =
+    typeof next.externalTerminalTmuxHostApp === 'string'
+      ? next.externalTerminalTmuxHostApp
+      : defaults.externalTerminalTmuxHostApp;
+  const localCustomTmuxHostApp =
+    typeof next.customExternalTerminalTmuxHostApp === 'string'
+      ? next.customExternalTerminalTmuxHostApp
+      : defaults.customExternalTerminalTmuxHostApp;
+  const localTmuxCommand =
+    typeof next.externalTerminalTmuxCommand === 'string' &&
+    next.externalTerminalTmuxCommand.trim().length > 0
+      ? next.externalTerminalTmuxCommand
+      : defaults.externalTerminalTmuxCommand;
 
   if (
     typeof raw.serverExternalTerminalApp !== 'string' ||
@@ -107,6 +143,36 @@ function migrateLegacySettings(raw: Record<string, unknown>): {
   if (typeof raw.customServerExternalTerminalApp !== 'string') {
     changed = true;
     next.customServerExternalTerminalApp = localCustomApp;
+  }
+  if (typeof raw.externalTerminalTmuxHostApp !== 'string') {
+    changed = true;
+    next.externalTerminalTmuxHostApp = defaults.externalTerminalTmuxHostApp;
+  }
+  if (typeof raw.customExternalTerminalTmuxHostApp !== 'string') {
+    changed = true;
+    next.customExternalTerminalTmuxHostApp = defaults.customExternalTerminalTmuxHostApp;
+  }
+  if (
+    typeof raw.externalTerminalTmuxCommand !== 'string' ||
+    raw.externalTerminalTmuxCommand.trim().length === 0
+  ) {
+    changed = true;
+    next.externalTerminalTmuxCommand = defaults.externalTerminalTmuxCommand;
+  }
+  if (typeof raw.serverExternalTerminalTmuxHostApp !== 'string') {
+    changed = true;
+    next.serverExternalTerminalTmuxHostApp = localTmuxHostApp;
+  }
+  if (typeof raw.customServerExternalTerminalTmuxHostApp !== 'string') {
+    changed = true;
+    next.customServerExternalTerminalTmuxHostApp = localCustomTmuxHostApp;
+  }
+  if (
+    typeof raw.serverExternalTerminalTmuxCommand !== 'string' ||
+    raw.serverExternalTerminalTmuxCommand.trim().length === 0
+  ) {
+    changed = true;
+    next.serverExternalTerminalTmuxCommand = localTmuxCommand;
   }
 
   if ('terminalMode' in next) {

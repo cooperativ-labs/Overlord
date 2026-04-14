@@ -782,7 +782,7 @@ export default function TicketDetailScreen() {
         <Text style={styles.sectionHelperText}>
           {isSSHSupported
             ? availableServers.length > 0
-              ? `Launches ${resolvedAssignedSelection?.agent ?? 'the selected agent'} in tmux on a connected SSH server from this device.`
+              ? `Launches ${resolvedAssignedSelection?.agent ?? 'the selected agent'} on a connected SSH server using your server terminal preference.`
               : 'No connected SSH servers are currently available on this device.'
             : 'Remote SSH launch is currently available on iOS only.'}
         </Text>

@@ -24,6 +24,12 @@ Final delivery events can include:
 
 Delivery turns the end of the agent run into a durable, reviewable record rather than a terminal-only result.
 
+## Large payloads
+
+Use \`--payload-file -\` to stream a full delivery JSON payload on stdin. This keeps summaries, artifacts, and change rationales in one structured JSON document without creating a temporary delivery file that needs cleanup.
+
+File-backed payloads are still supported when stdin is not available, but they should be treated as ephemeral scratch data outside the repository.
+
 ## Related pages
 
 - [Artifacts](/docs/protocol/artifacts)

@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.24.0] - 2026-04-14:16:24
+
+### Added
+- Add /tmp file access rules for Bash and Shell agent commands to enable temporary file operations in agent workflows.
+- Add agent and model selection to QuickRun modal so tickets are created with the selected agent pre-assigned.
+- Add configurable tmux terminal settings with support for multiple terminal emulators (iTerm2, Warp, Ghostty, Alacritty, Kitty, Hyper) and custom launch commands.
+- Add stdin streaming support (`--payload-file -`) for larger delivery JSON payloads to avoid creating temporary files.
+
+### Fixed
+- None.
+
+### Changed
+- Enhance Kanban board components with statusType prop for dynamic background color changes based on column status.
+- Improve visual differentiation of task columns in the Kanban interface with enhanced background colors for 'complete' status and new styling for 'review' status.
+- Split desktop terminal preferences into separate local and server profiles with distinct tmux configurations.
+- Update QuickRun modal to use AgentModelChooserButton and persist selected agent/model to created tickets.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace version to 3.24.0.
+
 ## [3.23.0] - 2026-04-13:10:30
 
 ### Added

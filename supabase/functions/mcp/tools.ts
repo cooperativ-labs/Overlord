@@ -374,7 +374,7 @@ export const TOOLS = [
       openWorldHint: false
     },
     description:
-      'Deliver your completed work. Always call last. Moves ticket to review. Do not call if you used ask and have not received an answer.',
+      'Deliver your completed work. Always call last. Moves ticket to review. Do not call if you used ask and have not received an answer. MCP accepts the structured delivery payload directly; do not create temporary delivery JSON files for this tool.',
     inputSchema: {
       type: 'object',
       properties: {

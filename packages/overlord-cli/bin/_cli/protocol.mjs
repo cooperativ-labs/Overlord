@@ -189,6 +189,37 @@ function readJsonFile(filePath, label) {
   }
 }
 
+async function readTextFromStdin(label) {
+  const chunks = [];
+  try {
+    for await (const chunk of process.stdin) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    }
+  } catch (err) {
+    throw new Error(
+      `${label}: could not read stdin: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function readJsonFileOrStdin(filePath, label) {
+  if (filePath !== '-') {
+    return readJsonFile(filePath, label);
+  }
+
+  try {
+    return JSON.parse(await readTextFromStdin(label));
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith(`${label}: could not read stdin`)) {
+      throw err;
+    }
+    throw new Error(
+      `${label}: could not parse stdin: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // changeRationales helper
 // ---------------------------------------------------------------------------
@@ -200,7 +231,10 @@ function readJsonFile(filePath, label) {
  */
 async function resolveChangeRationales(flags) {
   if (flags['change-rationales-file']) {
-    return readJsonFile(String(flags['change-rationales-file']), '--change-rationales-file');
+    return await readJsonFileOrStdin(
+      String(flags['change-rationales-file']),
+      '--change-rationales-file'
+    );
   }
   if (flags['change-rationales-json']) {
     try {
@@ -624,7 +658,7 @@ async function protocolDeliver(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   const deliverPayload = flags['payload-file']
-    ? readJsonFile(String(flags['payload-file']), '--payload-file')
+    ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
     : null;
   const summary = deliverPayload?.summary ??
     (flags['summary-file']
@@ -642,7 +676,7 @@ async function protocolDeliver(args) {
     throw new Error('Use either --payload-file or --artifacts-json, not both');
   }
   if (flags['artifacts-file']) {
-    artifacts = readJsonFile(String(flags['artifacts-file']), '--artifacts-file');
+    artifacts = await readJsonFileOrStdin(String(flags['artifacts-file']), '--artifacts-file');
   } else if (flags['artifacts-json']) {
     try {
       artifacts = JSON.parse(String(flags['artifacts-json']));
@@ -1144,14 +1178,15 @@ deliver:
     --session-key <key>
     --ticket-id <id>
     --summary <text> or --summary-file <path>
-    or: --payload-file <path> containing { summary, artifacts, changeRationales }
+    or: --payload-file <path|-> containing { summary, artifacts, changeRationales }
   Optional:
     --artifacts-json <json>
-    --artifacts-file <path>
+    --artifacts-file <path|->
     --change-rationales-json <json>
-    --change-rationales-file <path>
+    --change-rationales-file <path|->
     --skip-file-change-check  Bypass local git vs changeRationales validation
   Notes:
+    Use --payload-file - to read the full delivery JSON from stdin without creating a scratch file.
     Do not combine --payload-file with --artifacts-json/--artifacts-file or change-rationale flags.
     In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
 
@@ -1243,6 +1278,7 @@ Examples:
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <id> --payload-file ./deliver.json
+  ovld protocol deliver --session-key <key> --ticket-id <id> --payload-file -
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --timeout 60000
 `);

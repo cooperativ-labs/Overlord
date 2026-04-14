@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { getEditorSchemeAction, saveEditorSchemeAction } from '@/lib/actions/profile-settings';
 import {
   DEFAULT_EDITOR_SCHEME,
@@ -27,6 +28,9 @@ type TerminalProfileState = {
   terminalLaunchMode: string;
   terminalCustomHotkey: string;
   customTerminalApp: string;
+  terminalTmuxHostApp: string;
+  customTerminalTmuxHostApp: string;
+  terminalTmuxCommand: string;
 };
 
 const externalTerminalAppOptions = [
@@ -49,11 +53,27 @@ const externalTerminalLaunchModeOptions = [
   { value: 'custom', label: 'Custom' }
 ] as const;
 
+const tmuxHostTerminalOptions = [
+  { value: 'terminal', label: 'Terminal' },
+  { value: 'iterm', label: 'iTerm2' },
+  { value: 'warp', label: 'Warp' },
+  { value: 'ghostty', label: 'Ghostty' },
+  { value: 'alacritty', label: 'Alacritty' },
+  { value: 'kitty', label: 'Kitty' },
+  { value: 'hyper', label: 'Hyper' },
+  { value: 'custom', label: 'Custom…' }
+] as const;
+
+const DEFAULT_TMUX_COMMAND = 'tmux new-session bash {script}';
+
 const DEFAULT_TERMINAL_PROFILE: TerminalProfileState = {
   terminalApp: 'default',
   terminalLaunchMode: 'tab',
   terminalCustomHotkey: '',
-  customTerminalApp: ''
+  customTerminalApp: '',
+  terminalTmuxHostApp: 'terminal',
+  customTerminalTmuxHostApp: '',
+  terminalTmuxCommand: DEFAULT_TMUX_COMMAND
 };
 
 const TERMINAL_PROFILE_KEYS: Record<
@@ -63,19 +83,28 @@ const TERMINAL_PROFILE_KEYS: Record<
     launchMode: string;
     customHotkey: string;
     customApp: string;
+    tmuxHostApp: string;
+    customTmuxHostApp: string;
+    tmuxCommand: string;
   }
 > = {
   local: {
     app: 'externalTerminalApp',
     launchMode: 'externalTerminalLaunchMode',
     customHotkey: 'externalTerminalCustomHotkey',
-    customApp: 'customExternalTerminalApp'
+    customApp: 'customExternalTerminalApp',
+    tmuxHostApp: 'externalTerminalTmuxHostApp',
+    customTmuxHostApp: 'customExternalTerminalTmuxHostApp',
+    tmuxCommand: 'externalTerminalTmuxCommand'
   },
   server: {
     app: 'serverExternalTerminalApp',
     launchMode: 'serverExternalTerminalLaunchMode',
     customHotkey: 'serverExternalTerminalCustomHotkey',
-    customApp: 'customServerExternalTerminalApp'
+    customApp: 'customServerExternalTerminalApp',
+    tmuxHostApp: 'serverExternalTerminalTmuxHostApp',
+    customTmuxHostApp: 'customServerExternalTerminalTmuxHostApp',
+    tmuxCommand: 'serverExternalTerminalTmuxCommand'
   }
 };
 
@@ -137,20 +166,32 @@ export function TerminalPage({ open }: { open: boolean }) {
       api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.launchMode),
       api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customApp),
       api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customHotkey),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.tmuxHostApp),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customTmuxHostApp),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.tmuxCommand),
       api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.app),
       api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.launchMode),
       api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customApp),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customHotkey)
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customHotkey),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.tmuxHostApp),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customTmuxHostApp),
+      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.tmuxCommand)
     ]).then(
       ([
         localAppValue,
         localLaunchModeValue,
         localCustomAppValue,
         localCustomHotkeyValue,
+        localTmuxHostAppValue,
+        localCustomTmuxHostAppValue,
+        localTmuxCommandValue,
         serverAppValue,
         serverLaunchModeValue,
         serverCustomAppValue,
-        serverCustomHotkeyValue
+        serverCustomHotkeyValue,
+        serverTmuxHostAppValue,
+        serverCustomTmuxHostAppValue,
+        serverTmuxCommandValue
       ]) => {
         setTerminalProfiles({
           local: {
@@ -163,7 +204,17 @@ export function TerminalPage({ open }: { open: boolean }) {
             terminalCustomHotkey:
               typeof localCustomHotkeyValue === 'string'
                 ? localCustomHotkeyValue
-                : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey
+                : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey,
+            terminalTmuxHostApp:
+              localTmuxHostAppValue || DEFAULT_TERMINAL_PROFILE.terminalTmuxHostApp,
+            customTerminalTmuxHostApp:
+              typeof localCustomTmuxHostAppValue === 'string'
+                ? localCustomTmuxHostAppValue
+                : DEFAULT_TERMINAL_PROFILE.customTerminalTmuxHostApp,
+            terminalTmuxCommand:
+              typeof localTmuxCommandValue === 'string' && localTmuxCommandValue.trim().length > 0
+                ? localTmuxCommandValue
+                : DEFAULT_TERMINAL_PROFILE.terminalTmuxCommand
           },
           server: {
             terminalApp: serverAppValue || localAppValue || DEFAULT_TERMINAL_PROFILE.terminalApp,
@@ -182,7 +233,24 @@ export function TerminalPage({ open }: { open: boolean }) {
                 ? serverCustomHotkeyValue
                 : typeof localCustomHotkeyValue === 'string'
                   ? localCustomHotkeyValue
-                  : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey
+                  : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey,
+            terminalTmuxHostApp:
+              serverTmuxHostAppValue ||
+              localTmuxHostAppValue ||
+              DEFAULT_TERMINAL_PROFILE.terminalTmuxHostApp,
+            customTerminalTmuxHostApp:
+              typeof serverCustomTmuxHostAppValue === 'string'
+                ? serverCustomTmuxHostAppValue
+                : typeof localCustomTmuxHostAppValue === 'string'
+                  ? localCustomTmuxHostAppValue
+                  : DEFAULT_TERMINAL_PROFILE.customTerminalTmuxHostApp,
+            terminalTmuxCommand:
+              typeof serverTmuxCommandValue === 'string' && serverTmuxCommandValue.trim().length > 0
+                ? serverTmuxCommandValue
+                : typeof localTmuxCommandValue === 'string' &&
+                    localTmuxCommandValue.trim().length > 0
+                  ? localTmuxCommandValue
+                  : DEFAULT_TERMINAL_PROFILE.terminalTmuxCommand
           }
         });
       }
@@ -202,14 +270,16 @@ export function TerminalPage({ open }: { open: boolean }) {
       }
     }));
     const profileKeys = TERMINAL_PROFILE_KEYS[profileId];
-    const settingKey =
-      field === 'terminalApp'
-        ? profileKeys.app
-        : field === 'terminalLaunchMode'
-          ? profileKeys.launchMode
-          : field === 'terminalCustomHotkey'
-            ? profileKeys.customHotkey
-            : profileKeys.customApp;
+    const settingKeyByField: Record<keyof TerminalProfileState, string> = {
+      terminalApp: profileKeys.app,
+      terminalLaunchMode: profileKeys.launchMode,
+      terminalCustomHotkey: profileKeys.customHotkey,
+      customTerminalApp: profileKeys.customApp,
+      terminalTmuxHostApp: profileKeys.tmuxHostApp,
+      customTerminalTmuxHostApp: profileKeys.customTmuxHostApp,
+      terminalTmuxCommand: profileKeys.tmuxCommand
+    };
+    const settingKey = settingKeyByField[field];
     await api?.settings.set(settingKey, value);
   }
 
@@ -291,6 +361,7 @@ export function TerminalPage({ open }: { open: boolean }) {
       {(['local', 'server'] as const).map(profileId => {
         const profile = terminalProfiles[profileId];
         const isTmuxLike = isTmuxLikeProfile(profile);
+        const isTmux = profile.terminalApp === 'tmux';
         const supportsLaunchModeSelection =
           !isTmuxLike &&
           profile.terminalApp !== 'ghostty' &&
@@ -351,6 +422,71 @@ export function TerminalPage({ open }: { open: boolean }) {
                   </p>
                 </div>
               )}
+              {isTmux && (
+                <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor={`${prefix}-tmux-host-app`}>Run tmux in</Label>
+                    <Select
+                      value={profile.terminalTmuxHostApp}
+                      onValueChange={value =>
+                        void updateTerminalProfile(profileId, 'terminalTmuxHostApp', value)
+                      }
+                      disabled={!isElectron}
+                    >
+                      <SelectTrigger id={`${prefix}-tmux-host-app`}>
+                        <SelectValue placeholder="Select terminal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tmuxHostTerminalOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {profile.terminalTmuxHostApp === 'custom' && (
+                    <div className="grid gap-2">
+                      <Label htmlFor={`${prefix}-custom-tmux-host-app`}>
+                        Custom host terminal name or path
+                      </Label>
+                      <Input
+                        id={`${prefix}-custom-tmux-host-app`}
+                        placeholder="Example: WezTerm or /Applications/WezTerm.app"
+                        value={profile.customTerminalTmuxHostApp}
+                        onChange={event =>
+                          void updateTerminalProfile(
+                            profileId,
+                            'customTerminalTmuxHostApp',
+                            event.target.value
+                          )
+                        }
+                        disabled={!isElectron}
+                      />
+                    </div>
+                  )}
+                  <div className="grid gap-2">
+                    <Label htmlFor={`${prefix}-tmux-command`}>tmux launch command</Label>
+                    <Textarea
+                      id={`${prefix}-tmux-command`}
+                      placeholder={DEFAULT_TMUX_COMMAND}
+                      value={profile.terminalTmuxCommand}
+                      onChange={event =>
+                        void updateTerminalProfile(
+                          profileId,
+                          'terminalTmuxCommand',
+                          event.target.value
+                        )
+                      }
+                      disabled={!isElectron}
+                      rows={2}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Use {'{script}'} where Overlord should insert the generated launch script.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
               {supportsLaunchModeSelection && (
@@ -395,9 +531,11 @@ export function TerminalPage({ open }: { open: boolean }) {
               )}
               {!supportsLaunchModeSelection && (
                 <p className="text-xs text-muted-foreground">
-                  {isTmuxLike
-                    ? 'tmux-based terminals always open a fresh instance so multiple agent runs can coexist.'
-                    : 'This terminal opens directly into a new session for each launch.'}
+                  {isTmux
+                    ? 'tmux-based terminals run your launch command in a fresh host terminal so multiple agent runs can coexist.'
+                    : isTmuxLike
+                      ? 'tmux-like terminals open a fresh instance so multiple agent runs can coexist.'
+                      : 'This terminal opens directly into a new session for each launch.'}
                 </p>
               )}
               {supportsLaunchModeSelection && profile.terminalLaunchMode !== 'custom' && (

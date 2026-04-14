@@ -44,6 +44,9 @@ type TerminalSettingsProfile = {
   launchMode: string;
   customHotkeyValue: string;
   customApp: string;
+  tmuxHostApp: string;
+  customTmuxHostApp: string;
+  tmuxCommand: string;
 };
 
 function getTerminalSettingsProfile(isRemote: boolean): TerminalSettingsProfile {
@@ -54,12 +57,24 @@ function getTerminalSettingsProfile(isRemote: boolean): TerminalSettingsProfile 
     ? 'serverExternalTerminalCustomHotkey'
     : 'externalTerminalCustomHotkey';
   const customAppKey = prefix ? 'customServerExternalTerminalApp' : 'customExternalTerminalApp';
+  const tmuxHostAppKey = prefix
+    ? 'serverExternalTerminalTmuxHostApp'
+    : 'externalTerminalTmuxHostApp';
+  const customTmuxHostAppKey = prefix
+    ? 'customServerExternalTerminalTmuxHostApp'
+    : 'customExternalTerminalTmuxHostApp';
+  const tmuxCommandKey = prefix
+    ? 'serverExternalTerminalTmuxCommand'
+    : 'externalTerminalTmuxCommand';
 
   return {
     termApp: store.get(appKey, 'default') as string,
     launchMode: store.get(launchModeKey, 'window') as string,
     customHotkeyValue: store.get(customHotkeyKey, '') as string,
-    customApp: store.get(customAppKey, '') as string
+    customApp: store.get(customAppKey, '') as string,
+    tmuxHostApp: store.get(tmuxHostAppKey, 'terminal') as string,
+    customTmuxHostApp: store.get(customTmuxHostAppKey, '') as string,
+    tmuxCommand: store.get(tmuxCommandKey, 'tmux new-session bash {script}') as string
   };
 }
 
@@ -130,6 +145,32 @@ function buildHotkeyAppleScript(hotkey: string): string | null {
   return `keystroke "${keyLiteral}" using {${applescriptModifiers.join(', ')}}`;
 }
 
+function resolveTmuxHostApplication(hostApp: string, customHostApp: string): string {
+  if (hostApp === 'custom') return customHostApp.trim() || 'Terminal';
+
+  const appMap: Record<string, string> = {
+    terminal: 'Terminal',
+    iterm: 'iTerm',
+    warp: 'Warp',
+    ghostty: 'Ghostty',
+    alacritty: 'Alacritty',
+    kitty: 'Kitty',
+    hyper: 'Hyper'
+  };
+
+  return appMap[hostApp] ?? 'Terminal';
+}
+
+function buildTmuxLaunchCommand(template: string, scriptPath: string): string {
+  const trimmedTemplate = template.trim();
+  const commandTemplate =
+    trimmedTemplate.length > 0 && trimmedTemplate.includes('{script}')
+      ? trimmedTemplate
+      : 'tmux new-session bash {script}';
+
+  return commandTemplate.replaceAll('{script}', shellQuote(scriptPath));
+}
+
 function buildLaunchScriptContent(
   command: string,
   cwd?: string,
@@ -184,7 +225,15 @@ async function launchScriptInExternalTerminal(
     'fi'
   ].join(' ');
   const profile = getTerminalSettingsProfile(isRemote);
-  const { termApp, launchMode, customHotkeyValue, customApp } = profile;
+  const {
+    termApp,
+    launchMode,
+    customHotkeyValue,
+    customApp,
+    tmuxHostApp,
+    customTmuxHostApp,
+    tmuxCommand
+  } = profile;
   const openInTab = launchMode === 'tab';
   const isCustomLaunchMode = launchMode === 'custom';
   const hotkeyScript = buildHotkeyAppleScript(customHotkeyValue);
@@ -295,10 +344,14 @@ async function launchScriptInExternalTerminal(
         }, 1000);
       });
     case 'tmux':
-      await runShellCommand(buildNewInstanceApplicationCommand('Terminal'));
+      await runShellCommand(
+        buildNewInstanceApplicationCommand(
+          resolveTmuxHostApplication(tmuxHostApp, customTmuxHostApp)
+        )
+      );
       return new Promise(resolve => {
         setTimeout(() => {
-          const tmuxLaunchCmd = `tmux new-session bash ${shellQuote(scriptPath)}`;
+          const tmuxLaunchCmd = buildTmuxLaunchCommand(tmuxCommand, scriptPath);
           const escapedTmuxLaunchCmd = tmuxLaunchCmd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
           runAppleScript(
             `tell application "System Events" to keystroke "${escapedTmuxLaunchCmd}" & return`

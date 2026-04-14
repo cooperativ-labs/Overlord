@@ -2,6 +2,12 @@ import { getSupabase } from '@/lib/supabase';
 import type { LaunchAgentType, Server } from '@/lib/types';
 import { runCommand } from '@/modules/ssh';
 
+import {
+  DEFAULT_SERVER_TERMINAL_CUSTOM_COMMAND,
+  getServerTerminalPreference,
+  type ServerTerminalPreference
+} from './server-terminal-preferences';
+
 type LaunchTicketOnServerParams = {
   ticketId: string;
   ticketSequence: number | null;
@@ -107,13 +113,15 @@ function buildRemoteLaunchCommand({
   ticketSequence,
   agent,
   platformUrl,
-  agentToken
+  agentToken,
+  terminalPreference
 }: {
   ticketId: string;
   ticketSequence: number | null;
   agent: LaunchAgentType;
   platformUrl: string;
   agentToken: string;
+  terminalPreference: ServerTerminalPreference;
 }): string {
   const windowName = `ticket-${ticketSequence ?? ticketId.slice(0, 8)}`;
   // Source shell profile so nvm/node/ovld are in PATH, then run the
@@ -136,6 +144,19 @@ function buildRemoteLaunchCommand({
     '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"'
   ].join('; ');
   const launcher = `${profileSetup}; ${innerCmd}; EXIT_CODE=$?; if [ $EXIT_CODE -ne 0 ]; then echo ""; echo "[ovld connect exited with code $EXIT_CODE]"; echo "Press Enter to close this window..."; read; fi`;
+
+  if (terminalPreference.launchMode === 'custom') {
+    const trimmedTemplate = terminalPreference.customCommand.trim();
+    const commandTemplate =
+      trimmedTemplate.length > 0 && trimmedTemplate.includes('{command}')
+        ? trimmedTemplate
+        : DEFAULT_SERVER_TERMINAL_CUSTOM_COMMAND;
+
+    return commandTemplate
+      .replaceAll('{command}', quoteShell(launcher))
+      .replaceAll('{window}', quoteShell(windowName))
+      .replaceAll('{ticketId}', quoteShell(ticketId));
+  }
 
   return [
     'CURRENT_PATH="$(tmux list-panes -a -F \'#{?pane_active,1,0} #{pane_current_path}\' 2>/dev/null | awk \'$1 == 1 { $1 = \"\"; sub(/^ /, \"\"); print; exit }\')"',
@@ -171,12 +192,14 @@ export async function launchTicketOnServerWithPassword({
 }: LaunchTicketOnServerWithPasswordParams) {
   const platformUrl = resolvePlatformUrl();
   const agentToken = await ensureAgentToken();
+  const terminalPreference = await getServerTerminalPreference();
   const command = buildRemoteLaunchCommand({
     ticketId,
     ticketSequence,
     agent,
     platformUrl,
-    agentToken
+    agentToken,
+    terminalPreference
   });
 
   return runCommand({
@@ -199,12 +222,14 @@ export async function launchTicketOnServer({
 }: LaunchTicketOnServerParams) {
   const platformUrl = resolvePlatformUrl();
   const agentToken = await ensureAgentToken();
+  const terminalPreference = await getServerTerminalPreference();
   const command = buildRemoteLaunchCommand({
     ticketId,
     ticketSequence,
     agent,
     platformUrl,
-    agentToken
+    agentToken,
+    terminalPreference
   });
 
   return runCommand({

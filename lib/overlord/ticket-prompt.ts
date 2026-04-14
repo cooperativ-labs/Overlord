@@ -222,10 +222,10 @@ ovld protocol ask --session-key <sessionKey> --ticket-id ${ticketId} --question 
 ### 4 — Deliver last
 
 \`\`\`bash
-ovld protocol deliver --session-key <sessionKey> --ticket-id ${ticketId} --payload-file ./deliver.json
+ovld protocol deliver --session-key <sessionKey> --ticket-id ${ticketId} --payload-file -
 \`\`\`
 
-Where \`deliver.json\` contains:
+Where the stdin payload contains:
 
 \`\`\`json
 {
@@ -235,7 +235,7 @@ Where \`deliver.json\` contains:
 }
 \`\`\`
 
-Treat \`deliver.json\` as ephemeral scratch data only. Create it outside the repository when practical, never commit it, and remove it after the deliver call.
+Prefer \`--payload-file -\` for large or quote-sensitive delivery payloads so no scratch file needs to be created or removed. If your runtime cannot provide stdin directly, \`--payload-file ./deliver.json\` remains supported; treat that file as ephemeral scratch data, never commit it, and remove it after the deliver call.
 
 ### Rules
 
@@ -292,7 +292,7 @@ ${buildLocalEventTypeHelp(launchMode)}
 
 #### Change rationales (optional on updates)
 
-Record \`changeRationales\` for meaningful behavioral changes during long-running work. These are structured protocol payloads that Overlord persists as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated rationale command. Use a JSON file only as a transport convenience for large payloads, and treat it as ephemeral scratch data rather than a repository file.
+Record \`changeRationales\` for meaningful behavioral changes during long-running work. These are structured protocol payloads that Overlord persists as first-class rows in the \`file_changes\` table. Prefer inline JSON or the dedicated rationale command. For larger delivery payloads, prefer \`--payload-file -\` with stdin so no temporary file cleanup is needed. Use file-backed JSON only when stdin is not available, and treat it as ephemeral scratch data rather than a repository file.
 
 \`\`\`bash
 ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id ${ticketId} \\
@@ -340,13 +340,13 @@ ovld protocol deliver --session-key <sessionKey> \\
   --change-rationales-json '[{"label":"Add exponential backoff","file_path":"lib/api-client.ts","summary":"Added retry with backoff.","why":"Transient failures caused data loss.","impact":"Requests retry up to 3 times before failing.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
-For larger or quote-sensitive deliveries, prefer a single JSON file and submit it with:
+For larger or quote-sensitive deliveries, prefer a single JSON payload on stdin and submit it with:
 
 \`\`\`bash
-ovld protocol deliver --session-key <sessionKey> --ticket-id ${ticketId} --payload-file ./deliver.json
+ovld protocol deliver --session-key <sessionKey> --ticket-id ${ticketId} --payload-file -
 \`\`\`
 
-Where \`deliver.json\` contains:
+Where the stdin payload contains:
 
 \`\`\`json
 {
@@ -356,7 +356,7 @@ Where \`deliver.json\` contains:
 }
 \`\`\`
 
-Treat \`deliver.json\` as ephemeral scratch data only. Create it outside the repository when practical, never commit it, and remove it after the deliver call.
+Prefer stdin for large delivery payloads so no scratch file needs to be created or removed. If your runtime cannot provide stdin directly, \`--payload-file ./deliver.json\` remains supported; treat that file as ephemeral scratch data, never commit it, and remove it after the deliver call.
 
 ### 7 — Restart command
 
@@ -448,6 +448,8 @@ ${generateUpdatePayloadExample(ticketId)}
 ${eventTypeHelp}
 
 Use \`changeRationales\` on \`update\` or \`deliver\`, or call \`record_change_rationales\` directly when you want to persist rationale rows separately. Those records are stored in Overlord's \`file_changes\` table.
+
+MCP tool calls accept structured JSON directly. Do not create local delivery JSON files for MCP delivery; the CLI \`--payload-file -\` transport is only for local shell-based \`ovld protocol deliver\` commands.
 
 ### 3 — ask (when blocked)
 

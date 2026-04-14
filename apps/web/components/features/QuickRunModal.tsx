@@ -4,10 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
-import {
-  AgentModelSelector,
-  useAgentModelPreference
-} from '@/components/features/AgentModelSelector';
+import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
+import { useAgentModelPreference } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
@@ -30,6 +28,7 @@ import {
   createBlankTicketAction,
   deleteTicketAction,
   setTicketProjectAction,
+  updateTicketAssignedAgentAction,
   updateTicketFieldAction,
   updateTicketStatusAction
 } from '@/lib/actions/tickets';
@@ -65,16 +64,16 @@ export function QuickRunModal({
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS
 }: QuickRunModalProps) {
   const router = useRouter();
+  const resolvedDefaultProjectId = defaultProjectId || projects[0]?.id || '';
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [objective, setObjective] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(
-    defaultProjectId || projects[0]?.id || ''
-  );
+  const [selectedProjectId, setSelectedProjectId] = useState(resolvedDefaultProjectId);
   const [isCreating, startCreating] = useTransition();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitButtonState, setSubmitButtonState] = useState<ButtonLoadingState>('default');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const creatingTicketRef = useRef(false);
   const { launchAgent } = useTerminal();
   const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
 
@@ -91,19 +90,35 @@ export function QuickRunModal({
     el.style.height = `${el.scrollHeight}px`;
   }, []);
 
+  useEffect(() => {
+    if (ticketId) return;
+
+    setSelectedProjectId(current => {
+      if (isOpen && current) return current;
+      return current === resolvedDefaultProjectId ? current : resolvedDefaultProjectId;
+    });
+  }, [isOpen, resolvedDefaultProjectId, ticketId]);
+
   // Initialize ticket on modal open
   useEffect(() => {
-    if (isOpen && !ticketId) {
+    if (isOpen && !ticketId && !creatingTicketRef.current) {
+      creatingTicketRef.current = true;
       startCreating(async () => {
         try {
-          const created = await createBlankTicketAction(organizationId, selectedProjectId);
+          const created = await createBlankTicketAction(
+            organizationId,
+            resolvedDefaultProjectId || selectedProjectId
+          );
           setTicketId(created.id);
+          setSelectedProjectId(created.projectId);
         } catch (error) {
           console.error('Failed to create blank ticket:', error);
+        } finally {
+          creatingTicketRef.current = false;
         }
       });
     }
-  }, [isOpen, ticketId, organizationId, selectedProjectId]);
+  }, [isOpen, ticketId, organizationId, resolvedDefaultProjectId, selectedProjectId]);
 
   // Auto-save objective
   useEffect(() => {
@@ -150,6 +165,7 @@ export function QuickRunModal({
 
       // Persist final project selection
       await setTicketProjectAction(ticketId, selectedProjectId);
+      await updateTicketAssignedAgentAction(ticketId, selection);
 
       // Save objective and generate title
       if (objective.trim()) {
@@ -180,7 +196,7 @@ export function QuickRunModal({
       // Reset for next use
       setTicketId(null);
       setObjective('');
-      setSelectedProjectId(defaultProjectId || projects[0]?.id || '');
+      setSelectedProjectId(resolvedDefaultProjectId);
       setSubmitButtonState('default');
 
       router.push(buildTicketPath({ projectId: selectedProjectId, ticketId }));
@@ -210,7 +226,7 @@ export function QuickRunModal({
 
     setTicketId(null);
     setObjective('');
-    setSelectedProjectId(defaultProjectId || projects[0]?.id || '');
+    setSelectedProjectId(resolvedDefaultProjectId);
     setSubmitButtonState('default');
     onOpenChange(false);
   }
@@ -236,6 +252,57 @@ export function QuickRunModal({
           </div>
         ) : (
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-1 sm:min-h-0">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              {/* Project selector */}
+              <div className="space-y-2">
+                <Label htmlFor="quick-run-project" className="text-sm font-medium">
+                  Project
+                </Label>
+                <Select
+                  value={selectedProjectId}
+                  onValueChange={setSelectedProjectId}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger
+                    id="quick-run-project"
+                    className="h-8 w-full border-border bg-background px-3 text-left shadow-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 pr-2">
+                      {selectedProject ? (
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-[6px] border"
+                          style={projectIndicatorStyle}
+                        />
+                      ) : (
+                        <span className="h-3 w-3 shrink-0 rounded-[6px] border border-muted-foreground/50 bg-muted" />
+                      )}
+                      <span className="truncate text-sm font-medium">
+                        {selectedProject?.name ?? 'Select project'}
+                      </span>
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {projects.map(project => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Agent & Model</Label>
+                <AgentModelChooserButton
+                  ticketId={ticketId}
+                  initialSelection={null}
+                  disabled={isSubmitting}
+                  onSelectionChange={setSelection}
+                  persistSelection={false}
+                />
+              </div>
+            </div>
+
             {/* Objective textarea */}
             <div className="relative flex flex-1 flex-col">
               <Label htmlFor="quick-run-objective" className="mb-2 block text-sm font-medium">
@@ -260,52 +327,6 @@ export function QuickRunModal({
                 )}
                 disabled={isCreating || isSubmitting}
               />
-            </div>
-
-            {/* Project selector */}
-            <div className="space-y-2">
-              <Label htmlFor="quick-run-project" className="text-sm font-medium">
-                Project
-              </Label>
-              <Select
-                value={selectedProjectId}
-                onValueChange={setSelectedProjectId}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger
-                  id="quick-run-project"
-                  className="h-auto w-full rounded-full border-border bg-background px-3 py-1.5 text-left shadow-sm hover:bg-accent hover:text-accent-foreground"
-                >
-                  <span className="flex items-center gap-2 pr-2">
-                    {selectedProject ? (
-                      <span
-                        className="h-3 w-3 rounded-[6px] border"
-                        style={projectIndicatorStyle}
-                      />
-                    ) : (
-                      <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
-                    )}
-                    <span className="text-sm font-medium">
-                      {selectedProject?.name ?? 'Select project'}
-                    </span>
-                  </span>
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Agent & model selector */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Agent & Model</Label>
-              <div className="rounded-md border border-border/40 bg-background p-3">
-                <AgentModelSelector value={selection} onChange={setSelection} inline={false} />
-              </div>
             </div>
           </div>
         )}

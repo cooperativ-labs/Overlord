@@ -15,7 +15,7 @@ Overlord plugin.
    and stop.
 6. Deliver last with `ovld protocol deliver`, including meaningful `changeRationales` for every
    behavioral git-tracked change.
-   If you need `--payload-file`, `--artifacts-file`, or `--change-rationales-file`, treat that JSON as ephemeral scratch data, not as a repository file. Remove it after delivery and never commit it.
+   For larger delivery JSON, prefer `--payload-file -` and stream the full payload on stdin so no scratch file needs to be created or removed. If you need `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that JSON as ephemeral scratch data, not as a repository file. Remove it after delivery and never commit it.
 
 ## Rules
 

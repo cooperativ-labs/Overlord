@@ -26,6 +26,10 @@ import {
   reorderTicketsAction
 } from '@/lib/actions/tickets';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import {
+  TICKET_DELETED_EVENT,
+  type TicketDeletedEventDetail
+} from '@/lib/helpers/ticket-board-events';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import {
   getOpenedWaitingTimestamps,
@@ -199,9 +203,36 @@ export default function KanbanBoard({
   const boardScopeKey = `${organizationId ?? 'all'}:${projectId ?? 'all'}`;
   const previousBoardScopeKeyRef = useRef(boardScopeKey);
 
+  const removeTicketFromBoard = useCallback((ticketId: string) => {
+    setTickets(prev => {
+      if (!prev.some(ticket => ticket.id === ticketId)) return prev;
+      return prev.filter(ticket => ticket.id !== ticketId);
+    });
+    setWaitingByTicket(prev => {
+      if (!(ticketId in prev)) return prev;
+      const next = { ...prev };
+      delete next[ticketId];
+      return next;
+    });
+    latestSessionAttachedAtRef.current.delete(ticketId);
+    setActiveTicket(prev => (prev?.id === ticketId ? null : prev));
+    setActiveDragStatus(prev => (prev?.ticketId === ticketId ? null : prev));
+  }, []);
+
   useEffect(() => {
     waitingByTicketRef.current = waitingByTicket;
   }, [waitingByTicket]);
+
+  useEffect(() => {
+    const handleTicketDeleted = (event: Event) => {
+      const ticketId = (event as CustomEvent<TicketDeletedEventDetail>).detail?.ticketId;
+      if (!ticketId) return;
+      removeTicketFromBoard(ticketId);
+    };
+
+    window.addEventListener(TICKET_DELETED_EVENT, handleTicketDeleted);
+    return () => window.removeEventListener(TICKET_DELETED_EVENT, handleTicketDeleted);
+  }, [removeTicketFromBoard]);
 
   // Reconcile when server delivers new data (navigation, router.refresh()).
   useEffect(() => {
@@ -782,6 +813,15 @@ export default function KanbanBoard({
           );
         }
       )
+      .on<Database['public']['Tables']['tickets']['Row']>(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'tickets' },
+        payload => {
+          const deletedId = payload.old.id;
+          if (!deletedId || !ticketIdsRef.current.has(deletedId)) return;
+          removeTicketFromBoard(deletedId);
+        }
+      )
       .on<AgentSession>(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'agent_sessions' },
@@ -818,7 +858,7 @@ export default function KanbanBoard({
       window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
-  }, [organizationId, projectId]);
+  }, [organizationId, projectId, removeTicketFromBoard]);
 
   const toggleColumnVisibility = (slug: string) => {
     setVisibleSlugs(prev => {

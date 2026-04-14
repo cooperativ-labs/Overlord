@@ -308,7 +308,7 @@ export function ScheduleEditor({
           const state = createDefaultState();
           setSchedule(state);
           scheduleRef.current = state;
-          initialHashRef.current = JSON.stringify(state);
+          initialHashRef.current = '';
         }
 
         setLoaded(true);
@@ -334,11 +334,13 @@ export function ScheduleEditor({
   // Save on popover close
   const handleOpenChange = useCallback(
     async (nextOpen: boolean) => {
-      if (!nextOpen && schedule && loaded) {
-        const currentHash = hashState(schedule);
+      const currentSchedule = scheduleRef.current ?? schedule;
+
+      if (!nextOpen && currentSchedule && loaded) {
+        const currentHash = hashState(currentSchedule);
         if (currentHash !== initialHashRef.current) {
-          const input = stateToInput(schedule);
-          const isValid = validateState(schedule);
+          const input = stateToInput(currentSchedule);
+          const isValid = validateState(currentSchedule);
           if (isValid) {
             setSaving(true);
             setOptimisticHasSchedule(true);
@@ -438,6 +440,7 @@ export function ScheduleEditor({
       await clearTicketScheduleAction(ticketId);
       setClearButtonState('success');
       initialHashRef.current = '';
+      scheduleRef.current = null;
       setSchedule(null);
       setLoaded(false);
       setOpen(false);

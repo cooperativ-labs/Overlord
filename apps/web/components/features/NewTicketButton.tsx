@@ -29,9 +29,10 @@ export function NewTicketButton() {
 
   const segments = pathname.split('/').filter(Boolean);
   // Route format: /projects/[projectId]/... or /u/...
-  const projectId =
-    defaultProject?.id ??
-    (segments[0] === 'projects' && typeof segments[1] === 'string' ? segments[1] : undefined);
+  const routeProjectId =
+    segments[0] === 'projects' && typeof segments[1] === 'string' ? segments[1] : undefined;
+  const projectId = defaultProject?.id ?? routeProjectId;
+  const quickRunProjectId = routeProjectId ?? defaultProject?.id;
 
   // Load projects when either modal opens
   useEffect(() => {
@@ -94,7 +95,7 @@ export function NewTicketButton() {
         <QuickRunModal
           isOpen={isQuickRunOpen}
           onOpenChange={setIsQuickRunOpen}
-          defaultProjectId={projectId}
+          defaultProjectId={quickRunProjectId}
           projects={projects}
         />
       )}

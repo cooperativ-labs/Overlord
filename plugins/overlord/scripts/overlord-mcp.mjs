@@ -7,6 +7,27 @@ const execFileAsync = promisify(execFile);
 const OVLD_BIN = process.env.OVLD_BIN?.trim() || 'ovld';
 const PROTOCOL_VERSION = '2025-06-18';
 
+function execFileWithOptionalInput(file, args, options, input) {
+  if (input === undefined) {
+    return execFileAsync(file, args, options);
+  }
+
+  return new Promise((resolve, reject) => {
+    const child = execFile(file, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+
+      resolve({ stdout, stderr });
+    });
+
+    child.stdin?.end(input);
+  });
+}
+
 const tools = [
   {
     name: 'discover_project',
@@ -239,7 +260,8 @@ const tools = [
   },
   {
     name: 'deliver_ticket',
-    description: 'Deliver final work back into Overlord with summary, artifacts, and change rationales.',
+    description:
+      'Deliver final work back into Overlord with summary, artifacts, and change rationales. Large payloads are streamed to the CLI through stdin, so this tool does not create delivery scratch files.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -255,10 +277,13 @@ const tools = [
     toCliFlags: args => ({
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
-      summary: args.summary,
-      'artifacts-json': args.artifacts,
-      'change-rationales-json': args.change_rationales,
+      'payload-file': '-',
       'skip-file-change-check': args.skip_file_change_check
+    }),
+    toCliStdin: args => JSON.stringify({
+      summary: args.summary,
+      ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+      ...(Array.isArray(args.change_rationales) ? { changeRationales: args.change_rationales } : {})
     }),
     subcommand: 'deliver'
   },
@@ -490,17 +515,24 @@ function cliArgsFromFlags(flags) {
 }
 
 async function runProtocol(tool, args) {
-  const cliArgs = ['protocol', tool.subcommand, ...cliArgsFromFlags(tool.toCliFlags(args ?? {}))];
+  const toolArgs = args ?? {};
+  const cliArgs = ['protocol', tool.subcommand, ...cliArgsFromFlags(tool.toCliFlags(toolArgs))];
+  const stdin = typeof tool.toCliStdin === 'function' ? tool.toCliStdin(toolArgs) : undefined;
 
   try {
-    const { stdout, stderr } = await execFileAsync(OVLD_BIN, cliArgs, {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'codex-overlord-plugin'
+    const { stdout, stderr } = await execFileWithOptionalInput(
+      OVLD_BIN,
+      cliArgs,
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          AGENT_IDENTIFIER: process.env.AGENT_IDENTIFIER ?? 'codex-overlord-plugin'
+        },
+        maxBuffer: 20 * 1024 * 1024
       },
-      maxBuffer: 20 * 1024 * 1024
-    });
+      stdin
+    );
 
     const trimmed = stdout.trim();
     const data = trimmed ? JSON.parse(trimmed) : {};

@@ -32,10 +32,16 @@ function isSameSelection(left: AgentModelSelection, right: AgentModelSelection):
 
 export function AgentModelChooserButton({
   ticketId,
-  initialSelection
+  initialSelection,
+  disabled = false,
+  onSelectionChange,
+  persistSelection = true
 }: {
-  ticketId: string;
+  ticketId?: string | null;
   initialSelection: TicketAssignedAgent | null;
+  disabled?: boolean;
+  onSelectionChange?: (selection: AgentModelSelection) => void;
+  persistSelection?: boolean;
 }) {
   const { selection: preferenceSelection, setSelection: setPreferenceSelection } =
     useAgentModelPreference();
@@ -56,7 +62,7 @@ export function AgentModelChooserButton({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button className="h-8 gap-2 px-3 text-xs" size="sm" variant="outline">
+        <Button className="h-8 gap-2 px-3 text-xs" size="sm" variant="outline" disabled={disabled}>
           <Image
             src={agent.icon}
             alt={`${agent.label} icon`}
@@ -74,9 +80,12 @@ export function AgentModelChooserButton({
           onChange={nextSelection => {
             setSelection(nextSelection);
             setPreferenceSelection(nextSelection);
-            startTransition(() => {
-              void updateTicketAssignedAgentAction(ticketId, nextSelection);
-            });
+            onSelectionChange?.(nextSelection);
+            if (persistSelection && ticketId) {
+              startTransition(() => {
+                void updateTicketAssignedAgentAction(ticketId, nextSelection);
+              });
+            }
           }}
         />
       </PopoverContent>

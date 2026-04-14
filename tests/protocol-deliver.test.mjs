@@ -20,6 +20,7 @@ import { createServer } from 'node:http';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path, { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -132,6 +133,20 @@ async function withStubbedConsole(callback) {
     console.log = originalLog;
     console.error = originalError;
     process.stderr.write = originalWrite;
+  }
+}
+
+async function withStubbedStdin(input, callback) {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(process, 'stdin');
+  Object.defineProperty(process, 'stdin', {
+    configurable: true,
+    value: Readable.from([input])
+  });
+
+  try {
+    return await callback();
+  } finally {
+    Object.defineProperty(process, 'stdin', originalDescriptor);
   }
 }
 
@@ -602,6 +617,70 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
     }
   );
 
+  test(
+    `${modulePath} deliver accepts --payload-file - from stdin for summary, artifacts, and change rationales`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-payload-stdin');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'matching.ts'), 'export const value = 1;\n', 'utf8');
+
+      const payload = JSON.stringify({
+        summary: 'Delivered from stdin without a scratch file.',
+        artifacts: [
+          { type: 'note', label: 'Transport', content: 'Used --payload-file - to stream JSON.' }
+        ],
+        changeRationales: [
+          {
+            label: 'Match changed file',
+            file_path: 'matching.ts',
+            summary: 'Added stdin delivery transport.',
+            why: 'Agents need a quote-safe delivery path that does not create files to remove.',
+            impact: 'Deliver can be posted from one streamed JSON payload.',
+            hunks: [{ header: '@@ -1 +1 @@' }]
+          }
+        ]
+      });
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.AGENT_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedStdin(payload, async () => {
+            await withStubbedConsole(async () => {
+              await runProtocolCommand('deliver', [
+                '--session-key',
+                'sk',
+                '--ticket-id',
+                'tid',
+                '--payload-file',
+                '-'
+              ]);
+            });
+          });
+        });
+
+        assert.equal(requestBody.summary, 'Delivered from stdin without a scratch file.');
+        assert.equal(requestBody.artifacts.length, 1);
+        assert.equal(requestBody.changeRationales.length, 1);
+        assert.equal(requestBody.changeRationales[0].file_path, 'matching.ts');
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
   // ---------------------------------------------------------------------------
   // Spec 4.1.1 — delivery succeeds outside a git repo with no changeRationales
   // ---------------------------------------------------------------------------
@@ -916,6 +995,10 @@ test('no local agent instruction source uses file_changes as an artifact type', 
     assert.ok(
       content.includes('ephemeral'),
       `${relPath} must describe delivery JSON transport files as ephemeral scratch data`
+    );
+    assert.ok(
+      content.includes('--payload-file -'),
+      `${relPath} must recommend stdin delivery JSON transport for large payloads`
     );
   }
 });
