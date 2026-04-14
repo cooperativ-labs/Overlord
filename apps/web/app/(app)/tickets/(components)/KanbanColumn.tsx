@@ -70,8 +70,10 @@ export default function KanbanColumn({
     statusType === 'execute'
       ? 'bg-blue-500/5'
       : statusType === 'complete'
-        ? 'bg-green-500/5'
-        : 'bg-muted/30';
+        ? 'bg-green-500/10'
+        : statusType === 'review'
+          ? 'bg-cyan-500/10'
+          : 'bg-muted/30';
 
   const [addPosition, setAddPosition] = useState<'top' | 'bottom' | null>(null);
   const [focusEditorCount, setFocusEditorCount] = useState(0);
