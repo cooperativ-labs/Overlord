@@ -250,7 +250,8 @@ function configureOpenCode(): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: 'Updated OpenCode bash permissions for ovld protocol, curl POST, and /tmp file access.'
+      details:
+        'Updated OpenCode bash permissions for ovld protocol, curl POST, and /tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

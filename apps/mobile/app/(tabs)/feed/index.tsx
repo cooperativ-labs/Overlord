@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -45,7 +45,7 @@ export default function FeedScreen() {
   const executingTickets = useExecutingFeedTickets();
   const { newPosts, markKnown } = useFeedRealtime();
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('feed_posts')
@@ -64,11 +64,11 @@ export default function FeedScreen() {
     if (error) {
       Alert.alert('Unable to load feed', error.message);
     }
-  };
+  }, [markKnown]);
 
   useEffect(() => {
     fetchPosts().finally(() => setLoading(false));
-  }, []);
+  }, [fetchPosts]);
 
   const onRefresh = async () => {
     setRefreshing(true);

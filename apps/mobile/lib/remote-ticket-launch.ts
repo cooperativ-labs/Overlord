@@ -159,7 +159,7 @@ function buildRemoteLaunchCommand({
   }
 
   return [
-    'CURRENT_PATH="$(tmux list-panes -a -F \'#{?pane_active,1,0} #{pane_current_path}\' 2>/dev/null | awk \'$1 == 1 { $1 = \"\"; sub(/^ /, \"\"); print; exit }\')"',
+    'CURRENT_PATH="$(tmux list-panes -a -F \'#{?pane_active,1,0} #{pane_current_path}\' 2>/dev/null | awk \'$1 == 1 { $1 = ""; sub(/^ /, ""); print; exit }\')"',
     'if [ -z "$CURRENT_PATH" ]; then CURRENT_PATH="$(tmux list-panes -a -F \'#{pane_current_path}\' 2>/dev/null | head -n 1)"; fi',
     'if [ -z "$CURRENT_PATH" ]; then CURRENT_PATH="$HOME"; fi',
     'SESSION_NAME="$(tmux list-sessions -F \'#{session_name}\' 2>/dev/null | head -n 1)"',

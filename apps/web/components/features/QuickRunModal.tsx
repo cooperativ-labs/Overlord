@@ -252,9 +252,9 @@ export function QuickRunModal({
           </div>
         ) : (
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-1 sm:min-h-0">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="flex flex-col gap-3">
               {/* Project selector */}
-              <div className="space-y-2">
+              <div className="flex flex-col gap-2">
                 <Label htmlFor="quick-run-project" className="text-sm font-medium">
                   Project
                 </Label>
@@ -291,7 +291,7 @@ export function QuickRunModal({
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              <div className="flex flex-col gap-2">
                 <Label className="text-sm font-medium">Agent & Model</Label>
                 <AgentModelChooserButton
                   ticketId={ticketId}
