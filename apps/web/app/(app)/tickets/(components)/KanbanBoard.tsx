@@ -1144,6 +1144,7 @@ export default function KanbanBoard({
                     onMarkUnread={handleMarkUnread}
                     onMarkAllRead={() => handleMarkColumnRead(colTickets.map(t => t.id))}
                     isCompleteColumn={col.statusType === 'complete'}
+                    statusType={col.statusType}
                     hasMore={hasMore}
                     isLoadingMore={isLoadingMore}
                     onLoadMore={() => void handleLoadMore(col.id)}

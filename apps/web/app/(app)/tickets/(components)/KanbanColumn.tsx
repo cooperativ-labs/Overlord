@@ -33,6 +33,7 @@ export default function KanbanColumn({
   onMarkUnread,
   onMarkAllRead,
   isCompleteColumn: _isCompleteColumn = false,
+  statusType,
   hasMore = false,
   isLoadingMore = false,
   onLoadMore
@@ -57,12 +58,20 @@ export default function KanbanColumn({
   onMarkUnread?: (ticketId: string) => void;
   onMarkAllRead?: () => void;
   isCompleteColumn?: boolean;
+  statusType?: string;
   hasMore?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const ticketIds = tickets.map(t => t.id);
+
+  const columnBg =
+    statusType === 'execute'
+      ? 'bg-blue-500/5'
+      : statusType === 'complete'
+        ? 'bg-green-500/5'
+        : 'bg-muted/30';
 
   const [addPosition, setAddPosition] = useState<'top' | 'bottom' | null>(null);
   const [focusEditorCount, setFocusEditorCount] = useState(0);
@@ -98,7 +107,8 @@ export default function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex min-w-[280px] shrink-0 flex-1 flex-col rounded-lg bg-muted/30 transition-colors relative',
+        'flex min-w-[280px] shrink-0 flex-1 flex-col rounded-lg transition-colors relative',
+        columnBg,
         isOver ? 'bg-muted/60' : ''
       )}
     >
