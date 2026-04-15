@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
+import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
+import { useAgentModelPreference } from '@/components/features/AgentModelSelector';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,7 @@ import {
   createBlankTicketAction,
   deleteTicketAction,
   setTicketProjectAction,
+  updateTicketAssignedAgentAction,
   updateTicketFieldAction
 } from '@/lib/actions/tickets';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
@@ -68,6 +71,7 @@ export function NewTicketModal({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const creatingTicketRef = useRef(false);
+  const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
 
   const selectedProjectForFileTree = projects.find(p => p.id === selectedProjectId);
   const { files: effectiveMentionPaths } = useWorkspaceFileTree({
@@ -163,8 +167,13 @@ export function NewTicketModal({
 
       // The draft ticket is created when the modal opens. Persist the final project selection.
       await setTicketProjectAction(ticketId, selectedProjectId);
+      await updateTicketAssignedAgentAction(ticketId, selection);
 
-      // Generate title: AI-summarised for long objectives, truncated for short ones
+      if (objective.trim()) {
+        await updateTicketFieldAction(ticketId, 'objective', objective);
+      }
+
+      // Generate title: AI-summarised for long objectives, truncated for short ones.
       if (objective.trim()) {
         const title = await generateTicketTitleAction(objective);
         await updateTicketFieldAction(ticketId, 'title', title);
@@ -227,41 +236,54 @@ export function NewTicketModal({
           </div>
         ) : (
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-1 sm:min-h-0">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="ticket-project" className="text-sm font-medium">
-                Project
-              </Label>
-              <Select
-                value={selectedProjectId}
-                onValueChange={setSelectedProjectId}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger
-                  id="ticket-project"
-                  className="h-8 w-full border-border bg-background px-3 text-left shadow-sm hover:bg-accent hover:text-accent-foreground"
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="ticket-project" className="text-sm font-medium">
+                  Project
+                </Label>
+                <Select
+                  value={selectedProjectId}
+                  onValueChange={setSelectedProjectId}
+                  disabled={isSubmitting}
                 >
-                  <span className="flex min-w-0 items-center gap-2 pr-2">
-                    {selectedProject ? (
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-[6px] border"
-                        style={projectIndicatorStyle}
-                      />
-                    ) : (
-                      <span className="h-3 w-3 shrink-0 rounded-[6px] border border-muted-foreground/50 bg-muted" />
-                    )}
-                    <span className="truncate text-sm font-medium">
-                      {selectedProject?.name ?? 'Select project'}
+                  <SelectTrigger
+                    id="ticket-project"
+                    className="h-8 w-full border-border bg-background px-3 text-left shadow-sm hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 pr-2">
+                      {selectedProject ? (
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-[6px] border"
+                          style={projectIndicatorStyle}
+                        />
+                      ) : (
+                        <span className="h-3 w-3 shrink-0 rounded-[6px] border border-muted-foreground/50 bg-muted" />
+                      )}
+                      <span className="truncate text-sm font-medium">
+                        {selectedProject?.name ?? 'Select project'}
+                      </span>
                     </span>
-                  </span>
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {projects.map(project => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {projects.map(project => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label className="text-sm font-medium">Agent &amp; Model</Label>
+                <AgentModelChooserButton
+                  ticketId={ticketId}
+                  initialSelection={selection}
+                  disabled={isSubmitting}
+                  onSelectionChange={setSelection}
+                  persistSelection={false}
+                />
+              </div>
             </div>
 
             {/* Objective textarea */}
@@ -309,7 +331,7 @@ export function NewTicketModal({
             successText="Created"
             errorText="Failed"
             onClick={handleSubmit}
-            disabled={isCreating || !objective.trim() || !ticketId}
+            disabled={isCreating || !objective.trim() || !ticketId || !selectionLoaded}
             className="flex-1 sm:flex-none"
           />
         </DialogFooter>

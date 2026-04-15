@@ -179,10 +179,7 @@ export function DiscussTicketButton({
             const agent = getAgentTypeByValue(agentValue);
             const buttonState = agentButtonStates[agentValue];
             const label = agentValue === preferredAgent ? `${agent.label} (default)` : agent.label;
-            const iconClassName = cn(
-              'h-3.5 w-3.5',
-              agent.invertDark ? 'dark:invert' : ''
-            );
+            const iconClassName = cn('h-3.5 w-3.5', agent.invertDark ? 'dark:invert' : '');
 
             const content = (
               <>

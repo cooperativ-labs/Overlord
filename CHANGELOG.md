@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.25.0] - 2026-04-15:15:58
+
+### Added
+- Add agent and model selection to the New Ticket modal and persist the selection on ticket creation.
+
+### Fixed
+- Fix desktop Codex launches to preserve shell execution behavior in both expect and non-expect fallback paths.
+
+### Changed
+- Update New Ticket submission flow to persist objective text before generating titles and routing to the board view.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and CLI package versions to 3.25.0.
+
 ## [3.24.0] - 2026-04-14:16:24
 
 ### Added

@@ -417,7 +417,7 @@ function buildInteractiveCodexCommand(options: { fallbackPromptRef: string }): s
     '  send_user "Missing Overlord Codex launch command.\\n"',
     '  exit 1',
     '}',
-    'spawn sh -lc $env(_OVLD_CODEX_CMD)',
+    'spawn -noecho sh -lc $env(_OVLD_CODEX_CMD)',
     'sleep 1',
     'send -- $overlord_prompt',
     'send -- "\\r"',
@@ -428,7 +428,7 @@ function buildInteractiveCodexCommand(options: { fallbackPromptRef: string }): s
     'if command -v expect >/dev/null 2>&1; then',
     `expect -c ${shellQuote(expectScript)};`,
     'else',
-    `$_OVLD_CODEX_CMD ${options.fallbackPromptRef};`,
+    `sh -lc ${shellQuote(`$_OVLD_CODEX_CMD ${options.fallbackPromptRef}`)};`,
     'fi'
   ].join(' ');
 }
