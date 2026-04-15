@@ -251,7 +251,7 @@ export function QuickRunModal({
             <p className="text-sm text-muted-foreground">Creating ticket…</p>
           </div>
         ) : (
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto sm:flex-1 sm:min-h-0">
+          <div className="flex flex-1 gap-4 overflow-y-auto sm:flex-1 sm:min-h-0">
             <div className="flex flex-col gap-3">
               {/* Project selector */}
               <div className="flex flex-col gap-2">
