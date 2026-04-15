@@ -160,10 +160,10 @@ for (const modulePath of [
     }
   });
 
-  test(`${modulePath} resolveLoginPlatformUrl defaults to the hosted platform when no local runtime exists`, async () => {
+  test(`${modulePath} resolveLoginPlatformUrl defaults to localhost when running from the source tree`, async () => {
     await withTempHome(async () => {
       const { resolveLoginPlatformUrl } = await importFresh(modulePath);
-      assert.match(resolveLoginPlatformUrl(null), /^https:\/\/(?:www\.)?ovld\.ai$/);
+      assert.equal(resolveLoginPlatformUrl(null), 'http://localhost:3000');
     });
   });
 }

@@ -10,7 +10,7 @@ describe('Codex bundle prompt routing', () => {
     });
   });
 
-  it('uses the Codex local protocol instructions for Codex bundle launches', () => {
+  it('uses the minimal Codex plugin protocol instructions for Codex bundle launches', () => {
     const prompt = buildTicketPromptMarkdown({
       ticket: {
         id: 'ticket-123',
@@ -33,8 +33,39 @@ describe('Codex bundle prompt routing', () => {
       }
     });
 
-    expect(prompt).toContain('### Codex local workflow');
-    expect(prompt).toContain('Do not look for a local `overlord-local` skill');
+    expect(prompt).toContain('Use the installed Overlord Codex plugin');
+    expect(prompt).toContain('`overlord-ticket-workflow` skill');
+    expect(prompt).not.toContain('### Codex local workflow');
     expect(prompt).not.toContain('look for and invoke the overlord-local skill');
+  });
+
+  it('uses the minimal Codex plugin protocol instructions for Codex bundle discussions', () => {
+    const prompt = buildTicketPromptMarkdown({
+      ticket: {
+        id: 'ticket-123',
+        title: 'Investigate launcher regression',
+        objective: 'Discuss the Codex launcher prompt selection',
+        acceptance_criteria: null,
+        available_tools: null,
+        constraints: null,
+        output_format: null,
+        execution_target: 'agent',
+        project_id: 'project-123',
+        status: 'draft',
+        priority: 'medium'
+      },
+      platformUrl: 'http://localhost:3000',
+      context: 'cli',
+      options: {
+        agent: 'codex',
+        instructionMode: 'bundle',
+        launchMode: 'ask'
+      }
+    });
+
+    expect(prompt).toContain('Use the installed Overlord Codex plugin');
+    expect(prompt).toContain('This is Ask mode: discuss the ticket');
+    expect(prompt).not.toContain('### Codex local workflow');
+    expect(prompt).not.toContain('Where the stdin payload contains');
   });
 });

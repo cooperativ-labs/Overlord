@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Ticket } from 'lucide-react';
+import { MessageSquarePlus, Plus, Ticket } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -9,6 +9,7 @@ import { useDefaultProject } from '@/components/features/projects/DefaultProject
 import { QuickRunModal } from '@/components/features/QuickRunModal';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createClient } from '@/supabase/utils/client';
 
 type ProjectOption = {
@@ -76,13 +77,40 @@ export function NewTicketButton() {
 
   return (
     <>
-      <Button size="sm" onClick={() => setIsModalOpen(true)}>
-        <span className="flex items-center gap-0.5 sm:hidden">
-          <Plus className="h-3.5 w-3.5" />
-          <Ticket className="h-3.5 w-3.5" />
-        </span>
-        <span className="hidden sm:inline">New Ticket</span>
-      </Button>
+      <div className="flex items-center gap-2">
+        {isElectron ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                className="electron-no-drag hidden sm:inline-flex"
+                onClick={() => setIsQuickRunOpen(true)}
+                size="sm"
+                variant="outline"
+                type="button"
+              >
+                <MessageSquarePlus className="h-3.5 w-3.5" />
+                <span>Prompt</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Open prompt (Cmd+P)</TooltipContent>
+          </Tooltip>
+        ) : null}
+        <Button
+          className="electron-no-drag"
+          onClick={() => setIsModalOpen(true)}
+          size="sm"
+          type="button"
+        >
+          <span className="flex items-center gap-0.5 sm:hidden">
+            <Plus className="h-3.5 w-3.5" />
+            <Ticket className="h-3.5 w-3.5" />
+          </span>
+          <span className="hidden items-center gap-1 sm:inline-flex">
+            <Ticket className="h-3.5 w-3.5" />
+            <span>New Ticket</span>
+          </span>
+        </Button>
+      </div>
 
       <NewTicketModal
         isOpen={isModalOpen}

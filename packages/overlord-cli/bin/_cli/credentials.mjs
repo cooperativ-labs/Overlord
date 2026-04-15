@@ -5,11 +5,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const CREDENTIALS_DIR = path.join(os.homedir(), '.ovld');
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
 const RUNTIME_FILE_PATTERN = /^runtime\..+\.json$/;
-const DEFAULT_OVERLORD_URL = 'http://localhost:3000';
+const HOSTED_OVERLORD_URL = 'https://www.ovld.ai';
+const LOCAL_DEV_OVERLORD_URL = 'http://localhost:3000';
 const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
 
 /**
@@ -139,6 +141,14 @@ function isLocalhostUrl(value) {
   }
 }
 
+function isLocalDevOverlordUrl(value) {
+  try {
+    return new URL(value).origin === LOCAL_DEV_OVERLORD_URL;
+  } catch {
+    return false;
+  }
+}
+
 function isSupportedPlatformUrl(value) {
   try {
     const parsed = new URL(value);
@@ -198,37 +208,33 @@ export function buildAuthHeaders(token, localSecret) {
   return headers;
 }
 
+export function getDefaultOverlordUrl() {
+  return isLocalDevCli() ? LOCAL_DEV_OVERLORD_URL : HOSTED_OVERLORD_URL;
+}
+
+function isLocalDevCli() {
+  const sourcePath = fileURLToPath(import.meta.url);
+  return !sourcePath.split(path.sep).includes('node_modules');
+}
+
 /**
  * Resolve the overlord URL and agent token from credentials file or env vars.
  * @returns {{ platformUrl: string, agentToken: string }}
  */
 export function resolveAuth() {
   const creds = loadCredentials();
-  const connectorUrlFromEnv = normalizePlatformUrl(process.env.OVERLORD_CONNECTOR_URL);
   const overlordUrlFromEnv = normalizePlatformUrl(process.env.OVERLORD_URL);
-  const overlordUrlFromCreds = normalizePlatformUrl(creds?.platform_url);
+  const overlordUrlFromCreds = normalizeStoredPlatformUrl(creds?.platform_url);
 
-  const runtimeTarget =
-    connectorUrlFromEnv || isLocalhostUrl(overlordUrlFromEnv)
-      ? (connectorUrlFromEnv || overlordUrlFromEnv)
-      : null;
-  const targetedRuntime = loadRuntime(runtimeTarget ?? null);
-  const fallbackRuntime = targetedRuntime ?? loadRuntime(null);
-  const runtime =
-    targetedRuntime && isLocalhostUrl(targetedRuntime.platform_url)
-      ? targetedRuntime
-      : fallbackRuntime && isLocalhostUrl(fallbackRuntime.platform_url)
-        ? fallbackRuntime
-        : targetedRuntime;
+  const runtime = overlordUrlFromEnv && isLocalhostUrl(overlordUrlFromEnv)
+    ? loadRuntime(overlordUrlFromEnv)
+    : null;
   const runtimeOverlordUrl = runtime?.platform_url;
 
   const platformUrl =
-    connectorUrlFromEnv ??
-    (overlordUrlFromEnv && isLocalhostUrl(overlordUrlFromEnv) ? overlordUrlFromEnv : undefined) ??
-    runtimeOverlordUrl ??
     overlordUrlFromEnv ??
     overlordUrlFromCreds ??
-    DEFAULT_OVERLORD_URL;
+    getDefaultOverlordUrl();
   const localSecret =
     runtime &&
     runtime.local_secret &&
@@ -260,8 +266,18 @@ function normalizePlatformUrl(value) {
   try {
     const parsed = new URL(trimmed);
     if (!isSupportedPlatformUrl(parsed.toString())) return undefined;
+    if (parsed.protocol === 'https:' && parsed.hostname === 'ovld.ai') {
+      return HOSTED_OVERLORD_URL;
+    }
     return parsed.origin;
   } catch {
     return undefined;
   }
+}
+
+function normalizeStoredPlatformUrl(value) {
+  const normalized = normalizePlatformUrl(value);
+  if (!normalized) return undefined;
+  if (isLocalhostUrl(normalized) && !isLocalDevOverlordUrl(normalized)) return undefined;
+  return normalized;
 }

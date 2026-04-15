@@ -25,6 +25,7 @@ import {
   LAUNCH_AGENT_VALUES,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
+import { cn } from '@/lib/utils';
 
 import { useTerminal } from './terminal/TerminalProvider';
 import type { WebAgentMode } from './WebAgentModeButton';
@@ -178,6 +179,10 @@ export function DiscussTicketButton({
             const agent = getAgentTypeByValue(agentValue);
             const buttonState = agentButtonStates[agentValue];
             const label = agentValue === preferredAgent ? `${agent.label} (default)` : agent.label;
+            const iconClassName = cn(
+              'h-3.5 w-3.5',
+              agent.invertDark ? 'dark:invert' : ''
+            );
 
             const content = (
               <>
@@ -186,7 +191,7 @@ export function DiscussTicketButton({
                   alt={`${agent.label} icon`}
                   width={14}
                   height={14}
-                  className="h-3.5 w-3.5"
+                  className={iconClassName}
                 />
                 <span>{label}</span>
               </>
@@ -204,7 +209,7 @@ export function DiscussTicketButton({
                       alt={`${agent.label} icon`}
                       width={14}
                       height={14}
-                      className="h-3.5 w-3.5"
+                      className={iconClassName}
                     />
                     <span>{agent.label} failed</span>
                   </>
@@ -225,7 +230,7 @@ export function DiscussTicketButton({
                       alt={`${agent.label} icon`}
                       width={14}
                       height={14}
-                      className="h-3.5 w-3.5"
+                      className={iconClassName}
                     />
                     <span>{agent.label} ready</span>
                   </>

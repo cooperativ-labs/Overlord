@@ -45,7 +45,7 @@ for (const modulePath of [
   'packages/overlord-cli/bin/_cli/credentials.mjs'
 ]) {
   test(
-    `${modulePath} resolveAuth loads normalized runtime files and ignores blank stored tokens`,
+    `${modulePath} resolveAuth ignores ambient runtime files and blank stored tokens`,
     { concurrency: false },
     async () => {
       await withTempHome(async tempHome => {
@@ -92,9 +92,9 @@ for (const modulePath of [
         const { resolveAuth } = await importFresh(modulePath);
         const result = resolveAuth();
 
-        assert.equal(result.platformUrl, 'http://localhost:65475');
+        assert.equal(result.platformUrl, 'https://www.ovld.ai');
         assert.equal(result.agentToken, 'env-agent-token');
-        assert.equal(result.localSecret, 'local-secret');
+        assert.equal(result.localSecret, '');
       });
     }
   );
@@ -123,8 +123,8 @@ for (const modulePath of [
         );
         fs.chmodSync(credentialsPath, 0o600);
 
-        process.env.OVERLORD_CONNECTOR_URL = 'https://www.ovld.ai/api/protocol';
-        delete process.env.OVERLORD_URL;
+        process.env.OVERLORD_URL = 'https://www.ovld.ai/api/protocol';
+        delete process.env.OVERLORD_CONNECTOR_URL;
         delete process.env.AGENT_TOKEN;
 
         const { resolveAuth } = await importFresh(modulePath);
@@ -132,6 +132,82 @@ for (const modulePath of [
 
         assert.equal(result.platformUrl, 'https://www.ovld.ai');
         assert.equal(result.agentToken, 'cred-token');
+      });
+    }
+  );
+
+  test(
+    `${modulePath} resolveAuth ignores the legacy OVERLORD_CONNECTOR_URL override`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        const credentialsPath = path.join(ovldDir, 'credentials.json');
+        fs.writeFileSync(
+          credentialsPath,
+          JSON.stringify(
+            {
+              access_token: 'stored-token',
+              platform_url: 'https://www.ovld.ai'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+        fs.chmodSync(credentialsPath, 0o600);
+
+        process.env.OVERLORD_CONNECTOR_URL = 'http://localhost:65475';
+        delete process.env.OVERLORD_URL;
+        delete process.env.AGENT_TOKEN;
+
+        const { resolveAuth } = await importFresh(modulePath);
+        const result = resolveAuth();
+
+        assert.equal(result.platformUrl, 'https://www.ovld.ai');
+        assert.equal(result.agentToken, 'stored-token');
+        assert.equal(result.localSecret, '');
+      });
+    }
+  );
+
+  test(
+    `${modulePath} resolveAuth ignores stale stored localhost connector URLs`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        const credentialsPath = path.join(ovldDir, 'credentials.json');
+        fs.writeFileSync(
+          credentialsPath,
+          JSON.stringify(
+            {
+              access_token: 'stored-token',
+              platform_url: 'http://localhost:65475'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+        fs.chmodSync(credentialsPath, 0o600);
+
+        delete process.env.OVERLORD_CONNECTOR_URL;
+        delete process.env.OVERLORD_URL;
+        delete process.env.AGENT_TOKEN;
+
+        const { resolveAuth } = await importFresh(modulePath);
+        const result = resolveAuth();
+
+        assert.equal(result.platformUrl, 'http://localhost:3000');
+        assert.equal(result.agentToken, 'stored-token');
+        assert.equal(result.localSecret, '');
       });
     }
   );

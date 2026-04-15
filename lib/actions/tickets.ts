@@ -1352,43 +1352,10 @@ export async function getTicketPromptForCopy(
 }
 
 export async function getTicketDiscussionPromptForCopy(
-  ticketId: string
+  ticketId: string,
+  context?: PromptContext
 ): Promise<{ error?: string; prompt?: string }> {
-  const supabase = await createClient();
-  const { error, source } = await resolvePromptTicketSource(supabase, ticketId);
-  if (error || !source) {
-    return { error: error ?? 'Unable to load ticket prompt source.' };
-  }
-
-  const ticketReference = `#${source.ticket.id.slice(0, 8)}`;
-  const title = source.ticket.title?.trim() || '(Untitled)';
-  const executionTarget = source.ticket.execution_target === 'human' ? 'Human' : 'Agent';
-  const section = (heading: string, value: string | null) =>
-    value?.trim() ? `## ${heading}\n${value.trim()}\n` : '';
-
-  const prompt = `You are helping me discuss an Overlord ticket before implementation. First, consider the following:
-
-Your job is to act as a collaborative exploration partner:
-- Start by reading the ticket details carefully.
-- Then say exactly: "I understand the ticket. What would you like to discuss?"
-- Keep the conversation focused on open-ended exploration: scope, risks, tradeoffs, edge cases, and options.
-- Do not implement or change any code unless I explicitly ask you to implement.
-- Do not publish user_follow_up activity events for normal discussion turns.
-- Only save notes when I explicitly ask. Save them as ticket artifacts, and as Markdown files only when I request Markdown.
-
-## Ticket
-- Reference: ${ticketReference}
-- ID: ${source.ticket.id}
-- Title: ${title}
-- Status: ${source.ticket.status ?? 'unknown'}
-- Priority: ${source.ticket.priority ?? 'unset'}
-- Execution Target: ${executionTarget}
-- Project ID: ${source.ticket.project_id}
-
-${section('Objective', source.latestObjective)}${section('Acceptance Criteria', source.ticket.acceptance_criteria)}${section('Available Tools / Constraints', source.ticket.available_tools)}
-`;
-
-  return { prompt };
+  return getTicketPromptForCopy(ticketId, 'ask', context);
 }
 
 const TICKET_BOARD_SELECT =

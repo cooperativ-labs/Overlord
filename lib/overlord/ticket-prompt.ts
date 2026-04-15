@@ -59,7 +59,7 @@ type ProtocolSectionInput = {
   mcpUrl?: string;
 };
 
-type LocalProtocolFamily = 'bundled' | 'codex' | 'verbose';
+type LocalProtocolFamily = 'bundled' | 'codex-bundled' | 'codex' | 'verbose';
 
 export function buildTicketPromptMarkdown({
   ticket,
@@ -136,6 +136,10 @@ function resolveLocalProtocolFamily(
   agent: PromptAgent | undefined,
   instructionMode: InstructionMode
 ): LocalProtocolFamily {
+  if (agent === 'codex' && instructionMode === 'bundle') {
+    return 'codex-bundled';
+  }
+
   if (agent === 'codex') {
     return 'codex';
   }
@@ -154,6 +158,9 @@ function buildLocalProtocolSectionByAgent(
 ): string {
   if (input.family === 'bundled') {
     return buildBundledLocalProtocolSection(input);
+  }
+  if (input.family === 'codex-bundled') {
+    return buildCodexBundledLocalProtocolSection(input);
   }
   if (input.family === 'codex') {
     return buildCodexLocalProtocolSection(input);
@@ -174,6 +181,39 @@ Before delivering, make sure every meaningful git-tracked file change is represe
 \`\`\`bash
 ovld protocol attach --ticket-id ${ticketId}
 \`\`\`
+`;
+}
+
+function buildCodexBundledLocalProtocolSection({
+  ticketId,
+  context,
+  launchMode
+}: ProtocolSectionInput): string {
+  const discussionGuidance =
+    launchMode === 'ask'
+      ? '- This is Ask mode: discuss the ticket, do not implement, and do not publish `user_follow_up` events for normal discussion turns.'
+      : '- If the user sends a follow-up message after the initial ticket, immediately publish it with `--event-type user_follow_up` before doing anything else.';
+
+  return `## Overlord Protocol
+
+- **Ticket ID:** ${ticketId}
+
+${buildLocalLaunchNote(context)}
+
+Use the installed Overlord Codex plugin instead of relying on expanded protocol instructions in this prompt.
+
+If you need protocol details, use the \`overlord-ticket-workflow\` skill from the Codex Overlord plugin. Attach to this ticket through the plugin/CLI connector, then follow that workflow for updates, blocking questions, change rationales, artifacts, and final delivery.
+
+\`\`\`bash
+ovld protocol attach --ticket-id ${ticketId}
+\`\`\`
+
+### Rules
+
+- Always attach before discussing or working on the ticket.
+- Use the Overlord Codex plugin workflow as the source of truth for protocol details.
+${discussionGuidance}
+${buildAskModeRules(launchMode)}
 `;
 }
 

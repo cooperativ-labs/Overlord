@@ -5,9 +5,15 @@ import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import http from 'node:http';
 
-import { buildAuthHeaders, clearCredentials, loadCredentials, loadRuntime, saveCredentials } from './credentials.mjs';
+import {
+  buildAuthHeaders,
+  clearCredentials,
+  getDefaultOverlordUrl,
+  loadCredentials,
+  loadRuntime,
+  saveCredentials
+} from './credentials.mjs';
 
-const DEFAULT_OVERLORD_URL = process.env.OVERLORD_URL ?? 'https://ovld.ai';
 const DEFAULT_CLI_REDIRECT_URI = 'http://127.0.0.1:45619/callback';
 const DEFAULT_DEVICE_POLL_INTERVAL_SECONDS = 5;
 
@@ -412,13 +418,13 @@ export async function authLoginViaOAuthLoopback(platformUrl, localSecret) {
 // Public auth commands
 // ---------------------------------------------------------------------------
 
-export function resolveLoginPlatformUrl(runtime = loadRuntime()) {
-  return process.env.OVERLORD_URL ?? runtime?.platform_url ?? DEFAULT_OVERLORD_URL;
+export function resolveLoginPlatformUrl(runtime = null) {
+  return process.env.OVERLORD_URL ?? runtime?.platform_url ?? getDefaultOverlordUrl();
 }
 
 export async function authLogin() {
-  const runtime = loadRuntime();
-  const platformUrl = resolveLoginPlatformUrl(runtime);
+  const platformUrl = resolveLoginPlatformUrl();
+  const runtime = loadRuntime(platformUrl);
   const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
 
   console.log('Starting Overlord CLI authorization...\n');
