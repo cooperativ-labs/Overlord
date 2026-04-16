@@ -367,7 +367,7 @@ argument-hint: <objective or raw flags>
 disable-model-invocation: true
 ---
 
-Run \`ovld protocol spawn\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol spawn --objective "<objective>"\`.`
+Run \`ovld protocol spawn --agent claude-code\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol spawn --agent claude-code --objective "<objective>"\`.`
       }
     ];
   }
@@ -388,7 +388,7 @@ Run \`ovld protocol spawn\` with \`$ARGUMENTS\`. If no flags are present, treat 
       {
         path: path.join(base, 'spawn.md'),
         content:
-          'Create a new Overlord ticket.\n\nRun `ovld protocol spawn --objective "<objective>"` using the text after `/spawn` unless raw flags were provided.\n'
+          'Create a new Overlord ticket.\n\nRun `ovld protocol spawn --agent cursor --objective "<objective>"` using the text after `/spawn` unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol spawn --agent cursor`.\n'
       }
     ];
   }
@@ -409,7 +409,7 @@ Run \`ovld protocol spawn\` with \`$ARGUMENTS\`. If no flags are present, treat 
       {
         path: path.join(base, 'spawn.toml'),
         content:
-          'description = "Create a new Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol spawn --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided.\n"""\n'
+          'description = "Create a new Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol spawn --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol spawn --agent gemini`.\n"""\n'
       }
     ];
   }
@@ -441,7 +441,7 @@ description: Create a new Overlord ticket from the current conversation
 agent: build
 ---
 
-Run \`ovld protocol spawn\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol spawn --objective "<objective>"\`.`
+Run \`ovld protocol spawn --agent opencode\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol spawn --agent opencode --objective "<objective>"\`.`
     }
   ];
 }

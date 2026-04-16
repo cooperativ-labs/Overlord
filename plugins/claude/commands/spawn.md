@@ -7,9 +7,9 @@ disable-model-invocation: true
 Create a new Overlord ticket from the user's request.
 
 Use `$ARGUMENTS` as the input.
-If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--execution-target`, pass those flags through after `ovld protocol spawn`.
+If it already contains flags such as `--title`, `--priority`, `--project-id`, or `--execution-target`, pass those flags through after `ovld protocol spawn --agent claude-code`.
 Otherwise, treat `$ARGUMENTS` as the objective text and run:
-`ovld protocol spawn --objective "<objective>"`
+`ovld protocol spawn --agent claude-code --objective "<objective>"`
 
 If no objective was provided, ask the user for one and stop.
 

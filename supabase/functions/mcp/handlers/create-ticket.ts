@@ -7,6 +7,17 @@ import { resolveSession } from '../session.ts';
 
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 
+function resolveTicketDelegate(
+  delegate: string | null | undefined,
+  agentIdentifier: string | null | undefined
+) {
+  const explicitDelegate = delegate?.trim();
+  if (explicitDelegate) return explicitDelegate;
+
+  const sessionAgent = agentIdentifier?.trim();
+  return sessionAgent || null;
+}
+
 export async function handleCreateTicket(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     sessionKey,
@@ -29,6 +40,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
   );
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
+  const ticketDelegate = resolveTicketDelegate(delegate, resolved.session.agent_identifier);
 
   const { data: sourceTicket, error: sourceErr } = await supabase
     .from('tickets')
@@ -52,7 +64,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       acceptance_criteria: acceptanceCriteria || null,
       available_tools: availableTools,
       created_by: userId,
-      delegate: delegate || null,
+      delegate: ticketDelegate,
       execution_target: executionTarget,
       organization_id: sourceTicket.organization_id,
       priority,
@@ -81,14 +93,18 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
   await Promise.all([
     supabase.from('ticket_events').insert({
       event_type: 'system',
-      payload: { created_from_ticket_id: ticketId },
+      payload: { created_from_ticket_id: ticketId, delegate: ticketDelegate },
       session_id: resolved.session.id,
       summary: `Follow-up ticket created from ${sourceRef}.`,
       ticket_id: created.id
     }),
     supabase.from('ticket_events').insert({
       event_type: 'update',
-      payload: { created_ticket_id: created.id, entry_type: 'follow_up_ticket' },
+      payload: {
+        created_ticket_id: created.id,
+        delegate: ticketDelegate,
+        entry_type: 'follow_up_ticket'
+      },
       session_id: resolved.session.id,
       summary: `Created follow-up ticket ${createdRef} (${created.execution_target}).`,
       ticket_id: ticketId

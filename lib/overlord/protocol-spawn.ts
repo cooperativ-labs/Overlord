@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
+import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
@@ -85,6 +86,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
   }
 
   const nextTitle = title.trim() || deriveTitleFromObjective(objective);
+  const ticketDelegate = resolveTicketDelegate(delegate, agentIdentifier);
   const draftStatusName = await resolvePreferredStatusNameByType(supabase, organizationId, 'draft');
 
   // Create the ticket
@@ -94,7 +96,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       acceptance_criteria: acceptanceCriteria || null,
       available_tools: availableTools,
       created_by: userId,
-      delegate: delegate || null,
+      delegate: ticketDelegate,
       execution_target: executionTarget,
       organization_id: organizationId,
       priority,
@@ -140,11 +142,11 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       agent_identifier: agentIdentifier,
       connection_method: connectionMethod,
       created_via: 'protocol.spawn',
-      ...(delegate ? { delegate } : {})
+      ...(ticketDelegate ? { delegate: ticketDelegate } : {})
     },
     phase: 'execute',
     session_id: session.id,
-    summary: `Ticket spawned by ${agentIdentifier}${delegate ? ` (${delegate})` : ''} via ${connectionMethod}.`,
+    summary: `Ticket spawned by ${agentIdentifier}${ticketDelegate ? ` (${ticketDelegate})` : ''} via ${connectionMethod}.`,
     ticket_id: ticket.id
   });
 
@@ -173,7 +175,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
           spawned_ticket_id: ticket.id,
           spawned_ticket_title: nextTitle,
           spawned_ticket_sequence: ticket.ticket_sequence,
-          delegate: delegate || null
+          delegate: ticketDelegate
         },
         phase: 'execute',
         session_id: parentSession.id,

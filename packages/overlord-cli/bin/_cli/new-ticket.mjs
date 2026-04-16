@@ -6,7 +6,14 @@ import { stdin as input, stdout as output } from 'node:process';
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 import { runLauncherCommand } from './launcher.mjs';
 
-const PROMPT_AGENTS = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
+const PROMPT_AGENT_IDENTIFIERS = {
+  claude: 'claude-code',
+  codex: 'codex',
+  cursor: 'cursor',
+  gemini: 'gemini',
+  opencode: 'opencode'
+};
+const PROMPT_AGENTS = Object.keys(PROMPT_AGENT_IDENTIFIERS);
 
 function parseFlags(args) {
   const flags = {};
@@ -40,10 +47,10 @@ function parseFlags(args) {
 
 function buildUsage(commandName) {
   if (commandName === 'prompt') {
-    return 'Usage: ovld prompt "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>]';
+    return 'Usage: ovld prompt "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--delegate <agent>]';
   }
 
-  return 'Usage: ovld create "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>]';
+  return 'Usage: ovld create "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--delegate <agent>]';
 }
 
 function ensureObjective(commandName, objective) {
@@ -151,7 +158,9 @@ async function createTicket(platformUrl, agentToken, localSecret, body) {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(`Failed to create ticket (${res.status}): ${data.error ?? JSON.stringify(data)}`);
+    throw new Error(
+      `Failed to create ticket (${res.status}): ${data.error ?? JSON.stringify(data)}`
+    );
   }
 
   return data.ticket;
@@ -179,6 +188,20 @@ function resolveAgent(agent) {
   return normalizedAgent;
 }
 
+export function resolvePromptAgentIdentifier(agent) {
+  return PROMPT_AGENT_IDENTIFIERS[agent] ?? agent;
+}
+
+export function resolveTicketCreationDelegate(flags = {}, selectedAgent = null) {
+  const explicitDelegate = typeof flags.delegate === 'string' ? flags.delegate.trim() : '';
+  if (explicitDelegate) return explicitDelegate;
+
+  if (selectedAgent) return resolvePromptAgentIdentifier(selectedAgent);
+
+  const envAgent = process.env.AGENT_IDENTIFIER?.trim();
+  return envAgent || null;
+}
+
 async function runTicketCreationFlow(args, { commandName, launchAgent }) {
   const { flags, positionals } = parseFlags(args);
   const objective = String(flags.objective ?? positionals.join(' ')).trim();
@@ -200,6 +223,18 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
       renderItem: project => projectLabel(project)
     }));
 
+  const selectedAgent = launchAgent
+    ? (resolveAgent(typeof flags.agent === 'string' ? flags.agent : '') ??
+      (await promptForSelection({
+        items: PROMPT_AGENTS,
+        label: 'Agents',
+        prompt: 'Select an agent by number:',
+        renderItem: agent => agent
+      })))
+    : null;
+
+  const ticketDelegate = resolveTicketCreationDelegate(flags, selectedAgent);
+
   const ticket = await createTicket(platformUrl, agentToken, localSecret, {
     objective,
     title: String(flags.title ?? ''),
@@ -207,22 +242,14 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
     availableTools: String(flags['available-tools'] ?? ''),
     executionTarget: String(flags['execution-target'] ?? 'agent'),
     priority: String(flags.priority ?? 'medium'),
-    projectId: selectedProject.id
+    projectId: selectedProject.id,
+    ...(ticketDelegate ? { delegate: ticketDelegate } : {})
   });
 
   if (!launchAgent) {
     console.log(`ticket created with id ${ticket.id}`);
     return;
   }
-
-  const selectedAgent =
-    resolveAgent(typeof flags.agent === 'string' ? flags.agent : '') ??
-    (await promptForSelection({
-      items: PROMPT_AGENTS,
-      label: 'Agents',
-      prompt: 'Select an agent by number:',
-      renderItem: agent => agent
-    }));
 
   process.env.TICKET_ID = ticket.id;
   await runLauncherCommand('run', [selectedAgent, '--ticket-id', ticket.id]);

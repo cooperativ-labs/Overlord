@@ -4,6 +4,7 @@ import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_li
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
+import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
+    const ticketDelegate = resolveTicketDelegate(delegate, resolved.session.agent_identifier);
 
     const { data: sourceTicket, error: sourceTicketError } = await supabase
       .from('tickets')
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
         acceptance_criteria: acceptanceCriteria || null,
         available_tools: availableTools,
         created_by: userId,
-        delegate: delegate || null,
+        delegate: ticketDelegate,
         execution_target: executionTarget,
         organization_id: sourceTicket.organization_id,
         priority,
@@ -89,7 +91,8 @@ export async function POST(request: Request) {
       payload: {
         created_from_ticket_id: ticketId,
         created_from_ticket_reference: sourceReference,
-        created_via: 'protocol.create-ticket'
+        created_via: 'protocol.create-ticket',
+        delegate: ticketDelegate
       },
       session_id: resolved.session.id,
       summary: `Follow-up ticket created from ${sourceReference}.`,
@@ -106,6 +109,7 @@ export async function POST(request: Request) {
         created_ticket_id: createdTicket.id,
         created_ticket_reference: createdReference,
         created_ticket_execution_target: createdTicket.execution_target,
+        delegate: ticketDelegate,
         entry_type: 'follow_up_ticket'
       },
       session_id: resolved.session.id,

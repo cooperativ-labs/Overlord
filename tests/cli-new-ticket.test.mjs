@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseNumberedSelection, sortProjects } from '../packages/overlord-cli/bin/_cli/new-ticket.mjs';
+import {
+  parseNumberedSelection,
+  resolvePromptAgentIdentifier,
+  resolveTicketCreationDelegate,
+  sortProjects
+} from '../packages/overlord-cli/bin/_cli/new-ticket.mjs';
 
 test('parseNumberedSelection accepts in-range numeric input', () => {
   assert.equal(parseNumberedSelection('1', 3), 0);
@@ -27,4 +32,29 @@ test('sortProjects orders by organization, then project name, then id', () => {
     sorted.map(project => project.id),
     ['c', 'a', 'd', 'b']
   );
+});
+
+test('resolvePromptAgentIdentifier maps prompt agents to protocol identifiers', () => {
+  assert.equal(resolvePromptAgentIdentifier('claude'), 'claude-code');
+  assert.equal(resolvePromptAgentIdentifier('codex'), 'codex');
+  assert.equal(resolvePromptAgentIdentifier('cursor'), 'cursor');
+});
+
+test('resolveTicketCreationDelegate prefers explicit delegate, then selected agent, then environment', () => {
+  const original = process.env.AGENT_IDENTIFIER;
+  try {
+    delete process.env.AGENT_IDENTIFIER;
+    assert.equal(resolveTicketCreationDelegate({ delegate: ' gemini ' }, 'codex'), 'gemini');
+    assert.equal(resolveTicketCreationDelegate({}, 'claude'), 'claude-code');
+    assert.equal(resolveTicketCreationDelegate({}), null);
+
+    process.env.AGENT_IDENTIFIER = 'codex';
+    assert.equal(resolveTicketCreationDelegate({}), 'codex');
+  } finally {
+    if (original === undefined) {
+      delete process.env.AGENT_IDENTIFIER;
+    } else {
+      process.env.AGENT_IDENTIFIER = original;
+    }
+  }
 });

@@ -93,9 +93,9 @@ disable-model-invocation: true
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn --agent claude-code\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
-\`ovld protocol spawn --objective "<objective>"\`
+\`ovld protocol spawn --agent claude-code --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 
@@ -144,10 +144,10 @@ Rules:
 The text after \`/spawn\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
 
 If raw flags are present, run:
-\`ovld protocol spawn <raw arguments>\`
+\`ovld protocol spawn --agent cursor <raw arguments>\`
 
 Otherwise, run:
-\`ovld protocol spawn --objective "<objective>"\`
+\`ovld protocol spawn --agent cursor --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 
@@ -234,13 +234,13 @@ If it already contains flags such as ` +
         `, or ` +
         '`--execution-target`' +
         `, pass those flags through after ` +
-        '`ovld protocol spawn`' +
+        '`ovld protocol spawn --agent gemini`' +
         `.
 Otherwise, treat ` +
         '`{{args}}`' +
         ` as the objective text and run:
 ` +
-        '`ovld protocol spawn --objective "<objective>"`' +
+        '`ovld protocol spawn --agent gemini --objective "<objective>"`' +
         `
 
 If no objective was provided, ask the user for one and stop.
@@ -308,9 +308,9 @@ agent: build
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn --agent opencode\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
-\`ovld protocol spawn --objective "<objective>"\`
+\`ovld protocol spawn --agent opencode --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 

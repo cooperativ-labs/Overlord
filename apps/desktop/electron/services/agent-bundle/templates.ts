@@ -93,7 +93,7 @@ correct project by matching your current working directory against each project'
 configured "Local working directory". No \`--project-id\` flag is needed:
 
 \`\`\`bash
-ovld protocol spawn --objective "Implement feature X" --priority medium
+ovld protocol spawn --agent claude-code --objective "Implement feature X" --priority medium
 \`\`\`
 
 To discover which project maps to the current directory:
@@ -179,7 +179,7 @@ correct project by matching your current working directory against each project'
 configured "Local working directory". No \`--project-id\` flag is needed:
 
 \`\`\`bash
-ovld protocol spawn --objective "Implement feature X" --priority medium
+ovld protocol spawn --agent opencode --objective "Implement feature X" --priority medium
 \`\`\`
 
 To discover which project maps to the current directory:
@@ -276,7 +276,7 @@ correct project by matching your current working directory against each project'
 configured "Local working directory". No \`--project-id\` flag is needed:
 
 \`\`\`bash
-ovld protocol spawn --objective "Implement feature X" --priority medium
+ovld protocol spawn --agent cursor --objective "Implement feature X" --priority medium
 \`\`\`
 
 To discover which project maps to the current directory:

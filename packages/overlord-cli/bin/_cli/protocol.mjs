@@ -35,6 +35,22 @@ function parseFlags(args) {
   return result;
 }
 
+export function resolveProtocolAgentIdentifier(flags = {}) {
+  const explicitAgent = typeof flags.agent === 'string' ? flags.agent.trim() : '';
+  if (explicitAgent) return explicitAgent;
+
+  const envAgent = process.env.AGENT_IDENTIFIER?.trim();
+  return envAgent || 'claude-code';
+}
+
+export function resolveProtocolTicketDelegate(flags = {}, agentIdentifier = '') {
+  const explicitDelegate = typeof flags.delegate === 'string' ? flags.delegate.trim() : '';
+  if (explicitDelegate) return explicitDelegate;
+
+  const resolvedAgent = String(agentIdentifier).trim();
+  return resolvedAgent || null;
+}
+
 /**
  * Default request timeout in milliseconds. Overridable via --timeout flag or
  * OVERLORD_TIMEOUT env var. A bounded timeout prevents indefinite spinner hangs
@@ -427,7 +443,7 @@ async function protocolAttach(args) {
 
   const body = {
     ticketId,
-    agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
+    agentIdentifier: resolveProtocolAgentIdentifier(flags),
     connectionMethod: String(flags.method ?? 'cli'),
     ...(externalSessionId !== undefined ? { externalSessionId } : {}),
     metadata: {
@@ -915,7 +931,7 @@ async function protocolConnect(args) {
 
   const body = {
     ticketId,
-    agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
+    agentIdentifier: resolveProtocolAgentIdentifier(flags),
     connectionMethod: String(flags.method ?? 'cli'),
     metadata: {}
   };
@@ -969,6 +985,7 @@ async function protocolSpawn(args) {
   const objective = requireFlag(flags, 'objective', undefined);
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
+  const agentIdentifier = resolveProtocolAgentIdentifier(flags);
 
   // When --project-id is not provided, auto-send cwd as workingDirectory
   // so the server can resolve the project from the local_working_directory setting.
@@ -976,7 +993,7 @@ async function protocolSpawn(args) {
 
   const body = {
     objective,
-    agentIdentifier: String(flags.agent ?? process.env.AGENT_IDENTIFIER ?? 'claude-code'),
+    agentIdentifier,
     connectionMethod: String(flags.method ?? 'cli'),
     metadata: {},
     ...(flags.title ? { title: String(flags.title) } : {}),
@@ -986,7 +1003,7 @@ async function protocolSpawn(args) {
     ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
-    ...(flags.delegate ? { delegate: String(flags.delegate) } : {}),
+    delegate: resolveProtocolTicketDelegate(flags, agentIdentifier),
     ...(flags['parent-session-key'] ? { parentSessionKey: String(flags['parent-session-key']) } : {}),
     ...(flags['parent-ticket-id'] ? { parentTicketId: String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '') } : {})
   };
@@ -1260,12 +1277,12 @@ artifact-upload-file:
 Examples:
   ovld protocol discover-project
   ovld protocol discover-project --working-directory /path/to/repo
-  ovld protocol spawn --objective "Implement feature X"   # auto-resolves project from cwd
+  ovld protocol spawn --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
   ovld protocol attach --ticket-id abc-123
   ovld protocol attach --ticket-id abc-123 --external-session-id null
   ovld protocol connect --ticket-id abc-123
   ovld protocol load-context --ticket-id abc-123
-  ovld protocol spawn --objective "Implement user auth" --priority high
+  ovld protocol spawn --agent codex --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X" --phase execute
   ovld protocol update --session-key <key> --ticket-id <id> --summary-file ./update.txt --event-type user_follow_up
   ovld protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'

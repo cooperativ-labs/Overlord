@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.1.0] - 2026-04-16:13:58
+
+### Added
+- Add `delegate` propagation for protocol ticket spawning and follow-up ticket creation.
+- Add `--delegate` support in the `ovld protocol spawn` CLI flow.
+
+### Fixed
+- Fix follow-up ticket creation and protocol spawn flows to persist the originating `delegate` value on tickets and ticket events.
+
+### Changed
+- Update installed agent slash commands and connector instructions to invoke `ovld protocol spawn --agent <agent>` when creating tickets from the conversation.
+
+### Security
+- None.
+
+### Test
+- Add/adjust CLI and delegate-resolution tests to cover `delegate` propagation.
+
+### Documentation
+- Update Claude connector and local bundle instructions for `ovld protocol spawn` usage with explicit `--agent`.
+
+### Chore
+- Bump workspace and CLI package versions to 4.1.0.
+
 ## [4.0.0] - 2026-04-16:12:40
 
 ### Added
