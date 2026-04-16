@@ -1,0 +1,34 @@
+{
+  "name": "overlord",
+  "version": "0.1.0",
+  "description": "Overlord ticket protocol workflow for Claude Code — attach/update/ask/deliver, slash commands, and a PermissionRequest notifier.",
+  "author": {
+    "name": "Cooperativ",
+    "url": "https://github.com/cooperativ"
+  },
+  "homepage": "https://www.ovld.ai",
+  "repository": "https://github.com/cooperativ/overlord",
+  "license": "UNLICENSED",
+  "keywords": [
+    "overlord",
+    "tickets",
+    "agents",
+    "workflow",
+    "protocol",
+    "claude-code"
+  ],
+  "userConfig": {
+    "overlord_url": {
+      "type": "string",
+      "title": "Overlord URL",
+      "description": "Overlord platform URL (e.g. https://www.ovld.ai or http://localhost:3000).",
+      "sensitive": false
+    },
+    "agent_token": {
+      "type": "string",
+      "title": "Agent token",
+      "description": "Overlord agent token. Pull from Overlord Settings → Agents & MCP or from ~/.ovld/credentials.json.",
+      "sensitive": true
+    }
+  }
+}

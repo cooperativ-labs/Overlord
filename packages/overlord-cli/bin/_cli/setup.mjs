@@ -22,6 +22,8 @@ const MANIFEST_FILE = path.join(MANIFEST_DIR, 'bundle-manifest.json');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKAGE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'overlord');
 const REPO_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'overlord');
+const PACKAGE_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'claude');
+const REPO_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'claude');
 const CODEX_TARGET_PLUGIN_DIR = path.join(os.homedir(), '.codex', 'plugins', 'overlord');
 const CODEX_TARGET_PLUGIN_MANIFEST = path.join(
   CODEX_TARGET_PLUGIN_DIR,
@@ -459,11 +461,22 @@ function installSlashCommands(agent) {
   };
 }
 
+function uninstallSlashCommands(agent) {
+  const removedFiles = [];
+  const files = slashCommandFiles(agent);
+  for (const file of files) {
+    if (!fs.existsSync(file.path)) continue;
+    const existing = readTextFile(file.path);
+    if (existing.trim() !== file.content.trim()) continue;
+    fs.rmSync(file.path, { force: true });
+    removedFiles.push(file.path);
+  }
+  return { removedFiles };
+}
+
 function currentContentHashForAgent(agent) {
   if (agent === 'claude') {
-    return contentHash(
-      [CLAUDE_SKILL_CONTENT, PERMISSION_HOOK_SCRIPT, ...slashCommandFiles('claude').map(file => file.content)].join('\n')
-    );
+    return claudeContentHash();
   }
   if (agent === 'cursor') {
     return contentHash(
@@ -487,6 +500,14 @@ function codexSourcePluginDir() {
   );
 }
 
+function claudeSourcePluginDir() {
+  if (fs.existsSync(PACKAGE_CLAUDE_PLUGIN_DIR)) return PACKAGE_CLAUDE_PLUGIN_DIR;
+  if (fs.existsSync(REPO_CLAUDE_PLUGIN_DIR)) return REPO_CLAUDE_PLUGIN_DIR;
+  throw new Error(
+    `Claude plugin bundle not found. Checked ${PACKAGE_CLAUDE_PLUGIN_DIR} and ${REPO_CLAUDE_PLUGIN_DIR}.`
+  );
+}
+
 function listFilesRecursive(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -496,8 +517,7 @@ function listFilesRecursive(dir) {
   });
 }
 
-function codexContentHash() {
-  const sourceDir = codexSourcePluginDir();
+function contentHashForDirectory(sourceDir) {
   const hash = crypto.createHash('sha256');
 
   for (const filePath of listFilesRecursive(sourceDir).sort()) {
@@ -508,6 +528,14 @@ function codexContentHash() {
   }
 
   return hash.digest('hex').slice(0, 16);
+}
+
+function codexContentHash() {
+  return contentHashForDirectory(codexSourcePluginDir());
+}
+
+function claudeContentHash() {
+  return contentHashForDirectory(claudeSourcePluginDir());
 }
 
 function mergeCodexRules(existingContent) {
@@ -621,6 +649,62 @@ function removeLegacyCodexBundle() {
   writeManifest(manifest);
 }
 
+function removeLegacyClaudeBundle() {
+  const paths = claudePaths();
+  const removed = [];
+
+  if (fs.existsSync(paths.skillDir)) {
+    fs.rmSync(paths.skillDir, { recursive: true, force: true });
+    removed.push(paths.skillDir);
+  }
+
+  if (fs.existsSync(paths.hookScript)) {
+    fs.rmSync(paths.hookScript, { force: true });
+    removed.push(paths.hookScript);
+  }
+
+  const slashResult = uninstallSlashCommands('claude');
+  removed.push(...slashResult.removedFiles);
+
+  if (fs.existsSync(paths.settingsFile)) {
+    const settings = readJsonFile(paths.settingsFile);
+    let changed = false;
+
+    if (settings.__overlord_managed) {
+      delete settings.__overlord_managed;
+      changed = true;
+    }
+
+    const hooks = settings.hooks && typeof settings.hooks === 'object' ? settings.hooks : {};
+    if (Array.isArray(hooks.PermissionRequest)) {
+      const nextPermissionHooks = hooks.PermissionRequest.filter(hook => {
+        if (hook && typeof hook === 'object' && Array.isArray(hook.hooks)) {
+          return !hook.hooks.some(
+            inner =>
+              typeof inner?.command === 'string' &&
+              inner.command.includes('overlord-permission-hook')
+          );
+        }
+        return true;
+      });
+      if (nextPermissionHooks.length !== hooks.PermissionRequest.length) {
+        changed = true;
+        if (nextPermissionHooks.length > 0) hooks.PermissionRequest = nextPermissionHooks;
+        else delete hooks.PermissionRequest;
+      }
+    }
+
+    if (changed) {
+      if (Object.keys(hooks).length > 0) settings.hooks = hooks;
+      else delete settings.hooks;
+      writeJsonFile(paths.settingsFile, settings);
+      removed.push(paths.settingsFile);
+    }
+  }
+
+  return removed;
+}
+
 // ---------------------------------------------------------------------------
 // Install
 // ---------------------------------------------------------------------------
@@ -660,82 +744,30 @@ function geminiPaths() {
 }
 
 function installClaude() {
-  const paths = claudePaths();
-  const backups = [];
+  const sourceDir = claudeSourcePluginDir();
+  const sourceManifest = path.join(sourceDir, '.claude-plugin', 'plugin.json');
+  const sourceVersion = pluginVersion(sourceManifest) ?? '0.0.0';
+  const removed = removeLegacyClaudeBundle();
 
-  // 1. Install skill file
-  writeTextFile(paths.skillFile, CLAUDE_SKILL_CONTENT);
-  console.log(`  ✓ Installed skill: ${paths.skillFile}`);
-
-  // 2. Install permission hook
-  writeTextFile(paths.hookScript, PERMISSION_HOOK_SCRIPT, 0o755);
-  console.log(`  ✓ Installed hook: ${paths.hookScript}`);
-
-  // 3. Merge hook into settings.json
-  const backup = backupFile(paths.settingsFile);
-  if (backup) {
-    backups.push(backup);
-    console.log(`  ✓ Backed up: ${paths.settingsFile} → ${path.basename(backup)}`);
+  console.log(`  ✓ Found Claude plugin source: ${sourceDir}`);
+  if (removed.length > 0) {
+    console.log('  ✓ Migrated v3.25 Claude connector files:');
+    for (const filePath of removed) console.log(`      ${filePath}`);
+  } else {
+    console.log('  ✓ No v3.25 Claude connector files needed migration.');
   }
+  console.log('  ✓ `ovld connect claude` now loads this plugin with `claude --plugin-dir`.');
 
-  const existingSettings = readJsonFile(paths.settingsFile);
-  const overlordHook = {
-    matcher: '.*',
-    hooks: [{ type: 'command', command: paths.hookScript }]
-  };
-
-  const existingHooks = existingSettings.hooks ?? {};
-  const existingPermHooks = Array.isArray(existingHooks.PermissionRequest)
-    ? existingHooks.PermissionRequest
-    : [];
-  const existingPermissions =
-    existingSettings.permissions && typeof existingSettings.permissions === 'object'
-      ? existingSettings.permissions
-      : {};
-  const mergedAllow = Array.from(
-    new Set([
-      ...asStringArray(existingPermissions.allow),
-      'Bash(ovld protocol:*)',
-      'Bash(curl -sS -X POST:*)'
-    ])
-  );
-
-  // Remove existing Overlord hooks
-  const filteredPermHooks = existingPermHooks.filter(hook => {
-    if (hook && typeof hook === 'object' && hook.hooks) {
-      return !hook.hooks.some(
-        inner =>
-          typeof inner.command === 'string' && inner.command.includes('overlord-permission-hook')
-      );
-    }
-    return true;
-  });
-
-  const merged = deepClone(existingSettings);
-  merged.hooks = { ...existingHooks, PermissionRequest: [...filteredPermHooks, overlordHook] };
-  merged.permissions = { ...existingPermissions, allow: mergedAllow };
-  merged.__overlord_managed = {
-    version: BUNDLE_VERSION,
-    paths: ['hooks.PermissionRequest', 'permissions.allow'],
-    updatedAt: new Date().toISOString()
-  };
-  writeJsonFile(paths.settingsFile, merged);
-  console.log(`  ✓ Merged hook into: ${paths.settingsFile}`);
-
-  const slashResult = installSlashCommands('claude');
-  backups.push(...slashResult.backups);
-
-  // 4. Update manifest
   const manifest = readManifest();
   manifest.claude = {
-    version: BUNDLE_VERSION,
+    version: sourceVersion,
     contentHash: currentContentHashForAgent('claude'),
     installedAt: new Date().toISOString(),
-    files: [paths.skillFile, paths.hookScript, paths.settingsFile, ...slashResult.managedFiles]
+    files: listFilesRecursive(sourceDir)
   };
   writeManifest(manifest);
 
-  return { ok: true, backups };
+  return { ok: true, backups: [] };
 }
 
 function installOpenCode() {
@@ -923,7 +955,9 @@ function doctorAgent(agent) {
   }
 
   const currentVersion =
-    agent === 'codex'
+    agent === 'claude'
+      ? pluginVersion(path.join(claudeSourcePluginDir(), '.claude-plugin', 'plugin.json'))
+      : agent === 'codex'
       ? pluginVersion(path.join(codexSourcePluginDir(), '.codex-plugin', 'plugin.json'))
       : BUNDLE_VERSION;
   const currentHash = currentContentHashForAgent(agent);
@@ -1346,12 +1380,12 @@ export async function runSetupCommand(args) {
   if (agent === '--help' || agent === '-h' || agent === 'help') {
     console.log(`Usage:
   ovld setup           Interactive setup (select agents and configure permissions)
-  ovld setup claude    Install Overlord bundle for Claude Code
+  ovld setup claude    Prepare the Overlord Claude plugin and migrate v3.25 connector files
   ovld setup codex     Install Overlord Codex plugin bundle
   ovld setup cursor    Install Overlord rules, slash commands, and permissions for Cursor
   ovld setup gemini    Install Overlord slash commands and policy rules for Gemini CLI
   ovld setup opencode  Install Overlord connector for OpenCode
-  ovld setup all       Install for all supported agents
+  ovld setup all       Prepare all supported agents
   ovld doctor          Validate installed connectors and check for CLI updates`);
     return;
   }
@@ -1373,7 +1407,7 @@ export async function runSetupCommand(args) {
     });
 
     const selectedLabels = await runCheckboxPrompt({
-      message: 'Select agent connectors to install (Space to toggle, Enter to confirm):',
+      message: 'Select agent plugins/connectors to prepare (Space to toggle, Enter to confirm):',
       choices: agentLabels,
       defaults: []
     });
@@ -1387,7 +1421,7 @@ export async function runSetupCommand(args) {
     const selectedAgents = selectedLabels.map(label => label.split('-')[0].trim());
 
     // Step 2: Install selected agents
-    console.log(`\nInstalling Overlord agent bundles for: ${selectedAgents.join(', ')}...\n`);
+    console.log(`\nPreparing Overlord agent plugins/connectors for: ${selectedAgents.join(', ')}...\n`);
 
     const installedAgents = [];
     for (const a of selectedAgents) {
@@ -1416,7 +1450,7 @@ export async function runSetupCommand(args) {
     );
 
     if (agentsThatNeedPermissions.length > 0) {
-      console.log('Agent connectors installed successfully!\n');
+      console.log('Agent plugins/connectors prepared successfully!\n');
 
       const shouldInstallPermissions = await askYesNo(
         'Would you like to configure agent permissions for Overlord protocol access?',
@@ -1439,7 +1473,7 @@ export async function runSetupCommand(args) {
   }
 
   if (agent === 'all') {
-    console.log('Installing Overlord agent bundle for all supported agents...\n');
+    console.log('Preparing Overlord agent plugins/connectors for all supported agents...\n');
     const installedAgents = [];
 
     for (const a of supportedAgents) {
@@ -1485,7 +1519,7 @@ export async function runSetupCommand(args) {
     process.exit(1);
   }
 
-  console.log(`Installing Overlord agent bundle for ${agent}...\n`);
+  console.log(`Preparing Overlord agent plugin/connector for ${agent}...\n`);
   try {
     if (agent === 'claude') installClaude();
     else if (agent === 'codex') installCodex();

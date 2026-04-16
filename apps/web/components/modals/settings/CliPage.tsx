@@ -174,11 +174,7 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
 };
 
 const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
-  claude: [
-    '~/.claude/skills/overlord-local/SKILL.md',
-    '~/.claude/overlord-permission-hook.sh',
-    '~/.claude/settings.json'
-  ],
+  claude: ['~/.ovld/bundle-manifest.json'],
   cursor: ['~/.cursor/rules/overlord-local.mdc'],
   opencode: ['~/.config/opencode/AGENTS.md', '~/.config/opencode/opencode.json']
 };
@@ -187,21 +183,13 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
   {
     key: 'claude:bundle',
     agentKey: 'claude',
-    label: 'Prompt / skills',
+    label: 'Claude plugin',
     description:
-      'Installs the durable Overlord workflow bundle, including the Claude skill and permission hook integration.',
+      'Prepares the Overlord v4 Claude plugin. Overlord launches Claude with the plugin loaded, and this migration removes v3.25 home-directory skill and hook files.',
     kind: 'bundle',
     bundleAgent: 'claude',
-    supportNote: 'Managed by the desktop app in your local ~/.claude configuration.'
-  },
-  {
-    key: 'claude:slash',
-    agentKey: 'claude',
-    label: '/connect /load /spawn',
-    description: SLASH_COMMAND_CONFIGS.claude.description,
-    kind: 'slash',
-    slashAgent: 'claude',
-    supportNote: SLASH_COMMAND_CONFIGS.claude.supportNote
+    supportNote:
+      'Migration is needed when upgrading from desktop app v3.25.0 to v4.0.0 or later. The plugin is loaded by `ovld connect claude` and desktop launches with `claude --plugin-dir`.'
   },
   {
     key: 'codex:overlord-plugin',
@@ -939,7 +927,7 @@ export function CliPage({ open }: { open: boolean }) {
         <div className="grid gap-1">
           <p className="text-sm font-medium">Agent plugins</p>
           <p className="text-xs text-muted-foreground">
-            Install durable prompt and skill config where supported, plus mid-session ticket
+            Install or prepare durable agent plugins where supported, plus mid-session ticket
             commands for agents that can handle{' '}
             <code className="rounded bg-muted px-1">/connect</code>,{' '}
             <code className="rounded bg-muted px-1">/load</code>, and{' '}
@@ -1141,9 +1129,9 @@ export function CliPage({ open }: { open: boolean }) {
           <LoadingButton
             buttonState={installAllBundlesButtonState}
             setButtonState={setInstallAllBundlesButtonState}
-            text="Install all prompt / skills"
-            loadingText="Installing..."
-            successText="Installed"
+            text="Prepare all agent plugins"
+            loadingText="Preparing..."
+            successText="Prepared"
             errorText="Retry"
             size="sm"
             variant="outline"

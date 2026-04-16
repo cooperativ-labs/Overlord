@@ -9,10 +9,25 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
 import { runAttachCommand } from './attach.mjs';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PACKAGE_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'claude');
+const REPO_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'claude');
+
+function claudeSourcePluginDir() {
+  if (fs.existsSync(PACKAGE_CLAUDE_PLUGIN_DIR)) return PACKAGE_CLAUDE_PLUGIN_DIR;
+  if (fs.existsSync(REPO_CLAUDE_PLUGIN_DIR)) return REPO_CLAUDE_PLUGIN_DIR;
+  return null;
+}
+
 function getInstructionMode(agent) {
+  if (agent === 'claude') {
+    return claudeSourcePluginDir() ? 'bundle' : 'legacy';
+  }
+
   if (agent === 'codex') {
     const pluginManifest = path.join(
       os.homedir(),
@@ -108,20 +123,24 @@ async function runAgent(agent, mode = 'run') {
 
   try {
     if (agent === 'claude') {
+      const pluginDir = claudeSourcePluginDir();
       if (mode === 'resume') {
         const claudeSessionId = process.env.CLAUDE_SESSION_ID?.trim();
         const args = claudeSessionId
           ? ['--resume', claudeSessionId, context]
           : ['--continue', context];
+        if (pluginDir) args.unshift('--plugin-dir', pluginDir);
         execFileSync('claude', args, { stdio: 'inherit', env: childEnv });
       } else {
+        const args = [
+          '--append-system-prompt',
+          context,
+          'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.'
+        ];
+        if (pluginDir) args.unshift('--plugin-dir', pluginDir);
         execFileSync(
           'claude',
-          [
-            '--append-system-prompt',
-            context,
-            'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.'
-          ],
+          args,
           { stdio: 'inherit', env: childEnv }
         );
       }

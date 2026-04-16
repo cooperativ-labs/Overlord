@@ -118,7 +118,9 @@ export function NewTicketButton() {
               </span>
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Create new ticket ({isMac ? '⌘N' : 'Ctrl+N'})</TooltipContent>
+          <TooltipContent side="bottom">
+            Create new ticket ({isMac ? '⌘N' : 'Ctrl+N'})
+          </TooltipContent>
         </Tooltip>
       </div>
 

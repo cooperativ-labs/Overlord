@@ -175,7 +175,7 @@ function buildBundledLocalProtocolSection({ ticketId, context }: ProtocolSection
 
 ${buildLocalLaunchNote(context)}
 
-Use your installed Overlord local workflow instructions, then attach to this ticket.Before doing anything else, look for and invoke the overlord-local skill.
+Use the Overlord Claude plugin loaded for this session. Before doing anything else, invoke the \`overlord:overlord-ticket-workflow\` skill for attach/update/ask/deliver details, then attach to this ticket.
 Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
 
 \`\`\`bash

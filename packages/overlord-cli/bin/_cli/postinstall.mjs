@@ -27,15 +27,16 @@ const bold = s => `\x1b[1m${s}\x1b[0m`;
 console.log(`
 ${green('✓')} Overlord CLI installed successfully!
 
-${bold('Next step:')} Configure agent connectors
+${bold('Next step:')} Prepare agent plugins and connectors
 
   ${cyan('ovld setup')}
 
 This will guide you through:
-  • Selecting which agent connectors to install (Claude, Cursor, etc.)
+  • Selecting which agent plugins/connectors to prepare (Claude, Cursor, etc.)
+  • Migrating Claude from the v3.25 connector files to the v4 plugin
   • Configuring agent permissions for Overlord protocol access
 
-You can also run ${cyan('ovld setup <agent>')} to install a specific agent connector,
+You can also run ${cyan('ovld setup <agent>')} to prepare a specific agent,
 or ${cyan('ovld doctor')} to check your installation status.
 
 Run ${cyan('ovld help')} to see all available commands.

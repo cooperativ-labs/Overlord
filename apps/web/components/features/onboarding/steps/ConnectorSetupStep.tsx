@@ -33,14 +33,13 @@ const AGENT_CONNECTOR_FEATURES: Record<
   claude: {
     bundle: true,
     service: false,
-    slashCommands: true,
+    slashCommands: false,
     permissions: true,
     details: [
-      'Overlord skill (workflow protocol)',
-      'Permission hook (auto-approve protocol calls)',
-      'Settings merge (hooks config)',
-      'Slash commands (/connect, /load, /spawn)',
-      'Permission rules for ovld protocol & curl'
+      'Overlord v4 Claude plugin loaded by Overlord launches',
+      'Plugin skill and slash commands (overlord:connect, overlord:load, overlord:spawn)',
+      'Migration from v3.25.0 home-directory skill and hook files',
+      'Permission rules for ovld protocol and curl'
     ]
   },
   codex: {
@@ -337,16 +336,17 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Set up agent connectors</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Choose which agents to connect with Overlord. Each connector installs plugins, slash
-          commands, and permission rules so agents can work with your tickets seamlessly.
+          Choose which agents to connect with Overlord. Claude upgrades to the v4 plugin model;
+          other agents keep their local connector files and permission rules.
         </p>
       </div>
 
       <Alert>
         <Shield className="h-4 w-4" />
         <AlertDescription>
-          Connectors append to your existing agent config files. Originals are backed up
-          automatically. You can uninstall at any time from Settings.
+          Upgrading from desktop app v3.25.0 to v4.0.0 or later requires a one-time Claude
+          migration. Overlord removes its old Claude skill and hook files, then loads the new plugin
+          whenever it launches Claude.
         </AlertDescription>
       </Alert>
 
@@ -412,7 +412,7 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {features.bundle && (
                       <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
-                        Workflow bundle
+                        {agentType.value === 'claude' ? 'Claude plugin' : 'Workflow bundle'}
                       </span>
                     )}
                     {features.service && (

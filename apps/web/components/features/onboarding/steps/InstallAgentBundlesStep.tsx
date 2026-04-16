@@ -125,10 +125,10 @@ export function InstallAgentBundlesStep({ onContinue }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Install agent plugins</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Prepare agent plugins</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Install the Overlord workflow bundle for Claude, Cursor, and OpenCode. Codex uses the
-          dedicated Overlord chat plugin instead of a local bundle.
+          Claude uses the Overlord v4 plugin and needs a one-time migration from desktop app
+          v3.25.0. Cursor and OpenCode still use local workflow connector files.
         </p>
       </div>
 
@@ -203,7 +203,7 @@ export function InstallAgentBundlesStep({ onContinue }: Props) {
           disabled={loadingAction !== null}
         >
           <Download className="h-4 w-4" />
-          Install all
+          Prepare all
         </Button>
         <Button type="button" onClick={onContinue} disabled={loadingAction !== null}>
           <Check className="h-4 w-4" />

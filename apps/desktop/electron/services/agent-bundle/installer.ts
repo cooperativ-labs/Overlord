@@ -11,6 +11,7 @@
  */
 
 import crypto from 'crypto';
+import { app } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -18,7 +19,6 @@ import path from 'path';
 import {
   backupFile,
   hasOverlordSection,
-  mergeJsonSettings,
   mergeMarkdownSection,
   readJsonFile,
   readTextFile,
@@ -28,11 +28,9 @@ import {
 import { installSlashCommands, uninstallSlashCommands } from './slash-commands';
 import {
   BUNDLE_VERSION,
-  CLAUDE_SKILL_CONTENT,
   CURSOR_RULES_CONTENT,
   JSON_MARKER_KEY,
-  OPENCODE_AGENTS_SECTION,
-  PERMISSION_HOOK_SCRIPT
+  OPENCODE_AGENTS_SECTION
 } from './templates';
 
 // ---------------------------------------------------------------------------
@@ -90,6 +88,19 @@ function claudePaths() {
   };
 }
 
+function claudeSourcePluginDir(): string {
+  const appPath = app.getAppPath();
+  const bundledPath = path.join(appPath, 'plugins', 'claude');
+  if (!app.isPackaged) return bundledPath;
+
+  const unpackedPath = path.join(
+    appPath.replace('app.asar', 'app.asar.unpacked'),
+    'plugins',
+    'claude'
+  );
+  return fs.existsSync(unpackedPath) ? unpackedPath : bundledPath;
+}
+
 function openCodePaths() {
   const base = path.join(os.homedir(), '.config', 'opencode');
   return {
@@ -122,13 +133,38 @@ function contentHash(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);
 }
 
+function listFilesRecursive(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const resolved = path.join(dir, entry.name);
+    if (entry.isDirectory()) return listFilesRecursive(resolved);
+    return [resolved];
+  });
+}
+
+function contentHashForDirectory(sourceDir: string): string {
+  const hash = crypto.createHash('sha256');
+  for (const filePath of listFilesRecursive(sourceDir).sort()) {
+    hash.update(path.relative(sourceDir, filePath));
+    hash.update('\0');
+    hash.update(fs.readFileSync(filePath));
+    hash.update('\0');
+  }
+  return hash.digest('hex').slice(0, 16);
+}
+
+function pluginVersion(filePath: string): string | null {
+  const parsed = readJsonFile(filePath) as { version?: unknown };
+  return typeof parsed.version === 'string' ? parsed.version : null;
+}
+
 // ---------------------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------------------
 
 /** Returns the content hash for the current (bundled) template of a given agent. */
 function currentContentHashForAgent(agent: AgentBundleAgent): string {
-  if (agent === 'claude') return contentHash(CLAUDE_SKILL_CONTENT);
+  if (agent === 'claude') return contentHashForDirectory(claudeSourcePluginDir());
   if (agent === 'cursor') return contentHash(CURSOR_RULES_CONTENT);
   return contentHash(OPENCODE_AGENTS_SECTION);
 }
@@ -137,18 +173,33 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
   const manifest = readManifest();
   const entry = manifest[agent];
   const hash = currentContentHashForAgent(agent);
+  const currentVersion =
+    agent === 'claude'
+      ? pluginVersion(path.join(claudeSourcePluginDir(), '.claude-plugin', 'plugin.json'))
+      : BUNDLE_VERSION;
 
   if (!entry) {
+    if (agent === 'claude') {
+      return {
+        agent,
+        status: 'not_installed',
+        version: currentVersion,
+        installedVersion: null,
+        details:
+          'Claude plugin migration is required for Overlord v4. Run install to validate the plugin and remove v3.25 connector files.',
+        currentContentHash: hash
+      };
+    }
+
     // Check if files exist anyway (manual install or pre-manifest)
     let filesExist: boolean;
-    if (agent === 'claude') filesExist = checkClaudeFilesExist();
-    else if (agent === 'cursor') filesExist = checkCursorFilesExist();
+    if (agent === 'cursor') filesExist = checkCursorFilesExist();
     else filesExist = checkOpenCodeFilesExist();
     if (filesExist) {
       return {
         agent,
         status: 'partial',
-        version: BUNDLE_VERSION,
+        version: currentVersion,
         installedVersion: null,
         details: 'Files found but no manifest entry. Run repair to register.',
         currentContentHash: hash
@@ -157,20 +208,20 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
     return {
       agent,
       status: 'not_installed',
-      version: BUNDLE_VERSION,
+      version: currentVersion,
       installedVersion: null,
       details: 'Bundle not installed.',
       currentContentHash: hash
     };
   }
 
-  if (entry.version !== BUNDLE_VERSION) {
+  if (entry.version !== currentVersion) {
     return {
       agent,
       status: 'stale',
-      version: BUNDLE_VERSION,
+      version: currentVersion,
       installedVersion: entry.version,
-      details: `Installed v${entry.version}, current is v${BUNDLE_VERSION}.`,
+      details: `Installed v${entry.version}, current is v${currentVersion ?? 'unknown'}.`,
       currentContentHash: hash
     };
   }
@@ -181,9 +232,12 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
     return {
       agent,
       status: 'stale',
-      version: BUNDLE_VERSION,
+      version: currentVersion,
       installedVersion: entry.version,
-      details: 'Template content has changed since last install. Update to get the latest.',
+      details:
+        agent === 'claude'
+          ? 'Claude plugin content has changed since v4 migration. Update to refresh the launch plugin.'
+          : 'Template content has changed since last install. Update to get the latest.',
       currentContentHash: hash
     };
   }
@@ -194,9 +248,12 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
     return {
       agent,
       status: 'partial',
-      version: BUNDLE_VERSION,
+      version: currentVersion,
       installedVersion: entry.version,
-      details: 'Some managed files are missing. Run repair.',
+      details:
+        agent === 'claude'
+          ? 'Some Claude plugin source files are missing. Repair the Overlord desktop installation.'
+          : 'Some managed files are missing. Run repair.',
       currentContentHash: hash
     };
   }
@@ -204,9 +261,12 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
   return {
     agent,
     status: 'installed',
-    version: BUNDLE_VERSION,
+    version: currentVersion,
     installedVersion: entry.version,
-    details: 'Bundle is up to date.',
+    details:
+      agent === 'claude'
+        ? 'Claude v4 plugin is prepared. Overlord launches Claude with --plugin-dir and v3.25 connector files have been migrated.'
+        : 'Bundle is up to date.',
     currentContentHash: hash
   };
 }
@@ -217,11 +277,6 @@ export function getAllBundleStatuses(): AgentBundleStatus[] {
     getAgentBundleStatus('cursor'),
     getAgentBundleStatus('opencode')
   ];
-}
-
-function checkClaudeFilesExist(): boolean {
-  const paths = claudePaths();
-  return fs.existsSync(paths.skillFile);
 }
 
 function checkOpenCodeFilesExist(): boolean {
@@ -240,88 +295,91 @@ function checkCursorFilesExist(): boolean {
 // Install: Claude
 // ---------------------------------------------------------------------------
 
-function installClaude(): InstallResult {
+function removeLegacyClaudeBundle(): string[] {
   const paths = claudePaths();
+  const removed: string[] = [];
+
+  if (fs.existsSync(paths.skillDir)) {
+    fs.rmSync(paths.skillDir, { recursive: true, force: true });
+    removed.push(paths.skillDir);
+  }
+
+  if (fs.existsSync(paths.hookScript)) {
+    fs.rmSync(paths.hookScript, { force: true });
+    removed.push(paths.hookScript);
+  }
+
+  const slashUninstall = uninstallSlashCommands('claude');
+  if (slashUninstall.ok) {
+    removed.push(...slashUninstall.removedFiles);
+  }
+
+  if (fs.existsSync(paths.settingsFile)) {
+    const settings = readJsonFile(paths.settingsFile);
+    let changed = false;
+
+    if (settings[JSON_MARKER_KEY]) {
+      delete settings[JSON_MARKER_KEY];
+      changed = true;
+    }
+
+    const hooks = (settings.hooks ?? {}) as Record<string, unknown[]>;
+    if (Array.isArray(hooks.PermissionRequest)) {
+      const nextPermissionHooks = hooks.PermissionRequest.filter((hook: unknown) => {
+        if (hook && typeof hook === 'object' && 'hooks' in hook) {
+          const h = hook as { hooks?: Array<{ command?: string }> };
+          return !h.hooks?.some(
+            inner =>
+              typeof inner.command === 'string' &&
+              inner.command.includes('overlord-permission-hook')
+          );
+        }
+        return true;
+      });
+      if (nextPermissionHooks.length !== hooks.PermissionRequest.length) {
+        changed = true;
+        if (nextPermissionHooks.length > 0) {
+          hooks.PermissionRequest = nextPermissionHooks;
+        } else {
+          delete hooks.PermissionRequest;
+        }
+      }
+    }
+
+    if (changed) {
+      if (Object.keys(hooks).length > 0) settings.hooks = hooks;
+      else delete settings.hooks;
+      writeJsonFile(paths.settingsFile, settings);
+      removed.push(paths.settingsFile);
+    }
+  }
+
+  return removed;
+}
+
+function installClaude(): InstallResult {
   const backups: string[] = [];
 
   try {
-    // 1. Install the skill file
-    writeTextFile(paths.skillFile, CLAUDE_SKILL_CONTENT);
-
-    // 2. Install the permission hook script
-    writeTextFile(paths.hookScript, PERMISSION_HOOK_SCRIPT, 0o755);
-
-    // 3. Merge hook into settings.json
-    const backup = backupFile(paths.settingsFile);
-    if (backup) backups.push(backup);
-
-    const existingSettings = readJsonFile(paths.settingsFile);
-
-    // Build the hook entry pointing to our durable script
-    const overlordHook = {
-      matcher: '.*',
-      hooks: [{ type: 'command', command: paths.hookScript }]
-    };
-
-    // Check if an Overlord hook already exists in PermissionRequest
-    const existingHooks = (existingSettings.hooks ?? {}) as Record<string, unknown[]>;
-    const existingPermHooks = Array.isArray(existingHooks.PermissionRequest)
-      ? existingHooks.PermissionRequest
-      : [];
-
-    // Remove any existing Overlord hooks (ones pointing to our managed script)
-    const filteredPermHooks = existingPermHooks.filter((hook: unknown) => {
-      if (hook && typeof hook === 'object' && 'hooks' in hook) {
-        const h = hook as { hooks?: Array<{ command?: string }> };
-        return !h.hooks?.some(
-          inner =>
-            typeof inner.command === 'string' && inner.command.includes('overlord-permission-hook')
-        );
-      }
-      return true;
-    });
-
-    // Merge permission allow rules for ovld protocol commands
-    const existingPermissions =
-      existingSettings.permissions && typeof existingSettings.permissions === 'object'
-        ? (existingSettings.permissions as Record<string, unknown>)
-        : {};
-    const existingAllow = Array.isArray(existingPermissions.allow)
-      ? existingPermissions.allow.filter((e: unknown): e is string => typeof e === 'string')
-      : [];
-    const requiredPerms = ['Bash(ovld protocol:*)', 'Bash(curl -sS -X POST:*)'];
-    const mergedAllow = Array.from(new Set([...existingAllow, ...requiredPerms]));
-
-    const hookAdditions = {
-      hooks: {
-        PermissionRequest: [...filteredPermHooks, overlordHook]
-      },
-      permissions: {
-        ...existingPermissions,
-        allow: mergedAllow
-      }
-    };
-
-    const merged = mergeJsonSettings(existingSettings, hookAdditions, [
-      'hooks.PermissionRequest',
-      'permissions.allow'
-    ]);
-    writeJsonFile(paths.settingsFile, merged);
-
-    // 4. Install Claude slash commands alongside the durable bundle.
-    const slashResult = installSlashCommands('claude');
-    if (!slashResult.ok) {
-      return { ok: false, agent: 'claude', backups, error: slashResult.error };
+    const sourceDir = claudeSourcePluginDir();
+    if (!fs.existsSync(path.join(sourceDir, '.claude-plugin', 'plugin.json'))) {
+      return {
+        ok: false,
+        agent: 'claude',
+        backups,
+        error: `Claude plugin source not found at ${sourceDir}.`
+      };
     }
-    backups.push(...slashResult.backups);
 
-    // 5. Update manifest
+    removeLegacyClaudeBundle();
+
     const manifest = readManifest();
+    const version = pluginVersion(path.join(sourceDir, '.claude-plugin', 'plugin.json')) ?? '0.0.0';
     manifest.claude = {
-      version: BUNDLE_VERSION,
-      contentHash: contentHash(CLAUDE_SKILL_CONTENT),
+      version,
+      contentHash: contentHashForDirectory(sourceDir),
       installedAt: new Date().toISOString(),
-      files: [paths.skillFile, paths.hookScript, paths.settingsFile, ...slashResult.managedFiles]
+      files: listFilesRecursive(sourceDir)
     };
     writeManifest(manifest);
 

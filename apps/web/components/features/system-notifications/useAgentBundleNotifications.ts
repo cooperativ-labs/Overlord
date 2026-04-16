@@ -45,8 +45,8 @@ export function useAgentBundleNotifications(
         addNotification({
           id: 'agent-bundle-stale',
           type: 'update',
-          title: 'Agent prompt update available',
-          message: `${names} ${staleAgents.length === 1 ? 'has' : 'have'} a newer prompt version. Update to get the latest workflow instructions.`,
+          title: 'Agent plugin update available',
+          message: `${names} ${staleAgents.length === 1 ? 'has' : 'have'} a newer plugin or connector version. Update to get the latest workflow instructions.`,
           dismissKey: `overlord-bundle-stale-dismissed-${dismissFingerprint}`,
           action: onOpenSettings
             ? {
@@ -63,8 +63,8 @@ export function useAgentBundleNotifications(
         addNotification({
           id: 'agent-bundle-partial',
           type: 'warning',
-          title: 'Agent prompt needs repair',
-          message: `${names} ${partialAgents.length === 1 ? 'has' : 'have'} an incomplete installation. Repair to ensure agents work correctly.`,
+          title: 'Agent plugin needs repair',
+          message: `${names} ${partialAgents.length === 1 ? 'has' : 'have'} an incomplete plugin or connector setup. Repair to ensure agents work correctly.`,
           dismissKey: `overlord-bundle-partial-dismissed-${partialAgents.map(s => s.agent).join('-')}`,
           action: onOpenSettings
             ? {

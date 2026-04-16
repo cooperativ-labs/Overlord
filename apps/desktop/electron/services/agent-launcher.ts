@@ -1,3 +1,4 @@
+import { app } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -51,6 +52,16 @@ type ContextCommandsResponse = {
   gemini: string;
   opencode: string;
 };
+
+function claudeSourcePluginDir(): string | null {
+  const appPath = app.getAppPath();
+  const bundledPath = path.join(appPath, 'plugins', 'claude');
+  const unpackedPath = appPath.includes('app.asar')
+    ? path.join(appPath.replace('app.asar', 'app.asar.unpacked'), 'plugins', 'claude')
+    : bundledPath;
+  const sourceDir = app.isPackaged && fs.existsSync(unpackedPath) ? unpackedPath : bundledPath;
+  return fs.existsSync(path.join(sourceDir, '.claude-plugin', 'plugin.json')) ? sourceDir : null;
+}
 
 function buildProtocolHeaders(agentToken: string): Record<string, string> {
   const headers: Record<string, string> = {
@@ -145,9 +156,11 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const bundleInstalled =
     input.agent === 'codex'
       ? isCodexPluginInstalled()
-      : bundleAgent
-        ? isBundleInstalled(bundleAgent)
-        : false;
+      : input.agent === 'claude'
+        ? Boolean(claudeSourcePluginDir())
+        : bundleAgent
+          ? isBundleInstalled(bundleAgent)
+          : false;
   const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
   const workspaceParam = isRemote ? '&workspace=ssh' : '';
   const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron&agent=${input.agent}${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}${workspaceParam}`;
@@ -251,7 +264,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     // For SSH, skip the local settings file — it won't exist on the remote.
     const settingsArg =
       bundleInstalled || isRemote ? '' : ` --settings ${shellQuote(settingsFile)}`;
-    command = `claude --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
+    const pluginDir = claudeSourcePluginDir();
+    const pluginArg = pluginDir ? ` --plugin-dir ${shellQuote(pluginDir)}` : '';
+    command = `claude${pluginArg} --append-system-prompt ${contextRef}${settingsArg}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${shellQuote(startPrompt)}`;
   } else if (input.agent === 'codex') {
     command = buildInteractiveCodexCommand({ fallbackPromptRef: contextRef });
   } else if (input.agent === 'cursor') {

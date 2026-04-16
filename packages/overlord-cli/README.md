@@ -37,6 +37,7 @@ ovld protocol discover-project
 ovld protocol attach --ticket-id <ticket-id>
 ovld protocol update --session-key <session-key> --ticket-id <ticket-id> --summary "Working on it" --phase execute
 ovld setup codex
+ovld setup claude
 ovld setup cursor
 ovld setup gemini
 ovld setup all
@@ -59,7 +60,7 @@ ovld doctor
 - `protocol` - run ticket lifecycle commands such as `discover-project`, `attach`, `connect`, `load-context`, `spawn`, `update`, `record-change-rationales`, `ask`, `read-context`, `write-context`, `deliver`, and artifact upload/download helpers
 - `connect`, `restart`, `context` - launch or resume an agent session or print ticket context
 - `run`, `resume` - legacy aliases for `connect` and `restart`
-- `setup` - install the Overlord connector or plugin bundle for a supported agent
+- `setup` - prepare the Overlord plugin or connector for a supported agent; `ovld setup claude` performs the one-time v3.25.0 to v4 Claude plugin migration
 - `update` - install the latest CLI release from npm
 - `doctor` - verify installed agent connectors and check whether a newer CLI version is available
 

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.0] - 2026-04-16:12:40
+
+### Added
+- Add keyboard shortcut tooltips to the New Ticket button showing Cmd+N (Mac) or Ctrl+N (Windows/Linux).
+- Add support for passing assignedAgent to DiscussTicketButton for improved agent selection based on ticket assignment.
+
+### Fixed
+- None.
+
+### Changed
+- Update Discuss Ticket button to use assigned agent and model/thinking settings when available.
+- Update New Ticket Modal to refresh page after ticket creation instead of navigating to board view.
+- Update GEMINI_MODEL from 'gemini-2.5-flash' to 'gemini-3-flash-preview' for improved feed post generation performance and capabilities.
+- Claude Connector now works via the v4 plugin model.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace version to 4.0.0.
+
 ## [3.25.0] - 2026-04-15:15:58
 
 ### Added
