@@ -82,6 +82,7 @@ export function TicketHeaderAction({
         projectId={projectId}
         organizationId={organizationId}
         agentIdentifier={agentIdentifier}
+        assignedAgent={assignedAgent}
         agentToken={agentToken}
         agentFlags={agentFlags}
         workingDirectory={workingDirectory}

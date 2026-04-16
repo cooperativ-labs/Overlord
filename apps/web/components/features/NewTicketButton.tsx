@@ -27,6 +27,7 @@ export function NewTicketButton() {
   const [isQuickRunOpen, setIsQuickRunOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const { isElectron } = useElectron();
+  const [isMac, setIsMac] = useState(false);
 
   const segments = pathname.split('/').filter(Boolean);
   // Route format: /projects/[projectId]/... or /u/...
@@ -57,6 +58,10 @@ export function NewTicketButton() {
 
     loadProjects();
   }, [isModalOpen, isQuickRunOpen]);
+
+  useEffect(() => {
+    setIsMac(navigator.platform.toLowerCase().includes('mac'));
+  }, []);
 
   useEffect(() => {
     const handleNewTicketHotkey = (event: globalThis.KeyboardEvent) => {
@@ -95,21 +100,26 @@ export function NewTicketButton() {
             <TooltipContent side="bottom">Open prompt (Cmd+P)</TooltipContent>
           </Tooltip>
         ) : null}
-        <Button
-          className="electron-no-drag"
-          onClick={() => setIsModalOpen(true)}
-          size="sm"
-          type="button"
-        >
-          <span className="flex items-center gap-0.5 sm:hidden">
-            <Plus className="h-3.5 w-3.5" />
-            <Ticket className="h-3.5 w-3.5" />
-          </span>
-          <span className="hidden items-center gap-1 sm:inline-flex">
-            <Ticket className="h-3.5 w-3.5" />
-            <span>New Ticket</span>
-          </span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className="electron-no-drag"
+              onClick={() => setIsModalOpen(true)}
+              size="sm"
+              type="button"
+            >
+              <span className="flex items-center gap-0.5 sm:hidden">
+                <Plus className="h-3.5 w-3.5" />
+                <Ticket className="h-3.5 w-3.5" />
+              </span>
+              <span className="hidden items-center gap-1 sm:inline-flex">
+                <Ticket className="h-3.5 w-3.5" />
+                <span>New Ticket</span>
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Create new ticket ({isMac ? '⌘N' : 'Ctrl+N'})</TooltipContent>
+        </Tooltip>
       </div>
 
       <NewTicketModal

@@ -29,7 +29,6 @@ import {
   updateTicketAssignedAgentAction,
   updateTicketFieldAction
 } from '@/lib/actions/tickets';
-import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import type { EditableTextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
@@ -188,8 +187,7 @@ export function NewTicketModal({
       setSelectedProjectId(resolvedDefaultProjectId);
       setSubmitButtonState('default');
 
-      // Navigate to board view
-      router.push(`${buildProjectPath({ projectId: selectedProjectId })}?view=board`);
+      // Refresh current page data so the new ticket appears without navigating away
       router.refresh();
     } catch (error) {
       setSubmitButtonState('error');

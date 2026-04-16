@@ -25,6 +25,7 @@ import {
   LAUNCH_AGENT_VALUES,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { cn } from '@/lib/utils';
 
 import { useTerminal } from './terminal/TerminalProvider';
@@ -35,6 +36,7 @@ type DiscussTicketButtonProps = {
   projectId?: string | null;
   organizationId?: number;
   agentIdentifier?: string | null;
+  assignedAgent?: TicketAssignedAgent | null;
   agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   workingDirectory?: string | null;
@@ -56,6 +58,7 @@ export function DiscussTicketButton({
   projectId,
   organizationId,
   agentIdentifier,
+  assignedAgent,
   agentToken,
   agentFlags,
   workingDirectory,
@@ -77,7 +80,9 @@ export function DiscussTicketButton({
   const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
   const effectiveSshCommand = workspace.effectiveSshCommand;
   const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
-  const preferredAgent = getLaunchAgentTypeByIdentifier(agentIdentifier);
+  const preferredAgent = agentIdentifier
+    ? getLaunchAgentTypeByIdentifier(agentIdentifier)
+    : (assignedAgent?.agent ?? 'claude');
   const launchAgents = [
     preferredAgent,
     ...LAUNCH_AGENT_VALUES.filter(agentValue => agentValue !== preferredAgent)
@@ -110,8 +115,8 @@ export function DiscussTicketButton({
           resolvedAgentToken,
           'ask',
           agentFlags?.[agentValue],
-          undefined,
-          undefined,
+          agentValue === assignedAgent?.agent ? (assignedAgent.model ?? undefined) : undefined,
+          agentValue === assignedAgent?.agent ? (assignedAgent.thinking ?? undefined) : undefined,
           effectiveSshCommand ?? undefined,
           effectiveRemoteWorkingDirectory ?? undefined
         );
