@@ -37,7 +37,7 @@ export default function TicketListCard({
 }) {
   const router = useRouter();
 
-  const isAgentRunning = ticket.agent_session_state === 'attached';
+  const isAgentRunning = ticket.has_executing_objective === true;
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
   const hasUnopenedReview = ticket.is_read === false;
 

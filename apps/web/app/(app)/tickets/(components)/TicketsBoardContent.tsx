@@ -294,6 +294,7 @@ export default async function TicketsBoardContent({
         agent_session_state: session?.session_state ?? null,
         latest_objective_agent: latestObjectiveAgentByTicket.get(ticket.id) ?? null,
         running_agent: runningAgent,
+        has_executing_objective: objectiveAgentByTicket.has(ticket.id),
         waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
         objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0,
         schedule_id: ticket.schedule_id ?? null

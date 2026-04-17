@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { ProjectLayoutClient } from '@/components/features/projects/ProjectLayoutClient';
+import { TicketsBoardLoadingSkeleton } from '@/components/features/TicketsBoardLoadingSkeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { createClient } from '@/supabase/utils/server';
 
@@ -55,7 +57,9 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
     <ErrorBoundary>
       <ProjectLayoutClient
         board={
-          <TicketsBoardContent organizationId={project.organization_id} projectId={projectId} />
+          <Suspense fallback={<TicketsBoardLoadingSkeleton variant="project" />}>
+            <TicketsBoardContent organizationId={project.organization_id} projectId={projectId} />
+          </Suspense>
         }
         projectId={project.id}
         organizationId={project.organization_id}

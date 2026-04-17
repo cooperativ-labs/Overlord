@@ -20,6 +20,7 @@ export type BoardTicket = {
   agent_session_state?: string | null;
   running_agent?: string | null;
   latest_objective_agent?: string | null;
+  has_executing_objective?: boolean;
   status: string;
   priority: string;
   execution_target: string;

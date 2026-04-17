@@ -1,6 +1,8 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 
+import { TicketsBoardLoadingSkeleton } from '@/components/features/TicketsBoardLoadingSkeleton';
 import { UserTicketsSettingsPanel } from '@/components/features/UserTicketsSettingsPanel';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getUserOrganizations } from '@/lib/actions/organizations';
@@ -36,11 +38,13 @@ export default async function UserLayout({ children }: LayoutProps) {
     <div className="flex min-h-0 flex-1 flex-col gap-5">
       <ErrorBoundary>
         <UserTicketsSettingsPanel selectedOrgId={selectedOrgId} />
-        <TicketsBoardContent
-          organizationId={selectedOrgId}
-          showOrganizationName={!selectedOrgId}
-          mentionProjectId={defaultProjectId}
-        />
+        <Suspense fallback={<TicketsBoardLoadingSkeleton variant="user" />}>
+          <TicketsBoardContent
+            organizationId={selectedOrgId}
+            showOrganizationName={!selectedOrgId}
+            mentionProjectId={defaultProjectId}
+          />
+        </Suspense>
         {children}
       </ErrorBoundary>
     </div>

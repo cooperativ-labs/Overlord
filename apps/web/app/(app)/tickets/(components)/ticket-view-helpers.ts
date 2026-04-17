@@ -55,6 +55,7 @@ export function toBoardTicket(ticket: Ticket): BoardTicket {
     agent_session_state: ticket.agent_session_state,
     running_agent: ticket.running_agent,
     latest_objective_agent: ticket.latest_objective_agent,
+    has_executing_objective: ticket.has_executing_objective,
     status: ticket.status,
     priority: ticket.priority,
     execution_target: ticket.execution_target,

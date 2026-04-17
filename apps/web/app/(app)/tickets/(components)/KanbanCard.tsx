@@ -42,6 +42,7 @@ export type Ticket = {
   agent_session_state?: SessionState | null;
   running_agent?: string | null;
   latest_objective_agent?: string | null;
+  has_executing_objective?: boolean;
   status: string;
   priority: string;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
@@ -91,7 +92,7 @@ export default function KanbanCard({
     transition
   };
 
-  const isAgentRunning = ticket.agent_session_state === 'attached';
+  const isAgentRunning = ticket.has_executing_objective === true;
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
   const hasUnopenedReview = ticket.is_read === false;
 

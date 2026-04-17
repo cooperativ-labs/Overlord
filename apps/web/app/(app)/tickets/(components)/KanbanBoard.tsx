@@ -656,7 +656,8 @@ export default function KanbanBoard({
             latestObjectiveAgentByTicket.get(t.id) ?? t.latest_objective_agent,
           assigned_agent: parseTicketAssignedAgent(update.assigned_agent) ?? t.assigned_agent,
           agent_session_state: session?.session_state ?? t.agent_session_state ?? null,
-          running_agent: runningAgent
+          running_agent: runningAgent,
+          has_executing_objective: executingObjectiveAgentByTicket.has(t.id)
         });
         mergeObjectiveMetaIntoBoards(queryClient, t.id, {
           latest_agent: latestObjectiveAgentByTicket.get(t.id) ?? t.latest_objective_agent ?? null,

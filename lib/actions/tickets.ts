@@ -1418,7 +1418,11 @@ type RawBoardTicket = {
     | null;
 };
 
-function mapBoardTicket(raw: RawBoardTicket, latestObjectiveAgent: string | null = null) {
+function mapBoardTicket(
+  raw: RawBoardTicket,
+  latestObjectiveAgent: string | null = null,
+  hasExecutingObjective = false
+) {
   const p = Array.isArray(raw.project) ? raw.project[0] : raw.project;
   const org = Array.isArray(raw.organization) ? raw.organization[0] : raw.organization;
   return {
@@ -1445,6 +1449,7 @@ function mapBoardTicket(raw: RawBoardTicket, latestObjectiveAgent: string | null
     project_everhour_project_id: p?.everhour_project_id ?? null,
     agent_session_state: null,
     running_agent: null,
+    has_executing_objective: hasExecutingObjective,
     waiting_for_response_at: null,
     has_unopened_waiting_response: false,
     objectives_executed_count: 0
@@ -1504,11 +1509,12 @@ export async function getTicketBoardBootstrapAction(scope: BoardScope): Promise<
   const rawTickets = ticketResults.flatMap(result => (result.data ?? []) as RawBoardTicket[]);
   const ticketIds = rawTickets.map(ticket => ticket.id);
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
+  const executingObjectiveByTicket = new Set<string>();
 
   if (ticketIds.length > 0) {
     const { data: objectives, error: objectivesError } = await supabase
       .from('objectives')
-      .select('ticket_id,agent_identifier')
+      .select('ticket_id,agent_identifier,state')
       .in('ticket_id', ticketIds)
       .order('created_at', { ascending: false });
 
@@ -1517,9 +1523,13 @@ export async function getTicketBoardBootstrapAction(scope: BoardScope): Promise<
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       agent_identifier: string | null;
+      state: string | null;
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+      if (objective.state === 'executing') {
+        executingObjectiveByTicket.add(objective.ticket_id);
       }
     }
   }
@@ -1528,7 +1538,11 @@ export async function getTicketBoardBootstrapAction(scope: BoardScope): Promise<
     scope,
     statuses,
     tickets: rawTickets.map(ticket =>
-      mapBoardTicket(ticket, latestObjectiveAgentByTicket.get(ticket.id) ?? null)
+      mapBoardTicket(
+        ticket,
+        latestObjectiveAgentByTicket.get(ticket.id) ?? null,
+        executingObjectiveByTicket.has(ticket.id)
+      )
     ),
     columnPageInfo: Object.fromEntries(
       statuses.map(status => {
@@ -1574,11 +1588,12 @@ export async function loadMoreTicketsAction({
   const tickets = (data ?? []) as RawBoardTicket[];
   const ticketIds = tickets.map(ticket => ticket.id);
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
+  const executingObjectiveByTicket = new Set<string>();
 
   if (ticketIds.length > 0) {
     const { data: objectives, error: objectivesError } = await supabase
       .from('objectives')
-      .select('ticket_id,agent_identifier')
+      .select('ticket_id,agent_identifier,state')
       .in('ticket_id', ticketIds)
       .order('created_at', { ascending: false });
 
@@ -1587,16 +1602,24 @@ export async function loadMoreTicketsAction({
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       agent_identifier: string | null;
+      state: string | null;
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+      if (objective.state === 'executing') {
+        executingObjectiveByTicket.add(objective.ticket_id);
       }
     }
   }
 
   return {
     tickets: tickets.map(ticket =>
-      mapBoardTicket(ticket, latestObjectiveAgentByTicket.get(ticket.id) ?? null)
+      mapBoardTicket(
+        ticket,
+        latestObjectiveAgentByTicket.get(ticket.id) ?? null,
+        executingObjectiveByTicket.has(ticket.id)
+      )
     )
   };
 }
