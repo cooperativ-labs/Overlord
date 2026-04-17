@@ -128,15 +128,19 @@ function asStringArray(value: unknown): string[] {
 
 function cursorSourcePluginDir(): string {
   const appPath = app.getAppPath();
-  const bundledPath = path.join(appPath, 'plugins', 'cursor');
-  if (!app.isPackaged) return bundledPath;
+  const unpackedAppPath = appPath.replace('app.asar', 'app.asar.unpacked');
+  const candidates = [
+    path.join(unpackedAppPath, 'plugins', 'cursor'),
+    path.join(unpackedAppPath, 'packages', 'overlord-cli', 'plugins', 'cursor'),
+    path.join(appPath, 'plugins', 'cursor'),
+    path.join(appPath, 'packages', 'overlord-cli', 'plugins', 'cursor')
+  ];
 
-  const unpackedPath = path.join(
-    appPath.replace('app.asar', 'app.asar.unpacked'),
-    'plugins',
-    'cursor'
+  return (
+    candidates.find(candidate =>
+      fs.existsSync(path.join(candidate, '.cursor-plugin', 'plugin.json'))
+    ) ?? candidates[0]
   );
-  return fs.existsSync(unpackedPath) ? unpackedPath : bundledPath;
 }
 
 // ---------------------------------------------------------------------------

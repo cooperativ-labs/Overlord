@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.4.0] - 2026-04-17:14:52
+
+### Added
+- None.
+
+### Fixed
+- Fix Cursor plugin installation from the packaged desktop app by resolving the bundled plugin directory across unpacked ASAR layouts and the overlord-cli plugin copy when a valid `.cursor-plugin/plugin.json` is present.
+
+### Changed
+- Include `plugins/cursor` in desktop `electron-builder` `files` and `asarUnpack` so production builds ship the Cursor connector assets next to Claude and other bundled plugins.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and CLI package versions to 4.4.0.
+
 ## [4.3.0] - 2026-04-17:14:28
 
 ### Added

@@ -12,6 +12,7 @@ files:
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
   - "plugins/claude/**/*"
+  - "plugins/cursor/**/*"
   - "!node_modules"
 
 mac:
@@ -33,5 +34,6 @@ asarUnpack:
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
   - "plugins/claude/**/*"
+  - "plugins/cursor/**/*"
 
 npmRebuild: true
