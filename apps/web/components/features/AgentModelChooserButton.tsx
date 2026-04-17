@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 
 function getSelectionLabel(models: AgentModel[], modelId: string | null): string {
   if (!modelId) return 'Default model';
+  if (modelId === 'auto') return 'Auto';
   const name = models.find(model => model.model_id === modelId)?.display_name ?? 'Selected model';
   return name.replace(/^Claude\s+/i, '');
 }

@@ -4293,7 +4293,7 @@ __metadata:
     dotenv: "npm:^17.3.1"
     electron: "npm:^40.6.0"
     electron-builder: "npm:^26.8.1"
-    electron-updater: "npm:^6.8.3"
+    electron-updater: "npm:6.8.4"
     esbuild: "npm:^0.27.3"
     eslint: "npm:^10.0.0"
     eslint-config-next: "npm:^16.1.6"
@@ -9813,6 +9813,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"builder-util-runtime@npm:9.6.0":
+  version: 9.6.0
+  resolution: "builder-util-runtime@npm:9.6.0"
+  dependencies:
+    debug: "npm:^4.3.4"
+    sax: "npm:^1.2.4"
+  checksum: 10c0/e3b0b47e20dcbb5fea4b7204bcedcf5983a58159b89af4e44c49a0aa2bff79f0d52c799303532bab3decea73bbbd3f35b0b1baa6433d19d3f806e994531295cb
+  languageName: node
+  linkType: hard
+
 "builder-util@npm:26.8.1":
   version: 26.8.1
   resolution: "builder-util@npm:26.8.1"
@@ -11375,11 +11385,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron-updater@npm:^6.8.3":
-  version: 6.8.3
-  resolution: "electron-updater@npm:6.8.3"
+"electron-updater@npm:6.8.4":
+  version: 6.8.4
+  resolution: "electron-updater@npm:6.8.4"
   dependencies:
-    builder-util-runtime: "npm:9.5.1"
+    builder-util-runtime: "npm:9.6.0"
     fs-extra: "npm:^10.1.0"
     js-yaml: "npm:^4.1.0"
     lazy-val: "npm:^1.0.5"
@@ -11387,7 +11397,7 @@ __metadata:
     lodash.isequal: "npm:^4.5.0"
     semver: "npm:~7.7.3"
     tiny-typed-emitter: "npm:^2.1.0"
-  checksum: 10c0/82c86e5e13e3be7e81790367f6aa417db1a1b8657569c800bbc366259ff80c13101ffca88d5f69a54161e69311b31f116289d7805aff0c197d31af6a6e1c1947
+  checksum: 10c0/e6fa6731f3a6f3e6952db02b3bc70c56579bff89ac54ba06c449bf9465e3032f8b808abae8adafac961cab48a123242767c52e52dcc51c829c8d8ef07faf3d98
   languageName: node
   linkType: hard
 

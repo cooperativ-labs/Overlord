@@ -86,6 +86,20 @@ function DefaultTooltipLabel() {
   );
 }
 
+function CursorAutoTooltipLabel() {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <span className="truncate">Auto</span>
+          <Info aria-hidden className="h-3 w-3 shrink-0" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">Cursor picks the model automatically</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function syncConfigsForSelection(
   current: Record<string, AgentConfig>,
   nextSelection: AgentModelSelection
@@ -223,6 +237,19 @@ export function AgentModelSelector({
           <DefaultTooltipLabel />
           {value.model === null && <Check className="ml-auto h-3 w-3 shrink-0" />}
         </button>
+        {value.agent === 'cursor' ? (
+          <button
+            type="button"
+            onClick={() => handleModelChange('auto')}
+            className={cn(
+              'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+              value.model === 'auto' ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+            )}
+          >
+            <CursorAutoTooltipLabel />
+            {value.model === 'auto' && <Check className="ml-auto h-3 w-3 shrink-0" />}
+          </button>
+        ) : null}
         {currentModels.length > 0 ? (
           <div className="max-h-[200px] overflow-y-auto">
             {currentModels.map(m => {
