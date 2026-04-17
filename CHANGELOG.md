@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.2.0] - 2026-04-17:10:46
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and CLI package versions to 4.2.0.
+
 ## [4.1.0] - 2026-04-16:13:58
 
 ### Added
