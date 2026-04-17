@@ -15,6 +15,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
+const CURSOR_AGENTS_API_KEY = Deno.env.get('CURSOR_AGENTS_API_KEY') ?? '';
+const CURSOR_API_KEY = Deno.env.get('CURSOR_API_KEY') ?? '';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +44,10 @@ function buildCapabilities(compatibleAgents: string[]): Record<string, unknown> 
   };
 }
 
+function resolveCursorApiKey(): string {
+  return CURSOR_AGENTS_API_KEY || CURSOR_API_KEY;
+}
+
 function isClaudeCodeCompatibleModel(modelId: string): boolean {
   const id = modelId.toLowerCase();
   if (id.includes('embed') || id.includes('legacy')) return false;
@@ -50,8 +56,12 @@ function isClaudeCodeCompatibleModel(modelId: string): boolean {
 
 function isCodexCompatibleModel(modelId: string): boolean {
   const id = modelId.toLowerCase();
-  if (!OPENAI_LATEST_MAJOR_PREFIXES.some(prefix => id.startsWith(prefix))) return false;
-  if (id.includes('audio') || id.includes('realtime') || id.includes('embed')) return false;
+  if (!OPENAI_LATEST_MAJOR_PREFIXES.some(prefix => id.startsWith(prefix))) {
+    return false;
+  }
+  if (id.includes('audio') || id.includes('realtime') || id.includes('embed')) {
+    return false;
+  }
   if (id.includes(':ft-') || id.includes('ft:')) return false;
   return true;
 }
@@ -296,6 +306,61 @@ function getGeminiSortOrder(modelId: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Provider: Cursor
+// ---------------------------------------------------------------------------
+
+async function fetchCursorModels(): Promise<AgentModelRow[]> {
+  const apiKey = resolveCursorApiKey();
+  if (!apiKey) return [];
+
+  const basicAuth = btoa(`${apiKey}:`);
+  const res = await fetch('https://api.cursor.com/v0/models', {
+    headers: {
+      Authorization: `Basic ${basicAuth}`
+    }
+  });
+
+  if (!res.ok) {
+    console.error(`Cursor API error: ${res.status} ${await res.text()}`);
+    return [];
+  }
+
+  const body = (await res.json()) as {
+    models?: string[];
+  };
+
+  const models: AgentModelRow[] = [];
+
+  for (const modelId of body.models ?? []) {
+    const id = modelId.trim().toLowerCase();
+    if (!id || id === 'default') continue;
+
+    models.push({
+      agent_type: 'cursor',
+      model_id: modelId,
+      display_name: formatModelName(modelId),
+      thinking_options: [],
+      capabilities: buildCapabilities(['cursor']),
+      is_recommended: id.includes('sonnet') || id.includes('gpt-5') || id.includes('composer'),
+      sort_order: getCursorSortOrder(id),
+      updated_at: new Date().toISOString()
+    });
+  }
+
+  return models;
+}
+
+function getCursorSortOrder(modelId: string): number {
+  if (modelId.includes('composer')) return 10;
+  if (modelId.includes('opus')) return 20;
+  if (modelId.includes('sonnet')) return 30;
+  if (modelId.includes('gpt-5')) return 40;
+  if (modelId.includes('gemini-3')) return 50;
+  if (modelId.includes('gemini-2.5')) return 60;
+  return 100;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -330,10 +395,11 @@ Deno.serve(async (req: Request) => {
   const results: Record<string, { count: number; error?: string }> = {};
 
   // Fetch from all providers in parallel
-  const [claudeModels, openaiModels, geminiModels] = await Promise.allSettled([
+  const [claudeModels, openaiModels, geminiModels, cursorModels] = await Promise.allSettled([
     fetchClaudeModels(),
     fetchOpenAIModels(),
-    fetchGeminiModels()
+    fetchGeminiModels(),
+    fetchCursorModels()
   ]);
 
   const allModels: AgentModelRow[] = [];
@@ -359,6 +425,13 @@ Deno.serve(async (req: Request) => {
     results.gemini = { count: 0, error: String(geminiModels.reason) };
   }
 
+  if (cursorModels.status === 'fulfilled') {
+    allModels.push(...cursorModels.value);
+    results.cursor = { count: cursorModels.value.length };
+  } else {
+    results.cursor = { count: 0, error: String(cursorModels.reason) };
+  }
+
   // Upsert all models
   if (allModels.length > 0) {
     const { error } = await supabase.from('agent_models').upsert(allModels, {
@@ -368,8 +441,14 @@ Deno.serve(async (req: Request) => {
     if (error) {
       console.error('Upsert error:', error);
       return new Response(
-        JSON.stringify({ error: 'Failed to upsert models', details: error.message }),
-        { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: 'Failed to upsert models',
+          details: error.message
+        }),
+        {
+          status: 500,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+        }
       );
     }
   }

@@ -98,10 +98,7 @@ export function ProjectStatusSettings({
       })),
     [initialStatuses]
   );
-  const statusQuery = useTicketStatuses(
-    organizationId,
-    initialQueryStatuses
-  );
+  const statusQuery = useTicketStatuses(organizationId, initialQueryStatuses);
   const statuses = useMemo<StatusRow[]>(
     () =>
       (statusQuery.data ?? []).map(status => ({

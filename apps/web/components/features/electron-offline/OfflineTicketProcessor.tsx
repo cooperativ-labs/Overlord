@@ -16,8 +16,12 @@ export function OfflineTicketProcessor() {
   const { isOnline } = useOnlineStatus();
   const { projects } = useDefaultProject();
   const createTicketMutation = useCreateTicketMutation();
-  const createTicket = createTicketMutation.mutateAsync;
+  const createTicketMutationRef = useRef(createTicketMutation);
   const processingRef = useRef(false);
+
+  useEffect(() => {
+    createTicketMutationRef.current = createTicketMutation;
+  }, [createTicketMutation]);
 
   useEffect(() => {
     if (!isOnline || processingRef.current) return;
@@ -36,7 +40,7 @@ export function OfflineTicketProcessor() {
         try {
           const project = projects.find(item => item.id === ticket.projectId) ?? null;
           const organizationId = ticket.organizationId ?? project?.organizationId;
-          await createTicket({
+          await createTicketMutationRef.current.mutateAsync({
             optimisticTicket: {
               id: ticket.id,
               title: ticket.objective.slice(0, 80),
@@ -45,6 +49,7 @@ export function OfflineTicketProcessor() {
               project_id: ticket.projectId,
               project_name: project?.name ?? ticket.projectName,
               project_color: project?.color ?? ticket.projectColor ?? null,
+              project_everhour_project_id: null,
               everhour_task_id: null,
               agent_session_state: null,
               status: 'draft',
@@ -82,7 +87,7 @@ export function OfflineTicketProcessor() {
     }
 
     void processQueue();
-  }, [createTicket, isOnline, projects]);
+  }, [isOnline, projects]);
 
   return null;
 }

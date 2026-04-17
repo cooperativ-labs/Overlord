@@ -27,8 +27,7 @@ import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import {
   useCreateTicketMutation,
   useUpdateTicketAssignmentMutation,
-  useUpdateTicketFieldsMutation,
-  useUpdateTicketStatusMutation
+  useUpdateTicketFieldsMutation
 } from '@/lib/client-data/tickets/mutations';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
@@ -75,7 +74,6 @@ export function QuickRunModal({
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
-  const updateStatusMutation = useUpdateTicketStatusMutation();
 
   const selectedProjectForFileTree = projects.find(p => p.id === selectedProjectId);
   const { files: effectiveMentionPaths } = useWorkspaceFileTree({
@@ -117,9 +115,6 @@ export function QuickRunModal({
       const trimmedObjective = objective.trim();
       const clientTicketId = crypto.randomUUID();
 
-      setSubmitButtonState('success');
-      onOpenChange(false);
-
       await createTicketMutation.mutateAsync({
         optimisticTicket: {
           id: clientTicketId,
@@ -148,7 +143,6 @@ export function QuickRunModal({
         placement: 'top'
       });
       updateAssignmentMutation.mutate({ ticketId: clientTicketId, selection });
-      updateStatusMutation.mutate({ ticketId: clientTicketId, status: 'next-up' });
       if (trimmedObjective) {
         const title = await generateTicketTitleAction(trimmedObjective);
         updateFieldsMutation.mutate({
@@ -169,6 +163,8 @@ export function QuickRunModal({
         selection.model ?? undefined,
         selection.thinking ?? undefined
       );
+      setSubmitButtonState('success');
+      onOpenChange(false);
 
       // Reset for next use
       setObjective('');

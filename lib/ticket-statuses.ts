@@ -3,14 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
-type TicketPhase =
-  | 'draft'
-  | 'execute'
-  | 'review'
-  | 'complete'
-  | 'blocked'
-  | 'cancelled'
-  | 'deliver';
+type TicketPhase = TicketStatusType | string;
 type DbClient = SupabaseClient<Database>;
 type StatusRow = {
   name: string;
@@ -104,21 +97,18 @@ export async function resolveStatusNameForPhase(
   organizationId: number,
   phase: TicketPhase
 ): Promise<string> {
-  switch (phase) {
-    case 'draft':
-    case 'execute':
-    case 'review':
-    case 'complete':
-      return resolvePreferredStatusNameByType(supabase, organizationId, phase);
-    case 'blocked':
-    case 'cancelled': {
-      const statusName = await resolveNamedStatus(supabase, organizationId, phase);
-      if (!statusName) {
-        throw new Error(`No "${phase}" status is configured.`);
-      }
-      return statusName;
-    }
-    case 'deliver':
-      throw new Error('Use the deliver protocol instead of setting phase to "deliver".');
+  if (phase === 'deliver') {
+    throw new Error('Use the deliver protocol instead of setting phase to "deliver".');
   }
+
+  if (phase === 'draft' || phase === 'execute' || phase === 'review' || phase === 'complete') {
+    return resolvePreferredStatusNameByType(supabase, organizationId, phase);
+  }
+
+  const statusName = await resolveNamedStatus(supabase, organizationId, phase);
+  if (statusName) {
+    return statusName;
+  }
+
+  throw new Error(`No "${phase}" status is configured.`);
 }

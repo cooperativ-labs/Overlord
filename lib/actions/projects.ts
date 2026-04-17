@@ -156,21 +156,19 @@ async function ensureDefaultStatusesForOrganization(input: {
   organizationId: number;
   supabase: Awaited<ReturnType<typeof createClient>>;
 }): Promise<void> {
-  const { error } = await input.supabase
-    .from('ticket_statuses')
-    .upsert(
-      defaultProjectStatuses.map(status => ({
-        organization_id: input.organizationId,
-        name: status.name,
-        status_type: status.status_type,
-        position: status.position,
-        is_default: true
-      })),
-      {
-        onConflict: 'organization_id,name',
-        ignoreDuplicates: true
-      }
-    );
+  const { error } = await input.supabase.from('ticket_statuses').upsert(
+    defaultProjectStatuses.map(status => ({
+      organization_id: input.organizationId,
+      name: status.name,
+      status_type: status.status_type,
+      position: status.position,
+      is_default: true
+    })),
+    {
+      onConflict: 'organization_id,name',
+      ignoreDuplicates: true
+    }
+  );
 
   if (error) {
     throw new Error(error.message ?? 'Failed to initialize default project statuses.');

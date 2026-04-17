@@ -114,51 +114,41 @@ export function NewTicketModal({
       const trimmedObjective = objective.trim();
       const clientTicketId = crypto.randomUUID();
 
-      createTicketMutation.mutate(
-        {
-          optimisticTicket: {
-            id: clientTicketId,
-            title: deriveTitleFromObjective(trimmedObjective),
-            objective: trimmedObjective,
-            organization_id: organizationId ?? selectedProject.organization_id ?? 0,
-            project_id: selectedProjectId,
-            project_name: selectedProject.name,
-            project_color: selectedProject.color,
-            project_everhour_project_id: selectedProject.everhour_project_id,
-            everhour_task_id: null,
-            agent_session_state: null,
-            status: 'draft',
-            priority: 'medium',
-            execution_target: 'agent',
-            assigned_agent: null,
-            board_position: 0,
-            waiting_for_response_at: null,
-            has_unopened_waiting_response: false,
-            is_read: true
-          },
-          status: 'draft',
+      await createTicketMutation.mutateAsync({
+        optimisticTicket: {
+          id: clientTicketId,
+          title: deriveTitleFromObjective(trimmedObjective),
           objective: trimmedObjective,
-          organizationId,
-          projectId: selectedProjectId,
-          placement: 'top'
+          organization_id: organizationId ?? selectedProject.organization_id ?? 0,
+          project_id: selectedProjectId,
+          project_name: selectedProject.name,
+          project_color: selectedProject.color,
+          project_everhour_project_id: selectedProject.everhour_project_id,
+          everhour_task_id: null,
+          agent_session_state: null,
+          status: 'draft',
+          priority: 'medium',
+          execution_target: 'agent',
+          assigned_agent: null,
+          board_position: 0,
+          waiting_for_response_at: null,
+          has_unopened_waiting_response: false,
+          is_read: true
         },
-        {
-          onSuccess: async () => {
-            updateAssignmentMutation.mutate({ ticketId: clientTicketId, selection });
-            if (trimmedObjective) {
-              const title = await generateTicketTitleAction(trimmedObjective);
-              updateFieldsMutation.mutate({
-                ticketId: clientTicketId,
-                patch: { title, objective: trimmedObjective }
-              });
-            }
-          },
-          onError: error => {
-            console.error('Failed to submit ticket:', error);
-            toast.error('Failed to create ticket.');
-          }
-        }
-      );
+        status: 'draft',
+        objective: trimmedObjective,
+        organizationId,
+        projectId: selectedProjectId,
+        placement: 'top'
+      });
+      updateAssignmentMutation.mutate({ ticketId: clientTicketId, selection });
+      if (trimmedObjective) {
+        const title = await generateTicketTitleAction(trimmedObjective);
+        updateFieldsMutation.mutate({
+          ticketId: clientTicketId,
+          patch: { title, objective: trimmedObjective }
+        });
+      }
       setSubmitButtonState('success');
       onOpenChange(false);
 
@@ -169,6 +159,7 @@ export function NewTicketModal({
     } catch (error) {
       setSubmitButtonState('error');
       console.error('Failed to submit ticket:', error);
+      toast.error('Failed to create ticket.');
     } finally {
       setIsSubmitting(false);
     }

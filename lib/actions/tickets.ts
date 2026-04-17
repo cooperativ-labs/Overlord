@@ -550,6 +550,7 @@ export async function createTicketInColumnAction(
       normalizedStatus = await resolveAnyTicketStatus(supabase, selected.organizationId);
     }
   }
+  const statusForInsert = normalizedStatus ?? 'draft';
   const trimmedObjective = objective.trim() || null;
 
   // Generate title: AI-summarised for long objectives, truncated for short ones
@@ -563,7 +564,7 @@ export async function createTicketInColumnAction(
     project_id: string;
   } = {
     id: ticketId,
-    status: normalizedStatus,
+    status: statusForInsert,
     title,
     organization_id: selected.organizationId,
     project_id: selected.projectId
@@ -581,9 +582,9 @@ export async function createTicketInColumnAction(
 
   await upsertDraftObjective(supabase, data.id, trimmedObjective);
   if (position === 'bottom') {
-    await assignTicketToColumnEnd(supabase, data.id, normalizedStatus, data.organization_id);
+    await assignTicketToColumnEnd(supabase, data.id, statusForInsert, data.organization_id);
   } else {
-    await assignTicketToColumnStart(supabase, data.id, normalizedStatus, data.organization_id);
+    await assignTicketToColumnStart(supabase, data.id, statusForInsert, data.organization_id);
   }
 
   revalidateTicketBoards();
