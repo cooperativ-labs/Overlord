@@ -127,6 +127,7 @@ export function useTicketRealtime({
     setFileChanges(initialFileChanges);
     setSession(initialSession);
     setSharedState(initialSharedState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial* omitted on purpose; see comment above
   }, [ticketId]);
 
   useEffect(() => {

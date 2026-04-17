@@ -24,6 +24,8 @@ const PACKAGE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'overl
 const REPO_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'overlord');
 const PACKAGE_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'claude');
 const REPO_CLAUDE_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'claude');
+const PACKAGE_CURSOR_PLUGIN_DIR = path.resolve(__dirname, '..', '..', 'plugins', 'cursor');
+const REPO_CURSOR_PLUGIN_DIR = path.resolve(__dirname, '..', '..', '..', '..', 'plugins', 'cursor');
 const CODEX_TARGET_PLUGIN_DIR = path.join(os.homedir(), '.codex', 'plugins', 'overlord');
 const CODEX_TARGET_PLUGIN_MANIFEST = path.join(
   CODEX_TARGET_PLUGIN_DIR,
@@ -479,9 +481,7 @@ function currentContentHashForAgent(agent) {
     return claudeContentHash();
   }
   if (agent === 'cursor') {
-    return contentHash(
-      [CURSOR_RULES_CONTENT, ...slashCommandFiles('cursor').map(file => file.content)].join('\n')
-    );
+    return contentHashForDirectory(cursorSourcePluginDir());
   }
   if (agent === 'gemini') {
     return contentHash(slashCommandFiles('gemini').map(file => file.content).join('\n'));
@@ -505,6 +505,14 @@ function claudeSourcePluginDir() {
   if (fs.existsSync(REPO_CLAUDE_PLUGIN_DIR)) return REPO_CLAUDE_PLUGIN_DIR;
   throw new Error(
     `Claude plugin bundle not found. Checked ${PACKAGE_CLAUDE_PLUGIN_DIR} and ${REPO_CLAUDE_PLUGIN_DIR}.`
+  );
+}
+
+function cursorSourcePluginDir() {
+  if (fs.existsSync(PACKAGE_CURSOR_PLUGIN_DIR)) return PACKAGE_CURSOR_PLUGIN_DIR;
+  if (fs.existsSync(REPO_CURSOR_PLUGIN_DIR)) return REPO_CURSOR_PLUGIN_DIR;
+  throw new Error(
+    `Cursor plugin bundle not found. Checked ${PACKAGE_CURSOR_PLUGIN_DIR} and ${REPO_CURSOR_PLUGIN_DIR}.`
   );
 }
 
@@ -731,6 +739,8 @@ function openCodePaths() {
 function cursorPaths() {
   const base = path.join(os.homedir(), '.cursor');
   return {
+    pluginDir: path.join(base, 'plugins', 'local', 'overlord'),
+    pluginManifest: path.join(base, 'plugins', 'local', 'overlord', '.cursor-plugin', 'plugin.json'),
     rulesFile: path.join(base, 'rules', 'overlord-local.mdc'),
     settingsFile: path.join(base, 'settings.json')
   };
@@ -870,10 +880,21 @@ function installCodex() {
 
 function installCursor() {
   const paths = cursorPaths();
-  writeTextFile(paths.rulesFile, CURSOR_RULES_CONTENT);
-  console.log(`  ✓ Installed rules: ${paths.rulesFile}`);
+  const sourceDir = cursorSourcePluginDir();
+  fs.mkdirSync(path.dirname(paths.pluginDir), { recursive: true });
+  fs.rmSync(paths.pluginDir, { recursive: true, force: true });
+  fs.cpSync(sourceDir, paths.pluginDir, { recursive: true });
+  console.log(`  ✓ Installed plugin: ${paths.pluginDir}`);
 
-  const slashResult = installSlashCommands('cursor');
+  if (fs.existsSync(paths.rulesFile)) {
+    fs.rmSync(paths.rulesFile, { force: true });
+    console.log(`  ✓ Removed legacy rules file: ${paths.rulesFile}`);
+  }
+  const removedLegacySlash = uninstallSlashCommands('cursor');
+  if (removedLegacySlash.removedFiles.length > 0) {
+    console.log('  ✓ Removed legacy slash commands:');
+    for (const filePath of removedLegacySlash.removedFiles) console.log(`      ${filePath}`);
+  }
 
   const existingSettings = readJsonFile(paths.settingsFile);
   const permissions =
@@ -898,10 +919,10 @@ function installCursor() {
 
   const manifest = readManifest();
   manifest.cursor = {
-    version: BUNDLE_VERSION,
+    version: pluginVersion(paths.pluginManifest) ?? '0.0.0',
     contentHash: currentContentHashForAgent('cursor'),
     installedAt: new Date().toISOString(),
-    files: [paths.rulesFile, paths.settingsFile, ...slashResult.managedFiles]
+    files: [...listFilesRecursive(paths.pluginDir), paths.settingsFile]
   };
   writeManifest(manifest);
 
@@ -958,8 +979,10 @@ function doctorAgent(agent) {
     agent === 'claude'
       ? pluginVersion(path.join(claudeSourcePluginDir(), '.claude-plugin', 'plugin.json'))
       : agent === 'codex'
-      ? pluginVersion(path.join(codexSourcePluginDir(), '.codex-plugin', 'plugin.json'))
-      : BUNDLE_VERSION;
+        ? pluginVersion(path.join(codexSourcePluginDir(), '.codex-plugin', 'plugin.json'))
+        : agent === 'cursor'
+          ? pluginVersion(path.join(cursorSourcePluginDir(), '.cursor-plugin', 'plugin.json'))
+          : BUNDLE_VERSION;
   const currentHash = currentContentHashForAgent(agent);
 
   if (entry.version !== currentVersion || entry.contentHash !== currentHash) {
@@ -1382,7 +1405,7 @@ export async function runSetupCommand(args) {
   ovld setup           Interactive setup (select agents and configure permissions)
   ovld setup claude    Prepare the Overlord Claude plugin and migrate v3.25 connector files
   ovld setup codex     Install Overlord Codex plugin bundle
-  ovld setup cursor    Install Overlord rules, slash commands, and permissions for Cursor
+  ovld setup cursor    Install Overlord Cursor local plugin and permissions
   ovld setup gemini    Install Overlord slash commands and policy rules for Gemini CLI
   ovld setup opencode  Install Overlord connector for OpenCode
   ovld setup all       Prepare all supported agents

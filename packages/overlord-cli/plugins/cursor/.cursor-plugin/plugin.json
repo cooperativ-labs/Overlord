@@ -1,0 +1,14 @@
+{
+  "name": "overlord",
+  "version": "0.1.0",
+  "description": "Local Overlord workflow plugin for Cursor terminal agents.",
+  "author": {
+    "name": "Cooperativ",
+    "url": "https://github.com/cooperativ"
+  },
+  "homepage": "https://github.com/cooperativ/overlord",
+  "repository": "https://github.com/cooperativ/overlord",
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json"
+}

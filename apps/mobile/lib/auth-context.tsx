@@ -1,5 +1,6 @@
 import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { getSupabase, isSupabaseConfigured, supabaseConfigError } from './supabase';
 
@@ -25,6 +26,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const supabase = getSupabase();
 
+    const syncAuthRefreshWithAppState = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        void supabase.auth.startAutoRefresh();
+        void supabase.auth.getSession().then(({ data: { session } }) => {
+          setSession(session);
+        });
+      } else {
+        void supabase.auth.stopAutoRefresh();
+      }
+    };
+
+    syncAuthRefreshWithAppState(AppState.currentState);
+    const appStateSubscription = AppState.addEventListener('change', syncAuthRefreshWithAppState);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
@@ -36,7 +51,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      appStateSubscription.remove();
+      void supabase.auth.stopAutoRefresh();
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

@@ -26,12 +26,7 @@ import {
   writeTextFile
 } from './merge-helpers';
 import { installSlashCommands, uninstallSlashCommands } from './slash-commands';
-import {
-  BUNDLE_VERSION,
-  CURSOR_RULES_CONTENT,
-  JSON_MARKER_KEY,
-  OPENCODE_AGENTS_SECTION
-} from './templates';
+import { BUNDLE_VERSION, JSON_MARKER_KEY, OPENCODE_AGENTS_SECTION } from './templates';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -112,9 +107,36 @@ function openCodePaths() {
 function cursorPaths() {
   const base = path.join(os.homedir(), '.cursor');
   return {
-    rulesDir: path.join(base, 'rules'),
-    rulesFile: path.join(base, 'rules', 'overlord-local.mdc')
+    pluginDir: path.join(base, 'plugins', 'local', 'overlord'),
+    pluginManifest: path.join(
+      base,
+      'plugins',
+      'local',
+      'overlord',
+      '.cursor-plugin',
+      'plugin.json'
+    ),
+    rulesFile: path.join(base, 'rules', 'overlord-local.mdc'),
+    settingsFile: path.join(base, 'settings.json')
   };
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+function cursorSourcePluginDir(): string {
+  const appPath = app.getAppPath();
+  const bundledPath = path.join(appPath, 'plugins', 'cursor');
+  if (!app.isPackaged) return bundledPath;
+
+  const unpackedPath = path.join(
+    appPath.replace('app.asar', 'app.asar.unpacked'),
+    'plugins',
+    'cursor'
+  );
+  return fs.existsSync(unpackedPath) ? unpackedPath : bundledPath;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +187,7 @@ function pluginVersion(filePath: string): string | null {
 /** Returns the content hash for the current (bundled) template of a given agent. */
 function currentContentHashForAgent(agent: AgentBundleAgent): string {
   if (agent === 'claude') return contentHashForDirectory(claudeSourcePluginDir());
-  if (agent === 'cursor') return contentHash(CURSOR_RULES_CONTENT);
+  if (agent === 'cursor') return contentHashForDirectory(cursorSourcePluginDir());
   return contentHash(OPENCODE_AGENTS_SECTION);
 }
 
@@ -176,7 +198,9 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
   const currentVersion =
     agent === 'claude'
       ? pluginVersion(path.join(claudeSourcePluginDir(), '.claude-plugin', 'plugin.json'))
-      : BUNDLE_VERSION;
+      : agent === 'cursor'
+        ? pluginVersion(path.join(cursorSourcePluginDir(), '.cursor-plugin', 'plugin.json'))
+        : BUNDLE_VERSION;
 
   if (!entry) {
     if (agent === 'claude') {
@@ -288,7 +312,7 @@ function checkOpenCodeFilesExist(): boolean {
 
 function checkCursorFilesExist(): boolean {
   const paths = cursorPaths();
-  return fs.existsSync(paths.rulesFile);
+  return fs.existsSync(paths.pluginManifest);
 }
 
 // ---------------------------------------------------------------------------
@@ -463,23 +487,46 @@ function installCursor(): InstallResult {
   const backups: string[] = [];
 
   try {
-    // 1. Install the rules file
-    writeTextFile(paths.rulesFile, CURSOR_RULES_CONTENT);
+    const sourceDir = cursorSourcePluginDir();
+    fs.mkdirSync(path.dirname(paths.pluginDir), { recursive: true });
+    fs.rmSync(paths.pluginDir, { recursive: true, force: true });
+    fs.cpSync(sourceDir, paths.pluginDir, { recursive: true });
 
-    // 2. Install Cursor slash commands alongside the durable bundle.
-    const slashResult = installSlashCommands('cursor');
-    if (!slashResult.ok) {
-      return { ok: false, agent: 'cursor', backups, error: slashResult.error };
+    // Remove legacy cursor connector files if present.
+    if (fs.existsSync(paths.rulesFile)) {
+      fs.rmSync(paths.rulesFile, { force: true });
     }
-    backups.push(...slashResult.backups);
+    uninstallSlashCommands('cursor');
 
-    // 3. Update manifest
+    const settingsBackup = backupFile(paths.settingsFile);
+    if (settingsBackup) backups.push(settingsBackup);
+
+    const existingSettings = readJsonFile(paths.settingsFile);
+    const permissions =
+      existingSettings.permissions && typeof existingSettings.permissions === 'object'
+        ? (existingSettings.permissions as Record<string, unknown>)
+        : {};
+    const mergedAllow = Array.from(
+      new Set([
+        ...asStringArray(permissions.allow),
+        'Shell(ovld protocol:*)',
+        'Shell(curl -sS -X POST:*)'
+      ])
+    );
+    writeJsonFile(paths.settingsFile, {
+      ...existingSettings,
+      permissions: {
+        ...permissions,
+        allow: mergedAllow
+      }
+    });
+
     const manifest = readManifest();
     manifest.cursor = {
-      version: BUNDLE_VERSION,
-      contentHash: contentHash(CURSOR_RULES_CONTENT),
+      version: pluginVersion(paths.pluginManifest) ?? '0.0.0',
+      contentHash: contentHashForDirectory(sourceDir),
       installedAt: new Date().toISOString(),
-      files: [paths.rulesFile, ...slashResult.managedFiles]
+      files: [...listFilesRecursive(paths.pluginDir), paths.settingsFile]
     };
     writeManifest(manifest);
 
@@ -575,8 +622,11 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
       }
     } else if (agent === 'cursor') {
       const paths = cursorPaths();
+      if (fs.existsSync(paths.pluginDir)) {
+        fs.rmSync(paths.pluginDir, { recursive: true, force: true });
+      }
       if (fs.existsSync(paths.rulesFile)) {
-        fs.unlinkSync(paths.rulesFile);
+        fs.rmSync(paths.rulesFile, { force: true });
       }
 
       const slashUninstall = uninstallSlashCommands('cursor');

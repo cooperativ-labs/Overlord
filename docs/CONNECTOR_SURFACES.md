@@ -10,7 +10,7 @@ Use it before shipping any connector-related change. If one surface changes, che
 |-------|-----------------|--------------------------|
 | Claude Code | Overlord bundle (skill + permission hook) via `ovld setup claude` | `/api/mcp` with `AGENT_TOKEN` |
 | Codex | Home-local chat plugin via Desktop app Settings → CLI | `/api/mcp` with `AGENT_TOKEN` (`~/.codex/config.toml`) |
-| Cursor | Slash commands via `ovld setup cursor` | — |
+| Cursor | Local Cursor plugin via `ovld setup cursor` | — |
 | Gemini CLI | TOML slash commands via `ovld setup gemini` | — |
 | OpenCode | Overlord bundle (AGENTS.md + config) via `ovld setup opencode` | — |
 
@@ -18,8 +18,8 @@ Use it before shipping any connector-related change. If one surface changes, che
 
 Bundle-backed agents get a slim ticket prompt; unbundled agents always receive the full workflow instructions on every launch.
 
-- **Bundle supported:** `claude`, `opencode`
-- **Legacy mode only:** `codex`, `cursor`, `gemini`
+- **Bundle supported:** `claude`, `cursor`, `opencode`
+- **Legacy mode only:** `codex`, `gemini`
 
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
@@ -191,17 +191,20 @@ Checklist:
 
 ## Cursor connector surfaces
 
-### 1. Slash commands
+### 1. Local plugin
 
-- Slash command installer:
-  [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
 - CLI install:
   [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup cursor`
+- Desktop installer:
+  [installer.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/installer.ts)
 
-Managed files (Markdown format):
-- `~/.cursor/commands/connect.md`
-- `~/.cursor/commands/load.md`
-- `~/.cursor/commands/spawn.md`
+Managed files:
+- `~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json`
+- `~/.cursor/plugins/local/overlord/rules/overlord-local.mdc`
+- `~/.cursor/plugins/local/overlord/commands/connect.md`
+- `~/.cursor/plugins/local/overlord/commands/load.md`
+- `~/.cursor/plugins/local/overlord/commands/spawn.md`
+- `~/.cursor/settings.json` permission allow rules for `ovld protocol` and `curl -sS -X POST`
 
 ### 2. Local launch path
 
@@ -214,7 +217,7 @@ agent [--model <model>] "$(cat <context-file>)"
 ```
 
 Checklist:
-- No bundle support — full workflow instructions always included in the prompt (`instructionMode=legacy`)
+- Bundle support via local Cursor plugin — slim workflow prompt can be used in `instructionMode=bundle`
 - No permission hook
 - Model flag: `--model` (no thinking/effort flag for Cursor)
 
@@ -227,7 +230,7 @@ Checklist:
 
 Checklist:
 - Onboarding advertises `ovld setup cursor` as the connector setup command
-- Connector features list includes: slash commands, permission rules for ovld protocol & curl
+- Connector features list includes: local Cursor plugin install and permission rules for ovld protocol & curl
 
 ---
 
@@ -349,8 +352,8 @@ Checklist:
 
 Checklist:
 - Context route accepts `agent=` query param for all 5 agents: `claude`, `codex`, `cursor`, `gemini`, `opencode`
-- `instructionMode=bundle` is only sent for `claude` and `opencode` when their bundle is installed
-- `instructionMode=legacy` is used for `codex`, `cursor`, `gemini`, and for `claude`/`opencode` when bundle is not installed
+- `instructionMode=bundle` is sent for `claude`, `cursor`, and `opencode` when their bundle/plugin is installed
+- `instructionMode=legacy` is used for `codex`, `gemini`, and for `claude`/`cursor`/`opencode` when bundle/plugin is not installed
 - Prompt content varies per agent — verify agent-specific workflow sections when changing `ticket-prompt.ts`
 
 ### CLI setup command
@@ -362,7 +365,7 @@ Checklist:
 - `ovld setup claude` installs bundle for Claude Code
 - `ovld setup codex` installs the local Codex plugin bundle
 - `ovld setup opencode` installs bundle for OpenCode
-- `ovld setup cursor` installs Cursor rules, slash commands, and permission allow rules
+- `ovld setup cursor` installs Cursor local plugin and permission allow rules
 - `ovld setup gemini` installs Gemini TOML slash commands and policy rules
 - `ovld setup all` installs all supported agents (claude + codex + opencode; slash-only agents are separate)
 - `ovld doctor` validates installed bundle statuses for `claude`, `codex`, `cursor`, `gemini`, and `opencode`
@@ -402,8 +405,8 @@ When changing connector integration, verify the relevant agent(s):
 - User-facing pages advertise `ovld setup codex` as the CLI install path and do not reference `~/.codex/AGENTS.md` as the local Codex path
 
 **Cursor**
-- Slash commands written to `~/.cursor/commands/` (Markdown format)
-- Launching Cursor from Overlord always includes full legacy workflow instructions in the prompt
+- Cursor plugin installed at `~/.cursor/plugins/local/overlord/`
+- Launching Cursor from Overlord uses bundled/slim workflow prompt when plugin is installed
 
 **Gemini CLI**
 - Slash commands written to `~/.gemini/commands/` (TOML format, not Markdown)

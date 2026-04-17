@@ -175,7 +175,7 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
 
 const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
   claude: ['~/.ovld/bundle-manifest.json'],
-  cursor: ['~/.cursor/rules/overlord-local.mdc'],
+  cursor: ['~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json'],
   opencode: ['~/.config/opencode/AGENTS.md', '~/.config/opencode/opencode.json']
 };
 
@@ -205,21 +205,13 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
   {
     key: 'cursor:bundle',
     agentKey: 'cursor',
-    label: 'Prompt / rules',
+    label: 'Cursor plugin',
     description:
-      'Installs the durable Overlord workflow bundle as a global Cursor rule (~/.cursor/rules/overlord-local.mdc) so ticket lifecycle rules live in local config.',
+      'Installs the Overlord Cursor local plugin in ~/.cursor/plugins/local/overlord so terminal cursor-agent sessions get durable workflow rules, skills, MCP bridge, and slash commands.',
     kind: 'bundle',
     bundleAgent: 'cursor',
-    supportNote: 'Managed by the desktop app in your local ~/.cursor/rules configuration.'
-  },
-  {
-    key: 'cursor:slash',
-    agentKey: 'cursor',
-    label: '/connect /load /spawn',
-    description: SLASH_COMMAND_CONFIGS.cursor.description,
-    kind: 'slash',
-    slashAgent: 'cursor',
-    supportNote: SLASH_COMMAND_CONFIGS.cursor.supportNote
+    supportNote:
+      'Managed by the desktop app in ~/.cursor/plugins/local/overlord. Legacy ~/.cursor/rules and ~/.cursor/commands files are removed during install.'
   },
   {
     key: 'gemini:slash',

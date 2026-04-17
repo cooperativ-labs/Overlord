@@ -1,0 +1,8 @@
+---
+description: Overlord local workflow protocol for Cursor.
+alwaysApply: true
+---
+
+# Overlord Local Workflow
+
+Attach first, update during work, ask when blocked, and deliver last using `ovld protocol` commands.

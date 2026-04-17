@@ -54,12 +54,13 @@ const AGENT_CONNECTOR_FEATURES: Record<
     ]
   },
   cursor: {
-    bundle: false,
+    bundle: true,
     service: false,
-    slashCommands: true,
+    slashCommands: false,
     permissions: true,
     details: [
-      'Slash commands (/connect, /load, /spawn)',
+      'Cursor local plugin in ~/.cursor/plugins/local/overlord',
+      'Plugin-bundled rules, workflow skill, MCP bridge, and slash commands',
       'Permission rules for ovld protocol & curl'
     ]
   },
@@ -336,8 +337,8 @@ export function ConnectorSetupStep({ onContinue, projectDirectory }: Props) {
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Set up agent connectors</h2>
         <p className="text-muted-foreground mt-1 text-sm">
-          Choose which agents to connect with Overlord. Claude upgrades to the v4 plugin model;
-          other agents keep their local connector files and permission rules.
+          Choose which agents to connect with Overlord. Claude and Cursor install plugin-based
+          connectors; other agents keep their local connector files and permission rules.
         </p>
       </div>
 

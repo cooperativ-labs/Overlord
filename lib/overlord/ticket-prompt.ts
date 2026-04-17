@@ -168,14 +168,27 @@ function buildLocalProtocolSectionByAgent(
   return buildVerboseLocalProtocolSection(input);
 }
 
-function buildBundledLocalProtocolSection({ ticketId, context }: ProtocolSectionInput): string {
+function buildBundledLocalProtocolSection({
+  ticketId,
+  context,
+  agent
+}: ProtocolSectionInput): string {
+  const workflowHint =
+    agent === 'cursor'
+      ? 'Use the installed Overlord Cursor plugin workflow for this session. Attach first, then follow the plugin skill/rules for update, ask, and deliver behavior.'
+      : agent === 'claude'
+        ? 'Use the Overlord Claude plugin loaded for this session. Before doing anything else, invoke the `overlord:overlord-ticket-workflow` skill for attach/update/ask/deliver details, then attach to this ticket.'
+        : agent === 'opencode'
+          ? 'Use the installed Overlord OpenCode bundle (AGENTS.md workflow section) for attach/update/ask/deliver details, then attach to this ticket.'
+          : 'Use your installed Overlord local workflow configuration for this session. Attach first, then follow the durable workflow instructions for update, ask, and deliver behavior.';
+
   return `## Overlord Protocol
 
 - **Ticket ID:** ${ticketId}
 
 ${buildLocalLaunchNote(context)}
 
-Use the Overlord Claude plugin loaded for this session. Before doing anything else, invoke the \`overlord:overlord-ticket-workflow\` skill for attach/update/ask/deliver details, then attach to this ticket.
+${workflowHint}
 Before delivering, make sure every meaningful git-tracked file change is represented in \`changeRationales\`; do not send \`file_changes\` as an artifact.
 
 \`\`\`bash

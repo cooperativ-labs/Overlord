@@ -1,0 +1,13 @@
+---
+description: Overlord local workflow protocol for Cursor.
+alwaysApply: true
+---
+
+# Overlord Local Workflow
+
+- Attach first: `ovld protocol attach --ticket-id $TICKET_ID`
+- Update during work: `ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "..." --phase execute`
+- Ask when blocked: `ovld protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "..."`
+- Deliver last: `ovld protocol deliver --session-key <sessionKey> --ticket-id $TICKET_ID --payload-file -`
+
+Always include `changeRationales` on delivery for meaningful behavioral file changes.

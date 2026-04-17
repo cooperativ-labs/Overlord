@@ -3,15 +3,24 @@ import 'react-native-url-polyfill/auto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 
+/**
+ * iOS Keychain defaults to `whenUnlocked`; background auto-refresh can read storage while the app
+ * is not interactive and fail with "User interaction is not allowed." This accessibility class
+ * matches our other mobile secrets and allows reads after first device unlock.
+ */
+const supabaseAuthSecureStoreOptions: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY
+};
+
 const ExpoSecureStoreAdapter = {
   getItem(key: string) {
-    return SecureStore.getItemAsync(key);
+    return SecureStore.getItemAsync(key, supabaseAuthSecureStoreOptions);
   },
   setItem(key: string, value: string) {
-    return SecureStore.setItemAsync(key, value);
+    return SecureStore.setItemAsync(key, value, supabaseAuthSecureStoreOptions);
   },
   removeItem(key: string) {
-    return SecureStore.deleteItemAsync(key);
+    return SecureStore.deleteItemAsync(key, supabaseAuthSecureStoreOptions);
   }
 };
 
@@ -58,7 +67,9 @@ export function getSupabase() {
     supabaseClient = createClient(supabaseUrl, supabasePublishableKey, {
       auth: {
         storage: ExpoSecureStoreAdapter,
-        autoRefreshToken: true,
+        // RN is treated as "always foreground" by gotrue-js unless we manage refresh ourselves.
+        // Leaving this true runs refresh ticks in the background and can break iOS SecureStore.
+        autoRefreshToken: false,
         persistSession: true,
         detectSessionInUrl: false
       }

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.3.0] - 2026-04-17:14:28
+
+### Added
+- Ship the Overlord Cursor connector as a local plugin under `~/.cursor/plugins/local/overlord` (manifest, rules, commands, workflow skill, and MCP bridge) via `ovld setup cursor` and the desktop agent-bundle installer.
+- Merge Cursor `settings.json` permission allow rules needed for `ovld protocol` and signed `curl` POST usage when installing the Cursor plugin.
+
+### Fixed
+- Stabilize mobile Supabase session refresh on iOS by aligning Secure Store keychain accessibility with other secrets, turning off always-on token auto-refresh, and starting or stopping refresh only while the app is active so background reads avoid “User interaction is not allowed” errors.
+
+### Changed
+- Replace the legacy Cursor global rule file and standalone slash-command install with the plugin copy flow; remove old `~/.cursor/rules/overlord-local.mdc` and prior Cursor slash command files during install.
+- Update onboarding connector copy and CLI settings so Cursor is documented as plugin-based, and bundle health checks point at the plugin manifest path.
+- Adjust bundled ticket-prompt workflow hints so Cursor and OpenCode bundle launches reference the right local workflow instead of the Claude-only skill wording.
+
+### Security
+- None.
+
+### Test
+- Extend ticket prompt tests to cover Cursor and OpenCode bundle instruction modes.
+
+### Documentation
+- Refresh connector surfaces documentation for the Cursor plugin layout, bundle eligibility, and context-route `instructionMode` behavior.
+
+### Chore
+- Bump workspace and CLI package versions to 4.3.0.
+- Sync mobile iOS project and CocoaPods lockfile with dependency updates.
+
 ## [4.2.0] - 2026-04-17:10:46
 
 ### Added

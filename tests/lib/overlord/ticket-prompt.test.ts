@@ -69,3 +69,65 @@ describe('Codex bundle prompt routing', () => {
     expect(prompt).not.toContain('Where the stdin payload contains');
   });
 });
+
+describe('Cursor bundled prompt routing', () => {
+  const baseTicket = {
+    id: 'ticket-cursor-1',
+    title: 'Cursor connector',
+    objective: 'Verify bundled prompt text',
+    acceptance_criteria: null,
+    available_tools: null,
+    constraints: null,
+    output_format: null,
+    execution_target: 'agent' as const,
+    project_id: 'project-123',
+    status: 'draft',
+    priority: 'medium' as const
+  };
+
+  it('uses Cursor-specific workflow instructions for Cursor bundle launches', () => {
+    const prompt = buildTicketPromptMarkdown({
+      ticket: baseTicket,
+      platformUrl: 'http://localhost:3000',
+      context: 'cli',
+      options: {
+        agent: 'cursor',
+        instructionMode: 'bundle'
+      }
+    });
+
+    expect(prompt).toContain('Overlord Cursor plugin');
+    expect(prompt).not.toContain('Overlord Claude plugin');
+    expect(prompt).not.toContain('overlord:overlord-ticket-workflow');
+  });
+});
+
+describe('OpenCode bundled prompt routing', () => {
+  it('uses OpenCode-specific workflow instructions for OpenCode bundle launches', () => {
+    const prompt = buildTicketPromptMarkdown({
+      ticket: {
+        id: 'ticket-oc-1',
+        title: 'OpenCode bundle',
+        objective: 'Verify bundled prompt text',
+        acceptance_criteria: null,
+        available_tools: null,
+        constraints: null,
+        output_format: null,
+        execution_target: 'agent',
+        project_id: 'project-123',
+        status: 'draft',
+        priority: 'medium'
+      },
+      platformUrl: 'http://localhost:3000',
+      context: 'cli',
+      options: {
+        agent: 'opencode',
+        instructionMode: 'bundle'
+      }
+    });
+
+    expect(prompt).toContain('OpenCode bundle');
+    expect(prompt).not.toContain('Overlord Claude plugin');
+    expect(prompt).not.toContain('overlord:overlord-ticket-workflow');
+  });
+});

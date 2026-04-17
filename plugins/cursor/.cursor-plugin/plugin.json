@@ -1,0 +1,26 @@
+{
+  "name": "overlord",
+  "version": "0.1.0",
+  "description": "Local Overlord workflow plugin for Cursor terminal agents.",
+  "author": {
+    "name": "Cooperativ",
+    "url": "https://github.com/cooperativ"
+  },
+  "homepage": "https://github.com/cooperativ/overlord",
+  "repository": "https://github.com/cooperativ/overlord",
+  "license": "UNLICENSED",
+  "keywords": ["overlord", "cursor", "workflow", "mcp", "tickets"],
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json",
+  "interface": {
+    "displayName": "Overlord",
+    "shortDescription": "Run Overlord ticket workflows from Cursor",
+    "longDescription": "Connect Cursor to Overlord's local ticket workflow through the ovld protocol CLI. Includes workflow rules, slash commands, and MCP bridge tools.",
+    "developerName": "Cooperativ",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://www.ovld.ai/docs",
+    "privacyPolicyURL": "https://www.ovld.ai/privacy",
+    "termsOfServiceURL": "https://www.ovld.ai/terms"
+  }
+}
