@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { deleteTicketAction } from '@/lib/actions/tickets';
+import { useDeleteTicketMutation } from '@/lib/client-data/tickets/mutations';
 import { dispatchTicketDeletedEvent } from '@/lib/helpers/ticket-board-events';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
@@ -34,11 +34,12 @@ export function DeleteTicketButton({ ticketId, ticketLabel, className }: DeleteT
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [deleteButtonState, setDeleteButtonState] = useState<ButtonLoadingState>('default');
+  const deleteTicketMutation = useDeleteTicketMutation();
 
   async function handleConfirm() {
     setDeleteButtonState('loading');
     try {
-      const { projectId } = await deleteTicketAction(ticketId);
+      const { projectId } = await deleteTicketMutation.mutateAsync({ ticketId });
       dispatchTicketDeletedEvent(ticketId);
       setDeleteButtonState('success');
       setOpen(false);
@@ -48,7 +49,6 @@ export function DeleteTicketButton({ ticketId, ticketLabel, className }: DeleteT
       } else {
         router.push(buildProjectPath({ projectId }));
       }
-      router.refresh();
     } catch {
       setDeleteButtonState('error');
     }

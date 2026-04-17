@@ -16,8 +16,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, ChevronDown, GripVertical, Pencil, Trash2, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,12 +24,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { useTicketStatuses } from '@/lib/client-data/tickets/hooks';
 import {
-  createTicketStatusAction,
-  deleteTicketStatusAction,
-  reorderTicketStatusesAction,
-  updateTicketStatusNameAction
-} from '@/lib/actions/ticket-statuses';
+  useCreateTicketStatusMutation,
+  useDeleteTicketStatusMutation,
+  useRenameTicketStatusMutation,
+  useReorderTicketStatusesMutation
+} from '@/lib/client-data/tickets/status-mutations';
 import { ticketStatusTypeOptions } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
@@ -88,9 +88,34 @@ export function ProjectStatusSettings({
   initialStatuses,
   defaultExpanded = false
 }: ProjectStatusSettingsProps) {
-  const router = useRouter();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const [statuses, setStatuses] = useState<StatusRow[]>(initialStatuses);
+  const initialQueryStatuses = useMemo(
+    () =>
+      initialStatuses.map(status => ({
+        name: status.name,
+        position: status.position,
+        status_type: status.statusType
+      })),
+    [initialStatuses]
+  );
+  const statusQuery = useTicketStatuses(
+    organizationId,
+    initialQueryStatuses
+  );
+  const statuses = useMemo<StatusRow[]>(
+    () =>
+      (statusQuery.data ?? []).map(status => ({
+        name: status.name,
+        position: status.position,
+        statusType: (status.status_type ?? 'draft') as TicketStatusType,
+        isDefault: initialStatuses.find(initial => initial.name === status.name)?.isDefault ?? false
+      })),
+    [initialStatuses, statusQuery.data]
+  );
+  const createStatusMutation = useCreateTicketStatusMutation();
+  const deleteStatusMutation = useDeleteTicketStatusMutation();
+  const renameStatusMutation = useRenameTicketStatusMutation();
+  const reorderStatusesMutation = useReorderTicketStatusesMutation();
   const [statusesOpen, setStatusesOpen] = useState(defaultExpanded);
   const [statusName, setStatusName] = useState('');
   const [statusType, setStatusType] = useState<TicketStatusType>(() =>
@@ -103,10 +128,6 @@ export function ProjectStatusSettings({
   const [editingStatusName, setEditingStatusName] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setStatuses(initialStatuses);
-  }, [initialStatuses]);
 
   useEffect(() => {
     setStatusType(prevStatusType => {
@@ -139,33 +160,34 @@ export function ProjectStatusSettings({
     setError(null);
 
     try {
-      const created = await createTicketStatusAction({
+      await createStatusMutation.mutateAsync({
         organizationId,
         projectId,
         name: statusName,
         statusType
       });
 
-      setStatuses(prev =>
-        [...prev, created].sort((left, right) => {
-          if (left.position === right.position) return left.name.localeCompare(right.name);
-          return left.position - right.position;
-        })
-      );
       setStatusName('');
       setStatusType(currentStatusType => {
         if (!isExclusiveStatusType(currentStatusType)) {
           return currentStatusType;
         }
 
-        const nextStatuses = [...statuses, created];
+        const nextStatuses = [
+          ...statuses,
+          {
+            name: statusName,
+            position: statuses.length,
+            statusType,
+            isDefault: false
+          }
+        ];
         const isStillAvailable = !nextStatuses.some(
           status => status.statusType === currentStatusType
         );
         return isStillAvailable ? currentStatusType : getDefaultStatusType(nextStatuses);
       });
       setAddButtonState('success');
-      router.refresh();
     } catch (cause) {
       setAddButtonState('error');
       setError(cause instanceof Error ? cause.message : 'Failed to add status.');
@@ -177,13 +199,11 @@ export function ProjectStatusSettings({
     setError(null);
 
     try {
-      await deleteTicketStatusAction({
+      await deleteStatusMutation.mutateAsync({
         organizationId,
         projectId,
         name
       });
-      setStatuses(prev => prev.filter(status => status.name !== name));
-      router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Failed to delete status.');
     } finally {
@@ -212,20 +232,16 @@ export function ProjectStatusSettings({
       })
     );
 
-    setStatuses(nextStatuses);
     setPendingReorder(true);
     setError(null);
 
     try {
-      const reordered = await reorderTicketStatusesAction({
+      await reorderStatusesMutation.mutateAsync({
         organizationId,
         projectId,
         orderedNames: nextStatuses.map(status => status.name)
       });
-      setStatuses(reordered);
-      router.refresh();
     } catch (cause) {
-      setStatuses(previousStatuses);
       setError(cause instanceof Error ? cause.message : 'Failed to reorder statuses.');
     } finally {
       setPendingReorder(false);
@@ -248,18 +264,14 @@ export function ProjectStatusSettings({
     setError(null);
 
     try {
-      const updated = await updateTicketStatusNameAction({
+      await renameStatusMutation.mutateAsync({
         organizationId,
         projectId,
         currentName,
         nextName: editingNameValue
       });
 
-      if (updated) {
-        setStatuses(prev => prev.map(status => (status.name === currentName ? updated : status)));
-      }
       handleCancelRename();
-      router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Failed to update status name.');
     } finally {
@@ -269,6 +281,10 @@ export function ProjectStatusSettings({
 
   const hasPendingMutation =
     addButtonState === 'loading' ||
+    createStatusMutation.isPending ||
+    deleteStatusMutation.isPending ||
+    renameStatusMutation.isPending ||
+    reorderStatusesMutation.isPending ||
     pendingDeleteName !== null ||
     pendingReorder ||
     pendingRenameName !== null;

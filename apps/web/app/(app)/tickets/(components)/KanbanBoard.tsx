@@ -12,19 +12,29 @@ import {
   useSensors
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
+import { loadMoreTicketsAction, markTicketsReadAction } from '@/lib/actions/tickets';
+import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
 import {
-  createTicketInColumnAction,
-  loadMoreTicketsAction,
-  markTicketReadAction,
-  markTicketsReadAction,
-  markTicketUnreadAction,
-  reorderTicketsAction
-} from '@/lib/actions/tickets';
+  mergeObjectiveMetaIntoBoards,
+  mergeSessionMetaIntoBoards,
+  mergeTicketsIntoBoards,
+  mergeWaitingQuestionIntoBoards,
+  reconcileRealtimeTicketRow,
+  removeTicketFromBoards,
+  updateTicketInBoards
+} from '@/lib/client-data/tickets/cache';
+import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
+import {
+  useCreateTicketMutation,
+  useMarkTicketReadMutation,
+  useReorderTicketsMutation
+} from '@/lib/client-data/tickets/mutations';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import {
   TICKET_DELETED_EVENT,
@@ -66,7 +76,14 @@ type StatusColumn = {
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 
-import { formatStatusLabel, getPathTicketId } from './ticket-view-helpers';
+import {
+  buildBoardBootstrap,
+  buildBoardScope,
+  formatStatusLabel,
+  getPathTicketId,
+  toBoardTicket,
+  toViewTicket
+} from './ticket-view-helpers';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -90,27 +107,6 @@ function toWaitingByTicket(tickets: Ticket[]): Record<string, string> {
     }
     return acc;
   }, {});
-}
-
-function mergeTicketsById(current: Ticket[], incoming: Ticket[]): Ticket[] {
-  if (incoming.length === 0) return current;
-
-  const incomingById = new Map(incoming.map(ticket => [ticket.id, ticket]));
-  const seen = new Set<string>();
-  const merged = current.map(ticket => {
-    const next = incomingById.get(ticket.id);
-    if (!next) return ticket;
-    seen.add(ticket.id);
-    return { ...ticket, ...next };
-  });
-
-  for (const ticket of incoming) {
-    if (!seen.has(ticket.id)) {
-      merged.push(ticket);
-    }
-  }
-
-  return merged;
 }
 
 function mergeWaitingByTicket(
@@ -169,8 +165,27 @@ export default function KanbanBoard({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [, startTransition] = useTransition();
   const projectSettings = useProjectSettings();
+  const boardScope = useMemo(
+    () => buildBoardScope({ organizationId, projectId }),
+    [organizationId, projectId]
+  );
+  const boardBootstrap = useMemo(
+    () => buildBoardBootstrap({ scope: boardScope, tickets: initialTickets, statuses }),
+    [boardScope, initialTickets, statuses]
+  );
+  const boardQuery = useTicketBoard(boardScope, boardBootstrap, {
+    refetchInterval: 20_000
+  });
+  const tickets = useMemo(
+    () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
+    [boardQuery.data, initialTickets]
+  );
+  const createTicketMutation = useCreateTicketMutation();
+  const reorderTicketsMutation = useReorderTicketsMutation();
+  const { mutate: markTicketRead } = useMarkTicketReadMutation();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [filteredProjectId, setFilteredProjectId] = useState<string | null>(null);
   const [waitingByTicket, setWaitingByTicket] = useState<Record<string, string>>(() =>
@@ -183,9 +198,6 @@ export default function KanbanBoard({
     () => getWaitingRaisedWhileOpenMap()
   );
 
-  // Single source of truth for ticket data after mount.
-  // Seeded from server props, updated directly by real-time events, polling, and user actions.
-  const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   // Tracks the column a card is being dragged into, for immediate synchronous
   // re-render of SortableContext items (shows the insertion gap in the target column).
   const [activeDragStatus, setActiveDragStatus] = useState<{
@@ -200,24 +212,21 @@ export default function KanbanBoard({
   const openTicketIdRef = useRef<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollKey = `kanban-scroll:${projectId ?? organizationId ?? 'default'}`;
-  const boardScopeKey = `${organizationId ?? 'all'}:${projectId ?? 'all'}`;
-  const previousBoardScopeKeyRef = useRef(boardScopeKey);
-
-  const removeTicketFromBoard = useCallback((ticketId: string) => {
-    setTickets(prev => {
-      if (!prev.some(ticket => ticket.id === ticketId)) return prev;
-      return prev.filter(ticket => ticket.id !== ticketId);
-    });
-    setWaitingByTicket(prev => {
-      if (!(ticketId in prev)) return prev;
-      const next = { ...prev };
-      delete next[ticketId];
-      return next;
-    });
-    latestSessionAttachedAtRef.current.delete(ticketId);
-    setActiveTicket(prev => (prev?.id === ticketId ? null : prev));
-    setActiveDragStatus(prev => (prev?.ticketId === ticketId ? null : prev));
-  }, []);
+  const removeTicketFromBoard = useCallback(
+    (ticketId: string) => {
+      removeTicketFromBoards(queryClient, ticketId);
+      setWaitingByTicket(prev => {
+        if (!(ticketId in prev)) return prev;
+        const next = { ...prev };
+        delete next[ticketId];
+        return next;
+      });
+      latestSessionAttachedAtRef.current.delete(ticketId);
+      setActiveTicket(prev => (prev?.id === ticketId ? null : prev));
+      setActiveDragStatus(prev => (prev?.ticketId === ticketId ? null : prev));
+    },
+    [queryClient]
+  );
 
   useEffect(() => {
     waitingByTicketRef.current = waitingByTicket;
@@ -233,19 +242,6 @@ export default function KanbanBoard({
     window.addEventListener(TICKET_DELETED_EVENT, handleTicketDeleted);
     return () => window.removeEventListener(TICKET_DELETED_EVENT, handleTicketDeleted);
   }, [removeTicketFromBoard]);
-
-  // Reconcile when server delivers new data (navigation, router.refresh()).
-  useEffect(() => {
-    if (previousBoardScopeKeyRef.current !== boardScopeKey) {
-      previousBoardScopeKeyRef.current = boardScopeKey;
-      setTickets(initialTickets);
-      setWaitingByTicket(toWaitingByTicket(initialTickets));
-      return;
-    }
-
-    setTickets(previous => mergeTicketsById(previous, initialTickets));
-    setWaitingByTicket(previous => mergeWaitingByTicket(previous, initialTickets));
-  }, [boardScopeKey, initialTickets]);
 
   // Restore x-scroll position after remount (e.g. when opening a ticket reloads the board)
   useEffect(() => {
@@ -435,7 +431,9 @@ export default function KanbanBoard({
     }
     if (unreadIds.length > 0) {
       const unreadSet = new Set(unreadIds);
-      setTickets(prev => prev.map(t => (unreadSet.has(t.id) ? { ...t, is_read: true } : t)));
+      for (const id of unreadSet) {
+        updateTicketInBoards(queryClient, id, { is_read: true });
+      }
       startTransition(() => markTicketsReadAction(unreadIds));
     }
     setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
@@ -451,16 +449,14 @@ export default function KanbanBoard({
       setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
     }
 
-    setTickets(prev => prev.map(t => (t.id === ticketId ? { ...t, is_read: false } : t)));
-    startTransition(() => markTicketUnreadAction(ticketId));
+    markTicketRead({ ticketId, isRead: false });
   }
 
   function handleMarkRead(ticketId: string) {
     const ticket = ticketsByIdRef.current.get(ticketId);
     if (!ticket) return;
 
-    setTickets(prev => prev.map(t => (t.id === ticketId ? { ...t, is_read: true } : t)));
-    startTransition(() => markTicketReadAction(ticketId));
+    markTicketRead({ ticketId, isRead: true });
   }
 
   async function handleLoadMore(columnId: string) {
@@ -495,7 +491,7 @@ export default function KanbanBoard({
       const newCutoff =
         loaded.length > 0 ? (loaded[loaded.length - 1].updated_at ?? cutoff) : cutoff;
 
-      setTickets(prev => mergeTicketsById(prev, loaded as Ticket[]));
+      mergeTicketsIntoBoards(queryClient, (loaded as Ticket[]).map(toBoardTicket), 'server-poll');
       setWaitingByTicket(prev => mergeWaitingByTicket(prev, loaded as Ticket[]));
       setColumnLoadMoreStates(prev => {
         const next = new Map(prev);
@@ -542,10 +538,9 @@ export default function KanbanBoard({
     // Mark the ticket as read when the user navigates to it.
     const ticket = ticketsByIdRef.current.get(pathTicketId);
     if (ticket?.is_read === false) {
-      setTickets(prev => prev.map(t => (t.id === pathTicketId ? { ...t, is_read: true } : t)));
-      startTransition(() => markTicketReadAction(pathTicketId));
+      markTicketRead({ ticketId: pathTicketId, isRead: true });
     }
-  }, [pathname]);
+  }, [markTicketRead, pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -555,16 +550,10 @@ export default function KanbanBoard({
       session: Pick<AgentSession, 'ticket_id' | 'session_state' | 'agent_identifier'>
     ) => {
       const isAttached = session.session_state === 'attached';
-      setTickets(prev =>
-        prev.map(t => {
-          if (t.id !== session.ticket_id) return t;
-          return {
-            ...t,
-            agent_session_state: session.session_state,
-            running_agent: isAttached ? session.agent_identifier : null
-          };
-        })
-      );
+      updateTicketInBoards(queryClient, session.ticket_id, {
+        agent_session_state: session.session_state,
+        running_agent: isAttached ? session.agent_identifier : null
+      });
     };
 
     const syncBoardData = async () => {
@@ -649,30 +638,31 @@ export default function KanbanBoard({
         }
       }
 
-      setTickets(prev =>
-        prev.map(t => {
-          const update = ticketUpdateMap.get(t.id);
-          if (!update) return t;
-          const session = sessionByTicket.get(t.id);
-          const isAttached = session?.session_state === 'attached';
-          const runningAgent =
-            executingObjectiveAgentByTicket.get(t.id) ??
-            (isAttached ? session.agent_identifier : null);
-          return {
-            ...t,
-            status: update.status ?? t.status,
-            title: update.title ?? t.title,
-            is_read: update.is_read ?? t.is_read,
-            board_position: update.board_position ?? t.board_position,
-            updated_at: update.updated_at ?? t.updated_at,
-            latest_objective_agent:
-              latestObjectiveAgentByTicket.get(t.id) ?? t.latest_objective_agent,
-            assigned_agent: parseTicketAssignedAgent(update.assigned_agent) ?? t.assigned_agent,
-            agent_session_state: session?.session_state ?? t.agent_session_state ?? null,
-            running_agent: runningAgent
-          };
-        })
-      );
+      for (const t of ticketsByIdRef.current.values()) {
+        const update = ticketUpdateMap.get(t.id);
+        if (!update) continue;
+        const session = sessionByTicket.get(t.id);
+        const isAttached = session?.session_state === 'attached';
+        const runningAgent =
+          executingObjectiveAgentByTicket.get(t.id) ??
+          (isAttached ? session.agent_identifier : null);
+        updateTicketInBoards(queryClient, t.id, {
+          status: update.status ?? t.status,
+          title: update.title ?? t.title,
+          is_read: update.is_read ?? t.is_read,
+          board_position: update.board_position ?? t.board_position,
+          updated_at: update.updated_at ?? t.updated_at,
+          latest_objective_agent:
+            latestObjectiveAgentByTicket.get(t.id) ?? t.latest_objective_agent,
+          assigned_agent: parseTicketAssignedAgent(update.assigned_agent) ?? t.assigned_agent,
+          agent_session_state: session?.session_state ?? t.agent_session_state ?? null,
+          running_agent: runningAgent
+        });
+        mergeObjectiveMetaIntoBoards(queryClient, t.id, {
+          latest_agent: latestObjectiveAgentByTicket.get(t.id) ?? t.latest_objective_agent ?? null,
+          executing_agent: executingObjectiveAgentByTicket.get(t.id) ?? null
+        });
+      }
 
       const nextWaitingByTicket = { ...waitingByTicketRef.current };
       const raisedWaitingTicketIds: string[] = [];
@@ -683,6 +673,7 @@ export default function KanbanBoard({
           Date.parse(q.created_at) > Date.parse(nextWaitingByTicket[q.ticket_id])
         ) {
           nextWaitingByTicket[q.ticket_id] = q.created_at;
+          mergeWaitingQuestionIntoBoards(queryClient, q);
           raisedWaitingTicketIds.push(q.ticket_id);
           waitingChanged = true;
         }
@@ -712,6 +703,7 @@ export default function KanbanBoard({
           const event = payload.new;
           if (!event.is_blocking) return;
           if (!ticketIdsRef.current.has(event.ticket_id)) return;
+          mergeWaitingQuestionIntoBoards(queryClient, event);
 
           setWaitingByTicket(previous => {
             const existing = previous[event.ticket_id];
@@ -757,20 +749,20 @@ export default function KanbanBoard({
           // This is the authoritative signal — it fires after the ticket row
           // has been committed, so it is reliable even when the tickets UPDATE
           // real-time event is missed (e.g. due to after() timing on Vercel).
-          setTickets(prev =>
-            prev.map(t => {
-              if (t.id !== event.ticket_id) return t;
-              return {
-                ...t,
-                status: event.phase!,
-                board_position: shouldMoveToTopOfReview
-                  ? getTopBoardPositionForStatus(prev, event.phase!, event.ticket_id)
-                  : t.board_position,
-                updated_at: event.created_at ?? t.updated_at,
-                ...(openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
-              };
-            })
-          );
+          const existingTicket = ticketsByIdRef.current.get(event.ticket_id);
+          updateTicketInBoards(queryClient, event.ticket_id, {
+            status: event.phase,
+            board_position:
+              shouldMoveToTopOfReview && existingTicket
+                ? getTopBoardPositionForStatus(
+                    [...ticketsByIdRef.current.values()],
+                    event.phase,
+                    event.ticket_id
+                  )
+                : existingTicket?.board_position,
+            updated_at: event.created_at ?? existingTicket?.updated_at,
+            ...(openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
+          });
 
           if (event.phase !== 'review') return;
 
@@ -798,19 +790,14 @@ export default function KanbanBoard({
         payload => {
           const updated = payload.new;
           if (!ticketIdsRef.current.has(updated.id)) return;
-          setTickets(prev =>
-            prev.map(t => {
-              if (t.id !== updated.id) return t;
-              return {
-                ...t,
-                status: updated.status ?? t.status,
-                title: updated.title ?? t.title,
-                is_read: updated.is_read ?? t.is_read,
-                board_position: updated.board_position ?? t.board_position,
-                updated_at: updated.updated_at ?? t.updated_at
-              };
-            })
-          );
+          reconcileRealtimeTicketRow(queryClient, {
+            id: updated.id,
+            status: updated.status ?? undefined,
+            title: updated.title,
+            is_read: updated.is_read,
+            board_position: updated.board_position,
+            updated_at: updated.updated_at
+          });
         }
       )
       .on<Database['public']['Tables']['tickets']['Row']>(
@@ -829,6 +816,11 @@ export default function KanbanBoard({
           const session = payload.new;
           if (!ticketIdsRef.current.has(session.ticket_id)) return;
           latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
+          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
+            session_state: session.session_state,
+            agent_identifier: session.agent_identifier,
+            attached_at: session.attached_at
+          });
           applySessionOverride(session);
         }
       )
@@ -840,6 +832,11 @@ export default function KanbanBoard({
           if (!ticketIdsRef.current.has(session.ticket_id)) return;
           const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
           if (session.attached_at < latestAt) return;
+          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
+            session_state: session.session_state,
+            agent_identifier: session.agent_identifier,
+            attached_at: session.attached_at
+          });
           applySessionOverride(session);
         }
       )
@@ -858,7 +855,7 @@ export default function KanbanBoard({
       window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
-  }, [organizationId, projectId, removeTicketFromBoard]);
+  }, [organizationId, projectId, queryClient, removeTicketFromBoard]);
 
   const toggleColumnVisibility = (slug: string) => {
     setVisibleSlugs(prev => {
@@ -968,27 +965,10 @@ export default function KanbanBoard({
     const orderedIds = reordered.map(t => t.id);
     const col = columnById.get(columnSlug);
 
-    // Update tickets state directly with new positions and status.
-    const positionMap = new Map(orderedIds.map((id, i) => [id, i]));
-    setTickets(prev =>
-      prev.map(t => {
-        let next = t;
-        if (positionMap.has(t.id)) next = { ...next, board_position: positionMap.get(t.id)! };
-        if (statusChanged && t.id === activeId && col) next = { ...next, status: col.id };
-        return next;
-      })
-    );
-
-    startTransition(async () => {
-      await reorderTicketsAction(
-        orderedIds,
-        statusChanged && col ? { ticketId: activeId, newStatus: col.id } : undefined
-      );
-
-      // Ensure the router fetches fresh server-state after the action so the
-      // board reflects the new position/status even when the Supabase realtime
-      // subscription is unavailable (e.g. Electron with a restrictive CSP).
-      router.refresh();
+    reorderTicketsMutation.mutate({
+      status: columnSlug,
+      orderedIds,
+      statusChange: statusChanged && col ? { ticketId: activeId, newStatus: col.id } : undefined
     });
   }
 
@@ -1043,19 +1023,17 @@ export default function KanbanBoard({
       is_read: true
     };
 
-    setTickets(prev => [...prev, optimisticTicket]);
-
     try {
-      await createTicketInColumnAction(
+      await createTicketMutation.mutateAsync({
+        optimisticTicket: toBoardTicket(optimisticTicket),
         status,
-        trimmedObjective,
-        clientTicketId,
+        objective: trimmedObjective,
         organizationId,
         projectId,
-        position
-      );
+        placement: position
+      });
     } catch {
-      setTickets(prev => prev.filter(t => t.id !== clientTicketId));
+      // useCreateTicketMutation restores the previous cache snapshot.
     }
   }
 
@@ -1108,22 +1086,20 @@ export default function KanbanBoard({
       is_read: true
     };
 
-    setTickets(prev => [...prev, optimisticTicket]);
-
     try {
-      const result = await createTicketInColumnAction(
+      const result = await createTicketMutation.mutateAsync({
+        optimisticTicket: toBoardTicket(optimisticTicket),
         status,
-        trimmedObjective,
-        clientTicketId,
+        objective: trimmedObjective,
         organizationId,
         projectId,
-        position
-      );
+        placement: position
+      });
       router.push(
         buildTicketPath({ projectId: result.projectId, ticketId: result.id }) + '?focus=objective'
       );
     } catch {
-      setTickets(prev => prev.filter(t => t.id !== clientTicketId));
+      // useCreateTicketMutation restores the previous cache snapshot.
     }
   }
 

@@ -7,6 +7,11 @@ import { cookies } from 'next/headers';
 import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
+import type {
+  BoardBootstrap,
+  BoardScope,
+  BoardStatus
+} from '@/lib/client-data/tickets/board-types';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
@@ -26,7 +31,7 @@ import {
 import { createTicketSchema } from '@/lib/overlord/validation';
 import { generateDateFromSchedule } from '@/lib/schedulingEngine';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
-import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
+import { resolveNamedStatus, resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -137,6 +142,26 @@ async function resolveScheduledDuplicateStatus(supabase: ServerSupabase, organiz
 
 async function resolveNewTicketDraftStatus(supabase: ServerSupabase, organizationId: number) {
   return resolvePreferredStatusNameByType(supabase, organizationId, 'draft');
+}
+
+async function resolveAnyTicketStatus(supabase: ServerSupabase, organizationId: number) {
+  const { data, error } = await supabase
+    .from('ticket_statuses')
+    .select('name')
+    .eq('organization_id', organizationId)
+    .order('position', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data?.name) {
+    throw new Error('No ticket status is configured.');
+  }
+
+  return data.name;
 }
 
 function toEngineSchedule(schedule: TicketScheduleRow) {
@@ -517,6 +542,14 @@ export async function createTicketInColumnAction(
     organizationId,
     projectId
   });
+  let normalizedStatus = await resolveNamedStatus(supabase, selected.organizationId, status);
+  if (!normalizedStatus) {
+    try {
+      normalizedStatus = await resolveNewTicketDraftStatus(supabase, selected.organizationId);
+    } catch {
+      normalizedStatus = await resolveAnyTicketStatus(supabase, selected.organizationId);
+    }
+  }
   const trimmedObjective = objective.trim() || null;
 
   // Generate title: AI-summarised for long objectives, truncated for short ones
@@ -530,7 +563,7 @@ export async function createTicketInColumnAction(
     project_id: string;
   } = {
     id: ticketId,
-    status,
+    status: normalizedStatus,
     title,
     organization_id: selected.organizationId,
     project_id: selected.projectId
@@ -548,9 +581,9 @@ export async function createTicketInColumnAction(
 
   await upsertDraftObjective(supabase, data.id, trimmedObjective);
   if (position === 'bottom') {
-    await assignTicketToColumnEnd(supabase, data.id, status, data.organization_id);
+    await assignTicketToColumnEnd(supabase, data.id, normalizedStatus, data.organization_id);
   } else {
-    await assignTicketToColumnStart(supabase, data.id, status, data.organization_id);
+    await assignTicketToColumnStart(supabase, data.id, normalizedStatus, data.organization_id);
   }
 
   revalidateTicketBoards();
@@ -1359,11 +1392,12 @@ export async function getTicketDiscussionPromptForCopy(
 }
 
 const TICKET_BOARD_SELECT =
-  'id,title,execution_target,status,priority,assigned_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+  'id,title,due_datetime,execution_target,status,priority,assigned_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
 type RawBoardTicket = {
   id: string;
   title: string | null;
+  due_datetime: string | null;
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
@@ -1389,6 +1423,8 @@ function mapBoardTicket(raw: RawBoardTicket, latestObjectiveAgent: string | null
   return {
     id: raw.id,
     title: raw.title,
+    objective: null,
+    due_datetime: raw.due_datetime,
     execution_target: raw.execution_target,
     status: raw.status,
     priority: raw.priority,
@@ -1411,6 +1447,95 @@ function mapBoardTicket(raw: RawBoardTicket, latestObjectiveAgent: string | null
     waiting_for_response_at: null,
     has_unopened_waiting_response: false,
     objectives_executed_count: 0
+  };
+}
+
+export async function getTicketStatusesAction(organizationId?: number): Promise<BoardStatus[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from('ticket_statuses')
+    .select('name,position,status_type')
+    .order('position', { ascending: true });
+
+  if (organizationId !== undefined) {
+    query = query.eq('organization_id', organizationId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map(status => ({
+    name: status.name,
+    position: status.position,
+    status_type: status.status_type
+  }));
+}
+
+export async function getTicketBoardBootstrapAction(scope: BoardScope): Promise<BoardBootstrap> {
+  const supabase = await createClient();
+  const organizationId = scope.organizationId;
+  const projectId = scope.kind === 'project' ? scope.projectId : undefined;
+  const statuses = await getTicketStatusesAction(organizationId);
+
+  const ticketResults = await Promise.all(
+    statuses.map(async status => {
+      let query = supabase
+        .from('tickets')
+        .select(TICKET_BOARD_SELECT)
+        .eq('status', status.name)
+        .order('updated_at', { ascending: false })
+        .limit(20);
+
+      if (organizationId !== undefined) {
+        query = query.eq('organization_id', organizationId);
+      }
+      if (projectId !== undefined) {
+        query = query.eq('project_id', projectId);
+      }
+
+      return query;
+    })
+  );
+
+  const ticketLoadError = ticketResults.find(result => result.error)?.error;
+  if (ticketLoadError) throw new Error(ticketLoadError.message);
+
+  const rawTickets = ticketResults.flatMap(result => (result.data ?? []) as RawBoardTicket[]);
+  const ticketIds = rawTickets.map(ticket => ticket.id);
+  const latestObjectiveAgentByTicket = new Map<string, string | null>();
+
+  if (ticketIds.length > 0) {
+    const { data: objectives, error: objectivesError } = await supabase
+      .from('objectives')
+      .select('ticket_id,agent_identifier')
+      .in('ticket_id', ticketIds)
+      .order('created_at', { ascending: false });
+
+    if (objectivesError) throw new Error(objectivesError.message);
+
+    for (const objective of (objectives ?? []) as Array<{
+      ticket_id: string;
+      agent_identifier: string | null;
+    }>) {
+      if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
+        latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+    }
+  }
+
+  return {
+    scope,
+    statuses,
+    tickets: rawTickets.map(ticket =>
+      mapBoardTicket(ticket, latestObjectiveAgentByTicket.get(ticket.id) ?? null)
+    ),
+    columnPageInfo: Object.fromEntries(
+      statuses.map(status => {
+        const rows = rawTickets.filter(ticket => ticket.status === status.name);
+        const cutoff = rows.at(-1)?.updated_at ?? null;
+        return [status.name, { cutoff, hasMore: rows.length === 20 }];
+      })
+    )
   };
 }
 

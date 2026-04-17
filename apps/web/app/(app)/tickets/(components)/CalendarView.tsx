@@ -29,16 +29,24 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
+import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
-  createCalendarTicketAction,
-  updateTicketDueDateAction,
-  updateTicketStatusAction
-} from '@/lib/actions/tickets';
+  useCreateTicketMutation,
+  useUpdateTicketDueDateMutation,
+  useUpdateTicketStatusMutation
+} from '@/lib/client-data/tickets/mutations';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective, getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
+import {
+  buildBoardBootstrap,
+  buildBoardScope,
+  toBoardTicket,
+  toViewTicket
+} from './ticket-view-helpers';
 import TicketsViewControls from './TicketsViewControls';
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -108,6 +116,7 @@ function getCalendarTicketColors(projectColor: string | null | undefined) {
 
 type CalendarViewProps = {
   tickets: Ticket[];
+  statuses: Array<{ name: string; position: number; status_type?: string }>;
   completeStatusName?: string;
   initialView: string;
   showViewToggle?: boolean;
@@ -117,7 +126,8 @@ type CalendarViewProps = {
 };
 
 export default function CalendarView({
-  tickets,
+  tickets: initialTickets,
+  statuses,
   completeStatusName,
   initialView,
   showViewToggle = true,
@@ -126,16 +136,27 @@ export default function CalendarView({
   ticketUrlBase = '/u'
 }: CalendarViewProps) {
   const router = useRouter();
+  const boardScope = useMemo(
+    () => buildBoardScope({ organizationId, projectId }),
+    [organizationId, projectId]
+  );
+  const boardBootstrap = useMemo(
+    () => buildBoardBootstrap({ scope: boardScope, tickets: initialTickets, statuses }),
+    [boardScope, initialTickets, statuses]
+  );
+  const boardQuery = useTicketBoard(boardScope, boardBootstrap);
+  const tickets = useMemo(
+    () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
+    [boardQuery.data, initialTickets]
+  );
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
-  const [localTickets, setLocalTickets] = useState(tickets);
   const [completingTicketId, setCompletingTicketId] = useState<string | null>(null);
   const [creatingOnDateKey, setCreatingOnDateKey] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-
-  useEffect(() => {
-    setLocalTickets(tickets);
-  }, [tickets]);
+  const createTicketMutation = useCreateTicketMutation();
+  const updateDueDateMutation = useUpdateTicketDueDateMutation();
+  const updateStatusMutation = useUpdateTicketStatusMutation();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -155,7 +176,7 @@ export default function CalendarView({
   // Group tickets by date string
   const ticketsByDate = useMemo(() => {
     const map = new Map<string, Ticket[]>();
-    for (const ticket of localTickets) {
+    for (const ticket of tickets) {
       if (!ticket.due_datetime) continue;
       const dateKey = format(parseISO(ticket.due_datetime), 'yyyy-MM-dd');
       const existing = map.get(dateKey) ?? [];
@@ -163,7 +184,7 @@ export default function CalendarView({
       map.set(dateKey, existing);
     }
     return map;
-  }, [localTickets]);
+  }, [tickets]);
 
   const handlePrevMonth = useCallback(() => {
     setCurrentMonth(prev => subMonths(prev, 1));
@@ -179,10 +200,10 @@ export default function CalendarView({
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
-      const ticket = localTickets.find(t => t.id === event.active.id);
+      const ticket = tickets.find(t => t.id === event.active.id);
       setActiveTicket(ticket ?? null);
     },
-    [localTickets]
+    [tickets]
   );
 
   const handleDragEnd = useCallback(
@@ -195,7 +216,7 @@ export default function CalendarView({
       const newDateKey = over.id as string;
 
       // Find current ticket
-      const ticket = localTickets.find(t => t.id === ticketId);
+      const ticket = tickets.find(t => t.id === ticketId);
       if (!ticket) return;
 
       // Check if the date actually changed
@@ -207,17 +228,11 @@ export default function CalendarView({
       // Build new due_datetime preserving time or defaulting to noon
       const newDueDate = `${newDateKey}T12:00:00.000Z`;
 
-      // Optimistic update
-      setLocalTickets(prev =>
-        prev.map(t => (t.id === ticketId ? { ...t, due_datetime: newDueDate } : t))
-      );
-
-      // Persist in background
       startTransition(async () => {
-        await updateTicketDueDateAction(ticketId, newDueDate);
+        await updateDueDateMutation.mutateAsync({ ticketId, dueDate: newDueDate });
       });
     },
-    [localTickets, startTransition]
+    [tickets, startTransition, updateDueDateMutation]
   );
 
   const handleTicketClick = useCallback(
@@ -248,7 +263,7 @@ export default function CalendarView({
       const clientTicketId = crypto.randomUUID();
 
       const referenceTicket =
-        localTickets.find(t => (projectId ? t.project_id === projectId : true)) ?? localTickets[0];
+        tickets.find(t => (projectId ? t.project_id === projectId : true)) ?? tickets[0];
 
       const optimisticTicket: Ticket = {
         id: clientTicketId,
@@ -272,17 +287,23 @@ export default function CalendarView({
         is_read: true
       };
 
-      setLocalTickets(prev => [...prev, optimisticTicket]);
       setCreatingOnDateKey(null);
 
       try {
-        await createCalendarTicketAction(trimmed, dueDatetime, organizationId, projectId);
-        router.refresh();
+        await createTicketMutation.mutateAsync({
+          optimisticTicket: toBoardTicket(optimisticTicket),
+          status: optimisticTicket.status,
+          objective: trimmed,
+          organizationId,
+          projectId,
+          placement: 'top'
+        });
+        await updateDueDateMutation.mutateAsync({ ticketId: clientTicketId, dueDate: dueDatetime });
       } catch {
-        setLocalTickets(prev => prev.filter(t => t.id !== clientTicketId));
+        setCreatingOnDateKey(dateKey);
       }
     },
-    [localTickets, organizationId, projectId, router]
+    [createTicketMutation, organizationId, projectId, tickets, updateDueDateMutation]
   );
 
   return (
@@ -349,29 +370,16 @@ export default function CalendarView({
                   onCreateTicket={handleCreateCalendarTicket}
                   onTicketComplete={ticketId => {
                     if (!completeStatusName) return;
-                    const previousStatus =
-                      localTickets.find(ticket => ticket.id === ticketId)?.status ?? null;
-
                     setCompletingTicketId(ticketId);
-                    setLocalTickets(prev =>
-                      prev.map(ticket =>
-                        ticket.id === ticketId ? { ...ticket, status: completeStatusName } : ticket
-                      )
-                    );
 
                     startTransition(async () => {
                       try {
-                        await updateTicketStatusAction(ticketId, completeStatusName);
+                        await updateStatusMutation.mutateAsync({
+                          ticketId,
+                          status: completeStatusName
+                        });
                       } catch {
-                        if (previousStatus !== null) {
-                          setLocalTickets(prev =>
-                            prev.map(ticket =>
-                              ticket.id === ticketId
-                                ? { ...ticket, status: previousStatus }
-                                : ticket
-                            )
-                          );
-                        }
+                        // useUpdateTicketStatusMutation restores the previous cache snapshot.
                       } finally {
                         setCompletingTicketId(current => (current === ticketId ? null : current));
                       }

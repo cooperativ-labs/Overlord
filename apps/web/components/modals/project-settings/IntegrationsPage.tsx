@@ -1,12 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
-import { disconnectProjectFromEverhourAction } from '@/lib/actions/projects';
+import { useDisconnectProjectEverhourMutation } from '@/lib/client-data/projects/mutations';
 
 type IntegrationsPageProps = {
   projectId: string;
@@ -21,7 +20,7 @@ export function IntegrationsPage({
   initialEverhourProjectId,
   hasEverhourApiKey
 }: IntegrationsPageProps) {
-  const router = useRouter();
+  const disconnectEverhourMutation = useDisconnectProjectEverhourMutation();
   const [savedEverhourProjectId, setSavedEverhourProjectId] = useState(initialEverhourProjectId);
   const [syncButtonState, setSyncButtonState] = useState<ButtonLoadingState>('default');
   const [disconnectButtonState, setDisconnectButtonState] = useState<ButtonLoadingState>('default');
@@ -45,7 +44,6 @@ export function IntegrationsPage({
           ? ` Could not auto-create: ${result.failedProjects.join(', ')}. Create these in Everhour, then sync again.`
           : '';
       setSyncMessage(`${baseMessage}${failedMessage}`);
-      router.refresh();
     } catch (error) {
       setSyncButtonState('error');
       setSyncMessage(error instanceof Error ? error.message : 'Failed to sync Everhour projects.');
@@ -58,11 +56,10 @@ export function IntegrationsPage({
     setDisconnectButtonState('loading');
     setSyncMessage(null);
     try {
-      await disconnectProjectFromEverhourAction({ projectId });
+      await disconnectEverhourMutation.mutateAsync({ projectId });
       setSavedEverhourProjectId(null);
       setDisconnectButtonState('success');
       setSyncMessage('Disconnected this project from Everhour.');
-      router.refresh();
     } catch (error) {
       setDisconnectButtonState('error');
       setSyncMessage(

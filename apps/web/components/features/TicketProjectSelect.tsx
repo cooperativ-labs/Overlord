@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState, useTransition } from 'react';
 
 import {
@@ -28,7 +28,10 @@ import {
   SelectSeparator,
   SelectTrigger
 } from '@/components/ui/select';
-import { createProjectAction, setTicketProjectAction } from '@/lib/actions/tickets';
+import { setTicketProjectAction } from '@/lib/actions/tickets';
+import { useCreateProjectMutation } from '@/lib/client-data/projects/mutations';
+import { moveTicketProjectInBoards } from '@/lib/client-data/tickets/cache';
+import { useProjects } from '@/lib/client-data/tickets/hooks';
 
 type ProjectOption = {
   id: string;
@@ -50,8 +53,36 @@ export function TicketProjectSelect({
   currentProjectId,
   projects
 }: TicketProjectSelectProps) {
-  const router = useRouter();
-  const [availableProjects, setAvailableProjects] = useState<ProjectOption[]>(projects);
+  const queryClient = useQueryClient();
+  const createProjectMutation = useCreateProjectMutation();
+  const initialSidebarProjects = useMemo(
+    () =>
+      projects.map(project => ({
+        id: project.id,
+        name: project.name,
+        color: project.color,
+        organizationId,
+        localWorkingDirectory: null,
+        sshCommand: null,
+        remoteWorkingDirectory: null
+      })),
+    [organizationId, projects]
+  );
+  const projectsQuery = useProjects(initialSidebarProjects);
+  const everhourByProjectId = useMemo(
+    () => new Map(projects.map(project => [project.id, project.everhour_project_id])),
+    [projects]
+  );
+  const availableProjects = useMemo<ProjectOption[]>(
+    () =>
+      (projectsQuery.data ?? initialSidebarProjects).map(project => ({
+        id: project.id,
+        name: project.name,
+        color: project.color,
+        everhour_project_id: everhourByProjectId.get(project.id) ?? null
+      })),
+    [everhourByProjectId, initialSidebarProjects, projectsQuery.data]
+  );
   const [savedProjectId, setSavedProjectId] = useState(currentProjectId);
   const [selectedProjectId, setSelectedProjectId] = useState(currentProjectId);
   const [isSavingProject, startSavingProject] = useTransition();
@@ -76,8 +107,16 @@ export function TicketProjectSelect({
     startSavingProject(async () => {
       try {
         await setTicketProjectAction(ticketId, nextProjectId);
+        const nextProject = availableProjects.find(project => project.id === nextProjectId);
+        if (nextProject) {
+          moveTicketProjectInBoards(queryClient, ticketId, {
+            project_id: nextProject.id,
+            project_name: nextProject.name,
+            project_color: nextProject.color,
+            project_everhour_project_id: nextProject.everhour_project_id
+          });
+        }
         setSavedProjectId(nextProjectId);
-        router.refresh();
       } catch (error) {
         setSelectedProjectId(previousProjectId);
         setUpdateError(error instanceof Error ? error.message : 'Failed to update project.');
@@ -109,17 +148,23 @@ export function TicketProjectSelect({
       if (!color) {
         throw new Error('Use a valid 6-digit hex color, like #d4d4d8.');
       }
-      const created = await createProjectAction({ organizationId, name: trimmedName, color });
+      const created = await createProjectMutation.mutateAsync({
+        organizationId,
+        name: trimmedName,
+        color
+      });
       await setTicketProjectAction(ticketId, created.id);
+      moveTicketProjectInBoards(queryClient, ticketId, {
+        project_id: created.id,
+        project_name: created.name,
+        project_color: created.color,
+        project_everhour_project_id: null
+      });
 
-      setAvailableProjects(prev =>
-        [...prev, created].sort((left, right) => left.name.localeCompare(right.name))
-      );
       setSavedProjectId(created.id);
       setSelectedProjectId(created.id);
       setCreateButtonState('success');
       handleCreateDialogOpenChange(false);
-      router.refresh();
     } catch (error) {
       setCreateButtonState('error');
       setCreateError(error instanceof Error ? error.message : 'Failed to create project.');
@@ -176,6 +221,7 @@ export function TicketProjectSelect({
           </div>
         </SelectContent>
       </Select>
+      {updateError ? <p className="text-xs text-destructive">{updateError}</p> : null}
       <Dialog open={showCreateForm} onOpenChange={handleCreateDialogOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

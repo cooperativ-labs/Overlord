@@ -4,8 +4,8 @@ import { Loader2, Newspaper } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ExecutingFeedTicket, FeedPost } from '@/lib/actions/feed';
-import { getFeedPostsAction } from '@/lib/actions/feed';
+import type { ExecutingFeedTicket } from '@/lib/actions/feed';
+import { useFeedPosts } from '@/lib/client-data/feed/hooks';
 import { getWorkspaceRoot } from '@/lib/env';
 import { useExecutingFeedTickets } from '@/lib/hooks/use-executing-feed-tickets';
 import { useFeedRealtime } from '@/lib/hooks/use-feed-realtime';
@@ -14,9 +14,6 @@ import { cacheFeedPostsForOffline } from '@/lib/offline/offline-feed-cache';
 import { ExecutingTicketsSection } from './ExecutingTicketsSection';
 import { FeedCard } from './FeedCard';
 import { FeedProjectFilter } from './FeedProjectFilter';
-
-const PAGE_SIZE = 20;
-const REFRESH_INTERVAL_MS = 60_000;
 
 type Project = {
   id: string;
@@ -33,78 +30,40 @@ type FeedListProps = {
 
 export function FeedList({ projects, editorScheme, initialExecutingTickets = [] }: FeedListProps) {
   const { newPosts, markKnown } = useFeedRealtime();
-  const [basePosts, setBasePosts] = useState<FeedPost[]>([]);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const feedQuery = useFeedPosts();
   const liveExecutingTickets = useExecutingFeedTickets(initialExecutingTickets);
   const [selectedProjectId, setSelectedProjectId] = useState('all');
-  const [additionalPosts, setAdditionalPosts] = useState<FeedPost[]>([]);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const offsetRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const isSentinelVisibleRef = useRef(false);
 
-  // Fetch feed posts on mount and refresh every minute in the background
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchFeed = async () => {
-      try {
-        const fetchedPosts = await getFeedPostsAction({ limit: PAGE_SIZE });
-        if (cancelled) return;
-        setBasePosts(fetchedPosts);
-        markKnown(fetchedPosts.map(p => p.id));
-        setHasMore(fetchedPosts.length >= PAGE_SIZE);
-        offsetRef.current = fetchedPosts.length;
-        if (fetchedPosts.length > 0) {
-          cacheFeedPostsForOffline(
-            fetchedPosts.map(p => ({
-              id: p.id,
-              title: p.title,
-              body: p.body,
-              project_name: p.project_name,
-              project_color: p.project_color,
-              ticket_title: p.ticket_title,
-              ticket_sequence: p.ticket_sequence,
-              impact_level: p.impact_level,
-              human_actions: p.human_actions,
-              created_at: p.created_at
-            }))
-          );
-        }
-      } catch {
-        // Silently fail — realtime will still surface new posts
-      } finally {
-        if (!cancelled) setIsInitialLoading(false);
-      }
-    };
-
-    void fetchFeed();
-    const intervalId = window.setInterval(() => void fetchFeed(), REFRESH_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [markKnown]);
+  const allFetchedPosts = useMemo(
+    () => feedQuery.data?.pages.flat() ?? [],
+    [feedQuery.data?.pages]
+  );
 
   const loadMore = useCallback(async () => {
-    if (isLoadingMore || !hasMore) return;
-    setIsLoadingMore(true);
-    try {
-      const more = await getFeedPostsAction({ limit: PAGE_SIZE, offset: offsetRef.current });
-      if (more.length > 0) {
-        markKnown(more.map(p => p.id));
-        setAdditionalPosts(prev => [...prev, ...more]);
-        offsetRef.current += more.length;
-      }
-      if (more.length < PAGE_SIZE) {
-        setHasMore(false);
-      }
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [isLoadingMore, hasMore, markKnown]);
+    if (feedQuery.isFetchingNextPage || !feedQuery.hasNextPage) return;
+    await feedQuery.fetchNextPage();
+  }, [feedQuery]);
+
+  useEffect(() => {
+    markKnown(allFetchedPosts.map(p => p.id));
+    if (allFetchedPosts.length === 0) return;
+    cacheFeedPostsForOffline(
+      allFetchedPosts.slice(0, 50).map(p => ({
+        id: p.id,
+        title: p.title,
+        body: p.body,
+        project_name: p.project_name,
+        project_color: p.project_color,
+        ticket_title: p.ticket_title,
+        ticket_sequence: p.ticket_sequence,
+        impact_level: p.impact_level,
+        human_actions: p.human_actions,
+        created_at: p.created_at
+      }))
+    );
+  }, [allFetchedPosts, markKnown]);
 
   // Keep a stable ref to the latest loadMore so the observer never goes stale
   const loadMoreRef = useRef(loadMore);
@@ -131,10 +90,10 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
   // After initial load completes, trigger loadMore if the sentinel is already
   // in view (happens when the first page of posts doesn't fill the screen).
   useEffect(() => {
-    if (!isInitialLoading && isSentinelVisibleRef.current) {
+    if (!feedQuery.isLoading && isSentinelVisibleRef.current) {
       void loadMoreRef.current();
     }
-  }, [isInitialLoading]);
+  }, [feedQuery.isLoading]);
 
   const workspaceRootByProjectId = useMemo(
     () =>
@@ -146,10 +105,10 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
 
   // Merge realtime posts with fetched posts, deduped and sorted newest first
   const allPosts = useMemo(() => {
-    const serverIds = new Set([...basePosts.map(p => p.id), ...additionalPosts.map(p => p.id)]);
+    const serverIds = new Set(allFetchedPosts.map(p => p.id));
     const realtimeOnly = newPosts.filter(p => !serverIds.has(p.id));
-    return [...realtimeOnly, ...basePosts, ...additionalPosts];
-  }, [basePosts, additionalPosts, newPosts]);
+    return [...realtimeOnly, ...allFetchedPosts];
+  }, [allFetchedPosts, newPosts]);
 
   const filteredPosts = useMemo(() => {
     if (selectedProjectId === 'all') return allPosts;
@@ -177,7 +136,7 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
         <div className="max-w-2xl mx-auto">
           <ExecutingTicketsSection tickets={filteredExecutingTickets} />
 
-          {isInitialLoading ? (
+          {feedQuery.isLoading ? (
             <div className="flex flex-col gap-6">
               {Array.from({ length: 4 }).map((_, i) => (
                 <FeedCardSkeleton key={i} />
@@ -211,7 +170,7 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
           {/* Sentinel div that triggers loading more posts when scrolled into view */}
           <div ref={sentinelRef} className="h-1" />
 
-          {isLoadingMore && (
+          {feedQuery.isFetchingNextPage && (
             <div className="flex justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>

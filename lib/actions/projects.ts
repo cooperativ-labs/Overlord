@@ -145,6 +145,38 @@ export type CreateProjectResult = {
   organizationId: number;
 };
 
+const defaultProjectStatuses = [
+  { name: 'draft', status_type: 'draft', position: 0 },
+  { name: 'execute', status_type: 'execute', position: 1 },
+  { name: 'review', status_type: 'review', position: 2 },
+  { name: 'complete', status_type: 'complete', position: 3 }
+] as const;
+
+async function ensureDefaultStatusesForOrganization(input: {
+  organizationId: number;
+  supabase: Awaited<ReturnType<typeof createClient>>;
+}): Promise<void> {
+  const { error } = await input.supabase
+    .from('ticket_statuses')
+    .upsert(
+      defaultProjectStatuses.map(status => ({
+        organization_id: input.organizationId,
+        name: status.name,
+        status_type: status.status_type,
+        position: status.position,
+        is_default: true
+      })),
+      {
+        onConflict: 'organization_id,name',
+        ignoreDuplicates: true
+      }
+    );
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to initialize default project statuses.');
+  }
+}
+
 export async function deleteProjectAction(input: { projectId: string }): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from('projects').delete().eq('id', input.projectId);
@@ -199,6 +231,10 @@ export async function createProject(input: {
 
   const color = normalizeHexColor(input.color);
   const supabase = await createClient();
+  await ensureDefaultStatusesForOrganization({
+    organizationId: input.organizationId,
+    supabase
+  });
   const { data, error } = await supabase
     .from('projects')
     .insert({

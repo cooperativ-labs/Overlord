@@ -1,8 +1,10 @@
 'use client';
 
+import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FeedPost } from '@/lib/actions/feed';
+import { feedQueryKeys } from '@/lib/client-data/feed/query-keys';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
@@ -14,6 +16,7 @@ type FeedPostRow = Database['public']['Tables']['feed_posts']['Row'];
  * instantly without a full page reload.
  */
 export function useFeedRealtime() {
+  const queryClient = useQueryClient();
   const [newPosts, setNewPosts] = useState<FeedPost[]>([]);
   const knownIdsRef = useRef<Set<string>>(new Set());
 
@@ -123,6 +126,23 @@ export function useFeedRealtime() {
           const enriched = await enrichPost(row);
           if (!enriched) return;
 
+          queryClient.setQueryData<InfiniteData<FeedPost[], number>>(
+            feedQueryKeys.posts(),
+            current => {
+              if (!current) {
+                return { pageParams: [0], pages: [[enriched]] };
+              }
+              if (current.pages.some(page => page.some(post => post.id === enriched.id))) {
+                return current;
+              }
+              const [firstPage = [], ...restPages] = current.pages;
+              return {
+                ...current,
+                pages: [[enriched, ...firstPage], ...restPages]
+              };
+            }
+          );
+
           setNewPosts(prev => {
             // Avoid duplicates
             if (prev.some(p => p.id === enriched.id)) return prev;
@@ -135,7 +155,7 @@ export function useFeedRealtime() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [queryClient]);
 
   return { newPosts, markKnown };
 }

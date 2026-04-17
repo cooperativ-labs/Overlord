@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useTransition 
 
 import { saveDefaultProjectAction } from '@/lib/actions/profile-settings';
 import type { SidebarProject } from '@/lib/actions/projects';
+import { useProjects } from '@/lib/client-data/tickets/hooks';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { cacheProjectsForOffline } from '@/lib/offline/offline-projects-cache';
 
@@ -59,8 +60,10 @@ export function DefaultProjectProvider({
   initialDefaultProjectId,
   projects
 }: DefaultProjectProviderProps) {
+  const projectsQuery = useProjects(projects);
+  const cachedProjects = projectsQuery.data ?? projects;
   const [defaultProjectId, setDefaultProjectIdState] = useState<string | null>(() =>
-    resolveInitialDefaultProjectId(projects, initialDefaultProjectId)
+    resolveInitialDefaultProjectId(cachedProjects, initialDefaultProjectId)
   );
   const [isPending, startTransition] = useTransition();
 
@@ -76,11 +79,11 @@ export function DefaultProjectProvider({
   };
 
   useEffect(() => {
-    const resolved = resolveInitialDefaultProjectId(projects, defaultProjectId);
+    const resolved = resolveInitialDefaultProjectId(cachedProjects, defaultProjectId);
     if (resolved !== defaultProjectId) {
       setDefaultProjectIdState(resolved);
     }
-  }, [defaultProjectId, projects]);
+  }, [cachedProjects, defaultProjectId]);
 
   useEffect(() => {
     persistDefaultProjectCookie(defaultProjectId);
@@ -88,14 +91,14 @@ export function DefaultProjectProvider({
 
   // Cache projects for offline ticket creation
   useEffect(() => {
-    if (projects.length > 0) {
-      cacheProjectsForOffline(projects);
+    if (cachedProjects.length > 0) {
+      cacheProjectsForOffline(cachedProjects);
     }
-  }, [projects]);
+  }, [cachedProjects]);
 
   const defaultProject = useMemo(
-    () => projects.find(project => project.id === defaultProjectId) ?? null,
-    [defaultProjectId, projects]
+    () => cachedProjects.find(project => project.id === defaultProjectId) ?? null,
+    [cachedProjects, defaultProjectId]
   );
 
   return (
@@ -103,7 +106,7 @@ export function DefaultProjectProvider({
       value={{
         defaultProject,
         defaultProjectId,
-        projects,
+        projects: cachedProjects,
         setDefaultProjectId,
         isPending
       }}

@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { markTicketUnreadAction } from '@/lib/actions/tickets';
+import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
+import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
   normalizeStringList,
   normalizeTicketListFilters,
@@ -34,7 +36,13 @@ import {
 } from '@/lib/helpers/ticket-waiting-response';
 
 import type { Ticket } from './KanbanCard';
-import { formatStatusLabel, getPathTicketId } from './ticket-view-helpers';
+import {
+  buildBoardBootstrap,
+  buildBoardScope,
+  formatStatusLabel,
+  getPathTicketId,
+  toViewTicket
+} from './ticket-view-helpers';
 import TicketListCard from './TicketListCard';
 import TicketsViewControls from './TicketsViewControls';
 
@@ -80,24 +88,41 @@ function sanitizeSelectedStatuses(current: string[], availableStatuses: string[]
 }
 
 export default function TicketListView({
-  tickets,
+  tickets: initialTickets,
+  statuses,
   showOrganizationName = false,
   ticketUrlBase,
   initialView,
   showViewToggle = true,
+  organizationId,
   projectId,
   initialListFilters
 }: {
   tickets: Ticket[];
+  statuses: Array<{ name: string; position: number; status_type?: string }>;
   showOrganizationName?: boolean;
   ticketUrlBase?: string;
   initialView: string;
   showViewToggle?: boolean;
+  organizationId?: number;
   projectId?: string;
   initialListFilters?: TicketListFilters | null;
 }) {
   const pathname = usePathname();
   const [, startTransition] = useTransition();
+  const boardScope = useMemo(
+    () => buildBoardScope({ organizationId, projectId }),
+    [organizationId, projectId]
+  );
+  const boardBootstrap = useMemo(
+    () => buildBoardBootstrap({ scope: boardScope, tickets: initialTickets, statuses }),
+    [boardScope, initialTickets, statuses]
+  );
+  const boardQuery = useTicketBoard(boardScope, boardBootstrap);
+  const tickets = useMemo(
+    () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
+    [boardQuery.data, initialTickets]
+  );
 
   const [storedListFilters] = useState<TicketListFilters | null>(() =>
     projectId ? null : readStoredListFilters()

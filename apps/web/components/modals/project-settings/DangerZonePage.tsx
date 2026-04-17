@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
-import { deleteProjectAction } from '@/lib/actions/projects';
+import { useDeleteProjectMutation } from '@/lib/client-data/projects/mutations';
 
 type DangerZonePageProps = {
   projectId: string;
@@ -26,6 +26,7 @@ type DangerZonePageProps = {
 
 export function DangerZonePage({ projectId, projectName, onOpenChange }: DangerZonePageProps) {
   const router = useRouter();
+  const deleteProjectMutation = useDeleteProjectMutation();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteState, setDeleteState] = useState<ButtonLoadingState>('default');
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -34,11 +35,10 @@ export function DangerZonePage({ projectId, projectName, onOpenChange }: DangerZ
     setDeleteState('loading');
     setDeleteError(null);
     try {
-      await deleteProjectAction({ projectId });
+      await deleteProjectMutation.mutateAsync({ projectId });
       setDeleteState('success');
       onOpenChange(false);
       router.push('/projects');
-      router.refresh();
     } catch (error) {
       setDeleteState('error');
       setDeleteError(error instanceof Error ? error.message : 'Failed to delete project.');

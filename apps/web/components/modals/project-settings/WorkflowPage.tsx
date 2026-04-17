@@ -1,7 +1,6 @@
 'use client';
 
 import { Folder } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { ProjectStatusSettings } from '@/components/features/projects/ProjectStatusSettings';
@@ -9,9 +8,9 @@ import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import {
-  updateProjectSshConfigAction,
-  updateProjectWorkingDirectoryAction
-} from '@/lib/actions/projects';
+  useUpdateProjectSshConfigMutation,
+  useUpdateProjectWorkingDirectoryMutation
+} from '@/lib/client-data/projects/mutations';
 import {
   isWorkingDirectoryNone,
   WORKING_DIRECTORY_NONE
@@ -44,7 +43,8 @@ export function WorkflowPage({
   initialStatuses
 }: WorkflowPageProps) {
   const { api, isElectron } = useElectron();
-  const router = useRouter();
+  const updateWorkingDirectoryMutation = useUpdateProjectWorkingDirectoryMutation();
+  const updateSshConfigMutation = useUpdateProjectSshConfigMutation();
   const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [workingDirectorySaveState, setWorkingDirectorySaveState] =
@@ -90,14 +90,13 @@ export function WorkflowPage({
     setWorkingDirectorySaveState('loading');
     setWorkingDirectoryError(null);
     try {
-      await updateProjectWorkingDirectoryAction({
+      await updateWorkingDirectoryMutation.mutateAsync({
         projectId,
         workingDirectory: normalized || null
       });
       setSavedWorkingDirectory(normalized);
       setWorkingDirectory(normalized);
       setWorkingDirectorySaveState('success');
-      router.refresh();
     } catch (error) {
       setWorkingDirectorySaveState('error');
       setWorkingDirectoryError(
@@ -163,7 +162,7 @@ export function WorkflowPage({
     setSshSaveState('loading');
     setSshError(null);
     try {
-      await updateProjectSshConfigAction({
+      await updateSshConfigMutation.mutateAsync({
         projectId,
         sshCommand: normalizedSsh || null,
         remoteWorkingDirectory: normalizedRemote || null
@@ -171,7 +170,6 @@ export function WorkflowPage({
       setSavedSshCommand(normalizedSsh);
       setSavedRemoteWorkingDirectory(normalizedRemote);
       setSshSaveState('success');
-      router.refresh();
     } catch (error) {
       setSshSaveState('error');
       setSshError(error instanceof Error ? error.message : 'Failed to update SSH configuration.');
@@ -182,7 +180,7 @@ export function WorkflowPage({
     setSshSaveState('loading');
     setSshError(null);
     try {
-      await updateProjectSshConfigAction({
+      await updateSshConfigMutation.mutateAsync({
         projectId,
         sshCommand: null,
         remoteWorkingDirectory: null
@@ -192,7 +190,6 @@ export function WorkflowPage({
       setRemoteWorkingDirectory('');
       setSavedRemoteWorkingDirectory('');
       setSshSaveState('success');
-      router.refresh();
     } catch (error) {
       setSshSaveState('error');
       setSshError(error instanceof Error ? error.message : 'Failed to clear SSH configuration.');

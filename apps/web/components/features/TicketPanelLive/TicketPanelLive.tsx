@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useTransition } from 'react';
 
 import { CliQuickstart } from '@/components/features/CliQuickstart';
@@ -8,6 +8,7 @@ import { useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
+import { reconcileRealtimeTicketRow } from '@/lib/client-data/tickets/cache';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { createClient } from '@/supabase/utils/client';
 
@@ -52,7 +53,7 @@ export function TicketPanelLive({
   geminiResumeCommand: _geminiResumeCommand,
   opencodeResumeCommand: _opencodeResumeCommand
 }: TicketPanelLiveProps) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const { events, artifacts, fileChanges, session, sharedState } = useTicketLive();
   const [isPending, startTransition] = useTransition();
 
@@ -63,15 +64,24 @@ export function TicketPanelLive({
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'tickets', filter: `id=eq.${ticketId}` },
-        () => {
-          router.refresh();
+        payload => {
+          const updated = payload.new;
+          reconcileRealtimeTicketRow(queryClient, {
+            id: updated.id,
+            status: updated.status ?? undefined,
+            title: updated.title,
+            is_read: updated.is_read,
+            board_position: updated.board_position,
+            updated_at: updated.updated_at,
+            due_datetime: updated.due_datetime
+          });
         }
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [ticketId, router]);
+  }, [queryClient, ticketId]);
 
   const isRunning = session?.session_state === 'attached';
   const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);

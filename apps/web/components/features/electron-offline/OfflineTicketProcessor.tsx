@@ -3,7 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
-import { createTicketInColumnAction } from '@/lib/actions/tickets';
+import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
+import { useCreateTicketMutation } from '@/lib/client-data/tickets/mutations';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
 import { getQueuedTickets, removeQueuedTicket } from '@/lib/offline/offline-ticket-queue';
 
@@ -13,6 +14,9 @@ import { getQueuedTickets, removeQueuedTicket } from '@/lib/offline/offline-tick
  */
 export function OfflineTicketProcessor() {
   const { isOnline } = useOnlineStatus();
+  const { projects } = useDefaultProject();
+  const createTicketMutation = useCreateTicketMutation();
+  const createTicket = createTicketMutation.mutateAsync;
   const processingRef = useRef(false);
 
   useEffect(() => {
@@ -30,13 +34,34 @@ export function OfflineTicketProcessor() {
 
       for (const ticket of tickets) {
         try {
-          await createTicketInColumnAction(
-            'draft',
-            ticket.objective,
-            crypto.randomUUID(),
-            undefined,
-            ticket.projectId
-          );
+          const project = projects.find(item => item.id === ticket.projectId) ?? null;
+          const organizationId = ticket.organizationId ?? project?.organizationId;
+          await createTicket({
+            optimisticTicket: {
+              id: ticket.id,
+              title: ticket.objective.slice(0, 80),
+              objective: ticket.objective,
+              organization_id: organizationId ?? 0,
+              project_id: ticket.projectId,
+              project_name: project?.name ?? ticket.projectName,
+              project_color: project?.color ?? ticket.projectColor ?? null,
+              everhour_task_id: null,
+              agent_session_state: null,
+              status: 'draft',
+              priority: 'medium',
+              execution_target: 'agent',
+              assigned_agent: null,
+              board_position: 0,
+              waiting_for_response_at: null,
+              has_unopened_waiting_response: false,
+              is_read: true
+            },
+            status: 'draft',
+            objective: ticket.objective,
+            organizationId,
+            projectId: ticket.projectId,
+            placement: 'top'
+          });
           removeQueuedTicket(ticket.id);
           submitted++;
         } catch (error) {
@@ -57,7 +82,7 @@ export function OfflineTicketProcessor() {
     }
 
     void processQueue();
-  }, [isOnline]);
+  }, [createTicket, isOnline, projects]);
 
   return null;
 }

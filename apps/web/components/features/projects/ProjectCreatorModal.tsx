@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { createProject } from '@/lib/actions/projects';
+import { useCreateProjectMutation } from '@/lib/client-data/projects/mutations';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 
 type ProjectCreatorModalProps = {
@@ -36,6 +36,7 @@ export function ProjectCreatorModal({
   organizationId
 }: ProjectCreatorModalProps) {
   const router = useRouter();
+  const createProjectMutation = useCreateProjectMutation();
   const [name, setName] = useState('');
   const [color, setColor] = useState(DEFAULT_PROJECT_COLOR);
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +67,13 @@ export function ProjectCreatorModal({
         throw new Error('Use a valid 6-digit hex color, like #d4d4d8.');
       }
 
-      const created = await createProject({
+      const created = await createProjectMutation.mutateAsync({
         organizationId,
         name: trimmedName,
         color: hexColor
       });
 
       setCreateButtonState('success');
-      router.refresh();
       handleOpenChange(false);
       router.push(buildProjectPath({ projectId: created.id }));
     } catch (err) {

@@ -3,7 +3,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CheckCheck, ChevronDown, Loader2, Plus } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,7 @@ export default function KanbanColumn({
   onLoadMore?: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
-  const ticketIds = tickets.map(t => t.id);
+  const ticketIds = useMemo(() => tickets.map(t => t.id), [tickets]);
 
   const columnBg =
     statusType === 'execute'

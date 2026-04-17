@@ -6,19 +6,16 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { DiffPane } from '@/components/features/projects/current-changes/DiffPane';
 import { FileListPane } from '@/components/features/projects/current-changes/FileListPane';
-import { getRationalePaths } from '@/components/features/projects/current-changes/helpers';
-import {
-  type DiffState,
-  type EnrichedCurrentChangeFile,
-  type FileChangeRecord,
-  type GitDiffResponse,
-  type GitStatusResponse
-} from '@/components/features/projects/current-changes/types';
+import type { EnrichedCurrentChangeFile } from '@/components/features/projects/current-changes/types';
 import { UnavailableStateCard } from '@/components/features/projects/current-changes/UnavailableStateCard';
 import { buildEnrichedCurrentChangeFiles } from '@/components/features/projects/current-changes/view-model';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
-import { parseUnifiedDiff } from '@/lib/git/unified-diff';
+import {
+  useCurrentChangeFileChanges,
+  useGitDiffQuery,
+  useGitStatusQuery
+} from '@/lib/client-data/current-changes/hooks';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 
@@ -36,17 +33,37 @@ export function CurrentChangesPage({
   initialFilePath
 }: CurrentChangesPageProps) {
   const { api, isElectron } = useElectron();
-  const [statusResponse, setStatusResponse] = useState<GitStatusResponse | null>(null);
-  const [statusLoading, setStatusLoading] = useState(true);
-  const [fileChanges, setFileChanges] = useState<FileChangeRecord[]>([]);
-  const [rationalesError, setRationalesError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [diffState, setDiffState] = useState<DiffState>({
-    error: null,
-    isLoading: false,
-    parsed: null
-  });
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
+  const hasLocalDirectory = !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
+  const canInspectChanges = hasLocalDirectory;
+  const statusQuery = useGitStatusQuery({
+    api: api?.filesystem,
+    canInspectChanges,
+    directory: workingDirectory,
+    isElectron
+  });
+  const statusResponse = statusQuery.data ?? null;
+  const fileChangesQuery = useCurrentChangeFileChanges({
+    projectId,
+    files: statusResponse?.files ?? []
+  });
+  const fileChanges = useMemo(() => fileChangesQuery.data ?? [], [fileChangesQuery.data]);
+  const selectedStatusFile = statusResponse?.files.find(file => file.path === selectedPath) ?? null;
+  const diffQuery = useGitDiffQuery({
+    api: api?.filesystem,
+    canInspectChanges,
+    directory: workingDirectory,
+    file: selectedStatusFile,
+    isElectron
+  });
+  const diffState = diffQuery.data ?? {
+    error: null,
+    isLoading: diffQuery.isFetching,
+    parsed: null
+  };
+  const statusLoading = statusQuery.isLoading || statusQuery.isFetching;
+  const rationalesError = fileChangesQuery.error?.message ?? null;
 
   const enrichedFiles = useMemo(
     () =>
@@ -92,15 +109,9 @@ export function CurrentChangesPage({
     setSelectedTicketIds(new Set());
   }
 
-  const hasLocalDirectory = !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
-  const canInspectChanges = hasLocalDirectory;
-  const gitPayload = useMemo(() => ({ directory: workingDirectory! }), [workingDirectory]);
-
-  async function loadStatus(): Promise<GitStatusResponse | null> {
-    if (!api?.filesystem?.getGitStatus || !canInspectChanges) return null;
-    setStatusLoading(true);
-    const result = (await api.filesystem.getGitStatus(gitPayload)) as GitStatusResponse;
-    setStatusResponse(result);
+  useEffect(() => {
+    const result = statusResponse;
+    if (!isElectron || !canInspectChanges || !result) return;
     setSelectedPath(current => {
       if (!result.files.length) return null;
       if (initialFilePath && result.files.some(file => file.path === initialFilePath)) {
@@ -109,54 +120,7 @@ export function CurrentChangesPage({
       if (current && result.files.some(file => file.path === current)) return current;
       return result.files[0]?.path ?? null;
     });
-    setStatusLoading(false);
-    return result;
-  }
-
-  async function loadFileChanges(files: GitStatusResponse['files']) {
-    setRationalesError(null);
-    try {
-      const filePaths = getRationalePaths(files);
-      if (filePaths.length === 0) {
-        setFileChanges([]);
-        return;
-      }
-
-      const searchParams = new URLSearchParams();
-      for (const filePath of filePaths) {
-        searchParams.append('filePath', filePath);
-      }
-
-      const response = await fetch(`/api/projects/${projectId}/file-changes?${searchParams}`, {
-        cache: 'no-store'
-      });
-      const payload = (await response.json()) as {
-        error?: string;
-        fileChanges?: FileChangeRecord[];
-      };
-      if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to load file changes.');
-      }
-      setFileChanges(payload.fileChanges ?? []);
-    } catch (error) {
-      setFileChanges([]);
-      setRationalesError(error instanceof Error ? error.message : 'Failed to load file changes.');
-    }
-  }
-
-  useEffect(() => {
-    if (!isElectron || !canInspectChanges) {
-      setStatusLoading(false);
-      return;
-    }
-
-    void (async () => {
-      const result = await loadStatus();
-      const files = result?.files ?? [];
-      await loadFileChanges(files);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, canInspectChanges, isElectron, projectId, workingDirectory]);
+  }, [canInspectChanges, initialFilePath, isElectron, statusResponse]);
 
   useEffect(() => {
     if (filteredFiles.length === 0) {
@@ -170,44 +134,6 @@ export function CurrentChangesPage({
 
     setSelectedPath(filteredFiles[0]?.path ?? null);
   }, [filteredFiles, selectedPath]);
-
-  useEffect(() => {
-    const selectedFile = statusResponse?.files.find(file => file.path === selectedPath);
-    if (!isElectron || !api?.filesystem?.getGitDiff || !selectedFile || !canInspectChanges) {
-      setDiffState({
-        error: null,
-        isLoading: false,
-        parsed: null
-      });
-      return;
-    }
-
-    let cancelled = false;
-
-    const run = async () => {
-      setDiffState(previous => ({ ...previous, error: null, isLoading: true }));
-      const result = (await api.filesystem.getGitDiff({
-        ...gitPayload,
-        originalPath: selectedFile.originalPath ?? undefined,
-        path: selectedFile.path,
-        status: selectedFile.status
-      })) as GitDiffResponse;
-
-      if (cancelled) return;
-
-      setDiffState({
-        error: result.error ?? null,
-        isLoading: false,
-        parsed: result.diff ? parseUnifiedDiff(result.diff) : null
-      });
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, canInspectChanges, gitPayload, isElectron, selectedPath, statusResponse]);
 
   const backHref = buildProjectPath({ projectId });
 
@@ -258,9 +184,9 @@ export function CurrentChangesPage({
             size="sm"
             onClick={() =>
               void (async () => {
-                const result = await loadStatus();
-                const files = result?.files ?? [];
-                await loadFileChanges(files);
+                await statusQuery.refetch();
+                await fileChangesQuery.refetch();
+                await diffQuery.refetch();
               })()
             }
           >

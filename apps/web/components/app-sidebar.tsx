@@ -47,7 +47,8 @@ import {
 } from '@/components/ui/sidebar';
 import type { UserOrganization } from '@/lib/actions/organizations';
 import type { SidebarProject } from '@/lib/actions/projects';
-import { updateProjectColorAction } from '@/lib/actions/projects';
+import { useUpdateProjectColorMutation } from '@/lib/client-data/projects/mutations';
+import { useProjects } from '@/lib/client-data/tickets/hooks';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 
 type AppSidebarUser = {
@@ -70,29 +71,26 @@ type ProjectColorMenuProps = {
 };
 
 function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
-  const router = useRouter();
+  const updateProjectColorMutation = useUpdateProjectColorMutation();
   const [open, setOpen] = React.useState(false);
-  const [isUpdating, setIsUpdating] = React.useState(false);
 
   async function handleChangeColor(nextColor: string) {
-    if (nextColor.toLowerCase() === color.toLowerCase() || isUpdating) {
+    if (nextColor.toLowerCase() === color.toLowerCase() || updateProjectColorMutation.isPending) {
       return;
     }
 
-    setIsUpdating(true);
     try {
-      await updateProjectColorAction({ projectId, color: nextColor.toLowerCase() });
-      router.refresh();
+      await updateProjectColorMutation.mutateAsync({ projectId, color: nextColor.toLowerCase() });
       setOpen(false);
-    } finally {
-      setIsUpdating(false);
+    } catch {
+      // Mutation rollback restores the previous color; keep the menu open for another attempt.
     }
   }
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuAction showOnHover disabled={isUpdating}>
+        <SidebarMenuAction showOnHover disabled={updateProjectColorMutation.isPending}>
           <MoreHorizontal />
           <span className="sr-only">Project options</span>
         </SidebarMenuAction>
@@ -112,6 +110,8 @@ export function AppSidebar({
   selectedOrgId,
   ...props
 }: AppSidebarProps) {
+  const projectsQuery = useProjects(projects);
+  const cachedProjects = projectsQuery.data ?? projects;
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -167,13 +167,15 @@ export function AppSidebar({
   const defaultOrganizationId = React.useMemo(() => {
     if (selectedOrgId !== null) return selectedOrgId;
     if (defaultProject) return defaultProject.organizationId;
-    return projects[0]?.organizationId ?? null;
-  }, [selectedOrgId, defaultProject, projects]);
+    return cachedProjects[0]?.organizationId ?? null;
+  }, [selectedOrgId, defaultProject, cachedProjects]);
 
   const displayedProjects = React.useMemo(
     () =>
-      selectedOrgId !== null ? projects.filter(p => p.organizationId === selectedOrgId) : projects,
-    [selectedOrgId, projects]
+      selectedOrgId !== null
+        ? cachedProjects.filter(p => p.organizationId === selectedOrgId)
+        : cachedProjects,
+    [selectedOrgId, cachedProjects]
   );
 
   // const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');

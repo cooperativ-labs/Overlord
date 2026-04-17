@@ -1,7 +1,6 @@
 'use client';
 
 import { Folder } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -15,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
+import { useUpdateProjectWorkingDirectoryMutation } from '@/lib/client-data/projects/mutations';
 import { WORKING_DIRECTORY_NONE } from '@/lib/helpers/project-working-directory';
 
 type ProjectWorkingDirectoryRequiredModalProps = {
@@ -35,7 +34,7 @@ export function ProjectWorkingDirectoryRequiredModal({
   onLinked
 }: ProjectWorkingDirectoryRequiredModalProps) {
   const { api, isElectron } = useElectron();
-  const router = useRouter();
+  const updateWorkingDirectoryMutation = useUpdateProjectWorkingDirectoryMutation();
   const [selectFolderState, setSelectFolderState] = useState<ButtonLoadingState>('default');
   const [skipState, setSkipState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +64,7 @@ export function ProjectWorkingDirectoryRequiredModal({
         return;
       }
 
-      await updateProjectWorkingDirectoryAction({
+      await updateWorkingDirectoryMutation.mutateAsync({
         projectId: project.id,
         workingDirectory: chosenPath
       });
@@ -73,7 +72,6 @@ export function ProjectWorkingDirectoryRequiredModal({
       setSelectFolderState('success');
       onLinked?.(chosenPath);
       onOpenChange(false);
-      router.refresh();
     } catch (updateError) {
       setSelectFolderState('error');
       setError(
@@ -89,14 +87,13 @@ export function ProjectWorkingDirectoryRequiredModal({
     setError(null);
 
     try {
-      await updateProjectWorkingDirectoryAction({
+      await updateWorkingDirectoryMutation.mutateAsync({
         projectId: project.id,
         workingDirectory: WORKING_DIRECTORY_NONE
       });
 
       setSkipState('success');
       onOpenChange(false);
-      router.refresh();
     } catch (updateError) {
       setSkipState('error');
       setError(updateError instanceof Error ? updateError.message : 'Failed to save preference.');

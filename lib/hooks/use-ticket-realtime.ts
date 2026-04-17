@@ -119,19 +119,15 @@ export function useTicketRealtime({
   }, [ticketId]);
 
   useEffect(() => {
+    // Seed local realtime state when switching tickets. We intentionally avoid
+    // re-seeding on every new array/object reference for initial props because
+    // that can create update loops when parent trees re-render with equivalent data.
     setEvents(initialEvents);
     setArtifacts(initialArtifacts);
     setFileChanges(initialFileChanges);
     setSession(initialSession);
     setSharedState(initialSharedState);
-  }, [
-    initialArtifacts,
-    initialEvents,
-    initialFileChanges,
-    initialSession,
-    initialSharedState,
-    ticketId
-  ]);
+  }, [ticketId]);
 
   useEffect(() => {
     let cancelled = false;

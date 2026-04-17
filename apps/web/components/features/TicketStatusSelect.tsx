@@ -2,7 +2,7 @@
 
 import { useTransition } from 'react';
 
-import { updateTicketStatusAction } from '@/lib/actions/tickets';
+import { useUpdateTicketStatusMutation } from '@/lib/client-data/tickets/mutations';
 import { capitalizeFirst } from '@/lib/options';
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select';
@@ -15,10 +15,11 @@ type Props = {
 
 export function TicketStatusSelect({ ticketId, currentStatus, statusOptions }: Props) {
   const [pending, startTransition] = useTransition();
+  const updateStatusMutation = useUpdateTicketStatusMutation();
 
   function handleChange(value: string) {
     startTransition(async () => {
-      await updateTicketStatusAction(ticketId, value);
+      await updateStatusMutation.mutateAsync({ ticketId, status: value });
     });
   }
 

@@ -17,6 +17,7 @@ type ProjectOption = {
   name: string;
   color: string;
   everhour_project_id: string | null;
+  organization_id: number;
   local_working_directory: string | null;
 };
 
@@ -45,7 +46,7 @@ export function NewTicketButton() {
         const supabase = createClient();
         const { data: projectsData } = await supabase
           .from('projects')
-          .select('id,name,color,everhour_project_id,local_working_directory')
+          .select('id,name,color,everhour_project_id,organization_id,local_working_directory')
           .order('created_at', { ascending: true });
 
         if (projectsData) {

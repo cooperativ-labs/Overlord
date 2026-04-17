@@ -3,6 +3,8 @@ import { headers } from 'next/headers';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
+import type { BoardScope, BoardStatus, BoardTicket } from '@/lib/client-data/tickets/board-types';
+import BoardHydrationBoundary from '@/lib/client-data/tickets/BoardHydrationBoundary';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { createClient } from '@/supabase/utils/server';
@@ -338,8 +340,53 @@ export default async function TicketsBoardContent({
   const showBoard = view === 'board' && statuses.length > 0;
   const showCalendar = view === 'calendar';
 
+  const boardScope: BoardScope = projectId
+    ? { kind: 'project', projectId, organizationId }
+    : { kind: 'user', organizationId };
+  const boardBootstrapTickets: BoardTicket[] = tickets.map(ticket => ({
+    id: ticket.id,
+    title: ticket.title,
+    objective: ticket.objective ?? null,
+    organization_id: ticket.organization_id,
+    project_id: ticket.project_id,
+    project_name: ticket.project_name,
+    project_color: ticket.project_color,
+    project_everhour_project_id: ticket.project_everhour_project_id,
+    everhour_task_id: ticket.everhour_task_id,
+    agent_session_state: ticket.agent_session_state,
+    running_agent: ticket.running_agent,
+    latest_objective_agent: ticket.latest_objective_agent,
+    status: ticket.status,
+    priority: ticket.priority,
+    execution_target: ticket.execution_target,
+    assigned_agent: ticket.assigned_agent,
+    board_position: ticket.board_position,
+    organization_name: ticket.organization_name,
+    waiting_for_response_at: ticket.waiting_for_response_at,
+    is_read: ticket.is_read,
+    objectives_executed_count: ticket.objectives_executed_count,
+    updated_at: ticket.updated_at,
+    schedule_id: ticket.schedule_id,
+    due_datetime: ticket.due_datetime
+  }));
+  const boardBootstrapStatuses: BoardStatus[] = statuses.map(status => ({
+    name: status.name,
+    position: status.position,
+    status_type: status.status_type
+  }));
+
   return (
     <div className="flex flex-1 min-h-0 flex-col gap-4">
+      <BoardHydrationBoundary
+        scope={boardScope}
+        bootstrap={{
+          scope: boardScope,
+          tickets: boardBootstrapTickets,
+          statuses: boardBootstrapStatuses
+        }}
+        statuses={boardBootstrapStatuses}
+        organizationId={organizationId}
+      />
       {loadError ? (
         <Alert variant="destructive" className="mx-4 md:mx-6">
           <AlertDescription>Failed to load tickets: {loadError.message}</AlertDescription>
@@ -350,6 +397,7 @@ export default async function TicketsBoardContent({
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
           <CalendarView
             tickets={tickets}
+            statuses={statuses}
             completeStatusName={
               statuses.find(
                 status =>
@@ -380,10 +428,12 @@ export default async function TicketsBoardContent({
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
           <TicketListView
             tickets={tickets}
+            statuses={statuses}
             showOrganizationName={showOrganizationName}
             ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
             initialView={view}
             showViewToggle={!isMobile}
+            organizationId={organizationId}
             projectId={projectId}
             initialListFilters={initialListFilters}
           />

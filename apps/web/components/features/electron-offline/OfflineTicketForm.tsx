@@ -31,8 +31,10 @@ export function OfflineTicketForm() {
     const project = projects.find(p => p.id === selectedProjectId);
     const entry = enqueueOfflineTicket({
       objective: objective.trim(),
+      organizationId: project?.organizationId,
       projectId: selectedProjectId,
-      projectName: project?.name ?? 'Unknown'
+      projectName: project?.name ?? 'Unknown',
+      projectColor: project?.color
     });
 
     setQueue(prev => [...prev, entry]);

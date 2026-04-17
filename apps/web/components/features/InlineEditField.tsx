@@ -7,7 +7,7 @@ import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { uploadImageArtifactAction } from '@/lib/actions/artifacts';
-import { updateTicketFieldAction } from '@/lib/actions/tickets';
+import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutations';
 import { convertInlineFileMentionsToMarkdown } from '@/lib/helpers/file-mentions';
 import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
@@ -58,6 +58,7 @@ export function InlineEditField({
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
+  const updateFieldsMutation = useUpdateTicketFieldsMutation();
   const canMentionFiles = multiline && field === 'objective';
 
   const { files: workspaceFiles } = useWorkspaceFileTree({
@@ -114,7 +115,7 @@ export function InlineEditField({
       return;
     }
     startTransition(async () => {
-      await updateTicketFieldAction(ticketId, field, value);
+      await updateFieldsMutation.mutateAsync({ ticketId, patch: { [field]: value } });
       setSavedValue(value);
       setEditing(false);
     });

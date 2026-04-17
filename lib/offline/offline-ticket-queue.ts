@@ -3,8 +3,10 @@ const STORAGE_KEY = 'overlord:offline:ticket-queue';
 export type QueuedTicket = {
   id: string;
   objective: string;
+  organizationId?: number;
   projectId: string;
   projectName: string;
+  projectColor?: string;
   queuedAt: string; // ISO date string
 };
 

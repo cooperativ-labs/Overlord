@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSelectedLayoutSegment } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { ProjectSettingsProvider } from '@/components/features/projects/ProjectSettingsContext';
 import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
@@ -49,12 +49,16 @@ export function ProjectLayoutClient({
   const pathname = usePathname();
   const router = useRouter();
   const selectedSegment = useSelectedLayoutSegment();
-  const initialStatuses = statuses.map(s => ({
-    name: s.name,
-    position: s.position,
-    statusType: s.status_type,
-    isDefault: s.is_default
-  }));
+  const initialStatuses = useMemo(
+    () =>
+      statuses.map(s => ({
+        name: s.name,
+        position: s.position,
+        statusType: s.status_type,
+        isDefault: s.is_default
+      })),
+    [statuses]
+  );
 
   useEffect(() => {
     if (!isElectron) return;

@@ -12,7 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { updateProjectColorAction, updateProjectNameAction } from '@/lib/actions/projects';
+import {
+  useUpdateProjectColorMutation,
+  useUpdateProjectNameMutation
+} from '@/lib/client-data/projects/mutations';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
@@ -36,6 +39,8 @@ export function ProjectSettingsSection({
 }: ProjectSettingsSectionProps) {
   const { isElectron } = useElectron();
   const router = useRouter();
+  const updateProjectNameMutation = useUpdateProjectNameMutation();
+  const updateProjectColorMutation = useUpdateProjectColorMutation();
   const pathname = usePathname();
   const projectSettings = useProjectSettings();
   const [name, setName] = useState(initialName);
@@ -91,11 +96,10 @@ export function ProjectSettingsSection({
     setNameSaveState('loading');
     setNameError(null);
     try {
-      await updateProjectNameAction({ projectId, name: trimmed });
+      await updateProjectNameMutation.mutateAsync({ projectId, name: trimmed });
       setSavedName(trimmed);
       setNameSaveState('success');
       setNameEditing(false);
-      router.refresh();
     } catch (error) {
       setNameSaveState('error');
       setNameError(error instanceof Error ? error.message : 'Failed to update name.');
@@ -118,11 +122,10 @@ export function ProjectSettingsSection({
     setColorError(null);
 
     try {
-      await updateProjectColorAction({ projectId, color: color.toLowerCase() });
+      await updateProjectColorMutation.mutateAsync({ projectId, color: color.toLowerCase() });
       setSavedColor(color.toLowerCase());
       setColorSaveState('success');
       setColorPopoverOpen(false);
-      router.refresh();
     } catch (error) {
       setColorSaveState('error');
       setColorError(error instanceof Error ? error.message : 'Failed to update color.');
