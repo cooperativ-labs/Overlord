@@ -7,6 +7,8 @@ export type BoardScope =
   | { kind: 'user'; organizationId?: number }
   | { kind: 'project'; projectId: string; organizationId?: number };
 
+export type BoardDataset = 'board' | 'list' | 'calendar';
+
 export type BoardTicket = {
   id: string;
   title: string | null;

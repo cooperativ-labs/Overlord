@@ -753,10 +753,10 @@ async function gitCommitAndPush(
       error instanceof Error && 'stderr' in error && typeof error.stderr === 'string'
         ? error.stderr
         : '';
-    throw new Error(
+    const message =
       stderr ||
-        (error instanceof Error ? error.message : 'git push failed. Ensure an upstream is set.')
-    );
+      (error instanceof Error ? error.message : 'git push failed. Ensure an upstream is set.');
+    throw new Error(message, { cause: error });
   }
 
   return { branch, commitSha, pushed: true };

@@ -333,7 +333,7 @@ function Sidebar({
       <div
         data-slot="sidebar-container"
         className={cn(
-          'fixed inset-y-0 z-10 hidden h-svh transition-[left,right,width] duration-200 ease-linear md:flex',
+          'fixed top-[var(--sidebar-top-offset,0px)] bottom-0 z-10 hidden h-[calc(100svh_-_var(--sidebar-top-offset,0px))] transition-[left,right,width] duration-200 ease-linear md:flex',
           side === 'left'
             ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
             : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
@@ -374,7 +374,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       }}
       {...props}
     >
-      <PanelLeftIcon size={20} />
+      <PanelLeftIcon size={16} />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   );

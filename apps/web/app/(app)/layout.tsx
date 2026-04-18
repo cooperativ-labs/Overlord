@@ -131,11 +131,10 @@ export default async function RootLayout({
                   <SystemNotificationProvider>
                     <SidebarProvider defaultOpen={sidebarDefaultOpen} className="h-dvh min-h-0">
                       {user ? (
-                        <div className="flex h-full w-full flex-col overflow-hidden">
+                        <div className="flex h-full w-full flex-col overflow-hidden [--sidebar-top-offset:2.75rem]">
                           <OfflineTicketProcessor />
                           <AnnouncementBar />
-                          {/* Electron title bar drag region — hidden in browser */}
-                          <div className="electron-drag-region shrink-0" />
+                          <NavHeader />
                           <div className="flex min-h-0 flex-1 overflow-hidden">
                             <AppSidebar
                               user={{
@@ -155,7 +154,6 @@ export default async function RootLayout({
                               selectedOrgId={selectedOrgId}
                             />
                             <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
-                              <NavHeader />
                               <SidePanelProvider className="flex flex-col overflow-hidden">
                                 <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
                                   <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">

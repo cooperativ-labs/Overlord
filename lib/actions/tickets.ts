@@ -9,6 +9,7 @@ import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import type {
   BoardBootstrap,
+  BoardDataset,
   BoardScope,
   BoardStatus
 } from '@/lib/client-data/tickets/board-types';
@@ -535,7 +536,8 @@ export async function createTicketInColumnAction(
   ticketId: string,
   organizationId?: number,
   projectId?: string,
-  position: 'top' | 'bottom' = 'top'
+  position: 'top' | 'bottom' = 'top',
+  generateTitle = true
 ) {
   const supabase = await createClient();
   const selected = await resolveTicketProjectAndOrganization(supabase, {
@@ -554,7 +556,8 @@ export async function createTicketInColumnAction(
   const trimmedObjective = objective.trim() || null;
 
   // Generate title: AI-summarised for long objectives, truncated for short ones
-  const title = trimmedObjective ? await generateTicketTitleAction(trimmedObjective) : null;
+  const title =
+    generateTitle && trimmedObjective ? await generateTicketTitleAction(trimmedObjective) : null;
 
   const insertPayload: {
     id: string;
@@ -1477,31 +1480,55 @@ export async function getTicketStatusesAction(organizationId?: number): Promise<
   }));
 }
 
-export async function getTicketBoardBootstrapAction(scope: BoardScope): Promise<BoardBootstrap> {
+export async function getTicketBoardBootstrapAction(
+  scope: BoardScope,
+  dataset: BoardDataset = 'board'
+): Promise<BoardBootstrap> {
   const supabase = await createClient();
   const organizationId = scope.organizationId;
   const projectId = scope.kind === 'project' ? scope.projectId : undefined;
   const statuses = await getTicketStatusesAction(organizationId);
 
-  const ticketResults = await Promise.all(
-    statuses.map(async status => {
-      let query = supabase
-        .from('tickets')
-        .select(TICKET_BOARD_SELECT)
-        .eq('status', status.name)
-        .order('updated_at', { ascending: false })
-        .limit(20);
+  const ticketResults =
+    dataset === 'calendar'
+      ? [
+          await (async () => {
+            let query = supabase
+              .from('tickets')
+              .select(TICKET_BOARD_SELECT)
+              .not('due_datetime', 'is', null)
+              .order('due_datetime', { ascending: true })
+              .limit(500);
 
-      if (organizationId !== undefined) {
-        query = query.eq('organization_id', organizationId);
-      }
-      if (projectId !== undefined) {
-        query = query.eq('project_id', projectId);
-      }
+            if (organizationId !== undefined) {
+              query = query.eq('organization_id', organizationId);
+            }
+            if (projectId !== undefined) {
+              query = query.eq('project_id', projectId);
+            }
 
-      return query;
-    })
-  );
+            return query;
+          })()
+        ]
+      : await Promise.all(
+          statuses.map(async status => {
+            let query = supabase
+              .from('tickets')
+              .select(TICKET_BOARD_SELECT)
+              .eq('status', status.name)
+              .order('updated_at', { ascending: false })
+              .limit(20);
+
+            if (organizationId !== undefined) {
+              query = query.eq('organization_id', organizationId);
+            }
+            if (projectId !== undefined) {
+              query = query.eq('project_id', projectId);
+            }
+
+            return query;
+          })
+        );
 
   const ticketLoadError = ticketResults.find(result => result.error)?.error;
   if (ticketLoadError) throw new Error(ticketLoadError.message);

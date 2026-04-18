@@ -79,6 +79,7 @@ export type CreateTicketInput = {
   organizationId?: number;
   projectId?: string;
   placement?: ColumnPlacement;
+  generateServerTitle?: boolean;
 };
 
 export type CreateTicketResult = {
@@ -109,7 +110,8 @@ export function useCreateTicketMutation(): UseMutationResult<
         input.optimisticTicket.id,
         input.organizationId,
         input.projectId,
-        placement === 'top' ? 'top' : 'bottom'
+        placement === 'top' ? 'top' : 'bottom',
+        input.generateServerTitle ?? true
       );
     },
     onMutate: input => {

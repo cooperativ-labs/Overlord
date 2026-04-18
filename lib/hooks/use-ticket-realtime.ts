@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 
+import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
@@ -107,28 +109,56 @@ export function useTicketRealtime({
   initialSession,
   initialSharedState
 }: UseTicketRealtimeOptions) {
-  const [events, setEvents] = useState<TicketEvent[]>(initialEvents);
-  const [artifacts, setArtifacts] = useState<Artifact[]>(initialArtifacts);
-  const [fileChanges, setFileChanges] = useState<FileChange[]>(initialFileChanges);
-  const [session, setSession] = useState<AgentSession | null>(initialSession);
-  const [sharedState, setSharedState] = useState<SharedState[]>(initialSharedState);
+  const queryClient = useQueryClient();
   const notifiedEventIdsRef = useRef<Set<string>>(new Set());
+  const eventsQuery = useQuery({
+    queryKey: ticketQueryKeys.ticketEvents(ticketId),
+    queryFn: async () => initialEvents,
+    initialData: initialEvents,
+    staleTime: 30_000,
+    refetchOnMount: false
+  });
+  const artifactsQuery = useQuery({
+    queryKey: ticketQueryKeys.ticketArtifacts(ticketId),
+    queryFn: async () => initialArtifacts,
+    initialData: initialArtifacts,
+    staleTime: 30_000,
+    refetchOnMount: false
+  });
+  const fileChangesQuery = useQuery({
+    queryKey: ticketQueryKeys.ticketFileChanges(ticketId),
+    queryFn: async () => initialFileChanges,
+    initialData: initialFileChanges,
+    staleTime: 30_000,
+    refetchOnMount: false
+  });
+  const sessionQuery = useQuery({
+    queryKey: ticketQueryKeys.ticketSession(ticketId),
+    queryFn: async () => initialSession,
+    initialData: initialSession,
+    staleTime: 30_000,
+    refetchOnMount: false
+  });
+  const sharedStateQuery = useQuery({
+    queryKey: ticketQueryKeys.ticketSharedState(ticketId),
+    queryFn: async () => initialSharedState,
+    initialData: initialSharedState,
+    staleTime: 30_000,
+    refetchOnMount: false
+  });
 
   useEffect(() => {
     notifiedEventIdsRef.current = new Set();
   }, [ticketId]);
 
   useEffect(() => {
-    // Seed local realtime state when switching tickets. We intentionally avoid
-    // re-seeding on every new array/object reference for initial props because
-    // that can create update loops when parent trees re-render with equivalent data.
-    setEvents(initialEvents);
-    setArtifacts(initialArtifacts);
-    setFileChanges(initialFileChanges);
-    setSession(initialSession);
-    setSharedState(initialSharedState);
+    queryClient.setQueryData(ticketQueryKeys.ticketEvents(ticketId), initialEvents);
+    queryClient.setQueryData(ticketQueryKeys.ticketArtifacts(ticketId), initialArtifacts);
+    queryClient.setQueryData(ticketQueryKeys.ticketFileChanges(ticketId), initialFileChanges);
+    queryClient.setQueryData(ticketQueryKeys.ticketSession(ticketId), initialSession);
+    queryClient.setQueryData(ticketQueryKeys.ticketSharedState(ticketId), initialSharedState);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial* omitted on purpose; see comment above
-  }, [ticketId]);
+  }, [queryClient, ticketId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,27 +203,33 @@ export function useTicketRealtime({
       if (cancelled) return;
 
       if (eventsResult.data) {
-        setEvents(previous =>
-          mergeNewestById(eventsResult.data ?? [], previous, row => row.created_at)
+        queryClient.setQueryData<TicketEvent[]>(ticketQueryKeys.ticketEvents(ticketId), previous =>
+          mergeNewestById(eventsResult.data ?? [], previous ?? [], row => row.created_at)
         );
       }
       if (artifactsResult.data) {
-        setArtifacts(previous =>
-          mergeNewestById(artifactsResult.data ?? [], previous, row => row.created_at)
+        queryClient.setQueryData<Artifact[]>(ticketQueryKeys.ticketArtifacts(ticketId), previous =>
+          mergeNewestById(artifactsResult.data ?? [], previous ?? [], row => row.created_at)
         );
       }
       if (fileChangesResult.data) {
-        setFileChanges(previous =>
-          mergeNewestById(fileChangesResult.data ?? [], previous, row => row.created_at)
+        queryClient.setQueryData<FileChange[]>(
+          ticketQueryKeys.ticketFileChanges(ticketId),
+          previous =>
+            mergeNewestById(fileChangesResult.data ?? [], previous ?? [], row => row.created_at)
         );
       }
       if (stateResult.data) {
-        setSharedState(previous =>
-          mergeNewestById(stateResult.data ?? [], previous, row => row.created_at)
+        queryClient.setQueryData<SharedState[]>(
+          ticketQueryKeys.ticketSharedState(ticketId),
+          previous => mergeNewestById(stateResult.data ?? [], previous ?? [], row => row.created_at)
         );
       }
       if (sessionResult.data) {
-        setSession(previous => pickNewestSession(previous, sessionResult.data));
+        queryClient.setQueryData<AgentSession | null>(
+          ticketQueryKeys.ticketSession(ticketId),
+          previous => pickNewestSession(previous ?? null, sessionResult.data)
+        );
       }
     };
 
@@ -209,7 +245,10 @@ export function useTicketRealtime({
         },
         payload => {
           const incomingEvent = payload.new;
-          setEvents(previous => mergeNewestById([incomingEvent], previous, row => row.created_at));
+          queryClient.setQueryData<TicketEvent[]>(
+            ticketQueryKeys.ticketEvents(ticketId),
+            previous => mergeNewestById([incomingEvent], previous ?? [], row => row.created_at)
+          );
 
           if (
             shouldShowDesktopNotification(incomingEvent) &&
@@ -234,7 +273,10 @@ export function useTicketRealtime({
           filter: `ticket_id=eq.${ticketId}`
         },
         payload => {
-          setArtifacts(previous => mergeNewestById([payload.new], previous, row => row.created_at));
+          queryClient.setQueryData<Artifact[]>(
+            ticketQueryKeys.ticketArtifacts(ticketId),
+            previous => mergeNewestById([payload.new], previous ?? [], row => row.created_at)
+          );
         }
       )
       .on<FileChange>(
@@ -246,8 +288,9 @@ export function useTicketRealtime({
           filter: `ticket_id=eq.${ticketId}`
         },
         payload => {
-          setFileChanges(previous =>
-            mergeNewestById([payload.new], previous, row => row.created_at)
+          queryClient.setQueryData<FileChange[]>(
+            ticketQueryKeys.ticketFileChanges(ticketId),
+            previous => mergeNewestById([payload.new], previous ?? [], row => row.created_at)
           );
         }
       )
@@ -260,7 +303,10 @@ export function useTicketRealtime({
           filter: `ticket_id=eq.${ticketId}`
         },
         payload => {
-          setSession(previous => pickNewestSession(previous, payload.new));
+          queryClient.setQueryData<AgentSession | null>(
+            ticketQueryKeys.ticketSession(ticketId),
+            previous => pickNewestSession(previous ?? null, payload.new)
+          );
         }
       )
       .on<AgentSession>(
@@ -272,7 +318,10 @@ export function useTicketRealtime({
           filter: `ticket_id=eq.${ticketId}`
         },
         payload => {
-          setSession(previous => pickNewestSession(previous, payload.new));
+          queryClient.setQueryData<AgentSession | null>(
+            ticketQueryKeys.ticketSession(ticketId),
+            previous => pickNewestSession(previous ?? null, payload.new)
+          );
         }
       )
       .on<SharedState>(
@@ -284,8 +333,9 @@ export function useTicketRealtime({
           filter: `ticket_id=eq.${ticketId}`
         },
         payload => {
-          setSharedState(previous =>
-            mergeNewestById([payload.new], previous, row => row.created_at)
+          queryClient.setQueryData<SharedState[]>(
+            ticketQueryKeys.ticketSharedState(ticketId),
+            previous => mergeNewestById([payload.new], previous ?? [], row => row.created_at)
           );
         }
       )
@@ -306,7 +356,13 @@ export function useTicketRealtime({
       window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
-  }, [ticketId]);
+  }, [queryClient, ticketId]);
 
-  return { events, artifacts, fileChanges, session, sharedState };
+  return {
+    events: eventsQuery.data ?? [],
+    artifacts: artifactsQuery.data ?? [],
+    fileChanges: fileChangesQuery.data ?? [],
+    session: sessionQuery.data ?? null,
+    sharedState: sharedStateQuery.data ?? []
+  };
 }

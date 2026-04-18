@@ -2,13 +2,6 @@
 
 import { type ComponentProps, createContext, useContext, useState } from 'react';
 
-import {
-  useTicketArtifacts,
-  useTicketEvents,
-  useTicketFileChanges,
-  useTicketSession,
-  useTicketSharedState
-} from '@/lib/client-data/tickets/detail-hooks';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import { type AgentSelectorValue } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
@@ -58,12 +51,6 @@ export function TicketLiveProvider({
   initialSession,
   initialSharedState
 }: TicketLiveProviderProps) {
-  useTicketEvents(ticketId, initialEvents);
-  useTicketArtifacts(ticketId, initialArtifacts);
-  useTicketFileChanges(ticketId, initialFileChanges);
-  useTicketSession(ticketId, initialSession);
-  useTicketSharedState(ticketId, initialSharedState);
-
   const liveState = useTicketRealtime({
     ticketId,
     initialEvents,

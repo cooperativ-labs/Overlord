@@ -114,7 +114,7 @@ export function NewTicketModal({
       const trimmedObjective = objective.trim();
       const clientTicketId = crypto.randomUUID();
 
-      await createTicketMutation.mutateAsync({
+      const createPromise = createTicketMutation.mutateAsync({
         optimisticTicket: {
           id: clientTicketId,
           title: deriveTitleFromObjective(trimmedObjective),
@@ -139,16 +139,10 @@ export function NewTicketModal({
         objective: trimmedObjective,
         organizationId,
         projectId: selectedProjectId,
-        placement: 'top'
+        placement: 'top',
+        generateServerTitle: false
       });
-      updateAssignmentMutation.mutate({ ticketId: clientTicketId, selection });
-      if (trimmedObjective) {
-        const title = await generateTicketTitleAction(trimmedObjective);
-        updateFieldsMutation.mutate({
-          ticketId: clientTicketId,
-          patch: { title, objective: trimmedObjective }
-        });
-      }
+
       setSubmitButtonState('success');
       onOpenChange(false);
 
@@ -156,6 +150,23 @@ export function NewTicketModal({
       setObjective('');
       setSelectedProjectId(resolvedDefaultProjectId);
       setSubmitButtonState('default');
+
+      void (async () => {
+        try {
+          await createPromise;
+          await updateAssignmentMutation.mutateAsync({ ticketId: clientTicketId, selection });
+          if (trimmedObjective) {
+            const title = await generateTicketTitleAction(trimmedObjective);
+            await updateFieldsMutation.mutateAsync({
+              ticketId: clientTicketId,
+              patch: { title, objective: trimmedObjective }
+            });
+          }
+        } catch (error) {
+          console.error('Failed to finish ticket creation:', error);
+          toast.error('Failed to create ticket.');
+        }
+      })();
     } catch (error) {
       setSubmitButtonState('error');
       console.error('Failed to submit ticket:', error);

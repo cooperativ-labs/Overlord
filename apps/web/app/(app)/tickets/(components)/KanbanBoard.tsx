@@ -183,6 +183,7 @@ export default function KanbanBoard({
     [boardScope, initialTickets, statuses]
   );
   const boardQuery = useTicketBoard(boardScope, boardBootstrap, {
+    dataset: 'board',
     refetchInterval: 20_000
   });
   const tickets = useMemo(

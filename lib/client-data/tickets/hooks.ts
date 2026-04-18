@@ -13,7 +13,13 @@ import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/r
 import type { SidebarProject } from '@/lib/actions/projects';
 
 import { normalizeBoardBootstrap } from './board-normalize';
-import type { BoardBootstrap, BoardScope, BoardStatus, TicketBoardState } from './board-types';
+import type {
+  BoardBootstrap,
+  BoardDataset,
+  BoardScope,
+  BoardStatus,
+  TicketBoardState
+} from './board-types';
 import { defaultBoardFetcher, defaultProjectsFetcher, defaultStatusesFetcher } from './fetchers';
 import { ticketQueryKeys } from './query-keys';
 
@@ -22,14 +28,19 @@ type ReadOnlyQueryOptions<TData> = Pick<
   'enabled' | 'staleTime' | 'refetchOnMount' | 'refetchInterval'
 >;
 
+export type TicketBoardQueryOptions = ReadOnlyQueryOptions<TicketBoardState> & {
+  dataset?: BoardDataset;
+};
+
 export function useTicketBoard(
   scope: BoardScope,
   initialData: BoardBootstrap,
-  options?: ReadOnlyQueryOptions<TicketBoardState>
+  options?: TicketBoardQueryOptions
 ): UseQueryResult<TicketBoardState, Error> {
+  const dataset = options?.dataset ?? 'board';
   return useQuery<TicketBoardState, Error, TicketBoardState>({
-    queryKey: ticketQueryKeys.board(scope),
-    queryFn: async () => normalizeBoardBootstrap(await defaultBoardFetcher(scope)),
+    queryKey: ticketQueryKeys.board(scope, dataset),
+    queryFn: async () => normalizeBoardBootstrap(await defaultBoardFetcher(scope, dataset)),
     initialData: () => normalizeBoardBootstrap(initialData),
     staleTime: options?.staleTime ?? 30_000,
     refetchOnMount: options?.refetchOnMount ?? false,

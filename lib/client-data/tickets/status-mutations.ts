@@ -9,8 +9,9 @@ import {
   updateTicketStatusNameAction
 } from '@/lib/actions/ticket-statuses';
 
+import { renameTicketStatus } from './board-reducers';
 import type { BoardStatus, TicketBoardState } from './board-types';
-import { applyStatusListToBoards, restoreBoards, snapshotBoards } from './cache';
+import { applyStatusListToBoards, applyToAllBoards, restoreBoards, snapshotBoards } from './cache';
 import { ticketQueryKeys } from './query-keys';
 
 type StatusSnapshot = {
@@ -52,6 +53,14 @@ function setStatuses(queryClient: QueryClient, organizationId: number, statuses:
   const sorted = sortStatuses(statuses);
   queryClient.setQueryData(ticketQueryKeys.statuses(organizationId), sorted);
   applyStatusListToBoards(queryClient, sorted);
+}
+
+function renameStatusInBoards(
+  queryClient: QueryClient,
+  currentName: string,
+  nextStatus: BoardStatus
+) {
+  applyToAllBoards(queryClient, state => renameTicketStatus(state, currentName, nextStatus));
 }
 
 function patchStatuses(
@@ -139,11 +148,18 @@ export function useRenameTicketStatusMutation() {
       const snapshot = snapshotStatusState(queryClient, input.organizationId);
       const currentName = normalizeStatusName(input.currentName);
       const nextName = normalizeStatusName(input.nextName);
+      const currentStatuses =
+        queryClient.getQueryData<BoardStatus[]>(ticketQueryKeys.statuses(input.organizationId)) ??
+        [];
+      const existing = currentStatuses.find(status => status.name === currentName);
+      const optimisticStatus: BoardStatus = {
+        ...(existing ?? { position: currentStatuses.length, status_type: 'draft' }),
+        name: nextName
+      };
       patchStatuses(queryClient, input.organizationId, statuses =>
-        statuses.map(status =>
-          status.name === currentName ? { ...status, name: nextName } : status
-        )
+        statuses.map(status => (status.name === currentName ? optimisticStatus : status))
       );
+      renameStatusInBoards(queryClient, currentName, optimisticStatus);
       return snapshot;
     },
     onError: (_error, input, snapshot) => {
@@ -152,11 +168,11 @@ export function useRenameTicketStatusMutation() {
     onSuccess: (updated, input) => {
       if (!updated) return;
       const updatedStatus = toBoardStatus(updated);
+      const nextName = normalizeStatusName(input.nextName);
       patchStatuses(queryClient, input.organizationId, statuses =>
-        statuses.map(status =>
-          status.name === normalizeStatusName(input.nextName) ? updatedStatus : status
-        )
+        statuses.map(status => (status.name === nextName ? updatedStatus : status))
       );
+      renameStatusInBoards(queryClient, nextName, updatedStatus);
     }
   });
 }

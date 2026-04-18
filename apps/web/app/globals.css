@@ -152,6 +152,6 @@ html[data-electron] .electron-no-drag {
   -webkit-app-region: no-drag;
 }
 
-html[data-electron] .electron-sidebar-offset {
-  padding-top: 1.75rem; /* 40px — clears traffic lights */
+html[data-electron] .electron-traffic-pad {
+  padding-left: 5.25rem; /* 84px — clears macOS traffic lights (x=14 + ~70px) */
 }

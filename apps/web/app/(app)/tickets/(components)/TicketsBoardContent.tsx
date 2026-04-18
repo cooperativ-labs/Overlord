@@ -3,7 +3,12 @@ import { headers } from 'next/headers';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
-import type { BoardScope, BoardStatus, BoardTicket } from '@/lib/client-data/tickets/board-types';
+import type {
+  BoardDataset,
+  BoardScope,
+  BoardStatus,
+  BoardTicket
+} from '@/lib/client-data/tickets/board-types';
 import BoardHydrationBoundary from '@/lib/client-data/tickets/BoardHydrationBoundary';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
@@ -340,6 +345,7 @@ export default async function TicketsBoardContent({
 
   const showBoard = view === 'board' && statuses.length > 0;
   const showCalendar = view === 'calendar';
+  const boardDataset: BoardDataset = showCalendar ? 'calendar' : view === 'list' ? 'list' : 'board';
 
   const boardScope: BoardScope = projectId
     ? { kind: 'project', projectId, organizationId }
@@ -386,6 +392,7 @@ export default async function TicketsBoardContent({
           statuses: boardBootstrapStatuses
         }}
         statuses={boardBootstrapStatuses}
+        dataset={boardDataset}
         organizationId={organizationId}
       />
       {loadError ? (

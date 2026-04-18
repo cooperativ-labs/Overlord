@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.6.0] - 2026-04-18:10:03
+
+### Added
+- **Board dataset** support (`board`, `list`, `calendar`) on ticket queries and bootstrap so Kanban, list, and calendar each keep their own React Query cache instead of overwriting one another when switching views.
+- **Calendar** bootstrap loads tickets with a **due date** (up to 500, ordered by due time) for a dataset that matches what the calendar UI needs.
+
+### Fixed
+- **Rename ticket status (column)** applies an optimistic **rename across cached boards** (including every board dataset key) so tickets under the old status name move to the new name immediately and stay aligned after the server responds.
+- **New Ticket** and **Quick Run** return to a ready state right after the create mutation is scheduled, then **await creation** before assignment, AI title refresh, and (Quick Run) **agent launch and navigation**—avoiding races where follow-up steps ran before the row existed; surface clearer error toasts when post-create steps fail.
+- **Ticket detail realtime** (`useTicketRealtime`) now updates **TanStack Query** caches for events, artifacts, file changes, session, and shared state (same keys as the detail hooks) and drops redundant prefetch-only subscriptions from **`TicketLiveProvider`**.
+- Desktop **git commit/push** IPC throws errors that **preserve `cause`** from the underlying Git failure for easier diagnosis.
+
+### Changed
+- **App chrome**: **`NavHeader`** spans the full width **above** the sidebar and main content; the docked sidebar respects **`--sidebar-top-offset`** so it sits under the header. On **Electron**, traffic-light clearance uses **`electron-traffic-pad`** on the header instead of extra padding on the sidebar header.
+- **Ticket search** styling: remove **scale** transforms on focus and on the results popover so the control stays stable and predictable.
+- Slightly smaller **sidebar trigger** icon in the header toolbar.
+- **`createTicketInColumnAction`** accepts a **`generateTitle`** flag (default on) so flows that set the title client-side can skip the server-side title pass on insert.
+
+### Security
+- None.
+
+### Removed
+- Drop stale internal doc **`ai/feature-plans/agent-file-change-submission-hardening.md`**.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to 4.6.0; update Yarn lockfile and `.yarnrc.yml`.
+
 ## [4.5.0] - 2026-04-18:08:54
 
 ### Added

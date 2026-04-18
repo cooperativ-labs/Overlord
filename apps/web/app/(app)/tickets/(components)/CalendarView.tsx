@@ -144,7 +144,7 @@ export default function CalendarView({
     () => buildBoardBootstrap({ scope: boardScope, tickets: initialTickets, statuses }),
     [boardScope, initialTickets, statuses]
   );
-  const boardQuery = useTicketBoard(boardScope, boardBootstrap);
+  const boardQuery = useTicketBoard(boardScope, boardBootstrap, { dataset: 'calendar' });
   const tickets = useMemo(
     () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
     [boardQuery.data, initialTickets]

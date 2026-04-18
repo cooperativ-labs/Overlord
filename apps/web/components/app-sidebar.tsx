@@ -215,7 +215,7 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="electron-sidebar-offset">
+      <SidebarHeader>
         <TeamSwitcher organizations={organizations} selectedOrgId={selectedOrgId} />
       </SidebarHeader>
       <SidebarContent>

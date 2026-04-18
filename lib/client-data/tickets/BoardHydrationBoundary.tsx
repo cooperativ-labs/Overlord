@@ -13,7 +13,7 @@ import { useEffect } from 'react';
 
 import type { SidebarProject } from '@/lib/actions/projects';
 
-import type { BoardBootstrap, BoardScope, BoardStatus } from './board-types';
+import type { BoardBootstrap, BoardDataset, BoardScope, BoardStatus } from './board-types';
 import { useProjects, useTicketBoard, useTicketStatuses } from './hooks';
 
 /** Stable fallback so `useProjects` does not see a new `initialData` reference every render. */
@@ -23,6 +23,7 @@ export type BoardHydrationBoundaryProps = {
   scope: BoardScope;
   bootstrap: BoardBootstrap;
   statuses: BoardStatus[];
+  dataset?: BoardDataset;
   organizationId?: number;
   projects?: SidebarProject[];
 };
@@ -31,10 +32,11 @@ export default function BoardHydrationBoundary({
   scope,
   bootstrap,
   statuses,
+  dataset = 'board',
   organizationId,
   projects
 }: BoardHydrationBoundaryProps) {
-  const boardQuery = useTicketBoard(scope, bootstrap);
+  const boardQuery = useTicketBoard(scope, bootstrap, { dataset });
   const statusesQuery = useTicketStatuses(organizationId, statuses);
   const projectsQuery = useProjects(projects ?? EMPTY_PROJECTS);
 

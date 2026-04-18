@@ -5,22 +5,23 @@
 // through the helpers rather than inlining key arrays to keep invalidation
 // call-sites greppable.
 
-import type { BoardScope } from './board-types';
+import type { BoardDataset, BoardScope } from './board-types';
 
 export const ticketQueryKeys = {
   all: ['tickets'] as const,
 
-  board: (scope: BoardScope) => {
+  board: (scope: BoardScope, dataset: BoardDataset = 'board') => {
     if (scope.kind === 'project') {
       return [
         'tickets',
         'board',
         'project',
         scope.projectId,
-        scope.organizationId ?? null
+        scope.organizationId ?? null,
+        dataset
       ] as const;
     }
-    return ['tickets', 'board', 'user', scope.organizationId ?? null] as const;
+    return ['tickets', 'board', 'user', scope.organizationId ?? null, dataset] as const;
   },
 
   statuses: (organizationId?: number) => ['tickets', 'statuses', organizationId ?? null] as const,

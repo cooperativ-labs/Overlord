@@ -263,6 +263,30 @@ export function applyStatusListChange(
   return { ...state, ticketStatusesByName: next };
 }
 
+export function renameTicketStatus(
+  state: TicketBoardState,
+  currentName: string,
+  nextStatus: BoardStatus
+): TicketBoardState {
+  const nextStatuses = { ...state.ticketStatusesByName };
+  delete nextStatuses[currentName];
+  nextStatuses[nextStatus.name] = nextStatus;
+
+  let changedTickets = false;
+  const nextTickets = { ...state.ticketsById };
+  for (const ticket of Object.values(state.ticketsById)) {
+    if (ticket.status !== currentName) continue;
+    nextTickets[ticket.id] = { ...ticket, status: nextStatus.name };
+    changedTickets = true;
+  }
+
+  return {
+    ...state,
+    ticketStatusesByName: nextStatuses,
+    ticketsById: changedTickets ? nextTickets : state.ticketsById
+  };
+}
+
 export function withPendingMutation(
   state: TicketBoardState,
   entityId: string,

@@ -118,7 +118,7 @@ export default function TicketListView({
     () => buildBoardBootstrap({ scope: boardScope, tickets: initialTickets, statuses }),
     [boardScope, initialTickets, statuses]
   );
-  const boardQuery = useTicketBoard(boardScope, boardBootstrap);
+  const boardQuery = useTicketBoard(boardScope, boardBootstrap, { dataset: 'list' });
   const tickets = useMemo(
     () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
     [boardQuery.data, initialTickets]

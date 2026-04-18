@@ -115,7 +115,7 @@ export function QuickRunModal({
       const trimmedObjective = objective.trim();
       const clientTicketId = crypto.randomUUID();
 
-      await createTicketMutation.mutateAsync({
+      const createPromise = createTicketMutation.mutateAsync({
         optimisticTicket: {
           id: clientTicketId,
           title: deriveTitleFromObjective(trimmedObjective),
@@ -140,29 +140,10 @@ export function QuickRunModal({
         objective: trimmedObjective,
         organizationId,
         projectId: selectedProjectId,
-        placement: 'top'
+        placement: 'top',
+        generateServerTitle: false
       });
-      updateAssignmentMutation.mutate({ ticketId: clientTicketId, selection });
-      if (trimmedObjective) {
-        const title = await generateTicketTitleAction(trimmedObjective);
-        updateFieldsMutation.mutate({
-          ticketId: clientTicketId,
-          patch: { title, objective: trimmedObjective }
-        });
-      }
 
-      // Ensure we have an agent token, then launch
-      const agentToken = await ensureAgentTokenAction(organizationId);
-      await launchAgent(
-        clientTicketId,
-        selection.agent,
-        selectedProject.local_working_directory ?? undefined,
-        agentToken,
-        'run',
-        undefined,
-        selection.model ?? undefined,
-        selection.thinking ?? undefined
-      );
       setSubmitButtonState('success');
       onOpenChange(false);
 
@@ -171,7 +152,40 @@ export function QuickRunModal({
       setSelectedProjectId(resolvedDefaultProjectId);
       setSubmitButtonState('default');
 
-      router.push(buildTicketPath({ projectId: selectedProjectId, ticketId: clientTicketId }));
+      void (async () => {
+        try {
+          await createPromise;
+          await updateAssignmentMutation.mutateAsync({ ticketId: clientTicketId, selection });
+          if (trimmedObjective) {
+            const title = await generateTicketTitleAction(trimmedObjective);
+            await updateFieldsMutation.mutateAsync({
+              ticketId: clientTicketId,
+              patch: { title, objective: trimmedObjective }
+            });
+          }
+
+          const agentToken = await ensureAgentTokenAction(organizationId);
+          await launchAgent(
+            clientTicketId,
+            selection.agent,
+            selectedProject.local_working_directory ?? undefined,
+            agentToken,
+            'run',
+            undefined,
+            selection.model ?? undefined,
+            selection.thinking ?? undefined
+          );
+          router.push(buildTicketPath({ projectId: selectedProjectId, ticketId: clientTicketId }));
+        } catch (error) {
+          console.error('Failed to run ticket:', error);
+          toast.error('Failed to launch agent', {
+            description:
+              error instanceof Error && error.message.trim().length > 0
+                ? error.message
+                : 'Check your terminal settings and agent token, then try again.'
+          });
+        }
+      })();
     } catch (error) {
       setSubmitButtonState('error');
       console.error('Failed to run ticket:', error);
