@@ -13,11 +13,22 @@ import { useAuth } from '@/lib/auth-context';
 import { getSupabase } from '@/lib/supabase';
 import type { Server } from '@/lib/types';
 
+export function isConnectedSSHServer(server: Server): boolean {
+  return (
+    server.status === 'connected' &&
+    (server.transport === 'ssh' || server.transport === 'tailscale_ssh')
+  );
+}
+
+export function getConnectedSSHServers(servers: Server[]): Server[] {
+  return servers.filter(isConnectedSSHServer);
+}
+
 interface ServerConnectionsContextValue {
   servers: Server[];
   connectedSSHServers: Server[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<Server[]>;
   getServerById: (serverId: string) => Server | null;
 }
 
@@ -34,12 +45,14 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
 
   const refresh = useCallback(async () => {
     if (!userId) {
+      console.log('[ServerConnections] refresh skipped - no signed-in user');
       hasLoadedRef.current = false;
       setServers([]);
       setLoading(false);
-      return;
+      return [];
     }
 
+    console.log(`[ServerConnections] refresh start for user ${userId}`);
     if (!hasLoadedRef.current) {
       setLoading(true);
     }
@@ -69,8 +82,13 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
       );
       setServers(loadedServers);
       hasLoadedRef.current = true;
+      console.log(
+        `[ServerConnections] refresh complete: ${loadedServers.length} server(s), ${getConnectedSSHServers(loadedServers).length} connected`
+      );
+      return loadedServers;
     } catch (error) {
       console.error('Failed to load server connections:', error);
+      return servers;
     } finally {
       setLoading(false);
     }
@@ -121,17 +139,10 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
   }, [refresh, userId]);
 
   const value = useMemo<ServerConnectionsContextValue>(() => {
-    const connectedSSHServers = servers.filter(
-      server =>
-        server.status === 'connected' &&
-        (server.transport === 'ssh' || server.transport === 'tailscale_ssh')
-    );
+    const connectedSSHServers = getConnectedSSHServers(servers);
 
     if (servers.length > 0) {
-      const excluded = servers.filter(
-        s =>
-          !(s.status === 'connected' && (s.transport === 'ssh' || s.transport === 'tailscale_ssh'))
-      );
+      const excluded = servers.filter(s => !isConnectedSSHServer(s));
       console.log(
         `[ServerConnections] connectedSSHServers: ${connectedSSHServers.length}/${servers.length}`,
         connectedSSHServers.map(s => s.label)

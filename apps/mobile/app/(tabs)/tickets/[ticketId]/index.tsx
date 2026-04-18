@@ -21,7 +21,10 @@ import {
 import { colors } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { launchTicketOnServer, launchTicketOnServerWithPassword } from '@/lib/remote-ticket-launch';
-import { useServerConnections } from '@/lib/server-connections-context';
+import {
+  getConnectedSSHServers,
+  useServerConnections
+} from '@/lib/server-connections-context';
 import {
   getServerDeviceCredential,
   saveServerDeviceCredential
@@ -150,6 +153,24 @@ export default function TicketDetailScreen() {
     }, [refreshServers])
   );
 
+  useEffect(() => {
+    console.log('[TicketDetail] server connections updated', {
+      loadingServers,
+      allServers: allServers.map(server => ({
+        id: server.id,
+        label: server.label,
+        status: server.status,
+        transport: server.transport
+      })),
+      connectedSSHServers: availableServers.map(server => ({
+        id: server.id,
+        label: server.label,
+        status: server.status,
+        transport: server.transport
+      }))
+    });
+  }, [allServers, availableServers, loadingServers]);
+
   async function handleSaveObjective() {
     const trimmedObjective = objectiveDraft.trim();
     if (!trimmedObjective) {
@@ -267,6 +288,15 @@ export default function TicketDetailScreen() {
   async function launchWithPassword(server: Server, password: string) {
     if (!ticket || !resolvedAssignedSelection) return;
 
+    console.log('[TicketDetail] launchWithPassword', {
+      server: {
+        id: server.id,
+        label: server.label,
+        status: server.status,
+        transport: server.transport
+      },
+      agent: resolvedAssignedSelection.agent
+    });
     setLaunchingServerId(server.id);
     try {
       const result = await launchTicketOnServerWithPassword({
@@ -309,6 +339,15 @@ export default function TicketDetailScreen() {
   async function installKeyAndLaunch(server: Server, password: string) {
     if (!ticket || !resolvedAssignedSelection) return;
 
+    console.log('[TicketDetail] installKeyAndLaunch', {
+      server: {
+        id: server.id,
+        label: server.label,
+        status: server.status,
+        transport: server.transport
+      },
+      agent: resolvedAssignedSelection.agent
+    });
     setLaunchingServerId(server.id);
 
     try {
@@ -420,7 +459,20 @@ export default function TicketDetailScreen() {
   async function handleLaunchOnServer(server: Server) {
     if (!ticket || !resolvedAssignedSelection) return;
 
+    console.log('[TicketDetail] handleLaunchOnServer', {
+      server: {
+        id: server.id,
+        label: server.label,
+        status: server.status,
+        transport: server.transport
+      }
+    });
     const credential = await getServerDeviceCredential(server.id);
+    console.log('[TicketDetail] launch credential lookup result', {
+      serverId: server.id,
+      hasCredential: !!credential?.keyTag,
+      keyTag: credential?.keyTag ?? null
+    });
 
     if (!credential?.keyTag) {
       // No device key — prompt for password to install one
@@ -518,7 +570,7 @@ export default function TicketDetailScreen() {
     }
   }
 
-  function promptForServerLaunch() {
+  async function promptForServerLaunch() {
     console.log('[TicketDetail] promptForServerLaunch called', {
       hasResolvedAgent: !!resolvedAssignedSelection,
       isSSHSupported,
@@ -551,24 +603,43 @@ export default function TicketDetailScreen() {
       return;
     }
 
-    if (availableServers.length === 0) {
+    let freshAllServers = allServers;
+    let freshAvailableServers = availableServers;
+
+    try {
+      freshAllServers = await refreshServers();
+      freshAvailableServers = getConnectedSSHServers(freshAllServers);
+      console.log('[TicketDetail] refreshed servers before launch', {
+        totalServers: freshAllServers.length,
+        connectedSSHServers: freshAvailableServers.length
+      });
+    } catch (error) {
+      console.warn(
+        '[TicketDetail] refresh before launch failed, falling back to current server snapshot:',
+        error
+      );
+    }
+
+    if (freshAvailableServers.length === 0) {
       console.warn(
         '[TicketDetail] No connected SSH servers available.',
-        `Total servers: ${allServers.length}.`,
-        allServers.map(s => `${s.label}: status=${s.status}, transport=${s.transport}`).join('; ')
+        `Total servers: ${freshAllServers.length}.`,
+        freshAllServers
+          .map(s => `${s.label}: status=${s.status}, transport=${s.transport}`)
+          .join('; ')
       );
       Alert.alert(
         'No Connected Servers',
-        `Found ${allServers.length} server(s) but none are connected. ` +
-          (allServers.length > 0
-            ? allServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')
+        `Found ${freshAllServers.length} server(s) but none are connected. ` +
+          (freshAllServers.length > 0
+            ? freshAllServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')
             : 'Add and verify a server on this device.')
       );
       return;
     }
 
-    if (availableServers.length === 1) {
-      void handleLaunchOnServer(availableServers[0]);
+    if (freshAvailableServers.length === 1) {
+      void handleLaunchOnServer(freshAvailableServers[0]);
       return;
     }
 
@@ -576,7 +647,7 @@ export default function TicketDetailScreen() {
       'Choose Server',
       'Select a connected SSH server for this ticket.',
       [
-        ...availableServers.map(server => ({
+        ...freshAvailableServers.map(server => ({
           text: server.label,
           onPress: () => {
             void handleLaunchOnServer(server);
