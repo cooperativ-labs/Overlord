@@ -10,7 +10,7 @@ in the docs:
 
 - Plugin manifest at `plugins/overlord/.codex-plugin/plugin.json`
 - MCP server manifest at `plugins/overlord/.mcp.json`
-- Bundled skill at `plugins/overlord/skills/overlord-ticket-workflow/SKILL.md`
+- Bundled skill at `plugins/overlord/skills/overlord-ticket/SKILL.md`
 - Branded plugin assets under `plugins/overlord/assets/`
 - Local marketplace registration via `~/.agents/plugins/marketplace.json`
 - Personal install path `~/.codex/plugins/overlord` with marketplace `source.path` set to
@@ -28,7 +28,7 @@ The plugin docs describe plugins as a bundle that can include `skills`, `apps`, 
 
 Implemented:
 
-- Added `plugins/overlord/skills/overlord-ticket-workflow/SKILL.md`
+- Added `plugins/overlord/skills/overlord-ticket/SKILL.md`
 - Added `"skills": "./skills/"` to the plugin manifest
 - Kept the launched-ticket prompt authoritative, while moving reusable local workflow knowledge
   into the plugin bundle

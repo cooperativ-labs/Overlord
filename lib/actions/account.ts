@@ -228,7 +228,7 @@ export async function linkGithubIdentityAction(): Promise<LinkIdentityResult> {
       redirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent(
         '/u?settings=Linked Accounts'
       )}`,
-      scopes: 'user:email'
+      scopes: 'user:email repo'
     }
   });
 

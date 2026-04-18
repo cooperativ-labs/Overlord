@@ -86,6 +86,21 @@ interface ElectronAPI {
       ok: boolean;
       error?: string;
     }>;
+    getAggregateDiff: (options?: { directory?: string }) => Promise<{
+      branch: string | null;
+      diff: string;
+      filesChanged: number;
+      repoRoot: string | null;
+      status: string;
+      error?: string;
+    }>;
+    gitCommitAndPush: (options: { directory?: string; message: string }) => Promise<{
+      ok: boolean;
+      branch: string | null;
+      commitSha: string | null;
+      pushed: boolean;
+      error?: string;
+    }>;
   };
   supabase: {
     getStatus: () => Promise<{ running: boolean; url: string }>;

@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.5.0] - 2026-04-18:08:54
+
+### Added
+- Commit and push from **Current Changes** in the desktop app: stage all changes, enter a message, and push the current branch to `origin` (with clear errors when Git rejects the operation).
+- Optional **AI-generated commit messages** (Gemini) from the aggregate working-tree diff, wired through a server action and desktop IPC that collects `git status` plus a capped diff for the linked project directory.
+- Desktop Electron IPC: `getAggregateDiff` and `gitCommitAndPush` for repository workflows from the renderer.
+- Request the **`repo` GitHub OAuth scope** (in addition to `user:email`) when linking GitHub so re-authorized accounts can push to repositories that require that scope.
+
+### Fixed
+- Kanban board subscribes to **`objectives` realtime** updates and refreshes per-ticket execution metadata so running agents, executed objective counts, and related card state stay accurate while work progresses.
+
+### Changed
+- **Terminal** settings: drop the redundant “external terminal only” notice; show the custom activation hotkey field consistently for terminal profiles with updated helper copy.
+- **Ticket prompts** and bundled plugins reference the renamed **`overlord-ticket`** skill (replacing `overlord-ticket-workflow`) for Claude, Codex, Cursor, and overlord-cli plugin copies.
+
+### Security
+- None.
+
+### Removed
+- Delete the old **`overlord-ticket-workflow`** skill files in packaged and repo plugins in favor of **`overlord-ticket`**.
+
+### Documentation
+- Refresh plugin READMEs and connector notes for the skill rename; extend internal GitHub connector and Codex/Cursor investigation docs accordingly.
+
+### Test
+- Align ticket prompt tests with the `overlord-ticket` skill naming.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to 4.5.0.
+
 ## [4.4.0] - 2026-04-17:14:52
 
 ### Added

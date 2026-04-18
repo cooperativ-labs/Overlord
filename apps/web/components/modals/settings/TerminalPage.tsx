@@ -349,15 +349,6 @@ export function TerminalPage({ open }: { open: boolean }) {
           Terminal agent controls are only available in the Overlord desktop app.
         </div>
       )}
-      <div className="grid gap-2">
-        <Label>Where to run terminal commands</Label>
-        <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-foreground">
-          External terminal
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Overlord now launches agents in your system terminal instead of an in-app terminal.
-        </p>
-      </div>
       {(['local', 'server'] as const).map(profileId => {
         const profile = terminalProfiles[profileId];
         const isTmuxLike = isTmuxLikeProfile(profile);
@@ -512,23 +503,6 @@ export function TerminalPage({ open }: { open: boolean }) {
                   </Select>
                 </>
               )}
-              {supportsLaunchModeSelection && profile.terminalLaunchMode === 'custom' && (
-                <div className="mt-2 grid gap-2">
-                  <Label htmlFor={`${prefix}-terminal-custom-hotkey`}>Custom hotkey</Label>
-                  <Input
-                    id={`${prefix}-terminal-custom-hotkey`}
-                    placeholder="Press the key combination to use (e.g. Cmd + D)"
-                    value={profile.terminalCustomHotkey}
-                    onKeyDown={event => handleTerminalCustomHotkeyKeyDown(profileId, event)}
-                    readOnly
-                    disabled={!isElectron}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your
-                    preferred split or focus behavior, then type the launch command.
-                  </p>
-                </div>
-              )}
               {!supportsLaunchModeSelection && (
                 <p className="text-xs text-muted-foreground">
                   {isTmux
@@ -538,11 +512,21 @@ export function TerminalPage({ open }: { open: boolean }) {
                       : 'This terminal opens directly into a new session for each launch.'}
                 </p>
               )}
-              {supportsLaunchModeSelection && profile.terminalLaunchMode !== 'custom' && (
+              <div className="grid gap-2">
+                <Label htmlFor={`${prefix}-terminal-custom-hotkey`}>Custom hotkey</Label>
+                <Input
+                  id={`${prefix}-terminal-custom-hotkey`}
+                  placeholder="Press the key combination to use (e.g. Cmd + D)"
+                  value={profile.terminalCustomHotkey}
+                  onKeyDown={event => handleTerminalCustomHotkeyKeyDown(profileId, event)}
+                  readOnly
+                  disabled={!isElectron}
+                />
                 <p className="text-xs text-muted-foreground">
-                  Choose the app and whether launches open in a new window or tab.
+                  Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your
+                  preferred split or focus behavior, then type the launch command.
                 </p>
-              )}
+              </div>
             </div>
           </div>
         );

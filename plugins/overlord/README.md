@@ -30,7 +30,7 @@ The MCP server shells into the installed `ovld` binary so the plugin stays align
 
 ## Skill coverage
 
-- `skills/overlord-ticket-workflow/SKILL.md` teaches Codex the durable local workflow:
+- `skills/overlord-ticket/SKILL.md` teaches Codex the durable local workflow:
   attach first, update during work, ask when blocked, and deliver last.
 
 ## App surface status

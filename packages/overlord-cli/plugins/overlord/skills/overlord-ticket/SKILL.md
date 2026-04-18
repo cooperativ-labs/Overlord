@@ -1,9 +1,4 @@
----
-name: overlord-ticket-workflow
-description: Durable local workflow for working Overlord tickets from Codex through the installed plugin.
----
-
-# Overlord Ticket Workflow
+# Overlord Ticket
 
 Use this skill when the user wants to work on an Overlord ticket from Codex through the local
 Overlord plugin.

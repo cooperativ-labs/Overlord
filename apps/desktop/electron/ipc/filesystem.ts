@@ -668,6 +668,100 @@ async function checkSshConnection(sshCommand: string): Promise<{ ok: boolean; er
   }
 }
 
+async function getAggregateDiff(directory: string): Promise<{
+  branch: string | null;
+  diff: string;
+  filesChanged: number;
+  repoRoot: string;
+  status: string;
+}> {
+  const { branch, repoRoot } = await resolveGitRepo(directory);
+  const statusResult = await runGitCommand(repoRoot, ['status', '--short']);
+  const trackedDiff = await runGitCommand(
+    repoRoot,
+    ['-c', 'core.quotepath=false', 'diff', 'HEAD', '--no-color', '--unified=2'],
+    { allowFailure: true }
+  );
+
+  const untrackedResult = await runGitCommand(
+    repoRoot,
+    ['ls-files', '--others', '--exclude-standard', '-z'],
+    { allowFailure: true }
+  );
+  const untrackedFiles = untrackedResult.output.split('\0').filter(Boolean);
+
+  let untrackedDiff = '';
+  for (const relPath of untrackedFiles.slice(0, 50)) {
+    const fullPath = path.join(repoRoot, relPath);
+    const piece = await runGitCommand(
+      repoRoot,
+      ['diff', '--no-index', '--no-ext-diff', '--unified=2', '--', '/dev/null', fullPath],
+      { allowFailure: true }
+    );
+    if (piece.output) untrackedDiff += piece.output + '\n';
+  }
+
+  const filesChanged =
+    (statusResult.output.match(/\n/g)?.length ?? 0) + (statusResult.output.trim() ? 1 : 0);
+  return {
+    branch,
+    diff: trackedDiff.output + (untrackedDiff ? `\n${untrackedDiff}` : ''),
+    filesChanged,
+    repoRoot,
+    status: statusResult.output
+  };
+}
+
+async function gitCommitAndPush(
+  directory: string,
+  message: string
+): Promise<{ branch: string | null; commitSha: string | null; pushed: boolean }> {
+  const trimmedMessage = message.trim();
+  if (!trimmedMessage) {
+    throw new Error('Commit message cannot be empty.');
+  }
+
+  const { branch, repoRoot } = await resolveGitRepo(directory);
+  if (!branch) {
+    throw new Error('Cannot push from a detached HEAD. Check out a branch first.');
+  }
+
+  // Stage all changes (tracked edits, deletions, and untracked files).
+  await runGitCommand(repoRoot, ['add', '-A']);
+
+  // Bail out if nothing is staged.
+  const staged = await runGitCommand(repoRoot, ['diff', '--cached', '--name-only']);
+  if (!staged.output.trim()) {
+    throw new Error('No staged changes to commit.');
+  }
+
+  await runGitCommand(repoRoot, ['commit', '-m', trimmedMessage]);
+
+  const shaResult = await runGitCommand(repoRoot, ['rev-parse', 'HEAD'], { allowFailure: true });
+  const commitSha = shaResult.ok ? shaResult.output.trim() || null : null;
+
+  // Push to the upstream for the current branch. Git will emit a helpful error
+  // if no upstream is configured; surface it to the user so they can set one.
+  try {
+    await execFileAsync('git', ['push'], {
+      cwd: repoRoot,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: DEFAULT_GIT_TIMEOUT_MS * 4
+    });
+  } catch (error) {
+    const stderr =
+      error instanceof Error && 'stderr' in error && typeof error.stderr === 'string'
+        ? error.stderr
+        : '';
+    throw new Error(
+      stderr ||
+        (error instanceof Error ? error.message : 'git push failed. Ensure an upstream is set.')
+    );
+  }
+
+  return { branch, commitSha, pushed: true };
+}
+
 export function registerFilesystemIpc(): void {
   ipcMain.handle(
     'filesystem:directory-exists',
@@ -898,6 +992,64 @@ export function registerFilesystemIpc(): void {
           repoRoot: null,
           status: payload?.status ?? null,
           error: error instanceof Error ? error.message : 'Failed to read Git diff.'
+        };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'filesystem:get-aggregate-diff',
+    async (_event, payload?: { directory?: string }) => {
+      const resolvedDirectory = normalizeDirectory(payload?.directory);
+      if (!resolvedDirectory) {
+        return {
+          branch: null,
+          diff: '',
+          filesChanged: 0,
+          repoRoot: null,
+          status: '',
+          error: 'Linked directory does not exist or is not a directory.'
+        };
+      }
+      try {
+        const result = await getAggregateDiff(resolvedDirectory);
+        return { ...result };
+      } catch (error) {
+        return {
+          branch: null,
+          diff: '',
+          filesChanged: 0,
+          repoRoot: null,
+          status: '',
+          error: error instanceof Error ? error.message : 'Failed to read aggregate Git diff.'
+        };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'filesystem:git-commit-and-push',
+    async (_event, payload?: { directory?: string; message?: string }) => {
+      const resolvedDirectory = normalizeDirectory(payload?.directory);
+      if (!resolvedDirectory) {
+        return {
+          ok: false,
+          branch: null,
+          commitSha: null,
+          pushed: false,
+          error: 'Linked directory does not exist or is not a directory.'
+        };
+      }
+      try {
+        const result = await gitCommitAndPush(resolvedDirectory, payload?.message ?? '');
+        return { ok: true, ...result };
+      } catch (error) {
+        return {
+          ok: false,
+          branch: null,
+          commitSha: null,
+          pushed: false,
+          error: error instanceof Error ? error.message : 'Failed to commit and push.'
         };
       }
     }

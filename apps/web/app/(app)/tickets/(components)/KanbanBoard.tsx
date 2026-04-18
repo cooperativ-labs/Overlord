@@ -75,6 +75,7 @@ type StatusColumn = {
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
+type Objective = Database['public']['Tables']['objectives']['Row'];
 
 import {
   buildBoardBootstrap,
@@ -87,6 +88,11 @@ import {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getObjectivePayloadTicketId(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  return typeof value.ticket_id === 'string' ? value.ticket_id : null;
 }
 
 function getEventMessage(event: TicketEvent): string {
@@ -556,6 +562,65 @@ export default function KanbanBoard({
       });
     };
 
+    const syncObjectiveStateForTicket = async (ticketId: string) => {
+      const [{ data: objectives }, { data: sessions }] = await Promise.all([
+        supabase
+          .from('objectives')
+          .select('state,is_executed,agent_identifier')
+          .eq('ticket_id', ticketId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('agent_sessions')
+          .select('session_state,agent_identifier,attached_at')
+          .eq('ticket_id', ticketId)
+          .order('attached_at', { ascending: false })
+          .limit(1)
+      ]);
+
+      if (cancelled || !ticketIdsRef.current.has(ticketId)) return;
+
+      let latestObjectiveAgent: string | null = null;
+      let executingObjectiveAgent: string | null = null;
+      let executedObjectivesCount = 0;
+
+      for (const objective of (objectives ?? []) as Array<{
+        state: string | null;
+        is_executed: boolean | null;
+        agent_identifier: string | null;
+      }>) {
+        if (latestObjectiveAgent === null) {
+          latestObjectiveAgent = objective.agent_identifier ?? null;
+        }
+        if (objective.is_executed) {
+          executedObjectivesCount += 1;
+        }
+        if (
+          objective.state === 'executing' &&
+          objective.agent_identifier &&
+          executingObjectiveAgent === null
+        ) {
+          executingObjectiveAgent = objective.agent_identifier;
+        }
+      }
+
+      const session = (sessions ?? [])[0] as
+        | Pick<AgentSession, 'session_state' | 'agent_identifier'>
+        | undefined;
+      const isAttached = session?.session_state === 'attached';
+
+      updateTicketInBoards(queryClient, ticketId, {
+        agent_session_state: session?.session_state ?? null,
+        latest_objective_agent: latestObjectiveAgent,
+        running_agent: executingObjectiveAgent ?? (isAttached ? session.agent_identifier : null),
+        has_executing_objective: executingObjectiveAgent !== null,
+        objectives_executed_count: executedObjectivesCount
+      });
+      mergeObjectiveMetaIntoBoards(queryClient, ticketId, {
+        latest_agent: latestObjectiveAgent,
+        executing_agent: executingObjectiveAgent
+      });
+    };
+
     const syncBoardData = async () => {
       const ticketIds = [...ticketIdsRef.current];
       if (ticketIds.length === 0) return;
@@ -839,6 +904,16 @@ export default function KanbanBoard({
             attached_at: session.attached_at
           });
           applySessionOverride(session);
+        }
+      )
+      .on<Objective>(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'objectives' },
+        payload => {
+          const ticketId =
+            getObjectivePayloadTicketId(payload.new) ?? getObjectivePayloadTicketId(payload.old);
+          if (!ticketId || !ticketIdsRef.current.has(ticketId)) return;
+          void syncObjectiveStateForTicket(ticketId);
         }
       )
       .subscribe(status => {

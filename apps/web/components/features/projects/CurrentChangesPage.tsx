@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { DiffPane } from '@/components/features/projects/current-changes/DiffPane';
 import { FileListPane } from '@/components/features/projects/current-changes/FileListPane';
+import { PushToGithubPanel } from '@/components/features/projects/current-changes/PushToGithubPanel';
 import type { EnrichedCurrentChangeFile } from '@/components/features/projects/current-changes/types';
 import { UnavailableStateCard } from '@/components/features/projects/current-changes/UnavailableStateCard';
 import { buildEnrichedCurrentChangeFiles } from '@/components/features/projects/current-changes/view-model';
@@ -201,6 +202,19 @@ export function CurrentChangesPage({
           </Button>
         </div>
       </div>
+
+      <PushToGithubPanel
+        branch={statusResponse?.branch ?? null}
+        hasChanges={(statusResponse?.files.length ?? 0) > 0}
+        workingDirectory={displayDirectory}
+        onPushed={() => {
+          void (async () => {
+            await statusQuery.refetch();
+            await fileChangesQuery.refetch();
+            await diffQuery.refetch();
+          })();
+        }}
+      />
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-background">
         <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">

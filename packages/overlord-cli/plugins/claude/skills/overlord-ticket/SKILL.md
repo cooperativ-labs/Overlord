@@ -1,9 +1,9 @@
 ---
-name: overlord-ticket-workflow
+name: overlord-ticket
 description: Overlord local workflow protocol — attach, update, deliver lifecycle for ticket-driven work from Claude Code.
 ---
 
-# Overlord Local Workflow
+# Overlord Ticket
 
 If you receive a prompt with a specified ticket ID, adhere to the following. If the prompt does not have a ticket ID, the user may choose to add one later, but otherwise, proceed without it.
 

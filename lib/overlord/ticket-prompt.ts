@@ -177,7 +177,7 @@ function buildBundledLocalProtocolSection({
     agent === 'cursor'
       ? 'Use the installed Overlord Cursor plugin workflow for this session. Attach first, then follow the plugin skill/rules for update, ask, and deliver behavior.'
       : agent === 'claude'
-        ? 'Use the Overlord Claude plugin loaded for this session. Before doing anything else, invoke the `overlord:overlord-ticket-workflow` skill for attach/update/ask/deliver details, then attach to this ticket.'
+        ? 'Use the Overlord Claude plugin loaded for this session. Before doing anything else, invoke the `overlord:overlord-ticket` skill for attach/update/ask/deliver details, then attach to this ticket.'
         : agent === 'opencode'
           ? 'Use the installed Overlord OpenCode bundle (AGENTS.md workflow section) for attach/update/ask/deliver details, then attach to this ticket.'
           : 'Use your installed Overlord local workflow configuration for this session. Attach first, then follow the durable workflow instructions for update, ask, and deliver behavior.';
@@ -215,7 +215,7 @@ ${buildLocalLaunchNote(context)}
 
 Use the installed Overlord Codex plugin instead of relying on expanded protocol instructions in this prompt.
 
-If you need protocol details, use the \`overlord-ticket-workflow\` skill from the Codex Overlord plugin. Attach to this ticket through the plugin/CLI connector, then follow that workflow for updates, blocking questions, change rationales, artifacts, and final delivery.
+If you need protocol details, use the \`overlord-ticket\` skill from the Codex Overlord plugin. Attach to this ticket through the plugin/CLI connector, then follow that workflow for updates, blocking questions, change rationales, artifacts, and final delivery.
 
 \`\`\`bash
 ovld protocol attach --ticket-id ${ticketId}

@@ -1,9 +1,9 @@
 ---
-name: overlord-ticket-workflow
+name: overlord-ticket
 description: Durable local workflow for Overlord tickets from Cursor.
 ---
 
-# Overlord Ticket Workflow
+# Overlord Ticket
 
 1. Attach first with `ovld protocol attach --ticket-id <ticket-id>`.
 2. Keep the returned `session.sessionKey` for all follow-up calls.

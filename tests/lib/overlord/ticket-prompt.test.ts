@@ -34,7 +34,7 @@ describe('Codex bundle prompt routing', () => {
     });
 
     expect(prompt).toContain('Use the installed Overlord Codex plugin');
-    expect(prompt).toContain('`overlord-ticket-workflow` skill');
+    expect(prompt).toContain('`overlord-ticket` skill');
     expect(prompt).not.toContain('### Codex local workflow');
     expect(prompt).not.toContain('look for and invoke the overlord-local skill');
   });
@@ -98,7 +98,7 @@ describe('Cursor bundled prompt routing', () => {
 
     expect(prompt).toContain('Overlord Cursor plugin');
     expect(prompt).not.toContain('Overlord Claude plugin');
-    expect(prompt).not.toContain('overlord:overlord-ticket-workflow');
+    expect(prompt).not.toContain('overlord:overlord-ticket');
   });
 });
 
@@ -128,6 +128,6 @@ describe('OpenCode bundled prompt routing', () => {
 
     expect(prompt).toContain('OpenCode bundle');
     expect(prompt).not.toContain('Overlord Claude plugin');
-    expect(prompt).not.toContain('overlord:overlord-ticket-workflow');
+    expect(prompt).not.toContain('overlord:overlord-ticket');
   });
 });

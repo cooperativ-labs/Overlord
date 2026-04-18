@@ -29,7 +29,7 @@ The implementation lives primarily in:
 
 This works, but it has the usual bundle drawbacks: install state is split across several Cursor-owned directories, updates need custom manifest tracking, and users cannot see Overlord as a first-class Cursor plugin in Settings.
 
-One important current mismatch: `prepareAgentLaunch()` treats an installed Cursor rule bundle as `instructionMode=bundle`, and `ticket-prompt.ts` then emits the shared bundled prompt. That prompt currently says "Use the Overlord Claude plugin loaded for this session" and references `overlord:overlord-ticket-workflow`. That wording is wrong for Cursor and should be corrected regardless of whether the Cursor plugin migration happens.
+One important current mismatch: `prepareAgentLaunch()` treats an installed Cursor rule bundle as `instructionMode=bundle`, and `ticket-prompt.ts` then emits the shared bundled prompt. That prompt currently says "Use the Overlord Claude plugin loaded for this session" and references `overlord:overlord-ticket`. That wording is wrong for Cursor and should be corrected regardless of whether the Cursor plugin migration happens.
 
 ## Cursor Plugin Findings
 
@@ -74,7 +74,7 @@ The plugin route is the better long-term fit because it can package the same Ove
 
 - Rules: current `overlord-local.mdc`
 - Commands: `connect`, `load`, `spawn`
-- Skills: `overlord-ticket-workflow`
+- Skills: `overlord-ticket`
 - MCP: local bridge to the existing `ovld protocol` CLI
 - Assets/metadata: first-class Settings > Plugins presentation
 
@@ -95,7 +95,7 @@ plugins/cursor/
   commands/connect.md
   commands/load.md
   commands/spawn.md
-  skills/overlord-ticket-workflow/SKILL.md
+  skills/overlord-ticket/SKILL.md
   mcp.json
   scripts/overlord-mcp.mjs
   assets/

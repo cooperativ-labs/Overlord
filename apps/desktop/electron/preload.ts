@@ -54,7 +54,11 @@ const electronAPI = {
       status?: string;
       sshCommand?: string;
       remoteDirectory?: string;
-    }) => ipcRenderer.invoke('filesystem:get-git-diff', options)
+    }) => ipcRenderer.invoke('filesystem:get-git-diff', options),
+    getAggregateDiff: (options?: { directory?: string }) =>
+      ipcRenderer.invoke('filesystem:get-aggregate-diff', options),
+    gitCommitAndPush: (options: { directory?: string; message: string }) =>
+      ipcRenderer.invoke('filesystem:git-commit-and-push', options)
   },
   supabase: {
     getStatus: () => ipcRenderer.invoke('supabase:status'),
