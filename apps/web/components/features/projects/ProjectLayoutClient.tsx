@@ -7,6 +7,7 @@ import { useEffect, useMemo } from 'react';
 import { ProjectSettingsProvider } from '@/components/features/projects/ProjectSettingsContext';
 import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
 import { useElectron } from '@/components/features/terminal/useElectron';
+import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
@@ -21,6 +22,11 @@ type ProjectLayoutClientProps = {
   projectWorkingDirectory: string | null;
   projectSshCommand: string | null;
   projectRemoteWorkingDirectory: string | null;
+  projectSshHost: string | null;
+  projectSshPort: number | null;
+  projectSshUser: string | null;
+  projectSshAuthMethod: ProjectSshAuthMethod | string | null;
+  projectSshPrivateKeyPath: string | null;
   projectEverhourProjectId: string | null;
   statuses: Array<{
     name: string;
@@ -41,6 +47,11 @@ export function ProjectLayoutClient({
   projectWorkingDirectory,
   projectSshCommand,
   projectRemoteWorkingDirectory,
+  projectSshHost,
+  projectSshPort,
+  projectSshUser,
+  projectSshAuthMethod,
+  projectSshPrivateKeyPath,
   projectEverhourProjectId,
   statuses,
   hasEverhourApiKey
@@ -105,6 +116,11 @@ export function ProjectLayoutClient({
       initialWorkingDirectory={projectWorkingDirectory}
       initialSshCommand={projectSshCommand}
       initialRemoteWorkingDirectory={projectRemoteWorkingDirectory}
+      initialSshHost={projectSshHost}
+      initialSshPort={projectSshPort}
+      initialSshUser={projectSshUser}
+      initialSshAuthMethod={projectSshAuthMethod as ProjectSshAuthMethod | null}
+      initialSshPrivateKeyPath={projectSshPrivateKeyPath}
       initialEverhourProjectId={projectEverhourProjectId}
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}

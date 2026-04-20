@@ -25,7 +25,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
   const { data: project, error: projectError } = await supabase
     .from('projects')
     .select(
-      'id,name,color,organization_id,local_working_directory,ssh_command,remote_working_directory,everhour_project_id'
+      'id,name,color,organization_id,local_working_directory,ssh_command,remote_working_directory,ssh_host,ssh_port,ssh_user,ssh_auth_method,ssh_private_key_path,everhour_project_id'
     )
     .eq('id', projectId)
     .single();
@@ -68,6 +68,11 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         projectWorkingDirectory={project.local_working_directory}
         projectSshCommand={project.ssh_command}
         projectRemoteWorkingDirectory={project.remote_working_directory}
+        projectSshHost={project.ssh_host}
+        projectSshPort={project.ssh_port}
+        projectSshUser={project.ssh_user}
+        projectSshAuthMethod={project.ssh_auth_method}
+        projectSshPrivateKeyPath={project.ssh_private_key_path}
         projectEverhourProjectId={project.everhour_project_id}
         statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}

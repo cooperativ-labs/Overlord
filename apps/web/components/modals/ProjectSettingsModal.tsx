@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
+import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
 import type { Database } from '@/types/database.types';
 
 import { DangerZonePage } from './project-settings/DangerZonePage';
@@ -64,6 +65,11 @@ type ProjectSettingsModalProps = {
   initialWorkingDirectory: string | null;
   initialSshCommand: string | null;
   initialRemoteWorkingDirectory: string | null;
+  initialSshHost: string | null;
+  initialSshPort: number | null;
+  initialSshUser: string | null;
+  initialSshAuthMethod: ProjectSshAuthMethod | null;
+  initialSshPrivateKeyPath: string | null;
   initialEverhourProjectId: string | null;
   initialStatuses: Array<{
     name: string;
@@ -85,6 +91,11 @@ export function ProjectSettingsModal({
   initialWorkingDirectory,
   initialSshCommand,
   initialRemoteWorkingDirectory,
+  initialSshHost,
+  initialSshPort,
+  initialSshUser,
+  initialSshAuthMethod,
+  initialSshPrivateKeyPath,
   initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey,
@@ -183,6 +194,11 @@ export function ProjectSettingsModal({
                   initialWorkingDirectory={initialWorkingDirectory}
                   initialSshCommand={initialSshCommand}
                   initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
+                  initialSshHost={initialSshHost}
+                  initialSshPort={initialSshPort}
+                  initialSshUser={initialSshUser}
+                  initialSshAuthMethod={initialSshAuthMethod}
+                  initialSshPrivateKeyPath={initialSshPrivateKeyPath}
                   initialStatuses={initialStatuses}
                 />
               )}

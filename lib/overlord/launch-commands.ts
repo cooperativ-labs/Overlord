@@ -1,3 +1,24 @@
+import type { SshConnectionConfig } from '@/lib/workspace/types';
+
+/**
+ * Derive a legacy free-form ssh command string from a structured SshConnectionConfig.
+ * Used to wrap launch commands for external terminals that still need a raw ssh invocation.
+ */
+export function sshConnectionConfigToCommand(
+  config: SshConnectionConfig | null | undefined
+): string | null {
+  if (!config || !config.host || !config.user) return null;
+  const parts = ['ssh'];
+  if (config.authMethod === 'key' && config.privateKeyPath) {
+    parts.push('-i', config.privateKeyPath);
+  }
+  if (config.port && Number.isFinite(config.port)) {
+    parts.push('-p', String(config.port));
+  }
+  parts.push(`${config.user}@${config.host}`);
+  return parts.join(' ');
+}
+
 type BuildLaunchCommandsInput = {
   ticketId: string;
   platformUrl: string;
@@ -117,12 +138,16 @@ export function selectRestartSessionCommand(
  */
 export function buildSshWrappedCommand(
   baseCommand: string,
-  sshCommand: string | null | undefined,
+  sshCommand: string | SshConnectionConfig | null | undefined,
   remoteWorkingDirectory?: string | null
 ): string {
-  if (!sshCommand?.trim()) return baseCommand;
+  const derived =
+    typeof sshCommand === 'string'
+      ? sshCommand
+      : sshConnectionConfigToCommand(sshCommand ?? null);
+  if (!derived?.trim()) return baseCommand;
   const cdPart = remoteWorkingDirectory?.trim() ? `cd ${remoteWorkingDirectory.trim()} && ` : '';
-  return `${sshCommand.trim()} '${cdPart}${baseCommand.replace(/'/g, "'\\''")}'`;
+  return `${derived.trim()} '${cdPart}${baseCommand.replace(/'/g, "'\\''")}'`;
 }
 
 export function buildNativeResumeCommand(

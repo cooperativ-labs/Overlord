@@ -13,6 +13,7 @@ set -euo pipefail
 REMOTE_DIR="${HOME}/.overlord/remote"
 TOKEN_FILE="${REMOTE_DIR}/token"
 SERVER_FILE="${REMOTE_DIR}/server.mjs"
+VERSION_FILE="${REMOTE_DIR}/version"
 
 mkdir -p "${REMOTE_DIR}"
 chmod 700 "${REMOTE_DIR}"
@@ -43,8 +44,15 @@ if [ -z "${NODE_BIN}" ]; then
   exit 1
 fi
 
+if [ -n "${OVERLORD_HELPER_VERSION:-}" ]; then
+  printf '%s' "${OVERLORD_HELPER_VERSION}" > "${VERSION_FILE}"
+  chmod 644 "${VERSION_FILE}"
+fi
+VERSION="$( [ -f "${VERSION_FILE}" ] && cat "${VERSION_FILE}" || echo "unknown" )"
+
 TOKEN="$(cat "${TOKEN_FILE}")"
 echo "OVERLORD_REMOTE_INSTALLED"
 echo "TOKEN=${TOKEN}"
 echo "SERVER_PATH=${SERVER_FILE}"
 echo "NODE_BIN=${NODE_BIN}"
+echo "VERSION=${VERSION}"

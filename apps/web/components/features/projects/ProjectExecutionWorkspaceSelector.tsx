@@ -35,6 +35,8 @@ export function ProjectExecutionWorkspaceSelector({
   const [warningError, setWarningError] = useState<string | null>(null);
   const [tailscaleActive, setTailscaleActive] = useState(false);
   const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
+  const [helperNeedsUpdate, setHelperNeedsUpdate] = useState(false);
+  const [helperVersion, setHelperVersion] = useState<string | null>(null);
   const [installingHelper, setInstallingHelper] = useState(false);
 
   const sshConfig = projectSettings?.sshConnectionConfig ?? null;
@@ -65,7 +67,10 @@ export function ProjectExecutionWorkspaceSelector({
     void api.remoteHelper
       .status({ projectId })
       .then(result => {
-        if (!cancelled) setHelperInstalled(result.installed);
+        if (cancelled) return;
+        setHelperInstalled(result.installed);
+        setHelperVersion(result.version ?? null);
+        setHelperNeedsUpdate(Boolean(result.needsUpdate));
       })
       .catch(() => {
         if (!cancelled) setHelperInstalled(false);
@@ -86,6 +91,8 @@ export function ProjectExecutionWorkspaceSelector({
       }
       toast.success('Remote helper installed.');
       setHelperInstalled(true);
+      setHelperVersion(result.version ?? null);
+      setHelperNeedsUpdate(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to install remote helper.');
     } finally {
@@ -278,10 +285,25 @@ export function ProjectExecutionWorkspaceSelector({
               Install helper
             </button>
           ) : null}
-          {helperInstalled === true ? (
+          {helperInstalled === true && helperNeedsUpdate ? (
+            <button
+              type="button"
+              onClick={handleInstallHelper}
+              disabled={installingHelper}
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-amber-500/60 px-2 text-[11px] text-amber-600 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              title={`Helper v${helperVersion ?? 'unknown'} installed; bundled version is newer. Click to update.`}
+            >
+              {installingHelper ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Download className="h-3 w-3" />
+              )}
+              Update helper
+            </button>
+          ) : helperInstalled === true ? (
             <span
               className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] text-muted-foreground"
-              title="Overlord remote helper is installed"
+              title={helperVersion ? `Remote helper v${helperVersion}` : 'Remote helper installed'}
             >
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
               Helper ready

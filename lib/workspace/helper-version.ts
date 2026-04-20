@@ -1,0 +1,1 @@
+export const BUNDLED_REMOTE_HELPER_VERSION = '0.1.0';

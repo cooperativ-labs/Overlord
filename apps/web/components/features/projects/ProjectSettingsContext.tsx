@@ -13,8 +13,9 @@ import {
 import type { ProjectSettingsNavSection } from '@/components/modals/ProjectSettingsModal';
 import { ProjectSettingsModal } from '@/components/modals/ProjectSettingsModal';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
+import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
 import { parseLegacySshCommand } from '@/lib/workspace/parse-ssh-command';
-import type { SshConnectionConfig } from '@/lib/workspace/types';
+import type { SshAuthMethod, SshConnectionConfig } from '@/lib/workspace/types';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
@@ -68,6 +69,11 @@ type ProjectSettingsProviderProps = {
   initialWorkingDirectory: string | null;
   initialSshCommand: string | null;
   initialRemoteWorkingDirectory: string | null;
+  initialSshHost?: string | null;
+  initialSshPort?: number | null;
+  initialSshUser?: string | null;
+  initialSshAuthMethod?: ProjectSshAuthMethod | null;
+  initialSshPrivateKeyPath?: string | null;
   initialEverhourProjectId: string | null;
   initialStatuses: Array<{
     name: string;
@@ -87,6 +93,11 @@ export function ProjectSettingsProvider({
   initialWorkingDirectory,
   initialSshCommand,
   initialRemoteWorkingDirectory,
+  initialSshHost,
+  initialSshPort,
+  initialSshUser,
+  initialSshAuthMethod,
+  initialSshPrivateKeyPath,
   initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey
@@ -109,10 +120,27 @@ export function ProjectSettingsProvider({
     initialRemoteWorkingDirectory.trim().length > 0
       ? initialRemoteWorkingDirectory.trim()
       : null;
-  const sshConnectionConfig = useMemo(
-    () => parseLegacySshCommand(sshCommand),
-    [sshCommand]
-  );
+  const sshConnectionConfig = useMemo<SshConnectionConfig | null>(() => {
+    const host = initialSshHost?.trim();
+    const user = initialSshUser?.trim();
+    if (host && user) {
+      return {
+        host,
+        port: initialSshPort ?? undefined,
+        user,
+        authMethod: (initialSshAuthMethod as SshAuthMethod | null) ?? 'agent',
+        privateKeyPath: initialSshPrivateKeyPath?.trim() || undefined
+      };
+    }
+    return parseLegacySshCommand(sshCommand);
+  }, [
+    initialSshAuthMethod,
+    initialSshHost,
+    initialSshPort,
+    initialSshPrivateKeyPath,
+    initialSshUser,
+    sshCommand
+  ]);
   const resolvedExecutionWorkspace = resolveExecutionWorkspace(
     executionWorkspace,
     hasLocalDirectory,
@@ -214,6 +242,11 @@ export function ProjectSettingsProvider({
         initialWorkingDirectory={initialWorkingDirectory}
         initialSshCommand={initialSshCommand}
         initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
+        initialSshHost={initialSshHost ?? null}
+        initialSshPort={initialSshPort ?? null}
+        initialSshUser={initialSshUser ?? null}
+        initialSshAuthMethod={initialSshAuthMethod ?? null}
+        initialSshPrivateKeyPath={initialSshPrivateKeyPath ?? null}
         initialEverhourProjectId={initialEverhourProjectId}
         initialStatuses={initialStatuses}
         hasEverhourApiKey={hasEverhourApiKey}

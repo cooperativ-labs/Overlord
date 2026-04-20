@@ -25,6 +25,7 @@ import { app } from 'electron';
 import { Client as SshClient } from 'ssh2';
 
 import type { SshConnectionConfig } from '../../../../lib/workspace/types';
+import { BUNDLED_REMOTE_HELPER_VERSION } from '../../../../lib/workspace/helper-version';
 import { store } from '../services/settings-store';
 
 type InstallPayload = {
@@ -37,6 +38,7 @@ type InstallResult = {
   token?: string;
   serverPath?: string;
   nodeBin?: string;
+  version?: string;
   error?: string;
 };
 
@@ -81,7 +83,8 @@ async function connect(ssh: SshConnectionConfig): Promise<SshClient> {
 
 function runInstall(ssh: SshClient, script: Buffer, bundle: Buffer): Promise<InstallResult> {
   return new Promise(resolve => {
-    ssh.exec('bash -s -- --with-bundle', (err, channel) => {
+    const command = `OVERLORD_HELPER_VERSION=${BUNDLED_REMOTE_HELPER_VERSION} bash -s -- --with-bundle`;
+    ssh.exec(command, (err, channel) => {
       if (err) return resolve({ ok: false, error: err.message });
 
       let stdout = '';
@@ -100,11 +103,12 @@ function runInstall(ssh: SshClient, script: Buffer, bundle: Buffer): Promise<Ins
         const token = /^TOKEN=(.+)$/m.exec(stdout)?.[1]?.trim();
         const serverPath = /^SERVER_PATH=(.+)$/m.exec(stdout)?.[1]?.trim();
         const nodeBin = /^NODE_BIN=(.+)$/m.exec(stdout)?.[1]?.trim();
+        const version = /^VERSION=(.+)$/m.exec(stdout)?.[1]?.trim();
         if (!token || !serverPath || !nodeBin) {
           resolve({ ok: false, error: 'Install output missing expected markers.' });
           return;
         }
-        resolve({ ok: true, token, serverPath, nodeBin });
+        resolve({ ok: true, token, serverPath, nodeBin, version });
       });
 
       // Feed: install.sh → marker line → bundle → marker line
@@ -134,6 +138,10 @@ export function registerRemoteInstallIpc(): void {
         store.set(`remoteHelperToken:${payload.projectId}`, result.token);
         store.set(`remoteHelperServerPath:${payload.projectId}`, result.serverPath);
         store.set(`remoteHelperNodeBin:${payload.projectId}`, result.nodeBin);
+        store.set(
+          `remoteHelperVersion:${payload.projectId}`,
+          result.version ?? BUNDLED_REMOTE_HELPER_VERSION
+        );
       }
       return result;
     } catch (error) {
@@ -144,7 +152,14 @@ export function registerRemoteInstallIpc(): void {
   });
 
   ipcMain.handle('remote-install:status', async (_event, payload: { projectId: string }) => {
-    const installed = Boolean(store.get(`remoteHelperToken:${payload?.projectId ?? ''}`, ''));
-    return { installed };
+    const projectId = payload?.projectId ?? '';
+    const installed = Boolean(store.get(`remoteHelperToken:${projectId}`, ''));
+    const version = (store.get(`remoteHelperVersion:${projectId}`, '') as string) || null;
+    return {
+      installed,
+      version,
+      bundledVersion: BUNDLED_REMOTE_HELPER_VERSION,
+      needsUpdate: installed && version !== BUNDLED_REMOTE_HELPER_VERSION
+    };
   });
 }

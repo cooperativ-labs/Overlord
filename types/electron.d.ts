@@ -139,9 +139,15 @@ interface ElectronAPI {
       token?: string;
       serverPath?: string;
       nodeBin?: string;
+      version?: string;
       error?: string;
     }>;
-    status: (payload: { projectId: string }) => Promise<{ installed: boolean }>;
+    status: (payload: { projectId: string }) => Promise<{
+      installed: boolean;
+      version: string | null;
+      bundledVersion: string;
+      needsUpdate: boolean;
+    }>;
   };
   tailscale: {
     getStatus: () => Promise<TailscaleStatusResult>;

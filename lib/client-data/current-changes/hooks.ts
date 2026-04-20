@@ -54,7 +54,7 @@ export function useGitStatusQuery(input: {
       return (await input.api.getGitStatus({ directory: input.directory })) as GitStatusResponse;
     },
     enabled: input.isElectron && input.canInspectChanges && Boolean(input.api?.getGitStatus),
-    staleTime: 10_000,
+    staleTime: 30_000,
     refetchOnWindowFocus: false
   });
 }
@@ -88,7 +88,7 @@ export function useCurrentChangeFileChanges(input: { projectId: string; files: G
     },
     enabled: input.files.length > 0,
     initialData: [],
-    staleTime: 10_000,
+    staleTime: 30_000,
     refetchOnWindowFocus: false
   });
 }
@@ -125,7 +125,7 @@ export function useGitDiffQuery(input: {
       input.canInspectChanges &&
       Boolean(input.api?.getGitDiff) &&
       Boolean(input.file),
-    staleTime: 5_000,
+    staleTime: 15_000,
     refetchOnWindowFocus: false
   });
 }
