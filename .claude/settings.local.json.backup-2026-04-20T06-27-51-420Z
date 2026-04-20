@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ovld protocol:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx expo:*)",
+      "Bash(yarn --cwd apps/mobile tsc --noEmit)",
+      "Bash(yarn tsc:*)",
+      "Bash(corepack yarn:*)",
+      "Bash(yarn --version)",
+      "Bash(export SESSION_KEY=35107256-8385-41b6-8895-7d64e9d21306)",
+      "Bash(skill list:*)",
+      "Bash(npx overskill:*)",
+      "Bash(ovld --version)",
+      "Bash(export SUMMARY=\"test\")",
+      "Bash(export TICKET_ID=\"2a37b53e-a21f-4b44-8ef8-619d1461cdea\")",
+      "Bash(ovld doctor:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
+}

@@ -5,6 +5,7 @@ import { after, NextResponse } from 'next/server';
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
+import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { deliverSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -165,6 +166,14 @@ export async function POST(request: Request) {
           console.error('[protocol:deliver] feed post generation error:', feedErr);
           Sentry.captureException(feedErr, { extra: { ticketId, sessionId } });
         }
+
+        // Send mobile push notification
+        await sendPushNotification(supabase, {
+          title: `Agent Delivered (${ticketId.slice(-8)})`,
+          body: summary || 'The agent delivered this ticket for review.',
+          organizationId,
+          data: { ticketId, eventType: 'deliver' }
+        });
       } catch (bgErr) {
         console.error('[protocol:deliver] background job error:', bgErr);
         Sentry.captureException(bgErr, { extra: { ticketId, sessionId } });

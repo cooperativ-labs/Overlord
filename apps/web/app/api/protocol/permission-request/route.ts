@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 /**
@@ -76,6 +77,15 @@ export async function POST(request: Request) {
       session_id: session?.id ?? null,
       summary,
       ticket_id: ticketId
+    });
+
+    after(async () => {
+      await sendPushNotification(supabase, {
+        title: `Agent Question (${ticketId.slice(-8)})`,
+        body: summary,
+        organizationId,
+        data: { ticketId, eventType: 'question' }
+      });
     });
 
     return NextResponse.json({ ok: true });

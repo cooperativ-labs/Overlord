@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { AuthProvider } from '@/lib/auth-context';
 import { colors } from '@/lib/colors';
+import { NotificationsProvider } from '@/lib/notifications';
 import { ServerConnectionsProvider } from '@/lib/server-connections-context';
 import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
 
@@ -38,13 +39,15 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <ServerConnectionsProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(auth)" />
-        </Stack>
-        <StatusBar style="light" />
-      </ServerConnectionsProvider>
+      <NotificationsProvider>
+        <ServerConnectionsProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(auth)" />
+          </Stack>
+          <StatusBar style="light" />
+        </ServerConnectionsProvider>
+      </NotificationsProvider>
     </AuthProvider>
   );
 }

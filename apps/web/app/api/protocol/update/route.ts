@@ -9,6 +9,7 @@ import {
 } from '@/lib/overlord/agent-notifications';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
+import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { updateSchema } from '@/lib/overlord/validation';
 import {
   resolvePreferredStatusNameByType,
@@ -175,6 +176,24 @@ export async function POST(request: Request) {
 
       if (notificationsError) {
         return NextResponse.json({ error: notificationsError.message }, { status: 500 });
+      }
+
+      // Send mobile push for agent notifications (questions and alerts)
+      for (const notification of notifications) {
+        const notifTitle =
+          notification.kind === 'question'
+            ? `Agent Question (${ticketId.slice(-8)})`
+            : `Agent Notification (${ticketId.slice(-8)})`;
+        const notifBody =
+          buildAgentNotificationSummary(notification) || 'New agent event received.';
+        after(async () => {
+          await sendPushNotification(supabase, {
+            title: notifTitle,
+            body: notifBody,
+            organizationId,
+            data: { ticketId, eventType: notification.kind }
+          });
+        });
       }
     }
 
