@@ -70,6 +70,10 @@ export const TOOLS = [
           type: 'string',
           description: 'Your agent identifier, e.g. "claude-code" or "codex".'
         },
+        modelIdentifier: {
+          type: 'string',
+          description: 'Optional model identifier to snapshot on the executing objective.'
+        },
         connectionMethod: {
           type: 'string',
           enum: ['mcp', 'cli', 'rest', 'chatgpt', 'claude_app', 'claude_code', 'other'],

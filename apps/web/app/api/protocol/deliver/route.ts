@@ -132,9 +132,10 @@ export async function POST(request: Request) {
         ]);
 
         // Mark the executing objective as complete
+        const completedAt = new Date().toISOString();
         await supabase
           .from('objectives')
-          .update({ state: 'complete' })
+          .update({ state: 'complete', completed_at: completedAt })
           .eq('ticket_id', ticketId)
           .eq('state', 'executing');
 

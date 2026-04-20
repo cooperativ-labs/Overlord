@@ -31,7 +31,7 @@ Usage:
   ${primaryCommand} attach [ticketId] [agent]  Search tickets and launch an agent (interactive)
   ${primaryCommand} create "<objective>"       Create a ticket with numbered project selection
   ${primaryCommand} prompt "<objective>"       Create a ticket, then launch an agent on it
-  ${primaryCommand} auth <subcommand>          Login, logout, or check auth status
+  ${primaryCommand} auth <subcommand>          Login, logout, repair, or check auth status
   ${primaryCommand} tickets <subcommand>       Create or list tickets
   ${primaryCommand} ticket <subcommand>        Work with a single ticket
   ${primaryCommand} protocol <subcommand>      Agent workflow commands
@@ -46,10 +46,12 @@ Usage:
 
 Agents:
   Use ${primaryCommand} protocol help for ticket lifecycle commands.
+  Key protocol commands: auth-status, discover-project, spawn, attach, connect, load-context.
 
 Auth:
   ${primaryCommand} auth login               Authorize CLI via browser
   ${primaryCommand} auth status              Show login status
+  ${primaryCommand} auth repair              Repair shared Desktop/CLI credentials
   ${primaryCommand} auth logout              Remove stored credentials
 
 Tickets:

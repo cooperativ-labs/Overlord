@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { buildAuthHeaders, resolveAuth } from './credentials.mjs';
+import { buildAuthHeaders, getAuthStatus, resolveAuth } from './credentials.mjs';
 
 /**
  * Parse simple CLI flags: --key value or --key=value
@@ -49,6 +49,36 @@ export function resolveProtocolTicketDelegate(flags = {}, agentIdentifier = '') 
 
   const resolvedAgent = String(agentIdentifier).trim();
   return resolvedAgent || null;
+}
+
+export function resolveProtocolModelIdentifier(flags = {}) {
+  const explicitModel = typeof flags.model === 'string' ? flags.model.trim() : '';
+  if (explicitModel) return explicitModel;
+
+  const envModel =
+    process.env.OVERLORD_MODEL_IDENTIFIER?.trim() ||
+    process.env.MODEL_IDENTIFIER?.trim() ||
+    process.env.AGENT_MODEL?.trim();
+  return envModel || null;
+}
+
+function resolveProtocolMetadata(flags = {}, base = {}) {
+  const metadata = { ...base };
+
+  if (flags['metadata-json']) {
+    const parsed = JSON.parse(String(flags['metadata-json']));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('--metadata-json must be a JSON object');
+    }
+    Object.assign(metadata, parsed);
+  }
+
+  const modelIdentifier = resolveProtocolModelIdentifier(flags);
+  if (modelIdentifier) {
+    metadata.model = modelIdentifier;
+  }
+
+  return metadata;
 }
 
 /**
@@ -446,9 +476,7 @@ async function protocolAttach(args) {
     agentIdentifier: resolveProtocolAgentIdentifier(flags),
     connectionMethod: String(flags.method ?? 'cli'),
     ...(externalSessionId !== undefined ? { externalSessionId } : {}),
-    metadata: {
-      cwd: process.cwd()
-    }
+    metadata: resolveProtocolMetadata(flags, { cwd: process.cwd() })
   };
 
   const data = await apiPost(
@@ -586,6 +614,31 @@ async function protocolAsk(args) {
   };
 
   const data = await apiPost(platformUrl, agentToken, localSecret, '/api/protocol/ask', body, timeoutMs);
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// permission-request
+// ---------------------------------------------------------------------------
+
+async function protocolPermissionRequest(args) {
+  const flags = parseFlags(args);
+  const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
+  const payload = flags['payload-file']
+    ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
+    : {};
+
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    `/api/protocol/permission-request?ticketId=${encodeURIComponent(ticketId)}`,
+    payload,
+    timeoutMs
+  );
   console.log(JSON.stringify(data, null, 2));
 }
 
@@ -933,7 +986,7 @@ async function protocolConnect(args) {
     ticketId,
     agentIdentifier: resolveProtocolAgentIdentifier(flags),
     connectionMethod: String(flags.method ?? 'cli'),
-    metadata: {}
+    metadata: resolveProtocolMetadata(flags, { cwd: process.cwd() })
   };
 
   const data = await apiPost(
@@ -995,7 +1048,7 @@ async function protocolSpawn(args) {
     objective,
     agentIdentifier,
     connectionMethod: String(flags.method ?? 'cli'),
-    metadata: {},
+    metadata: resolveProtocolMetadata(flags, { cwd: process.cwd() }),
     ...(flags.title ? { title: String(flags.title) } : {}),
     ...(flags.priority ? { priority: String(flags.priority) } : {}),
     ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
@@ -1030,6 +1083,34 @@ async function protocolSpawn(args) {
 }
 
 // ---------------------------------------------------------------------------
+// auth-status (agent-friendly auth diagnostics)
+// ---------------------------------------------------------------------------
+
+async function protocolAuthStatus() {
+  const status = getAuthStatus();
+
+  console.log(
+    JSON.stringify(
+      {
+        ok: status.isLoggedIn,
+        authStatus: {
+          isLoggedIn: status.isLoggedIn,
+          platformUrl: status.platformUrl,
+          platformUrlSource: status.platformUrlSource,
+          tokenSource: status.tokenSource,
+          tokenPresent: status.tokenPresent,
+          hasLocalSecret: status.hasLocalSecret,
+          credentialsFileExists: status.credentialsFileExists,
+          electronCredentialsFileExists: status.electronCredentialsFileExists
+        }
+      },
+      null,
+      2
+    )
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -1053,6 +1134,7 @@ Project discovery:
   Use --project-id to override automatic resolution on spawn or ticket creation.
 
 Subcommands:
+  auth-status               Return machine-readable auth status for agent runtimes
   discover-project          Resolve a project from the current working directory
   attach                    Start a ticket session and return full working context
   connect                   Start a lightweight session without full context
@@ -1061,6 +1143,7 @@ Subcommands:
   update                    Post progress, activity events, and optional change rationales
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
+  permission-request        Notify Overlord that the agent is requesting tool permission
   read-context              Read shared persistent context for this ticket
   write-context             Write shared persistent context for future sessions
   deliver                   Finish work, send artifacts, and move the ticket to review
@@ -1072,7 +1155,7 @@ Subcommands:
 Environment fallback:
   --session-key <- SESSION_KEY
   --ticket-id   <- TICKET_ID
-  auth/host     <- OVERLORD_URL, AGENT_TOKEN
+  auth/host     <- OVERLORD_URL, AGENT_TOKEN, or shared credentials from ovld auth/Desktop login
   --timeout     <- OVERLORD_TIMEOUT
 
 Common flags:
@@ -1080,7 +1163,14 @@ Common flags:
   --ticket-id <id>            Ticket id when the subcommand operates on an existing ticket
   --session-key <key>         Session key returned by attach/connect/spawn
   --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
+  --model <identifier>        Model identifier to snapshot on executing objectives
   --method <connectionMethod> Connection method sent to Overlord (default: cli)
+
+auth-status:
+  Purpose:
+    Check whether the local runtime has usable Overlord credentials.
+  Returns:
+    JSON with ok=true|false plus authStatus fields describing token and host sources.
 
 discover-project:
   Purpose:
@@ -1101,8 +1191,10 @@ attach:
     --ticket-id <id>
   Optional:
     --agent <identifier>
+    --model <identifier>
     --method <connectionMethod>
     --external-session-id <id|null>  Store the native agent thread/session id, or clear it with null
+    --metadata-json <json>     Extra session metadata object
   Returns:
     Full JSON including session.sessionKey, ticket, history, artifacts, sharedState, and promptContext
   Notes:
@@ -1115,7 +1207,9 @@ connect:
     --ticket-id <id>
   Optional:
     --agent <identifier>
+    --model <identifier>
     --method <connectionMethod>
+    --metadata-json <json>     Extra session metadata object
   Returns:
     Session JSON and SESSION_KEY on stderr when available
 
@@ -1166,6 +1260,15 @@ ask:
     --payload-json <json>
   Notes:
     After ask succeeds, stop working until the human responds
+
+permission-request:
+  Purpose:
+    Notify Overlord that the local agent runtime is requesting tool permission.
+    This is primarily used by installed permission hooks.
+  Required:
+    --ticket-id <id>
+  Optional:
+    --payload-file <path|->   Hook JSON payload, or stdin when "-"
 
 read-context:
   Purpose:
@@ -1226,7 +1329,9 @@ spawn:
     --parent-session-key <key>
     --parent-ticket-id <id>
     --agent <identifier>
+    --model <identifier>
     --method <connectionMethod>
+    --metadata-json <json>     Extra session metadata object
   Returns:
     New ticket/session JSON plus SESSION_KEY and TICKET_ID on stderr when available
 
@@ -1275,6 +1380,7 @@ artifact-upload-file:
     --metadata-json <json>
 
 Examples:
+  ovld protocol auth-status
   ovld protocol discover-project
   ovld protocol discover-project --working-directory /path/to/repo
   ovld protocol spawn --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
@@ -1303,6 +1409,7 @@ Examples:
   }
 
   if (subcommand === 'discover-project') { await protocolDiscoverProject(args); return; }
+  if (subcommand === 'auth-status') { await protocolAuthStatus(); return; }
   if (subcommand === 'attach') { await protocolAttach(args); return; }
   if (subcommand === 'connect') { await protocolConnect(args); return; }
   if (subcommand === 'load-context') { await protocolLoadContext(args); return; }
@@ -1314,6 +1421,7 @@ Examples:
   if (subcommand === 'update') { await protocolUpdate(args); return; }
   if (subcommand === 'record-change-rationales') { await protocolRecordChangeRationales(args); return; }
   if (subcommand === 'ask') { await protocolAsk(args); return; }
+  if (subcommand === 'permission-request') { await protocolPermissionRequest(args); return; }
   if (subcommand === 'read-context') { await protocolReadContext(args); return; }
   if (subcommand === 'write-context') { await protocolWriteContext(args); return; }
   if (subcommand === 'deliver') { await protocolDeliver(args); return; }

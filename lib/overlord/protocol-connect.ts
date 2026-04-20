@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
+import { markSubmittedObjectiveExecuting } from '@/lib/objectives';
 import { connectionMethods } from '@/lib/overlord/types';
 import { resolvePreferredStatusNameByType, resolveStatusTypeForName } from '@/lib/ticket-statuses';
 import type { Database, Json } from '@/types/database.types';
@@ -29,7 +30,7 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
 
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
-    .select('id,status')
+    .select('id,status,assigned_agent')
     .eq('id', ticketId)
     .eq('organization_id', organizationId)
     .single();
@@ -70,6 +71,12 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     organizationId,
     'execute'
   );
+
+  await markSubmittedObjectiveExecuting(supabase, ticketId, {
+    agentIdentifier,
+    metadata,
+    ticketAssignedAgent: ticket.assigned_agent
+  });
 
   const { error: ticketUpdateError } = await supabase
     .from('tickets')

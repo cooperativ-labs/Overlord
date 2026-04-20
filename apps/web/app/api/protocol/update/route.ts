@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { resolveObjectiveModelIdentifier } from '@/lib/objectives';
 import {
   buildAgentNotificationSummary,
   extractAgentNotifications
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     // Auto-transition the ticket back to execute and reactivate the session.
     const { data: currentTicket } = await supabase
       .from('tickets')
-      .select('status')
+      .select('status,assigned_agent')
       .eq('id', ticketId)
       .single();
 
@@ -94,7 +95,15 @@ export async function POST(request: Request) {
             if (latestObjective?.id) {
               return supabase
                 .from('objectives')
-                .update({ state: 'executing' })
+                .update({
+                  state: 'executing',
+                  agent_identifier: resolved.session.agent_identifier,
+                  model_identifier: resolveObjectiveModelIdentifier({
+                    metadata: resolved.session.metadata,
+                    ticketAssignedAgent: currentTicket?.assigned_agent ?? null
+                  }),
+                  completed_at: null
+                })
                 .eq('id', latestObjective.id);
             }
           })
@@ -229,6 +238,18 @@ export async function POST(request: Request) {
             Sentry.captureException(feedErr, { extra: { ticketId, sessionId: reviewSessionId } });
           }
         });
+      }
+
+      if (statusType === 'complete') {
+        const completedAt = new Date().toISOString();
+        const { error: objectiveError } = await supabase
+          .from('objectives')
+          .update({ state: 'complete', completed_at: completedAt })
+          .eq('ticket_id', ticketId)
+          .eq('state', 'executing');
+        if (objectiveError) {
+          return NextResponse.json({ error: objectiveError.message }, { status: 500 });
+        }
       }
 
       const { error: ticketError } = await supabase

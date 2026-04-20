@@ -23,7 +23,7 @@ import {
 } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
-import { upsertDraftObjective } from '@/lib/objectives';
+import { submitDraftObjective, upsertDraftObjective } from '@/lib/objectives';
 import {
   buildTicketPromptMarkdown,
   type PromptContext,
@@ -372,7 +372,10 @@ async function resolvePromptTicketSource(
     return { error: error?.message ?? 'Ticket not found.' };
   }
 
-  // Prefer the executing objective; fall back to draft
+  // Prefer the executing objective; fall back to the latest submitted objective.
+  // Draft objectives are intentionally private to the human until submitted,
+  // but we still fall back to them for older databases that do not accept
+  // the submitted state yet.
   const { data: executingObjective } = await supabase
     .from('objectives')
     .select('objective')
@@ -384,6 +387,16 @@ async function resolvePromptTicketSource(
 
   const currentObjective =
     executingObjective ??
+    (
+      await supabase
+        .from('objectives')
+        .select('objective')
+        .eq('ticket_id', ticketId)
+        .eq('state', 'submitted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ).data ??
     (
       await supabase
         .from('objectives')
@@ -409,6 +422,39 @@ async function resolvePromptTicketSource(
       latestObjective: currentObjective.objective
     }
   };
+}
+
+export async function submitTicketObjectiveAction(ticketId: string): Promise<void> {
+  const supabase = await createClient();
+  await assertTicketAccess(supabase, ticketId);
+  const submission = await submitDraftObjective(supabase, ticketId);
+
+  if (!submission.didSubmit) {
+    return;
+  }
+
+  const { data: ticket, error: ticketError } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+  if (ticketError || !ticket) {
+    throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: 'Objective submitted.',
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
 }
 
 async function resolveTicketProjectAndOrganization(
@@ -1016,7 +1062,7 @@ export async function markObjectiveExecutedAction(
 
   const { error: executeError } = await supabase
     .from('objectives')
-    .update({ state: 'complete' })
+    .update({ state: 'complete', completed_at: new Date().toISOString() })
     .eq('id', objectiveId);
   if (executeError) {
     throw new Error(executeError.message);
@@ -1117,14 +1163,16 @@ export async function markObjectiveDraftAction(
 
   const otherObjectives = objectives.filter(o => o.id !== objectiveId);
 
-  // 2. Close out any other draft rows so the selected objective becomes the draft.
-  const otherDraftIds = otherObjectives.filter(o => o.state === 'draft').map(o => o.id);
+  // 2. Close out any other editable rows so the selected objective becomes the draft.
+  const otherEditableIds = otherObjectives
+    .filter(o => o.state === 'draft' || o.state === 'submitted')
+    .map(o => o.id);
 
-  if (otherDraftIds.length > 0) {
+  if (otherEditableIds.length > 0) {
     const { error: updateError } = await supabase
       .from('objectives')
-      .update({ state: 'complete' })
-      .in('id', otherDraftIds);
+      .update({ state: 'complete', completed_at: new Date().toISOString() })
+      .in('id', otherEditableIds);
     if (updateError) {
       throw new Error(updateError.message);
     }
@@ -1133,7 +1181,7 @@ export async function markObjectiveDraftAction(
   // 3. Mark the target objective back to draft
   const { error: unexecuteError } = await supabase
     .from('objectives')
-    .update({ state: 'draft' })
+    .update({ state: 'draft', completed_at: null })
     .eq('id', objectiveId);
 
   if (unexecuteError) {
@@ -1330,6 +1378,7 @@ export async function getTicketPromptForCopy(
   context?: PromptContext
 ): Promise<{ error?: string; prompt?: string }> {
   const supabase = await createClient();
+  await submitDraftObjective(supabase, ticketId);
   const { error, source } = await resolvePromptTicketSource(supabase, ticketId);
   if (error || !source) {
     return { error: error ?? 'Unable to load ticket prompt source.' };

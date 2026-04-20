@@ -50,7 +50,9 @@ export async function GET(request: Request, { params }: RouteContext) {
       .select('local_working_directory,remote_working_directory')
       .eq('id', ticket.project_id)
       .maybeSingle();
-    // Prefer the currently executing objective; fall back to the draft
+    // Prefer the currently executing objective; fall back to submitted.
+    // Draft objectives are not exposed on modern schemas, but we keep them as
+    // a last resort for older databases that still reject the submitted state.
     const { data: executingObjective } = await supabase
       .from('objectives')
       .select('objective')
@@ -62,6 +64,16 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const currentObjective =
       executingObjective ??
+      (
+        await supabase
+          .from('objectives')
+          .select('objective')
+          .eq('ticket_id', ticketId)
+          .eq('state', 'submitted')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      ).data ??
       (
         await supabase
           .from('objectives')

@@ -51,16 +51,20 @@ const tools = [
       properties: {
         ticket_id: { type: 'string', description: 'Target ticket ID' },
         agent: { type: 'string' },
+        model: { type: 'string' },
         method: { type: 'string' },
-        external_session_id: { type: ['string', 'null'] }
+        external_session_id: { type: ['string', 'null'] },
+        metadata: { type: 'object' }
       },
       required: ['ticket_id']
     },
     toCliFlags: args => ({
       'ticket-id': args.ticket_id,
       agent: args.agent,
+      model: args.model,
       method: args.method,
-      'external-session-id': args.external_session_id
+      'external-session-id': args.external_session_id,
+      'metadata-json': args.metadata
     }),
     subcommand: 'attach'
   },
@@ -116,6 +120,8 @@ const tools = [
         parent_session_key: { type: 'string' },
         parent_ticket_id: { type: 'string' },
         agent: { type: 'string' },
+        model: { type: 'string' },
+        metadata: { type: 'object' },
         method: { type: 'string' }
       },
       required: ['objective']
@@ -133,6 +139,8 @@ const tools = [
       'parent-session-key': args.parent_session_key,
       'parent-ticket-id': args.parent_ticket_id,
       agent: args.agent,
+      model: args.model,
+      'metadata-json': args.metadata,
       method: args.method
     }),
     subcommand: 'spawn'

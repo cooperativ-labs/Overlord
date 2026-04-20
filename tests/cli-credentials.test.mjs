@@ -248,4 +248,203 @@ for (const modulePath of [
       });
     }
   );
+
+  test(
+    `${modulePath} resolveAuth reads shared electron credentials before legacy CLI credentials`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        fs.writeFileSync(
+          path.join(ovldDir, 'credentials.json'),
+          JSON.stringify(
+            {
+              access_token: 'legacy-cli-token',
+              platform_url: 'https://legacy.ovld.test'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+
+        fs.writeFileSync(
+          path.join(ovldDir, 'electron-credentials.json'),
+          JSON.stringify(
+            {
+              encrypted_token: 'electron-only-encrypted-value',
+              access_token: 'shared-electron-token',
+              platform_url: 'https://www.ovld.ai'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+
+        delete process.env.OVERLORD_URL;
+        delete process.env.AGENT_TOKEN;
+        delete process.env.OVERLORD_CONNECTOR_URL;
+
+        const { resolveAuth } = await importFresh(modulePath);
+        const result = resolveAuth();
+
+        assert.equal(result.platformUrl, 'https://www.ovld.ai');
+        assert.equal(result.agentToken, 'shared-electron-token');
+      });
+    }
+  );
+
+  test(
+    `${modulePath} saveCredentials mirrors CLI login into electron credentials without deleting encrypted fields`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        const electronCredentialsPath = path.join(ovldDir, 'electron-credentials.json');
+        fs.writeFileSync(
+          electronCredentialsPath,
+          JSON.stringify(
+            {
+              encrypted_token: 'old-encrypted-token',
+              encrypted_refresh_token: 'old-refresh-token',
+              access_token: 'old-token',
+              platform_url: 'https://old.ovld.test'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+
+        const { loadCredentials, saveCredentials } = await importFresh(modulePath);
+        saveCredentials({
+          access_token: 'new-cli-token',
+          platform_url: 'https://www.ovld.ai'
+        });
+
+        const cliCredentials = JSON.parse(
+          fs.readFileSync(path.join(ovldDir, 'credentials.json'), 'utf8')
+        );
+        const electronCredentials = JSON.parse(fs.readFileSync(electronCredentialsPath, 'utf8'));
+
+        assert.equal(cliCredentials.access_token, 'new-cli-token');
+        assert.equal(cliCredentials.platform_url, 'https://www.ovld.ai');
+        assert.equal(electronCredentials.access_token, 'new-cli-token');
+        assert.equal(electronCredentials.platform_url, 'https://www.ovld.ai');
+        assert.equal(electronCredentials.encrypted_token, 'old-encrypted-token');
+        assert.equal(electronCredentials.encrypted_refresh_token, 'old-refresh-token');
+        assert.deepEqual(loadCredentials(), {
+          access_token: 'new-cli-token',
+          platform_url: 'https://www.ovld.ai'
+        });
+      });
+    }
+  );
+
+  test(
+    `${modulePath} clearCredentials removes both shared credential files`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        const cliCredentialsPath = path.join(ovldDir, 'credentials.json');
+        const electronCredentialsPath = path.join(ovldDir, 'electron-credentials.json');
+        fs.writeFileSync(cliCredentialsPath, '{}', { mode: 0o600 });
+        fs.writeFileSync(electronCredentialsPath, '{}', { mode: 0o600 });
+
+        const { clearCredentials } = await importFresh(modulePath);
+        clearCredentials();
+
+        assert.equal(fs.existsSync(cliCredentialsPath), false);
+        assert.equal(fs.existsSync(electronCredentialsPath), false);
+      });
+    }
+  );
+
+  test(
+    `${modulePath} getAuthStatus reports redacted credential sources`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        fs.writeFileSync(
+          path.join(ovldDir, 'electron-credentials.json'),
+          JSON.stringify(
+            {
+              access_token: 'shared-token',
+              platform_url: 'https://www.ovld.ai'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+
+        delete process.env.OVERLORD_URL;
+        delete process.env.AGENT_TOKEN;
+        delete process.env.OVERLORD_CONNECTOR_URL;
+
+        const { getAuthStatus } = await importFresh(modulePath);
+        const status = getAuthStatus();
+
+        assert.equal(status.isLoggedIn, true);
+        assert.equal(status.platformUrl, 'https://www.ovld.ai');
+        assert.equal(status.platformUrlSource, 'electron-credentials.json');
+        assert.equal(status.tokenSource, 'electron-credentials.json');
+        assert.equal(status.tokenPresent, true);
+        assert.equal(status.electronCredentialsFileExists, true);
+        assert.equal(status.credentialsFileExists, false);
+      });
+    }
+  );
+
+  test(
+    `${modulePath} repairCredentials mirrors a valid shared credential into both files`,
+    { concurrency: false },
+    async () => {
+      await withTempHome(async tempHome => {
+        const ovldDir = path.join(tempHome, '.ovld');
+        fs.mkdirSync(ovldDir, { mode: 0o700, recursive: true });
+        fs.chmodSync(ovldDir, 0o700);
+
+        fs.writeFileSync(
+          path.join(ovldDir, 'electron-credentials.json'),
+          JSON.stringify(
+            {
+              access_token: 'repair-token',
+              platform_url: 'https://www.ovld.ai'
+            },
+            null,
+            2
+          ),
+          { mode: 0o600 }
+        );
+
+        const { repairCredentials } = await importFresh(modulePath);
+        const result = repairCredentials();
+
+        assert.equal(result.repaired, true);
+        assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.json')), true);
+
+        const cliCredentials = JSON.parse(
+          fs.readFileSync(path.join(ovldDir, 'credentials.json'), 'utf8')
+        );
+        assert.equal(cliCredentials.access_token, 'repair-token');
+        assert.equal(cliCredentials.platform_url, 'https://www.ovld.ai');
+      });
+    }
+  );
 }

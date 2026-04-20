@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { generateAndSetObjectiveTitle, markDraftObjectiveExecuted } from '@/lib/objectives';
+import { generateAndSetObjectiveTitle, markSubmittedObjectiveExecuting } from '@/lib/objectives';
 import { buildPromptContext } from '@/lib/overlord/prompt-context';
 import { connectionMethods } from '@/lib/overlord/types';
 import { resolvePreferredStatusNameByType, resolveStatusTypeForName } from '@/lib/ticket-statuses';
@@ -137,7 +137,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     return { error: 'Failed to create session.', status: 500 } as const;
   }
 
-  const objectiveExecution = await markDraftObjectiveExecuted(supabase, ticketId, {
+  const objectiveExecution = await markSubmittedObjectiveExecuting(supabase, ticketId, {
     agentIdentifier,
     metadata,
     ticketAssignedAgent: ticket.assigned_agent

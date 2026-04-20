@@ -539,8 +539,8 @@ ${buildMcpCoreRules(launchMode)}
 
 function buildLocalLaunchNote(context?: PromptContext): string {
   return context === 'electron'
-    ? '> **Launched from Overlord desktop.** This terminal already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set. Use the connector URL below for all protocol calls.'
-    : '> **Running locally.** If those environment variables are not already set, export `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` before using the commands below.';
+    ? '> **Launched from Overlord desktop.** This terminal already has the needed Overlord environment. Use `ovld protocol ...` commands for all ticket lifecycle work.'
+    : '> **Running locally.** `ovld protocol` uses `OVERLORD_URL` and `AGENT_TOKEN` when set; otherwise it reads shared credentials from `ovld auth login` or Overlord Desktop. Export env vars only when overriding stored credentials or running in a remote shell without copied credentials.';
 }
 
 function buildLocalEventTypeHelp(launchMode: PromptLaunchMode): string {

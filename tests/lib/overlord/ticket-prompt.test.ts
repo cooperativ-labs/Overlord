@@ -10,6 +10,62 @@ describe('Codex bundle prompt routing', () => {
     });
   });
 
+  it('describes local auth env vars as optional overrides for non-desktop runs', () => {
+    const prompt = buildTicketPromptMarkdown({
+      ticket: {
+        id: 'ticket-123',
+        title: 'Investigate auth prompt',
+        objective: 'Verify auth instructions',
+        acceptance_criteria: null,
+        available_tools: null,
+        constraints: null,
+        output_format: null,
+        execution_target: 'agent',
+        project_id: 'project-123',
+        status: 'draft',
+        priority: 'medium'
+      },
+      platformUrl: 'http://localhost:3000',
+      context: 'cli',
+      options: {
+        agent: 'codex',
+        instructionMode: 'bundle'
+      }
+    });
+
+    expect(prompt).toContain('reads shared credentials from `ovld auth login` or Overlord Desktop');
+    expect(prompt).toContain('Export env vars only when overriding stored credentials');
+    expect(prompt).not.toContain('If those environment variables are not already set, export');
+  });
+
+  it('keeps desktop launch wording focused on ovld protocol instead of raw credentials', () => {
+    const prompt = buildTicketPromptMarkdown({
+      ticket: {
+        id: 'ticket-123',
+        title: 'Investigate desktop prompt',
+        objective: 'Verify desktop instructions',
+        acceptance_criteria: null,
+        available_tools: null,
+        constraints: null,
+        output_format: null,
+        execution_target: 'agent',
+        project_id: 'project-123',
+        status: 'draft',
+        priority: 'medium'
+      },
+      platformUrl: 'http://localhost:3000',
+      context: 'electron',
+      options: {
+        agent: 'codex',
+        instructionMode: 'bundle'
+      }
+    });
+
+    expect(prompt).toContain('This terminal already has the needed Overlord environment');
+    expect(prompt).toContain('Use `ovld protocol ...` commands');
+    expect(prompt).not.toContain('already has `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID` set');
+  });
+
   it('uses the minimal Codex plugin protocol instructions for Codex bundle launches', () => {
     const prompt = buildTicketPromptMarkdown({
       ticket: {

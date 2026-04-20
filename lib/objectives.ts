@@ -12,6 +12,8 @@ type DraftObjective = Pick<
   'id' | 'objective' | 'state'
 >;
 
+type EditableObjective = DraftObjective;
+
 type ObjectiveTimelineItem = Pick<Database['public']['Tables']['objectives']['Row'], 'created_at'>;
 
 type ObjectiveExecutionSnapshot = {
@@ -19,6 +21,10 @@ type ObjectiveExecutionSnapshot = {
   metadata?: Json;
   ticketAssignedAgent?: Json | null;
 };
+
+function isObjectiveStateConstraintError(error: { code?: string; message?: string } | null) {
+  return error?.code === '23514' || error?.message?.includes('objectives_state_check') === true;
+}
 
 function normalizeObjectiveText(value: string | null | undefined): string {
   return (value ?? '').trim();
@@ -58,7 +64,7 @@ function readModelIdentifierFromMetadata(metadata: Json | undefined): string | n
   return null;
 }
 
-function resolveObjectiveModelIdentifier(
+export function resolveObjectiveModelIdentifier(
   executionSnapshot?: Pick<ObjectiveExecutionSnapshot, 'metadata' | 'ticketAssignedAgent'>
 ): string | null {
   return (
@@ -80,25 +86,25 @@ export async function upsertDraftObjective(
   objective: string | null | undefined
 ) {
   const normalizedObjective = normalizeObjectiveText(objective);
-  const { data: draft, error: draftError } = await supabase
+  const { data: editableObjective, error: editableObjectiveError } = await supabase
     .from('objectives')
     .select('id,objective,state')
     .eq('ticket_id', ticketId)
-    .eq('state', 'draft')
+    .in('state', ['draft', 'submitted'])
     .order('created_at', { ascending: false })
     .limit(1)
-    .maybeSingle<DraftObjective>();
+    .maybeSingle<EditableObjective>();
 
-  if (draftError) {
-    throw new Error(draftError.message);
+  if (editableObjectiveError) {
+    throw new Error(editableObjectiveError.message);
   }
 
-  if (draft) {
-    if (draft.objective !== normalizedObjective) {
+  if (editableObjective) {
+    if (editableObjective.objective !== normalizedObjective) {
       const { error: updateDraftError } = await supabase
         .from('objectives')
         .update({ objective: normalizedObjective })
-        .eq('id', draft.id);
+        .eq('id', editableObjective.id);
       if (updateDraftError) {
         throw new Error(updateDraftError.message);
       }
@@ -116,11 +122,7 @@ export async function upsertDraftObjective(
   }
 }
 
-export async function markDraftObjectiveExecuted(
-  supabase: ObjectiveClient,
-  ticketId: string,
-  executionSnapshot?: ObjectiveExecutionSnapshot
-) {
+export async function submitDraftObjective(supabase: ObjectiveClient, ticketId: string) {
   const { data: draft, error: draftError } = await supabase
     .from('objectives')
     .select('id,objective,state')
@@ -134,12 +136,62 @@ export async function markDraftObjectiveExecuted(
     throw new Error(draftError.message);
   }
 
-  if (!draft) {
-    await upsertDraftObjective(supabase, ticketId, '');
+  const normalizedObjective = normalizeObjectiveText(draft?.objective);
+  if (!draft || !normalizedObjective) {
+    return { didSubmit: false, submittedObjective: null, submittedObjectiveId: null };
+  }
+
+  const { error: submitError } = await supabase
+    .from('objectives')
+    .update({ state: 'submitted' })
+    .eq('id', draft.id);
+  if (submitError && !isObjectiveStateConstraintError(submitError)) {
+    throw new Error(submitError.message);
+  }
+
+  return {
+    didSubmit: true,
+    submittedObjective: normalizedObjective,
+    submittedObjectiveId: draft.id
+  };
+}
+
+export async function markSubmittedObjectiveExecuting(
+  supabase: ObjectiveClient,
+  ticketId: string,
+  executionSnapshot?: ObjectiveExecutionSnapshot
+) {
+  const { data: submittedObjective, error: submittedError } = await supabase
+    .from('objectives')
+    .select('id,objective,state')
+    .eq('ticket_id', ticketId)
+    .eq('state', 'submitted')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<DraftObjective>();
+
+  if (submittedError) {
+    throw new Error(submittedError.message);
+  }
+
+  const launchObjective = submittedObjective
+    ? submittedObjective
+    : (
+        await supabase
+          .from('objectives')
+          .select('id,objective,state')
+          .eq('ticket_id', ticketId)
+          .eq('state', 'draft')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle<DraftObjective>()
+      ).data;
+
+  if (!launchObjective) {
     return { didExecute: false, executedObjective: null };
   }
 
-  const normalizedObjective = normalizeObjectiveText(draft.objective);
+  const normalizedObjective = normalizeObjectiveText(launchObjective.objective);
   if (!normalizedObjective) {
     return { didExecute: false, executedObjective: null };
   }
@@ -149,9 +201,10 @@ export async function markDraftObjectiveExecuted(
     .update({
       state: 'executing',
       agent_identifier: executionSnapshot?.agentIdentifier ?? null,
-      model_identifier: resolveObjectiveModelIdentifier(executionSnapshot)
+      model_identifier: resolveObjectiveModelIdentifier(executionSnapshot),
+      completed_at: null
     })
-    .eq('id', draft.id);
+    .eq('id', launchObjective.id);
   if (executeError) {
     throw new Error(executeError.message);
   }
@@ -168,7 +221,7 @@ export async function markDraftObjectiveExecuted(
   return {
     didExecute: true,
     executedObjective: normalizedObjective,
-    executedObjectiveId: draft.id
+    executedObjectiveId: launchObjective.id
   };
 }
 

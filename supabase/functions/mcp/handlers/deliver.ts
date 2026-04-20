@@ -144,6 +144,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     .limit(1);
   const topBoardPosition =
     ((headTickets as { board_position: number }[] | null)?.[0]?.board_position ?? 0) - 1;
+  const completedAt = new Date().toISOString();
 
   await Promise.all([
     supabase
@@ -160,7 +161,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     // Mark executing objective(s) as complete
     supabase
       .from('objectives')
-      .update({ state: 'complete' })
+      .update({ state: 'complete', completed_at: completedAt })
       .eq('ticket_id', ticketId)
       .eq('state', 'executing')
   ]);
