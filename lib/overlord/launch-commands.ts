@@ -142,9 +142,7 @@ export function buildSshWrappedCommand(
   remoteWorkingDirectory?: string | null
 ): string {
   const derived =
-    typeof sshCommand === 'string'
-      ? sshCommand
-      : sshConnectionConfigToCommand(sshCommand ?? null);
+    typeof sshCommand === 'string' ? sshCommand : sshConnectionConfigToCommand(sshCommand ?? null);
   if (!derived?.trim()) return baseCommand;
   const cdPart = remoteWorkingDirectory?.trim() ? `cd ${remoteWorkingDirectory.trim()} && ` : '';
   return `${derived.trim()} '${cdPart}${baseCommand.replace(/'/g, "'\\''")}'`;

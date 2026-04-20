@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.7.0] - 2026-04-20:14:22
+
+### Added
+- **Objective submission lifecycle** with explicit states (`draft`, `submitted`, `executing`, `complete`) so draft objectives stay hidden from agents until they are intentionally submitted.
+- **Project remote workspace settings** now capture structured SSH fields (`host`, `port`, `user`, auth method, private key path) and track remote helper install metadata for more reliable remote execution setup.
+- **Tailscale and remote-helper awareness** in project execution workspace selection to improve readiness checks and remote launch guidance.
+- **Foreground push notification controls** on mobile now support separate banner/list behavior for better notification presentation.
+
+### Fixed
+- **Server connection refresh** now runs before launch flows to reduce stale-connection launch failures.
+- **Scheduler editor save flow** handles monthly options more reliably.
+- **Protocol permission request delivery** now uses `ovld protocol` calls instead of ad-hoc `curl` plumbing for more consistent request handling.
+
+### Changed
+- **Agent launches** now include explicit model identifiers so launches are more deterministic across web, desktop, and CLI orchestration paths.
+- **Objective UI and data access patterns** prioritize submitted objectives over drafts across ticket views and realtime updates.
+- **Remote helper installation flow** now persists helper version information during install for better compatibility tracking.
+
+### Security
+- **Permission request hooks** now focus on essential rules, reducing unnecessary permission surface while keeping required workflows functional.
+
+### Refactor
+- **Workspace and SSH handling** were reorganized around shared parsing/connection helpers to align local and remote execution code paths.
+
+### Test
+- Add and update tests for CLI protocol and credential behavior, plus ticket prompt expectations aligned with objective and protocol changes.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.7.0`.
+
 ## [4.6.0] - 2026-04-18:10:03
 
 ### Added

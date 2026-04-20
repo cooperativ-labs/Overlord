@@ -23,3 +23,4 @@ The repository is now organized as a workspace-based monorepo.
 - Root scripts continue to work and delegate into the relevant app workspace.
 - Shared code is still rooted at the repo top level for now; future work can progressively move
   stable cross-surface modules into `packages/shared`.
+- Electron desktop build details and troubleshooting are documented in `docs/ELECTRON_BUILD.md`.

@@ -12,8 +12,8 @@ import {
 
 import type { ProjectSettingsNavSection } from '@/components/modals/ProjectSettingsModal';
 import { ProjectSettingsModal } from '@/components/modals/ProjectSettingsModal';
-import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
+import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { parseLegacySshCommand } from '@/lib/workspace/parse-ssh-command';
 import type { SshAuthMethod, SshConnectionConfig } from '@/lib/workspace/types';
 import type { Database } from '@/types/database.types';

@@ -1,6 +1,6 @@
+export { createWorkspaceClient } from './factory';
 export { LocalWorkspaceClient } from './local';
 export { RemoteWorkspaceClient } from './remote';
-export { createWorkspaceClient } from './factory';
 export type {
   AggregateDiffResult,
   CommitAndPushOptions,

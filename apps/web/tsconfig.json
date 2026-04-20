@@ -29,6 +29,8 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "app/.well-known/**/*.ts",
+    "app/.well-known/**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "../../types/electron.d.ts"

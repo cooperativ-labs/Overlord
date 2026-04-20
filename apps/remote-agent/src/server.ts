@@ -17,8 +17,8 @@
  * matches the Electron local mode exactly.
  */
 
-import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -34,7 +34,8 @@ const VERSION = '0.1.0';
 
 const DEFAULT_PORT = Number.parseInt(process.env.OVERLORD_REMOTE_PORT ?? '0', 10);
 const DEFAULT_HOST = '127.0.0.1';
-const TOKEN_PATH = process.env.OVERLORD_REMOTE_TOKEN_PATH ?? join(homedir(), '.overlord', 'remote', 'token');
+const TOKEN_PATH =
+  process.env.OVERLORD_REMOTE_TOKEN_PATH ?? join(homedir(), '.overlord', 'remote', 'token');
 
 async function loadAuthToken(): Promise<string> {
   const raw = await readFile(TOKEN_PATH, 'utf8');
@@ -55,9 +56,10 @@ function buildHandlers(): Record<string, Handler> {
   return {
     '/directory-exists': async body => ({ exists: await workspaceFor(body).directoryExists() }),
     '/list-project-files': async body =>
-      workspaceFor(body).listProjectFiles((body.options as ListFilesOptions | undefined) ?? undefined),
-    '/read-file': async body =>
-      workspaceFor(body).readFile(body.options as ReadFileOptions),
+      workspaceFor(body).listProjectFiles(
+        (body.options as ListFilesOptions | undefined) ?? undefined
+      ),
+    '/read-file': async body => workspaceFor(body).readFile(body.options as ReadFileOptions),
     '/git/status': async body => workspaceFor(body).getGitStatus(),
     '/git/diff': async body => workspaceFor(body).getGitDiff(body.options as GitDiffOptions),
     '/git/aggregate-diff': async body => workspaceFor(body).getAggregateDiff(),
@@ -144,6 +146,8 @@ async function main(): Promise<void> {
 }
 
 main().catch(error => {
-  process.stderr.write(`overlord-remote-agent failed to start: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(
+    `overlord-remote-agent failed to start: ${error instanceof Error ? error.message : String(error)}\n`
+  );
   process.exit(1);
 });

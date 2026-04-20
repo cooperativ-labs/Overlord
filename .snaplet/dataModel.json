@@ -6534,6 +6534,20 @@
           "maxLength": null
         },
         {
+          "id": "public.objectives.completed_at",
+          "name": "completed_at",
+          "columnName": "completed_at",
+          "type": "timestamptz",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "tickets",
           "type": "tickets",
           "isRequired": true,

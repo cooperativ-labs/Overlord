@@ -7,7 +7,9 @@ import type { SshConnectionConfig } from './types';
  * This is a transition helper: rows migrated from the `ssh_command` column before
  * structured fields are populated.
  */
-export function parseLegacySshCommand(value: string | null | undefined): SshConnectionConfig | null {
+export function parseLegacySshCommand(
+  value: string | null | undefined
+): SshConnectionConfig | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;

@@ -28,6 +28,7 @@ export default [
           'tsconfig.json',
           'apps/mobile/tsconfig.json',
           'apps/web/tsconfig.json',
+          'apps/remote-agent/tsconfig.json',
           'apps/desktop/tsconfig.json',
           'apps/ticket-card/tsconfig.json',
           'scripts/tsconfig.json',

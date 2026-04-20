@@ -80,7 +80,10 @@ export function registerFilesystemIpc(): void {
       });
       return await client.checkHealth();
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : 'SSH connection failed.' };
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'SSH connection failed.'
+      };
     }
   });
 
@@ -99,7 +102,13 @@ export function registerFilesystemIpc(): void {
       try {
         const relativePath = payload?.path?.trim();
         if (!relativePath) {
-          return { diff: '', path: null, repoRoot: null, status: payload?.status ?? null, error: 'A file path is required.' };
+          return {
+            diff: '',
+            path: null,
+            repoRoot: null,
+            status: payload?.status ?? null,
+            error: 'A file path is required.'
+          };
         }
         const client = await resolveClient(payload);
         return await client.getGitDiff({
@@ -108,7 +117,12 @@ export function registerFilesystemIpc(): void {
           status: payload?.status
         });
       } catch (error) {
-        return failure(error, { diff: '', path: payload?.path ?? null, repoRoot: null, status: payload?.status ?? null });
+        return failure(error, {
+          diff: '',
+          path: payload?.path ?? null,
+          repoRoot: null,
+          status: payload?.status ?? null
+        });
       }
     }
   );
@@ -118,7 +132,13 @@ export function registerFilesystemIpc(): void {
       const client = await resolveClient(payload);
       return await client.getAggregateDiff();
     } catch (error) {
-      return failure(error, { branch: null, diff: '', filesChanged: 0, repoRoot: null, status: '' });
+      return failure(error, {
+        branch: null,
+        diff: '',
+        filesChanged: 0,
+        repoRoot: null,
+        status: ''
+      });
     }
   });
 
@@ -149,7 +169,8 @@ export function registerFilesystemIpc(): void {
     async (_event, payload?: WorkspacePayload & { path?: string; maxBytes?: number }) => {
       try {
         const filePath = payload?.path?.trim();
-        if (!filePath) return { content: '', path: '', truncated: false, error: 'path is required.' };
+        if (!filePath)
+          return { content: '', path: '', truncated: false, error: 'path is required.' };
         const client = await resolveClient(payload);
         return await client.readFile({ path: filePath, maxBytes: payload?.maxBytes });
       } catch (error) {

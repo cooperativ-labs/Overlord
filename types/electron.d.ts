@@ -131,10 +131,7 @@ interface ElectronAPI {
     }>;
   };
   remoteHelper: {
-    install: (payload: {
-      projectId: string;
-      ssh: SshConnectionConfig;
-    }) => Promise<{
+    install: (payload: { projectId: string; ssh: SshConnectionConfig }) => Promise<{
       ok: boolean;
       token?: string;
       serverPath?: string;

@@ -15,16 +15,16 @@
  * tunnel; agents spawned for tickets on that project share the single tunnel.
  */
 
-import { createServer as createNetServer, type Server as NetServer, type Socket } from 'node:net';
 import { readFile } from 'node:fs/promises';
-import path from 'node:path';
+import { createServer as createNetServer, type Server as NetServer, type Socket } from 'node:net';
 import os from 'node:os';
-
+import path from 'node:path';
 import type { ClientChannel, ConnectConfig } from 'ssh2';
 import { Client as SshClient } from 'ssh2';
 
 import { RemoteWorkspaceClient } from '../../../../lib/workspace/remote';
 import type { SshConnectionConfig, WorkspaceClient } from '../../../../lib/workspace/types';
+
 import { store } from './settings-store';
 
 type TunnelRecord = {
@@ -139,9 +139,7 @@ function launchRemoteHelper(
         if (!settled) {
           settled = true;
           reject(
-            new Error(
-              `Remote helper exited before ready. stderr:\n${stderrBuffer.slice(0, 2000)}`
-            )
+            new Error(`Remote helper exited before ready. stderr:\n${stderrBuffer.slice(0, 2000)}`)
           );
         }
       });

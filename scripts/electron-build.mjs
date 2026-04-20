@@ -206,10 +206,10 @@ run('rm -rf apps/web/.next/standalone/node_modules/@esbuild');
 // ---------------------------------------------------------------------------
 
 run(
-  'npx esbuild apps/desktop/electron/main.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/main.js --external:electron --format=cjs --sourcemap'
+  "npx esbuild apps/desktop/electron/main.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/main.js --external:electron '--external:*.node' --format=cjs --sourcemap"
 );
 run(
-  'npx esbuild apps/desktop/electron/preload.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/preload.js --external:electron --format=cjs --sourcemap'
+  "npx esbuild apps/desktop/electron/preload.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/preload.js --external:electron '--external:*.node' --format=cjs --sourcemap"
 );
 
 // ---------------------------------------------------------------------------

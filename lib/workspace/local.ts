@@ -9,13 +9,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import {
-  countLines,
-  GitFileStats,
-  parseGitStatus,
-  parseNumStat,
-  toPosixPath
-} from './git-parse';
+import { countLines, GitFileStats, parseGitStatus, parseNumStat, toPosixPath } from './git-parse';
 import type {
   AggregateDiffResult,
   CommitAndPushOptions,
@@ -74,7 +68,9 @@ async function runGit(
   }
 }
 
-async function resolveRepo(directory: string): Promise<{ branch: string | null; repoRoot: string }> {
+async function resolveRepo(
+  directory: string
+): Promise<{ branch: string | null; repoRoot: string }> {
   const topLevel = await runGit(directory, ['rev-parse', '--show-toplevel']);
   const repoRoot = topLevel.output.trim();
   if (!repoRoot) throw new Error('Directory is not inside a Git repository.');
@@ -88,7 +84,10 @@ async function resolveRepo(directory: string): Promise<{ branch: string | null; 
   };
 }
 
-async function readUntrackedStats(repoRoot: string, relativePath: string): Promise<GitFileStats | null> {
+async function readUntrackedStats(
+  repoRoot: string,
+  relativePath: string
+): Promise<GitFileStats | null> {
   try {
     const content = await fs.readFile(path.join(repoRoot, relativePath), 'utf8');
     return { linesAdded: countLines(content), linesRemoved: 0 };
@@ -153,15 +152,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       const relativeRoot = path.relative(repoRoot, rootDirectory);
       const normalizedRelativeRoot =
         relativeRoot && relativeRoot !== '.' ? toPosixPath(relativeRoot) : null;
-      const args = [
-        '-C',
-        repoRoot,
-        'ls-files',
-        '-z',
-        '--cached',
-        '--others',
-        '--exclude-standard'
-      ];
+      const args = ['-C', repoRoot, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'];
       if (normalizedRelativeRoot) args.push('--', normalizedRelativeRoot);
 
       const result = await runGit(repoRoot, args, { allowFailure: true });
@@ -180,7 +171,8 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     }
 
     const maxDepth = options?.maxDepth ?? DEFAULT_MAX_DEPTH;
-    const maxEntriesPerDirectory = options?.maxEntriesPerDirectory ?? DEFAULT_MAX_ENTRIES_PER_DIRECTORY;
+    const maxEntriesPerDirectory =
+      options?.maxEntriesPerDirectory ?? DEFAULT_MAX_ENTRIES_PER_DIRECTORY;
     const files: string[] = [];
     let truncated = false;
 
@@ -227,11 +219,17 @@ export class LocalWorkspaceClient implements WorkspaceClient {
   async readFile(options: ReadFileOptions): Promise<ReadFileResult> {
     const maxBytes = options.maxBytes ?? DEFAULT_READ_MAX_BYTES;
     const relative = options.path.trim();
-    if (!relative) return { content: '', path: options.path, truncated: false, error: 'path is required.' };
+    if (!relative)
+      return { content: '', path: options.path, truncated: false, error: 'path is required.' };
 
     const absolute = path.resolve(this.workingDirectory, relative);
     if (!absolute.startsWith(this.workingDirectory)) {
-      return { content: '', path: options.path, truncated: false, error: 'Path escapes workspace.' };
+      return {
+        content: '',
+        path: options.path,
+        truncated: false,
+        error: 'Path escapes workspace.'
+      };
     }
 
     try {
@@ -298,7 +296,13 @@ export class LocalWorkspaceClient implements WorkspaceClient {
   async getGitDiff(options: GitDiffOptions): Promise<GitDiffResult> {
     const relativePath = options.path.trim();
     if (!relativePath) {
-      return { diff: '', path: null, repoRoot: null, status: options.status ?? null, error: 'A file path is required.' };
+      return {
+        diff: '',
+        path: null,
+        repoRoot: null,
+        status: options.status ?? null,
+        error: 'A file path is required.'
+      };
     }
     try {
       const { repoRoot } = await resolveRepo(this.workingDirectory);
@@ -314,7 +318,12 @@ export class LocalWorkspaceClient implements WorkspaceClient {
           ['diff', '--no-index', '--no-ext-diff', '--unified=3', '--', '/dev/null', fullPath],
           { allowFailure: true }
         );
-        return { diff: result.output, path: relativePath, repoRoot, status: options.status ?? null };
+        return {
+          diff: result.output,
+          path: relativePath,
+          repoRoot,
+          status: options.status ?? null
+        };
       }
 
       if ((options.status === 'renamed' || options.status === 'copied') && normalizedOriginal) {
@@ -328,7 +337,12 @@ export class LocalWorkspaceClient implements WorkspaceClient {
           normalizedOriginal,
           normalizedPath
         ]);
-        return { diff: result.output, path: relativePath, repoRoot, status: options.status ?? null };
+        return {
+          diff: result.output,
+          path: relativePath,
+          repoRoot,
+          status: options.status ?? null
+        };
       }
 
       const result = await runGit(repoRoot, [
@@ -403,7 +417,13 @@ export class LocalWorkspaceClient implements WorkspaceClient {
   async commitAndPush(options: CommitAndPushOptions): Promise<CommitAndPushResult> {
     const message = options.message.trim();
     if (!message) {
-      return { ok: false, branch: null, commitSha: null, pushed: false, error: 'Commit message cannot be empty.' };
+      return {
+        ok: false,
+        branch: null,
+        commitSha: null,
+        pushed: false,
+        error: 'Commit message cannot be empty.'
+      };
     }
     try {
       const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
@@ -429,7 +449,8 @@ export class LocalWorkspaceClient implements WorkspaceClient {
             ? error.stderr
             : '';
         const msg =
-          stderr || (error instanceof Error ? error.message : 'git push failed. Ensure an upstream is set.');
+          stderr ||
+          (error instanceof Error ? error.message : 'git push failed. Ensure an upstream is set.');
         throw new Error(msg);
       }
 

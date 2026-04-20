@@ -3,7 +3,7 @@
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
-    "build-main": "node ../../node_modules/esbuild/bin/esbuild apps/desktop/electron/main.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/main.js --external:electron --format=cjs --sourcemap && node ../../node_modules/esbuild/bin/esbuild apps/desktop/electron/preload.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/preload.js --external:electron --format=cjs --sourcemap",
+    "build-main": "node ../../node_modules/esbuild/bin/esbuild apps/desktop/electron/main.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/main.js --external:electron '--external:*.node' --format=cjs --sourcemap && node ../../node_modules/esbuild/bin/esbuild apps/desktop/electron/preload.ts --bundle --platform=node --target=node20 --outfile=apps/desktop/dist-electron/preload.js --external:electron '--external:*.node' --format=cjs --sourcemap",
     "dev": "yarn build-main && node ../../node_modules/concurrently/dist/bin/concurrently.js \"yarn workspace @overlord/web dev\" \"node ../../node_modules/wait-on/bin/wait-on http://localhost:3000 && node ../../node_modules/electron/cli.js .\"",
     "type-check": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
   }

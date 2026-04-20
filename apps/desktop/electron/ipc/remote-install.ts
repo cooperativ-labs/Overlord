@@ -17,15 +17,14 @@
  */
 
 import { ipcMain } from 'electron';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import os from 'node:os';
 import { app } from 'electron';
-
+import { readFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { Client as SshClient } from 'ssh2';
 
-import type { SshConnectionConfig } from '../../../../lib/workspace/types';
 import { BUNDLED_REMOTE_HELPER_VERSION } from '../../../../lib/workspace/helper-version';
+import type { SshConnectionConfig } from '../../../../lib/workspace/types';
 import { store } from '../services/settings-store';
 
 type InstallPayload = {

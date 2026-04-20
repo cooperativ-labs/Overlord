@@ -9,8 +9,8 @@
  * ai/feature-plans/tailscale-ssh-followups.md #2).
  */
 
-import { execFile } from 'node:child_process';
 import { ipcMain } from 'electron';
+import { execFile } from 'node:child_process';
 
 import type { TailscaleStatus } from '../../../../lib/workspace/types';
 

@@ -78,8 +78,7 @@ const electronAPI = {
   remoteHelper: {
     install: (payload: { projectId: string; ssh: SshConnectionConfig }) =>
       ipcRenderer.invoke('remote-install:install', payload),
-    status: (payload: { projectId: string }) =>
-      ipcRenderer.invoke('remote-install:status', payload)
+    status: (payload: { projectId: string }) => ipcRenderer.invoke('remote-install:status', payload)
   },
   tailscale: {
     getStatus: () => ipcRenderer.invoke('tailscale:status')
