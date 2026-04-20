@@ -160,8 +160,8 @@ export function ProjectExecutionWorkspaceSelector({
     }
   }
 
-  const showSshAffordances =
-    activeExecutionWorkspace === 'ssh' && projectSettings.hasSshDirectory && Boolean(sshConfig);
+  const sshWorkspaceAvailable = projectSettings.hasSshDirectory || Boolean(sshConfig);
+  const showSshAffordances = sshWorkspaceAvailable && Boolean(sshConfig);
 
   return (
     <>
@@ -171,7 +171,7 @@ export function ProjectExecutionWorkspaceSelector({
             type="button"
             className={cn(
               'mt-1 inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground md:mt-0',
-              projectSettings.hasLocalDirectory || projectSettings.hasSshDirectory
+              projectSettings.hasLocalDirectory || sshWorkspaceAvailable
                 ? 'border-border'
                 : 'border-dashed border-muted-foreground/60'
             )}
@@ -224,7 +224,7 @@ export function ProjectExecutionWorkspaceSelector({
           <DropdownMenuItem
             className="items-start gap-3"
             onSelect={() => {
-              if (!projectSettings.hasSshDirectory) {
+              if (!sshWorkspaceAvailable) {
                 projectSettings.openProjectSettings();
                 return;
               }
@@ -245,7 +245,7 @@ export function ProjectExecutionWorkspaceSelector({
               <p
                 className={cn(
                   'truncate text-xs',
-                  projectSettings.hasSshDirectory
+                  sshWorkspaceAvailable
                     ? 'text-muted-foreground'
                     : 'italic text-muted-foreground/80'
                 )}
