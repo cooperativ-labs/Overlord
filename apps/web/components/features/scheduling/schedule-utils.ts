@@ -11,13 +11,14 @@ const DAY_LABELS_FULL = [
   'Saturday'
 ] as const;
 
-const ORDINAL_LABELS = ['1st', '2nd', '3rd', '4th', '5th'] as const;
+const ORDINAL_LABELS = ['1st', '2nd', '3rd'] as const;
 
 export function getDayLabel(dayNum: number, full = false): string {
   return full ? (DAY_LABELS_FULL[dayNum] ?? '') : (DAY_LABELS[dayNum] ?? '');
 }
 
 export function getOrdinalLabel(week: number): string {
+  if (week >= 4 && week <= 5) return 'Last';
   return ORDINAL_LABELS[week - 1] ?? `${week}th`;
 }
 
