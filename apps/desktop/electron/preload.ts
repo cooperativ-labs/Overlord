@@ -1,5 +1,29 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+type SshAuthMethod = 'agent' | 'key' | 'tailscale';
+type SshConnectionConfig = {
+  host: string;
+  port?: number;
+  user: string;
+  authMethod: SshAuthMethod;
+  privateKeyPath?: string;
+  passphrase?: string;
+};
+
+type WorkspacePayload = {
+  mode?: 'local' | 'remote';
+  directory?: string;
+  remoteDirectory?: string;
+  ssh?: SshConnectionConfig;
+  projectId?: string;
+};
+
+type ListFilesOptions = {
+  maxDepth?: number;
+  maxEntriesPerDirectory?: number;
+  maxFiles?: number;
+};
+
 const electronAPI = {
   terminal: {
     launchAgent: (
@@ -29,36 +53,36 @@ const electronAPI = {
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },
   filesystem: {
-    directoryExists: (
-      options?: string | { directory?: string; sshCommand?: string; remoteDirectory?: string }
-    ) => ipcRenderer.invoke('filesystem:directory-exists', options),
-    listProjectFiles: (options?: {
-      directory?: string;
-      sshCommand?: string;
-      remoteDirectory?: string;
-      maxDepth?: number;
-      maxEntriesPerDirectory?: number;
-      maxFiles?: number;
-    }) => ipcRenderer.invoke('filesystem:list-project-files', options),
-    checkSshConnection: (sshCommand: string) =>
-      ipcRenderer.invoke('filesystem:check-ssh-connection', sshCommand),
-    getGitStatus: (options?: {
-      directory?: string;
-      sshCommand?: string;
-      remoteDirectory?: string;
-    }) => ipcRenderer.invoke('filesystem:get-git-status', options),
-    getGitDiff: (options?: {
-      directory?: string;
-      originalPath?: string;
-      path?: string;
-      status?: string;
-      sshCommand?: string;
-      remoteDirectory?: string;
-    }) => ipcRenderer.invoke('filesystem:get-git-diff', options),
-    getAggregateDiff: (options?: { directory?: string }) =>
+    directoryExists: (options?: WorkspacePayload) =>
+      ipcRenderer.invoke('filesystem:directory-exists', options),
+    listProjectFiles: (options?: WorkspacePayload & { options?: ListFilesOptions }) =>
+      ipcRenderer.invoke('filesystem:list-project-files', options),
+    checkSshConnection: (options: WorkspacePayload) =>
+      ipcRenderer.invoke('filesystem:check-ssh-connection', options),
+    getGitStatus: (options?: WorkspacePayload) =>
+      ipcRenderer.invoke('filesystem:get-git-status', options),
+    getGitDiff: (
+      options?: WorkspacePayload & {
+        originalPath?: string;
+        path?: string;
+        status?: string;
+      }
+    ) => ipcRenderer.invoke('filesystem:get-git-diff', options),
+    getAggregateDiff: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-aggregate-diff', options),
-    gitCommitAndPush: (options: { directory?: string; message: string }) =>
-      ipcRenderer.invoke('filesystem:git-commit-and-push', options)
+    gitCommitAndPush: (options: WorkspacePayload & { message: string }) =>
+      ipcRenderer.invoke('filesystem:git-commit-and-push', options),
+    readFile: (options: WorkspacePayload & { path: string; maxBytes?: number }) =>
+      ipcRenderer.invoke('filesystem:read-file', options)
+  },
+  remoteHelper: {
+    install: (payload: { projectId: string; ssh: SshConnectionConfig }) =>
+      ipcRenderer.invoke('remote-install:install', payload),
+    status: (payload: { projectId: string }) =>
+      ipcRenderer.invoke('remote-install:status', payload)
+  },
+  tailscale: {
+    getStatus: () => ipcRenderer.invoke('tailscale:status')
   },
   supabase: {
     getStatus: () => ipcRenderer.invoke('supabase:status'),

@@ -1,3 +1,31 @@
+type SshAuthMethod = 'agent' | 'key' | 'tailscale';
+
+interface SshConnectionConfig {
+  host: string;
+  port?: number;
+  user: string;
+  authMethod: SshAuthMethod;
+  privateKeyPath?: string;
+  passphrase?: string;
+}
+
+interface WorkspacePayload {
+  mode?: 'local' | 'remote';
+  directory?: string;
+  remoteDirectory?: string;
+  ssh?: SshConnectionConfig;
+  projectId?: string;
+}
+
+interface TailscaleStatusResult {
+  installed: boolean;
+  running: boolean;
+  loggedIn: boolean;
+  selfName: string | null;
+  tailnet: string | null;
+  error?: string;
+}
+
 type AppUpdatePhase =
   | 'idle'
   | 'unsupported'
@@ -33,25 +61,20 @@ interface ElectronAPI {
     chooseDirectory: () => Promise<string | null>;
   };
   filesystem: {
-    getGitDiff: (options?: {
-      directory?: string;
-      originalPath?: string;
-      path?: string;
-      status?: string;
-      sshCommand?: string;
-      remoteDirectory?: string;
-    }) => Promise<{
+    getGitDiff: (
+      options?: WorkspacePayload & {
+        originalPath?: string;
+        path?: string;
+        status?: string;
+      }
+    ) => Promise<{
       diff: string;
       error?: string;
       path: string | null;
       repoRoot: string | null;
       status: string | null;
     }>;
-    getGitStatus: (options?: {
-      directory?: string;
-      sshCommand?: string;
-      remoteDirectory?: string;
-    }) => Promise<{
+    getGitStatus: (options?: WorkspacePayload) => Promise<{
       branch: string | null;
       error?: string;
       files: Array<{
@@ -66,27 +89,26 @@ interface ElectronAPI {
       linkedDirectory: string | null;
       repoRoot: string | null;
     }>;
-    directoryExists: (
-      options?: string | { directory?: string; sshCommand?: string; remoteDirectory?: string }
-    ) => Promise<boolean>;
-    listProjectFiles: (options?: {
-      directory?: string;
-      sshCommand?: string;
-      remoteDirectory?: string;
-      maxDepth?: number;
-      maxEntriesPerDirectory?: number;
-      maxFiles?: number;
-    }) => Promise<{
+    directoryExists: (options?: WorkspacePayload) => Promise<boolean>;
+    listProjectFiles: (
+      options?: WorkspacePayload & {
+        options?: {
+          maxDepth?: number;
+          maxEntriesPerDirectory?: number;
+          maxFiles?: number;
+        };
+      }
+    ) => Promise<{
       files: string[];
       linkedDirectory: string | null;
       truncated: boolean;
       error?: string;
     }>;
-    checkSshConnection: (sshCommand: string) => Promise<{
+    checkSshConnection: (options: WorkspacePayload) => Promise<{
       ok: boolean;
       error?: string;
     }>;
-    getAggregateDiff: (options?: { directory?: string }) => Promise<{
+    getAggregateDiff: (options?: WorkspacePayload) => Promise<{
       branch: string | null;
       diff: string;
       filesChanged: number;
@@ -94,13 +116,35 @@ interface ElectronAPI {
       status: string;
       error?: string;
     }>;
-    gitCommitAndPush: (options: { directory?: string; message: string }) => Promise<{
+    gitCommitAndPush: (options: WorkspacePayload & { message: string }) => Promise<{
       ok: boolean;
       branch: string | null;
       commitSha: string | null;
       pushed: boolean;
       error?: string;
     }>;
+    readFile: (options: WorkspacePayload & { path: string; maxBytes?: number }) => Promise<{
+      content: string;
+      path: string;
+      truncated: boolean;
+      error?: string;
+    }>;
+  };
+  remoteHelper: {
+    install: (payload: {
+      projectId: string;
+      ssh: SshConnectionConfig;
+    }) => Promise<{
+      ok: boolean;
+      token?: string;
+      serverPath?: string;
+      nodeBin?: string;
+      error?: string;
+    }>;
+    status: (payload: { projectId: string }) => Promise<{ installed: boolean }>;
+  };
+  tailscale: {
+    getStatus: () => Promise<TailscaleStatusResult>;
   };
   supabase: {
     getStatus: () => Promise<{ running: boolean; url: string }>;

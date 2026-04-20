@@ -5,8 +5,10 @@ import path from 'path';
 
 import { registerAppIpc } from './ipc/app';
 import { registerAuthIpc } from './ipc/auth';
-import { registerFilesystemIpc } from './ipc/filesystem';
+import { registerFilesystemIpc, teardownFilesystemIpc } from './ipc/filesystem';
+import { registerRemoteInstallIpc } from './ipc/remote-install';
 import { registerSupabaseIpc } from './ipc/supabase';
+import { registerTailscaleIpc } from './ipc/tailscale';
 import { registerTerminalIpc } from './ipc/terminal';
 import { registerAppMenu } from './services/app-menu';
 import { AppUpdaterService } from './services/app-updater';
@@ -327,6 +329,8 @@ app.whenReady().then(async () => {
   // Register IPC handlers
   registerTerminalIpc();
   registerFilesystemIpc();
+  registerRemoteInstallIpc();
+  registerTailscaleIpc();
   registerSupabaseIpc(supabaseManager);
   registerAppIpc({ appUpdater, platformUrl, connectorUrl });
   registerAuthIpc({ getPlatformUrl: () => platformUrl });
@@ -352,6 +356,12 @@ app.on('before-quit', async () => {
   unsubscribeAppMenu?.();
   unsubscribeAppMenu = null;
   clearLocalRuntime(connectorUrl);
+
+  try {
+    await teardownFilesystemIpc();
+  } catch {
+    // best effort — shutting down anyway
+  }
 
   if (isDev) {
     try {

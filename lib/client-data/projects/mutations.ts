@@ -70,15 +70,28 @@ function removeProjectFromCache(queryClient: QueryClient, projectId: string) {
   );
 }
 
+function emptySshFields() {
+  return {
+    localWorkingDirectory: null,
+    sshCommand: null,
+    remoteWorkingDirectory: null,
+    sshHost: null,
+    sshPort: null,
+    sshUser: null,
+    sshAuthMethod: null,
+    sshPrivateKeyPath: null,
+    remoteHelperInstalledAt: null,
+    remoteHelperVersion: null
+  } as const;
+}
+
 function appendCreatedProject(queryClient: QueryClient, created: CreateProjectResult) {
   const project: SidebarProject = {
     id: created.id,
     name: created.name,
     color: created.color,
     organizationId: created.organizationId,
-    localWorkingDirectory: null,
-    sshCommand: null,
-    remoteWorkingDirectory: null
+    ...emptySshFields()
   };
 
   queryClient.setQueryData<SidebarProject[]>(ticketQueryKeys.projects(), current => {
@@ -103,9 +116,7 @@ export function useCreateProjectMutation() {
             name: input.name.trim(),
             color: input.color.toLowerCase(),
             organizationId: input.organizationId,
-            localWorkingDirectory: null,
-            sshCommand: null,
-            remoteWorkingDirectory: null
+            ...emptySshFields()
           }
         ])
       );
@@ -179,16 +190,15 @@ export function useUpdateProjectSshConfigMutation() {
     mutationFn: updateProjectSshConfigAction,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
+      const trim = (value: string | null | undefined) =>
+        typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
       patchProjectCache(queryClient, input.projectId, {
-        sshCommand:
-          typeof input.sshCommand === 'string' && input.sshCommand.trim().length > 0
-            ? input.sshCommand.trim()
-            : null,
-        remoteWorkingDirectory:
-          typeof input.remoteWorkingDirectory === 'string' &&
-          input.remoteWorkingDirectory.trim().length > 0
-            ? input.remoteWorkingDirectory.trim()
-            : null
+        remoteWorkingDirectory: trim(input.remoteWorkingDirectory),
+        sshHost: trim(input.sshHost),
+        sshPort: input.sshPort ?? null,
+        sshUser: trim(input.sshUser),
+        sshAuthMethod: input.sshAuthMethod ?? null,
+        sshPrivateKeyPath: trim(input.sshPrivateKeyPath)
       });
       return snapshot;
     },

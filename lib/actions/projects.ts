@@ -6,14 +6,24 @@ import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { createClient } from '@/supabase/utils/server';
 
+export type ProjectSshAuthMethod = 'agent' | 'key' | 'tailscale';
+
 export type SidebarProject = {
   id: string;
   name: string;
   color: string;
   organizationId: number;
   localWorkingDirectory: string | null;
+  /** @deprecated — retained for one release so legacy callers keep compiling. */
   sshCommand: string | null;
   remoteWorkingDirectory: string | null;
+  sshHost: string | null;
+  sshPort: number | null;
+  sshUser: string | null;
+  sshAuthMethod: ProjectSshAuthMethod | null;
+  sshPrivateKeyPath: string | null;
+  remoteHelperInstalledAt: string | null;
+  remoteHelperVersion: string | null;
 };
 
 function revalidateProjectPaths(projectId: string) {
@@ -30,7 +40,7 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   const { data, error } = await supabase
     .from('projects')
     .select(
-      'id,name,color,organization_id,local_working_directory,ssh_command,remote_working_directory'
+      'id,name,color,organization_id,local_working_directory,ssh_command,remote_working_directory,ssh_host,ssh_port,ssh_user,ssh_auth_method,ssh_private_key_path,remote_helper_installed_at,remote_helper_version'
     )
     .order('name', { ascending: true });
 
@@ -46,7 +56,14 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
     organizationId: project.organization_id,
     localWorkingDirectory: project.local_working_directory,
     sshCommand: project.ssh_command,
-    remoteWorkingDirectory: project.remote_working_directory
+    remoteWorkingDirectory: project.remote_working_directory,
+    sshHost: project.ssh_host,
+    sshPort: project.ssh_port,
+    sshUser: project.ssh_user,
+    sshAuthMethod: project.ssh_auth_method as ProjectSshAuthMethod | null,
+    sshPrivateKeyPath: project.ssh_private_key_path,
+    remoteHelperInstalledAt: project.remote_helper_installed_at,
+    remoteHelperVersion: project.remote_helper_version
   }));
 }
 
@@ -187,25 +204,54 @@ export async function deleteProjectAction(input: { projectId: string }): Promise
   revalidatePath('/u');
 }
 
-export async function updateProjectSshConfigAction(input: {
+function trimOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export type UpdateProjectSshConfigInput = {
   projectId: string;
-  sshCommand: string | null;
   remoteWorkingDirectory: string | null;
-}): Promise<void> {
-  const sshCommand =
-    typeof input.sshCommand === 'string' && input.sshCommand.trim().length > 0
-      ? input.sshCommand.trim()
-      : null;
-  const remoteWorkingDirectory =
-    typeof input.remoteWorkingDirectory === 'string' &&
-    input.remoteWorkingDirectory.trim().length > 0
-      ? input.remoteWorkingDirectory.trim()
+  sshHost: string | null;
+  sshPort: number | null;
+  sshUser: string | null;
+  sshAuthMethod: ProjectSshAuthMethod | null;
+  sshPrivateKeyPath: string | null;
+};
+
+function deriveLegacySshCommand(input: UpdateProjectSshConfigInput): string | null {
+  const user = trimOrNull(input.sshUser);
+  const host = trimOrNull(input.sshHost);
+  if (!user || !host) return null;
+  const port = input.sshPort && input.sshPort !== 22 ? ` -p ${input.sshPort}` : '';
+  return `ssh${port} ${user}@${host}`;
+}
+
+export async function updateProjectSshConfigAction(
+  input: UpdateProjectSshConfigInput
+): Promise<void> {
+  const supabase = await createClient();
+  const authMethod: ProjectSshAuthMethod | null =
+    input.sshAuthMethod && ['agent', 'key', 'tailscale'].includes(input.sshAuthMethod)
+      ? input.sshAuthMethod
       : null;
 
-  const supabase = await createClient();
+  const payload = {
+    remote_working_directory: trimOrNull(input.remoteWorkingDirectory),
+    ssh_host: trimOrNull(input.sshHost),
+    ssh_port: input.sshPort ?? null,
+    ssh_user: trimOrNull(input.sshUser),
+    ssh_auth_method: authMethod,
+    ssh_private_key_path: trimOrNull(input.sshPrivateKeyPath),
+    // Keep legacy ssh_command in sync so unmigrated callers still work this
+    // release. Phase 5 drops the column.
+    ssh_command: deriveLegacySshCommand(input)
+  };
+
   const { data, error } = await supabase
     .from('projects')
-    .update({ ssh_command: sshCommand, remote_working_directory: remoteWorkingDirectory })
+    .update(payload)
     .eq('id', input.projectId)
     .select('organization_id')
     .single();
