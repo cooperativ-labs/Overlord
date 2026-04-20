@@ -9,7 +9,8 @@ import { getSupabase, isSupabaseConfigured } from './supabase';
 // Configure how notifications are displayed when the app is in the foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true
   })
