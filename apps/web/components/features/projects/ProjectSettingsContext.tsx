@@ -13,6 +13,8 @@ import {
 import type { ProjectSettingsNavSection } from '@/components/modals/ProjectSettingsModal';
 import { ProjectSettingsModal } from '@/components/modals/ProjectSettingsModal';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
+import { parseLegacySshCommand } from '@/lib/workspace/parse-ssh-command';
+import type { SshConnectionConfig } from '@/lib/workspace/types';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
@@ -34,6 +36,7 @@ export function resolveExecutionWorkspace(
 }
 
 type ProjectSettingsContextValue = {
+  projectId: string;
   openProjectSettings: (initialNav?: ProjectSettingsNavSection) => void;
   executionWorkspace: ProjectExecutionWorkspace;
   setExecutionWorkspace: (workspace: ProjectExecutionWorkspace) => void;
@@ -41,9 +44,11 @@ type ProjectSettingsContextValue = {
   hasSshDirectory: boolean;
   localWorkingDirectory: string | null;
   sshCommand: string | null;
+  sshConnectionConfig: SshConnectionConfig | null;
   remoteWorkingDirectory: string | null;
   effectiveWorkingDirectory: string | null;
   effectiveSshCommand: string | null;
+  effectiveSshConnectionConfig: SshConnectionConfig | null;
   effectiveRemoteWorkingDirectory: string | null;
 };
 
@@ -104,6 +109,10 @@ export function ProjectSettingsProvider({
     initialRemoteWorkingDirectory.trim().length > 0
       ? initialRemoteWorkingDirectory.trim()
       : null;
+  const sshConnectionConfig = useMemo(
+    () => parseLegacySshCommand(sshCommand),
+    [sshCommand]
+  );
   const resolvedExecutionWorkspace = resolveExecutionWorkspace(
     executionWorkspace,
     hasLocalDirectory,
@@ -160,6 +169,7 @@ export function ProjectSettingsProvider({
 
   const value: ProjectSettingsContextValue = useMemo(
     () => ({
+      projectId,
       openProjectSettings,
       executionWorkspace: resolvedExecutionWorkspace,
       setExecutionWorkspace,
@@ -167,10 +177,13 @@ export function ProjectSettingsProvider({
       hasSshDirectory,
       localWorkingDirectory,
       sshCommand,
+      sshConnectionConfig,
       remoteWorkingDirectory,
       effectiveWorkingDirectory:
         resolvedExecutionWorkspace === 'local' ? localWorkingDirectory : null,
       effectiveSshCommand: resolvedExecutionWorkspace === 'ssh' ? sshCommand : null,
+      effectiveSshConnectionConfig:
+        resolvedExecutionWorkspace === 'ssh' ? sshConnectionConfig : null,
       effectiveRemoteWorkingDirectory:
         resolvedExecutionWorkspace === 'ssh' ? remoteWorkingDirectory : null
     }),
@@ -179,10 +192,12 @@ export function ProjectSettingsProvider({
       hasSshDirectory,
       localWorkingDirectory,
       openProjectSettings,
+      projectId,
       remoteWorkingDirectory,
       resolvedExecutionWorkspace,
       setExecutionWorkspace,
-      sshCommand
+      sshCommand,
+      sshConnectionConfig
     ]
   );
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { ChevronDown, Folder, Loader2, Server } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, Download, Folder, Loader2, Server } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -32,6 +33,65 @@ export function ProjectExecutionWorkspaceSelector({
   const [warningType, setWarningType] = useState<'local' | 'ssh'>('local');
   const [warningPath, setWarningPath] = useState('');
   const [warningError, setWarningError] = useState<string | null>(null);
+  const [tailscaleActive, setTailscaleActive] = useState(false);
+  const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
+  const [installingHelper, setInstallingHelper] = useState(false);
+
+  const sshConfig = projectSettings?.sshConnectionConfig ?? null;
+  const projectId = projectSettings?.projectId ?? null;
+
+  useEffect(() => {
+    if (!api?.tailscale) return;
+    let cancelled = false;
+    void api.tailscale
+      .getStatus()
+      .then(status => {
+        if (!cancelled) setTailscaleActive(status.running && status.loggedIn);
+      })
+      .catch(() => {
+        if (!cancelled) setTailscaleActive(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
+  useEffect(() => {
+    if (!api?.remoteHelper || !projectId || !sshConfig) {
+      setHelperInstalled(null);
+      return;
+    }
+    let cancelled = false;
+    void api.remoteHelper
+      .status({ projectId })
+      .then(result => {
+        if (!cancelled) setHelperInstalled(result.installed);
+      })
+      .catch(() => {
+        if (!cancelled) setHelperInstalled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, sshConfig]);
+
+  async function handleInstallHelper() {
+    if (!api?.remoteHelper || !projectId || !sshConfig) return;
+    setInstallingHelper(true);
+    try {
+      const result = await api.remoteHelper.install({ projectId, ssh: sshConfig });
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to install remote helper.');
+        return;
+      }
+      toast.success('Remote helper installed.');
+      setHelperInstalled(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to install remote helper.');
+    } finally {
+      setInstallingHelper(false);
+    }
+  }
 
   if (!projectSettings) return null;
 
@@ -48,7 +108,7 @@ export function ProjectExecutionWorkspaceSelector({
       if (workspace === 'local') {
         const dir = projectSettings!.localWorkingDirectory;
         if (!dir) return;
-        const exists = await api.filesystem.directoryExists(dir);
+        const exists = await api.filesystem.directoryExists({ directory: dir });
         if (!exists) {
           setWarningType('local');
           setWarningPath(dir);
@@ -56,24 +116,31 @@ export function ProjectExecutionWorkspaceSelector({
           setWarningOpen(true);
         }
       } else {
-        const ssh = projectSettings!.sshCommand;
+        const ssh = projectSettings!.sshConnectionConfig;
+        const sshLabel = projectSettings!.sshCommand;
         const remoteDir = projectSettings!.remoteWorkingDirectory;
-        if (!ssh) return;
-        const result = await api.filesystem.checkSshConnection(ssh);
+        if (!ssh || !sshLabel) return;
+        const result = await api.filesystem.checkSshConnection({
+          mode: 'remote',
+          ssh,
+          remoteDirectory: remoteDir ?? '/',
+          projectId: projectSettings!.projectId
+        });
         if (!result.ok) {
           setWarningType('ssh');
-          setWarningPath(remoteDir ? `${ssh} → ${remoteDir}` : ssh);
+          setWarningPath(remoteDir ? `${sshLabel} → ${remoteDir}` : sshLabel);
           setWarningError(result.error ?? 'SSH connection failed.');
           setWarningOpen(true);
         } else if (remoteDir) {
-          // SSH connected — also verify the remote directory exists
           const dirExists = await api.filesystem.directoryExists({
-            sshCommand: ssh,
-            remoteDirectory: remoteDir
+            mode: 'remote',
+            ssh,
+            remoteDirectory: remoteDir,
+            projectId: projectSettings!.projectId
           });
           if (!dirExists) {
             setWarningType('ssh');
-            setWarningPath(`${ssh} → ${remoteDir}`);
+            setWarningPath(`${sshLabel} → ${remoteDir}`);
             setWarningError('Remote directory does not exist.');
             setWarningOpen(true);
           }
@@ -85,6 +152,9 @@ export function ProjectExecutionWorkspaceSelector({
       setChecking(false);
     }
   }
+
+  const showSshAffordances =
+    activeExecutionWorkspace === 'ssh' && projectSettings.hasSshDirectory && Boolean(sshConfig);
 
   return (
     <>
@@ -180,6 +250,45 @@ export function ProjectExecutionWorkspaceSelector({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {showSshAffordances ? (
+        <div className="mt-1 flex items-center gap-1.5 md:mt-0">
+          {tailscaleActive ? (
+            <span
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] text-muted-foreground"
+              title="Tailscale is running on this machine"
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Tailscale
+            </span>
+          ) : null}
+          {helperInstalled === false ? (
+            <button
+              type="button"
+              onClick={handleInstallHelper}
+              disabled={installingHelper}
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 px-2 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              title="Install the Overlord remote helper on this host"
+            >
+              {installingHelper ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Download className="h-3 w-3" />
+              )}
+              Install helper
+            </button>
+          ) : null}
+          {helperInstalled === true ? (
+            <span
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] text-muted-foreground"
+              title="Overlord remote helper is installed"
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Helper ready
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <WorkspaceConnectionWarningModal
         open={warningOpen}

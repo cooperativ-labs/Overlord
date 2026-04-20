@@ -36,7 +36,7 @@ export function useLocalDirectoryAccess({ workingDirectory, hasProjectWorkingDir
     setCanRunAgent(false);
 
     void api.filesystem
-      .directoryExists(directory)
+      .directoryExists({ directory })
       .then(exists => {
         if (!cancelled) setCanRunAgent(exists);
       })
