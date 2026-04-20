@@ -231,7 +231,6 @@ export async function createDraftTicket(
   }
 
   const { error: objectiveError } = await supabase.from('objectives').insert({
-    is_executed: false,
     state: 'draft',
     objective: draft.description,
     ticket_id: createdTicket.id

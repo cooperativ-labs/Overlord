@@ -67,7 +67,7 @@ export async function GET(request: Request, { params }: RouteContext) {
           .from('objectives')
           .select('objective')
           .eq('ticket_id', ticketId)
-          .eq('is_executed', false)
+          .eq('state', 'draft')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()

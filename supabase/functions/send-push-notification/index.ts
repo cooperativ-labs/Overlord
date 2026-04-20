@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const userIds = (memberUserIds ?? []).map((m) => m.user_id);
+    const userIds = (memberUserIds ?? []).map(m => m.user_id);
     if (userIds.length === 0) {
       return new Response(JSON.stringify({ ok: true, sent: 0 }), {
         status: 200,
@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
     }));
 
     // Send in chunks of 100 (Expo limit)
-    const chunks: typeof messages[] = [];
+    const chunks: (typeof messages)[] = [];
     for (let i = 0; i < messages.length; i += 100) {
       chunks.push(messages.slice(i, i + 100));
     }

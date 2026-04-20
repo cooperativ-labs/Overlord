@@ -635,7 +635,6 @@ export type Database = {
           agent_identifier: string | null;
           created_at: string;
           id: string;
-          is_executed: boolean;
           model_identifier: string | null;
           objective: string;
           state: string;
@@ -647,7 +646,6 @@ export type Database = {
           agent_identifier?: string | null;
           created_at?: string;
           id?: string;
-          is_executed?: boolean;
           model_identifier?: string | null;
           objective?: string;
           state?: string;
@@ -659,7 +657,6 @@ export type Database = {
           agent_identifier?: string | null;
           created_at?: string;
           id?: string;
-          is_executed?: boolean;
           model_identifier?: string | null;
           objective?: string;
           state?: string;
@@ -832,6 +829,33 @@ export type Database = {
             referencedColumns: ['id'];
           }
         ];
+      };
+      push_tokens: {
+        Row: {
+          created_at: string;
+          id: string;
+          platform: string;
+          token: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          platform: string;
+          token: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          platform?: string;
+          token?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
       };
       schedule: {
         Row: {

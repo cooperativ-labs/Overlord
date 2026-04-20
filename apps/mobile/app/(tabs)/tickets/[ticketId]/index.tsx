@@ -21,10 +21,7 @@ import {
 import { colors } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import { launchTicketOnServer, launchTicketOnServerWithPassword } from '@/lib/remote-ticket-launch';
-import {
-  getConnectedSSHServers,
-  useServerConnections
-} from '@/lib/server-connections-context';
+import { getConnectedSSHServers, useServerConnections } from '@/lib/server-connections-context';
 import {
   getServerDeviceCredential,
   saveServerDeviceCredential
@@ -94,9 +91,7 @@ export default function TicketDetailScreen() {
         .single(),
       supabase
         .from('objectives')
-        .select(
-          'id, objective, is_executed, title, state, agent_identifier, model_identifier, created_at'
-        )
+        .select('id, objective, title, state, agent_identifier, model_identifier, created_at')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false }),
       supabase
@@ -125,13 +120,13 @@ export default function TicketDetailScreen() {
   useTicketRealtime(ticketId, loadData);
 
   const draftObjective = useMemo(
-    () => objectives.find(objective => !objective.is_executed) ?? null,
+    () => objectives.find(objective => objective.state === 'draft') ?? null,
     [objectives]
   );
   const executedObjectives = useMemo(
     () =>
       objectives
-        .filter(objective => objective.is_executed)
+        .filter(objective => objective.state !== 'draft')
         .slice()
         .sort((left, right) => {
           return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
@@ -197,8 +192,7 @@ export default function TicketDetailScreen() {
         const { error } = await supabase.from('objectives').insert({
           ticket_id: ticketId,
           objective: trimmedObjective,
-          state: 'draft',
-          is_executed: false
+          state: 'draft'
         });
 
         if (error) {

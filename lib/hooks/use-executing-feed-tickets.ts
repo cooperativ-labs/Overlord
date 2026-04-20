@@ -22,6 +22,7 @@ export function useExecutingFeedTickets(initialTickets: ExecutingFeedTicket[]) {
       .channel('feed-executing-tickets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_sessions' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'objectives' }, invalidate)
       .subscribe(status => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           invalidate();

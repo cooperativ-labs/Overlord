@@ -93,7 +93,7 @@ type TicketScheduleRow = {
 async function getLatestObjectiveText(supabase: ServerSupabase, ticketId: string) {
   const { data, error } = await supabase
     .from('objectives')
-    .select('objective,is_executed')
+    .select('objective')
     .eq('ticket_id', ticketId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -389,7 +389,7 @@ async function resolvePromptTicketSource(
         .from('objectives')
         .select('objective')
         .eq('ticket_id', ticketId)
-        .eq('is_executed', false)
+        .eq('state', 'draft')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -1001,7 +1001,7 @@ export async function markObjectiveExecutedAction(
   const supabase = await createClient();
   const { data: objective, error: objectiveError } = await supabase
     .from('objectives')
-    .select('id,is_executed,objective,ticket_id')
+    .select('id,state,objective,ticket_id')
     .eq('id', objectiveId)
     .eq('ticket_id', ticketId)
     .single();
@@ -1010,13 +1010,13 @@ export async function markObjectiveExecutedAction(
     throw new Error(objectiveError?.message ?? 'Objective not found.');
   }
 
-  if (objective.is_executed) {
+  if (objective.state === 'complete') {
     return;
   }
 
   const { error: executeError } = await supabase
     .from('objectives')
-    .update({ is_executed: true, state: 'complete' })
+    .update({ state: 'complete' })
     .eq('id', objectiveId);
   if (executeError) {
     throw new Error(executeError.message);
@@ -1026,7 +1026,7 @@ export async function markObjectiveExecutedAction(
     .from('objectives')
     .select('id')
     .eq('ticket_id', ticketId)
-    .eq('is_executed', false)
+    .eq('state', 'draft')
     .limit(1)
     .maybeSingle();
   if (existingDraftError) {
@@ -1037,7 +1037,6 @@ export async function markObjectiveExecutedAction(
     const { error: insertDraftError } = await supabase.from('objectives').insert({
       ticket_id: ticketId,
       objective: '',
-      is_executed: false,
       state: 'draft'
     });
     if (insertDraftError) {
@@ -1091,7 +1090,7 @@ export async function markObjectiveExecutedAction(
   ]);
 }
 
-export async function markObjectiveUnexecutedAction(
+export async function markObjectiveDraftAction(
   ticketId: string,
   objectiveId: string
 ): Promise<void> {
@@ -1100,7 +1099,7 @@ export async function markObjectiveUnexecutedAction(
   // 1. Get all objectives for this ticket to check conditions
   const { data: objectives, error: objectivesError } = await supabase
     .from('objectives')
-    .select('id,is_executed,objective')
+    .select('id,state,objective')
     .eq('ticket_id', ticketId);
 
   if (objectivesError || !objectives) {
@@ -1112,39 +1111,29 @@ export async function markObjectiveUnexecutedAction(
     throw new Error('Target objective not found.');
   }
 
-  if (!targetObjective.is_executed) {
+  if (targetObjective.state === 'draft') {
     return;
   }
 
-  // 2. Check if all OTHER objectives are either executed or empty
   const otherObjectives = objectives.filter(o => o.id !== objectiveId);
-  const hasActiveNonEmptyObjective = otherObjectives.some(
-    o => !o.is_executed && o.objective.trim().length > 0
-  );
 
-  if (hasActiveNonEmptyObjective) {
-    throw new Error('Cannot unexecute objective while another objective is active.');
-  }
+  // 2. Close out any other draft rows so the selected objective becomes the draft.
+  const otherDraftIds = otherObjectives.filter(o => o.state === 'draft').map(o => o.id);
 
-  // 3. Mark any empty unexecuted objectives as executed to keep things clean
-  const emptyUnexecutedIds = otherObjectives
-    .filter(o => !o.is_executed && o.objective.trim().length === 0)
-    .map(o => o.id);
-
-  if (emptyUnexecutedIds.length > 0) {
+  if (otherDraftIds.length > 0) {
     const { error: updateError } = await supabase
       .from('objectives')
-      .update({ is_executed: true, state: 'complete' })
-      .in('id', emptyUnexecutedIds);
+      .update({ state: 'complete' })
+      .in('id', otherDraftIds);
     if (updateError) {
       throw new Error(updateError.message);
     }
   }
 
-  // 4. Mark the target objective as unexecuted (back to draft)
+  // 3. Mark the target objective back to draft
   const { error: unexecuteError } = await supabase
     .from('objectives')
-    .update({ is_executed: false, state: 'draft' })
+    .update({ state: 'draft' })
     .eq('id', objectiveId);
 
   if (unexecuteError) {
@@ -1164,7 +1153,7 @@ export async function markObjectiveUnexecutedAction(
 
   await supabase.from('ticket_events').insert({
     event_type: 'system',
-    summary: 'Objective marked unexecuted.',
+    summary: 'Objective marked draft.',
     ticket_id: ticketId
   });
 

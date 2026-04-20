@@ -567,7 +567,7 @@ export default function KanbanBoard({
       const [{ data: objectives }, { data: sessions }] = await Promise.all([
         supabase
           .from('objectives')
-          .select('state,is_executed,agent_identifier')
+          .select('state,agent_identifier')
           .eq('ticket_id', ticketId)
           .order('created_at', { ascending: false }),
         supabase
@@ -586,13 +586,12 @@ export default function KanbanBoard({
 
       for (const objective of (objectives ?? []) as Array<{
         state: string | null;
-        is_executed: boolean | null;
         agent_identifier: string | null;
       }>) {
         if (latestObjectiveAgent === null) {
           latestObjectiveAgent = objective.agent_identifier ?? null;
         }
-        if (objective.is_executed) {
+        if (objective.state === 'complete') {
           executedObjectivesCount += 1;
         }
         if (
@@ -650,7 +649,7 @@ export default function KanbanBoard({
           .in('id', ticketIds),
         supabase
           .from('objectives')
-          .select('ticket_id,state,is_executed,agent_identifier')
+          .select('ticket_id,state,agent_identifier')
           .in('ticket_id', ticketIds)
           .order('created_at', { ascending: false })
       ]);
@@ -689,7 +688,6 @@ export default function KanbanBoard({
       for (const objective of (objectives ?? []) as Array<{
         ticket_id: string;
         state: string | null;
-        is_executed: boolean | null;
         agent_identifier: string | null;
       }>) {
         if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {

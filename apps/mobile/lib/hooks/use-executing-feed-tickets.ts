@@ -153,6 +153,11 @@ export function useExecutingFeedTickets() {
         { event: '*', schema: 'public', table: 'agent_sessions' },
         () => void refresh()
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'objectives' },
+        () => void refresh()
+      )
       .subscribe(status => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           void refresh();

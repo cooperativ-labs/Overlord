@@ -41,6 +41,7 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
   const userId = user?.id ?? null;
   const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
+  const serversRef = useRef<Server[]>([]);
   const hasLoadedRef = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -48,6 +49,7 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
       console.log('[ServerConnections] refresh skipped - no signed-in user');
       hasLoadedRef.current = false;
       setServers([]);
+      serversRef.current = [];
       setLoading(false);
       return [];
     }
@@ -81,6 +83,7 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
         }))
       );
       setServers(loadedServers);
+      serversRef.current = loadedServers;
       hasLoadedRef.current = true;
       console.log(
         `[ServerConnections] refresh complete: ${loadedServers.length} server(s), ${getConnectedSSHServers(loadedServers).length} connected`
@@ -88,7 +91,7 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
       return loadedServers;
     } catch (error) {
       console.error('Failed to load server connections:', error);
-      return servers;
+      return serversRef.current;
     } finally {
       setLoading(false);
     }

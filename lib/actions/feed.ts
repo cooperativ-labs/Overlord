@@ -104,7 +104,7 @@ export async function getFeedPostsAction(options?: {
         .from('objectives')
         .select('ticket_id,objective,created_at')
         .in('ticket_id', ticketIds)
-        .eq('is_executed', false)
+        .eq('state', 'draft')
         .order('created_at', { ascending: false }),
       supabase
         .from('file_changes')

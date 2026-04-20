@@ -286,41 +286,41 @@ async function main() {
       ticket_id: ticketIds[0],
       title: 'CI workflow setup',
       objective: 'Configure GitHub Actions workflows for lint and test jobs.',
-      is_executed: true,
+      state: 'complete',
       agent_identifier: 'Claude'
     },
     {
       ticket_id: ticketIds[0],
       title: 'Deployment wiring',
       objective: 'Add the deploy job and wire in production secrets.',
-      is_executed: true,
+      state: 'complete',
       agent_identifier: 'Claude'
     },
     {
       ticket_id: ticketIds[1],
       objective: 'Define color, spacing, and typography tokens for the Alpha project.',
-      is_executed: false
+      state: 'draft'
     },
     {
       ticket_id: ticketIds[2],
       objective: 'Document all public REST endpoints with examples and error codes.',
-      is_executed: false
+      state: 'draft'
     },
     {
       ticket_id: ticketIds[3],
       objective: 'Add PostHog analytics to the Beta project and instrument key user flows.',
-      is_executed: false
+      state: 'draft'
     },
     {
       ticket_id: ticketIds[4],
       objective: 'Run axe-core across all pages and resolve WCAG AA violations.',
-      is_executed: false,
+      state: 'draft',
       agent_identifier: 'Codex'
     },
     {
       ticket_id: ticketIds[5],
       objective: 'Write a one-time script to migrate records from the old schema to the new one.',
-      is_executed: false
+      state: 'draft'
     }
   ]);
 

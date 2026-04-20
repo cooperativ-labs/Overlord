@@ -59,7 +59,7 @@ export function useFeedRealtime() {
           .from('objectives')
           .select('objective')
           .eq('ticket_id', row.ticket_id)
-          .eq('is_executed', false)
+          .eq('state', 'draft')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();

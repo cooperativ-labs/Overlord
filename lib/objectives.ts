@@ -9,7 +9,7 @@ type ObjectiveClient = SupabaseClient<Database>;
 
 type DraftObjective = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  'id' | 'objective' | 'is_executed'
+  'id' | 'objective' | 'state'
 >;
 
 type ObjectiveTimelineItem = Pick<Database['public']['Tables']['objectives']['Row'], 'created_at'>;
@@ -82,9 +82,9 @@ export async function upsertDraftObjective(
   const normalizedObjective = normalizeObjectiveText(objective);
   const { data: draft, error: draftError } = await supabase
     .from('objectives')
-    .select('id,objective,is_executed')
+    .select('id,objective,state')
     .eq('ticket_id', ticketId)
-    .eq('is_executed', false)
+    .eq('state', 'draft')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle<DraftObjective>();
@@ -107,7 +107,6 @@ export async function upsertDraftObjective(
   }
 
   const { error: insertDraftError } = await supabase.from('objectives').insert({
-    is_executed: false,
     state: 'draft',
     objective: normalizedObjective,
     ticket_id: ticketId
@@ -124,9 +123,9 @@ export async function markDraftObjectiveExecuted(
 ) {
   const { data: draft, error: draftError } = await supabase
     .from('objectives')
-    .select('id,objective,is_executed')
+    .select('id,objective,state')
     .eq('ticket_id', ticketId)
-    .eq('is_executed', false)
+    .eq('state', 'draft')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle<DraftObjective>();
@@ -148,7 +147,6 @@ export async function markDraftObjectiveExecuted(
   const { error: executeError } = await supabase
     .from('objectives')
     .update({
-      is_executed: true,
       state: 'executing',
       agent_identifier: executionSnapshot?.agentIdentifier ?? null,
       model_identifier: resolveObjectiveModelIdentifier(executionSnapshot)
@@ -159,7 +157,6 @@ export async function markDraftObjectiveExecuted(
   }
 
   const { error: insertDraftError } = await supabase.from('objectives').insert({
-    is_executed: false,
     state: 'draft',
     objective: '',
     ticket_id: ticketId

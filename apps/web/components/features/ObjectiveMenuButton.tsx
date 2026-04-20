@@ -10,19 +10,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { markObjectiveExecutedAction, markObjectiveUnexecutedAction } from '@/lib/actions/tickets';
+import { markObjectiveDraftAction, markObjectiveExecutedAction } from '@/lib/actions/tickets';
 
 type ObjectiveMenuButtonProps = {
   ticketId: string;
   objectiveId: string;
-  isExecuted: boolean;
+  state: string | null;
   canMarkExecuted?: boolean;
 };
 
 export function ObjectiveMenuButton({
   ticketId,
   objectiveId,
-  isExecuted,
+  state,
   canMarkExecuted = true
 }: ObjectiveMenuButtonProps) {
   const [pending, startTransition] = useTransition();
@@ -33,11 +33,14 @@ export function ObjectiveMenuButton({
     });
   }
 
-  function handleMarkUnexecuted() {
+  function handleMarkDraft() {
     startTransition(async () => {
-      await markObjectiveUnexecutedAction(ticketId, objectiveId);
+      await markObjectiveDraftAction(ticketId, objectiveId);
     });
   }
+
+  const canShowMarkComplete = state !== 'complete';
+  const canShowMarkDraft = state !== 'draft';
 
   return (
     <DropdownMenu>
@@ -53,7 +56,7 @@ export function ObjectiveMenuButton({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {!isExecuted ? (
+        {canShowMarkComplete ? (
           <DropdownMenuItem
             disabled={pending || !canMarkExecuted}
             onSelect={event => {
@@ -61,19 +64,20 @@ export function ObjectiveMenuButton({
               handleMarkExecuted();
             }}
           >
-            Mark executed
+            Mark complete
           </DropdownMenuItem>
-        ) : (
+        ) : null}
+        {canShowMarkDraft ? (
           <DropdownMenuItem
             disabled={pending}
             onSelect={event => {
               event.preventDefault();
-              handleMarkUnexecuted();
+              handleMarkDraft();
             }}
           >
-            Mark unexecuted
+            Mark draft
           </DropdownMenuItem>
-        )}
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

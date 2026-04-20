@@ -54,7 +54,7 @@ export async function runLoadContextProtocol(
         .from('objectives')
         .select('objective')
         .eq('ticket_id', ticketId)
-        .eq('is_executed', false)
+        .eq('state', 'draft')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

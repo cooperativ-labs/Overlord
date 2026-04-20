@@ -227,7 +227,7 @@ export default async function TicketsBoardContent({
           .order('created_at', { ascending: false }),
         supabase
           .from('objectives')
-          .select('ticket_id,state,is_executed,agent_identifier')
+          .select('ticket_id,state,agent_identifier')
           .in('ticket_id', ticketIds)
           .order('created_at', { ascending: false })
       ]);
@@ -250,13 +250,12 @@ export default async function TicketsBoardContent({
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       state: string | null;
-      is_executed: boolean | null;
       agent_identifier: string | null;
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
       }
-      if (objective.is_executed) {
+      if (objective.state === 'complete') {
         executedObjectivesCountByTicket.set(
           objective.ticket_id,
           (executedObjectivesCountByTicket.get(objective.ticket_id) ?? 0) + 1

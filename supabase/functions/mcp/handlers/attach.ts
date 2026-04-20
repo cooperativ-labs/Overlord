@@ -80,12 +80,12 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
   if (sessionErr || !session) return toolErr('Failed to create session.');
 
-  // Mark draft objective as executed
+  // Mark draft objective as executing
   const { data: draftObjective } = await supabase
     .from('objectives')
     .select('id, objective')
     .eq('ticket_id', ticketId)
-    .eq('is_executed', false)
+    .eq('state', 'draft')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -122,7 +122,6 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     await supabase
       .from('objectives')
       .update({
-        is_executed: true,
         state: 'executing',
         agent_identifier: agentIdentifier ?? null,
         model_identifier: metadataModel ?? ticketAssignedAgent
@@ -131,7 +130,6 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
     // Create new empty draft objective
     await supabase.from('objectives').insert({
-      is_executed: false,
       state: 'draft',
       objective: '',
       ticket_id: ticketId

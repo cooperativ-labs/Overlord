@@ -9,14 +9,7 @@ import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  | 'id'
-  | 'objective'
-  | 'is_executed'
-  | 'created_at'
-  | 'title'
-  | 'state'
-  | 'agent_identifier'
-  | 'model_identifier'
+  'id' | 'objective' | 'created_at' | 'title' | 'state' | 'agent_identifier' | 'model_identifier'
 >;
 
 type TicketObjectivesSectionProps = {
@@ -39,9 +32,9 @@ export function TicketObjectivesSection({
     initialObjectives
   });
 
-  const draftObjective = objectives.find(objective => !objective.is_executed) ?? null;
+  const draftObjective = objectives.find(objective => objective.state === 'draft') ?? null;
   const executedObjectives = objectives.filter(
-    objective => objective.is_executed && objective.objective.trim().length > 0
+    objective => objective.state !== 'draft' && objective.objective.trim().length > 0
   );
   const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
   const draftObjectiveValue = draftObjective?.objective ?? '';
@@ -85,7 +78,7 @@ export function TicketObjectivesSection({
             <ObjectiveMenuButton
               ticketId={ticketId}
               objectiveId={draftObjective?.id ?? ''}
-              isExecuted={!draftObjective || draftObjective.is_executed}
+              state={draftObjective?.state ?? 'complete'}
               canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
             />
           </InlineEditField>

@@ -103,9 +103,8 @@ export interface TicketDetail {
 export interface Objective {
   id: string;
   objective: string;
-  is_executed: boolean;
   title: string | null;
-  state: string;
+  state: 'draft' | 'executing' | 'complete';
   agent_identifier: string | null;
   model_identifier: string | null;
   created_at: string;

@@ -13,14 +13,7 @@ import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  | 'id'
-  | 'objective'
-  | 'is_executed'
-  | 'created_at'
-  | 'title'
-  | 'state'
-  | 'agent_identifier'
-  | 'model_identifier'
+  'id' | 'objective' | 'created_at' | 'title' | 'state' | 'agent_identifier' | 'model_identifier'
 >;
 
 type ObjectiveCollapsibleItemProps = {
@@ -36,10 +29,11 @@ export function ObjectiveCollapsibleItem({
   ticketId,
   isLatest
 }: ObjectiveCollapsibleItemProps) {
-  const executedAt = new Date(objective.created_at).toLocaleString();
+  const objectiveTimestamp = new Date(objective.created_at).toLocaleString();
   const isExecuting = objective.state === 'executing';
   const agentType = getAgentTypeByIdentifier(objective.agent_identifier);
   const modelIdentifier = objective.model_identifier?.trim() || null;
+  const timestampLabel = isExecuting ? 'Executing since' : 'Completed';
 
   return (
     <Collapsible defaultOpen={isLatest}>
@@ -88,7 +82,9 @@ export function ObjectiveCollapsibleItem({
                       {objective.title ?? `Objective ${index + 1}`}
                     </p>
                   </TooltipTrigger>
-                  <TooltipContent side="top">Executed {executedAt}</TooltipContent>
+                  <TooltipContent side="top">
+                    {timestampLabel} {objectiveTimestamp}
+                  </TooltipContent>
                 </Tooltip>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-1" />
@@ -97,7 +93,7 @@ export function ObjectiveCollapsibleItem({
           <ObjectiveMenuButton
             ticketId={ticketId}
             objectiveId={objective.id}
-            isExecuted={objective.is_executed}
+            state={objective.state}
             canMarkExecuted={objective.objective.trim().length > 0}
           />
         </div>

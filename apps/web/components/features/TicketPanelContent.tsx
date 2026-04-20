@@ -171,7 +171,7 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('objectives')
-      .select('id,objective,is_executed,created_at,title,state,agent_identifier,model_identifier')
+      .select('id,objective,created_at,title,state,agent_identifier,model_identifier')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
   ]);
