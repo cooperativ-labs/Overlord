@@ -50,7 +50,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       .select('local_working_directory,remote_working_directory')
       .eq('id', ticket.project_id)
       .maybeSingle();
-    // Prefer the currently executing objective; fall back to the draft
+    // Prefer the currently executing objective; fall back to the submitted objective.
+    // Draft objectives are not exposed to agents.
     const { data: executingObjective } = await supabase
       .from('objectives')
       .select('objective')
@@ -67,7 +68,7 @@ export async function GET(request: Request, { params }: RouteContext) {
           .from('objectives')
           .select('objective')
           .eq('ticket_id', ticketId)
-          .eq('state', 'draft')
+          .eq('state', 'submitted')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()

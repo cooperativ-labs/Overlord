@@ -17,7 +17,7 @@ import {
   PopoverTrigger
 } from '@/components/ui/popover';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
-import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
 import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import {
   getAgentTypeByValue,
@@ -100,6 +100,7 @@ export function DiscussTicketButton({
 
     try {
       if (isElectron) {
+        await submitTicketObjectiveAction(ticketId);
         const providedAgentToken = normalizeAgentToken(agentToken);
         const resolvedAgentToken =
           providedAgentToken ??
@@ -144,6 +145,7 @@ export function DiscussTicketButton({
 
   if (!isElectron && webMode !== undefined) {
     const handleWebDiscuss = async () => {
+      await submitTicketObjectiveAction(ticketId);
       const context = webMode === 'local' ? 'cli' : 'web';
       const { error, prompt } = await getTicketPromptForCopy(ticketId, 'ask', context);
       if (error || !prompt) return;

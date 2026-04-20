@@ -37,7 +37,8 @@ export async function runLoadContextProtocol(
     } as const;
   }
 
-  // Prefer the executing objective; fall back to draft
+  // Prefer the executing objective; fall back to submitted.
+  // Draft objectives are intentionally hidden from agent context.
   const { data: executingObjective } = await supabase
     .from('objectives')
     .select('objective')
@@ -54,7 +55,7 @@ export async function runLoadContextProtocol(
         .from('objectives')
         .select('objective')
         .eq('ticket_id', ticketId)
-        .eq('state', 'draft')
+        .eq('state', 'submitted')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

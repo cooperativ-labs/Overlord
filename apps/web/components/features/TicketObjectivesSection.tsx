@@ -32,12 +32,18 @@ export function TicketObjectivesSection({
     initialObjectives
   });
 
-  const draftObjective = objectives.find(objective => objective.state === 'draft') ?? null;
+  const editableObjective =
+    objectives.find(objective => objective.state === 'draft') ??
+    objectives.find(objective => objective.state === 'submitted') ??
+    null;
   const executedObjectives = objectives.filter(
-    objective => objective.state !== 'draft' && objective.objective.trim().length > 0
+    objective =>
+      objective.state !== 'draft' &&
+      objective.state !== 'submitted' &&
+      objective.objective.trim().length > 0
   );
   const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
-  const draftObjectiveValue = draftObjective?.objective ?? '';
+  const editableObjectiveValue = editableObjective?.objective ?? '';
 
   return (
     <div className="flex flex-col pb-5">
@@ -51,7 +57,7 @@ export function TicketObjectivesSection({
                 index={index}
                 ticketId={ticketId}
                 isLatest={
-                  index === orderedExecutedObjectives.length - 1 && !draftObjectiveValue.trim()
+                  index === orderedExecutedObjectives.length - 1 && !editableObjectiveValue.trim()
                 }
               />
             ))}
@@ -60,10 +66,10 @@ export function TicketObjectivesSection({
 
         <div className="flex w-full items-start gap-1">
           <InlineEditField
-            key={draftObjective?.id ?? 'current-objective'}
+            key={editableObjective?.id ?? 'current-objective'}
             displayClassName="text-base leading-relaxed"
             field="objective"
-            initialValue={draftObjectiveValue}
+            initialValue={editableObjectiveValue}
             inputClassName="text-base leading-relaxed"
             multiline
             organizationId={organizationId}
@@ -77,9 +83,9 @@ export function TicketObjectivesSection({
             {' '}
             <ObjectiveMenuButton
               ticketId={ticketId}
-              objectiveId={draftObjective?.id ?? ''}
-              state={draftObjective?.state ?? 'complete'}
-              canMarkExecuted={Boolean(draftObjective?.objective?.trim())}
+              objectiveId={editableObjective?.id ?? ''}
+              state={editableObjective?.state ?? 'complete'}
+              canMarkExecuted={Boolean(editableObjective?.objective?.trim())}
             />
           </InlineEditField>
         </div>

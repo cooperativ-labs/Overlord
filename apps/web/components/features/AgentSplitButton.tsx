@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
-import { getTicketPromptForCopy } from '@/lib/actions/tickets';
+import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
@@ -199,6 +199,7 @@ export function AgentSplitButton({
     if (isElectron) {
       setIsLaunching(true);
       try {
+        await submitTicketObjectiveAction(ticketId);
         const providedAgentToken = normalizeAgentToken(agentToken);
         const resolvedAgentToken =
           providedAgentToken ??
@@ -235,6 +236,7 @@ export function AgentSplitButton({
     } else {
       const command = commands?.[agentValue as LaunchAgentTypeValue];
       if (command) {
+        await submitTicketObjectiveAction(ticketId);
         await navigator.clipboard.writeText(command);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);

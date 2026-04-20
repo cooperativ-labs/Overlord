@@ -80,18 +80,18 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
   if (sessionErr || !session) return toolErr('Failed to create session.');
 
-  // Mark draft objective as executing
-  const { data: draftObjective } = await supabase
+  // Mark submitted objective as executing. Draft objectives remain hidden from agents.
+  const { data: submittedObjective } = await supabase
     .from('objectives')
     .select('id, objective')
     .eq('ticket_id', ticketId)
-    .eq('state', 'draft')
+    .eq('state', 'submitted')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   let executedObjective: string | null = null;
-  if (draftObjective) {
+  if (submittedObjective && submittedObjective.objective.trim().length > 0) {
     const ticketAssignedAgent =
       ticket.assigned_agent &&
       typeof ticket.assigned_agent === 'object' &&
@@ -118,7 +118,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
           ? metadata.selection.model.trim()
           : null;
 
-    executedObjective = draftObjective.objective;
+    executedObjective = submittedObjective.objective;
     await supabase
       .from('objectives')
       .update({
@@ -126,7 +126,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
         agent_identifier: agentIdentifier ?? null,
         model_identifier: metadataModel ?? ticketAssignedAgent
       })
-      .eq('id', draftObjective.id);
+      .eq('id', submittedObjective.id);
 
     // Create new empty draft objective
     await supabase.from('objectives').insert({
