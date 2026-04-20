@@ -195,13 +195,9 @@ ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKE
 const PERMISSION_HOOK_SCRIPT = `#!/bin/bash
 # Overlord PermissionRequest notification hook (managed by Overlord)
 BODY=$(cat -)
-if [ -n "$OVERLORD_URL" ] && [ -n "$AGENT_TOKEN" ] && [ -n "$TICKET_ID" ]; then
-  curl -sf -m 5 \\
-    -X POST "$OVERLORD_URL/api/protocol/permission-request?ticketId=$TICKET_ID" \\
-    -H "Authorization: Bearer $AGENT_TOKEN" \\
-    -H "X-Overlord-Local-Secret: $OVERLORD_LOCAL_SECRET" \\
-    -H "Content-Type: application/json" \\
-    -d "$BODY" \\
+if [ -n "$TICKET_ID" ] && command -v ovld >/dev/null 2>&1; then
+  { if [ -n "$BODY" ]; then printf '%s' "$BODY"; else printf '{}'; fi; } \\
+    | ovld protocol permission-request --ticket-id "$TICKET_ID" --payload-file - \\
     >/dev/null 2>&1 &
   disown
 fi
@@ -823,9 +819,7 @@ function installOpenCode() {
       bash: {
         '*': 'ask',
         ...existingBash,
-        'ovld protocol *': 'allow',
-        'curl -sS -X POST *': 'allow',
-        'curl -s -X POST *': 'allow'
+        'ovld protocol *': 'allow'
       }
     }
   });
@@ -904,8 +898,7 @@ function installCursor() {
   const mergedAllow = Array.from(
     new Set([
       ...asStringArray(permissions.allow),
-      'Shell(ovld protocol:*)',
-      'Shell(curl -sS -X POST:*)'
+      'Shell(ovld protocol:*)'
     ])
   );
   writeJsonFile(paths.settingsFile, {
@@ -937,12 +930,6 @@ function installGemini() {
     '[[rule]]',
     'toolName = "run_shell_command"',
     'commandPrefix = "ovld protocol"',
-    'decision = "allow"',
-    'priority = 900',
-    '',
-    '[[rule]]',
-    'toolName = "run_shell_command"',
-    'commandPrefix = "curl -sS -X POST"',
     'decision = "allow"',
     'priority = 900',
     ''
@@ -1277,21 +1264,7 @@ function installClaudePermissions(platformUrl) {
     if (!Array.isArray(settings.permissions.allow)) settings.permissions.allow = [];
   }
 
-  const PROTOCOL_ENDPOINTS = [
-    'attach', 'update', 'ask', 'read-context', 'write-context', 'deliver',
-    'create-ticket', 'list-tickets', 'record-change-rationales', 'spawn',
-    'discover-project', 'load-context', 'artifact-upload-file', 'artifact-download-url'
-  ];
-
-  const entries = [];
-  for (const endpoint of PROTOCOL_ENDPOINTS) {
-    entries.push(`Bash(curl -s -X POST "${platformUrl}/api/protocol/${endpoint}":*)`);
-  }
-  entries.push(`Bash(curl -s -H 'Authorization::*)`);
-  for (const endpoint of PROTOCOL_ENDPOINTS) {
-    entries.push(`Bash(curl -s -X POST "$OVERLORD_URL/api/protocol/${endpoint}":*)`);
-  }
-  entries.push(`Bash(curl -s -H "Authorization::*)`);
+  const entries = ['Bash(ovld protocol:*)'];
 
   const existing = new Set(settings.permissions.allow);
   const toAdd = entries.filter((e) => !existing.has(e));
@@ -1353,9 +1326,7 @@ function installOpenCodePermissions(_platformUrl) {
       bash: {
         '*': 'ask',
         ...existingBash,
-        'ovld protocol *': 'allow',
-        'curl -sS -X POST *': 'allow',
-        'curl -s -X POST *': 'allow'
+        'ovld protocol *': 'allow'
       }
     }
   };
@@ -1374,21 +1345,12 @@ function installOpenCodePermissions(_platformUrl) {
   return true;
 }
 
-function installCodexPermissions(platformUrl) {
+function installCodexPermissions() {
   console.log(`--- Codex ---`);
   console.log('  Codex does not support file-based permission configuration.');
-  console.log('  To warm up permissions, run the following commands once inside a Codex session:');
-  console.log('  (Codex will prompt for approval; approve each one to persist the prefix.)\n');
-
-  const PROTOCOL_ENDPOINTS = [
-    'attach', 'update', 'ask', 'read-context', 'write-context', 'deliver',
-    'create-ticket', 'list-tickets'
-  ];
-
-  for (const endpoint of PROTOCOL_ENDPOINTS) {
-    console.log(`  curl -s -X POST "${platformUrl}/api/protocol/${endpoint}" -H "Content-Type: application/json" -H "Authorization: Bearer \\$AGENT_TOKEN" -d '{}'`);
-  }
-  console.log(`  curl -s -H "Authorization: Bearer \\$AGENT_TOKEN" "${platformUrl}/api/protocol/context/test"`);
+  console.log('  To warm up permissions, run the following command once inside a Codex session:');
+  console.log('  (Codex will prompt for approval; approve it to persist the prefix.)\n');
+  console.log('  ovld protocol help');
   console.log();
   return true;
 }

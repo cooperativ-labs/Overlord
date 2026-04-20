@@ -317,13 +317,9 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 export const PERMISSION_HOOK_SCRIPT = `#!/bin/bash
 # Overlord PermissionRequest notification hook (managed by Overlord)
 BODY=$(cat -)
-if [ -n "$OVERLORD_URL" ] && [ -n "$AGENT_TOKEN" ] && [ -n "$TICKET_ID" ]; then
-  curl -sf -m 5 \\
-    -X POST "$OVERLORD_URL/api/protocol/permission-request?ticketId=$TICKET_ID" \\
-    -H "Authorization: Bearer $AGENT_TOKEN" \\
-    -H "X-Overlord-Local-Secret: $OVERLORD_LOCAL_SECRET" \\
-    -H "Content-Type: application/json" \\
-    -d "$BODY" \\
+if [ -n "$TICKET_ID" ] && command -v ovld >/dev/null 2>&1; then
+  { if [ -n "$BODY" ]; then printf '%s' "$BODY"; else printf '{}'; fi; } \\
+    | ovld protocol permission-request --ticket-id "$TICKET_ID" --payload-file - \\
     >/dev/null 2>&1 &
   disown
 fi

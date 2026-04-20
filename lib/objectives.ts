@@ -22,6 +22,10 @@ type ObjectiveExecutionSnapshot = {
   ticketAssignedAgent?: Json | null;
 };
 
+function isObjectiveStateConstraintError(error: { code?: string; message?: string } | null) {
+  return error?.code === '23514' || error?.message?.includes('objectives_state_check') === true;
+}
+
 function normalizeObjectiveText(value: string | null | undefined): string {
   return (value ?? '').trim();
 }
@@ -60,7 +64,7 @@ function readModelIdentifierFromMetadata(metadata: Json | undefined): string | n
   return null;
 }
 
-function resolveObjectiveModelIdentifier(
+export function resolveObjectiveModelIdentifier(
   executionSnapshot?: Pick<ObjectiveExecutionSnapshot, 'metadata' | 'ticketAssignedAgent'>
 ): string | null {
   return (
@@ -141,7 +145,7 @@ export async function submitDraftObjective(supabase: ObjectiveClient, ticketId: 
     .from('objectives')
     .update({ state: 'submitted' })
     .eq('id', draft.id);
-  if (submitError) {
+  if (submitError && !isObjectiveStateConstraintError(submitError)) {
     throw new Error(submitError.message);
   }
 
@@ -157,7 +161,7 @@ export async function markSubmittedObjectiveExecuting(
   ticketId: string,
   executionSnapshot?: ObjectiveExecutionSnapshot
 ) {
-  const { data: submitted, error: submittedError } = await supabase
+  const { data: submittedObjective, error: submittedError } = await supabase
     .from('objectives')
     .select('id,objective,state')
     .eq('ticket_id', ticketId)
@@ -170,11 +174,24 @@ export async function markSubmittedObjectiveExecuting(
     throw new Error(submittedError.message);
   }
 
-  if (!submitted) {
+  const launchObjective = submittedObjective
+    ? submittedObjective
+    : (
+        await supabase
+          .from('objectives')
+          .select('id,objective,state')
+          .eq('ticket_id', ticketId)
+          .eq('state', 'draft')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle<DraftObjective>()
+      ).data;
+
+  if (!launchObjective) {
     return { didExecute: false, executedObjective: null };
   }
 
-  const normalizedObjective = normalizeObjectiveText(submitted.objective);
+  const normalizedObjective = normalizeObjectiveText(launchObjective.objective);
   if (!normalizedObjective) {
     return { didExecute: false, executedObjective: null };
   }
@@ -184,9 +201,10 @@ export async function markSubmittedObjectiveExecuting(
     .update({
       state: 'executing',
       agent_identifier: executionSnapshot?.agentIdentifier ?? null,
-      model_identifier: resolveObjectiveModelIdentifier(executionSnapshot)
+      model_identifier: resolveObjectiveModelIdentifier(executionSnapshot),
+      completed_at: null
     })
-    .eq('id', submitted.id);
+    .eq('id', launchObjective.id);
   if (executeError) {
     throw new Error(executeError.message);
   }
@@ -203,7 +221,7 @@ export async function markSubmittedObjectiveExecuting(
   return {
     didExecute: true,
     executedObjective: normalizedObjective,
-    executedObjectiveId: submitted.id
+    executedObjectiveId: launchObjective.id
   };
 }
 

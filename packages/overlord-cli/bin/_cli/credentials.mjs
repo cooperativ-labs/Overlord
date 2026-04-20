@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const CREDENTIALS_DIR = path.join(os.homedir(), '.ovld');
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
+const ELECTRON_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'electron-credentials.json');
 const RUNTIME_FILE_PATTERN = /^runtime\..+\.json$/;
 const HOSTED_OVERLORD_URL = 'https://www.ovld.ai';
 const LOCAL_DEV_OVERLORD_URL = 'http://localhost:3000';
@@ -18,28 +19,119 @@ const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
  * @typedef {{ access_token: string, platform_url: string, user_email?: string }} Credentials
  */
 
-/** @returns {Credentials | null} */
-export function loadCredentials() {
+function ensureCredentialsDir() {
+  fs.mkdirSync(CREDENTIALS_DIR, { recursive: true, mode: 0o700 });
   try {
-    const raw = fs.readFileSync(CREDENTIALS_FILE, 'utf8');
+    fs.chmodSync(CREDENTIALS_DIR, 0o700);
+  } catch {
+    // Best-effort hardening for existing directories.
+  }
+}
+
+function readJsonFile(filePath) {
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
+function fileExists(filePath) {
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function writeJsonFileAtomic(filePath, data) {
+  ensureCredentialsDir();
+  const tempFile = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), { mode: 0o600 });
+  fs.renameSync(tempFile, filePath);
+  fs.chmodSync(filePath, 0o600);
+}
+
+function parseStoredCredentialsData(parsed, { requireAccessToken = false } = {}) {
+  if (!parsed || typeof parsed !== 'object') return null;
+
+  const accessToken = normalizeAgentToken(parsed.access_token);
+  const platformUrl = typeof parsed.platform_url === 'string' ? parsed.platform_url.trim() : '';
+  if (requireAccessToken && !accessToken) return null;
+  if (!accessToken && !platformUrl) return null;
+
+  return {
+    access_token: accessToken,
+    platform_url: platformUrl,
+    ...(typeof parsed.user_email === 'string' && parsed.user_email.trim()
+      ? { user_email: parsed.user_email.trim() }
+      : {})
+  };
+}
+
+function normalizeCredentialsForSave(data) {
+  const parsed = parseStoredCredentialsData(data, { requireAccessToken: true });
+  if (!parsed) return null;
+
+  const platformUrl = normalizePlatformUrl(parsed.platform_url);
+  if (!platformUrl) return null;
+
+  return {
+    ...parsed,
+    platform_url: platformUrl
+  };
+}
+
+/** @returns {Credentials | null} */
+export function loadCredentials() {
+  return (
+    parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
+      requireAccessToken: true
+    }) ??
+    parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE))
+  );
+}
+
 /** @param {Credentials} data */
 export function saveCredentials(data) {
-  fs.mkdirSync(CREDENTIALS_DIR, { recursive: true });
-  fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
+  const credentials = normalizeCredentialsForSave(data);
+  if (!credentials) {
+    throw new Error('Cannot save empty Overlord credentials.');
+  }
+
+  writeJsonFileAtomic(CREDENTIALS_FILE, credentials);
+
+  // `electron-credentials.json` is now the shared desktop/CLI credential record.
+  // Preserve Electron-only encrypted fields when CLI login refreshes the agent token.
+  const existingElectronCredentials = readJsonFile(ELECTRON_CREDENTIALS_FILE);
+  const electronPayload =
+    existingElectronCredentials && typeof existingElectronCredentials === 'object'
+      ? { ...existingElectronCredentials, ...credentials }
+      : credentials;
+  writeJsonFileAtomic(ELECTRON_CREDENTIALS_FILE, electronPayload);
 }
 
 export function clearCredentials() {
-  try {
-    fs.unlinkSync(CREDENTIALS_FILE);
-  } catch {
-    // Already gone
+  for (const filePath of [CREDENTIALS_FILE, ELECTRON_CREDENTIALS_FILE]) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      // Already gone
+    }
   }
+}
+
+function getCredentialFileSource() {
+  const electronCredentials = parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
+    requireAccessToken: true
+  });
+  if (electronCredentials) return 'electron-credentials.json';
+
+  const cliCredentials = parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE));
+  if (cliCredentials) return 'credentials.json';
+
+  return 'none';
 }
 
 function getRuntimeFilePath(targetUrl) {
@@ -251,6 +343,55 @@ export function resolveAuth() {
       normalizeAgentToken(creds?.access_token) ||
       'overlord-local-dev-token',
     localSecret
+  };
+}
+
+export function getAuthStatus() {
+  const creds = loadCredentials();
+  const resolved = resolveAuth();
+
+  let tokenSource = 'fallback';
+  if (normalizeAgentToken(process.env.AGENT_TOKEN)) {
+    tokenSource = 'AGENT_TOKEN';
+  } else if (normalizeAgentToken(creds?.access_token)) {
+    tokenSource = getCredentialFileSource();
+  }
+
+  let platformUrlSource = 'default';
+  if (normalizePlatformUrl(process.env.OVERLORD_URL)) {
+    platformUrlSource = 'OVERLORD_URL';
+  } else if (normalizeStoredPlatformUrl(creds?.platform_url)) {
+    platformUrlSource = getCredentialFileSource();
+  }
+
+  return {
+    isLoggedIn: tokenSource !== 'fallback',
+    platformUrl: resolved.platformUrl,
+    platformUrlSource,
+    tokenPresent: tokenSource !== 'fallback',
+    tokenSource,
+    hasLocalSecret: Boolean(resolved.localSecret),
+    credentialsFileExists: fileExists(CREDENTIALS_FILE),
+    electronCredentialsFileExists: fileExists(ELECTRON_CREDENTIALS_FILE)
+  };
+}
+
+export function repairCredentials() {
+  const creds = loadCredentials();
+  if (!creds || !normalizeAgentToken(creds.access_token)) {
+    ensureCredentialsDir();
+    return {
+      repaired: false,
+      reason: 'No valid stored credentials with an access token were found.',
+      status: getAuthStatus()
+    };
+  }
+
+  saveCredentials(creds);
+
+  return {
+    repaired: true,
+    status: getAuthStatus()
   };
 }
 

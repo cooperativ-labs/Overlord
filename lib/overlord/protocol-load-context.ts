@@ -38,7 +38,9 @@ export async function runLoadContextProtocol(
   }
 
   // Prefer the executing objective; fall back to submitted.
-  // Draft objectives are intentionally hidden from agent context.
+  // Draft objectives are intentionally hidden from agent context on modern
+  // schemas, but we keep a draft fallback for databases that have not picked
+  // up the submitted-state migration yet.
   const { data: executingObjective } = await supabase
     .from('objectives')
     .select('objective')
@@ -56,6 +58,16 @@ export async function runLoadContextProtocol(
         .select('objective')
         .eq('ticket_id', ticketId)
         .eq('state', 'submitted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ).data ??
+    (
+      await supabase
+        .from('objectives')
+        .select('objective')
+        .eq('ticket_id', ticketId)
+        .eq('state', 'draft')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

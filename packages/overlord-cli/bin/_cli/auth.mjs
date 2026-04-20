@@ -9,8 +9,10 @@ import {
   buildAuthHeaders,
   clearCredentials,
   getDefaultOverlordUrl,
+  getAuthStatus,
   loadCredentials,
   loadRuntime,
+  repairCredentials,
   saveCredentials
 } from './credentials.mjs';
 
@@ -460,7 +462,30 @@ export async function authLogin() {
   console.log('Logged in successfully!');
 }
 
-export function authStatus() {
+function printVerboseAuthStatus() {
+  const status = getAuthStatus();
+  if (!status.isLoggedIn) {
+    console.log('Not logged in. Run: ovld auth login');
+  } else {
+    console.log('Logged in');
+  }
+  console.log(`  Platform URL: ${status.platformUrl}`);
+  console.log(`  Platform source: ${status.platformUrlSource}`);
+  console.log(`  Token source: ${status.tokenSource}`);
+  console.log(`  Token present: ${status.tokenPresent ? 'yes' : 'no'}`);
+  console.log(`  Local secret: ${status.hasLocalSecret ? 'yes' : 'no'}`);
+  console.log(`  credentials.json: ${status.credentialsFileExists ? 'present' : 'missing'}`);
+  console.log(
+    `  electron-credentials.json: ${status.electronCredentialsFileExists ? 'present' : 'missing'}`
+  );
+}
+
+export function authStatus(args = []) {
+  if (args.includes('--verbose') || args.includes('-v')) {
+    printVerboseAuthStatus();
+    return;
+  }
+
   const creds = loadCredentials();
   if (!creds) {
     console.log('Not logged in. Run: ovld auth login');
@@ -478,13 +503,24 @@ export function authLogout() {
   console.log('Logged out.');
 }
 
-export async function runAuthCommand(subcommand) {
+export function authRepair() {
+  const result = repairCredentials();
+  if (result.repaired) {
+    console.log('Credentials repaired.');
+  } else {
+    console.log(`Credentials not repaired: ${result.reason}`);
+  }
+  printVerboseAuthStatus();
+}
+
+export async function runAuthCommand(subcommand, args = []) {
   if (!subcommand || subcommand === 'help' || subcommand === '--help') {
     console.log(`ovld auth <subcommand>
 
 Subcommands:
   login    Authorize the CLI via browser (works locally or over SSH)
-  status   Show current login status
+  status   Show current login status (use --verbose for redacted diagnostics)
+  repair   Mirror and chmod shared Desktop/CLI credentials when possible
   logout   Remove stored credentials
 `);
     return;
@@ -496,7 +532,12 @@ Subcommands:
   }
 
   if (subcommand === 'status') {
-    authStatus();
+    authStatus(args);
+    return;
+  }
+
+  if (subcommand === 'repair') {
+    authRepair();
     return;
   }
 

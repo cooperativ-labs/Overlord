@@ -12,6 +12,37 @@ import {
   resolveStatusTypeForName
 } from './_status-resolution.ts';
 
+function readModelIdentifierFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const directModel = typeof record.model === 'string' ? record.model.trim() : '';
+  if (directModel) {
+    return directModel;
+  }
+
+  const selection = record.selection;
+  if (!selection || typeof selection !== 'object' || Array.isArray(selection)) {
+    return null;
+  }
+
+  const selectionModel = (selection as Record<string, unknown>).model;
+  return typeof selectionModel === 'string' && selectionModel.trim().length > 0
+    ? selectionModel.trim()
+    : null;
+}
+
+function readModelIdentifierFromAssignedAgent(assignedAgent: unknown): string | null {
+  if (!assignedAgent || typeof assignedAgent !== 'object' || Array.isArray(assignedAgent)) {
+    return null;
+  }
+
+  const model = (assignedAgent as Record<string, unknown>).model;
+  return typeof model === 'string' && model.trim().length > 0 ? model.trim() : null;
+}
+
 export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     sessionKey,
@@ -37,7 +68,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
   // Auto-transition the ticket back to execute and reactivate the session.
   const { data: currentTicket } = await supabase
     .from('tickets')
-    .select('status')
+    .select('status,assigned_agent')
     .eq('id', ticketId)
     .single();
 
@@ -69,14 +100,30 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
         summary: 'Ticket resumed — agent continued working after delivery.',
         ticket_id: ticketId
       }),
-      // Reactivate the most recently completed objective back to executing
       supabase
         .from('objectives')
-        .update({ state: 'executing' })
+        .select('id')
         .eq('ticket_id', ticketId)
         .eq('state', 'complete')
         .order('created_at', { ascending: false })
         .limit(1)
+        .single()
+        .then(({ data: latestObjective }) => {
+          if (!latestObjective?.id) return;
+          return supabase
+            .from('objectives')
+            .update({
+              state: 'executing',
+              agent_identifier: resolved.session.agent_identifier,
+              model_identifier:
+                readModelIdentifierFromMetadata(resolved.session.metadata) ??
+                readModelIdentifierFromAssignedAgent(
+                  (currentTicket as { assigned_agent?: unknown } | null)?.assigned_agent
+                ),
+              completed_at: null
+            })
+            .eq('id', latestObjective.id);
+        })
     ]);
   }
 
@@ -163,6 +210,14 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
         .limit(1);
       ticketUpdate.board_position =
         ((headTickets as { board_position: number }[] | null)?.[0]?.board_position ?? 0) - 1;
+    }
+
+    if (statusType === 'complete') {
+      await supabase
+        .from('objectives')
+        .update({ state: 'complete', completed_at: new Date().toISOString() })
+        .eq('ticket_id', ticketId)
+        .eq('state', 'executing');
     }
 
     await supabase.from('tickets').update(ticketUpdate).eq('id', ticketId);

@@ -2,7 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
-import { upsertDraftObjective } from '@/lib/objectives';
+import {
+  generateAndSetObjectiveTitle,
+  markSubmittedObjectiveExecuting,
+  upsertDraftObjective
+} from '@/lib/objectives';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
@@ -87,7 +91,11 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
 
   const nextTitle = title.trim() || deriveTitleFromObjective(objective);
   const ticketDelegate = resolveTicketDelegate(delegate, agentIdentifier);
-  const draftStatusName = await resolvePreferredStatusNameByType(supabase, organizationId, 'draft');
+  const executeStatusName = await resolvePreferredStatusNameByType(
+    supabase,
+    organizationId,
+    'execute'
+  );
 
   // Create the ticket
   const { data: ticket, error: ticketError } = await supabase
@@ -101,7 +109,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       organization_id: organizationId,
       priority,
       project_id: resolvedProjectId,
-      status: draftStatusName,
+      status: executeStatusName,
       title: nextTitle
     })
     .select('id,organization_id,project_id,execution_target,status,ticket_sequence')
@@ -114,7 +122,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     } as const;
   }
 
-  // Create the draft objective (and mark it executed since we're starting work)
+  // Create the objective and immediately mark it as executing for the spawned session.
   await upsertDraftObjective(supabase, ticket.id, objective);
 
   // Create agent session
@@ -133,6 +141,21 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
 
   if (sessionError || !session) {
     return { error: 'Ticket created but failed to create session.', status: 500 } as const;
+  }
+
+  const objectiveExecution = await markSubmittedObjectiveExecuting(supabase, ticket.id, {
+    agentIdentifier,
+    metadata,
+    ticketAssignedAgent: null
+  });
+
+  if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {
+    generateAndSetObjectiveTitle(
+      supabase,
+      objectiveExecution.executedObjectiveId,
+      objectiveExecution.executedObjective!,
+      userId
+    ).catch(err => console.error('[spawn] objective title generation failed:', err));
   }
 
   // Record the spawn event on the new ticket's session

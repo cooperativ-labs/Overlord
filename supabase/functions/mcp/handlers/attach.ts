@@ -21,6 +21,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   const {
     ticketId: rawTicketId,
     agentIdentifier,
+    modelIdentifier,
     connectionMethod = 'mcp',
     externalSessionId,
     metadata = {}
@@ -80,7 +81,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
   if (sessionErr || !session) return toolErr('Failed to create session.');
 
-  // Mark submitted objective as executing. Draft objectives remain hidden from agents.
+  // Mark submitted objective as executing. If the database does not yet accept
+  // submitted objectives, fall back to the newest draft so launch still works.
   const { data: submittedObjective } = await supabase
     .from('objectives')
     .select('id, objective')
@@ -90,8 +92,21 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     .limit(1)
     .maybeSingle();
 
+  const draftObjective =
+    submittedObjective ??
+    (
+      await supabase
+        .from('objectives')
+        .select('id, objective')
+        .eq('ticket_id', ticketId)
+        .eq('state', 'draft')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ).data;
+
   let executedObjective: string | null = null;
-  if (submittedObjective && submittedObjective.objective.trim().length > 0) {
+  if (draftObjective && draftObjective.objective.trim().length > 0) {
     const ticketAssignedAgent =
       ticket.assigned_agent &&
       typeof ticket.assigned_agent === 'object' &&
@@ -100,8 +115,13 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       ticket.assigned_agent.model.trim().length > 0
         ? ticket.assigned_agent.model.trim()
         : null;
+    const explicitModel =
+      typeof modelIdentifier === 'string' && modelIdentifier.trim().length > 0
+        ? modelIdentifier.trim()
+        : null;
     const metadataModel =
-      metadata &&
+      explicitModel ??
+      (metadata &&
       typeof metadata === 'object' &&
       !Array.isArray(metadata) &&
       typeof metadata.model === 'string' &&
@@ -116,17 +136,18 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
             typeof metadata.selection.model === 'string' &&
             metadata.selection.model.trim().length > 0
           ? metadata.selection.model.trim()
-          : null;
+          : null);
 
-    executedObjective = submittedObjective.objective;
+    executedObjective = draftObjective.objective;
     await supabase
       .from('objectives')
       .update({
         state: 'executing',
         agent_identifier: agentIdentifier ?? null,
-        model_identifier: metadataModel ?? ticketAssignedAgent
+        model_identifier: metadataModel ?? ticketAssignedAgent,
+        completed_at: null
       })
-      .eq('id', submittedObjective.id);
+      .eq('id', draftObjective.id);
 
     // Create new empty draft objective
     await supabase.from('objectives').insert({

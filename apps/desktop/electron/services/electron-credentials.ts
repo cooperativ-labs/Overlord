@@ -18,19 +18,66 @@ function ensureOvldDir(): void {
   fs.mkdirSync(OVLD_DIR, { recursive: true, mode: 0o700 });
 }
 
+function readJsonFile(filePath: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function writeJsonFileAtomic(filePath: string, payload: Record<string, unknown>): void {
+  ensureOvldDir();
+  const tempFile = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tempFile, JSON.stringify(payload, null, 2), { mode: FILE_MODE });
+  fs.renameSync(tempFile, filePath);
+  fs.chmodSync(filePath, FILE_MODE);
+}
+
+function readCliCredentials(): Pick<ElectronCredentials, 'agent_token' | 'platform_url'> | null {
+  const parsed = readJsonFile(CLI_CREDENTIALS_FILE);
+  const accessToken = typeof parsed?.access_token === 'string' ? parsed.access_token.trim() : '';
+  const platformUrl = typeof parsed?.platform_url === 'string' ? parsed.platform_url.trim() : '';
+  if (!accessToken || !platformUrl) return null;
+  return { agent_token: accessToken, platform_url: platformUrl };
+}
+
+function writeSharedCredentials(
+  credentials: Pick<ElectronCredentials, 'agent_token' | 'platform_url'>
+): void {
+  const cliPayload = {
+    access_token: credentials.agent_token,
+    platform_url: credentials.platform_url
+  };
+  writeJsonFileAtomic(CLI_CREDENTIALS_FILE, cliPayload);
+
+  const existingElectronCredentials = readJsonFile(CREDENTIALS_FILE);
+  const electronPayload = {
+    ...(existingElectronCredentials ?? {}),
+    access_token: credentials.agent_token,
+    platform_url: credentials.platform_url
+  };
+  writeJsonFileAtomic(CREDENTIALS_FILE, electronPayload);
+}
+
 export function loadElectronCredentials(): ElectronCredentials | null {
   try {
-    const raw = fs.readFileSync(CREDENTIALS_FILE, 'utf8');
-    const parsed = JSON.parse(raw) as {
+    const parsed = readJsonFile(CREDENTIALS_FILE) as {
       encrypted_token?: string;
+      access_token?: string;
       platform_url?: string;
       encrypted_refresh_token?: string;
-    };
+    } | null;
 
-    if (!parsed.encrypted_token || !parsed.platform_url) return null;
-    if (!safeStorage.isEncryptionAvailable()) return null;
+    if (!parsed?.platform_url) return readCliCredentials();
 
-    const decrypted = safeStorage.decryptString(Buffer.from(parsed.encrypted_token, 'base64'));
+    let agentToken = typeof parsed.access_token === 'string' ? parsed.access_token.trim() : '';
+    if (!agentToken && parsed.encrypted_token) {
+      if (!safeStorage.isEncryptionAvailable()) return readCliCredentials();
+      agentToken = safeStorage.decryptString(Buffer.from(parsed.encrypted_token, 'base64'));
+    }
+
+    if (!agentToken) return readCliCredentials();
 
     let supabase_refresh_token: string | undefined;
     if (parsed.encrypted_refresh_token) {
@@ -43,9 +90,11 @@ export function loadElectronCredentials(): ElectronCredentials | null {
       }
     }
 
-    return { agent_token: decrypted, platform_url: parsed.platform_url, supabase_refresh_token };
+    writeSharedCredentials({ agent_token: agentToken, platform_url: parsed.platform_url });
+
+    return { agent_token: agentToken, platform_url: parsed.platform_url, supabase_refresh_token };
   } catch {
-    return null;
+    return readCliCredentials();
   }
 }
 
@@ -66,22 +115,10 @@ export function saveElectronCredentials(credentials: ElectronCredentials): void 
   }
 
   ensureOvldDir();
-  const tempFile = `${CREDENTIALS_FILE}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(tempFile, JSON.stringify(payload, null, 2), { mode: FILE_MODE });
-  fs.renameSync(tempFile, CREDENTIALS_FILE);
-  fs.chmodSync(CREDENTIALS_FILE, FILE_MODE);
+  payload.access_token = credentials.agent_token;
+  writeJsonFileAtomic(CREDENTIALS_FILE, payload);
 
-  // Also write plaintext credentials for the CLI (`ovld protocol ...`)
-  // so it can pick up the same token without a separate `ovld login`.
-  const cliPayload = JSON.stringify(
-    { access_token: credentials.agent_token, platform_url: credentials.platform_url },
-    null,
-    2
-  );
-  const cliTempFile = `${CLI_CREDENTIALS_FILE}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(cliTempFile, cliPayload, { mode: FILE_MODE });
-  fs.renameSync(cliTempFile, CLI_CREDENTIALS_FILE);
-  fs.chmodSync(CLI_CREDENTIALS_FILE, FILE_MODE);
+  writeSharedCredentials(credentials);
 }
 
 export function clearElectronCredentials(): void {

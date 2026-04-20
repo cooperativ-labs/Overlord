@@ -633,6 +633,7 @@ export type Database = {
       objectives: {
         Row: {
           agent_identifier: string | null;
+          completed_at: string | null;
           created_at: string;
           id: string;
           model_identifier: string | null;
@@ -644,6 +645,7 @@ export type Database = {
         };
         Insert: {
           agent_identifier?: string | null;
+          completed_at?: string | null;
           created_at?: string;
           id?: string;
           model_identifier?: string | null;
@@ -655,6 +657,7 @@ export type Database = {
         };
         Update: {
           agent_identifier?: string | null;
+          completed_at?: string | null;
           created_at?: string;
           id?: string;
           model_identifier?: string | null;

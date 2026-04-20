@@ -373,7 +373,9 @@ async function resolvePromptTicketSource(
   }
 
   // Prefer the executing objective; fall back to the latest submitted objective.
-  // Draft objectives are intentionally private to the human until submitted.
+  // Draft objectives are intentionally private to the human until submitted,
+  // but we still fall back to them for older databases that do not accept
+  // the submitted state yet.
   const { data: executingObjective } = await supabase
     .from('objectives')
     .select('objective')
@@ -391,6 +393,16 @@ async function resolvePromptTicketSource(
         .select('objective')
         .eq('ticket_id', ticketId)
         .eq('state', 'submitted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ).data ??
+    (
+      await supabase
+        .from('objectives')
+        .select('objective')
+        .eq('ticket_id', ticketId)
+        .eq('state', 'draft')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -1050,7 +1062,7 @@ export async function markObjectiveExecutedAction(
 
   const { error: executeError } = await supabase
     .from('objectives')
-    .update({ state: 'complete' })
+    .update({ state: 'complete', completed_at: new Date().toISOString() })
     .eq('id', objectiveId);
   if (executeError) {
     throw new Error(executeError.message);
@@ -1159,7 +1171,7 @@ export async function markObjectiveDraftAction(
   if (otherEditableIds.length > 0) {
     const { error: updateError } = await supabase
       .from('objectives')
-      .update({ state: 'complete' })
+      .update({ state: 'complete', completed_at: new Date().toISOString() })
       .in('id', otherEditableIds);
     if (updateError) {
       throw new Error(updateError.message);
@@ -1169,7 +1181,7 @@ export async function markObjectiveDraftAction(
   // 3. Mark the target objective back to draft
   const { error: unexecuteError } = await supabase
     .from('objectives')
-    .update({ state: 'draft' })
+    .update({ state: 'draft', completed_at: null })
     .eq('id', objectiveId);
 
   if (unexecuteError) {

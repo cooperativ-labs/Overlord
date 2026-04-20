@@ -54,12 +54,7 @@ function configureClaude(projectDirectory?: string): AgentPermissionResult {
         : {};
 
     const existingAllow = asStringArray(permissions.allow);
-    const required = [
-      'Bash(ovld protocol:*)',
-      'Bash(curl -sS -X POST:*)',
-      'Read(/tmp/*)',
-      'Write(/tmp/*)'
-    ];
+    const required = ['Bash(ovld protocol:*)', 'Read(/tmp/*)', 'Write(/tmp/*)'];
 
     const mergedAllow = Array.from(new Set([...existingAllow, ...required]));
 
@@ -109,12 +104,7 @@ function configureCursor(projectDirectory?: string): AgentPermissionResult {
         : {};
 
     const existingAllow = asStringArray(permissions.allow);
-    const required = [
-      'Shell(ovld protocol:*)',
-      'Shell(curl -sS -X POST:*)',
-      'Read(/tmp/*)',
-      'Write(/tmp/*)'
-    ];
+    const required = ['Shell(ovld protocol:*)', 'Read(/tmp/*)', 'Write(/tmp/*)'];
 
     const mergedAllow = Array.from(new Set([...existingAllow, ...required]));
 
@@ -164,12 +154,6 @@ function configureGemini(): AgentPermissionResult {
       'priority = 900',
       '',
       '[[rule]]',
-      'toolName = "run_shell_command"',
-      'commandPrefix = "curl -sS -X POST"',
-      'decision = "allow"',
-      'priority = 900',
-      '',
-      '[[rule]]',
       'toolName = "read_file"',
       'pathPrefix = "/tmp/"',
       'decision = "allow"',
@@ -190,7 +174,7 @@ function configureGemini(): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details: 'Installed Gemini policy rules for ovld protocol, curl POST, and /tmp file access.'
+      details: 'Installed Gemini policy rules for ovld protocol and /tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -231,8 +215,6 @@ function configureOpenCode(): AgentPermissionResult {
           '*': 'ask',
           ...bashPermission,
           'ovld protocol *': 'allow',
-          'curl -sS -X POST *': 'allow',
-          'curl -s -X POST *': 'allow',
           'cat /tmp/*': 'allow',
           'echo * /tmp/*': 'allow',
           'tee /tmp/*': 'allow',
@@ -250,8 +232,7 @@ function configureOpenCode(): AgentPermissionResult {
       ok: true,
       filePath,
       backups,
-      details:
-        'Updated OpenCode bash permissions for ovld protocol, curl POST, and /tmp file access.'
+      details: 'Updated OpenCode bash permissions for ovld protocol and /tmp file access.'
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

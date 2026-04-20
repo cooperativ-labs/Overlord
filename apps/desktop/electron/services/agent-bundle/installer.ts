@@ -457,9 +457,7 @@ function installOpenCode(): InstallResult {
         bash: {
           '*': 'ask',
           ...existingBash,
-          'ovld protocol *': 'allow',
-          'curl -sS -X POST *': 'allow',
-          'curl -s -X POST *': 'allow'
+          'ovld protocol *': 'allow'
         }
       }
     });
@@ -511,11 +509,7 @@ function installCursor(): InstallResult {
         ? (existingSettings.permissions as Record<string, unknown>)
         : {};
     const mergedAllow = Array.from(
-      new Set([
-        ...asStringArray(permissions.allow),
-        'Shell(ovld protocol:*)',
-        'Shell(curl -sS -X POST:*)'
-      ])
+      new Set([...asStringArray(permissions.allow), 'Shell(ovld protocol:*)'])
     );
     writeJsonFile(paths.settingsFile, {
       ...existingSettings,
@@ -673,8 +667,6 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
 
         if (bash) {
           delete bash['ovld protocol *'];
-          delete bash['curl -sS -X POST *'];
-          delete bash['curl -s -X POST *'];
         }
 
         const nextConfig: Record<string, unknown> = { ...config };
