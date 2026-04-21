@@ -151,8 +151,19 @@ export function EverhourNavTimer({ projects }: EverhourNavTimerProps) {
   }, [isRunning]);
 
   const inactiveProject = routeProject ?? selectedProject;
-  const title =
-    timer.task?.name ?? (inactiveProject ? `${inactiveProject.name} general` : 'No timer running');
+  const isTimerRunning = Boolean(timer.task?.name);
+
+  let title = 'No timer running';
+  if (isTimerRunning) {
+    if (timer.projectName) {
+      title = `${timer.projectName} • ${timer.task?.name}`;
+    } else {
+      title = timer.task?.name ?? 'Timer running';
+    }
+  } else if (inactiveProject) {
+    title = `${inactiveProject.name} general`;
+  }
+
   const badge = isRunning ? formatElapsed(elapsedSeconds) : null;
   const description = isRunning
     ? `Elapsed ${formatElapsed(elapsedSeconds)}`

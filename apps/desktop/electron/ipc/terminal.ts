@@ -49,32 +49,36 @@ type TerminalSettingsProfile = {
   tmuxCommand: string;
 };
 
-function getTerminalSettingsProfile(isRemote: boolean): TerminalSettingsProfile {
-  const prefix = isRemote ? 'server' : '';
-  const appKey = prefix ? 'serverExternalTerminalApp' : 'externalTerminalApp';
-  const launchModeKey = prefix ? 'serverExternalTerminalLaunchMode' : 'externalTerminalLaunchMode';
-  const customHotkeyKey = prefix
-    ? 'serverExternalTerminalCustomHotkey'
-    : 'externalTerminalCustomHotkey';
-  const customAppKey = prefix ? 'customServerExternalTerminalApp' : 'customExternalTerminalApp';
-  const tmuxHostAppKey = prefix
-    ? 'serverExternalTerminalTmuxHostApp'
-    : 'externalTerminalTmuxHostApp';
-  const customTmuxHostAppKey = prefix
-    ? 'customServerExternalTerminalTmuxHostApp'
-    : 'customExternalTerminalTmuxHostApp';
-  const tmuxCommandKey = prefix
-    ? 'serverExternalTerminalTmuxCommand'
-    : 'externalTerminalTmuxCommand';
-
+function getLocalTerminalSettingsProfile(): TerminalSettingsProfile {
   return {
-    termApp: store.get(appKey, 'default') as string,
-    launchMode: store.get(launchModeKey, 'window') as string,
-    customHotkeyValue: store.get(customHotkeyKey, '') as string,
-    customApp: store.get(customAppKey, '') as string,
-    tmuxHostApp: store.get(tmuxHostAppKey, 'terminal') as string,
-    customTmuxHostApp: store.get(customTmuxHostAppKey, '') as string,
-    tmuxCommand: store.get(tmuxCommandKey, 'tmux new-session bash {script}') as string
+    termApp: store.get('externalTerminalApp', 'default') as string,
+    launchMode: store.get('externalTerminalLaunchMode', 'window') as string,
+    customHotkeyValue: store.get('externalTerminalCustomHotkey', '') as string,
+    customApp: store.get('customExternalTerminalApp', '') as string,
+    tmuxHostApp: store.get('externalTerminalTmuxHostApp', 'terminal') as string,
+    customTmuxHostApp: store.get('customExternalTerminalTmuxHostApp', '') as string,
+    tmuxCommand: store.get(
+      'externalTerminalTmuxCommand',
+      'tmux new-session bash {script}'
+    ) as string
+  };
+}
+
+/**
+ * Server-side multiplexer config. Unlike the local profile, the server
+ * section only controls what happens *inside* the SSH session on the remote
+ * host — the local GUI terminal is always driven by the local profile.
+ */
+function getServerMultiplexerConfig(): { enabled: boolean; tmuxCommand: string } {
+  const termApp = store.get('serverExternalTerminalApp', 'default') as string;
+  const customApp = store.get('customServerExternalTerminalApp', '') as string;
+  const tmuxCommand = store.get(
+    'serverExternalTerminalTmuxCommand',
+    'tmux new-session bash {script}'
+  ) as string;
+  return {
+    enabled: isTmuxLikeTerminalApp(termApp, customApp),
+    tmuxCommand
   };
 }
 
@@ -212,14 +216,11 @@ function writeLaunchScript(command: string, cwd?: string, env?: Record<string, s
   return scriptPath;
 }
 
-async function launchScriptInExternalTerminal(
-  scriptPath: string,
-  isRemote: boolean
-): Promise<void> {
+async function launchScriptInExternalTerminal(scriptPath: string): Promise<void> {
   // Keep the command short for apps we drive via synthetic keystrokes.
   // Long leading shell conditionals can lose characters during app-switch/hotkey flows.
   const launchCmd = `bash ${shellQuote(scriptPath)}`;
-  const profile = getTerminalSettingsProfile(isRemote);
+  const profile = getLocalTerminalSettingsProfile();
   const {
     termApp,
     launchMode,
@@ -486,11 +487,12 @@ export function registerTerminalIpc(): void {
         model: payload.model,
         thinking: payload.thinking,
         sshCommand: payload.sshCommand,
-        remoteWorkingDirectory: payload.remoteWorkingDirectory
+        remoteWorkingDirectory: payload.remoteWorkingDirectory,
+        serverMultiplexer: isRemote ? getServerMultiplexerConfig() : undefined
       });
 
       const scriptPath = writeLaunchScript(command, cwd, env);
-      return launchScriptInExternalTerminal(scriptPath, isRemote);
+      return launchScriptInExternalTerminal(scriptPath);
     }
   );
 

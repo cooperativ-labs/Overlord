@@ -37,6 +37,15 @@ type LaunchAgentInput = {
   sshCommand?: string;
   /** Working directory path on the remote server. */
   remoteWorkingDirectory?: string;
+  /**
+   * Server-side multiplexer config. When `enabled` is true (tmux on the
+   * remote host), the agent command is wrapped in `tmuxCommand` with
+   * `{script}` substituted by a remote temp script path.
+   */
+  serverMultiplexer?: {
+    enabled: boolean;
+    tmuxCommand: string;
+  };
 };
 
 type LaunchAgentResult = {
@@ -310,7 +319,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
       .join('; ');
     const cdPart = remoteCwd ? `cd ${shellQuote(remoteCwd)} && ` : '';
-    const remoteScript = `${pathSetup}; ${cdPart}${envExports}; ${remoteContextSetup}; ${command}`;
+    const remoteInvocation = wrapRemoteCommandWithMultiplexer(command, input.serverMultiplexer);
+    const remoteScript = `${pathSetup}; ${cdPart}${envExports}; ${remoteContextSetup}; ${remoteInvocation}`;
     // Force PTY allocation so the remote agent gets a working terminal for
     // stdin.  Without -tt, SSH runs the remote command without a pseudo-terminal
     // and interactive CLIs (claude, codex, etc.) fail with "stdin is not a terminal".
@@ -405,6 +415,40 @@ function writePermissionRequestHookFiles(tag: string): {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * When the server profile asks us to run the remote agent inside tmux, write
+ * the agent command to a temp script on the remote host, then substitute that
+ * path into the user's tmux command template. Using a script file makes the
+ * `{script}` placeholder (already documented in the UI) behave the same on
+ * local and remote launches and avoids re-quoting an already-quoted command.
+ */
+function wrapRemoteCommandWithMultiplexer(
+  command: string,
+  multiplexer?: { enabled: boolean; tmuxCommand: string }
+): string {
+  if (!multiplexer?.enabled) return command;
+
+  const rawTemplate = multiplexer.tmuxCommand.trim();
+  const template =
+    rawTemplate.length > 0 && rawTemplate.includes('{script}')
+      ? rawTemplate
+      : 'tmux new-session bash {script}';
+
+  // Write the agent command to a remote temp script; quoted heredoc delimiter
+  // prevents any expansion of the command contents on the way in.
+  const writeScript = [
+    'export _OVLD_AGENT_SCRIPT=$(mktemp "${TMPDIR:-/tmp}/overlord-agent.XXXXXX")',
+    'cat > "$_OVLD_AGENT_SCRIPT" <<\'OVLD_AGENT_SCRIPT_EOF\'',
+    '#!/bin/bash',
+    command,
+    'OVLD_AGENT_SCRIPT_EOF',
+    'chmod +x "$_OVLD_AGENT_SCRIPT"'
+  ].join('\n');
+
+  const tmuxInvocation = template.replaceAll('{script}', '"$_OVLD_AGENT_SCRIPT"');
+  return `${writeScript}\n${tmuxInvocation}`;
 }
 
 function isCodexPluginInstalled(): boolean {

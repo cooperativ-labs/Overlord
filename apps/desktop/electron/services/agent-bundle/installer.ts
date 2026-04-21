@@ -73,13 +73,27 @@ type BundleManifest = {
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
 const MANIFEST_FILE = path.join(MANIFEST_DIR, 'bundle-manifest.json');
 
+const CLAUDE_MARKETPLACE_NAME = 'overlord-local';
+const CLAUDE_PLUGIN_NAME = 'overlord';
+
 function claudePaths() {
   const base = path.join(os.homedir(), '.claude');
+  const pluginsBase = path.join(base, 'plugins');
+  const marketplaceRoot = path.join(os.homedir(), '.ovld', 'claude-marketplace');
   return {
     skillDir: path.join(base, 'skills', 'overlord-local'),
     skillFile: path.join(base, 'skills', 'overlord-local', 'SKILL.md'),
     settingsFile: path.join(base, 'settings.json'),
-    hookScript: path.join(base, 'overlord-permission-hook.sh')
+    hookScript: path.join(base, 'overlord-permission-hook.sh'),
+    // Local marketplace files the Claude desktop app reads on startup.
+    knownMarketplacesFile: path.join(pluginsBase, 'known_marketplaces.json'),
+    installedPluginsFile: path.join(pluginsBase, 'installed_plugins.json'),
+    pluginCacheDir: path.join(pluginsBase, 'cache', CLAUDE_MARKETPLACE_NAME, CLAUDE_PLUGIN_NAME),
+    // Marketplace wrapper we generate outside the asar bundle so the path is stable
+    // across Overlord app versions.
+    marketplaceRoot,
+    marketplaceManifest: path.join(marketplaceRoot, '.claude-plugin', 'marketplace.json'),
+    marketplacePluginDir: path.join(marketplaceRoot, 'plugins', CLAUDE_PLUGIN_NAME)
   };
 }
 
@@ -293,7 +307,7 @@ export function getAgentBundleStatus(agent: AgentBundleAgent): AgentBundleStatus
     installedVersion: entry.version,
     details:
       agent === 'claude'
-        ? 'Claude v4 plugin is prepared. Overlord launches Claude with --plugin-dir and v3.25 connector files have been migrated.'
+        ? 'Claude v4 plugin is registered as a local marketplace under ~/.claude/plugins so the desktop app and CLI both discover it.'
         : 'Bundle is up to date.',
     currentContentHash: hash
   };
@@ -317,6 +331,128 @@ function checkOpenCodeFilesExist(): boolean {
 function checkCursorFilesExist(): boolean {
   const paths = cursorPaths();
   return fs.existsSync(paths.pluginManifest);
+}
+
+// ---------------------------------------------------------------------------
+// Claude local marketplace registration
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a self-contained local marketplace under ~/.ovld/claude-marketplace so
+ * the Claude desktop app (which reads ~/.claude/plugins/{known_marketplaces,
+ * installed_plugins}.json at startup) can discover and load the Overlord plugin
+ * without needing `claude --plugin-dir`.
+ */
+function registerClaudeLocalMarketplace(sourceDir: string, version: string): void {
+  const paths = claudePaths();
+
+  // 1. Build the marketplace wrapper directory with the plugin inside.
+  fs.mkdirSync(path.dirname(paths.marketplacePluginDir), { recursive: true });
+  fs.rmSync(paths.marketplacePluginDir, { recursive: true, force: true });
+  fs.cpSync(sourceDir, paths.marketplacePluginDir, { recursive: true });
+
+  const marketplaceManifest = {
+    name: CLAUDE_MARKETPLACE_NAME,
+    owner: { name: 'Cooperativ', email: 'support@ovld.ai' },
+    metadata: {
+      description: 'Overlord plugin registered locally by the Overlord desktop app.',
+      version
+    },
+    plugins: [
+      {
+        name: CLAUDE_PLUGIN_NAME,
+        source: `./plugins/${CLAUDE_PLUGIN_NAME}`,
+        description:
+          'Overlord ticket protocol workflow for Claude Code (attach/update/ask/deliver, slash commands, permission hook).',
+        version
+      }
+    ]
+  };
+  fs.mkdirSync(path.dirname(paths.marketplaceManifest), { recursive: true });
+  fs.writeFileSync(paths.marketplaceManifest, JSON.stringify(marketplaceManifest, null, 2) + '\n');
+
+  // 2. Copy the plugin into Claude's versioned cache so /plugin loads it directly.
+  const cacheVersionDir = path.join(paths.pluginCacheDir, version);
+  fs.mkdirSync(path.dirname(cacheVersionDir), { recursive: true });
+  fs.rmSync(cacheVersionDir, { recursive: true, force: true });
+  fs.cpSync(sourceDir, cacheVersionDir, { recursive: true });
+
+  // 3. Register the marketplace in known_marketplaces.json (preserving other entries).
+  const known = readJsonFile(paths.knownMarketplacesFile);
+  const now = new Date().toISOString();
+  known[CLAUDE_MARKETPLACE_NAME] = {
+    source: {
+      source: 'directory',
+      path: paths.marketplaceRoot
+    },
+    installLocation: paths.marketplaceRoot,
+    lastUpdated: now
+  };
+  writeJsonFile(paths.knownMarketplacesFile, known);
+
+  // 4. Register the plugin in installed_plugins.json (preserving other entries).
+  const installed = readJsonFile(paths.installedPluginsFile);
+  const plugins =
+    installed.plugins && typeof installed.plugins === 'object' && !Array.isArray(installed.plugins)
+      ? (installed.plugins as Record<string, unknown>)
+      : {};
+  const key = `${CLAUDE_PLUGIN_NAME}@${CLAUDE_MARKETPLACE_NAME}`;
+  plugins[key] = [
+    {
+      scope: 'user',
+      installPath: cacheVersionDir,
+      version,
+      installedAt: now,
+      lastUpdated: now
+    }
+  ];
+  writeJsonFile(paths.installedPluginsFile, {
+    ...installed,
+    version: typeof installed.version === 'number' ? installed.version : 2,
+    plugins
+  });
+}
+
+function unregisterClaudeLocalMarketplace(): string[] {
+  const paths = claudePaths();
+  const removed: string[] = [];
+
+  if (fs.existsSync(paths.knownMarketplacesFile)) {
+    const known = readJsonFile(paths.knownMarketplacesFile);
+    if (CLAUDE_MARKETPLACE_NAME in known) {
+      delete known[CLAUDE_MARKETPLACE_NAME];
+      writeJsonFile(paths.knownMarketplacesFile, known);
+      removed.push(paths.knownMarketplacesFile);
+    }
+  }
+
+  if (fs.existsSync(paths.installedPluginsFile)) {
+    const installed = readJsonFile(paths.installedPluginsFile);
+    const plugins =
+      installed.plugins &&
+      typeof installed.plugins === 'object' &&
+      !Array.isArray(installed.plugins)
+        ? (installed.plugins as Record<string, unknown>)
+        : null;
+    const key = `${CLAUDE_PLUGIN_NAME}@${CLAUDE_MARKETPLACE_NAME}`;
+    if (plugins && key in plugins) {
+      delete plugins[key];
+      writeJsonFile(paths.installedPluginsFile, { ...installed, plugins });
+      removed.push(paths.installedPluginsFile);
+    }
+  }
+
+  if (fs.existsSync(paths.pluginCacheDir)) {
+    fs.rmSync(paths.pluginCacheDir, { recursive: true, force: true });
+    removed.push(paths.pluginCacheDir);
+  }
+
+  if (fs.existsSync(paths.marketplaceRoot)) {
+    fs.rmSync(paths.marketplaceRoot, { recursive: true, force: true });
+    removed.push(paths.marketplaceRoot);
+  }
+
+  return removed;
 }
 
 // ---------------------------------------------------------------------------
@@ -401,13 +537,24 @@ function installClaude(): InstallResult {
 
     removeLegacyClaudeBundle();
 
-    const manifest = readManifest();
     const version = pluginVersion(path.join(sourceDir, '.claude-plugin', 'plugin.json')) ?? '0.0.0';
+
+    // Register as a local marketplace so the Claude desktop app discovers the
+    // plugin, not just CLI sessions launched with `claude --plugin-dir`.
+    registerClaudeLocalMarketplace(sourceDir, version);
+
+    const paths = claudePaths();
+    const manifest = readManifest();
     manifest.claude = {
       version,
       contentHash: contentHashForDirectory(sourceDir),
       installedAt: new Date().toISOString(),
-      files: listFilesRecursive(sourceDir)
+      files: [
+        ...listFilesRecursive(sourceDir),
+        paths.knownMarketplacesFile,
+        paths.installedPluginsFile,
+        paths.marketplaceManifest
+      ]
     };
     writeManifest(manifest);
 
@@ -613,6 +760,8 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
         }
         writeJsonFile(paths.settingsFile, settings);
       }
+
+      unregisterClaudeLocalMarketplace();
 
       const slashUninstall = uninstallSlashCommands('claude');
       if (!slashUninstall.ok) {

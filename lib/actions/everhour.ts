@@ -24,6 +24,8 @@ export type EverhourTimer = {
   duration?: number;
   task?: EverhourTaskRef | null;
   today?: number;
+  projectId?: string | null;
+  projectName?: string | null;
 };
 
 export type EverhourTimeRecord = {
@@ -523,14 +525,57 @@ async function getEverhourProjectIdForTicket(
   return projectId;
 }
 
+async function getProjectInfoByEverhourTaskId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  taskId: string,
+  taskName?: string
+): Promise<{ projectId: string; projectName: string } | null> {
+  const { data: ticket, error } = await supabase
+    .from('tickets')
+    .select('project_id')
+    .eq('everhour_task_id', taskId)
+    .maybeSingle();
+
+  if (error) {
+    return null;
+  }
+
+  if (ticket?.project_id) {
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id,name')
+      .eq('id', ticket.project_id)
+      .single();
+
+    if (!projectError && project) {
+      return { projectId: project.id, projectName: project.name };
+    }
+  }
+
+  if (taskName?.endsWith(' General')) {
+    const projectNameFromTask = taskName.slice(0, -' General'.length);
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('id,name')
+      .ilike('name', projectNameFromTask)
+      .maybeSingle();
+
+    if (!projectError && project) {
+      return { projectId: project.id, projectName: project.name };
+    }
+  }
+
+  return null;
+}
+
 function buildEverhourTaskName(ticket: { id: string; title: string | null }): string {
   const label = getTicketIdentifier(ticket.id) || 'Ticket';
   const title = ticket.title?.trim() || 'Untitled';
   return `${label}: ${title}`;
 }
 
-function buildGeneralEverhourTaskName(): string {
-  return 'general';
+function buildGeneralEverhourTaskName(projectName: string): string {
+  return `${projectName} General`;
 }
 
 export async function getEverhourConnectionStatus(): Promise<{
@@ -746,7 +791,7 @@ export async function ensureEverhourGeneralTaskForProject(
   }
 
   const apiKey = await requireEverhourApiKey(supabase, userId);
-  const taskName = buildGeneralEverhourTaskName();
+  const taskName = buildGeneralEverhourTaskName(project.name);
   const existingTaskId = await findEverhourTaskIdByName(apiKey, everhourProjectId, taskName);
   if (existingTaskId) {
     return { taskId: existingTaskId };
@@ -770,7 +815,23 @@ export async function getCurrentEverhourTimer(): Promise<EverhourTimer> {
 
   try {
     const timer = await everhourFetch<EverhourTimer>(apiKey, '/timers/current');
-    return timer?.status ? timer : { status: 'inactive' };
+    if (!timer?.status || timer.status === 'inactive') {
+      return { status: 'inactive' };
+    }
+
+    if (timer.task?.id) {
+      const projectInfo = await getProjectInfoByEverhourTaskId(
+        supabase,
+        timer.task.id,
+        timer.task.name
+      );
+      if (projectInfo) {
+        timer.projectId = projectInfo.projectId;
+        timer.projectName = projectInfo.projectName;
+      }
+    }
+
+    return timer;
   } catch (error) {
     throw new Error(parseEverhourErrorMessage(error), { cause: error });
   }

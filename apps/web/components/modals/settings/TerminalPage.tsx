@@ -349,7 +349,7 @@ export function TerminalPage({ open }: { open: boolean }) {
           Terminal agent controls are only available in the Overlord desktop app.
         </div>
       )}
-      {(['local', 'server'] as const).map(profileId => {
+      {(['local'] as const).map(profileId => {
         const profile = terminalProfiles[profileId];
         const isTmuxLike = isTmuxLikeProfile(profile);
         const isTmux = profile.terminalApp === 'tmux';
@@ -361,18 +361,15 @@ export function TerminalPage({ open }: { open: boolean }) {
         const selectedTerminalLabel =
           externalTerminalAppOptions.find(opt => opt.value === profile.terminalApp)?.label ??
           'your terminal';
-        const prefix = profileId === 'local' ? 'local' : 'server';
+        const prefix = 'local';
 
         return (
           <div key={profileId} className="grid gap-4 rounded-lg border p-4">
             <div className="grid gap-1">
-              <h3 className="text-sm font-medium">
-                {profileId === 'local' ? 'Local terminal settings' : 'Server terminal settings'}
-              </h3>
+              <h3 className="text-sm font-medium">Local terminal settings</h3>
               <p className="text-xs text-muted-foreground">
-                {profileId === 'local'
-                  ? 'Used when the project runs in a local working directory.'
-                  : 'Used when the project runs through SSH on a server workspace.'}
+                Overlord opens this terminal on your machine for every agent launch — including SSH
+                launches, where this terminal is the one that runs the ssh command.
               </p>
             </div>
             <div className="grid gap-2">
@@ -531,6 +528,66 @@ export function TerminalPage({ open }: { open: boolean }) {
           </div>
         );
       })}
+      {(() => {
+        const serverProfile = terminalProfiles.server;
+        const serverUsesTmux = isTmuxLikeProfile(serverProfile);
+        return (
+          <div className="grid gap-4 rounded-lg border p-4">
+            <div className="grid gap-1">
+              <h3 className="text-sm font-medium">Server terminal settings</h3>
+              <p className="text-xs text-muted-foreground">
+                Controls how the agent runs on the remote host after Overlord connects via SSH from
+                your local terminal. The local terminal app above is still the one that opens.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="server-remote-multiplexer">Remote multiplexer</Label>
+              <Select
+                value={serverUsesTmux ? 'tmux' : 'none'}
+                onValueChange={value =>
+                  void updateTerminalProfile(
+                    'server',
+                    'terminalApp',
+                    value === 'tmux' ? 'tmux' : 'default'
+                  )
+                }
+                disabled={!isElectron}
+              >
+                <SelectTrigger id="server-remote-multiplexer">
+                  <SelectValue placeholder="Select behavior" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Run the agent directly</SelectItem>
+                  <SelectItem value="tmux">Run the agent inside tmux</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                tmux keeps the agent alive on the server if your SSH session drops and lets you
+                re-attach from another terminal.
+              </p>
+            </div>
+            {serverUsesTmux && (
+              <div className="grid gap-2">
+                <Label htmlFor="server-tmux-command">Remote tmux launch command</Label>
+                <Textarea
+                  id="server-tmux-command"
+                  placeholder={DEFAULT_TMUX_COMMAND}
+                  value={serverProfile.terminalTmuxCommand}
+                  onChange={event =>
+                    void updateTerminalProfile('server', 'terminalTmuxCommand', event.target.value)
+                  }
+                  disabled={!isElectron}
+                  rows={2}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Runs on the remote host. Use {'{script}'} where Overlord should insert the path of
+                  the generated agent launch script on the server.
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <div className="grid gap-2">
         <Label htmlFor="editor-scheme-select">File links</Label>
         <Select value={editorScheme} onValueChange={setEditorScheme} disabled={editorSchemeLoading}>

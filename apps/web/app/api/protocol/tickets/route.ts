@@ -115,7 +115,6 @@ export async function POST(request: Request) {
         available_tools: availableTools,
         delegate: delegate || null,
         execution_target: executionTarget,
-        objective,
         organization_id: resolvedOrganizationId,
         priority,
         project_id: resolvedProjectId,

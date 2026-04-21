@@ -34,7 +34,7 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
     const updateStandaloneState = () => {
       setIsStandalonePwa(
         mediaQuery.matches ||
-        Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+          Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
       );
     };
 
@@ -100,7 +100,9 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
                 text={<RefreshCwIcon size={16} />}
               />
             </TooltipTrigger>
-            <TooltipContent side="bottom">Hard refresh app ({isMac ? '⌘R' : 'Ctrl+R'})</TooltipContent>
+            <TooltipContent side="bottom">
+              Hard refresh app ({isMac ? '⌘R' : 'Ctrl+R'})
+            </TooltipContent>
           </Tooltip>
         ) : null}
       </div>

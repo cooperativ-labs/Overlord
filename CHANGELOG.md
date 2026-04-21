@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.12.0] - 2026-04-21:12:13
+
+### Added
+- **Claude desktop plugin marketplace registration** now installs and registers the Overlord Claude plugin as a local marketplace so Claude desktop and CLI both discover it without manual `--plugin-dir` launch flags.
+- **Remote tmux execution controls** in terminal settings now separate local terminal app selection from server-side multiplexer behavior, including a configurable remote tmux launch template.
+
+### Fixed
+- **Protocol ticket creation payload** no longer attempts to write a non-existent `objective` column, preventing insert failures in the tickets route.
+
+### Changed
+- **Remote agent launch flow** now applies server tmux wrapping only on the remote host while always using local terminal profile settings to open the SSH command locally.
+- **Everhour timer labeling** now resolves and shows the project name with active timers when possible, and general tasks are named per project for clearer navigation context.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.12.0`.
+
 ## [4.11.0] - 2026-04-21:10:33
 
 ### Added
