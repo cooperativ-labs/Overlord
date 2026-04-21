@@ -109,7 +109,7 @@ export function NewTicketButton() {
               size="sm"
               type="button"
             >
-              <span className="flex items-center gap-0.5 sm:hidden">
+              <span className="flex items-center gap-0.5 ms:hidden">
                 <Plus className="h-3.5 w-3.5" />
                 <Ticket className="h-3.5 w-3.5" />
               </span>

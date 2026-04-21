@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.13.0] - 2026-04-21:12:54
+
+### Added
+- **Protocol create subcommand** now supports draft-only ticket creation with `ovld protocol create`, including follow-up drafts when session flags are provided and standalone drafts resolved from working directory.
+
+### Fixed
+- **New ticket button mobile visibility class** is corrected to use the expected Tailwind breakpoint utility for the compact icon label.
+
+### Changed
+- **Overlord ticket skill guidance** now clearly separates draft creation (`create`) from immediate attach-and-execute flow (`spawn`) across CLI and plugin skill docs.
+
+### Security
+- None.
+
+### Documentation
+- Expand `ovld protocol help` output with a dedicated `create` section, examples, and mode behavior details so agents can select the correct ticket lifecycle command.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.13.0`.
+
 ## [4.12.0] - 2026-04-21:12:13
 
 ### Added

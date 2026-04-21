@@ -67,12 +67,16 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
 
 ## Mode 2: Asked From Chat To Use Overlord
 
-1. If the user wants a new ticket, use `ovld protocol spawn --objective "..."`. It creates the ticket and attaches immediately.
-2. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket-id>`.
-3. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1.
-4. If the user wants to find existing tickets by keyword or workflow state, use the `search_tickets` tool.
-5. If you need to understand project routing before spawning, use `ovld protocol discover-project`.
-6. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
+1. If the user wants to create ticket drafts only (do not start execution), run `ovld protocol create --objective "..."`.
+   - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
+   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
+2. If the user wants to create and start executing immediately, use `ovld protocol spawn --objective "..."`.
+   It creates the ticket in `execute` status and attaches immediately.
+3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket-id>`.
+4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1.
+5. If the user wants to find existing tickets by keyword or workflow state, use the `search_tickets` tool.
+6. If you need to understand project routing before spawning, use `ovld protocol discover-project`.
+7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 
 ## Change Rationales
 

@@ -1083,6 +1083,92 @@ async function protocolSpawn(args) {
 }
 
 // ---------------------------------------------------------------------------
+// create (create follow-up ticket draft only)
+// ---------------------------------------------------------------------------
+
+async function protocolCreateTicket(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  const objective = requireFlag(flags, 'objective', undefined);
+  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+  const agentIdentifier = resolveProtocolAgentIdentifier(flags);
+
+  const hasSessionContext = Boolean(sessionKey && ticketId);
+
+  // Follow-up mode: create a draft ticket linked to the current session ticket.
+  if (hasSessionContext) {
+    const body = {
+      sessionKey,
+      ticketId,
+      objective,
+      ...(flags.title ? { title: String(flags.title) } : {}),
+      ...(flags.priority ? { priority: String(flags.priority) } : {}),
+      ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
+      ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
+      ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
+      delegate: resolveProtocolTicketDelegate(flags, agentIdentifier)
+    };
+
+    const data = await apiPost(
+      platformUrl,
+      agentToken,
+      localSecret,
+      '/api/protocol/create-ticket',
+      body,
+      timeoutMs
+    );
+    console.log(JSON.stringify(data, null, 2));
+    return;
+  }
+
+  // Standalone mode: resolve project from cwd/--working-directory first, then create draft ticket.
+  if (sessionKey || ticketId) {
+    throw new Error(
+      'Provide both --session-key and --ticket-id for follow-up create, or provide neither for standalone create.'
+    );
+  }
+
+  const workingDirectory = String(flags['working-directory'] ?? process.cwd());
+  const discovered = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/discover-project',
+    { workingDirectory },
+    timeoutMs
+  );
+
+  const projectId = discovered?.project?.id;
+  if (!projectId) {
+    throw new Error(
+      'Could not resolve project from working directory. Set project local working directory in Overlord or pass --working-directory.'
+    );
+  }
+
+  const standaloneBody = {
+    objective,
+    projectId,
+    ...(flags.title ? { title: String(flags.title) } : {}),
+    ...(flags.priority ? { priority: String(flags.priority) } : {}),
+    ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
+    ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
+    ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
+    delegate: resolveProtocolTicketDelegate(flags, agentIdentifier)
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    agentToken,
+    localSecret,
+    '/api/protocol/tickets',
+    standaloneBody,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // auth-status (agent-friendly auth diagnostics)
 // ---------------------------------------------------------------------------
 
@@ -1139,6 +1225,7 @@ Subcommands:
   attach                    Start a ticket session and return full working context
   connect                   Start a lightweight session without full context
   load-context              Read ticket context without creating a session
+  create                    Create a draft ticket without attaching (follow-up or standalone)
   spawn                     Create a follow-up ticket and attach to it immediately
   update                    Post progress, activity events, and optional change rationales
   record-change-rationales  Persist structured change rationales without a progress update
@@ -1335,6 +1422,27 @@ spawn:
   Returns:
     New ticket/session JSON plus SESSION_KEY and TICKET_ID on stderr when available
 
+create:
+  Purpose:
+    Create a draft ticket without attaching to it.
+    If session flags are provided, creates a follow-up draft linked to the current ticket.
+    If session flags are omitted, resolves project by working directory and creates a standalone draft.
+  Required:
+    --objective <text>
+  Optional:
+    --session-key <key>
+    --ticket-id <id>
+    --working-directory <path>  Resolve project by local working directory (default: cwd)
+    --title <text>
+    --priority <level>        low | medium | high | urgent
+    --acceptance-criteria <text>
+    --available-tools <text>
+    --execution-target <t>    agent | human
+    --delegate <model>        Model or delegate identifier that created the ticket
+    --agent <identifier>
+  Returns:
+    New draft ticket JSON (follow-up draft when session flags are provided)
+
 artifact-prepare-upload:
   Required:
     --session-key <key>
@@ -1388,6 +1496,8 @@ Examples:
   ovld protocol attach --ticket-id abc-123 --external-session-id null
   ovld protocol connect --ticket-id abc-123
   ovld protocol load-context --ticket-id abc-123
+  ovld protocol create --objective "Capture follow-up work from this repo"
+  ovld protocol create --session-key <key> --ticket-id <id> --objective "Capture follow-up work"
   ovld protocol spawn --agent codex --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X" --phase execute
   ovld protocol update --session-key <key> --ticket-id <id> --summary-file ./update.txt --event-type user_follow_up
@@ -1413,6 +1523,7 @@ Examples:
   if (subcommand === 'attach') { await protocolAttach(args); return; }
   if (subcommand === 'connect') { await protocolConnect(args); return; }
   if (subcommand === 'load-context') { await protocolLoadContext(args); return; }
+  if (subcommand === 'create' || subcommand === 'create-ticket') { await protocolCreateTicket(args); return; }
   if (subcommand === 'spawn') { await protocolSpawn(args); return; }
   if (subcommand === 'artifact-prepare-upload') { await protocolArtifactPrepareUpload(args); return; }
   if (subcommand === 'artifact-finalize-upload') { await protocolArtifactFinalizeUpload(args); return; }
