@@ -343,6 +343,17 @@ export default async function HomePage() {
                 variant="outline"
                 className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10"
               >
+                <Link href="#watch-video">
+                  <Play className="size-4" />
+                  Watch video
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="h-14 rounded-full border-white/15 bg-white/5 px-8 text-base text-white hover:bg-white/10"
+              >
                 <Link href="/early-access">
                   Get Early Access
                   <ArrowRight className="size-4" />
@@ -377,7 +388,7 @@ export default async function HomePage() {
         </section>
 
         {/* Video section */}
-        <section className="mx-auto w-full max-w-6xl py-6">
+        <section id="watch-video" className="mx-auto w-full max-w-6xl py-6">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-3 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.4)] backdrop-blur">
             <div className="mb-4 px-3 pt-3 text-center">
               <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
