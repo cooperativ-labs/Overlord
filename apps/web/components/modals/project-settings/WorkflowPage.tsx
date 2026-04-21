@@ -1,7 +1,8 @@
 'use client';
 
-import { Folder } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Download, Folder, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { ProjectStatusSettings } from '@/components/features/projects/ProjectStatusSettings';
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
+import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import {
   useUpdateProjectSshConfigMutation,
   useUpdateProjectWorkingDirectoryMutation
@@ -103,6 +104,12 @@ export function WorkflowPage({
   const [sshSaveState, setSshSaveState] = useState<ButtonLoadingState>('default');
   const [sshError, setSshError] = useState<string | null>(null);
   const hasSshConfig = savedSshHost.trim().length > 0 && savedSshUser.trim().length > 0;
+
+  // Remote helper state
+  const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
+  const [helperNeedsUpdate, setHelperNeedsUpdate] = useState(false);
+  const [helperVersion, setHelperVersion] = useState<string | null>(null);
+  const [installingHelper, setInstallingHelper] = useState(false);
   const sshHasUnsavedChanges =
     sshHost.trim() !== savedSshHost ||
     sshPort.trim() !== savedSshPort ||
@@ -144,6 +151,62 @@ export function WorkflowPage({
     initialSshUser,
     initialRemoteWorkingDirectory
   ]);
+
+  const savedSshConfig = useMemo(
+    () =>
+      savedSshHost.trim() && savedSshUser.trim()
+        ? {
+            host: savedSshHost.trim(),
+            port: savedSshPort.trim() ? Number.parseInt(savedSshPort.trim(), 10) : undefined,
+            user: savedSshUser.trim(),
+            authMethod: savedSshAuthMethod,
+            privateKeyPath: savedSshPrivateKeyPath.trim() || undefined
+          }
+        : null,
+    [savedSshAuthMethod, savedSshHost, savedSshPort, savedSshPrivateKeyPath, savedSshUser]
+  );
+
+  useEffect(() => {
+    if (!api?.remoteHelper || !projectId || !savedSshConfig) {
+      setHelperInstalled(null);
+      return;
+    }
+    let cancelled = false;
+    void api.remoteHelper
+      .status({ projectId })
+      .then(result => {
+        if (cancelled) return;
+        setHelperInstalled(result.installed);
+        setHelperVersion(result.version ?? null);
+        setHelperNeedsUpdate(Boolean(result.needsUpdate));
+      })
+      .catch(() => {
+        if (!cancelled) setHelperInstalled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, savedSshConfig]);
+
+  async function handleInstallHelper() {
+    if (!api?.remoteHelper || !projectId || !savedSshConfig) return;
+    setInstallingHelper(true);
+    try {
+      const result = await api.remoteHelper.install({ projectId, ssh: savedSshConfig });
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to install remote helper.');
+        return;
+      }
+      toast.success('Remote helper installed.');
+      setHelperInstalled(true);
+      setHelperVersion(result.version ?? null);
+      setHelperNeedsUpdate(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to install remote helper.');
+    } finally {
+      setInstallingHelper(false);
+    }
+  }
 
   async function handleSaveWorkingDirectory(nextValue?: string) {
     const normalized = (nextValue ?? workingDirectory).trim();
@@ -444,6 +507,51 @@ export function WorkflowPage({
           </div>
         </div>
         {sshError ? <p className="text-xs text-destructive">{sshError}</p> : null}
+        {hasSshConfig && helperInstalled !== null ? (
+          <div className="flex items-center gap-2 pt-1">
+            {helperInstalled === false ? (
+              <button
+                type="button"
+                onClick={handleInstallHelper}
+                disabled={installingHelper}
+                className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 px-2 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                title="Install the Overlord remote helper on this host"
+              >
+                {installingHelper ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3" />
+                )}
+                Install helper
+              </button>
+            ) : helperNeedsUpdate ? (
+              <button
+                type="button"
+                onClick={handleInstallHelper}
+                disabled={installingHelper}
+                className="inline-flex h-7 items-center gap-1 rounded-full border border-amber-500/60 px-2 text-[11px] text-amber-600 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                title={`Helper v${helperVersion ?? 'unknown'} installed; bundled version is newer. Click to update.`}
+              >
+                {installingHelper ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3" />
+                )}
+                Update helper
+              </button>
+            ) : (
+              <span
+                className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] text-muted-foreground"
+                title={
+                  helperVersion ? `Remote helper v${helperVersion}` : 'Remote helper installed'
+                }
+              >
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                Helper ready
+              </span>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <ProjectStatusSettings

@@ -29,7 +29,7 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
-import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
+import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import type { Database } from '@/types/database.types';
 
 import { DangerZonePage } from './project-settings/DangerZonePage';

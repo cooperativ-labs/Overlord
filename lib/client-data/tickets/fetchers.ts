@@ -1,4 +1,4 @@
-import type { SidebarProject } from '@/lib/actions/projects';
+import type { SidebarProject } from '@/lib/actions/project-types';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { getTicketBoardBootstrapAction, getTicketStatusesAction } from '@/lib/actions/tickets';
 

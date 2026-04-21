@@ -46,7 +46,7 @@ import {
   SidebarRail
 } from '@/components/ui/sidebar';
 import type { UserOrganization } from '@/lib/actions/organizations';
-import type { SidebarProject } from '@/lib/actions/projects';
+import type { SidebarProject } from '@/lib/actions/project-types';
 import { useUpdateProjectColorMutation } from '@/lib/client-data/projects/mutations';
 import { useProjects } from '@/lib/client-data/tickets/hooks';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';

@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.8.0] - 2026-04-21:10:00
+
+### Added
+- **Chat-invoked Overlord workflows** via `ovld protocol spawn` so users can create and work Overlord tickets directly from chat without launching from desktop.
+- **Mode 2 support in overlord-ticket skill** for chat-initiated Overlord sessions with ticket discovery, context loading, and project discovery capabilities.
+- **Per-user SSH configuration** stored in `project_user` table so each user can maintain distinct SSH settings (host, port, user, auth method, key path) for the same project.
+- **Remote helper deployment tracking** (`remote_helper_installed_at`, `remote_helper_version`) on projects table for better provisioning state visibility.
+- **Change rationales API** in protocol (`record-change-rationales`, `--change-rationales-json`) for structured documentation of code changes with impact analysis.
+- **Context and artifact APIs** in protocol (`read-context`, `write-context`, `artifact-upload-file`, `artifact-download-url`) for durable session state and file handling.
+
+### Fixed
+- None.
+
+### Changed
+- **Database schema**: Renamed `project_user_preferences` table to `project_user` as the canonical per-user/per-project join row for both UI preferences and SSH execution settings.
+- **SSH settings storage**: Migrated SSH-related fields from `projects` table to `project_user` table with best-effort backfill for existing users.
+- **Project settings UI**: Workflow page now owns SSH configuration input; ProjectExecutionWorkspaceSelector simplified by delegating SSH setup responsibility.
+- **overlord-ticket skill**: Expanded with two-mode workflow (Launched vs Chat-invoked), comprehensive protocol CLI reference, and change rationale patterns.
+- **Protocol lifecycle**: Enhanced `ovld protocol` subcommands and flags for artifact handling, change documentation, and chat-initiated ticket spawning.
+
+### Security
+- None.
+
+### Removed
+- Drop SSH-related columns from `projects` table (migrated to `project_user`): `ssh_command`, `remote_working_directory`, `ssh_host`, `ssh_port`, `ssh_user`, `ssh_auth_method`, `ssh_private_key_path`.
+
+### Refactor
+- **ProjectExecutionWorkspaceSelector** refactored to remove SSH configuration responsibility; WorkflowPage consolidates user-facing SSH settings.
+- **Protocol attachment** and delivery flows enhanced for better session state handling in both desktop and chat contexts.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.8.0`.
+
 ## [4.7.0] - 2026-04-20:14:22
 
 ### Added

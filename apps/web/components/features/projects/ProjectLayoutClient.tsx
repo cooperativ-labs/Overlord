@@ -7,7 +7,7 @@ import { useEffect, useMemo } from 'react';
 import { ProjectSettingsProvider } from '@/components/features/projects/ProjectSettingsContext';
 import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
+import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];

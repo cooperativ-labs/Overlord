@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, useTransition } from 'react';
 
 import { saveDefaultProjectAction } from '@/lib/actions/profile-settings';
-import type { SidebarProject } from '@/lib/actions/projects';
+import type { SidebarProject } from '@/lib/actions/project-types';
 import { useProjects } from '@/lib/client-data/tickets/hooks';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { cacheProjectsForOffline } from '@/lib/offline/offline-projects-cache';

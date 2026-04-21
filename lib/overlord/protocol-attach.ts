@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
+import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
+import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
 import { generateAndSetObjectiveTitle, markSubmittedObjectiveExecuting } from '@/lib/objectives';
 import { buildPromptContext } from '@/lib/overlord/prompt-context';
 import { connectionMethods } from '@/lib/overlord/types';
@@ -209,6 +211,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     { data: sharedState },
     { data: recentEvents },
     { data: project },
+    sshPreferencesByProjectId,
     { data: profile }
   ] = await Promise.all([
     supabase
@@ -239,11 +242,19 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       .limit(12),
     supabase
       .from('projects')
-      .select('local_working_directory,remote_working_directory')
+      .select('id,local_working_directory')
       .eq('id', ticket.project_id)
       .maybeSingle(),
+    getProjectUserSshSettingsByProjectId(
+      supabase,
+      userId,
+      ticket.project_id ? [ticket.project_id] : []
+    ),
     supabase.from('profiles').select('custom_agent_instructions').eq('id', userId).maybeSingle()
   ]);
+  const sshSettings = project
+    ? resolveProjectUserSshSettings(sshPreferencesByProjectId.get(project.id))
+    : null;
 
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: {
@@ -257,7 +268,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     customInstructions: profile?.custom_agent_instructions ?? null,
     workingDirectory: resolveSessionWorkingDirectory({
       localWorkingDirectory: project?.local_working_directory,
-      remoteWorkingDirectory: project?.remote_working_directory,
+      remoteWorkingDirectory: sshSettings?.remoteWorkingDirectory,
       metadata
     })
   });

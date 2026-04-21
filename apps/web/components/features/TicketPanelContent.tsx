@@ -19,6 +19,8 @@ import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
+import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
+import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -87,6 +89,7 @@ export async function TicketPanelContent({
 
   const profileSettings = user ? await fetchProfileSettings(supabase, user.id) : null;
   const assignedAgent = parseTicketAssignedAgent(ticket.assigned_agent);
+  const projectsSelect = 'id,name,color,everhour_project_id,local_working_directory';
 
   // Fetch all related data in parallel. Individual query failures are
   // handled gracefully — the component still renders with partial data.
@@ -141,9 +144,7 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('projects')
-      .select(
-        'id,name,color,everhour_project_id,local_working_directory,ssh_command,remote_working_directory'
-      )
+      .select(projectsSelect)
       .eq('organization_id', organizationId)
       .order('name', { ascending: true }),
     ticket.schedule_id
@@ -187,6 +188,16 @@ export async function TicketPanelContent({
   const agentSession = agentSessionResult.data;
   const agentTokenRow = agentTokenResult.data;
   const objectives = objectivesResult.data;
+  const projectOptionsRaw = projects ?? [];
+  const sshSettingsByProjectId = await getProjectUserSshSettingsByProjectId(
+    supabase,
+    user?.id,
+    projectOptionsRaw.map(project => project.id)
+  );
+  const projectOptions = projectOptionsRaw.map(project => ({
+    ...project,
+    ...resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id))
+  }));
 
   const platformUrl = getPlatformUrl();
   const agentConfigs = user ? await getAllAgentConfigsByUserIdAction(user.id, supabase) : {};
@@ -229,7 +240,6 @@ export async function TicketPanelContent({
   const ticketIdentifier = getTicketIdentifier(ticket.id);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
 
-  const projectOptions = projects ?? [];
   const activeProjectId = ticket.project_id ?? projectOptions[0]?.id;
   if (!activeProjectId) {
     return (
@@ -241,8 +251,8 @@ export async function TicketPanelContent({
 
   const activeProject = projectOptions.find(project => project.id === activeProjectId);
   const projectWorkingDirectory = activeProject?.local_working_directory;
-  const projectSshCommand = activeProject?.ssh_command ?? null;
-  const projectRemoteWorkingDirectory = activeProject?.remote_working_directory ?? null;
+  const projectSshCommand = activeProject?.sshCommand ?? null;
+  const projectRemoteWorkingDirectory = activeProject?.remoteWorkingDirectory ?? null;
   const configuredProjectDirectory =
     typeof projectWorkingDirectory === 'string' && projectWorkingDirectory.trim().length > 0
       ? projectWorkingDirectory.trim()

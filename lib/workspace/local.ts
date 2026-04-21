@@ -451,7 +451,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
         const msg =
           stderr ||
           (error instanceof Error ? error.message : 'git push failed. Ensure an upstream is set.');
-        throw new Error(msg);
+        throw new Error(msg, { cause: error });
       }
 
       return { ok: true, branch, commitSha, pushed: true };

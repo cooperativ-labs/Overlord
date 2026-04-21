@@ -2,7 +2,7 @@
   "name": "Overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "4.7.0",
+  "version": "4.8.0",
   "private": true,
   "main": "apps/desktop/dist-electron/main.js",
   "workspaces": [
@@ -34,7 +34,7 @@
     "sunpeak:ticket-card:sync": "node scripts/build-ticket-card-app.mjs",
     "sunpeak:ticket-card:build-and-sync": "yarn sunpeak:ticket-card:build && yarn sunpeak:ticket-card:sync",
     "generate": "node scripts/generate-supabase-types.js local",
-    "new": "rm -rf node_modules && yarn cache clean && yarn install && yarn generate",
+    "new": "rm -rf node_modules && yarn cache clean && yarn install",
     "nuke": "yarn install && supabase db reset && supabase start && supabase status && yarn generate",
     "build": "yarn workspace @overlord/web build",
     "build:web": "yarn workspace @overlord/web build",

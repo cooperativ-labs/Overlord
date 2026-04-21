@@ -2,12 +2,11 @@
 
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import type { CreateProjectResult } from '@/lib/actions/projects';
+import type { CreateProjectResult, SidebarProject } from '@/lib/actions/project-types';
 import {
   createProject,
   deleteProjectAction,
   disconnectProjectFromEverhourAction,
-  type SidebarProject,
   updateProjectColorAction,
   updateProjectNameAction,
   updateProjectSshConfigAction,
@@ -83,6 +82,16 @@ function emptySshFields() {
     remoteHelperInstalledAt: null,
     remoteHelperVersion: null
   } as const;
+}
+
+function deriveSshCommand(input: {
+  sshHost: string | null;
+  sshPort: number | null;
+  sshUser: string | null;
+}) {
+  if (!input.sshHost || !input.sshUser) return null;
+  const port = input.sshPort && input.sshPort !== 22 ? ` -p ${input.sshPort}` : '';
+  return `ssh${port} ${input.sshUser}@${input.sshHost}`;
 }
 
 function appendCreatedProject(queryClient: QueryClient, created: CreateProjectResult) {
@@ -198,7 +207,12 @@ export function useUpdateProjectSshConfigMutation() {
         sshPort: input.sshPort ?? null,
         sshUser: trim(input.sshUser),
         sshAuthMethod: input.sshAuthMethod ?? null,
-        sshPrivateKeyPath: trim(input.sshPrivateKeyPath)
+        sshPrivateKeyPath: trim(input.sshPrivateKeyPath),
+        sshCommand: deriveSshCommand({
+          sshHost: trim(input.sshHost),
+          sshPort: input.sshPort ?? null,
+          sshUser: trim(input.sshUser)
+        })
       });
       return snapshot;
     },

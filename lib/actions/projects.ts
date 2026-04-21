@@ -1,30 +1,34 @@
 'use server';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
+import { PROJECT_BASE_SELECT, PROJECT_SSH_PREFERENCE_SELECT } from '@/lib/actions/project-selects';
+import {
+  buildLegacySshCommand,
+  resolveProjectUserSshSettings,
+  type CreateProjectResult,
+  type ProjectSshAuthMethod,
+  type ProjectUserSshSettingsRow,
+  type SidebarProject,
+  type UpdateProjectSshConfigInput
+} from '@/lib/actions/project-types';
 import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { createClient } from '@/supabase/utils/server';
+import type { Database } from '@/types/database.types';
 
-export type ProjectSshAuthMethod = 'agent' | 'key' | 'tailscale';
+type ServerSupabase = SupabaseClient<Database>;
 
-export type SidebarProject = {
-  id: string;
-  name: string;
-  color: string;
-  organizationId: number;
-  localWorkingDirectory: string | null;
-  /** @deprecated — retained for one release so legacy callers keep compiling. */
-  sshCommand: string | null;
-  remoteWorkingDirectory: string | null;
-  sshHost: string | null;
-  sshPort: number | null;
-  sshUser: string | null;
-  sshAuthMethod: ProjectSshAuthMethod | null;
-  sshPrivateKeyPath: string | null;
-  remoteHelperInstalledAt: string | null;
-  remoteHelperVersion: string | null;
-};
+function trimString(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function trimOrNull(value: string | null | undefined): string | null {
+  return trimString(value);
+}
 
 function revalidateProjectPaths(projectId: string) {
   const projectPath = buildProjectPath({ projectId });
@@ -34,34 +38,56 @@ function revalidateProjectPaths(projectId: string) {
   revalidatePath(projectPath, 'layout');
 }
 
+export async function getProjectUserSshSettingsByProjectId(
+  supabase: ServerSupabase,
+  userId: string | null | undefined,
+  projectIds: string[]
+): Promise<Map<string, ProjectUserSshSettingsRow>> {
+  if (!userId || projectIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from('project_user')
+    .select(PROJECT_SSH_PREFERENCE_SELECT)
+    .eq('user_id', userId)
+    .in('project_id', projectIds);
+
+  if (error || !data) {
+    return new Map();
+  }
+
+  return new Map(data.map(row => [row.project_id, row]));
+}
+
 export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   const { data, error } = await supabase
     .from('projects')
-    .select(
-      'id,name,color,organization_id,local_working_directory,ssh_command,remote_working_directory,ssh_host,ssh_port,ssh_user,ssh_auth_method,ssh_private_key_path,remote_helper_installed_at,remote_helper_version'
-    )
+    .select(PROJECT_BASE_SELECT)
     .order('name', { ascending: true });
 
   if (error || !data) {
-    // If the user has no access to projects, return an empty list rather than throwing.
     return [];
   }
 
+  const sshSettingsByProjectId = await getProjectUserSshSettingsByProjectId(
+    supabase,
+    user?.id,
+    data.map(project => project.id)
+  );
+
   return data.map(project => ({
+    ...resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id)),
     id: project.id,
     name: project.name,
     color: project.color,
     organizationId: project.organization_id,
     localWorkingDirectory: project.local_working_directory,
-    sshCommand: project.ssh_command,
-    remoteWorkingDirectory: project.remote_working_directory,
-    sshHost: project.ssh_host,
-    sshPort: project.ssh_port,
-    sshUser: project.ssh_user,
-    sshAuthMethod: project.ssh_auth_method as ProjectSshAuthMethod | null,
-    sshPrivateKeyPath: project.ssh_private_key_path,
     remoteHelperInstalledAt: project.remote_helper_installed_at,
     remoteHelperVersion: project.remote_helper_version
   }));
@@ -155,13 +181,6 @@ export async function disconnectProjectFromEverhourAction(input: {
   revalidateProjectPaths(input.projectId);
 }
 
-export type CreateProjectResult = {
-  id: string;
-  name: string;
-  color: string;
-  organizationId: number;
-};
-
 const defaultProjectStatuses = [
   { name: 'draft', status_type: 'draft', position: 0 },
   { name: 'execute', status_type: 'execute', position: 1 },
@@ -204,56 +223,40 @@ export async function deleteProjectAction(input: { projectId: string }): Promise
   revalidatePath('/u');
 }
 
-function trimOrNull(value: string | null | undefined): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-export type UpdateProjectSshConfigInput = {
-  projectId: string;
-  remoteWorkingDirectory: string | null;
-  sshHost: string | null;
-  sshPort: number | null;
-  sshUser: string | null;
-  sshAuthMethod: ProjectSshAuthMethod | null;
-  sshPrivateKeyPath: string | null;
-};
-
-function deriveLegacySshCommand(input: UpdateProjectSshConfigInput): string | null {
-  const user = trimOrNull(input.sshUser);
-  const host = trimOrNull(input.sshHost);
-  if (!user || !host) return null;
-  const port = input.sshPort && input.sshPort !== 22 ? ` -p ${input.sshPort}` : '';
-  return `ssh${port} ${user}@${host}`;
-}
-
 export async function updateProjectSshConfigAction(
   input: UpdateProjectSshConfigInput
 ): Promise<void> {
   const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('You must be signed in to update project SSH configuration.');
+  }
+
   const authMethod: ProjectSshAuthMethod | null =
     input.sshAuthMethod && ['agent', 'key', 'tailscale'].includes(input.sshAuthMethod)
       ? input.sshAuthMethod
       : null;
 
   const payload = {
+    user_id: user.id,
+    project_id: input.projectId,
     remote_working_directory: trimOrNull(input.remoteWorkingDirectory),
     ssh_host: trimOrNull(input.sshHost),
     ssh_port: input.sshPort ?? null,
     ssh_user: trimOrNull(input.sshUser),
     ssh_auth_method: authMethod,
     ssh_private_key_path: trimOrNull(input.sshPrivateKeyPath),
-    // Keep legacy ssh_command in sync so unmigrated callers still work this
-    // release. Phase 5 drops the column.
-    ssh_command: deriveLegacySshCommand(input)
+    ssh_command: buildLegacySshCommand(input),
+    updated_at: new Date().toISOString()
   };
 
   const { data, error } = await supabase
-    .from('projects')
-    .update(payload)
-    .eq('id', input.projectId)
-    .select('organization_id')
+    .from('project_user')
+    .upsert(payload, { onConflict: 'user_id,project_id' })
+    .select('project_id')
     .single();
 
   if (error || !data) {

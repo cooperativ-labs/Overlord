@@ -12,7 +12,7 @@ import {
 
 import type { ProjectSettingsNavSection } from '@/components/modals/ProjectSettingsModal';
 import { ProjectSettingsModal } from '@/components/modals/ProjectSettingsModal';
-import type { ProjectSshAuthMethod } from '@/lib/actions/projects';
+import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import { isWorkingDirectoryNone } from '@/lib/helpers/project-working-directory';
 import { parseLegacySshCommand } from '@/lib/workspace/parse-ssh-command';
 import type { SshAuthMethod, SshConnectionConfig } from '@/lib/workspace/types';

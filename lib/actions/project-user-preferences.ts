@@ -53,7 +53,7 @@ export async function getProjectUserPreferencesAction(
   if (!user) return DEFAULT_PREFERENCES;
 
   const { data, error } = await supabase
-    .from('project_user_preferences')
+    .from('project_user')
     .select('preferences')
     .eq('user_id', user.id)
     .eq('project_id', projectId)
@@ -77,7 +77,7 @@ export async function upsertProjectUserPreferencesAction(
 
   // Fetch existing preferences to merge
   const { data: existing } = await supabase
-    .from('project_user_preferences')
+    .from('project_user')
     .select('preferences')
     .eq('user_id', user.id)
     .eq('project_id', projectId)
@@ -101,7 +101,7 @@ export async function upsertProjectUserPreferencesAction(
         : current.list_filters
   };
 
-  const { error } = await supabase.from('project_user_preferences').upsert(
+  const { error } = await supabase.from('project_user').upsert(
     {
       user_id: user.id,
       project_id: projectId,

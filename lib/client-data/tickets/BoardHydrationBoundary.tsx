@@ -11,7 +11,7 @@
 
 import { useEffect } from 'react';
 
-import type { SidebarProject } from '@/lib/actions/projects';
+import type { SidebarProject } from '@/lib/actions/project-types';
 
 import type { BoardBootstrap, BoardDataset, BoardScope, BoardStatus } from './board-types';
 import { useProjects, useTicketBoard, useTicketStatuses } from './hooks';

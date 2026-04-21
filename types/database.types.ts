@@ -751,12 +751,19 @@ export type Database = {
           }
         ];
       };
-      project_user_preferences: {
+      project_user: {
         Row: {
           created_at: string | null;
           id: string;
           preferences: Json;
           project_id: string;
+          remote_working_directory: string | null;
+          ssh_auth_method: string | null;
+          ssh_command: string | null;
+          ssh_host: string | null;
+          ssh_port: number | null;
+          ssh_private_key_path: string | null;
+          ssh_user: string | null;
           updated_at: string | null;
           user_id: string;
         };
@@ -765,6 +772,13 @@ export type Database = {
           id?: string;
           preferences?: Json;
           project_id: string;
+          remote_working_directory?: string | null;
+          ssh_auth_method?: string | null;
+          ssh_command?: string | null;
+          ssh_host?: string | null;
+          ssh_port?: number | null;
+          ssh_private_key_path?: string | null;
+          ssh_user?: string | null;
           updated_at?: string | null;
           user_id: string;
         };
@@ -773,12 +787,19 @@ export type Database = {
           id?: string;
           preferences?: Json;
           project_id?: string;
+          remote_working_directory?: string | null;
+          ssh_auth_method?: string | null;
+          ssh_command?: string | null;
+          ssh_host?: string | null;
+          ssh_port?: number | null;
+          ssh_private_key_path?: string | null;
+          ssh_user?: string | null;
           updated_at?: string | null;
           user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: 'project_user_preferences_project_id_fkey';
+            foreignKeyName: 'project_user_project_id_fkey';
             columns: ['project_id'];
             isOneToOne: false;
             referencedRelation: 'projects';
@@ -795,8 +816,8 @@ export type Database = {
           local_working_directory: string | null;
           name: string;
           organization_id: number;
-          remote_working_directory: string | null;
-          ssh_command: string | null;
+          remote_helper_installed_at: string | null;
+          remote_helper_version: string | null;
           updated_at: string;
         };
         Insert: {
@@ -807,8 +828,8 @@ export type Database = {
           local_working_directory?: string | null;
           name: string;
           organization_id: number;
-          remote_working_directory?: string | null;
-          ssh_command?: string | null;
+          remote_helper_installed_at?: string | null;
+          remote_helper_version?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -819,8 +840,8 @@ export type Database = {
           local_working_directory?: string | null;
           name?: string;
           organization_id?: number;
-          remote_working_directory?: string | null;
-          ssh_command?: string | null;
+          remote_helper_installed_at?: string | null;
+          remote_helper_version?: string | null;
           updated_at?: string;
         };
         Relationships: [

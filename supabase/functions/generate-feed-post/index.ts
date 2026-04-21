@@ -430,7 +430,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     const { data: projectUserPreferences } = await supabase
-      .from('project_user_preferences')
+      .from('project_user')
       .select('preferences')
       .eq('project_id', ticket.project_id)
       .eq('user_id', ticket.created_by)

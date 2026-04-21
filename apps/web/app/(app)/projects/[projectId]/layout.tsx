@@ -4,6 +4,9 @@ import { Suspense } from 'react';
 import { ProjectLayoutClient } from '@/components/features/projects/ProjectLayoutClient';
 import { TicketsBoardLoadingSkeleton } from '@/components/features/TicketsBoardLoadingSkeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { PROJECT_BASE_SELECT } from '@/lib/actions/project-selects';
+import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
+import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
 import { createClient } from '@/supabase/utils/server';
 
 import TicketsBoardContent from '../../tickets/(components)/TicketsBoardContent';
@@ -24,15 +27,18 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
   // Fetch project first to get organization_id for subsequent queries
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select(
-      'id,name,color,organization_id,local_working_directory,ssh_command,remote_working_directory,ssh_host,ssh_port,ssh_user,ssh_auth_method,ssh_private_key_path,everhour_project_id'
-    )
+    .select(`${PROJECT_BASE_SELECT},everhour_project_id`)
     .eq('id', projectId)
     .single();
 
   if (projectError || !project) {
     notFound();
   }
+
+  const projectUser = (
+    await getProjectUserSshSettingsByProjectId(supabase, user?.id, [project.id])
+  ).get(project.id);
+  const sshSettings = resolveProjectUserSshSettings(projectUser);
 
   const [{ data: everhourIntegration }, { data: statuses }] = await Promise.all([
     supabase
@@ -66,13 +72,13 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         projectName={project.name}
         projectColor={project.color}
         projectWorkingDirectory={project.local_working_directory}
-        projectSshCommand={project.ssh_command}
-        projectRemoteWorkingDirectory={project.remote_working_directory}
-        projectSshHost={project.ssh_host}
-        projectSshPort={project.ssh_port}
-        projectSshUser={project.ssh_user}
-        projectSshAuthMethod={project.ssh_auth_method}
-        projectSshPrivateKeyPath={project.ssh_private_key_path}
+        projectSshCommand={sshSettings.sshCommand}
+        projectRemoteWorkingDirectory={sshSettings.remoteWorkingDirectory}
+        projectSshHost={sshSettings.sshHost}
+        projectSshPort={sshSettings.sshPort}
+        projectSshUser={sshSettings.sshUser}
+        projectSshAuthMethod={sshSettings.sshAuthMethod}
+        projectSshPrivateKeyPath={sshSettings.sshPrivateKeyPath}
         projectEverhourProjectId={project.everhour_project_id}
         statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}

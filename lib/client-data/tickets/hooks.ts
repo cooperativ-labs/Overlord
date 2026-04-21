@@ -10,7 +10,7 @@
 
 import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 
-import type { SidebarProject } from '@/lib/actions/projects';
+import type { SidebarProject } from '@/lib/actions/project-types';
 
 import { normalizeBoardBootstrap } from './board-normalize';
 import type {
