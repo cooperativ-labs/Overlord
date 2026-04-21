@@ -216,14 +216,9 @@ async function launchScriptInExternalTerminal(
   scriptPath: string,
   isRemote: boolean
 ): Promise<void> {
-  const launchCmd = [
-    `if [ -f ${shellQuote(scriptPath)} ]; then`,
-    `bash ${shellQuote(scriptPath)};`,
-    'else',
-    `echo "Launch script missing: ${scriptPath}";`,
-    'echo "Re-run the launch command from Overlord to generate a new script.";',
-    'fi'
-  ].join(' ');
+  // Keep the command short for apps we drive via synthetic keystrokes.
+  // Long leading shell conditionals can lose characters during app-switch/hotkey flows.
+  const launchCmd = `bash ${shellQuote(scriptPath)}`;
   const profile = getTerminalSettingsProfile(isRemote);
   const {
     termApp,

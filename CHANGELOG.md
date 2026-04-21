@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.10.0] - 2026-04-21:09:58
+
+### Added
+- None.
+
+### Fixed
+- **Remote helper installation delivery** now embeds the helper bundle directly in the installer script payload, reducing install failures caused by stdin marker parsing.
+
+### Changed
+- **Desktop terminal launch command behavior** now uses a shorter direct script invocation to improve reliability when launching through synthetic keystroke terminal automation.
+- **Web home page video section width** is increased to improve media presentation on larger displays.
+
+### Security
+- None.
+
+### Removed
+- Remove bundled `apps/desktop/electron/resources/remote-agent/server.mjs` in favor of inlined helper delivery during install.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.10.0`.
+
 ## [4.9.0] - 2026-04-21:09:09
 
 ### Added

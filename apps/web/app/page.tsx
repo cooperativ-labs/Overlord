@@ -377,7 +377,7 @@ export default async function HomePage() {
         </section>
 
         {/* Video section */}
-        <section className="mx-auto w-full max-w-4xl py-6">
+        <section className="mx-auto w-full max-w-6xl py-6">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-3 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.4)] backdrop-blur">
             <div className="mb-4 px-3 pt-3 text-center">
               <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">

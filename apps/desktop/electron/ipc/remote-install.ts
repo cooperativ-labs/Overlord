@@ -4,7 +4,8 @@
  * Flow (from the desktop app):
  *   1. User provides structured SshConnectionConfig + projectId.
  *   2. We open an ssh2 connection, exec `bash -s -- --with-bundle`, and
- *      stream the install script + the bundled server.mjs on stdin.
+ *      stream a rendered install script with the bundled server.mjs embedded
+ *      inline as base64.
  *   3. The script drops the server at ~/.overlord/remote/server.mjs, mints
  *      an auth token at ~/.overlord/remote/token, and prints TOKEN / path
  *      markers on stdout.
@@ -80,7 +81,18 @@ async function connect(ssh: SshConnectionConfig): Promise<SshClient> {
   });
 }
 
-function runInstall(ssh: SshClient, script: Buffer, bundle: Buffer): Promise<InstallResult> {
+function renderInstallScript(script: Buffer, bundle: Buffer): string {
+  const scriptTemplate = script.toString('utf8');
+  const bundleMarker = '__OVERLORD_REMOTE_BUNDLE_B64__';
+  if (!scriptTemplate.includes(bundleMarker)) {
+    throw new Error('Remote install script is missing the bundle placeholder.');
+  }
+
+  const bundleBase64 = bundle.toString('base64').replace(/(.{76})/g, '$1\n');
+  return scriptTemplate.replace(bundleMarker, bundleBase64);
+}
+
+function runInstall(ssh: SshClient, script: string): Promise<InstallResult> {
   return new Promise(resolve => {
     const command = `OVERLORD_HELPER_VERSION=${BUNDLED_REMOTE_HELPER_VERSION} bash -s -- --with-bundle`;
     ssh.exec(command, (err, channel) => {
@@ -110,12 +122,7 @@ function runInstall(ssh: SshClient, script: Buffer, bundle: Buffer): Promise<Ins
         resolve({ ok: true, token, serverPath, nodeBin, version });
       });
 
-      // Feed: install.sh → marker line → bundle → marker line
-      channel.write(script);
-      channel.write('\nOVERLORD_BUNDLE_BEGIN\n');
-      channel.write(bundle);
-      channel.write('\nOVERLORD_BUNDLE_END\n');
-      channel.end();
+      channel.end(script);
     });
   });
 }
@@ -131,8 +138,9 @@ export function registerRemoteInstallIpc(): void {
         readResource('remote-agent/install.sh'),
         readResource('remote-agent/server.mjs')
       ]);
+      const renderedScript = renderInstallScript(script, bundle);
       ssh = await connect(payload.ssh);
-      const result = await runInstall(ssh, script, bundle);
+      const result = await runInstall(ssh, renderedScript);
       if (result.ok && result.token && result.serverPath && result.nodeBin) {
         store.set(`remoteHelperToken:${payload.projectId}`, result.token);
         store.set(`remoteHelperServerPath:${payload.projectId}`, result.serverPath);
