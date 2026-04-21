@@ -643,7 +643,7 @@ export async function createTicketInColumnAction(
   revalidateTicketDetails([
     { organizationId: data.organization_id, projectId: data.project_id, ticketId: data.id }
   ]);
-  return { id: data.id, organizationId: data.organization_id, projectId: data.project_id };
+  return { id: data.id, organizationId: data.organization_id, projectId: data.project_id, title };
 }
 
 export async function createCalendarTicketAction(

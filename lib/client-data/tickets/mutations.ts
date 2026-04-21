@@ -57,7 +57,8 @@ import {
   applyToAllBoards,
   applyToBoardsContainingTicket,
   restoreBoards,
-  snapshotBoards
+  snapshotBoards,
+  updateTicketInBoards
 } from './cache';
 
 export { reconcileServerTicketRow } from './cache';
@@ -86,6 +87,7 @@ export type CreateTicketResult = {
   id: string;
   organizationId: number;
   projectId: string;
+  title: string | null;
 };
 
 type CreateTicketContext = {
@@ -130,11 +132,14 @@ export function useCreateTicketMutation(): UseMutationResult<
     onError: (_err, _input, ctx) => {
       if (ctx) restoreBoards(qc, ctx.snapshot);
     },
-    onSuccess: (_result, _input, ctx) => {
+    onSuccess: (result, _input, ctx) => {
       if (!ctx) return;
       applyToAllBoards(qc, state =>
         clearPendingMutation(state, ctx.temporaryTicketId, ctx.mutationId)
       );
+      if (result.title) {
+        updateTicketInBoards(qc, ctx.temporaryTicketId, { title: result.title });
+      }
     }
   });
 }
