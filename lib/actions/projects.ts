@@ -255,13 +255,11 @@ export async function updateProjectSshConfigAction(
     updated_at: new Date().toISOString()
   };
 
-  const { data, error } = await supabase
-    .from('project_user')
-    .upsert(payload, { onConflict: 'user_id,project_id' })
-    .select('project_id')
-    .single();
+  const { error } = await supabase.from('project_user').upsert(payload, {
+    onConflict: 'user_id,project_id'
+  });
 
-  if (error || !data) {
+  if (error) {
     throw new Error(error?.message ?? 'Failed to update project SSH configuration.');
   }
 

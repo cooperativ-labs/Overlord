@@ -84,12 +84,57 @@ async function connect(ssh: SshConnectionConfig): Promise<SshClient> {
 function renderInstallScript(script: Buffer, bundle: Buffer): string {
   const scriptTemplate = script.toString('utf8');
   const bundleMarker = '__OVERLORD_REMOTE_BUNDLE_B64__';
-  if (!scriptTemplate.includes(bundleMarker)) {
-    throw new Error('Remote install script is missing the bundle placeholder.');
+  const bundleBase64 = bundle.toString('base64').replace(/(.{76})/g, '$1\n');
+  if (scriptTemplate.includes(bundleMarker)) {
+    return scriptTemplate.replace(bundleMarker, bundleBase64);
   }
 
-  const bundleBase64 = bundle.toString('base64').replace(/(.{76})/g, '$1\n');
-  return scriptTemplate.replace(bundleMarker, bundleBase64);
+  const legacyBundleBlock = [
+    '# The server.mjs contents are streamed on stdin after this script, delimited by',
+    '# a line matching OVERLORD_BUNDLE_BEGIN.',
+    'if [ "${1-}" = "--with-bundle" ]; then',
+    '  # Read bundle from stdin between markers.',
+    "  awk '/^OVERLORD_BUNDLE_BEGIN$/{flag=1;next}/^OVERLORD_BUNDLE_END$/{flag=0}flag' \\",
+    '    > "${SERVER_FILE}.tmp"',
+    '  mv "${SERVER_FILE}.tmp" "${SERVER_FILE}"',
+    '  chmod 644 "${SERVER_FILE}"',
+    'fi',
+    '',
+    'NODE_BIN="$(command -v node || true)"',
+    'if [ -z "${NODE_BIN}" ]; then',
+    '  echo "OVERLORD_REMOTE_INSTALL_ERROR node is not installed on the remote host." >&2',
+    '  exit 1',
+    'fi'
+  ].join('\n');
+
+  const replacementBundleBlock = [
+    'NODE_BIN="$(command -v node || true)"',
+    'if [ -z "${NODE_BIN}" ]; then',
+    '  echo "OVERLORD_REMOTE_INSTALL_ERROR node is not installed on the remote host." >&2',
+    '  exit 1',
+    'fi',
+    '',
+    'if [ "${1-}" = "--with-bundle" ]; then',
+    `  cat > "\${SERVER_FILE}.b64" <<'OVERLORD_REMOTE_BUNDLE'`,
+    bundleBase64,
+    'OVERLORD_REMOTE_BUNDLE',
+    `  "\${NODE_BIN}" -e '`,
+    '    const fs = require("node:fs");',
+    '    const [src, dest] = process.argv.slice(1);',
+    '    const base64 = fs.readFileSync(src, "utf8").replace(/\\s+/g, "");',
+    '    fs.writeFileSync(dest, Buffer.from(base64, "base64"));',
+    `  ' "\${SERVER_FILE}.b64" "\${SERVER_FILE}.tmp"`,
+    '  rm -f "${SERVER_FILE}.b64"',
+    '  mv "${SERVER_FILE}.tmp" "${SERVER_FILE}"',
+    '  chmod 644 "${SERVER_FILE}"',
+    'fi'
+  ].join('\n');
+
+  if (scriptTemplate.includes(legacyBundleBlock)) {
+    return scriptTemplate.replace(legacyBundleBlock, replacementBundleBlock);
+  }
+
+  throw new Error('Remote install script format is not recognized.');
 }
 
 function runInstall(ssh: SshClient, script: string): Promise<InstallResult> {
