@@ -15,6 +15,12 @@ files:
   - "plugins/cursor/**/*"
   - "!node_modules"
 
+extraResources:
+  - from: apps/desktop/electron/resources/remote-agent
+    to: remote-agent
+    filter:
+      - "**/*"
+
 mac:
   target:
     - dmg

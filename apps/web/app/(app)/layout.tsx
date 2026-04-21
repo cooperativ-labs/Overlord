@@ -134,7 +134,7 @@ export default async function RootLayout({
                         <div className="flex h-full w-full flex-col overflow-hidden [--sidebar-top-offset:2.75rem]">
                           <OfflineTicketProcessor />
                           <AnnouncementBar />
-                          <NavHeader />
+                          <NavHeader projects={projects} />
                           <div className="flex min-h-0 flex-1 overflow-hidden">
                             <AppSidebar
                               user={{

@@ -376,6 +376,31 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* Video section */}
+        <section className="mx-auto w-full max-w-4xl py-6">
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-3 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.4)] backdrop-blur">
+            <div className="mb-4 px-3 pt-3 text-center">
+              <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
+                See it in action
+              </p>
+              <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                Watch how Overlord works
+              </h2>
+            </div>
+            <div className="overflow-hidden rounded-[1.5rem] border border-white/10">
+              <div className="aspect-video w-full">
+                <iframe
+                  src="https://www.youtube.com/embed/aaKTqO1sRxY?si=b5sbaeu1f1vI-s90"
+                  title="Overlord Overview"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  className="h-full w-full"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Feature highlights */}
         <section className="mx-auto max-w-6xl pb-10 pt-2">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.55)] backdrop-blur sm:p-8">

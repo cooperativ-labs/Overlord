@@ -7,6 +7,7 @@ export type SidebarProject = {
   name: string;
   color: string;
   organizationId: number;
+  everhourProjectId?: string | null;
   localWorkingDirectory: string | null;
   /** @deprecated — retained for one release so legacy callers keep compiling. */
   sshCommand: string | null;

@@ -6,10 +6,10 @@ import { revalidatePath } from 'next/cache';
 import { PROJECT_BASE_SELECT, PROJECT_SSH_PREFERENCE_SELECT } from '@/lib/actions/project-selects';
 import {
   buildLegacySshCommand,
-  resolveProjectUserSshSettings,
   type CreateProjectResult,
   type ProjectSshAuthMethod,
   type ProjectUserSshSettingsRow,
+  resolveProjectUserSshSettings,
   type SidebarProject,
   type UpdateProjectSshConfigInput
 } from '@/lib/actions/project-types';
@@ -87,6 +87,8 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
     name: project.name,
     color: project.color,
     organizationId: project.organization_id,
+    everhourProjectId:
+      typeof project.everhour_project_id === 'string' ? project.everhour_project_id : null,
     localWorkingDirectory: project.local_working_directory,
     remoteHelperInstalledAt: project.remote_helper_installed_at,
     remoteHelperVersion: project.remote_helper_version

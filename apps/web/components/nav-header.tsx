@@ -12,8 +12,9 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
+import type { SidebarProject } from '@/lib/actions/project-types';
 
-export function NavHeader() {
+export function NavHeader({ projects }: { projects: SidebarProject[] }) {
   const [hasEverhourIntegration, setHasEverhourIntegration] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
   const [hardRefreshButtonState, setHardRefreshButtonState] =
@@ -108,7 +109,7 @@ export function NavHeader() {
       </div>
       <div className="flex justify-end items-center gap-3 electron-no-drag ">
         <div className="hidden md:block w-18 ">
-          {hasEverhourIntegration && <EverhourNavTimer />}
+          {hasEverhourIntegration && <EverhourNavTimer projects={projects} />}
         </div>
         <NewTicketButton />
       </div>

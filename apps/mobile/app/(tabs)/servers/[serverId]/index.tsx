@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Link, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -514,6 +514,26 @@ export default function ServerDetailScreen() {
         </View>
       </View>
 
+      {server.status === 'connected' ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Workspace</Text>
+          <Link href={`/(tabs)/servers/${serverId}/workspace`} asChild>
+            <Pressable
+              style={({ pressed }) => [styles.workspaceButton, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="folder-open-outline" size={18} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.workspaceButtonTitle}>Open Remote Workspace</Text>
+                <Text style={styles.workspaceButtonHint}>
+                  View git status + files on this server through the Overlord remote helper.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+            </Pressable>
+          </Link>
+        </View>
+      ) : null}
+
       <View style={styles.section}>
         <Pressable
           style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.7 }]}
@@ -717,5 +737,26 @@ const styles = StyleSheet.create({
     color: colors.destructive,
     fontSize: 15,
     fontWeight: '600'
+  },
+  workspaceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14
+  },
+  workspaceButtonTitle: {
+    color: colors.foreground,
+    fontSize: 15,
+    fontWeight: '600'
+  },
+  workspaceButtonHint: {
+    color: colors.mutedForeground,
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16
   }
 });

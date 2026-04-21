@@ -1,9 +1,11 @@
 'use client';
 
+import { ChevronDown, Play, StopCircle } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import type { ButtonLoadingState } from '@/components/ui/loading-button';
+import { LoadingButton } from '@/components/ui/loading-button';
 import {
   Popover,
   PopoverContent,
@@ -13,6 +15,7 @@ import {
   PopoverTrigger
 } from '@/components/ui/popover';
 import type { EverhourTimer } from '@/lib/actions/everhour';
+import type { SidebarProject } from '@/lib/actions/project-types';
 import { cn } from '@/lib/utils';
 
 import { TimeEntriesPanel } from './TimeEntriesPanel';
@@ -46,13 +49,29 @@ function getErrorMessage(error: unknown): string {
 
 export function deriveTicketIdFromPath(pathname: string) {
   const segments = pathname.split('/').filter(Boolean);
-  if (segments[0] === 'projects' && typeof segments[2] === 'string') {
+  if (
+    segments[0] === 'projects' &&
+    typeof segments[2] === 'string' &&
+    segments[2] !== 'current-changes'
+  ) {
     return segments[2];
   }
   if (segments[0] === 'u' && typeof segments[1] === 'string') {
     return segments[1];
   }
   return null;
+}
+
+export function deriveProjectIdFromPath(pathname: string) {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments[0] === 'projects' && typeof segments[1] === 'string') {
+    return segments[1];
+  }
+  return null;
+}
+
+export function isUserTicketsPath(pathname: string) {
+  return pathname.split('/').filter(Boolean)[0] === 'u';
 }
 
 export function shouldShowNavTimerTimeEntriesContext({
@@ -65,17 +84,55 @@ export function shouldShowNavTimerTimeEntriesContext({
   return Boolean(ticketId || everhourTaskId);
 }
 
-export function EverhourNavTimer() {
+type EverhourNavTimerProps = {
+  projects: SidebarProject[];
+};
+
+export function EverhourNavTimer({ projects }: EverhourNavTimerProps) {
   const pathname = usePathname();
   const ticketId = useMemo(() => deriveTicketIdFromPath(pathname ?? ''), [pathname]);
-  const { timer, errorMessage: pollError, startForTicket, stop } = useEverhourTimer();
+  const currentProjectId = useMemo(() => deriveProjectIdFromPath(pathname ?? ''), [pathname]);
+  const onUserTicketsPage = useMemo(() => isUserTicketsPath(pathname ?? ''), [pathname]);
+  const { timer, errorMessage: pollError, startForProject, stop } = useEverhourTimer();
   const [elapsedSeconds, setElapsedSeconds] = useState(() => getElapsedFromTimer(timer));
   const [actionError, setActionError] = useState<string | null>(null);
-  const [isActionPending, setIsActionPending] = useState(false);
+  const [buttonState, setButtonState] = useState<ButtonLoadingState>('default');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
 
   const isRunning = timer.status === 'active';
   const everhourTaskId = timer.task?.id ?? null;
-  const hasTicketContext = Boolean(ticketId);
+  const availableProjects = useMemo(
+    () => projects.filter(project => project.everhourProjectId),
+    [projects]
+  );
+  const routeProject = useMemo(
+    () => projects.find(project => project.id === currentProjectId) ?? null,
+    [currentProjectId, projects]
+  );
+  const currentProject = useMemo(
+    () => availableProjects.find(project => project.id === currentProjectId) ?? null,
+    [availableProjects, currentProjectId]
+  );
+
+  useEffect(() => {
+    if (currentProject) {
+      setSelectedProjectId(currentProject.id);
+      return;
+    }
+
+    setSelectedProjectId(previous => {
+      if (previous && availableProjects.some(project => project.id === previous)) {
+        return previous;
+      }
+      return availableProjects[0]?.id ?? '';
+    });
+  }, [availableProjects, currentProject]);
+
+  const selectedProject = useMemo(
+    () => availableProjects.find(project => project.id === selectedProjectId) ?? null,
+    [availableProjects, selectedProjectId]
+  );
+  const targetProject = onUserTicketsPage ? selectedProject : currentProject;
 
   useEffect(() => {
     setElapsedSeconds(getElapsedFromTimer(timer));
@@ -93,15 +150,28 @@ export function EverhourNavTimer() {
     return () => window.clearInterval(intervalId);
   }, [isRunning]);
 
-  const title = timer.task?.name ?? 'No timer running';
+  const inactiveProject = routeProject ?? selectedProject;
+  const title =
+    timer.task?.name ?? (inactiveProject ? `${inactiveProject.name} general` : 'No timer running');
   const badge = isRunning ? formatElapsed(elapsedSeconds) : null;
   const description = isRunning
     ? `Elapsed ${formatElapsed(elapsedSeconds)}`
-    : 'No timer is running right now.';
+    : currentProject
+      ? `Start a general timer for ${currentProject.name}.`
+      : routeProject
+        ? `${routeProject.name} is not linked to Everhour yet.`
+        : onUserTicketsPage
+          ? 'Select a project to start a general timer.'
+          : 'No timer is running right now.';
 
-  const actionLabel = isRunning ? 'Stop timer' : 'Start timer';
-  const isStartDisabled = !isRunning && !hasTicketContext;
-  const isButtonDisabled = isActionPending || isStartDisabled;
+  const actionLabel = isRunning
+    ? 'Stop timer'
+    : currentProject
+      ? `Start ${currentProject.name}`
+      : targetProject
+        ? `Start ${targetProject.name}`
+        : 'Start timer';
+  const canStartProjectTimer = Boolean(targetProject);
   const shouldShowTimeEntries = shouldShowNavTimerTimeEntriesContext({
     everhourTaskId,
     ticketId
@@ -109,20 +179,32 @@ export function EverhourNavTimer() {
 
   const handleAction = useCallback(async () => {
     setActionError(null);
-    setIsActionPending(true);
+    setButtonState('loading');
 
     try {
       if (isRunning) {
         await stop();
-      } else if (ticketId) {
-        await startForTicket(ticketId);
+      } else {
+        const targetProjectId = targetProject?.id ?? null;
+        if (!targetProjectId) {
+          throw new Error('Choose a project with an Everhour mapping first.');
+        }
+        await startForProject(targetProjectId);
       }
+      setButtonState('success');
     } catch (error) {
+      setButtonState('error');
       setActionError(getErrorMessage(error));
-    } finally {
-      setIsActionPending(false);
     }
-  }, [isRunning, ticketId, startForTicket, stop]);
+  }, [isRunning, startForProject, stop, targetProject]);
+
+  const triggerLabel = isRunning
+    ? badge
+    : currentProject
+      ? 'General'
+      : onUserTicketsPage
+        ? 'Project'
+        : 'General';
 
   return (
     <Popover>
@@ -134,14 +216,24 @@ export function EverhourNavTimer() {
             className={cn(
               'flex shrink-0 items-center justify-center rounded-full border transition-[width,background-color,box-shadow,border] duration-200 ease-in-out',
               isRunning
-                ? 'min-w-[70px] gap-2 border-red-500/40 bg-red-500/15 text-red-600   px-1 py-2 text-xs font-semibold  '
-                : 'border-0 bg-transparent'
+                ? 'min-w-[70px] gap-2 border-red-500/40 bg-red-500/15 px-2 py-2 text-xs font-semibold text-red-600'
+                : 'min-w-[76px] gap-1 border-border bg-muted/60 px-2 py-1.5 text-xs font-medium text-foreground hover:bg-accent'
             )}
           >
-            <span className="pointer-events-none text-[11px]" aria-live="polite">
-              {badge}
+            <span
+              className="pointer-events-none inline-flex items-center gap-1 text-[11px]"
+              aria-live="polite"
+            >
+              {isRunning ? (
+                <StopCircle className="h-3.5 w-3.5" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              {triggerLabel}
             </span>
-            {!isRunning ? <span className="sr-only"> No active timer</span> : null}
+            {!isRunning && onUserTicketsPage ? (
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            ) : null}
           </button>
         </PopoverTrigger>
       </div>
@@ -154,18 +246,47 @@ export function EverhourNavTimer() {
           {shouldShowTimeEntries ? (
             <TimeEntriesPanel ticketId={ticketId} everhourTaskId={everhourTaskId} />
           ) : null}
-          <Button
+          {!isRunning && onUserTicketsPage ? (
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor="everhour-project-timer"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Project
+              </label>
+              <select
+                id="everhour-project-timer"
+                className="h-8 rounded-md border bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                value={selectedProjectId}
+                onChange={event => setSelectedProjectId(event.target.value)}
+              >
+                {availableProjects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          <LoadingButton
+            buttonState={buttonState}
+            setButtonState={setButtonState}
+            text={actionLabel}
+            loadingText={isRunning ? 'Stopping…' : 'Starting…'}
+            successText={isRunning ? 'Stopped' : 'Started'}
+            errorText="Retry"
+            reset
             variant={isRunning ? 'destructive' : 'outline'}
             className="w-full"
             size="sm"
-            disabled={isButtonDisabled}
+            disabled={!isRunning && !canStartProjectTimer}
             onClick={handleAction}
-          >
-            {isActionPending ? 'Working…' : actionLabel}
-          </Button>
-          {!isRunning && !hasTicketContext ? (
+          />
+          {!isRunning && !canStartProjectTimer ? (
             <p className="text-xs text-muted-foreground">
-              Open a ticket in the side panel to start an Everhour timer.
+              {onUserTicketsPage
+                ? 'No Everhour-linked projects are available yet. Sync Projects to Everhour first.'
+                : 'This project is not linked to Everhour yet. Use Sync Projects to Everhour in the Project section.'}
             </p>
           ) : null}
           {actionError || pollError ? (

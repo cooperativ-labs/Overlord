@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.9.0] - 2026-04-21:09:09
+
+### Added
+- **Everhour nav timer controls** in the web app navigation so users can start and manage tracked time directly from app chrome.
+- **Everhour server actions and client hooks** for timer lifecycle and workspace-aware syncing between UI and backend.
+- **Home page enhancements** that improve first-load navigation into active project workflows.
+
+### Fixed
+- **Project selection action typing** and related action wiring issues that could cause project option handling regressions.
+
+### Changed
+- **Navigation header layout** to better support timer UI and keep top-level controls aligned across app states.
+- **Desktop build configuration** updates to keep packaging aligned with the latest runtime and app entry expectations.
+
+### Security
+- None.
+
+### Test
+- Add coverage for Everhour nav timer context behavior to lock timer state transitions and nav synchronization.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.9.0`.
+
 ## [4.8.0] - 2026-04-21:10:00
 
 ### Added

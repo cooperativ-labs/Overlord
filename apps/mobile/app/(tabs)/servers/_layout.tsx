@@ -13,6 +13,7 @@ export default function ServersLayout() {
       <Stack.Screen name="index" options={{ title: 'Servers' }} />
       <Stack.Screen name="add" options={{ title: 'Add Server', presentation: 'modal' }} />
       <Stack.Screen name="[serverId]/index" options={{ title: '' }} />
+      <Stack.Screen name="[serverId]/workspace" options={{ title: 'Workspace' }} />
     </Stack>
   );
 }

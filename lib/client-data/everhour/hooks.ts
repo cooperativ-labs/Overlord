@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type EverhourTimer,
   getCurrentEverhourTimer,
+  startEverhourTimerForProject,
   startEverhourTimerForTicket,
   stopEverhourTimer
 } from '@/lib/actions/everhour';
@@ -55,6 +56,13 @@ export function useEverhourTimerQuery() {
     }
   });
 
+  const startProjectMutation = useMutation({
+    mutationFn: (projectId: string) => startEverhourTimerForProject(projectId),
+    onSuccess: timer => {
+      queryClient.setQueryData(everhourQueryKeys.activeTimer(), timer);
+    }
+  });
+
   const stopMutation = useMutation({
     mutationFn: stopEverhourTimer,
     onMutate: () => {
@@ -69,16 +77,21 @@ export function useEverhourTimerQuery() {
     }
   });
 
-  const mutationError = startMutation.error ?? stopMutation.error;
+  const mutationError = startMutation.error ?? startProjectMutation.error ?? stopMutation.error;
 
   return {
     errorMessage: mutationError ? getErrorMessage(mutationError) : (query.error?.message ?? null),
-    isLoading: query.isFetching || startMutation.isPending || stopMutation.isPending,
+    isLoading:
+      query.isFetching ||
+      startMutation.isPending ||
+      startProjectMutation.isPending ||
+      stopMutation.isPending,
     timer: query.data ?? inactiveTimer(),
     updatedAt: query.dataUpdatedAt || null,
     refresh: async () => {
       await query.refetch();
     },
+    startForProject: async (projectId: string) => startProjectMutation.mutateAsync(projectId),
     startForTicket: async (ticketId: string) => startMutation.mutateAsync(ticketId),
     stop: async () => {
       await stopMutation.mutateAsync();
