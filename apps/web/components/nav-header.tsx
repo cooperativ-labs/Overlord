@@ -17,11 +17,13 @@ import type { SidebarProject } from '@/lib/actions/project-types';
 export function NavHeader({ projects }: { projects: SidebarProject[] }) {
   const [hasEverhourIntegration, setHasEverhourIntegration] = useState(false);
   const [isStandalonePwa, setIsStandalonePwa] = useState(false);
+  const [isMac, setIsMac] = useState(false);
   const [hardRefreshButtonState, setHardRefreshButtonState] =
     useState<ButtonLoadingState>('default');
   const { api, isElectron } = useElectron();
 
   useEffect(() => {
+    setIsMac(navigator.platform.toLowerCase().includes('mac'));
     getEverhourConnectionStatus().then(status => setHasEverhourIntegration(status.connected));
   }, []);
 
@@ -32,7 +34,7 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
     const updateStandaloneState = () => {
       setIsStandalonePwa(
         mediaQuery.matches ||
-          Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+        Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
       );
     };
 
@@ -98,7 +100,7 @@ export function NavHeader({ projects }: { projects: SidebarProject[] }) {
                 text={<RefreshCwIcon size={16} />}
               />
             </TooltipTrigger>
-            <TooltipContent side="bottom">Hard refresh app (Cmd+R)</TooltipContent>
+            <TooltipContent side="bottom">Hard refresh app ({isMac ? '⌘R' : 'Ctrl+R'})</TooltipContent>
           </Tooltip>
         ) : null}
       </div>

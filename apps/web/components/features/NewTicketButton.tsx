@@ -98,7 +98,7 @@ export function NewTicketButton() {
                 <span>Prompt</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">Open prompt (Cmd+P)</TooltipContent>
+            <TooltipContent side="bottom">Open prompt ({isMac ? '⌘P' : 'Ctrl+P'})</TooltipContent>
           </Tooltip>
         ) : null}
         <Tooltip>
