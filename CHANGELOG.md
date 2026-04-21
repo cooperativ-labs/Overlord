@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.11.0] - 2026-04-21:10:33
+
+### Added
+- None.
+
+### Fixed
+- helper install package.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.11.0`.
+
 ## [4.10.0] - 2026-04-21:09:58
 
 ### Added
