@@ -413,16 +413,16 @@ export default async function HomePage() {
         </section>
 
         {/* Feature highlights */}
-        <section className="mx-auto max-w-6xl pb-10 pt-2">
+        <section id="feature-highlights" className="mx-auto max-w-6xl pb-10 pt-2">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.55)] backdrop-blur sm:p-8">
-            <div className="max-w-3xl">
+            <div className="w-full">
               <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
                 New deployment paths
               </p>
               <h2 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                 Overlord now fits the hardware you already own.
               </h2>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+              <p className="mt-4  text-base leading-7 text-slate-300 sm:text-lg">
                 The homepage now makes the product story explicit: run Overlord through SSH on a
                 personal server, use a CLI that works on smaller machines, and keep remote agent
                 work in reach from iPhone.
@@ -467,7 +467,7 @@ export default async function HomePage() {
         </section>
 
         {/* Workflow section */}
-        <section className="mx-auto max-w-6xl pb-24 pt-12 mt-12">
+        <section id="how-it-works" className="mx-auto max-w-6xl pb-24 pt-12 mt-12">
           <div className="mb-16 text-center">
             <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
               How it works
