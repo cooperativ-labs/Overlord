@@ -71,11 +71,11 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
 
 Use this mode when the conversation starts normally and the user asks Claude to create, inspect, connect to, or otherwise use Overlord.
 
-1. If the user wants to create ticket drafts only (do not start execution), run `ovld protocol create --objective "..."`.
+1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent claude-code --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. If the user wants to create and start execution immediately, use `/overlord:spawn` or run `ovld protocol spawn --agent claude-code --objective "..."`.
-   This creates the ticket in `execute` status and attaches immediately.
+2. Default to `create` for new tickets. Only use `/overlord:spawn` or `ovld protocol spawn --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
+   `spawn` creates the ticket in `execute` status and attaches immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket-id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket-id>`.
 5. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or ask the user for the ticket ID if staying strictly inside chat is the better fit.
@@ -107,9 +107,13 @@ Record only meaningful behavioral changes. Skip formatting-only noise.
 ## Project Discovery And Ticket Creation
 
 When creating tickets from within a repository:
-- `spawn` automatically resolves the correct project from the current working directory and starts execution.
-- `create` creates a draft follow-up ticket (no auto-attach execution session).
-No `--project-id` flag is needed for `spawn` unless you want to override resolution.
+- Prefer `create` by default for draft ticket creation.
+- Use `spawn` only when the user explicitly asks to start execution immediately.
+- Both commands can resolve the project from the current working directory; use `--working-directory` to override.
+
+```bash
+ovld protocol create --agent claude-code --objective "Capture follow-up work from this repository"
+```
 
 ```bash
 ovld protocol spawn --agent claude-code --objective "Implement feature X" --priority medium

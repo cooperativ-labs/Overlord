@@ -505,7 +505,7 @@ export const TOOLS = [
         delegate: {
           type: 'string',
           description:
-            'Who is creating this ticket (your agent identifier, e.g. "claude-code"). Always provide this so the ticket tracks its origin.'
+            'Optional override for tickets.delegate. When omitted, Overlord should fill it with the active model identifier and only fall back to the agent identifier if the model is unavailable. The authenticated bearer token determines created_by automatically.'
         }
       },
       required: ['sessionKey', 'ticketId', 'objective']

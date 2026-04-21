@@ -4,6 +4,7 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { type TokenContext } from '../auth.ts';
 
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
+import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
 const PRIORITY_ORDER = ['low', 'medium', 'high', 'urgent'] as const;
 
@@ -205,6 +206,7 @@ export async function createDraftTicket(
   ctx: TokenContext,
   draft: TicketDraft
 ) {
+  const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
   const project = await resolveProject(supabase, ctx.organizationId, draft.projectId);
   const draftStatusName = await resolvePreferredStatusNameByType(
     supabase,
@@ -215,7 +217,7 @@ export async function createDraftTicket(
   const { data: createdTicket, error: createTicketError } = await supabase
     .from('tickets')
     .insert({
-      created_by: ctx.userId,
+      created_by: createdBy,
       execution_target: DEFAULT_EXECUTION_TARGET,
       organization_id: project.organization_id,
       priority: draft.priority,

@@ -30,7 +30,7 @@ Common commands:
 ```bash
 ovld auth login
 ovld attach
-ovld create "Investigate the failing build"
+ovld create "Investigate the failing build" --agent codex
 ovld prompt "Draft a fix for the onboarding flow"
 ovld update
 ovld protocol discover-project
@@ -52,7 +52,7 @@ ovld doctor
 ## Commands
 
 - `attach` - search tickets and launch an agent interactively
-- `create` - create a ticket from a short objective
+- `create` - create a ticket from a short objective; supports the same delegate-identifying flags as `ovld protocol create` (`--agent`, `--model`, `--delegate`)
 - `prompt` - create a ticket and launch an agent on it
 - `auth` - log in, log out, or check auth status
 - `tickets` - list or create tickets

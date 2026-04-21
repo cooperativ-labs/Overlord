@@ -29,7 +29,7 @@ Primary command: ${primaryCommand}
 
 Usage:
   ${primaryCommand} attach [ticketId] [agent]  Search tickets and launch an agent (interactive)
-  ${primaryCommand} create "<objective>"       Create a ticket with numbered project selection
+  ${primaryCommand} create "<objective>"       Create a ticket with numbered project selection; supports --agent/--model/--delegate
   ${primaryCommand} prompt "<objective>"       Create a ticket, then launch an agent on it
   ${primaryCommand} auth <subcommand>          Login, logout, repair, or check auth status
   ${primaryCommand} tickets <subcommand>       Create or list tickets
@@ -46,7 +46,7 @@ Usage:
 
 Agents:
   Use ${primaryCommand} protocol help for ticket lifecycle commands.
-  Key protocol commands: auth-status, discover-project, spawn, attach, connect, load-context.
+  Key protocol commands: auth-status, discover-project, create, spawn, attach, connect, load-context.
 
 Auth:
   ${primaryCommand} auth login               Authorize CLI via browser
@@ -55,7 +55,7 @@ Auth:
   ${primaryCommand} auth logout              Remove stored credentials
 
 Tickets:
-  ${primaryCommand} create "..." [options]
+  ${primaryCommand} create "..." [--agent <agent>] [--model <identifier>] [--delegate <agent>] [options]
   ${primaryCommand} prompt "..." [options]
   ${primaryCommand} tickets create "..." [options]
   ${primaryCommand} tickets list [--status <status>]

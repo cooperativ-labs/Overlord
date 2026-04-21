@@ -4,6 +4,7 @@ import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_li
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
+import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
@@ -25,16 +26,25 @@ export async function POST(request: Request) {
       ticketId: rawTicketId,
       title
     } = parsed.data;
-    const { organizationId, userId } = parsed.tokenContext;
+    const { organizationId, tokenId, tokenValue, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
     const supabase = createServiceRoleClient();
+    const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
+      userId,
+      tokenId,
+      tokenValue
+    });
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
-    const ticketDelegate = resolveTicketDelegate(delegate, resolved.session.agent_identifier);
+    const ticketDelegate = resolveTicketDelegate(
+      delegate,
+      typeof resolved.session.metadata?.model === 'string' ? resolved.session.metadata.model : null,
+      resolved.session.agent_identifier
+    );
 
     const { data: sourceTicket, error: sourceTicketError } = await supabase
       .from('tickets')
@@ -62,7 +72,7 @@ export async function POST(request: Request) {
       .insert({
         acceptance_criteria: acceptanceCriteria || null,
         available_tools: availableTools,
-        created_by: userId,
+        created_by: createdBy,
         delegate: ticketDelegate,
         execution_target: executionTarget,
         organization_id: sourceTicket.organization_id,

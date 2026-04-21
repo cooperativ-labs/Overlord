@@ -6,13 +6,18 @@ import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
+import { resolveTicketCreatorUserId } from './_ticket-creator.ts';
 
 function resolveTicketDelegate(
   delegate: string | null | undefined,
+  modelIdentifier: string | null | undefined,
   agentIdentifier: string | null | undefined
 ) {
   const explicitDelegate = delegate?.trim();
   if (explicitDelegate) return explicitDelegate;
+
+  const sessionModel = modelIdentifier?.trim();
+  if (sessionModel) return sessionModel;
 
   const sessionAgent = agentIdentifier?.trim();
   return sessionAgent || null;
@@ -30,7 +35,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     priority = 'medium',
     delegate = null
   } = args;
-  const { organizationId, userId } = ctx;
+  const { organizationId } = ctx;
   const resolved = await resolveSession(
     supabase,
     sessionKey,
@@ -40,7 +45,11 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
   );
   if (!resolved.session) return toolErr(resolved.error ?? 'Session not found.');
   const ticketId = resolved.resolvedTicketId!;
-  const ticketDelegate = resolveTicketDelegate(delegate, resolved.session.agent_identifier);
+  const ticketDelegate = resolveTicketDelegate(
+    delegate,
+    typeof resolved.session.metadata?.model === 'string' ? resolved.session.metadata.model : null,
+    resolved.session.agent_identifier
+  );
 
   const { data: sourceTicket, error: sourceErr } = await supabase
     .from('tickets')
@@ -52,6 +61,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
   if (sourceErr || !sourceTicket) return toolErr('Source ticket not found.');
 
   const nextTitle = title.trim() || objective.slice(0, 120);
+  const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
   const draftStatusName = await resolvePreferredStatusNameByType(
     supabase,
     sourceTicket.organization_id,
@@ -63,7 +73,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
     .insert({
       acceptance_criteria: acceptanceCriteria || null,
       available_tools: availableTools,
-      created_by: userId,
+      created_by: createdBy,
       delegate: ticketDelegate,
       execution_target: executionTarget,
       organization_id: sourceTicket.organization_id,

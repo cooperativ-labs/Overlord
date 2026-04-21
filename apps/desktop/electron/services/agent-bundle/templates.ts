@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.8.0';
+export const BUNDLE_VERSION = '1.9.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -86,11 +86,16 @@ ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
 
 Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
-## Project Discovery & Ticket Spawning
+## Project Discovery & Ticket Creation
 
-When creating tickets from within a repository, \`spawn\` automatically resolves the
-correct project by matching your current working directory against each project's
-configured "Local working directory". No \`--project-id\` flag is needed:
+When creating tickets from within a repository:
+- Prefer \`ovld protocol create --agent claude-code\` by default for draft ticket creation.
+- Use \`ovld protocol spawn --agent claude-code\` only when the user explicitly asks to create and execute immediately.
+- Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+
+\`\`\`bash
+ovld protocol create --agent claude-code --objective "Capture follow-up work from this repository"
+\`\`\`
 
 \`\`\`bash
 ovld protocol spawn --agent claude-code --objective "Implement feature X" --priority medium
@@ -172,11 +177,16 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
-## Project Discovery & Ticket Spawning
+## Project Discovery & Ticket Creation
 
-When creating tickets from within a repository, \`spawn\` automatically resolves the
-correct project by matching your current working directory against each project's
-configured "Local working directory". No \`--project-id\` flag is needed:
+When creating tickets from within a repository:
+- Prefer \`ovld protocol create --agent opencode\` by default for draft ticket creation.
+- Use \`ovld protocol spawn --agent opencode\` only when the user explicitly asks to create and execute immediately.
+- Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+
+\`\`\`bash
+ovld protocol create --agent opencode --objective "Capture follow-up work from this repository"
+\`\`\`
 
 \`\`\`bash
 ovld protocol spawn --agent opencode --objective "Implement feature X" --priority medium
@@ -269,11 +279,16 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
-## Project Discovery & Ticket Spawning
+## Project Discovery & Ticket Creation
 
-When creating tickets from within a repository, \`spawn\` automatically resolves the
-correct project by matching your current working directory against each project's
-configured "Local working directory". No \`--project-id\` flag is needed:
+When creating tickets from within a repository:
+- Prefer \`ovld protocol create --agent cursor\` by default for draft ticket creation.
+- Use \`ovld protocol spawn --agent cursor\` only when the user explicitly asks to create and execute immediately.
+- Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+
+\`\`\`bash
+ovld protocol create --agent cursor --objective "Capture follow-up work from this repository"
+\`\`\`
 
 \`\`\`bash
 ovld protocol spawn --agent cursor --objective "Implement feature X" --priority medium

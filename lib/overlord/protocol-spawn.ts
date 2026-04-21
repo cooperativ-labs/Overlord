@@ -7,6 +7,7 @@ import {
   markSubmittedObjectiveExecuting,
   upsertDraftObjective
 } from '@/lib/objectives';
+import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
@@ -29,10 +30,13 @@ export type SpawnParams = {
   parentSessionKey?: string;
   parentTicketId?: string;
   agentIdentifier: string;
+  modelIdentifier?: string | null;
   connectionMethod: ConnectionMethod;
   metadata: Json;
   organizationId: number;
-  userId: string;
+  userId?: string;
+  tokenId?: string | null;
+  tokenValue?: string | null;
 };
 
 /**
@@ -56,10 +60,13 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     parentSessionKey,
     parentTicketId,
     agentIdentifier,
+    modelIdentifier,
     connectionMethod,
     metadata,
     organizationId,
-    userId
+    userId,
+    tokenId,
+    tokenValue
   } = params;
 
   // Resolve project — use provided projectId, then try workingDirectory, then fall back to first in org
@@ -90,7 +97,12 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
   }
 
   const nextTitle = title.trim() || deriveTitleFromObjective(objective);
-  const ticketDelegate = resolveTicketDelegate(delegate, agentIdentifier);
+  const ticketDelegate = resolveTicketDelegate(delegate, modelIdentifier ?? null, agentIdentifier);
+  const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
+    userId,
+    tokenId: tokenId ?? null,
+    tokenValue: tokenValue ?? ''
+  });
   const executeStatusName = await resolvePreferredStatusNameByType(
     supabase,
     organizationId,
@@ -103,7 +115,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     .insert({
       acceptance_criteria: acceptanceCriteria || null,
       available_tools: availableTools,
-      created_by: userId,
+      created_by: createdBy,
       delegate: ticketDelegate,
       execution_target: executionTarget,
       organization_id: organizationId,
@@ -154,7 +166,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       supabase,
       objectiveExecution.executedObjectiveId,
       objectiveExecution.executedObjective!,
-      userId
+      createdBy
     ).catch(err => console.error('[spawn] objective title generation failed:', err));
   }
 

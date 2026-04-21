@@ -5,19 +5,27 @@ All notable changes to this project will be documented in this file.
 ## [4.13.0] - 2026-04-21:12:54
 
 ### Added
-- **Protocol create subcommand** now supports draft-only ticket creation with `ovld protocol create`, including follow-up drafts when session flags are provided and standalone drafts resolved from working directory.
+- **Draft ticket creation flow** introduces `ovld protocol create` and plugin `/overlord:create` command coverage for creating standalone or follow-up draft tickets without auto-attaching execution sessions.
+- **Protocol ticket creator helpers** add shared routing and delegate resolution for draft creation across web protocol routes and MCP handlers.
 
 ### Fixed
-- **New ticket button mobile visibility class** is corrected to use the expected Tailwind breakpoint utility for the compact icon label.
+- **Protocol spawn and ticket routes** now align delegate and project resolution behavior so create/spawn ticket paths consistently persist required metadata.
+- **MCP ticket creation handlers** now route through shared draft-creation helpers to avoid mismatched request handling between tool entrypoints.
 
 ### Changed
-- **Overlord ticket skill guidance** now clearly separates draft creation (`create`) from immediate attach-and-execute flow (`spawn`) across CLI and plugin skill docs.
+- **Agent bundle templates and slash-command wiring** now document and route users toward draft creation (`create`) versus immediate execution (`spawn`) more explicitly.
+- **CLI protocol and new-ticket command behavior** now distinguishes draft-only ticket creation from attach-and-run flows while keeping working-directory project discovery as the default.
+- **Ticket skill guidance across Claude, Cursor, and Overlord plugins** now consistently explains when to use `create`, `spawn`, `attach`, and `load-context`.
+- **New ticket button and demo settings copy/behavior** now reflect the draft-ticket-first workflow in the web UI.
 
 ### Security
 - None.
 
+### Test
+- Expand CLI protocol and new-ticket test coverage for draft ticket creation, including follow-up and standalone creation modes.
+
 ### Documentation
-- Expand `ovld protocol help` output with a dedicated `create` section, examples, and mode behavior details so agents can select the correct ticket lifecycle command.
+- Update CLI and plugin READMEs plus protocol help text with the new create command examples and lifecycle guidance.
 
 ### Chore
 - Bump workspace and `overlord-cli` package versions to `4.13.0`.

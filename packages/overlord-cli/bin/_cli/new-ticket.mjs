@@ -47,10 +47,10 @@ function parseFlags(args) {
 
 function buildUsage(commandName) {
   if (commandName === 'prompt') {
-    return 'Usage: ovld prompt "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--delegate <agent>]';
+    return 'Usage: ovld prompt "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
   }
 
-  return 'Usage: ovld create "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--delegate <agent>]';
+  return 'Usage: ovld create "<objective>" [--title "..."] [--acceptance-criteria "..."] [--available-tools "..."] [--execution-target agent|human] [--priority low|medium|high|urgent] [--project-id <id>] [--agent <agent>] [--model <identifier>] [--delegate <agent>]';
 }
 
 function ensureObjective(commandName, objective) {
@@ -192,9 +192,26 @@ export function resolvePromptAgentIdentifier(agent) {
   return PROMPT_AGENT_IDENTIFIERS[agent] ?? agent;
 }
 
-export function resolveTicketCreationDelegate(flags = {}, selectedAgent = null) {
+export function resolveTicketCreationModelIdentifier(flags = {}) {
+  const explicitModel = typeof flags.model === 'string' ? flags.model.trim() : '';
+  if (explicitModel) return explicitModel;
+
+  const envModel =
+    process.env.OVERLORD_MODEL_IDENTIFIER?.trim() ||
+    process.env.MODEL_IDENTIFIER?.trim() ||
+    process.env.AGENT_MODEL?.trim();
+  return envModel || null;
+}
+
+export function resolveTicketCreationDelegate(flags = {}, selectedAgent = null, modelIdentifier = '') {
   const explicitDelegate = typeof flags.delegate === 'string' ? flags.delegate.trim() : '';
   if (explicitDelegate) return explicitDelegate;
+
+  const resolvedModel = typeof modelIdentifier === 'string' ? modelIdentifier.trim() : '';
+  if (resolvedModel) return resolvedModel;
+
+  const explicitAgent = typeof flags.agent === 'string' ? flags.agent.trim() : '';
+  if (explicitAgent) return resolvePromptAgentIdentifier(explicitAgent.toLowerCase()) ?? explicitAgent;
 
   if (selectedAgent) return resolvePromptAgentIdentifier(selectedAgent);
 
@@ -233,7 +250,8 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
       })))
     : null;
 
-  const ticketDelegate = resolveTicketCreationDelegate(flags, selectedAgent);
+  const modelIdentifier = resolveTicketCreationModelIdentifier(flags);
+  const ticketDelegate = resolveTicketCreationDelegate(flags, selectedAgent, modelIdentifier);
 
   const ticket = await createTicket(platformUrl, agentToken, localSecret, {
     objective,
@@ -262,7 +280,7 @@ export async function runCreateCommand(args) {
 Creates a ticket after interactive numbered project selection.
 
 Examples:
-  ovld create "Implement login page"
+  ovld create "Implement login page" --agent codex
   ovld create "Fix sync bug" --project-id <project-id>
 `);
     return;
@@ -279,7 +297,7 @@ Creates a ticket after interactive numbered project selection, then lets you pic
 
 Examples:
   ovld prompt "Implement login page"
-  ovld prompt "Investigate flaky tests" --agent codex
+  ovld prompt "Investigate flaky tests" --agent codex --model gpt-5.4
 `);
     return;
   }

@@ -4,6 +4,7 @@ import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { deriveTitleFromObjective, getTicketIdentifier } from '@/lib/helpers/tickets';
 import { upsertDraftObjective } from '@/lib/objectives';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
@@ -13,7 +14,7 @@ export async function POST(request: Request) {
   const authResult = await resolveAgentToken(request);
   if (authResult.error) return authResult.error;
 
-  const { organizationId } = authResult.context;
+  const { organizationId, tokenId, tokenValue, userId } = authResult.context;
 
   let body: unknown;
   try {
@@ -44,6 +45,11 @@ export async function POST(request: Request) {
     } = parsed.data;
 
     const supabase = createServiceRoleClient();
+    const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
+      userId,
+      tokenId,
+      tokenValue
+    });
 
     // Resolve project_id — use provided projectId, then try workingDirectory,
     // then fall back to first project in org.
@@ -113,6 +119,7 @@ export async function POST(request: Request) {
       .insert({
         acceptance_criteria: acceptanceCriteria || null,
         available_tools: availableTools,
+        created_by: createdBy,
         delegate: delegate || null,
         execution_target: executionTarget,
         organization_id: resolvedOrganizationId,

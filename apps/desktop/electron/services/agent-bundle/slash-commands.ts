@@ -83,6 +83,25 @@ Rules:
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.`
     },
     {
+      path: path.join(base, 'create.md'),
+      content: `---
+description: Create a draft Overlord ticket from the current conversation
+argument-hint: <objective or raw flags>
+disable-model-invocation: true
+---
+
+Create a draft Overlord ticket from the user's request.
+
+Use \`$ARGUMENTS\` as the input.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol create --agent claude-code\`.
+Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
+\`ovld protocol create --agent claude-code --objective "<objective>"\`
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new \`TICKET_ID\`.`
+    },
+    {
       path: path.join(base, 'spawn.md'),
       content: `---
 description: Create a new Overlord ticket from the current conversation
@@ -136,6 +155,22 @@ Rules:
 - Use \`load-context\`, not \`attach\`.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+    },
+    {
+      path: path.join(base, 'create.md'),
+      content: `Create a draft Overlord ticket from the user's request.
+
+The text after \`/create\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
+
+If raw flags are present, run:
+\`ovld protocol create --agent cursor <raw arguments>\`
+
+Otherwise, run:
+\`ovld protocol create --agent cursor --objective "<objective>"\`
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new \`TICKET_ID\`.`
     },
     {
       path: path.join(base, 'spawn.md'),
@@ -213,6 +248,41 @@ Rules:
         `.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.
+"""`
+    },
+    {
+      path: path.join(base, 'create.toml'),
+      content:
+        `description = "Create a draft Overlord ticket from the current conversation."
+prompt = """
+Create a draft Overlord ticket from the user's request.
+
+Use ` +
+        '`{{args}}`' +
+        ` as the input.
+If it already contains flags such as ` +
+        '`--title`' +
+        `, ` +
+        '`--priority`' +
+        `, ` +
+        '`--project-id`' +
+        `, or ` +
+        '`--execution-target`' +
+        `, pass those flags through after ` +
+        '`ovld protocol create --agent gemini`' +
+        `.
+Otherwise, treat ` +
+        '`{{args}}`' +
+        ` as the objective text and run:
+` +
+        '`ovld protocol create --agent gemini --objective "<objective>"`' +
+        `
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new ` +
+        '`TICKET_ID`' +
+        `.
 """`
     },
     {
@@ -297,6 +367,24 @@ Rules:
 - Use \`load-context\`, not \`attach\`.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+    },
+    {
+      path: path.join(base, 'create.md'),
+      content: `---
+description: Create a draft Overlord ticket from the current conversation
+agent: build
+---
+
+Create a draft Overlord ticket from the user's request.
+
+Use \`$ARGUMENTS\` as the input.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol create --agent opencode\`.
+Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
+\`ovld protocol create --agent opencode --objective "<objective>"\`
+
+If no objective was provided, ask the user for one and stop.
+
+After the command succeeds, report the new \`TICKET_ID\`.`
     },
     {
       path: path.join(base, 'spawn.md'),

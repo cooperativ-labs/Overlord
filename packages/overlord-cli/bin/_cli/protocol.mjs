@@ -43,9 +43,12 @@ export function resolveProtocolAgentIdentifier(flags = {}) {
   return envAgent || 'claude-code';
 }
 
-export function resolveProtocolTicketDelegate(flags = {}, agentIdentifier = '') {
+export function resolveProtocolTicketDelegate(flags = {}, modelIdentifier = '', agentIdentifier = '') {
   const explicitDelegate = typeof flags.delegate === 'string' ? flags.delegate.trim() : '';
   if (explicitDelegate) return explicitDelegate;
+
+  const resolvedModel = typeof modelIdentifier === 'string' ? modelIdentifier.trim() : '';
+  if (resolvedModel) return resolvedModel;
 
   const resolvedAgent = String(agentIdentifier).trim();
   return resolvedAgent || null;
@@ -1039,6 +1042,7 @@ async function protocolSpawn(args) {
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
+  const modelIdentifier = resolveProtocolModelIdentifier(flags);
 
   // When --project-id is not provided, auto-send cwd as workingDirectory
   // so the server can resolve the project from the local_working_directory setting.
@@ -1056,7 +1060,7 @@ async function protocolSpawn(args) {
     ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
-    delegate: resolveProtocolTicketDelegate(flags, agentIdentifier),
+    delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier),
     ...(flags['parent-session-key'] ? { parentSessionKey: String(flags['parent-session-key']) } : {}),
     ...(flags['parent-ticket-id'] ? { parentTicketId: String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '') } : {})
   };
@@ -1093,6 +1097,7 @@ async function protocolCreateTicket(args) {
   const { platformUrl, agentToken, localSecret } = resolveAuth();
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
+  const modelIdentifier = resolveProtocolModelIdentifier(flags);
 
   const hasSessionContext = Boolean(sessionKey && ticketId);
 
@@ -1107,7 +1112,7 @@ async function protocolCreateTicket(args) {
       ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
       ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
       ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
-      delegate: resolveProtocolTicketDelegate(flags, agentIdentifier)
+      delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
     };
 
     const data = await apiPost(
@@ -1154,7 +1159,7 @@ async function protocolCreateTicket(args) {
     ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
-    delegate: resolveProtocolTicketDelegate(flags, agentIdentifier)
+    delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
   };
 
   const data = await apiPost(
@@ -1204,9 +1209,9 @@ export async function runProtocolCommand(subcommand, args) {
   if (!subcommand || subcommand === 'help' || subcommand === '--help') {
     console.log(`ovld protocol <subcommand> [flags]
 
-Use this for agent workflow on a ticket: create one with \`ovld protocol spawn\`,
-attach with \`ovld protocol attach --ticket-id <id>\`, then begin executing with
-\`ovld protocol update --phase execute\`.
+Use this for ticket lifecycle work from an agent runtime: create a standalone
+draft with \`ovld protocol create\`, create-and-attach with \`ovld protocol spawn\`,
+or attach to an existing ticket with \`ovld protocol attach --ticket-id <id>\`.
 
 Project discovery:
   When spawning or creating tickets, the CLI automatically resolves the correct
@@ -1440,8 +1445,12 @@ create:
     --execution-target <t>    agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
     --agent <identifier>
+    --model <identifier>
   Returns:
     New draft ticket JSON (follow-up draft when session flags are provided)
+  Notes:
+    Standalone create auto-discovers the project from the current working directory.
+    Follow-up create requires both --session-key and --ticket-id.
 
 artifact-prepare-upload:
   Required:
@@ -1496,8 +1505,8 @@ Examples:
   ovld protocol attach --ticket-id abc-123 --external-session-id null
   ovld protocol connect --ticket-id abc-123
   ovld protocol load-context --ticket-id abc-123
-  ovld protocol create --objective "Capture follow-up work from this repo"
-  ovld protocol create --session-key <key> --ticket-id <id> --objective "Capture follow-up work"
+  ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
+  ovld protocol create --agent codex --session-key <key> --ticket-id <id> --objective "Capture follow-up work"
   ovld protocol spawn --agent codex --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X" --phase execute
   ovld protocol update --session-key <key> --ticket-id <id> --summary-file ./update.txt --event-type user_follow_up

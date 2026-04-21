@@ -19,12 +19,13 @@ Use this skill whenever Cursor needs to work with Overlord, whether the session 
 
 ## Mode 2: Asked From Chat To Use Overlord
 
-1. If the user wants a new ticket, use `/spawn` or run `ovld protocol spawn --agent cursor --objective "..."`.
-2. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket-id>`.
-3. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket-id>`.
-4. If the user wants to search for tickets by keyword or status, use the `search_tickets` MCP tool.
-5. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
-6. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
+1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objective "..."`.
+2. Default to `create` for new tickets. Only use `/spawn` or `ovld protocol spawn --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately.
+3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket-id>`.
+4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket-id>`.
+5. If the user wants to search for tickets by keyword or status, use the `search_tickets` MCP tool.
+6. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
+7. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
 
 ## Rules
 

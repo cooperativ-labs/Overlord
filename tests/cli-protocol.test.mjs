@@ -27,14 +27,15 @@ test('resolveProtocolAgentIdentifier prefers explicit agent, then environment, t
   }
 });
 
-test('resolveProtocolTicketDelegate uses explicit delegate before agent identifier', () => {
-  assert.equal(resolveProtocolTicketDelegate({ delegate: 'gemini' }, 'codex'), 'gemini');
-  assert.equal(resolveProtocolTicketDelegate({ delegate: '  cursor  ' }, 'codex'), 'cursor');
+test('resolveProtocolTicketDelegate uses explicit delegate before model or agent identifier', () => {
+  assert.equal(resolveProtocolTicketDelegate({ delegate: 'gemini' }, 'gpt-5.4', 'codex'), 'gemini');
+  assert.equal(resolveProtocolTicketDelegate({ delegate: '  cursor  ' }, 'gpt-5.4', 'codex'), 'cursor');
 });
 
-test('resolveProtocolTicketDelegate falls back to agent identifier', () => {
-  assert.equal(resolveProtocolTicketDelegate({}, 'codex'), 'codex');
-  assert.equal(resolveProtocolTicketDelegate({ delegate: true }, 'claude-code'), 'claude-code');
+test('resolveProtocolTicketDelegate falls back to model identifier before agent identifier', () => {
+  assert.equal(resolveProtocolTicketDelegate({}, 'gpt-5.4', 'codex'), 'gpt-5.4');
+  assert.equal(resolveProtocolTicketDelegate({}, '', 'codex'), 'codex');
+  assert.equal(resolveProtocolTicketDelegate({ delegate: true }, '', 'claude-code'), 'claude-code');
 });
 
 test('resolveProtocolModelIdentifier prefers explicit model, then environment', () => {

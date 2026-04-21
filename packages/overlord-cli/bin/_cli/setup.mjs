@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkForCliUpdate, getCurrentCliVersion, printCliUpdateNotice } from './cli-update.mjs';
 
-const BUNDLE_VERSION = '1.8.0';
+const BUNDLE_VERSION = '1.9.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
@@ -110,6 +110,21 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
 
 Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
+## Project Discovery & Ticket Creation
+
+When creating tickets from within a repository:
+- Prefer \`ovld protocol create --agent claude-code\` by default for draft ticket creation.
+- Use \`ovld protocol spawn --agent claude-code\` only when the user explicitly asks to create and execute immediately.
+- Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+
+\`\`\`bash
+ovld protocol create --agent claude-code --objective "Capture follow-up work from this repository"
+\`\`\`
+
+\`\`\`bash
+ovld protocol spawn --agent claude-code --objective "Implement feature X" --priority medium
+\`\`\`
+
 ## Context & Artifacts
 
 \`\`\`bash
@@ -174,6 +189,21 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
+## Project Discovery & Ticket Creation
+
+When creating tickets from within a repository:
+- Prefer \`ovld protocol create --agent opencode\` by default for draft ticket creation.
+- Use \`ovld protocol spawn --agent opencode\` only when the user explicitly asks to create and execute immediately.
+- Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
+
+\`\`\`bash
+ovld protocol create --agent opencode --objective "Capture follow-up work from this repository"
+\`\`\`
+
+\`\`\`bash
+ovld protocol spawn --agent opencode --objective "Implement feature X" --priority medium
+\`\`\`
+
 ## Context & Artifacts
 
 \`\`\`bash
@@ -236,6 +266,7 @@ For larger delivery JSON, prefer \`--payload-file -\` with stdin so no scratch f
 Rules:
 - Always attach first and deliver last.
 - Use \`ovld protocol\` commands instead of ad hoc repo scripts for ticket lifecycle work.
+- Prefer \`ovld protocol create --agent cursor\` for draft ticket creation; use \`spawn --agent cursor\` only for create-and-execute requests.
 - If the user sends a new message during an active ticket session, publish a \`user_follow_up\` event before doing anything else.
 `;
 
@@ -358,6 +389,16 @@ disable-model-invocation: true
 Run \`ovld protocol load-context --ticket-id <ticketId>\` using \`$ARGUMENTS\` as the ticket ID.`
       },
       {
+        path: path.join(base, 'create.md'),
+        content: `---
+description: Create a draft Overlord ticket from the current conversation
+argument-hint: <objective or raw flags>
+disable-model-invocation: true
+---
+
+Run \`ovld protocol create --agent claude-code\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol create --agent claude-code --objective "<objective>"\`.`
+      },
+      {
         path: path.join(base, 'spawn.md'),
         content: `---
 description: Create a new Overlord ticket from the current conversation
@@ -384,6 +425,11 @@ Run \`ovld protocol spawn --agent claude-code\` with \`$ARGUMENTS\`. If no flags
           'Load Overlord ticket context without attaching.\n\nRun `ovld protocol load-context --ticket-id <ticketId>` using the text after `/load` as the ticket ID.\n'
       },
       {
+        path: path.join(base, 'create.md'),
+        content:
+          'Create a draft Overlord ticket.\n\nRun `ovld protocol create --agent cursor --objective "<objective>"` using the text after `/create` unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol create --agent cursor`.\n'
+      },
+      {
         path: path.join(base, 'spawn.md'),
         content:
           'Create a new Overlord ticket.\n\nRun `ovld protocol spawn --agent cursor --objective "<objective>"` using the text after `/spawn` unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol spawn --agent cursor`.\n'
@@ -403,6 +449,11 @@ Run \`ovld protocol spawn --agent claude-code\` with \`$ARGUMENTS\`. If no flags
         path: path.join(base, 'load.toml'),
         content:
           'description = "Load Overlord ticket context without creating a new session."\nprompt = """\nRun `ovld protocol load-context --ticket-id <ticketId>` using `{{args}}` as the ticket ID.\n"""\n'
+      },
+      {
+        path: path.join(base, 'create.toml'),
+        content:
+          'description = "Create a draft Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol create --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol create --agent gemini`.\n"""\n'
       },
       {
         path: path.join(base, 'spawn.toml'),
@@ -431,6 +482,15 @@ agent: build
 ---
 
 Run \`ovld protocol load-context --ticket-id <ticketId>\` using \`$ARGUMENTS\` as the ticket ID. If no ticket ID was provided, ask the user for one and stop.`
+    },
+    {
+      path: path.join(base, 'create.md'),
+      content: `---
+description: Create a draft Overlord ticket from the current conversation
+agent: build
+---
+
+Run \`ovld protocol create --agent opencode\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol create --agent opencode --objective "<objective>"\`.`
     },
     {
       path: path.join(base, 'spawn.md'),

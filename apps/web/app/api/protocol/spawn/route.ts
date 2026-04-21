@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       connectionMethod,
       metadata
     } = parsed.data;
-    const { organizationId, userId } = parsed.tokenContext;
+    const { organizationId, tokenId, tokenValue, userId } = parsed.tokenContext;
 
     const result = await runSpawnProtocol(supabase, {
       title,
@@ -42,9 +42,12 @@ export async function POST(request: Request) {
       parentSessionKey,
       parentTicketId,
       agentIdentifier,
+      modelIdentifier: typeof metadata?.model === 'string' ? metadata.model : null,
       connectionMethod,
       metadata: metadata as Record<string, never>,
       organizationId,
+      tokenId,
+      tokenValue,
       userId
     });
 

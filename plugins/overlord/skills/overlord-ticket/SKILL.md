@@ -67,16 +67,31 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
 
 ## Mode 2: Asked From Chat To Use Overlord
 
-1. If the user wants to create ticket drafts only (do not start execution), run `ovld protocol create --objective "..."`.
+1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent codex --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. If the user wants to create and start executing immediately, use `ovld protocol spawn --objective "..."`.
-   It creates the ticket in `execute` status and attaches immediately.
+2. Default to `create` for new tickets. Only use `ovld protocol spawn --agent codex --objective "..."` when the user explicitly asks to create and execute immediately.
+   `spawn` creates the ticket in `execute` status and attaches immediately.
 3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket-id>`.
 4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1.
 5. If the user wants to find existing tickets by keyword or workflow state, use the `search_tickets` tool.
 6. If you need to understand project routing before spawning, use `ovld protocol discover-project`.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
+
+## Project Discovery And Ticket Creation
+
+When creating tickets from within a repository:
+- Prefer `create` by default for draft ticket creation.
+- Use `spawn` only when the user explicitly asks to start execution immediately.
+- Both commands can resolve the project from the current working directory; use `--working-directory` to override.
+
+```bash
+ovld protocol create --agent codex --objective "Capture follow-up work from this repository"
+```
+
+```bash
+ovld protocol spawn --agent codex --objective "Implement feature X" --priority medium
+```
 
 ## Change Rationales
 
