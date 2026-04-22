@@ -315,7 +315,7 @@ export default async function HomePage() {
             </div>
 
             <h1 className="font-[family-name:var(--font-display)] text-5xl font-semibold leading-[0.94] tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">
-              Agent Work, Organized.
+              Stop Juggling Agents.
             </h1>
 
             <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">

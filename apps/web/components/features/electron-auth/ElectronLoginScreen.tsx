@@ -24,6 +24,8 @@ export function ElectronLoginScreen() {
   const [signInButtonState, setSignInButtonState] = useState<ButtonLoadingState>('default');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isRestoringSession, setIsRestoringSession] = useState(false);
+  const [showRefreshButton, setShowRefreshButton] = useState(false);
+  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextPath = sanitizeNextPath(searchParams.get('next'));
 
   // Stable ref so the effect doesn't re-run when router identity changes.
@@ -106,15 +108,22 @@ export function ElectronLoginScreen() {
     setIsRestoringSession(false);
     setSignInButtonState('loading');
     setErrorMessage('');
+    setShowRefreshButton(false);
+
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => setShowRefreshButton(true), 5000);
 
     try {
       const { session } = await electronAuth.login();
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
       // Establish a Supabase session in the webview so server components can read it.
       await createClient().auth.setSession(session);
       // Full reload so Next.js server components pick up the new session cookie.
       // After a fresh login the cookie IS set, so the middleware will see it.
       window.location.href = nextPath;
     } catch (err) {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      setShowRefreshButton(false);
       const message =
         err instanceof Error ? err.message : 'Authorization failed. Please try again.';
       setErrorMessage(message);
@@ -159,6 +168,15 @@ export function ElectronLoginScreen() {
                     onClick={handleLogout}
                   >
                     Log out
+                  </button>
+                )}
+                {!isRestoringSession && showRefreshButton && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline hover:text-foreground"
+                    onClick={() => window.location.reload()}
+                  >
+                    Refresh page
                   </button>
                 )}
               </div>
