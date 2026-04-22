@@ -19,7 +19,8 @@ export function AgentPluginsTabs() {
           </p>
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-7">
             <li>
-              Open Claude Code and run <code className="rounded bg-muted px-1 py-0.5 text-xs">/plugins</code>.
+              Open Claude Code and run{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">/plugins</code>.
             </li>
             <li>
               Choose <span className="font-medium">Add plugin</span> and select{' '}
@@ -76,8 +77,8 @@ export function AgentPluginsTabs() {
               <span className="font-medium">+</span> next to the Overlord plugin.
             </li>
             <li>
-              Click <span className="font-medium">Install</span>. Codex reloads the plugin list
-              once it finishes.
+              Click <span className="font-medium">Install</span>. Codex reloads the plugin list once
+              it finishes.
             </li>
           </ol>
         </div>

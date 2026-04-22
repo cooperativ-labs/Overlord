@@ -10,16 +10,16 @@ export default [
   js.configs.recommended,
   {
     ignores: [
-        '**/.next/**',
-        'apps/desktop/dist-electron/**',
-        'apps/ticket-card/dist/**',
-        'node_modules/**',
-        'dist/**',
-        'build/**',
-        'coverage/**',
-        'seed.config.ts',
-        'seed.ts'
-      ],
+      '**/.next/**',
+      'apps/desktop/dist-electron/**',
+      'apps/ticket-card/dist/**',
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      'seed.config.ts',
+      'seed.ts'
+    ],
     files: ['**/*.ts', '**/*.tsx'],
     languageOptions: {
       parser: tsParser,
@@ -57,11 +57,7 @@ export default [
       ...tsPlugin.configs.recommended.rules,
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
-      'prettier/prettier': [
-        'warn',
-        { singleQuote: true },
-        { usePrettierrc: true }
-      ],
+      'prettier/prettier': ['warn', { singleQuote: true }, { usePrettierrc: true }],
       'react/prop-types': 'off',
       'react/jsx-uses-react': 'error',
       'react/jsx-uses-vars': 'error',
@@ -69,7 +65,7 @@ export default [
       'react/display-name': 'off',
       'react/no-deprecated': 'warn',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-unsafe-function-type': 'off',

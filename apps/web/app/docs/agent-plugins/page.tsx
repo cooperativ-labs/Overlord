@@ -19,7 +19,9 @@ export default function AgentPluginsPage() {
       </div>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold tracking-tight">Step 1 — Install the plugins from Overlord</h2>
+        <h2 className="text-xl font-semibold tracking-tight">
+          Step 1 — Install the plugins from Overlord
+        </h2>
         <p className="text-muted-foreground leading-7">
           Before you register anything with your agent, generate the local plugin bundles from the
           Overlord desktop app. This writes the plugin files into a known folder on your machine so
@@ -44,10 +46,12 @@ export default function AgentPluginsPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold tracking-tight">Step 2 — Register the plugin in your agent</h2>
+        <h2 className="text-xl font-semibold tracking-tight">
+          Step 2 — Register the plugin in your agent
+        </h2>
         <p className="text-muted-foreground leading-7">
-          Once the plugin files exist on disk, tell your agent where to find them. Pick the tab
-          that matches your setup.
+          Once the plugin files exist on disk, tell your agent where to find them. Pick the tab that
+          matches your setup.
         </p>
         <AgentPluginsTabs />
       </section>

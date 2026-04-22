@@ -13,8 +13,8 @@ export default function ForAgentsPage() {
         <p className="text-lg leading-7 text-muted-foreground">
           This section is written for coding agents (Claude Code, Codex, Cursor, OpenCode, Gemini,
           and any MCP- or CLI-driven runtime). It explains how to drive an Overlord ticket from
-          start to delivery using the <code className="rounded bg-muted px-1 py-0.5 text-sm">ovld protocol</code>{' '}
-          CLI.
+          start to delivery using the{' '}
+          <code className="rounded bg-muted px-1 py-0.5 text-sm">ovld protocol</code> CLI.
         </p>
       </div>
 
@@ -63,22 +63,30 @@ export default function ForAgentsPage() {
         <div className="rounded-lg border bg-card p-4">
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-7">
             <li>
-              Attach first: <code className="rounded bg-muted px-1 py-0.5 text-xs">ovld protocol attach --ticket-id &lt;id&gt;</code>.
-              Keep the returned <code className="rounded bg-muted px-1 py-0.5 text-xs">session.sessionKey</code> for every follow-up call.
+              Attach first:{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                ovld protocol attach --ticket-id &lt;id&gt;
+              </code>
+              . Keep the returned{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">session.sessionKey</code> for
+              every follow-up call.
             </li>
             <li>
               Post progress with{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">update --phase execute</code>{' '}
-              as you work. Use <code className="rounded bg-muted px-1 py-0.5 text-xs">--event-type user_follow_up</code> for verbatim human follow-ups.
+              as you work. Use{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                --event-type user_follow_up
+              </code>{' '}
+              for verbatim human follow-ups.
             </li>
             <li>
-              If blocked, run{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">ask</code> and{' '}
+              If blocked, run <code className="rounded bg-muted px-1 py-0.5 text-xs">ask</code> and{' '}
               <span className="font-medium">stop working</span> until a human responds.
             </li>
             <li>
-              Finish with{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">deliver</code>, including{' '}
+              Finish with <code className="rounded bg-muted px-1 py-0.5 text-xs">deliver</code>,
+              including{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">changeRationales</code> for
               every meaningful git-tracked file change. Then stop.
             </li>
