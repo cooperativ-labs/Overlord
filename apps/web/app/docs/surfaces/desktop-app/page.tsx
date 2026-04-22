@@ -20,7 +20,9 @@ The desktop app provides local capabilities that a browser cannot:
 - direct connection to your local terminal
 - linking Overlord projects to repository folders on your machine
 - launching agents into those repositories
-- embedded terminal sessions
+- embedded terminal sessions with configurable tmux profiles (local and server)
+- AI-assisted Git commit messages and push from the Current Changes view
+- per-user agent configuration (flags, default model, permissions) synced through Overlord
 - local notifications
 
 ## The main use case
@@ -41,7 +43,9 @@ That local plugin bundles the Overlord Codex workflow skill and the MCP bridge t
 the installed \`ovld\` CLI.
 
 If you already installed the npm CLI, you can install the same local Codex plugin with
-\`ovld setup codex\`.
+\`ovld setup codex\`. Cursor has an equivalent local plugin connector installable with
+\`ovld setup cursor\`, and Claude Code, OpenCode, and Gemini integrations follow the same
+\`ovld setup <agent>\` pattern.
 
 ## Change Viewer
 

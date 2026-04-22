@@ -24,7 +24,9 @@ import { getSupabase } from '@/lib/supabase';
 import type { DeviceServerCredential, ServerStatus } from '@/lib/types';
 import { deleteKey, generateKey, installPublicKey, verifyConnection } from '@/modules/ssh';
 
-const statusConfig: Record<ServerStatus, { label: string; color: string; icon: string }> = {
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+const statusConfig: Record<ServerStatus, { label: string; color: string; icon: IoniconName }> = {
   pending: { label: 'Pending Verification', color: colors.mutedForeground, icon: 'time-outline' },
   connected: { label: 'Connected', color: colors.success, icon: 'checkmark-circle-outline' },
   error: { label: 'Verification Error', color: colors.destructive, icon: 'alert-circle-outline' }
@@ -346,7 +348,7 @@ export default function ServerDetailScreen() {
       <Stack.Screen options={{ title: server.label }} />
 
       <View style={[styles.statusBanner, { borderColor: status.color + '40' }]}>
-        <Ionicons name={status.icon as any} size={20} color={status.color} />
+        <Ionicons name={status.icon} size={20} color={status.color} />
         <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
       </View>
 

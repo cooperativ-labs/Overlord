@@ -31,13 +31,13 @@ function resolvePlatformUrl(): string {
     try {
       const parsed = new URL(supabaseUrl);
       const host = parsed.hostname;
-      const isLocalLike =
-        host === 'localhost' ||
-        host === '127.0.0.1' ||
-        host === '0.0.0.0' ||
-        /^\d+\.\d+\.\d+\.\d+$/.test(host);
+      // Only permit the loopback addresses. Private-range IPv4 hosts (e.g. a
+      // devbox reachable on the LAN) would otherwise fall back to cleartext
+      // HTTP even when the Supabase URL has drifted.
+      const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+      const allowInsecure = process.env.EXPO_PUBLIC_OVERLORD_ALLOW_INSECURE_LOCAL === 'true';
 
-      if (isLocalLike) {
+      if (isLoopback || allowInsecure) {
         return `http://${host}:3000`;
       }
     } catch {

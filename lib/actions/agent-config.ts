@@ -51,7 +51,20 @@ export async function getAllAgentConfigsByUserIdAction(
   supabase?: SupabaseClient
 ): Promise<Record<string, AgentConfig>> {
   if (!supabase) {
+    // When no trusted server-side client is supplied, this is callable as a
+    // server action from the browser. Require the requested userId to match
+    // the authenticated user so a caller can't read someone else's configs
+    // if RLS ever regresses.
     supabase = await createClient();
+    const {
+      data: { user }
+    } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    if (user.id !== userId) {
+      throw new Error('Not authorized to read configs for another user');
+    }
   }
 
   const { data, error } = await supabase

@@ -21,11 +21,13 @@ Agents use the CLI to:
 - attach a session to a ticket
 - create lightweight ticket sessions without full context
 - load ticket context without creating a session
-- spawn a follow-up ticket from the current workspace
+- create a draft follow-up ticket without attaching
+- spawn a follow-up ticket and attach to it immediately
 - fetch the latest ticket context
 - post progress updates
 - record structured change rationales
 - ask blocking questions
+- request tool permission from the human reviewer
 - read and write shared ticket context
 - deliver final results
 - install or update the CLI with \`ovld update\`

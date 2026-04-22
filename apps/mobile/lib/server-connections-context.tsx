@@ -46,7 +46,7 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
 
   const refresh = useCallback(async () => {
     if (!userId) {
-      console.log('[ServerConnections] refresh skipped - no signed-in user');
+      if (__DEV__) console.log('[ServerConnections] refresh skipped - no signed-in user');
       hasLoadedRef.current = false;
       setServers([]);
       serversRef.current = [];
@@ -54,7 +54,7 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
       return [];
     }
 
-    console.log(`[ServerConnections] refresh start for user ${userId}`);
+    if (__DEV__) console.log('[ServerConnections] refresh start');
     if (!hasLoadedRef.current) {
       setLoading(true);
     }
@@ -72,25 +72,17 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
       }
 
       const loadedServers = (data ?? []) as Server[];
-      console.log(
-        `[ServerConnections] Loaded ${loadedServers.length} server(s) for user ${userId}:`,
-        loadedServers.map(s => ({
-          id: s.id,
-          label: s.label,
-          status: s.status,
-          transport: s.transport,
-          host: s.host
-        }))
-      );
       setServers(loadedServers);
       serversRef.current = loadedServers;
       hasLoadedRef.current = true;
-      console.log(
-        `[ServerConnections] refresh complete: ${loadedServers.length} server(s), ${getConnectedSSHServers(loadedServers).length} connected`
-      );
+      if (__DEV__) {
+        console.log(
+          `[ServerConnections] refresh complete: ${loadedServers.length} server(s), ${getConnectedSSHServers(loadedServers).length} connected`
+        );
+      }
       return loadedServers;
     } catch (error) {
-      console.error('Failed to load server connections:', error);
+      if (__DEV__) console.error('Failed to load server connections:', error);
       return serversRef.current;
     } finally {
       setLoading(false);
@@ -143,29 +135,6 @@ export function ServerConnectionsProvider({ children }: { children: React.ReactN
 
   const value = useMemo<ServerConnectionsContextValue>(() => {
     const connectedSSHServers = getConnectedSSHServers(servers);
-
-    if (servers.length > 0) {
-      const excluded = servers.filter(s => !isConnectedSSHServer(s));
-      console.log(
-        `[ServerConnections] connectedSSHServers: ${connectedSSHServers.length}/${servers.length}`,
-        connectedSSHServers.map(s => s.label)
-      );
-      if (excluded.length > 0) {
-        console.log(
-          '[ServerConnections] Excluded from connectedSSHServers:',
-          excluded.map(s => ({
-            label: s.label,
-            status: s.status,
-            transport: s.transport,
-            reason:
-              s.status !== 'connected'
-                ? `status is '${s.status}' (not 'connected')`
-                : `transport is '${s.transport}' (not 'ssh')`
-          }))
-        );
-      }
-    }
-
     return {
       servers,
       connectedSSHServers,

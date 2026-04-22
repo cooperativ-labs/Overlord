@@ -13,7 +13,9 @@ async function loadExecutingFeedTickets(): Promise<ExecutingFeedTicket[]> {
     .eq('status_type', 'execute');
 
   if (executeStatusesError) {
-    console.error('[useExecutingFeedTickets] execute statuses error:', executeStatusesError);
+    if (__DEV__) {
+      console.error('[useExecutingFeedTickets] execute statuses error:', executeStatusesError);
+    }
     return [];
   }
 
@@ -41,7 +43,7 @@ async function loadExecutingFeedTickets(): Promise<ExecutingFeedTicket[]> {
 
   for (const result of ticketResults) {
     if (result.error) {
-      console.error('[useExecutingFeedTickets] tickets error:', result.error);
+      if (__DEV__) console.error('[useExecutingFeedTickets] tickets error:', result.error);
       return [];
     }
   }
@@ -73,7 +75,9 @@ async function loadExecutingFeedTickets(): Promise<ExecutingFeedTicket[]> {
     .order('attached_at', { ascending: false });
 
   if (sessionsError) {
-    console.error('[useExecutingFeedTickets] agent_sessions error:', sessionsError);
+    if (__DEV__) {
+      console.error('[useExecutingFeedTickets] agent_sessions error:', sessionsError);
+    }
     return [];
   }
 
@@ -164,10 +168,11 @@ export function useExecutingFeedTickets() {
         }
       });
 
-    // Polling fallback every 20 seconds
+    // Polling fallback every 60 seconds. Realtime subscriptions are the
+    // primary source of truth; polling covers channel drops.
     const pollId = setInterval(() => {
       void refresh();
-    }, 20_000);
+    }, 60_000);
 
     // Refresh when app comes to foreground
     const appStateSubscription = AppState.addEventListener('change', nextAppState => {

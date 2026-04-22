@@ -20,6 +20,21 @@ A ticket can include:
 - execution target information
 - status and priority
 - project assignment
+- assigned agent and model
+- creator attribution
+- read / unread state per reviewer
+
+## How tickets are created
+
+Tickets can be created from:
+
+- the web or desktop app, including the new-ticket modal on the Kanban board
+- the CLI with \`ovld protocol create\` for a draft or \`ovld protocol spawn\` to start execution immediately
+- an agent session, as a follow-up captured from the work in progress
+
+## Lifecycle statuses
+
+Tickets move through explicit lifecycle states (draft, next-up, execute, review, deliver, complete, blocked, cancelled) so both humans and agents share the same view of where work stands.
 
 ## Why tickets matter
 

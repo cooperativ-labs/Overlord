@@ -31,7 +31,7 @@ export async function saveServerDeviceCredential(
   await SecureStore.setItemAsync(storageKey(credential.serverId), JSON.stringify(credential), {
     requireAuthentication: true,
     authenticationPrompt: 'Authenticate to save server credentials',
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
+    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY
   });
 }
 

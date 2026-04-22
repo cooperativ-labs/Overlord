@@ -1,6 +1,6 @@
 export { deleteHelperConfig, getHelperConfig, saveHelperConfig } from './helper-config';
-export type { MobileRemoteClientOptions } from './remote-client';
-export { MobileRemoteWorkspaceClient } from './remote-client';
+export type { MobileRemoteClientOptions, RemoteHelperErrorKind } from './remote-client';
+export { MobileRemoteWorkspaceClient, RemoteHelperError } from './remote-client';
 export type {
   GitDiffOptions,
   GitDiffResult,

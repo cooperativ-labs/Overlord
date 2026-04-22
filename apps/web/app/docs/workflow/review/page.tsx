@@ -27,6 +27,10 @@ Humans can review:
 
 The goal is to make the final output easier to review than raw terminal logs.
 
+## Staying current
+
+The Kanban board streams real-time updates as agents work, and tickets track read/unread state per reviewer so it is easy to see what needs attention since you last looked.
+
 ## Delivery mindset
 
 The ticket should preserve:

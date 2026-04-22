@@ -69,7 +69,7 @@ function resolveProtocolMetadata(flags = {}, base = {}) {
   const metadata = { ...base };
 
   if (flags['metadata-json']) {
-    const parsed = JSON.parse(String(flags['metadata-json']));
+    const parsed = parseJsonFlag('--metadata-json', flags['metadata-json']);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('--metadata-json must be a JSON object');
     }
@@ -215,6 +215,15 @@ function requireFlag(flags, name, envAlias) {
   return String(value);
 }
 
+function parseJsonFlag(flagName, rawValue) {
+  try {
+    return JSON.parse(String(rawValue));
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`${flagName} must be valid JSON: ${detail}`);
+  }
+}
+
 function readTextFile(filePath, label) {
   try {
     return fs.readFileSync(filePath, 'utf8');
@@ -286,11 +295,7 @@ async function resolveChangeRationales(flags) {
     );
   }
   if (flags['change-rationales-json']) {
-    try {
-      return JSON.parse(String(flags['change-rationales-json']));
-    } catch {
-      throw new Error('--change-rationales-json must be valid JSON');
-    }
+    return parseJsonFlag('--change-rationales-json', flags['change-rationales-json']);
   }
   return [];
 }
@@ -534,7 +539,7 @@ async function protocolUpdate(args) {
       : {}),
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
     ...(flags['event-type'] ? { eventType: String(flags['event-type']) } : {}),
-    ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {}),
+    ...(flags['payload-json'] ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) } : {}),
     ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
 
@@ -613,7 +618,7 @@ async function protocolAsk(args) {
     ticketId,
     question,
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
-    ...(flags['payload-json'] ? { payload: JSON.parse(String(flags['payload-json'])) } : {})
+    ...(flags['payload-json'] ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) } : {})
   };
 
   const data = await apiPost(platformUrl, agentToken, localSecret, '/api/protocol/ask', body, timeoutMs);
@@ -750,11 +755,7 @@ async function protocolDeliver(args) {
   if (flags['artifacts-file']) {
     artifacts = await readJsonFileOrStdin(String(flags['artifacts-file']), '--artifacts-file');
   } else if (flags['artifacts-json']) {
-    try {
-      artifacts = JSON.parse(String(flags['artifacts-json']));
-    } catch {
-      throw new Error('--artifacts-json must be valid JSON');
-    }
+    artifacts = parseJsonFlag('--artifacts-json', flags['artifacts-json']);
   }
 
   if (deliverPayload && (flags['change-rationales-file'] || flags['change-rationales-json'])) {
@@ -805,7 +806,7 @@ async function protocolArtifactPrepareUpload(args) {
     ...(flags['artifact-type'] ? { artifactType: String(flags['artifact-type']) } : {}),
     ...(flags['content-type'] ? { contentType: String(flags['content-type']) } : {}),
     ...(flags['file-size'] ? { fileSize: parseInt(String(flags['file-size']), 10) } : {}),
-    ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+    ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
   };
 
   const data = await apiPost(
@@ -838,7 +839,7 @@ async function protocolArtifactFinalizeUpload(args) {
     ...(flags['artifact-type'] ? { artifactType: String(flags['artifact-type']) } : {}),
     ...(flags['content-type'] ? { contentType: String(flags['content-type']) } : {}),
     ...(flags['file-size'] ? { fileSize: parseInt(String(flags['file-size']), 10) } : {}),
-    ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+    ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
   };
 
   const data = await apiPost(
@@ -915,7 +916,7 @@ async function protocolArtifactUploadFile(args) {
       artifactType: String(flags['artifact-type'] ?? 'document'),
       contentType,
       fileSize: fileStats.size,
-      ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+      ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
     },
     timeoutMs
   );
@@ -941,7 +942,7 @@ async function protocolArtifactUploadFile(args) {
       artifactType: String(flags['artifact-type'] ?? 'document'),
       contentType,
       fileSize: fileStats.size,
-      ...(flags['metadata-json'] ? { metadata: JSON.parse(String(flags['metadata-json'])) } : {})
+      ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
     },
     timeoutMs
   );

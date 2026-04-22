@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 // apps/remote-agent/src/server.ts
+import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { homedir } from "node:os";
@@ -509,33 +510,107 @@ async function readBody(req, maxBytes) {
   }
   return Buffer.concat(chunks).toString("utf8");
 }
+var MAX_AUTH_FAILURES = 10;
+var AUTH_FAIL_WINDOW_MS = 6e4;
+function createAuthGuard(authToken) {
+  const tokenBuf = Buffer.from(authToken, "utf8");
+  const failures = /* @__PURE__ */ new Map();
+  return {
+    check(req) {
+      const header = req.headers.authorization ?? "";
+      if (!header.startsWith("Bearer ")) return false;
+      const provided = Buffer.from(header.slice(7), "utf8");
+      if (provided.length !== tokenBuf.length) return false;
+      return timingSafeEqual(provided, tokenBuf);
+    },
+    recordSuccess(ip) {
+      failures.delete(ip);
+    },
+    isBlocked(ip) {
+      const entry = failures.get(ip);
+      if (!entry) return false;
+      if (Date.now() - entry.firstAt > AUTH_FAIL_WINDOW_MS) {
+        failures.delete(ip);
+        return false;
+      }
+      return entry.count >= MAX_AUTH_FAILURES;
+    },
+    recordFailure(ip) {
+      const now = Date.now();
+      const entry = failures.get(ip);
+      if (!entry || now - entry.firstAt > AUTH_FAIL_WINDOW_MS) {
+        failures.set(ip, { count: 1, firstAt: now });
+      } else {
+        entry.count += 1;
+      }
+    }
+  };
+}
+function requestId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+function clientIp(req) {
+  return req.socket.remoteAddress ?? "unknown";
+}
 async function main() {
   const authToken = await loadAuthToken();
   const handlers = buildHandlers();
+  const guard = createAuthGuard(authToken);
   const server = createServer(async (req, res) => {
     const method = req.method ?? "GET";
     const url = req.url ?? "/";
+    const id = requestId();
+    const ip = clientIp(req);
+    if (guard.isBlocked(ip)) {
+      process.stderr.write(`[${id}] ${ip} ${method} ${url} rate-limited
+`);
+      return send(res, 429, { error: "Too many failed attempts." });
+    }
     if (url === "/health") {
-      const header2 = req.headers.authorization ?? "";
-      if (!header2.startsWith("Bearer ") || header2.slice(7) !== authToken) {
+      if (!guard.check(req)) {
+        guard.recordFailure(ip);
+        process.stderr.write(`[${id}] ${ip} GET /health unauthorized
+`);
         return send(res, 401, { ok: false, error: "Unauthorized." });
       }
+      guard.recordSuccess(ip);
       return send(res, 200, { ok: true, version: VERSION });
     }
     if (method !== "POST") return send(res, 405, { error: "Method not allowed." });
-    const header = req.headers.authorization ?? "";
-    if (!header.startsWith("Bearer ") || header.slice(7) !== authToken) {
+    if (!guard.check(req)) {
+      guard.recordFailure(ip);
+      process.stderr.write(`[${id}] ${ip} POST ${url} unauthorized
+`);
       return send(res, 401, { error: "Unauthorized." });
     }
+    guard.recordSuccess(ip);
     const handler = handlers[url];
     if (!handler) return send(res, 404, { error: "Not found." });
+    let rawBody;
     try {
-      const rawBody = await readBody(req, 16 * 1024 * 1024);
-      const body = rawBody ? JSON.parse(rawBody) : {};
+      rawBody = await readBody(req, 16 * 1024 * 1024);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Read error.";
+      process.stderr.write(`[${id}] ${ip} POST ${url} body-error: ${message}
+`);
+      return send(res, 413, { error: "Request body too large." });
+    }
+    let body;
+    try {
+      body = rawBody ? JSON.parse(rawBody) : {};
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`[${id}] ${ip} POST ${url} invalid-json: ${detail}
+`);
+      return send(res, 400, { error: "Invalid JSON body." });
+    }
+    try {
       const result = await handler(body);
       return send(res, 200, result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Internal error.";
+      process.stderr.write(`[${id}] ${ip} POST ${url} handler-error: ${message}
+`);
       return send(res, 500, { error: message });
     }
   });

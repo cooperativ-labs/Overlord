@@ -3,9 +3,31 @@ import { BrowserWindow, dialog, ipcMain } from 'electron';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { z } from 'zod';
 
 import { type AgentType, prepareAgentLaunch } from '../services/agent-launcher';
 import { store } from '../services/settings-store';
+
+const AGENT_TYPES = [
+  'claude',
+  'codex',
+  'cursor',
+  'gemini',
+  'opencode'
+] as const satisfies readonly AgentType[];
+
+const LaunchAgentPayloadSchema = z.object({
+  ticketId: z.string().min(1).max(256),
+  agent: z.enum(AGENT_TYPES),
+  cwd: z.string().max(4096).optional(),
+  agentToken: z.string().max(4096).optional(),
+  launchMode: z.enum(['run', 'ask']).optional(),
+  flags: z.array(z.string().max(512)).max(64).optional(),
+  model: z.string().max(128).optional(),
+  thinking: z.string().max(64).optional(),
+  sshCommand: z.string().max(4096).optional(),
+  remoteWorkingDirectory: z.string().max(4096).optional()
+});
 
 function runAppleScript(script: string) {
   return new Promise<void>((resolve, reject) => {
@@ -459,42 +481,26 @@ async function launchScriptInExternalTerminal(scriptPath: string): Promise<void>
 }
 
 export function registerTerminalIpc(): void {
-  ipcMain.handle(
-    'terminal:launch-agent',
-    async (
-      _event,
-      payload: {
-        ticketId: string;
-        agent: AgentType;
-        cwd?: string;
-        agentToken?: string;
-        launchMode?: 'run' | 'ask';
-        flags?: string[];
-        model?: string;
-        thinking?: string;
-        sshCommand?: string;
-        remoteWorkingDirectory?: string;
-      }
-    ) => {
-      const isRemote = Boolean(payload.sshCommand?.trim());
-      const { command, cwd, env } = await prepareAgentLaunch({
-        ticketId: payload.ticketId,
-        agent: payload.agent,
-        cwd: payload.cwd,
-        agentToken: payload.agentToken,
-        launchMode: payload.launchMode,
-        flags: payload.flags,
-        model: payload.model,
-        thinking: payload.thinking,
-        sshCommand: payload.sshCommand,
-        remoteWorkingDirectory: payload.remoteWorkingDirectory,
-        serverMultiplexer: isRemote ? getServerMultiplexerConfig() : undefined
-      });
+  ipcMain.handle('terminal:launch-agent', async (_event, rawPayload: unknown) => {
+    const payload = LaunchAgentPayloadSchema.parse(rawPayload);
+    const isRemote = Boolean(payload.sshCommand?.trim());
+    const { command, cwd, env } = await prepareAgentLaunch({
+      ticketId: payload.ticketId,
+      agent: payload.agent,
+      cwd: payload.cwd,
+      agentToken: payload.agentToken,
+      launchMode: payload.launchMode,
+      flags: payload.flags,
+      model: payload.model,
+      thinking: payload.thinking,
+      sshCommand: payload.sshCommand,
+      remoteWorkingDirectory: payload.remoteWorkingDirectory,
+      serverMultiplexer: isRemote ? getServerMultiplexerConfig() : undefined
+    });
 
-      const scriptPath = writeLaunchScript(command, cwd, env);
-      return launchScriptInExternalTerminal(scriptPath);
-    }
-  );
+    const scriptPath = writeLaunchScript(command, cwd, env);
+    return launchScriptInExternalTerminal(scriptPath);
+  });
 
   ipcMain.handle('terminal:choose-directory', async event => {
     const win = BrowserWindow.fromWebContents(event.sender);

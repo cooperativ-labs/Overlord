@@ -19,7 +19,19 @@ export default function AccountScreen() {
   const [savingServerTerminalPreference, setSavingServerTerminalPreference] = useState(false);
 
   useEffect(() => {
-    void getServerTerminalPreference().then(setServerTerminalPreference);
+    let cancelled = false;
+    getServerTerminalPreference()
+      .then(preference => {
+        if (!cancelled) setServerTerminalPreference(preference);
+      })
+      .catch(error => {
+        if (__DEV__) {
+          console.warn('[Account] Failed to load server terminal preference:', error);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSignOut = () => {

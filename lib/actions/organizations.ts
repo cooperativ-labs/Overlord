@@ -12,11 +12,26 @@ export type UserOrganization = {
 
 export async function getUserOrganizations(): Promise<UserOrganization[]> {
   const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return [];
+  }
+  // Defensive membership join (defense in depth; RLS is primary authz).
   const { data } = await supabase
-    .from('organizations')
-    .select('id,name')
-    .order('name', { ascending: true });
-  return (data ?? []) as UserOrganization[];
+    .from('members')
+    .select('organizations!inner(id,name)')
+    .eq('user_id', user.id);
+  const rows = (data ?? []) as { organizations: UserOrganization | UserOrganization[] | null }[];
+  const orgs = rows.flatMap(row =>
+    Array.isArray(row.organizations)
+      ? row.organizations
+      : row.organizations
+        ? [row.organizations]
+        : []
+  );
+  return orgs.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function setSelectedOrgAction(orgId: number | null): Promise<void> {

@@ -53,10 +53,10 @@ export default function TicketsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const handleCreateTicket = useCallback(() => {
-    router.push('/(tabs)/tickets/create' as never);
+    router.push('/(tabs)/tickets/create');
   }, [router]);
 
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('tickets')
@@ -74,15 +74,32 @@ export default function TicketsScreen() {
     if (error) {
       Alert.alert('Unable to load tickets', error.message);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchTickets().finally(() => setLoading(false));
-  }, []);
+  }, [fetchTickets]);
 
-  // Realtime subscription for ticket changes
+  // Realtime subscription + foreground refresh. The realtime channel is the
+  // primary source of truth; we only fall back to polling when the channel
+  // reports an error or closes, so we don't burn cellular bandwidth 3×/min.
   useEffect(() => {
     const supabase = getSupabase();
+    let pollId: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      if (pollId) {
+        clearInterval(pollId);
+        pollId = null;
+      }
+    };
+
+    const startPolling = () => {
+      if (pollId) return;
+      pollId = setInterval(() => {
+        void fetchTickets();
+      }, 60_000);
+    };
 
     const channel = supabase
       .channel('tickets-list-realtime')
@@ -91,14 +108,15 @@ export default function TicketsScreen() {
         { event: '*', schema: 'public', table: 'tickets' },
         () => void fetchTickets()
       )
-      .subscribe();
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          stopPolling();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          startPolling();
+          void fetchTickets();
+        }
+      });
 
-    // Poll every 20 seconds as fallback
-    const pollId = setInterval(() => {
-      void fetchTickets();
-    }, 20_000);
-
-    // Refresh when app comes to foreground
     const appStateSubscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         void fetchTickets();
@@ -106,11 +124,11 @@ export default function TicketsScreen() {
     });
 
     return () => {
-      clearInterval(pollId);
+      stopPolling();
       appStateSubscription.remove();
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchTickets]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -155,7 +173,7 @@ export default function TicketsScreen() {
           return (
             <Pressable
               style={styles.card}
-              onPress={() => router.push(`/(tabs)/tickets/${item.id}` as never)}
+              onPress={() => router.push(`/(tabs)/tickets/${item.id}`)}
             >
               <View style={styles.cardHeader}>
                 <Text style={styles.sequence}>#{item.ticket_sequence}</Text>

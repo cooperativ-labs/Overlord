@@ -139,7 +139,7 @@ export default function WorkspaceScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    Promise.all([checkHelperHealth(), fetchStatus()]).finally(() => setRefreshing(false));
+    Promise.allSettled([checkHelperHealth(), fetchStatus()]).finally(() => setRefreshing(false));
   }, [checkHelperHealth, fetchStatus]);
 
   async function handleSaveConfig() {

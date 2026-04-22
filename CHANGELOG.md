@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.16.0] - 2026-04-22:08:38
+
+### Added
+- None.
+
+### Fixed
+- Harden desktop IPC and remote agent request handling with schema validation, stricter payload limits, and safer JSON parsing so malformed inputs fail cleanly.
+- Make remote workspace file, diff, and status requests more resilient by validating helper responses and retrying transient network or timeout failures.
+- Reduce unnecessary mobile ticket refresh traffic by using realtime updates as the primary source of truth and only polling when the channel drops or errors.
+
+### Changed
+- Tighten organization and agent-config reads so they now resolve through authenticated user membership and same-user checks instead of broad table reads.
+- Update mobile remote workspace and ticket-launch flows to treat loopback hosts more narrowly and surface clearer helper/auth failures.
+- Improve desktop and protocol documentation to cover `auth-status`, `create`, `permission-request`, tmux profiles, per-user agent config, and the updated create/spawn workflow.
+
+### Security
+- Use timing-safe token checks and auth failure rate limiting in the remote agent daemon.
+- Restrict user-configuration reads to the authenticated user and membership-derived organizations.
+
+### Refactor
+- Centralize remote helper response validation and error classification in the mobile workspace client.
+- Replace ad-hoc payload parsing in desktop IPC and protocol commands with shared validation paths.
+
+### Documentation
+- Refresh protocol, CLI, desktop app, and workflow docs to match the new ticket lifecycle and agent workflow terminology.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.16.0`.
+
 ## [4.15.0] - 2026-04-22:07:12
 
 ### Added

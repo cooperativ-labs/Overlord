@@ -27,7 +27,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('Uncaught error:', error, errorInfo);
+    }
     this.setState({ errorInfo });
   }
 
