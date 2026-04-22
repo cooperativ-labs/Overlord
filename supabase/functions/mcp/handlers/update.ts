@@ -98,7 +98,8 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
         phase: 'execute',
         session_id: resolved.session.id,
         summary: 'Ticket resumed — agent continued working after delivery.',
-        ticket_id: ticketId
+        ticket_id: ticketId,
+        created_by: ctx.userId
       }),
       supabase
         .from('objectives')
@@ -135,7 +136,8 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
       phase: phase ?? null,
       session_id: resolved.session.id,
       summary,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: ctx.userId
     })
     .select('id')
     .single();
@@ -183,7 +185,8 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
         phase: phase ?? null,
         session_id: resolved.session.id,
         summary: n.title ?? n.message ?? 'Agent notification.',
-        ticket_id: ticketId
+        ticket_id: ticketId,
+        created_by: ctx.userId
       }))
     );
   }

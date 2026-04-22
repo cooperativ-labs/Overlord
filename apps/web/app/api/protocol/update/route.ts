@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       summary,
       ticketId: rawTicketId
     } = parsed.data;
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
@@ -78,7 +78,8 @@ export async function POST(request: Request) {
           phase: 'execute',
           session_id: resolved.session.id,
           summary: 'Ticket resumed — agent continued working after delivery.',
-          ticket_id: ticketId
+          ticket_id: ticketId,
+          created_by: userId
         }),
         // Reactivate only the most recently completed objective back to executing.
         // PostgREST ignores .order()/.limit() on UPDATE, so we first fetch the ID
@@ -118,7 +119,8 @@ export async function POST(request: Request) {
         phase: phase ?? null,
         session_id: resolved.session.id,
         summary,
-        ticket_id: ticketId
+        ticket_id: ticketId,
+        created_by: userId
       })
       .select('id')
       .single();
@@ -179,7 +181,8 @@ export async function POST(request: Request) {
           phase: phase ?? null,
           session_id: resolved.session.id,
           summary: buildAgentNotificationSummary(notification),
-          ticket_id: ticketId
+          ticket_id: ticketId,
+          created_by: userId
         }))
       );
 

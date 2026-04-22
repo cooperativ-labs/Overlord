@@ -44,13 +44,24 @@ export function NewTicketButton() {
     const loadProjects = async () => {
       try {
         const supabase = createClient();
-        const { data: projectsData } = await supabase
-          .from('projects')
-          .select('id,name,color,everhour_project_id,organization_id,local_working_directory')
-          .order('created_at', { ascending: true });
+        const [{ data: projectsData }, { data: projectUserRows }] = await Promise.all([
+          supabase
+            .from('projects')
+            .select('id,name,color,everhour_project_id,organization_id')
+            .order('created_at', { ascending: true }),
+          supabase.from('project_user').select('project_id,local_working_directory')
+        ]);
 
         if (projectsData) {
-          setProjects(projectsData);
+          const dirByProject = new Map(
+            (projectUserRows ?? []).map(row => [row.project_id, row.local_working_directory])
+          );
+          setProjects(
+            projectsData.map(project => ({
+              ...project,
+              local_working_directory: dirByProject.get(project.id) ?? null
+            }))
+          );
         }
       } catch (error) {
         console.error('Failed to load projects:', error);

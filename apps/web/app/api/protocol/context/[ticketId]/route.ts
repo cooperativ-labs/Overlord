@@ -4,7 +4,10 @@ import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
-import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
+import {
+  getProjectUserLocalSettingsByProjectId,
+  getProjectUserSshSettingsByProjectId
+} from '@/lib/actions/projects';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import type { InstructionMode } from '@/lib/overlord/agent-capabilities';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
@@ -47,19 +50,15 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
-    const { data: project } = await supabase
-      .from('projects')
-      .select('id,local_working_directory')
-      .eq('id', ticket.project_id)
-      .maybeSingle();
-    const projectUser = (
-      await getProjectUserSshSettingsByProjectId(
-        supabase,
-        authResult.context.userId,
-        ticket.project_id ? [ticket.project_id] : []
-      )
-    ).get(ticket.project_id);
+    const projectIds = ticket.project_id ? [ticket.project_id] : [];
+    const [sshByProject, localByProject] = await Promise.all([
+      getProjectUserSshSettingsByProjectId(supabase, authResult.context.userId, projectIds),
+      getProjectUserLocalSettingsByProjectId(supabase, authResult.context.userId, projectIds)
+    ]);
+    const projectUser = sshByProject.get(ticket.project_id);
     const sshSettings = resolveProjectUserSshSettings(projectUser);
+    const projectUserLocal = localByProject.get(ticket.project_id);
+    const localWorkingDirectory = projectUserLocal?.local_working_directory ?? null;
     // Prefer the currently executing objective; fall back to submitted.
     // Draft objectives are not exposed on modern schemas, but we keep them as
     // a last resort for older databases that still reject the submitted state.
@@ -112,8 +111,8 @@ export async function GET(request: Request, { params }: RouteContext) {
     const requestedWorkspace = searchParams.get('workspace')?.trim().toLowerCase();
     const workingDirectory =
       requestedWorkspace === 'ssh'
-        ? (sshSettings?.remoteWorkingDirectory ?? project?.local_working_directory ?? null)
-        : (project?.local_working_directory ?? null);
+        ? (sshSettings?.remoteWorkingDirectory ?? localWorkingDirectory)
+        : localWorkingDirectory;
     const requestOrigin = new URL(request.url).origin;
     const platformUrl = getPlatformUrl(requestOrigin);
 

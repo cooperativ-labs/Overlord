@@ -12,7 +12,7 @@ export async function POST(request: Request) {
 
   try {
     const { ticketId: rawTicketId, question, phase, payload, sessionKey } = parsed.data;
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
@@ -28,7 +28,8 @@ export async function POST(request: Request) {
       phase: phase ?? 'review',
       session_id: resolved.session.id,
       summary: question,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: userId
     });
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });

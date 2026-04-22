@@ -623,7 +623,8 @@ Deno.serve(async (req: Request) => {
           tickets_created: ticketsCreatedPayload,
           source_event_ids: eventIds,
           source_window_start: windowStart,
-          source_window_end: windowEnd
+          source_window_end: windowEnd,
+          created_by: ticket.created_by ?? null
         })
         .select('id')
         .single();

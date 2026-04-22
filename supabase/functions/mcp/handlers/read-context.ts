@@ -33,7 +33,8 @@ export async function handleReadContext(supabase: SupabaseClient, args: any, ctx
     payload: { query },
     session_id: resolved.session.id,
     summary: query ? `Read context query: ${query}` : 'Read latest context entries.',
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: ctx.userId
   });
 
   return toolOk({ context: rows ?? [], count: rows?.length ?? 0 });

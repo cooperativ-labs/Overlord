@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   try {
     const { limit, query, sessionKey, ticketId: rawTicketId } = parsed.data;
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
@@ -41,7 +41,8 @@ export async function POST(request: Request) {
       payload: { query },
       session_id: resolved.session.id,
       summary: query ? `Read context query: ${query}` : 'Read latest context entries.',
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: userId
     });
 
     return NextResponse.json({

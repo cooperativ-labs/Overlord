@@ -65,7 +65,8 @@ export async function handleArtifactFinalizeUpload(
       session_id: access.session.id,
       storage_path: storagePath,
       ticket_id: ticketId,
-      uploaded_by: ctx.userId
+      uploaded_by: ctx.userId,
+      created_by: ctx.userId
     })
     .select('id, artifact_type, label, storage_path, ticket_id, created_at, metadata')
     .single();
@@ -80,7 +81,8 @@ export async function handleArtifactFinalizeUpload(
     phase: 'execute',
     session_id: access.session.id,
     summary: `Artifact uploaded: ${label}`,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: ctx.userId
   });
 
   return toolOk({ artifact, ok: true });

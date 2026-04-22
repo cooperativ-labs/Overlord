@@ -24,7 +24,8 @@ export async function handleAsk(supabase: SupabaseClient, args: any, ctx: TokenC
     phase: phase ?? 'review',
     session_id: resolved.session.id,
     summary: question,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: ctx.userId
   });
 
   await supabase

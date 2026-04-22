@@ -15,6 +15,7 @@ export type ConnectParams = {
   connectionMethod: ConnectionMethod;
   metadata: Json;
   organizationId: number;
+  userId?: string | null;
 };
 
 /**
@@ -25,7 +26,7 @@ export type ConnectParams = {
  * sending events to a ticket without ingesting its context.
  */
 export async function runConnectProtocol(supabase: ConnectClient, params: ConnectParams) {
-  const { ticketId, agentIdentifier, connectionMethod, metadata, organizationId } = params;
+  const { ticketId, agentIdentifier, connectionMethod, metadata, organizationId, userId } = params;
   const sessionKey = randomUUID();
 
   const { data: ticket, error: ticketError } = await supabase
@@ -72,11 +73,16 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     'execute'
   );
 
-  await markSubmittedObjectiveExecuting(supabase, ticketId, {
-    agentIdentifier,
-    metadata,
-    ticketAssignedAgent: ticket.assigned_agent
-  });
+  await markSubmittedObjectiveExecuting(
+    supabase,
+    ticketId,
+    {
+      agentIdentifier,
+      metadata,
+      ticketAssignedAgent: ticket.assigned_agent
+    },
+    userId
+  );
 
   const { error: ticketUpdateError } = await supabase
     .from('tickets')
@@ -93,7 +99,8 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     phase: previousStatus,
     session_id: session.id,
     summary: `${agentIdentifier} connected via ${connectionMethod}.`,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: userId ?? null
   });
 
   if (eventError) {
@@ -106,7 +113,8 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
       phase: 'execute',
       session_id: session.id,
       summary: 'Ticket reopened — resumed from delivered state.',
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: userId ?? null
     });
   }
 

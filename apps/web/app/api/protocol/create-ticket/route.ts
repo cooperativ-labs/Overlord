@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await upsertDraftObjective(supabase, createdTicket.id, objective);
+    await upsertDraftObjective(supabase, createdTicket.id, objective, createdBy);
 
     const createdReference = getTicketIdentifier(createdTicket.id);
     const sourceReference = getTicketIdentifier(ticketId);
@@ -106,7 +106,8 @@ export async function POST(request: Request) {
       },
       session_id: resolved.session.id,
       summary: `Follow-up ticket created from ${sourceReference}.`,
-      ticket_id: createdTicket.id
+      ticket_id: createdTicket.id,
+      created_by: createdBy
     });
 
     if (childEventError) {
@@ -124,7 +125,8 @@ export async function POST(request: Request) {
       },
       session_id: resolved.session.id,
       summary: `Created follow-up ticket ${createdReference} (${createdTicket.execution_target}).`,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: createdBy
     });
 
     if (sourceEventError) {

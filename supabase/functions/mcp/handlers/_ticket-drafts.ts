@@ -235,7 +235,8 @@ export async function createDraftTicket(
   const { error: objectiveError } = await supabase.from('objectives').insert({
     state: 'draft',
     objective: draft.description,
-    ticket_id: createdTicket.id
+    ticket_id: createdTicket.id,
+    created_by: createdBy
   });
 
   if (objectiveError) {
@@ -257,7 +258,8 @@ export async function createDraftTicket(
       source_summary: draft.sourceSummary
     },
     summary: `Ticket ${ticketReference} created from interactive MCP draft.`,
-    ticket_id: createdTicket.id
+    ticket_id: createdTicket.id,
+    created_by: createdBy
   });
 
   if (eventError) {

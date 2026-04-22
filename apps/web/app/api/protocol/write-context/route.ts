@@ -11,7 +11,7 @@ export async function POST(request: Request) {
 
   try {
     const { key, sessionKey, tags, ticketId: rawTicketId, value } = parsed.data;
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
@@ -44,7 +44,8 @@ export async function POST(request: Request) {
       payload: { key, tags },
       session_id: resolved.session.id,
       summary: `Wrote context key ${key}.`,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: userId
     });
 
     return NextResponse.json({

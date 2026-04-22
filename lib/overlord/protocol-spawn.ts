@@ -76,7 +76,8 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     const matched = await resolveProjectByWorkingDirectory(
       supabase,
       organizationId,
-      workingDirectory
+      workingDirectory,
+      userId ?? null
     );
     resolvedProjectId = matched?.id;
   }
@@ -135,7 +136,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
   }
 
   // Create the objective and immediately mark it as executing for the spawned session.
-  await upsertDraftObjective(supabase, ticket.id, objective);
+  await upsertDraftObjective(supabase, ticket.id, objective, createdBy);
 
   // Create agent session
   const sessionKey = randomUUID();
@@ -155,11 +156,16 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     return { error: 'Ticket created but failed to create session.', status: 500 } as const;
   }
 
-  const objectiveExecution = await markSubmittedObjectiveExecuting(supabase, ticket.id, {
-    agentIdentifier,
-    metadata,
-    ticketAssignedAgent: null
-  });
+  const objectiveExecution = await markSubmittedObjectiveExecuting(
+    supabase,
+    ticket.id,
+    {
+      agentIdentifier,
+      metadata,
+      ticketAssignedAgent: null
+    },
+    createdBy
+  );
 
   if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {
     generateAndSetObjectiveTitle(
@@ -182,7 +188,8 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     phase: 'execute',
     session_id: session.id,
     summary: `Ticket spawned by ${agentIdentifier}${ticketDelegate ? ` (${ticketDelegate})` : ''} via ${connectionMethod}.`,
-    ticket_id: ticket.id
+    ticket_id: ticket.id,
+    created_by: createdBy
   });
 
   if (eventError) {
@@ -215,7 +222,8 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
         phase: 'execute',
         session_id: parentSession.id,
         summary: `Spawned ticket #${ticket.ticket_sequence}: ${nextTitle}`,
-        ticket_id: parentTicketId
+        ticket_id: parentTicketId,
+        created_by: createdBy
       });
     }
   }

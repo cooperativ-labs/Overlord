@@ -1044,8 +1044,9 @@ async function protocolSpawn(args) {
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
 
-  // When --project-id is not provided, auto-send cwd as workingDirectory
-  // so the server can resolve the project from the local_working_directory setting.
+  // When --project-id is not provided, auto-send cwd as workingDirectory so
+  // the server can resolve the project from the caller's project_user
+  // local_working_directory setting.
   const workingDirectory = flags['working-directory'] ?? (!flags['project-id'] ? process.cwd() : undefined);
 
   const body = {
@@ -1147,7 +1148,7 @@ async function protocolCreateTicket(args) {
   const projectId = discovered?.project?.id;
   if (!projectId) {
     throw new Error(
-      'Could not resolve project from working directory. Set project local working directory in Overlord or pass --working-directory.'
+      "Could not resolve project from working directory. Set your local working directory for this project in Overlord or pass --working-directory."
     );
   }
 
@@ -1215,8 +1216,8 @@ or attach to an existing ticket with \`ovld protocol attach --ticket-id <id>\`.
 
 Project discovery:
   When spawning or creating tickets, the CLI automatically resolves the correct
-  project by matching your current working directory against each project's
-  configured "Local working directory" (set in Project Settings in the Overlord UI).
+  project by matching your current working directory against your configured
+  "Local working directory" for that project (stored per user in Overlord).
   You can also discover the project explicitly:
 
     ovld protocol discover-project
@@ -1267,13 +1268,13 @@ auth-status:
 discover-project:
   Purpose:
     Resolve the Overlord project that corresponds to the current (or given) working directory.
-    Uses each project's "Local working directory" setting for matching.
+    Uses the caller's configured "Local working directory" for matching.
   Optional:
     --working-directory <path>  Directory to match (default: current working directory)
   Returns:
     Project JSON with id, name, organizationId. Prints PROJECT_ID=<id> on stderr.
   Notes:
-    Set the local working directory for a project in the Overlord UI under Project Settings.
+    Set your local working directory for a project in the Overlord UI under Project Settings.
     When no match is found, returns a 404 with a hint.
 
 attach:
@@ -1406,7 +1407,7 @@ spawn:
   Purpose:
     Create a follow-up ticket and attach to it in one call.
     When --project-id is omitted, automatically resolves the project from the
-    current working directory (matching against each project's local_working_directory).
+    current working directory (matching against the caller's project_user.local_working_directory).
   Required:
     --objective <text>
   Optional:
@@ -1437,7 +1438,7 @@ create:
   Optional:
     --session-key <key>
     --ticket-id <id>
-    --working-directory <path>  Resolve project by local working directory (default: cwd)
+    --working-directory <path>  Resolve project by your configured local working directory (default: cwd)
     --title <text>
     --priority <level>        low | medium | high | urgent
     --acceptance-criteria <text>

@@ -10,6 +10,7 @@ type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 function makeEvent(overrides: Partial<TicketEvent> = {}): TicketEvent {
   return {
     created_at: new Date(0).toISOString(),
+    created_by: null,
     event_type: 'update',
     id: 'event-1',
     is_blocking: false,

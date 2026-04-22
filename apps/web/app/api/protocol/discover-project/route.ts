@@ -11,13 +11,14 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createServiceRoleClient();
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const { workingDirectory } = parsed.data;
 
     const project = await resolveProjectByWorkingDirectory(
       supabase,
       organizationId,
-      workingDirectory
+      workingDirectory,
+      userId
     );
 
     if (!project) {

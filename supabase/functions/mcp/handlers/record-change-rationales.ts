@@ -43,7 +43,8 @@ export async function handleRecordChangeRationales(
       phase: phase ?? null,
       session_id: resolved.session.id,
       summary: eventSummary,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: ctx.userId
     })
     .select('id')
     .single();
