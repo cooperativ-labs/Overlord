@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.15.0] - 2026-04-22:07:12
+
+### Added
+- Capture creator attribution on objectives, ticket events, feed posts, and artifacts so generated work can be traced back to the auth user who produced it.
+
+### Fixed
+- Project layouts, ticket panels, and protocol flows now resolve the correct per-user working directory from `project_user`, avoiding stale project-level paths after the local directory move.
+- Local project matching now prefers the most specific `project_user` working directory, which improves launch and attach behavior for nested repositories and sibling folders.
+
+### Changed
+- Project user settings loading now reads SSH and local working-directory data separately from `project_user`, and the New Ticket flow now combines those settings when presenting project options.
+- Project and protocol resolution now rely on per-user project settings instead of project-level `local_working_directory` fields, aligning desktop, web, and MCP paths.
+
+### Security
+- None.
+
+### Refactor
+- Introduce shared project-user resolution helpers to centralize matching logic across project actions and protocol handlers.
+- Move project-local settings access behind dedicated query helpers so SSH and working-directory state can be fetched independently.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.15.0`.
+
 ## [4.13.0] - 2026-04-21:12:54
 
 ### Added
