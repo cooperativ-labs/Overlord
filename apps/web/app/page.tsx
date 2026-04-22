@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
+import { VideoSection } from '@/components/marketing/VideoSection';
 import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
@@ -158,7 +159,7 @@ function HeroDashboardGraphic() {
               <span className="size-2.5 rounded-full bg-[#ff5f57]" />
               <span className="size-2.5 rounded-full bg-[#febc2e]" />
               <span className="size-2.5 rounded-full bg-[#28c840]" />
-              <span className="ml-2 text-[11px] uppercase tracking-[0.22em] text-slate-500">
+              <span className="ml-2 text-[14px] uppercase tracking-[0.22em] text-slate-500">
                 Project Board
               </span>
             </div>
@@ -170,7 +171,7 @@ function HeroDashboardGraphic() {
                   className="rounded-[1.1rem] border border-white/8 bg-white/[0.03] p-2.5 text-left"
                 >
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                    <span className="text-[14px] font-medium uppercase tracking-[0.18em] text-slate-400">
                       {column.title}
                     </span>
                     <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-500">
@@ -218,7 +219,7 @@ function HeroDashboardGraphic() {
             <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
               <div className="flex items-center gap-2">
                 <TerminalSquare className="size-4 text-sky-300" />
-                <span className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
+                <span className="text-[14px] uppercase tracking-[0.22em] text-slate-500">
                   Terminal
                 </span>
               </div>
@@ -235,7 +236,7 @@ function HeroDashboardGraphic() {
                 </div>
               ))}
 
-              <div className="mt-4 rounded-xl border border-sky-400/15 bg-sky-400/10 px-3 py-2 text-[11px] text-sky-100">
+              <div className="mt-4 rounded-xl border border-sky-400/15 bg-sky-400/10 px-3 py-2 text-[14px] text-sky-100">
                 Ticket status updates and terminal execution stay in sync.
               </div>
             </div>
@@ -310,7 +311,7 @@ export default async function HomePage() {
         {/* Hero — centered, focused */}
         <section className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center text-center">
           <div className="animate-in fade-in slide-in-from-bottom-6 max-w-5xl space-y-8 duration-700">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[14px] font-medium uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
               Web App · Desktop · CLI · MCP
             </div>
 
@@ -371,7 +372,7 @@ export default async function HomePage() {
 
             {/* Agent icons */}
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-sm text-slate-300">
-              <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-500">
+              <span className="font-[family-name:var(--font-mono)] text-[14px] uppercase tracking-[0.22em] text-slate-500">
                 Works with
               </span>
               {agentIcons.map(agent => (
@@ -389,87 +390,16 @@ export default async function HomePage() {
 
         {/* Video section */}
         <section id="watch-video" className="mx-auto w-full max-w-6xl py-6">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-3 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.4)] backdrop-blur">
-            <div className="mb-4 px-3 pt-3 text-center">
-              <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
-                See it in action
-              </p>
-              <h2 className="mt-2 font-[family-name:var(--font-display)] text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                Watch how Overlord works
-              </h2>
-            </div>
-            <div className="overflow-hidden rounded-[1.5rem] border border-white/10">
-              <div className="aspect-video w-full">
-                <iframe
-                  src="https://www.youtube.com/embed/aaKTqO1sRxY?si=b5sbaeu1f1vI-s90"
-                  title="Overlord Overview"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  className="h-full w-full"
-                />
-              </div>
-            </div>
-          </div>
+          <VideoSection />
         </section>
 
         {/* Feature highlights */}
-        <section id="feature-highlights" className="mx-auto max-w-6xl pb-10 pt-2">
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.55)] backdrop-blur sm:p-8">
-            <div className="w-full">
-              <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
-                New deployment paths
-              </p>
-              <h2 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Overlord now fits the hardware you already own.
-              </h2>
-              <p className="mt-4  text-base leading-7 text-slate-300 sm:text-lg">
-                The homepage now makes the product story explicit: run Overlord through SSH on a
-                personal server, use a CLI that works on smaller machines, and keep remote agent
-                work in reach from iPhone.
-              </p>
-            </div>
 
-            <div className="mt-8 grid gap-4 lg:grid-cols-3">
-              {featureHighlights.map(feature => (
-                <article
-                  key={feature.title}
-                  className="group rounded-3xl border border-white/10 bg-[#07101d]/70 p-5 transition-colors hover:border-white/15 hover:bg-[#07101d]/90"
-                >
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className="flex size-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
-                      <feature.icon className="size-5" />
-                    </div>
-                    <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                      {feature.eyebrow}
-                    </span>
-                  </div>
-
-                  <h3 className="text-xl font-semibold tracking-tight text-white">
-                    {feature.title}
-                  </h3>
-                  <p className="mt-3 text-sm leading-7 text-slate-300">{feature.description}</p>
-
-                  <ul className="mt-5 space-y-2.5">
-                    {feature.bullets.map(bullet => (
-                      <li
-                        key={bullet}
-                        className="flex items-start gap-2 text-sm leading-6 text-slate-300"
-                      >
-                        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-sky-400/70" />
-                        <span>{bullet}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
 
         {/* Workflow section */}
         <section id="how-it-works" className="mx-auto max-w-6xl pb-24 pt-12 mt-12">
           <div className="mb-16 text-center">
-            <p className="font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.24em] text-sky-400">
+            <p className="font-[family-name:var(--font-mono)] text-[14px] font-medium uppercase tracking-[0.24em] text-sky-400">
               How it works
             </p>
             <h2 className="mt-4 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
@@ -505,6 +435,58 @@ export default async function HomePage() {
                 </ul>
               </div>
             ))}
+          </div>
+        </section>
+        <section id="feature-highlights" className="mx-auto max-w-6xl pb-10 pt-2">
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6 shadow-[0_24px_96px_-56px_rgba(14,165,233,0.55)] backdrop-blur sm:p-8">
+            <div className="w-full">
+              <p className="font-[family-name:var(--font-mono)] text-[14px] font-medium uppercase tracking-[0.24em] text-sky-400">
+                New deployment paths
+              </p>
+              <h2 className="mt-3 font-[family-name:var(--font-display)] text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                Overlord now fits the hardware you already own.
+              </h2>
+              <p className="mt-4  text-base leading-7 text-slate-300 sm:text-lg">
+                The homepage now makes the product story explicit: run Overlord through SSH on a
+                personal server, use a CLI that works on smaller machines, and keep remote agent
+                work in reach from iPhone.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-4 lg:grid-cols-3">
+              {featureHighlights.map(feature => (
+                <article
+                  key={feature.title}
+                  className="group rounded-3xl border border-white/10 bg-[#07101d]/70 p-5 transition-colors hover:border-white/15 hover:bg-[#07101d]/90"
+                >
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="flex size-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-300">
+                      <feature.icon className="size-5" />
+                    </div>
+                    <span className="font-[family-name:var(--font-mono)] text-[14px] uppercase tracking-[0.22em] text-slate-500">
+                      {feature.eyebrow}
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-semibold tracking-tight text-white">
+                    {feature.title}
+                  </h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-300">{feature.description}</p>
+
+                  <ul className="mt-5 space-y-2.5">
+                    {feature.bullets.map(bullet => (
+                      <li
+                        key={bullet}
+                        className="flex items-start gap-2 text-sm leading-6 text-slate-300"
+                      >
+                        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-sky-400/70" />
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
       </div>
