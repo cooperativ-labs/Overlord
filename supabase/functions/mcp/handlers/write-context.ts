@@ -36,7 +36,8 @@ export async function handleWriteContext(supabase: SupabaseClient, args: any, ct
     payload: { key, tags },
     session_id: resolved.session.id,
     summary: `Wrote context key ${key}.`,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: ctx.userId
   });
 
   return toolOk({ context: state, ok: true });

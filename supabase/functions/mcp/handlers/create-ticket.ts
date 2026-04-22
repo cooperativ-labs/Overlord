@@ -91,7 +91,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
   const { error: objectiveErr } = await supabase.from('objectives').insert({
     state: 'draft',
     objective: objective,
-    ticket_id: created.id
+    ticket_id: created.id,
+    created_by: createdBy
   });
 
   if (objectiveErr) return toolErr(objectiveErr.message);
@@ -105,7 +106,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       payload: { created_from_ticket_id: ticketId, delegate: ticketDelegate },
       session_id: resolved.session.id,
       summary: `Follow-up ticket created from ${sourceRef}.`,
-      ticket_id: created.id
+      ticket_id: created.id,
+      created_by: createdBy
     }),
     supabase.from('ticket_events').insert({
       event_type: 'update',
@@ -116,7 +118,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       },
       session_id: resolved.session.id,
       summary: `Created follow-up ticket ${createdRef} (${created.execution_target}).`,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: createdBy
     })
   ]);
 

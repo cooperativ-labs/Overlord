@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id,organization_id,local_working_directory')
+      .select('id,organization_id')
       .eq('id', projectId)
       .single();
 
@@ -37,7 +37,14 @@ export async function GET(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
-    const resolvedRoot = resolveLinkedDirectory(project.local_working_directory);
+    const { data: projectUser } = await supabase
+      .from('project_user')
+      .select('local_working_directory')
+      .eq('user_id', user.id)
+      .eq('project_id', project.id)
+      .maybeSingle();
+
+    const resolvedRoot = resolveLinkedDirectory(projectUser?.local_working_directory ?? null);
     if (resolvedRoot) {
       const stat = await fs.stat(resolvedRoot).catch(() => null);
       if (stat?.isDirectory()) {

@@ -73,7 +73,7 @@ Use this mode when the conversation starts normally and the user asks Claude to 
 
 1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent claude-code --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
-   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
+   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to the caller's configured Overlord `project_user.local_working_directory`, then creates a standalone draft.
 2. Default to `create` for new tickets. Only use `/overlord:spawn` or `ovld protocol spawn --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
    `spawn` creates the ticket in `execute` status and attaches immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket-id>`.

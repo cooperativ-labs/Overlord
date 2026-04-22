@@ -185,6 +185,7 @@ export type Database = {
           artifact_type: string;
           content: string | null;
           created_at: string;
+          created_by: string | null;
           event_id: string | null;
           id: string;
           label: string;
@@ -199,6 +200,7 @@ export type Database = {
           artifact_type: string;
           content?: string | null;
           created_at?: string;
+          created_by?: string | null;
           event_id?: string | null;
           id?: string;
           label: string;
@@ -213,6 +215,7 @@ export type Database = {
           artifact_type?: string;
           content?: string | null;
           created_at?: string;
+          created_by?: string | null;
           event_id?: string | null;
           id?: string;
           label?: string;
@@ -395,6 +398,7 @@ export type Database = {
           agent_type: string | null;
           body: string;
           created_at: string;
+          created_by: string | null;
           files_touched: string[];
           human_actions: string[];
           id: string;
@@ -417,6 +421,7 @@ export type Database = {
           agent_type?: string | null;
           body: string;
           created_at?: string;
+          created_by?: string | null;
           files_touched?: string[];
           human_actions?: string[];
           id?: string;
@@ -439,6 +444,7 @@ export type Database = {
           agent_type?: string | null;
           body?: string;
           created_at?: string;
+          created_by?: string | null;
           files_touched?: string[];
           human_actions?: string[];
           id?: string;
@@ -635,6 +641,7 @@ export type Database = {
           agent_identifier: string | null;
           completed_at: string | null;
           created_at: string;
+          created_by: string | null;
           id: string;
           model_identifier: string | null;
           objective: string;
@@ -647,6 +654,7 @@ export type Database = {
           agent_identifier?: string | null;
           completed_at?: string | null;
           created_at?: string;
+          created_by?: string | null;
           id?: string;
           model_identifier?: string | null;
           objective?: string;
@@ -659,6 +667,7 @@ export type Database = {
           agent_identifier?: string | null;
           completed_at?: string | null;
           created_at?: string;
+          created_by?: string | null;
           id?: string;
           model_identifier?: string | null;
           objective?: string;
@@ -755,8 +764,11 @@ export type Database = {
         Row: {
           created_at: string | null;
           id: string;
+          local_working_directory: string | null;
           preferences: Json;
           project_id: string;
+          remote_helper_installed_at: string | null;
+          remote_helper_version: string | null;
           remote_working_directory: string | null;
           ssh_auth_method: string | null;
           ssh_command: string | null;
@@ -770,8 +782,11 @@ export type Database = {
         Insert: {
           created_at?: string | null;
           id?: string;
+          local_working_directory?: string | null;
           preferences?: Json;
           project_id: string;
+          remote_helper_installed_at?: string | null;
+          remote_helper_version?: string | null;
           remote_working_directory?: string | null;
           ssh_auth_method?: string | null;
           ssh_command?: string | null;
@@ -785,8 +800,11 @@ export type Database = {
         Update: {
           created_at?: string | null;
           id?: string;
+          local_working_directory?: string | null;
           preferences?: Json;
           project_id?: string;
+          remote_helper_installed_at?: string | null;
+          remote_helper_version?: string | null;
           remote_working_directory?: string | null;
           ssh_auth_method?: string | null;
           ssh_command?: string | null;
@@ -813,11 +831,8 @@ export type Database = {
           created_at: string;
           everhour_project_id: string | null;
           id: string;
-          local_working_directory: string | null;
           name: string;
           organization_id: number;
-          remote_helper_installed_at: string | null;
-          remote_helper_version: string | null;
           updated_at: string;
         };
         Insert: {
@@ -825,11 +840,8 @@ export type Database = {
           created_at?: string;
           everhour_project_id?: string | null;
           id?: string;
-          local_working_directory?: string | null;
           name: string;
           organization_id: number;
-          remote_helper_installed_at?: string | null;
-          remote_helper_version?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -837,11 +849,8 @@ export type Database = {
           created_at?: string;
           everhour_project_id?: string | null;
           id?: string;
-          local_working_directory?: string | null;
           name?: string;
           organization_id?: number;
-          remote_helper_installed_at?: string | null;
-          remote_helper_version?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -1044,6 +1053,7 @@ export type Database = {
       ticket_events: {
         Row: {
           created_at: string;
+          created_by: string | null;
           event_type: Database['public']['Enums']['ticket_event_type'];
           id: string;
           is_blocking: boolean;
@@ -1055,6 +1065,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          created_by?: string | null;
           event_type?: Database['public']['Enums']['ticket_event_type'];
           id?: string;
           is_blocking?: boolean;
@@ -1066,6 +1077,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          created_by?: string | null;
           event_type?: Database['public']['Enums']['ticket_event_type'];
           id?: string;
           is_blocking?: boolean;

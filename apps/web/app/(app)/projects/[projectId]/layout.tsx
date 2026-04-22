@@ -6,7 +6,10 @@ import { TicketsBoardLoadingSkeleton } from '@/components/features/TicketsBoardL
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { PROJECT_BASE_SELECT } from '@/lib/actions/project-selects';
 import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
-import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
+import {
+  getProjectUserLocalSettingsByProjectId,
+  getProjectUserSshSettingsByProjectId
+} from '@/lib/actions/projects';
 import { createClient } from '@/supabase/utils/server';
 
 import TicketsBoardContent from '../../tickets/(components)/TicketsBoardContent';
@@ -35,10 +38,14 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
     notFound();
   }
 
-  const projectUser = (
-    await getProjectUserSshSettingsByProjectId(supabase, user?.id, [project.id])
-  ).get(project.id);
+  const [sshByProject, localByProject] = await Promise.all([
+    getProjectUserSshSettingsByProjectId(supabase, user?.id, [project.id]),
+    getProjectUserLocalSettingsByProjectId(supabase, user?.id, [project.id])
+  ]);
+  const projectUser = sshByProject.get(project.id);
   const sshSettings = resolveProjectUserSshSettings(projectUser);
+  const projectUserLocal = localByProject.get(project.id);
+  const projectWorkingDirectory = projectUserLocal?.local_working_directory ?? null;
 
   const [{ data: everhourIntegration }, { data: statuses }] = await Promise.all([
     supabase
@@ -71,7 +78,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         organizationId={project.organization_id}
         projectName={project.name}
         projectColor={project.color}
-        projectWorkingDirectory={project.local_working_directory}
+        projectWorkingDirectory={projectWorkingDirectory}
         projectSshCommand={sshSettings.sshCommand}
         projectRemoteWorkingDirectory={sshSettings.remoteWorkingDirectory}
         projectSshHost={sshSettings.sshHost}

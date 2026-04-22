@@ -13,10 +13,13 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
   const { file } = await searchParams;
   const initialFilePath = Array.isArray(file) ? file[0] : file;
   const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   const { data: project, error } = await supabase
     .from('projects')
-    .select('id,name,local_working_directory')
+    .select('id,name')
     .eq('id', projectId)
     .maybeSingle();
 
@@ -24,11 +27,22 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
     notFound();
   }
 
+  let workingDirectory: string | null = null;
+  if (user?.id) {
+    const { data: projectUser } = await supabase
+      .from('project_user')
+      .select('local_working_directory')
+      .eq('user_id', user.id)
+      .eq('project_id', project.id)
+      .maybeSingle();
+    workingDirectory = projectUser?.local_working_directory ?? null;
+  }
+
   return (
     <CurrentChangesPage
       projectId={project.id}
       projectName={project.name}
-      workingDirectory={project.local_working_directory}
+      workingDirectory={workingDirectory}
       initialFilePath={initialFilePath ?? null}
     />
   );

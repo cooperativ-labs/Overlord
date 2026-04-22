@@ -3,11 +3,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
-import { PROJECT_BASE_SELECT, PROJECT_SSH_PREFERENCE_SELECT } from '@/lib/actions/project-selects';
+import {
+  PROJECT_BASE_SELECT,
+  PROJECT_SSH_PREFERENCE_SELECT,
+  PROJECT_USER_LOCAL_SELECT
+} from '@/lib/actions/project-selects';
 import {
   buildLegacySshCommand,
   type CreateProjectResult,
   type ProjectSshAuthMethod,
+  type ProjectUserLocalSettingsRow,
   type ProjectUserSshSettingsRow,
   resolveProjectUserSshSettings,
   type SidebarProject,
@@ -60,6 +65,28 @@ export async function getProjectUserSshSettingsByProjectId(
   return new Map(data.map(row => [row.project_id, row]));
 }
 
+export async function getProjectUserLocalSettingsByProjectId(
+  supabase: ServerSupabase,
+  userId: string | null | undefined,
+  projectIds: string[]
+): Promise<Map<string, ProjectUserLocalSettingsRow>> {
+  if (!userId || projectIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from('project_user')
+    .select(PROJECT_USER_LOCAL_SELECT)
+    .eq('user_id', userId)
+    .in('project_id', projectIds);
+
+  if (error || !data) {
+    return new Map();
+  }
+
+  return new Map(data.map(row => [row.project_id, row]));
+}
+
 export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   const supabase = await createClient();
   const {
@@ -75,24 +102,27 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
     return [];
   }
 
-  const sshSettingsByProjectId = await getProjectUserSshSettingsByProjectId(
-    supabase,
-    user?.id,
-    data.map(project => project.id)
-  );
+  const projectIds = data.map(project => project.id);
+  const [sshSettingsByProjectId, localSettingsByProjectId] = await Promise.all([
+    getProjectUserSshSettingsByProjectId(supabase, user?.id, projectIds),
+    getProjectUserLocalSettingsByProjectId(supabase, user?.id, projectIds)
+  ]);
 
-  return data.map(project => ({
-    ...resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id)),
-    id: project.id,
-    name: project.name,
-    color: project.color,
-    organizationId: project.organization_id,
-    everhourProjectId:
-      typeof project.everhour_project_id === 'string' ? project.everhour_project_id : null,
-    localWorkingDirectory: project.local_working_directory,
-    remoteHelperInstalledAt: project.remote_helper_installed_at,
-    remoteHelperVersion: project.remote_helper_version
-  }));
+  return data.map(project => {
+    const localSettings = localSettingsByProjectId.get(project.id);
+    return {
+      ...resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id)),
+      id: project.id,
+      name: project.name,
+      color: project.color,
+      organizationId: project.organization_id,
+      everhourProjectId:
+        typeof project.everhour_project_id === 'string' ? project.everhour_project_id : null,
+      localWorkingDirectory: localSettings?.local_working_directory ?? null,
+      remoteHelperInstalledAt: localSettings?.remote_helper_installed_at ?? null,
+      remoteHelperVersion: localSettings?.remote_helper_version ?? null
+    };
+  });
 }
 
 export async function updateProjectColorAction(input: {
@@ -151,15 +181,26 @@ export async function updateProjectWorkingDirectoryAction(input: {
       : null;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from('projects')
-    .update({ local_working_directory: normalized })
-    .eq('id', input.projectId)
-    .select('organization_id')
-    .single();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
-  if (error || !data) {
-    throw new Error(error?.message ?? 'Failed to update project working directory.');
+  if (!user) {
+    throw new Error('You must be signed in to update the project working directory.');
+  }
+
+  const { error } = await supabase.from('project_user').upsert(
+    {
+      user_id: user.id,
+      project_id: input.projectId,
+      local_working_directory: normalized,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: 'user_id,project_id' }
+  );
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to update project working directory.');
   }
 
   revalidateProjectPaths(input.projectId);

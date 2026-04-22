@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   try {
     const { artifacts, changeRationales, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
@@ -39,7 +39,8 @@ export async function POST(request: Request) {
         phase: 'deliver',
         session_id: resolved.session.id,
         summary,
-        ticket_id: ticketId
+        ticket_id: ticketId,
+        created_by: userId
       })
       .select('id')
       .single();
@@ -91,7 +92,8 @@ export async function POST(request: Request) {
             metadata: artifact.metadata,
             session_id: sessionId,
             ticket_id: ticketId,
-            uri: artifact.uri ?? null
+            uri: artifact.uri ?? null,
+            created_by: userId
           }));
           const { error: artifactError } = await supabase.from('artifacts').insert(artifactRows);
           if (artifactError) {
@@ -155,7 +157,8 @@ export async function POST(request: Request) {
           phase: 'review',
           summary: 'Ticket delivered and moved to review.',
           session_id: sessionId,
-          ticket_id: ticketId
+          ticket_id: ticketId,
+          created_by: userId
         });
 
         // Generate feed post (fire-and-forget — non-fatal if it fails)

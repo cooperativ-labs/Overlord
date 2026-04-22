@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const authResult = await resolveAgentToken(request);
   if (authResult.error) return authResult.error;
 
-  const { organizationId } = authResult.context;
+  const { organizationId, userId } = authResult.context;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -76,7 +76,8 @@ export async function POST(request: Request) {
       phase: null,
       session_id: session?.id ?? null,
       summary,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: userId
     });
 
     after(async () => {

@@ -21,6 +21,10 @@ export async function uploadImageArtifactAction(
 
   const supabase = await createClient();
 
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
   // Get ticket and project info
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
@@ -34,7 +38,7 @@ export async function uploadImageArtifactAction(
 
   const { data: project, error: projectError } = await supabase
     .from('projects')
-    .select('id, name, local_working_directory')
+    .select('id, name')
     .eq('id', ticket.project_id)
     .single();
 
@@ -42,8 +46,19 @@ export async function uploadImageArtifactAction(
     throw new Error('Project not found.');
   }
 
-  const workspaceRoot = getWorkspaceRoot(project.local_working_directory);
-  const projectWorkingDirectory = project.local_working_directory;
+  let projectUserWorkingDirectory: string | null = null;
+  if (user?.id) {
+    const { data: projectUser } = await supabase
+      .from('project_user')
+      .select('local_working_directory')
+      .eq('user_id', user.id)
+      .eq('project_id', project.id)
+      .maybeSingle();
+    projectUserWorkingDirectory = projectUser?.local_working_directory ?? null;
+  }
+
+  const workspaceRoot = getWorkspaceRoot(projectUserWorkingDirectory);
+  const projectWorkingDirectory = projectUserWorkingDirectory;
   const resolvedProjectDirectory = resolveLinkedDirectory(projectWorkingDirectory);
   const resolvedWorkspaceDirectory = resolveLinkedDirectory(workspaceRoot);
 
@@ -71,6 +86,7 @@ export async function uploadImageArtifactAction(
       artifact_type: 'image',
       label: file.name,
       uri: relativePath,
+      created_by: user?.id ?? null,
       metadata: {
         size: file.size,
         type: file.type,
@@ -89,6 +105,7 @@ export async function uploadImageArtifactAction(
     event_type: 'artifact',
     summary: `Image artifact added: ${file.name}`,
     ticket_id: ticketId,
+    created_by: user?.id ?? null,
     payload: { artifactId: artifact.id }
   });
 
@@ -173,6 +190,7 @@ export async function uploadTicketDocumentAction(
       label: file.name,
       storage_path: storagePath,
       uploaded_by: user.id,
+      created_by: user.id,
       metadata: {
         size: file.size,
         type: file.type,
@@ -192,6 +210,7 @@ export async function uploadTicketDocumentAction(
     event_type: 'artifact',
     summary: `Document uploaded: ${file.name}`,
     ticket_id: ticketId,
+    created_by: user.id,
     payload: { artifactId: artifact.id }
   });
 

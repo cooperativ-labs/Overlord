@@ -20,7 +20,10 @@ import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
-import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
+import {
+  getProjectUserLocalSettingsByProjectId,
+  getProjectUserSshSettingsByProjectId
+} from '@/lib/actions/projects';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -89,7 +92,7 @@ export async function TicketPanelContent({
 
   const profileSettings = user ? await fetchProfileSettings(supabase, user.id) : null;
   const assignedAgent = parseTicketAssignedAgent(ticket.assigned_agent);
-  const projectsSelect = 'id,name,color,everhour_project_id,local_working_directory';
+  const projectsSelect = 'id,name,color,everhour_project_id';
 
   // Fetch all related data in parallel. Individual query failures are
   // handled gracefully — the component still renders with partial data.
@@ -189,13 +192,15 @@ export async function TicketPanelContent({
   const agentTokenRow = agentTokenResult.data;
   const objectives = objectivesResult.data;
   const projectOptionsRaw = projects ?? [];
-  const sshSettingsByProjectId = await getProjectUserSshSettingsByProjectId(
-    supabase,
-    user?.id,
-    projectOptionsRaw.map(project => project.id)
-  );
+  const projectIdsForSettings = projectOptionsRaw.map(project => project.id);
+  const [sshSettingsByProjectId, localSettingsByProjectId] = await Promise.all([
+    getProjectUserSshSettingsByProjectId(supabase, user?.id, projectIdsForSettings),
+    getProjectUserLocalSettingsByProjectId(supabase, user?.id, projectIdsForSettings)
+  ]);
   const projectOptions = projectOptionsRaw.map(project => ({
     ...project,
+    local_working_directory:
+      localSettingsByProjectId.get(project.id)?.local_working_directory ?? null,
     ...resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id))
   }));
 

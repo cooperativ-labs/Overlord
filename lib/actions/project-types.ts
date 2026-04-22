@@ -50,6 +50,11 @@ export type ProjectUserSshSettingsRow = Pick<
   | 'ssh_auth_method'
   | 'ssh_private_key_path'
 >;
+
+export type ProjectUserLocalSettingsRow = Pick<
+  ProjectUserRow,
+  'project_id' | 'local_working_directory' | 'remote_helper_installed_at' | 'remote_helper_version'
+>;
 type ProjectSshSettings = Pick<
   SidebarProject,
   | 'sshCommand'

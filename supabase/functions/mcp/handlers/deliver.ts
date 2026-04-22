@@ -70,7 +70,8 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
       phase: 'deliver',
       session_id: resolved.session.id,
       summary,
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: ctx.userId
     })
     .select('id')
     .single();
@@ -128,7 +129,8 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
         metadata: a.metadata ?? {},
         session_id: resolved.session.id,
         ticket_id: ticketId,
-        uri: a.uri ?? null
+        uri: a.uri ?? null,
+        created_by: ctx.userId
       }))
     );
   }
@@ -171,7 +173,8 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     phase: 'review',
     summary: 'Ticket delivered and moved to review.',
     session_id: resolved.session.id,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: ctx.userId
   });
 
   return toolOk({ artifacts: artifactsToPersist.length, ok: true, status: reviewStatusName });

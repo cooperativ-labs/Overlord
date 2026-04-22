@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
-import { getProjectUserSshSettingsByProjectId } from '@/lib/actions/projects';
+import {
+  getProjectUserLocalSettingsByProjectId,
+  getProjectUserSshSettingsByProjectId
+} from '@/lib/actions/projects';
 import { generateAndSetObjectiveTitle, markSubmittedObjectiveExecuting } from '@/lib/objectives';
 import { buildPromptContext } from '@/lib/overlord/prompt-context';
 import { connectionMethods } from '@/lib/overlord/types';
@@ -139,11 +142,16 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     return { error: 'Failed to create session.', status: 500 } as const;
   }
 
-  const objectiveExecution = await markSubmittedObjectiveExecuting(supabase, ticketId, {
-    agentIdentifier,
-    metadata,
-    ticketAssignedAgent: ticket.assigned_agent
-  });
+  const objectiveExecution = await markSubmittedObjectiveExecuting(
+    supabase,
+    ticketId,
+    {
+      agentIdentifier,
+      metadata,
+      ticketAssignedAgent: ticket.assigned_agent
+    },
+    userId
+  );
 
   // Fire-and-forget: generate objective title immediately without blocking attach
   if (objectiveExecution.didExecute && objectiveExecution.executedObjectiveId) {
@@ -184,7 +192,8 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     phase: previousStatus,
     session_id: session.id,
     summary: `${agentIdentifier} attached via ${connectionMethod}.`,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: userId
   });
 
   if (attachEventError) {
@@ -197,7 +206,8 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       phase: 'execute',
       session_id: session.id,
       summary: 'Ticket reopened — resumed from delivered state.',
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: userId
     });
 
     if (reopenEventError) {
@@ -212,6 +222,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     { data: recentEvents },
     { data: project },
     sshPreferencesByProjectId,
+    localSettingsByProjectId,
     { data: profile }
   ] = await Promise.all([
     supabase
@@ -240,12 +251,13 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       .neq('event_type', 'system')
       .order('created_at', { ascending: false })
       .limit(12),
-    supabase
-      .from('projects')
-      .select('id,local_working_directory')
-      .eq('id', ticket.project_id)
-      .maybeSingle(),
+    supabase.from('projects').select('id').eq('id', ticket.project_id).maybeSingle(),
     getProjectUserSshSettingsByProjectId(
+      supabase,
+      userId,
+      ticket.project_id ? [ticket.project_id] : []
+    ),
+    getProjectUserLocalSettingsByProjectId(
       supabase,
       userId,
       ticket.project_id ? [ticket.project_id] : []
@@ -255,6 +267,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
   const sshSettings = project
     ? resolveProjectUserSshSettings(sshPreferencesByProjectId.get(project.id))
     : null;
+  const localSettings = project ? localSettingsByProjectId.get(project.id) : null;
 
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: {
@@ -267,7 +280,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     sharedState: sharedState ?? [],
     customInstructions: profile?.custom_agent_instructions ?? null,
     workingDirectory: resolveSessionWorkingDirectory({
-      localWorkingDirectory: project?.local_working_directory,
+      localWorkingDirectory: localSettings?.local_working_directory ?? null,
       remoteWorkingDirectory: sshSettings?.remoteWorkingDirectory,
       metadata
     })

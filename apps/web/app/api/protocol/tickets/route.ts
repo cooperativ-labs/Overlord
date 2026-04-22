@@ -73,7 +73,8 @@ export async function POST(request: Request) {
       const matched = await resolveProjectByWorkingDirectory(
         supabase,
         organizationId,
-        workingDirectory
+        workingDirectory,
+        userId
       );
       if (matched) {
         resolvedProjectId = matched.id;
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await upsertDraftObjective(supabase, ticket.id, objective);
+    await upsertDraftObjective(supabase, ticket.id, objective, createdBy);
 
     return NextResponse.json({
       ok: true,

@@ -83,7 +83,8 @@ export function sortObjectivesByCreatedAtAscending<T extends ObjectiveTimelineIt
 export async function upsertDraftObjective(
   supabase: ObjectiveClient,
   ticketId: string,
-  objective: string | null | undefined
+  objective: string | null | undefined,
+  createdBy?: string | null
 ) {
   const normalizedObjective = normalizeObjectiveText(objective);
   const { data: editableObjective, error: editableObjectiveError } = await supabase
@@ -115,7 +116,8 @@ export async function upsertDraftObjective(
   const { error: insertDraftError } = await supabase.from('objectives').insert({
     state: 'draft',
     objective: normalizedObjective,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: createdBy ?? null
   });
   if (insertDraftError) {
     throw new Error(insertDraftError.message);
@@ -159,7 +161,8 @@ export async function submitDraftObjective(supabase: ObjectiveClient, ticketId: 
 export async function markSubmittedObjectiveExecuting(
   supabase: ObjectiveClient,
   ticketId: string,
-  executionSnapshot?: ObjectiveExecutionSnapshot
+  executionSnapshot?: ObjectiveExecutionSnapshot,
+  createdBy?: string | null
 ) {
   const { data: submittedObjective, error: submittedError } = await supabase
     .from('objectives')
@@ -212,7 +215,8 @@ export async function markSubmittedObjectiveExecuting(
   const { error: insertDraftError } = await supabase.from('objectives').insert({
     state: 'draft',
     objective: '',
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: createdBy ?? null
   });
   if (insertDraftError) {
     throw new Error(insertDraftError.message);

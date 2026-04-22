@@ -311,19 +311,25 @@ export default async function TicketsBoardContent({
 
   const effectiveMentionProjectId = projectId ?? mentionProjectId;
   if (effectiveMentionProjectId && view === 'board') {
-    const { data: projectForMentions } = await supabase
-      .from('projects')
-      .select('local_working_directory')
-      .eq('id', effectiveMentionProjectId)
-      .limit(1)
-      .maybeSingle();
+    const {
+      data: { user: currentUser }
+    } = await supabase.auth.getUser();
+    const { data: projectUserForMentions } = currentUser
+      ? await supabase
+          .from('project_user')
+          .select('local_working_directory')
+          .eq('user_id', currentUser.id)
+          .eq('project_id', effectiveMentionProjectId)
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
 
     if (isElectronRequest) {
       // In Electron, pass the raw configured path so the client can fetch files locally via IPC
-      kanbanWorkingDirectory = projectForMentions?.local_working_directory ?? null;
+      kanbanWorkingDirectory = projectUserForMentions?.local_working_directory ?? null;
     } else {
       const resolvedProjectDirectory = resolveLinkedDirectory(
-        projectForMentions?.local_working_directory
+        projectUserForMentions?.local_working_directory
       );
       if (resolvedProjectDirectory) {
         kanbanWorkingDirectory = resolvedProjectDirectory;

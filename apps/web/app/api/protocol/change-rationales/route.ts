@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
   try {
     const { changeRationales, phase, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
-    const { organizationId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
@@ -40,7 +40,8 @@ export async function POST(request: Request) {
         phase: phase ?? null,
         session_id: resolved.session.id,
         summary: eventSummary,
-        ticket_id: ticketId
+        ticket_id: ticketId,
+        created_by: userId
       })
       .select('id')
       .single();

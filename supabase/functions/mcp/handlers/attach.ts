@@ -153,7 +153,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     await supabase.from('objectives').insert({
       state: 'draft',
       objective: '',
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: ctx.userId
     });
   }
 
@@ -184,7 +185,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     phase: previousStatus,
     session_id: session.id,
     summary: `${agentIdentifier} attached via ${connectionMethod}.`,
-    ticket_id: ticketId
+    ticket_id: ticketId,
+    created_by: ctx.userId
   });
 
   if (attachEventError) return toolErr('Failed to record attach event.');
@@ -195,7 +197,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       phase: 'execute',
       session_id: session.id,
       summary: 'Ticket reopened — resumed from delivered state.',
-      ticket_id: ticketId
+      ticket_id: ticketId,
+      created_by: ctx.userId
     });
 
     if (reopenEventError) return toolErr('Failed to record reopen event.');
