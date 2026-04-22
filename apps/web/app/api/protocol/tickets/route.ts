@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       delegate,
       executionTarget,
       objective,
+      personal,
       priority,
       projectId,
       workingDirectory,
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     // Ticket organization_id follows the selected project so the CLI can treat
     // the project choice as the source of truth.
     let resolvedProjectId: string | null = projectId ?? null;
-    let resolvedOrganizationId: number | null = null;
+    let resolvedOrganizationId: number | null = personal ? organizationId : null;
 
     if (resolvedProjectId) {
       const { data: project } = await supabase
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
       resolvedOrganizationId = project?.organization_id ?? null;
     }
 
-    if (!resolvedProjectId && workingDirectory) {
+    if (!personal && !resolvedProjectId && workingDirectory) {
       const matched = await resolveProjectByWorkingDirectory(
         supabase,
         organizationId,
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!resolvedProjectId) {
+    if (!personal && !resolvedProjectId) {
       const { data: project } = await supabase
         .from('projects')
         .select('id,organization_id')
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
       resolvedOrganizationId = project?.organization_id ?? null;
     }
 
-    if (!resolvedProjectId || !resolvedOrganizationId) {
+    if (!resolvedOrganizationId) {
       return NextResponse.json(
         { error: 'No project found for this organization.' },
         { status: 400 }
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
         execution_target: executionTarget,
         organization_id: resolvedOrganizationId,
         priority,
-        project_id: resolvedProjectId,
+        project_id: personal ? null : resolvedProjectId,
         status: draftStatusName,
         title: nextTitle
       })
@@ -148,6 +149,7 @@ export async function POST(request: Request) {
         id: ticket.id,
         organizationId: ticket.organization_id,
         projectId: ticket.project_id,
+        personal: ticket.project_id === null,
         reference: getTicketIdentifier(ticket.id),
         status: ticket.status,
         title: nextTitle

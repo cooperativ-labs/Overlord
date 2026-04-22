@@ -30,7 +30,7 @@ export default async function (args: Args, _extra: ToolHandlerExtra) {
         id: ticketId,
         reference,
         title: args.title,
-        projectName: args.projectId ? 'Selected project' : 'Default project'
+        projectName: args.projectId ? 'Selected project' : 'Personal'
       }
     }
   };

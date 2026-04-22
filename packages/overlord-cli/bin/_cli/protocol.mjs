@@ -1048,7 +1048,9 @@ async function protocolSpawn(args) {
   // When --project-id is not provided, auto-send cwd as workingDirectory so
   // the server can resolve the project from the caller's project_user
   // local_working_directory setting.
-  const workingDirectory = flags['working-directory'] ?? (!flags['project-id'] ? process.cwd() : undefined);
+  const personal = Boolean(flags.personal);
+  const workingDirectory =
+    flags['working-directory'] ?? (!flags['project-id'] && !personal ? process.cwd() : undefined);
 
   const body = {
     objective,
@@ -1058,6 +1060,7 @@ async function protocolSpawn(args) {
     ...(flags.title ? { title: String(flags.title) } : {}),
     ...(flags.priority ? { priority: String(flags.priority) } : {}),
     ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
+    ...(personal ? { personal: true } : {}),
     ...(workingDirectory ? { workingDirectory: String(workingDirectory) } : {}),
     ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
@@ -1136,26 +1139,16 @@ async function protocolCreateTicket(args) {
     );
   }
 
-  const workingDirectory = String(flags['working-directory'] ?? process.cwd());
-  const discovered = await apiPost(
-    platformUrl,
-    agentToken,
-    localSecret,
-    '/api/protocol/discover-project',
-    { workingDirectory },
-    timeoutMs
-  );
-
-  const projectId = discovered?.project?.id;
-  if (!projectId) {
-    throw new Error(
-      "Could not resolve project from working directory. Set your local working directory for this project in Overlord or pass --working-directory."
-    );
-  }
+  const standaloneWorkingDirectory =
+    !flags.personal && !flags['project-id']
+      ? String(flags['working-directory'] ?? process.cwd())
+      : undefined;
 
   const standaloneBody = {
     objective,
-    projectId,
+    ...(flags.personal ? { personal: true } : {}),
+    ...(!flags.personal && flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
+    ...(standaloneWorkingDirectory ? { workingDirectory: standaloneWorkingDirectory } : {}),
     ...(flags.title ? { title: String(flags.title) } : {}),
     ...(flags.priority ? { priority: String(flags.priority) } : {}),
     ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
@@ -1225,6 +1218,7 @@ Project discovery:
     ovld protocol discover-project --working-directory /path/to/repo
 
   Use --project-id to override automatic resolution on spawn or ticket creation.
+  Use --personal to create a private ticket without assigning any project.
 
 Subcommands:
   auth-status               Return machine-readable auth status for agent runtimes
@@ -1415,6 +1409,7 @@ spawn:
     --title <text>
     --priority <level>        low | medium | high | urgent
     --project-id <id>         Explicit project; skips working-directory resolution
+    --personal                Create the ticket without assigning a project
     --working-directory <path> Override cwd for project resolution (default: cwd)
     --acceptance-criteria <text>
     --available-tools <text>
@@ -1440,6 +1435,8 @@ create:
     --session-key <key>
     --ticket-id <id>
     --working-directory <path>  Resolve project by your configured local working directory (default: cwd)
+    --project-id <id>           Explicit project for standalone draft creation
+    --personal                  Create a private standalone draft without a project
     --title <text>
     --priority <level>        low | medium | high | urgent
     --acceptance-criteria <text>
@@ -1451,7 +1448,7 @@ create:
   Returns:
     New draft ticket JSON (follow-up draft when session flags are provided)
   Notes:
-    Standalone create auto-discovers the project from the current working directory.
+    Standalone create auto-discovers the project from the current working directory unless --personal is set.
     Follow-up create requires both --session-key and --ticket-id.
 
 artifact-prepare-upload:

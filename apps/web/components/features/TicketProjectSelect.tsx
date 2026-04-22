@@ -33,6 +33,8 @@ import { useCreateProjectMutation } from '@/lib/client-data/projects/mutations';
 import { moveTicketProjectInBoards } from '@/lib/client-data/tickets/cache';
 import { useProjects } from '@/lib/client-data/tickets/hooks';
 
+const PERSONAL_PROJECT_VALUE = '__personal__';
+
 type ProjectOption = {
   id: string;
   name: string;
@@ -43,7 +45,7 @@ type ProjectOption = {
 type TicketProjectSelectProps = {
   ticketId: string;
   organizationId: number;
-  currentProjectId: string;
+  currentProjectId: string | null;
   projects: ProjectOption[];
 };
 
@@ -91,7 +93,9 @@ export function TicketProjectSelect({
     [everhourByProjectId, initialSidebarProjects, projectsQuery.data]
   );
   const [savedProjectId, setSavedProjectId] = useState(currentProjectId);
-  const [selectedProjectId, setSelectedProjectId] = useState(currentProjectId);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(
+    currentProjectId ?? PERSONAL_PROJECT_VALUE
+  );
   const [isSavingProject, startSavingProject] = useTransition();
   const [updateError, setUpdateError] = useState<string | null>(null);
 
@@ -106,21 +110,29 @@ export function TicketProjectSelect({
     [availableProjects, selectedProjectId]
   );
 
-  function handleProjectChange(nextProjectId: string) {
-    const previousProjectId = savedProjectId;
-    setSelectedProjectId(nextProjectId);
+  function handleProjectChange(nextValue: string) {
+    const previousProjectId = savedProjectId ?? PERSONAL_PROJECT_VALUE;
+    const nextProjectId = nextValue === PERSONAL_PROJECT_VALUE ? null : nextValue;
+    setSelectedProjectId(nextValue);
     setUpdateError(null);
 
     startSavingProject(async () => {
       try {
         await setTicketProjectAction(ticketId, nextProjectId);
-        const nextProject = availableProjects.find(project => project.id === nextProjectId);
-        if (nextProject) {
+        const nextProject = availableProjects.find(project => project.id === nextProjectId) ?? null;
+        if (nextProjectId && nextProject) {
           moveTicketProjectInBoards(queryClient, ticketId, {
             project_id: nextProject.id,
             project_name: nextProject.name,
             project_color: nextProject.color,
             project_everhour_project_id: nextProject.everhour_project_id
+          });
+        } else {
+          moveTicketProjectInBoards(queryClient, ticketId, {
+            project_id: null,
+            project_name: 'Personal',
+            project_color: null,
+            project_everhour_project_id: null
           });
         }
         setSavedProjectId(nextProjectId);
@@ -186,7 +198,9 @@ export function TicketProjectSelect({
     <>
       <Select
         value={selectedProjectId}
-        onValueChange={(value: string | undefined) => handleProjectChange(value ?? '')}
+        onValueChange={(value: string | undefined) =>
+          handleProjectChange(value ?? PERSONAL_PROJECT_VALUE)
+        }
         disabled={isSavingProject}
       >
         <SelectTrigger
@@ -203,10 +217,12 @@ export function TicketProjectSelect({
             ) : (
               <span className="h-2.5 w-2.5 rounded-[4px] border border-muted-foreground/50 bg-muted shrink-0" />
             )}
-            <span>{selectedProject?.name ?? 'Project'}</span>
+            <span>{selectedProject?.name ?? 'Personal'}</span>
           </span>
         </SelectTrigger>
         <SelectContent align="start">
+          <SelectItem value={PERSONAL_PROJECT_VALUE}>Personal</SelectItem>
+          <SelectSeparator />
           {availableProjects.map(project => (
             <SelectItem key={project.id} value={project.id}>
               {project.name}

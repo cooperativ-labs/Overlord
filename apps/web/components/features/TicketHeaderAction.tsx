@@ -17,7 +17,7 @@ import { type WebAgentMode, WebAgentModeButton } from './WebAgentModeButton';
 
 type TicketHeaderActionProps = {
   ticketId: string;
-  projectId: string;
+  projectId: string | null;
   organizationId: number;
   agentToken: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;

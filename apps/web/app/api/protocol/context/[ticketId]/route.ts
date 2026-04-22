@@ -55,9 +55,9 @@ export async function GET(request: Request, { params }: RouteContext) {
       getProjectUserSshSettingsByProjectId(supabase, authResult.context.userId, projectIds),
       getProjectUserLocalSettingsByProjectId(supabase, authResult.context.userId, projectIds)
     ]);
-    const projectUser = sshByProject.get(ticket.project_id);
+    const projectUser = ticket.project_id ? sshByProject.get(ticket.project_id) : undefined;
     const sshSettings = resolveProjectUserSshSettings(projectUser);
-    const projectUserLocal = localByProject.get(ticket.project_id);
+    const projectUserLocal = ticket.project_id ? localByProject.get(ticket.project_id) : undefined;
     const localWorkingDirectory = projectUserLocal?.local_working_directory ?? null;
     // Prefer the currently executing objective; fall back to submitted.
     // Draft objectives are not exposed on modern schemas, but we keep them as

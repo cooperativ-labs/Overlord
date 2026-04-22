@@ -16,6 +16,7 @@ export type TicketDraft = {
   priority: (typeof PRIORITY_ORDER)[number];
   projectId: string | null;
   projectName: string | null;
+  personal: boolean;
   sourceSummary: string;
 };
 
@@ -123,6 +124,7 @@ export function buildTicketDraft(args: any): TicketDraft {
     projectId:
       typeof args.projectId === 'string' && args.projectId.trim() ? args.projectId.trim() : null,
     projectName: null,
+    personal: args.personal === true,
     sourceSummary: getSourceSummary(description)
   };
 }
@@ -130,8 +132,13 @@ export function buildTicketDraft(args: any): TicketDraft {
 export async function resolveProject(
   supabase: SupabaseClient,
   organizationId: number,
-  explicitProjectId: string | null
+  explicitProjectId: string | null,
+  personal = false
 ) {
+  if (personal) {
+    return null;
+  }
+
   if (explicitProjectId) {
     const { data: explicitProject, error: explicitProjectError } = await supabase
       .from('projects')
@@ -207,10 +214,15 @@ export async function createDraftTicket(
   draft: TicketDraft
 ) {
   const createdBy = await resolveTicketCreatorUserId(supabase, ctx);
-  const project = await resolveProject(supabase, ctx.organizationId, draft.projectId);
+  const project = await resolveProject(
+    supabase,
+    ctx.organizationId,
+    draft.projectId,
+    draft.personal
+  );
   const draftStatusName = await resolvePreferredStatusNameByType(
     supabase,
-    project.organization_id,
+    ctx.organizationId,
     'draft'
   );
 
@@ -219,9 +231,9 @@ export async function createDraftTicket(
     .insert({
       created_by: createdBy,
       execution_target: DEFAULT_EXECUTION_TARGET,
-      organization_id: project.organization_id,
+      organization_id: ctx.organizationId,
       priority: draft.priority,
-      project_id: project.id,
+      project_id: project?.id ?? null,
       status: draftStatusName,
       title: draft.title
     })
@@ -245,7 +257,7 @@ export async function createDraftTicket(
 
   await assignTicketToDraftColumnEnd(
     supabase,
-    project.organization_id,
+    ctx.organizationId,
     createdTicket.id,
     draftStatusName
   );
@@ -255,6 +267,7 @@ export async function createDraftTicket(
     event_type: 'system',
     payload: {
       created_via: 'mcp.save_ticket_draft',
+      personal: project === null,
       source_summary: draft.sourceSummary
     },
     summary: `Ticket ${ticketReference} created from interactive MCP draft.`,
@@ -270,7 +283,7 @@ export async function createDraftTicket(
     id: createdTicket.id,
     organizationId: createdTicket.organization_id,
     projectId: createdTicket.project_id,
-    projectName: project.name,
+    projectName: project?.name ?? 'Personal',
     reference: ticketReference,
     status: createdTicket.status,
     title: createdTicket.title ?? draft.title,

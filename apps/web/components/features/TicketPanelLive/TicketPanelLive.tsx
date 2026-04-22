@@ -20,7 +20,7 @@ import { SharedStateSection } from './SharedStateSection';
 
 type TicketPanelLiveProps = {
   ticketId: string;
-  projectId: string;
+  projectId: string | null;
   editorScheme: string;
   workspaceRoot: string;
   workingDirectory?: string | null;

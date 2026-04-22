@@ -24,7 +24,7 @@ type ArtifactAccessResult =
   | {
       error: null;
       session: { id: string };
-      ticket: { id: string; organization_id: number; project_id: string };
+      ticket: { id: string; organization_id: number; project_id: string | null };
     };
 
 export function sanitizeArtifactFileName(fileName: string): string {
@@ -42,17 +42,17 @@ export function sanitizeArtifactFileName(fileName: string): string {
 }
 
 export function buildTicketStoragePath(
-  ticket: { organization_id: number; project_id: string; id: string },
+  ticket: { organization_id: number; project_id: string | null; id: string },
   fileName: string
 ) {
-  return `${ticket.organization_id}/${ticket.project_id}/${ticket.id}/${Date.now()}-${sanitizeArtifactFileName(fileName)}`;
+  return `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${Date.now()}-${sanitizeArtifactFileName(fileName)}`;
 }
 
 export function ensureTicketStoragePath(
   storagePath: string,
-  ticket: { organization_id: number; project_id: string; id: string }
+  ticket: { organization_id: number; project_id: string | null; id: string }
 ) {
-  const expectedPrefix = `${ticket.organization_id}/${ticket.project_id}/${ticket.id}/`;
+  const expectedPrefix = `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/`;
   return storagePath.startsWith(expectedPrefix);
 }
 

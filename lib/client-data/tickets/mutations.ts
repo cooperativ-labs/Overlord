@@ -78,7 +78,7 @@ export type CreateTicketInput = {
   status: string;
   objective: string;
   organizationId?: number;
-  projectId?: string;
+  projectId?: string | null;
   placement?: ColumnPlacement;
   generateServerTitle?: boolean;
 };
@@ -86,7 +86,7 @@ export type CreateTicketInput = {
 export type CreateTicketResult = {
   id: string;
   organizationId: number;
-  projectId: string;
+  projectId: string | null;
   title: string | null;
 };
 
@@ -149,7 +149,7 @@ export function useCreateTicketMutation(): UseMutationResult<
 export function useCreateBlankTicketMutation(): UseMutationResult<
   Awaited<ReturnType<typeof createBlankTicketAction>>,
   Error,
-  { organizationId?: number; projectId?: string }
+  { organizationId?: number; projectId?: string | null }
 > {
   return useMutation({
     mutationFn: input => createBlankTicketAction(input.organizationId, input.projectId)
@@ -163,7 +163,7 @@ type DeleteTicketContext = {
 };
 
 export function useDeleteTicketMutation(): UseMutationResult<
-  { organizationId: number; projectId: string },
+  { organizationId: number; projectId: string | null },
   Error,
   { ticketId: string },
   DeleteTicketContext

@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.17.0] - 2026-04-22:09:49
+
+### Added
+- Add personal ticket support so CLI, protocol, and web flows can create private tickets without assigning a project.
+
+### Fixed
+- Keep personal tickets visible in ticket search, Kanban, and list views instead of dropping projectless rows.
+- Route projectless ticket links, artifacts, and protocol context lookups through the personal inbox path instead of project-only paths.
+
+### Changed
+- Add `--personal` to `ovld protocol spawn` and `ovld protocol create` so private tickets skip project resolution.
+- Treat ticket `project_id` as nullable across draft creation, spawn, and board hydration so personal tickets behave consistently end to end.
+- Skip feed-post generation for personal tickets and hydrate new Kanban inserts immediately from realtime.
+
+### Security
+- None.
+
+### Refactor
+- Normalize ticket and project helper logic around nullable project IDs and personal inbox routing.
+
+### Test
+- Add coverage for ticket-path routing and personal-ticket protocol validation.
+
+### Documentation
+- Update CLI help text and protocol notes for personal ticket workflows.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.17.0`.
+
 ## [4.16.0] - 2026-04-22:08:38
 
 ### Added

@@ -18,9 +18,14 @@ export async function handleCreateTicketDraft(
   }
 
   try {
-    const project = await resolveProject(supabase, ctx.organizationId, draft.projectId);
-    draft.projectId = project.id;
-    draft.projectName = project.name;
+    const project = await resolveProject(
+      supabase,
+      ctx.organizationId,
+      draft.projectId,
+      draft.personal
+    );
+    draft.projectId = project?.id ?? null;
+    draft.projectName = project?.name ?? 'Personal';
 
     return appToolOk(
       'Prepared a draft ticket. Review the fields in the inline card, edit anything that needs work, then save it to Overlord.',

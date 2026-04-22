@@ -62,7 +62,13 @@ export async function getProjectUserSshSettingsByProjectId(
     return new Map();
   }
 
-  return new Map(data.map(row => [row.project_id, row]));
+  return new Map(
+    data
+      .filter(
+        (row): row is typeof row & { project_id: string } => typeof row.project_id === 'string'
+      )
+      .map(row => [row.project_id, row])
+  );
 }
 
 export async function getProjectUserLocalSettingsByProjectId(
@@ -84,7 +90,13 @@ export async function getProjectUserLocalSettingsByProjectId(
     return new Map();
   }
 
-  return new Map(data.map(row => [row.project_id, row]));
+  return new Map(
+    data
+      .filter(
+        (row): row is typeof row & { project_id: string } => typeof row.project_id === 'string'
+      )
+      .map(row => [row.project_id, row])
+  );
 }
 
 export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {

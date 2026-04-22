@@ -128,7 +128,7 @@ export function ProjectColorDot({
   return (
     <span
       className={cn('block shrink-0 rounded-[2px] border border-muted-foreground/50', sizeClass)}
-      title="No project"
+      title={name ?? 'Personal ticket'}
     />
   );
 }

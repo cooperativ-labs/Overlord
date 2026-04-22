@@ -30,6 +30,10 @@ export function useFeedRealtime() {
     const supabase = createClient();
 
     async function enrichPost(row: FeedPostRow): Promise<FeedPost | null> {
+      if (!row.project_id) {
+        return null;
+      }
+
       // Fetch project info
       const { data: project } = await supabase
         .from('projects')

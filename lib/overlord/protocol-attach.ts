@@ -251,7 +251,9 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       .neq('event_type', 'system')
       .order('created_at', { ascending: false })
       .limit(12),
-    supabase.from('projects').select('id').eq('id', ticket.project_id).maybeSingle(),
+    ticket.project_id
+      ? supabase.from('projects').select('id').eq('id', ticket.project_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     getProjectUserSshSettingsByProjectId(
       supabase,
       userId,

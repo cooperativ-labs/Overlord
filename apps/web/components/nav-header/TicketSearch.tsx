@@ -7,7 +7,7 @@ import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { buildProjectPath } from '@/lib/helpers/ticket-path';
+import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
@@ -120,11 +120,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
   }, [router]);
 
   const selectTicket = (ticket: TicketSearchResult) => {
-    if (!ticket.project_id) {
-      return;
-    }
-    const path = buildProjectPath({ projectId: ticket.project_id });
-    router.push(`${path}/${ticket.id}`);
+    router.push(buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id }));
     setQuery('');
     setResults([]);
     setIsOpen(false);
@@ -220,7 +216,7 @@ export function TicketSearch({ className }: TicketSearchProps) {
                     {ticket.ticket_sequence
                       ? `#${ticket.ticket_sequence}`
                       : getTicketIdentifier(ticket.id)}{' '}
-                    • {ticket.project?.name ?? 'Unknown project'}
+                    • {ticket.project?.name ?? (ticket.project_id ? 'Unknown project' : 'Personal')}
                   </p>
                 </li>
               );

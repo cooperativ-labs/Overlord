@@ -9,6 +9,10 @@ import { resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { createClient } from '@/supabase/utils/server';
 
+function getTicketStorageProjectSegment(projectId: string | null) {
+  return projectId ?? 'personal';
+}
+
 export async function uploadImageArtifactAction(
   ticketId: string,
   organizationId: number,
@@ -36,18 +40,13 @@ export async function uploadImageArtifactAction(
     throw new Error('Ticket not found.');
   }
 
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('id, name')
-    .eq('id', ticket.project_id)
-    .single();
-
-  if (projectError || !project) {
-    throw new Error('Project not found.');
-  }
+  const project = ticket.project_id
+    ? ((await supabase.from('projects').select('id, name').eq('id', ticket.project_id).single())
+        .data ?? null)
+    : null;
 
   let projectUserWorkingDirectory: string | null = null;
-  if (user?.id) {
+  if (user?.id && project?.id) {
     const { data: projectUser } = await supabase
       .from('project_user')
       .select('local_working_directory')
@@ -167,7 +166,7 @@ export async function uploadTicketDocumentAction(
   }
 
   // Build path: <organization_id>/<project_id>/<ticket_id>/<timestamp>-<filename>
-  const storagePath = `${ticket.organization_id}/${ticket.project_id}/${ticketId}/${Date.now()}-${file.name}`;
+  const storagePath = `${ticket.organization_id}/${getTicketStorageProjectSegment(ticket.project_id)}/${ticketId}/${Date.now()}-${file.name}`;
 
   const { error: uploadError } = await supabase.storage
     .from('artifacts')

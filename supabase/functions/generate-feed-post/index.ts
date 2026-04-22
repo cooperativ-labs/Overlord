@@ -398,6 +398,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (!ticket.project_id) {
+      return new Response(JSON.stringify({ ok: true, skipped: 'personal_ticket' }), {
+        status: 200,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Fetch the most recent executed objective (the one being delivered/completed).
     // Prefer the executing/complete objective over the draft.
     const { data: executedObjective } = await supabase

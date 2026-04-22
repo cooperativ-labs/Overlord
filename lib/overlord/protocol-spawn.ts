@@ -25,6 +25,7 @@ export type SpawnParams = {
   executionTarget: 'agent' | 'human';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   projectId?: string;
+  personal?: boolean;
   workingDirectory?: string;
   delegate?: string;
   parentSessionKey?: string;
@@ -55,6 +56,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     executionTarget,
     priority,
     projectId,
+    personal = false,
     workingDirectory,
     delegate,
     parentSessionKey,
@@ -72,7 +74,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
   // Resolve project — use provided projectId, then try workingDirectory, then fall back to first in org
   let resolvedProjectId: string | undefined = projectId;
 
-  if (!resolvedProjectId && workingDirectory) {
+  if (!personal && !resolvedProjectId && workingDirectory) {
     const matched = await resolveProjectByWorkingDirectory(
       supabase,
       organizationId,
@@ -82,7 +84,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     resolvedProjectId = matched?.id;
   }
 
-  if (!resolvedProjectId) {
+  if (!personal && !resolvedProjectId) {
     const { data: project } = await supabase
       .from('projects')
       .select('id')
@@ -93,7 +95,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     resolvedProjectId = project?.id;
   }
 
-  if (!resolvedProjectId) {
+  if (!personal && !resolvedProjectId) {
     return { error: 'No project found for this organization.', status: 400 } as const;
   }
 
@@ -121,7 +123,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       execution_target: executionTarget,
       organization_id: organizationId,
       priority,
-      project_id: resolvedProjectId,
+      project_id: personal ? null : (resolvedProjectId ?? null),
       status: executeStatusName,
       title: nextTitle
     })
@@ -236,6 +238,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
         title: nextTitle,
         organizationId: ticket.organization_id,
         projectId: ticket.project_id,
+        personal: ticket.project_id === null,
         executionTarget: ticket.execution_target,
         status: ticket.status,
         ticketSequence: ticket.ticket_sequence

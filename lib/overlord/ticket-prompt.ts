@@ -38,7 +38,7 @@ type Ticket = {
   constraints?: string | null;
   output_format?: string | null;
   execution_target: 'agent' | 'human' | null;
-  project_id: string;
+  project_id: string | null;
   status: string | null;
   priority: string | number | null;
 };

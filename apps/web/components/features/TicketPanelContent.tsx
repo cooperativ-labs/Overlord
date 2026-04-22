@@ -245,16 +245,10 @@ export async function TicketPanelContent({
   const ticketIdentifier = getTicketIdentifier(ticket.id);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
 
-  const activeProjectId = ticket.project_id ?? projectOptions[0]?.id;
-  if (!activeProjectId) {
-    return (
-      <div className="flex h-full items-center justify-center p-4">
-        <p className="text-sm text-muted-foreground">Project not found for this ticket.</p>
-      </div>
-    );
-  }
-
-  const activeProject = projectOptions.find(project => project.id === activeProjectId);
+  const activeProjectId = ticket.project_id;
+  const activeProject = activeProjectId
+    ? projectOptions.find(project => project.id === activeProjectId)
+    : null;
   const projectWorkingDirectory = activeProject?.local_working_directory;
   const projectSshCommand = activeProject?.sshCommand ?? null;
   const projectRemoteWorkingDirectory = activeProject?.remoteWorkingDirectory ?? null;
@@ -368,6 +362,14 @@ export async function TicketPanelContent({
                   currentProjectId={activeProjectId}
                   projects={projectOptions}
                 />
+                {!ticket.project_id ? (
+                  <>
+                    <div className="h-4 w-px bg-border" />
+                    <span className="text-xs text-muted-foreground">
+                      Personal ticket • only visible to you until assigned to a project
+                    </span>
+                  </>
+                ) : null}
                 <div className="h-4 w-px bg-border" />
                 <TicketStatusSelect
                   currentStatus={ticket.status ?? ''}

@@ -60,6 +60,7 @@ import KanbanCard, { type Ticket } from './KanbanCard';
 import KanbanColumn from './KanbanColumn';
 
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
+const PERSONAL_PROJECT_FILTER_ID = '__personal__';
 const WAITING_SOUND_PATH = '/sounds/notification-question.mp3';
 const REVIEW_SOUND_PATH = '/sounds/notification-complete.mp3';
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
@@ -76,6 +77,28 @@ type StatusColumn = {
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type AgentSession = Database['public']['Tables']['agent_sessions']['Row'];
 type Objective = Database['public']['Tables']['objectives']['Row'];
+type RealtimeBoardTicketRow = {
+  id: string;
+  title: string | null;
+  due_datetime: string | null;
+  execution_target: Database['public']['Enums']['ticket_execution_target'];
+  status: string;
+  priority: string;
+  assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
+  delegate: string | null;
+  is_read: boolean;
+  updated_at: string;
+  board_position: number;
+  organization_id: number;
+  project_id: string | null;
+  everhour_task_id: string | null;
+  schedule_id: number | null;
+  organization: { name: string } | Array<{ name: string }> | null;
+  project:
+    | { name: string; color: string; everhour_project_id: string | null }
+    | Array<{ name: string; color: string; everhour_project_id: string | null }>
+    | null;
+};
 
 import {
   buildBoardBootstrap,
@@ -93,6 +116,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getObjectivePayloadTicketId(value: unknown): string | null {
   if (!isRecord(value)) return null;
   return typeof value.ticket_id === 'string' ? value.ticket_id : null;
+}
+
+function getSingleRelation<T>(relation: T | T[] | null | undefined): T | null {
+  if (!relation) return null;
+  return Array.isArray(relation) ? (relation[0] ?? null) : relation;
+}
+
+function mapRealtimeBoardTicketRow(row: RealtimeBoardTicketRow): Ticket {
+  const project = getSingleRelation(row.project);
+  const organization = getSingleRelation(row.organization);
+
+  return {
+    id: row.id,
+    title: row.title,
+    objective: null,
+    organization_id: row.organization_id,
+    project_id: row.project_id,
+    project_name: project?.name ?? null,
+    project_color: project?.color ?? null,
+    project_everhour_project_id: project?.everhour_project_id ?? null,
+    everhour_task_id: row.everhour_task_id,
+    agent_session_state: null,
+    running_agent: null,
+    latest_objective_agent: null,
+    has_executing_objective: false,
+    status: row.status,
+    priority: row.priority,
+    execution_target: row.execution_target,
+    assigned_agent: parseTicketAssignedAgent(row.assigned_agent),
+    board_position: row.board_position,
+    organization_name: organization?.name ?? null,
+    waiting_for_response_at: null,
+    has_unopened_waiting_response: false,
+    is_read: row.is_read,
+    objectives_executed_count: 0,
+    updated_at: row.updated_at,
+    delegate: row.delegate,
+    schedule_id: row.schedule_id,
+    due_datetime: row.due_datetime
+  };
 }
 
 function getEventMessage(event: TicketEvent): string {
@@ -339,10 +402,11 @@ export default function KanbanBoard({
     if (projectId) return [];
     const seen = new Map<string, { id: string; name: string; color: string | null }>();
     for (const ticket of tickets) {
-      if (!seen.has(ticket.project_id)) {
-        seen.set(ticket.project_id, {
-          id: ticket.project_id,
-          name: ticket.project_name ?? ticket.project_id,
+      const optionId = ticket.project_id ?? PERSONAL_PROJECT_FILTER_ID;
+      if (!seen.has(optionId)) {
+        seen.set(optionId, {
+          id: optionId,
+          name: ticket.project_name ?? ticket.project_id ?? 'Personal',
           color: ticket.project_color ?? null
         });
       }
@@ -353,7 +417,11 @@ export default function KanbanBoard({
   const displayedTickets = useMemo(
     () =>
       filteredProjectId
-        ? ticketsWithIndicators.filter(t => t.project_id === filteredProjectId)
+        ? ticketsWithIndicators.filter(t =>
+            filteredProjectId === PERSONAL_PROJECT_FILTER_ID
+              ? t.project_id === null
+              : t.project_id === filteredProjectId
+          )
         : ticketsWithIndicators,
     [filteredProjectId, ticketsWithIndicators]
   );
@@ -552,6 +620,30 @@ export default function KanbanBoard({
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
+    const fetchRealtimeBoardTicket = async (ticketId: string): Promise<Ticket | null> => {
+      let query = supabase
+        .from('tickets')
+        .select(
+          'id,title,due_datetime,execution_target,status,priority,assigned_agent,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+        )
+        .eq('id', ticketId)
+        .limit(1);
+
+      if (organizationId !== undefined) {
+        query = query.eq('organization_id', organizationId);
+      }
+
+      if (projectId !== undefined) {
+        query = query.eq('project_id', projectId);
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (cancelled || error || !data) {
+        return null;
+      }
+
+      return mapRealtimeBoardTicketRow(data as RealtimeBoardTicketRow);
+    };
 
     const applySessionOverride = (
       session: Pick<AgentSession, 'ticket_id' | 'session_state' | 'agent_identifier'>
@@ -645,7 +737,7 @@ export default function KanbanBoard({
           .order('created_at', { ascending: false }),
         supabase
           .from('tickets')
-          .select('id,status,title,assigned_agent,is_read,board_position,updated_at')
+          .select('id,status,title,assigned_agent,delegate,is_read,board_position,updated_at')
           .in('id', ticketIds),
         supabase
           .from('objectives')
@@ -678,6 +770,7 @@ export default function KanbanBoard({
             status: string | null;
             title: string | null;
             assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
+            delegate: string | null;
             is_read: boolean;
             board_position: number;
             updated_at: string;
@@ -719,6 +812,7 @@ export default function KanbanBoard({
           latest_objective_agent:
             latestObjectiveAgentByTicket.get(t.id) ?? t.latest_objective_agent,
           assigned_agent: parseTicketAssignedAgent(update.assigned_agent) ?? t.assigned_agent,
+          delegate: update.delegate,
           agent_session_state: session?.session_state ?? t.agent_session_state ?? null,
           running_agent: runningAgent,
           has_executing_objective: executingObjectiveAgentByTicket.has(t.id)
@@ -847,6 +941,26 @@ export default function KanbanBoard({
       .on<Database['public']['Tables']['tickets']['Row']>(
         'postgres_changes',
         {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'tickets',
+          ...(organizationId ? { filter: `organization_id=eq.${organizationId}` } : {})
+        },
+        payload => {
+          const inserted = payload.new;
+          if (projectId && inserted.project_id !== projectId) return;
+
+          void (async () => {
+            const ticket = await fetchRealtimeBoardTicket(inserted.id);
+            if (!ticket) return;
+            mergeTicketsIntoBoards(queryClient, [toBoardTicket(ticket)], 'realtime');
+            setWaitingByTicket(previous => mergeWaitingByTicket(previous, [ticket]));
+          })();
+        }
+      )
+      .on<Database['public']['Tables']['tickets']['Row']>(
+        'postgres_changes',
+        {
           event: 'UPDATE',
           schema: 'public',
           table: 'tickets',
@@ -861,7 +975,8 @@ export default function KanbanBoard({
             title: updated.title,
             is_read: updated.is_read,
             board_position: updated.board_position,
-            updated_at: updated.updated_at
+            updated_at: updated.updated_at,
+            delegate: updated.delegate
           });
         }
       )
@@ -1081,10 +1196,13 @@ export default function KanbanBoard({
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
       organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
-      project_id: projectId ?? referenceTicket?.project_id ?? '',
-      project_name: referenceTicket?.project_name ?? null,
+      project_id: projectId ?? referenceTicket?.project_id ?? null,
+      project_name: referenceTicket?.project_name ?? (projectId ? null : 'Personal'),
       project_color: referenceTicket?.project_color ?? null,
-      project_everhour_project_id: referenceTicket?.project_everhour_project_id ?? null,
+      project_everhour_project_id:
+        (projectId ?? referenceTicket?.project_id)
+          ? (referenceTicket?.project_everhour_project_id ?? null)
+          : null,
       everhour_task_id: null,
       agent_session_state: null,
       status,
@@ -1144,10 +1262,13 @@ export default function KanbanBoard({
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
       organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
-      project_id: projectId ?? referenceTicket?.project_id ?? '',
-      project_name: referenceTicket?.project_name ?? null,
+      project_id: projectId ?? referenceTicket?.project_id ?? null,
+      project_name: referenceTicket?.project_name ?? (projectId ? null : 'Personal'),
       project_color: referenceTicket?.project_color ?? null,
-      project_everhour_project_id: referenceTicket?.project_everhour_project_id ?? null,
+      project_everhour_project_id:
+        (projectId ?? referenceTicket?.project_id)
+          ? (referenceTicket?.project_everhour_project_id ?? null)
+          : null,
       everhour_task_id: null,
       agent_session_state: null,
       status,

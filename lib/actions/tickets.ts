@@ -42,11 +42,13 @@ function revalidateTicketBoards() {
 }
 
 function revalidateTicketDetails(
-  items: Iterable<{ organizationId: number; projectId: string; ticketId: string }>
+  items: Iterable<{ organizationId: number; projectId: string | null; ticketId: string }>
 ) {
   for (const { organizationId, projectId, ticketId } of items) {
     revalidatePath(`/u/${ticketId}`);
-    revalidatePath(buildTicketPath({ organizationId, projectId, ticketId }));
+    if (projectId) {
+      revalidatePath(buildTicketPath({ organizationId, projectId, ticketId }));
+    }
   }
 }
 
@@ -62,7 +64,7 @@ type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 async function assertTicketAccess(
   supabase: ServerSupabase,
   ticketId: string
-): Promise<{ organization_id: number; project_id: string }> {
+): Promise<{ organization_id: number; project_id: string | null }> {
   const { data, error } = await supabase
     .from('tickets')
     .select('organization_id,project_id')
@@ -181,7 +183,7 @@ function toEngineSchedule(schedule: TicketScheduleRow) {
 async function createScheduledDuplicateIfNeeded(
   supabase: ServerSupabase,
   ticketId: string
-): Promise<Array<{ organizationId: number; projectId: string; ticketId: string }>> {
+): Promise<Array<{ organizationId: number; projectId: string | null; ticketId: string }>> {
   const { data: sourceTicket, error: sourceTicketError } = await supabase
     .from('tickets')
     .select(
@@ -297,7 +299,7 @@ async function updateTicketStatusAndSchedule(
   supabase: ServerSupabase,
   ticketId: string,
   status: string
-): Promise<Array<{ organizationId: number; projectId: string; ticketId: string }>> {
+): Promise<Array<{ organizationId: number; projectId: string | null; ticketId: string }>> {
   const { data: existingTicket, error: existingTicketError } = await supabase
     .from('tickets')
     .select('organization_id,project_id,status')
@@ -349,7 +351,7 @@ type PromptTicketSource = {
     acceptance_criteria: string | null;
     available_tools: string | null;
     execution_target: Database['public']['Enums']['ticket_execution_target'] | null;
-    project_id: string;
+    project_id: string | null;
     status: string | null;
     priority: Database['public']['Enums']['ticket_priority'] | null;
   };
@@ -461,9 +463,43 @@ async function resolveTicketProjectAndOrganization(
   supabase: ServerSupabase,
   input: {
     organizationId?: number;
-    projectId?: string;
+    projectId?: string | null;
   }
-): Promise<{ organizationId: number; projectId: string }> {
+): Promise<{ organizationId: number; projectId: string | null }> {
+  if (input.projectId === null) {
+    if (input.organizationId !== undefined) {
+      return { organizationId: input.organizationId, projectId: null };
+    }
+
+    const cookieStore = await cookies();
+    const defaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value?.trim() || null;
+    if (defaultProjectId) {
+      const { data: cookieProject, error: cookieProjectError } = await supabase
+        .from('projects')
+        .select('organization_id')
+        .eq('id', defaultProjectId)
+        .maybeSingle();
+
+      if (!cookieProjectError && cookieProject) {
+        return { organizationId: cookieProject.organization_id, projectId: null };
+      }
+    }
+
+    const { data: fallbackProject, error: fallbackError } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (fallbackError || !fallbackProject) {
+      throw new Error('No projects available. Create a project first.');
+    }
+
+    return { organizationId: fallbackProject.organization_id, projectId: null };
+  }
+
   const explicitProjectId = input.projectId?.trim() || null;
 
   if (explicitProjectId) {
@@ -581,7 +617,7 @@ export async function createTicketInColumnAction(
   objective: string,
   ticketId: string,
   organizationId?: number,
-  projectId?: string,
+  projectId?: string | null,
   position: 'top' | 'bottom' = 'top',
   generateTitle = true
 ) {
@@ -610,7 +646,7 @@ export async function createTicketInColumnAction(
     status: string;
     title: string | null;
     organization_id: number;
-    project_id: string;
+    project_id: string | null;
   } = {
     id: ticketId,
     status: statusForInsert,
@@ -650,7 +686,7 @@ export async function createCalendarTicketAction(
   objective: string,
   dueDatetime: string,
   organizationId?: number,
-  projectId?: string
+  projectId?: string | null
 ) {
   const supabase = await createClient();
   const selected = await resolveTicketProjectAndOrganization(supabase, {
@@ -689,7 +725,7 @@ export async function createCalendarTicketAction(
   return { id: data.id, organizationId: data.organization_id, projectId: data.project_id };
 }
 
-export async function createBlankTicketAction(organizationId?: number, projectId?: string) {
+export async function createBlankTicketAction(organizationId?: number, projectId?: string | null) {
   const supabase = await createClient();
   const selected = await resolveTicketProjectAndOrganization(supabase, {
     organizationId,
@@ -699,7 +735,7 @@ export async function createBlankTicketAction(organizationId?: number, projectId
   const insertPayload: {
     status: string;
     organization_id: number;
-    project_id: string;
+    project_id: string | null;
   } = {
     status: await resolveNewTicketDraftStatus(supabase, selected.organizationId),
     organization_id: selected.organizationId,
@@ -752,7 +788,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     status: string;
     title: string;
     organization_id: number;
-    project_id: string;
+    project_id: string | null;
   } = {
     acceptance_criteria: parsed.data.acceptanceCriteria || null,
     available_tools: parsed.data.availableTools,
@@ -855,7 +891,7 @@ export async function updateTicketFieldAction(
 
   const normalizedValue = value.trim();
 
-  let data: { organization_id: number; project_id: string };
+  let data: { organization_id: number; project_id: string | null };
 
   // For objective field, only update the objectives table
   if (field === 'objective') {
@@ -997,12 +1033,12 @@ export async function updateTicketExecutionTargetAction(
   ]);
 }
 
-export async function setTicketProjectAction(ticketId: string, projectId: string): Promise<void> {
+export async function setTicketProjectAction(
+  ticketId: string,
+  projectId: string | null
+): Promise<void> {
   const supabase = await createClient();
-  const nextProjectId = projectId.trim();
-  if (!nextProjectId) {
-    throw new Error('Project is required.');
-  }
+  const nextProjectId = typeof projectId === 'string' ? projectId.trim() || null : null;
 
   // assertTicketAccess verifies RLS access; reuse the result as existingTicket
   const existingTicket = await assertTicketAccess(supabase, ticketId);
@@ -1027,7 +1063,7 @@ export async function setTicketProjectAction(ticketId: string, projectId: string
 
   await supabase.from('ticket_events').insert({
     event_type: 'system',
-    summary: 'Project updated.',
+    summary: nextProjectId ? 'Project updated.' : 'Moved to personal inbox.',
     ticket_id: ticketId
   });
 
@@ -1348,7 +1384,7 @@ export async function markSessionDisconnectedAction(sessionId: string): Promise<
 
 export async function deleteTicketAction(
   ticketId: string
-): Promise<{ organizationId: number; projectId: string }> {
+): Promise<{ organizationId: number; projectId: string | null }> {
   const supabase = await createClient();
   await assertTicketAccess(supabase, ticketId);
 
@@ -1448,7 +1484,7 @@ type RawBoardTicket = {
   updated_at: string;
   board_position: number;
   organization_id: number;
-  project_id: string;
+  project_id: string | null;
   everhour_task_id: string | null;
   schedule_id: number | null;
   delegate: string | null;
@@ -1485,7 +1521,7 @@ function mapBoardTicket(
     schedule_id: raw.schedule_id,
     delegate: raw.delegate,
     organization_name: org?.name ?? null,
-    project_name: p?.name ?? null,
+    project_name: p?.name ?? (raw.project_id ? null : 'Personal'),
     project_color: p?.color ?? null,
     project_everhour_project_id: p?.everhour_project_id ?? null,
     agent_session_state: null,

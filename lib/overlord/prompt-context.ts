@@ -13,7 +13,7 @@ type TicketLike = {
   constraints?: string | null;
   output_format?: string | null;
   execution_target: 'agent' | 'human' | null;
-  project_id: string;
+  project_id: string | null;
   status: string | null;
   priority: string | number | null;
 };
@@ -60,7 +60,7 @@ function formatTicketMetadata(ticket: TicketLike): string {
     `- **Title:** ${ticket.title?.trim() || '(Untitled)'}`,
     `- **Ticket ID:** ${ticket.id}`,
     `- **Status:** ${ticket.status ?? 'unknown'}`,
-    `- **Project ID:** ${ticket.project_id}`
+    `- **Project:** ${ticket.project_id ?? 'Personal / private'}`
   ];
 
   return lines.join('\n');

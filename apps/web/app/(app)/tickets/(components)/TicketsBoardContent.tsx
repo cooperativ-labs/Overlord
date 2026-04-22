@@ -76,7 +76,7 @@ type RawTicket = {
   updated_at: string;
   board_position: number;
   organization_id: number;
-  project_id: string;
+  project_id: string | null;
   everhour_task_id: string | null;
   schedule_id: number | null;
   objectives_executed_count?: number;
@@ -271,39 +271,32 @@ export default async function TicketsBoardContent({
     }
   }
 
-  const tickets = rawTickets
-    .filter(ticket => {
-      if (!ticket.project_id) {
-        console.warn('[TicketsBoardContent] Dropping ticket without project_id:', ticket.id);
-        return false;
-      }
-      return true;
-    })
-    .map(({ organization, project, ...ticket }) => {
-      const p = getRelationItem(project);
-      const session = latestSessionByTicket.get(ticket.id);
-      const isAttached = session?.session_state === 'attached';
-      // Prefer the executing objective's agent_identifier; fall back to session's
-      const runningAgent =
-        objectiveAgentByTicket.get(ticket.id) ?? (isAttached ? session.agent_identifier : null);
-      return {
-        ...ticket,
-        assigned_agent: parseTicketAssignedAgent(ticket.assigned_agent),
-        objective: null,
-        project_id: ticket.project_id,
-        organization_name: getOrganizationName(organization),
-        project_name: p?.name ?? null,
-        project_color: p?.color ?? null,
-        project_everhour_project_id: hasEverhourApiKey ? (p?.everhour_project_id ?? null) : null,
-        agent_session_state: session?.session_state ?? null,
-        latest_objective_agent: latestObjectiveAgentByTicket.get(ticket.id) ?? null,
-        running_agent: runningAgent,
-        has_executing_objective: objectiveAgentByTicket.has(ticket.id),
-        waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
-        objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0,
-        schedule_id: ticket.schedule_id ?? null
-      };
-    });
+  const tickets = rawTickets.map(({ organization, project, ...ticket }) => {
+    const p = getRelationItem(project);
+    const session = latestSessionByTicket.get(ticket.id);
+    const isAttached = session?.session_state === 'attached';
+    // Prefer the executing objective's agent_identifier; fall back to session's
+    const runningAgent =
+      objectiveAgentByTicket.get(ticket.id) ?? (isAttached ? session.agent_identifier : null);
+    return {
+      ...ticket,
+      assigned_agent: parseTicketAssignedAgent(ticket.assigned_agent),
+      objective: null,
+      project_id: ticket.project_id,
+      organization_name: getOrganizationName(organization),
+      project_name: p?.name ?? (ticket.project_id ? null : 'Personal'),
+      project_color: p?.color ?? null,
+      project_everhour_project_id:
+        hasEverhourApiKey && ticket.project_id ? (p?.everhour_project_id ?? null) : null,
+      agent_session_state: session?.session_state ?? null,
+      latest_objective_agent: latestObjectiveAgentByTicket.get(ticket.id) ?? null,
+      running_agent: runningAgent,
+      has_executing_objective: objectiveAgentByTicket.has(ticket.id),
+      waiting_for_response_at: waitingQuestionByTicket.get(ticket.id) ?? null,
+      objectives_executed_count: executedObjectivesCountByTicket.get(ticket.id) ?? 0,
+      schedule_id: ticket.schedule_id ?? null
+    };
+  });
   const statuses = allStatuses;
   const loadError = ticketLoadError ?? statusesResult.error;
   let objectiveFileMentionPaths: string[] = [];

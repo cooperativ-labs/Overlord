@@ -34,7 +34,7 @@ export type Ticket = {
   title: string | null;
   objective: string | null;
   organization_id: number;
-  project_id: string;
+  project_id: string | null;
   project_name?: string | null;
   project_color?: string | null;
   project_everhour_project_id?: string | null;
@@ -180,7 +180,12 @@ function KanbanCardBody({
               <span className="mt-1">
                 <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
               </span>
-              <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
+                {!ticket.project_id ? (
+                  <p className="text-[10px] text-muted-foreground">Personal • private to you</p>
+                ) : null}
+              </div>
             </div>
           </div>
           {showOrganizationName && ticket.organization_name ? (

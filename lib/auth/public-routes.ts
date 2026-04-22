@@ -1,7 +1,8 @@
 export const SESSION_ENDED_MESSAGE = 'You have been signed out. Please sign in again.';
 
-const PUBLIC_EXACT_PATHS = new Set(['/', '/early-access']);
+const PUBLIC_EXACT_PATHS = new Set(['/', '/early-access', '/docs']);
 const PUBLIC_PATH_PREFIXES = [
+  '/docs/',
   '/login',
   '/signup',
   '/electron-login',

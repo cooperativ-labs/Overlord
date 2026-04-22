@@ -57,6 +57,7 @@ const SORT_LABELS: Record<SortKey, string> = {
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
 const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
+const PERSONAL_PROJECT_FILTER_ID = '__personal__';
 
 function areStringListsEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
@@ -182,10 +183,11 @@ export default function TicketListView({
   const projectOptions = useMemo(() => {
     const seen = new Map<string, { id: string; name: string; color: string | null }>();
     for (const t of tickets) {
-      if (!seen.has(t.project_id)) {
-        seen.set(t.project_id, {
-          id: t.project_id,
-          name: t.project_name ?? t.project_id,
+      const optionId = t.project_id ?? PERSONAL_PROJECT_FILTER_ID;
+      if (!seen.has(optionId)) {
+        seen.set(optionId, {
+          id: optionId,
+          name: t.project_name ?? t.project_id ?? 'Personal',
           color: t.project_color ?? null
         });
       }
@@ -252,7 +254,13 @@ export default function TicketListView({
     if (!areAllStatusesSelected && selectedStatuses.length > 0) {
       filtered = filtered.filter(t => selectedStatusesSet.has(t.status));
     }
-    if (filterProject) filtered = filtered.filter(t => t.project_id === filterProject);
+    if (filterProject) {
+      filtered = filtered.filter(t =>
+        filterProject === PERSONAL_PROJECT_FILTER_ID
+          ? t.project_id === null
+          : t.project_id === filterProject
+      );
+    }
 
     return [...filtered].sort((a, b) => {
       if (sortKey === 'updated_at')

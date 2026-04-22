@@ -151,6 +151,7 @@ export const createStandaloneTicketSchema = z.object({
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
+  personal: z.boolean().optional().default(false),
   workingDirectory: z.string().trim().max(1024).optional(),
   delegate: z.string().trim().max(120).optional()
 });
@@ -189,6 +190,7 @@ export const spawnSchema = z.object({
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
+  personal: z.boolean().optional().default(false),
   workingDirectory: z.string().trim().max(1024).optional(),
   delegate: z.string().trim().max(120).optional(),
   parentSessionKey: z.string().uuid().optional(),

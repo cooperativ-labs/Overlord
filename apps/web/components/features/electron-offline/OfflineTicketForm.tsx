@@ -16,24 +16,27 @@ import {
   removeQueuedTicket
 } from '@/lib/offline/offline-ticket-queue';
 
+const PERSONAL_PROJECT_VALUE = '__personal__';
+
 export function OfflineTicketForm() {
   const [projects] = useState<CachedProject[]>(() => getCachedProjects());
   const [objective, setObjective] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? '');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(PERSONAL_PROJECT_VALUE);
   const [queue, setQueue] = useState<QueuedTicket[]>(() => getQueuedTickets());
   const [justQueued, setJustQueued] = useState(false);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
   const handleQueue = useCallback(() => {
-    if (!objective.trim() || !selectedProjectId) return;
+    if (!objective.trim()) return;
 
-    const project = projects.find(p => p.id === selectedProjectId);
+    const isPersonalTicket = selectedProjectId === PERSONAL_PROJECT_VALUE;
+    const project = isPersonalTicket ? null : projects.find(p => p.id === selectedProjectId);
     const entry = enqueueOfflineTicket({
       objective: objective.trim(),
       organizationId: project?.organizationId,
-      projectId: selectedProjectId,
-      projectName: project?.name ?? 'Unknown',
+      projectId: isPersonalTicket ? null : selectedProjectId,
+      projectName: project?.name ?? 'Personal',
       projectColor: project?.color
     });
 
@@ -100,12 +103,11 @@ export function OfflineTicketForm() {
                 ) : (
                   <span className="h-3 w-3 rounded-[6px] border border-muted-foreground/50 bg-muted" />
                 )}
-                <span className="text-sm font-medium">
-                  {selectedProject?.name ?? 'Select project'}
-                </span>
+                <span className="text-sm font-medium">{selectedProject?.name ?? 'Personal'}</span>
               </span>
             </SelectTrigger>
             <SelectContent align="start">
+              <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Personal</SelectItem>
               {projects.map(project => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}
@@ -117,7 +119,7 @@ export function OfflineTicketForm() {
 
         <Button
           onClick={handleQueue}
-          disabled={!objective.trim() || !selectedProjectId}
+          disabled={!objective.trim()}
           variant="default"
           size="default"
           className="w-full"

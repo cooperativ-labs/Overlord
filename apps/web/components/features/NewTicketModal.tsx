@@ -31,6 +31,7 @@ import type { EditableTextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
+const PERSONAL_PROJECT_VALUE = '__personal__';
 
 type ProjectOption = {
   id: string;
@@ -58,7 +59,7 @@ export function NewTicketModal({
   projects,
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS
 }: NewTicketModalProps) {
-  const resolvedDefaultProjectId = defaultProjectId || projects[0]?.id || '';
+  const resolvedDefaultProjectId = defaultProjectId ?? PERSONAL_PROJECT_VALUE;
   const [objective, setObjective] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(resolvedDefaultProjectId);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,7 +70,10 @@ export function NewTicketModal({
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
 
-  const selectedProjectForFileTree = projects.find(p => p.id === selectedProjectId);
+  const selectedProjectForFileTree =
+    selectedProjectId === PERSONAL_PROJECT_VALUE
+      ? null
+      : projects.find(p => p.id === selectedProjectId);
   const { files: effectiveMentionPaths } = useWorkspaceFileTree({
     fileMentionPaths,
     workingDirectory: selectedProjectForFileTree?.local_working_directory
@@ -109,8 +113,13 @@ export function NewTicketModal({
     setSubmitButtonState('loading');
 
     try {
-      const selectedProject = projects.find(p => p.id === selectedProjectId);
-      if (!selectedProject) throw new Error('Selected project not found');
+      const isPersonalTicket = selectedProjectId === PERSONAL_PROJECT_VALUE;
+      const selectedProject = isPersonalTicket
+        ? null
+        : (projects.find(p => p.id === selectedProjectId) ?? null);
+      const resolvedOrganizationId =
+        organizationId ?? selectedProject?.organization_id ?? projects[0]?.organization_id ?? 0;
+      if (!resolvedOrganizationId) throw new Error('Organization not found');
       const trimmedObjective = objective.trim();
       const clientTicketId = crypto.randomUUID();
 
@@ -119,11 +128,13 @@ export function NewTicketModal({
           id: clientTicketId,
           title: deriveTitleFromObjective(trimmedObjective),
           objective: trimmedObjective,
-          organization_id: organizationId ?? selectedProject.organization_id ?? 0,
-          project_id: selectedProjectId,
-          project_name: selectedProject.name,
-          project_color: selectedProject.color,
-          project_everhour_project_id: selectedProject.everhour_project_id,
+          organization_id: resolvedOrganizationId,
+          project_id: isPersonalTicket ? null : selectedProjectId,
+          project_name: isPersonalTicket ? 'Personal' : (selectedProject?.name ?? null),
+          project_color: isPersonalTicket ? null : (selectedProject?.color ?? null),
+          project_everhour_project_id: isPersonalTicket
+            ? null
+            : (selectedProject?.everhour_project_id ?? null),
           everhour_task_id: null,
           agent_session_state: null,
           status: 'draft',
@@ -138,7 +149,7 @@ export function NewTicketModal({
         status: 'draft',
         objective: trimmedObjective,
         organizationId,
-        projectId: selectedProjectId,
+        projectId: isPersonalTicket ? null : selectedProjectId,
         placement: 'top',
         generateServerTitle: false
       });
@@ -194,7 +205,7 @@ export function NewTicketModal({
         <DialogHeader>
           <DialogTitle>New Ticket</DialogTitle>
           <DialogDescription>
-            Create a new ticket with details and assign it to a project.
+            Create a new private personal ticket or assign it to a project.
           </DialogDescription>
         </DialogHeader>
 
@@ -223,11 +234,12 @@ export function NewTicketModal({
                       <span className="h-3 w-3 shrink-0 rounded-[6px] border border-muted-foreground/50 bg-muted" />
                     )}
                     <span className="truncate text-sm font-medium">
-                      {selectedProject?.name ?? 'Select project'}
+                      {selectedProject?.name ?? 'Personal'}
                     </span>
                   </span>
                 </SelectTrigger>
                 <SelectContent align="start">
+                  <SelectItem value={PERSONAL_PROJECT_VALUE}>No project / Personal</SelectItem>
                   {projects.map(project => (
                     <SelectItem key={project.id} value={project.id}>
                       {project.name}

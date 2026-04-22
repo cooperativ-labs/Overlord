@@ -24,10 +24,8 @@ export const schema = {
     .describe('Optional title override if you already know the best title.'),
   description: z.string().optional().describe('Optional description/objective override.'),
   priority: prioritySchema.optional().describe('Optional priority override.'),
-  projectId: z
-    .string()
-    .optional()
-    .describe('Optional project UUID. Defaults to the first project in your organization.')
+  projectId: z.string().optional().describe('Optional project UUID. Omit for a personal ticket.'),
+  personal: z.boolean().optional().describe('Create this as a personal ticket without a project.')
 };
 
 type Args = z.infer<z.ZodObject<typeof schema>>;
@@ -63,7 +61,7 @@ export default async function (args: Args, _extra: ToolHandlerExtra) {
         description,
         priority: args.priority ?? 'medium',
         projectId: args.projectId ?? null,
-        projectName: args.projectId ? 'Selected project' : 'Default project',
+        projectName: args.personal || !args.projectId ? 'Personal' : 'Selected project',
         sourceSummary: summarizeConversation(args.conversationContext)
       },
       ticketCard: {

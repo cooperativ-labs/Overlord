@@ -14,7 +14,7 @@ export type BoardTicket = {
   title: string | null;
   objective: string | null;
   organization_id: number;
-  project_id: string;
+  project_id: string | null;
   project_name?: string | null;
   project_color?: string | null;
   project_everhour_project_id?: string | null;

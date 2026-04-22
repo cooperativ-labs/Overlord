@@ -4,7 +4,7 @@ export type QueuedTicket = {
   id: string;
   objective: string;
   organizationId?: number;
-  projectId: string;
+  projectId: string | null;
   projectName: string;
   projectColor?: string;
   queuedAt: string; // ISO date string

@@ -1,11 +1,16 @@
 export function buildTicketPath(input: {
   organizationId?: number;
-  projectId: string;
+  projectId?: string | null;
   ticketId: string;
 }): string {
-  return `/projects/${input.projectId}/${input.ticketId}`;
+  return input.projectId
+    ? `/projects/${input.projectId}/${input.ticketId}`
+    : `/u/${input.ticketId}`;
 }
 
-export function buildProjectPath(input: { organizationId?: number; projectId: string }): string {
-  return `/projects/${input.projectId}`;
+export function buildProjectPath(input: {
+  organizationId?: number;
+  projectId?: string | null;
+}): string {
+  return input.projectId ? `/projects/${input.projectId}` : '/u';
 }

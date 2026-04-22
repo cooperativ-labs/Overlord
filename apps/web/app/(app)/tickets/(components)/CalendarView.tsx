@@ -270,10 +270,13 @@ export default function CalendarView({
         title: deriveTitleFromObjective(trimmed),
         objective: trimmed,
         organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
-        project_id: projectId ?? referenceTicket?.project_id ?? '',
-        project_name: referenceTicket?.project_name ?? null,
+        project_id: projectId ?? referenceTicket?.project_id ?? null,
+        project_name: referenceTicket?.project_name ?? (projectId ? null : 'Personal'),
         project_color: referenceTicket?.project_color ?? null,
-        project_everhour_project_id: referenceTicket?.project_everhour_project_id ?? null,
+        project_everhour_project_id:
+          (projectId ?? referenceTicket?.project_id)
+            ? (referenceTicket?.project_everhour_project_id ?? null)
+            : null,
         everhour_task_id: null,
         agent_session_state: null,
         status: 'draft',
