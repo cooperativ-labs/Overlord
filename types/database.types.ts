@@ -1344,6 +1344,8 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      can_access_ticket: { Args: { p_ticket_id: string }; Returns: boolean };
+      can_write_ticket: { Args: { p_ticket_id: string }; Returns: boolean };
       create_organization_for_current_user: {
         Args: { target_name: string };
         Returns: number;
