@@ -15,8 +15,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
 import { VideoSection } from '@/components/marketing/VideoSection';
+import { Button } from '@/components/ui/button';
 import { createClient } from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
@@ -394,7 +394,6 @@ export default async function HomePage() {
         </section>
 
         {/* Feature highlights */}
-
 
         {/* Workflow section */}
         <section id="how-it-works" className="mx-auto max-w-6xl pb-24 pt-12 mt-12">

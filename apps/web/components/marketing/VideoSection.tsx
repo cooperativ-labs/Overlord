@@ -40,7 +40,6 @@ function VideoThumbnail({ video, onClick, large }: VideoThumbnailProps) {
       aria-label={`Play ${video.title}`}
     >
       <div className={`aspect-video w-full ${large ? '' : 'rounded-[1.25rem]'}`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={video.thumbnail}
           alt={video.title}
@@ -104,7 +103,6 @@ export function VideoSection() {
               aria-label={`Play ${video.title}`}
             >
               <div className="aspect-video w-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={video.thumbnail}
                   alt={video.title}
@@ -112,7 +110,11 @@ export function VideoSection() {
                 />
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 transition-colors group-hover:bg-black/20">
                   <div className="flex size-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/20 backdrop-blur-sm transition-transform duration-200 group-hover:scale-110">
-                    <svg className="ml-0.5 size-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <svg
+                      className="ml-0.5 size-4 text-white"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </div>
@@ -132,10 +134,7 @@ export function VideoSection() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
           onClick={() => setActiveIndex(null)}
         >
-          <div
-            className="relative w-full max-w-8xl px-4"
-            onClick={e => e.stopPropagation()}
-          >
+          <div className="relative w-full max-w-8xl px-4" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setActiveIndex(null)}
               className="absolute -top-10 right-4 flex size-8 items-center justify-center rounded-full bg-white/10 text-white/70 ring-1 ring-white/20 transition-colors hover:bg-white/20 hover:text-white"

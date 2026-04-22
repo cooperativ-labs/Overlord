@@ -193,7 +193,6 @@ export type Database = {
           session_id: string | null;
           storage_path: string | null;
           ticket_id: string;
-          uploaded_by: string | null;
           uri: string | null;
         };
         Insert: {
@@ -208,7 +207,6 @@ export type Database = {
           session_id?: string | null;
           storage_path?: string | null;
           ticket_id: string;
-          uploaded_by?: string | null;
           uri?: string | null;
         };
         Update: {
@@ -223,7 +221,6 @@ export type Database = {
           session_id?: string | null;
           storage_path?: string | null;
           ticket_id?: string;
-          uploaded_by?: string | null;
           uri?: string | null;
         };
         Relationships: [
@@ -1151,7 +1148,7 @@ export type Database = {
           constraints: string;
           context: string;
           created_at: string;
-          created_by: string;
+          created_by: string | null;
           delegate: string | null;
           due_datetime: string | null;
           everhour_task_id: string | null;
@@ -1177,7 +1174,7 @@ export type Database = {
           constraints?: string;
           context?: string;
           created_at?: string;
-          created_by?: string;
+          created_by?: string | null;
           delegate?: string | null;
           due_datetime?: string | null;
           everhour_task_id?: string | null;
@@ -1203,7 +1200,7 @@ export type Database = {
           constraints?: string;
           context?: string;
           created_at?: string;
-          created_by?: string;
+          created_by?: string | null;
           delegate?: string | null;
           due_datetime?: string | null;
           everhour_task_id?: string | null;

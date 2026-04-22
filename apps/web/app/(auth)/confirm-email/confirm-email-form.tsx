@@ -151,7 +151,7 @@ export function ConfirmEmailForm({ email, next = '/onboarding' }: ConfirmEmailFo
                   autoComplete="one-time-code"
                   placeholder="12345678"
                   value={code}
-                  onChange={(event) => {
+                  onChange={event => {
                     setCode(event.target.value.replace(/\D/g, '').slice(0, CODE_LENGTH));
                   }}
                   maxLength={CODE_LENGTH}
