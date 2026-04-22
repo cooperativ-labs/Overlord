@@ -10,7 +10,7 @@ import { displayFont, monoFont } from '@/lib/fonts';
 
 export const metadata: Metadata = {
   title: 'Overlord',
-  description: 'Local-first AI agent orchestration dashboard',
+  description: 'Stop juggling agents. Organize and launch AI agent work with Overlord.',
   icons: {
     apple: '/images/256.png'
   },
