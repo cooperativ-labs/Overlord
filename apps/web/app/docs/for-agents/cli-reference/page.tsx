@@ -1,0 +1,288 @@
+import type { Metadata } from 'next';
+
+import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
+
+export const metadata: Metadata = {
+  title: 'CLI Reference'
+};
+
+export default function CliReferencePage() {
+  return (
+    <DocsMarkdownPage
+      title="ovld protocol — CLI reference"
+      lead="Every ovld protocol subcommand an agent runtime needs, with required and optional flags. Run ovld protocol help locally for the live, authoritative list."
+    >
+      {`
+## Environment fallbacks
+
+All subcommands honor these environment variables so you don't have to pass flags every time:
+
+\`\`\`bash
+SESSION_KEY=<key>        # falls back to --session-key
+TICKET_ID=<id>           # falls back to --ticket-id
+OVERLORD_URL=<url>       # API host
+AGENT_TOKEN=<token>      # agent auth token (or inherit from ovld auth / Desktop login)
+OVERLORD_TIMEOUT=<ms>    # falls back to --timeout
+AGENT_IDENTIFIER=<name>  # falls back to --agent (default: claude-code)
+\`\`\`
+
+## Common flags
+
+\`\`\`text
+--timeout <ms>              Request timeout in milliseconds (default: 30000)
+--ticket-id <id>            Ticket this call operates on
+--session-key <key>         Session key returned by attach/connect/spawn
+--agent <identifier>        Agent identifier (default: AGENT_IDENTIFIER or claude-code)
+--model <identifier>        Model identifier to snapshot on executing objectives
+--method <connectionMethod> Connection method (default: cli)
+\`\`\`
+
+---
+
+## auth-status
+
+Check whether the local runtime has usable Overlord credentials.
+
+\`\`\`bash
+ovld protocol auth-status
+\`\`\`
+
+Returns JSON with \`ok=true|false\` plus \`authStatus\` fields describing token and host sources.
+
+## discover-project
+
+Resolve the Overlord project that corresponds to a working directory. Uses your configured
+"Local working directory" on each project for matching.
+
+\`\`\`bash
+ovld protocol discover-project
+ovld protocol discover-project --working-directory /path/to/repo
+\`\`\`
+
+Prints \`PROJECT_ID=<id>\` on stderr. Returns 404 with a hint when no match is found.
+
+---
+
+## attach
+
+Create the working session on an existing ticket. Normally the first call you make.
+
+\`\`\`bash
+ovld protocol attach --ticket-id <id>
+\`\`\`
+
+Optional:
+
+\`\`\`text
+--agent <identifier>
+--model <identifier>
+--method <connectionMethod>
+--external-session-id <id|null>   # store native agent thread id, or clear with "null"
+--metadata-json <json>            # extra session metadata
+\`\`\`
+
+Returns full JSON including \`session.sessionKey\`, \`ticket\`, \`history\`, \`artifacts\`,
+\`sharedState\`, and \`promptContext\`.
+
+## connect
+
+Lightweight session when you only need a session key, not the full ticket payload.
+
+\`\`\`bash
+ovld protocol connect --ticket-id <id>
+\`\`\`
+
+Optional flags match \`attach\`. Prints \`SESSION_KEY\` on stderr when available.
+
+## load-context
+
+Read ticket details without creating a session.
+
+\`\`\`bash
+ovld protocol load-context --ticket-id <id>
+\`\`\`
+
+---
+
+## create
+
+Create a draft ticket without attaching. If session flags are provided it creates a follow-up
+draft linked to the current ticket; otherwise it creates a standalone draft, resolving the
+project from the current working directory.
+
+\`\`\`bash
+ovld protocol create --agent claude-code \\
+  --objective "Capture follow-up work from this repo"
+
+ovld protocol create --agent claude-code \\
+  --session-key <key> --ticket-id <id> \\
+  --objective "Write migration notes"
+\`\`\`
+
+Optional:
+
+\`\`\`text
+--working-directory <path>   Override cwd for project resolution
+--project-id <id>            Explicit project for standalone drafts
+--personal                   Private standalone draft, no project
+--title <text>
+--priority <low|medium|high|urgent>
+--acceptance-criteria <text>
+--available-tools <text>
+--execution-target <agent|human>
+--delegate <model>
+\`\`\`
+
+## spawn
+
+Create a follow-up ticket and attach to it immediately. Use when you want execution to start
+right away.
+
+\`\`\`bash
+ovld protocol spawn --agent claude-code \\
+  --objective "Implement user auth" --priority high
+\`\`\`
+
+Shares most flags with \`create\`, plus \`--parent-session-key\`, \`--parent-ticket-id\`, and
+\`--metadata-json\`. Returns ticket/session JSON and prints \`SESSION_KEY\` / \`TICKET_ID\` on stderr.
+
+---
+
+## update
+
+Post progress events during execution.
+
+\`\`\`bash
+ovld protocol update \\
+  --session-key <key> --ticket-id <id> \\
+  --summary "Wired up the new retry policy." \\
+  --phase execute
+\`\`\`
+
+Optional:
+
+\`\`\`text
+--summary-file <path>               # read summary from a file instead of --summary
+--phase <draft|execute|review|deliver|complete|blocked|cancelled>
+--event-type <update|user_follow_up|alert>
+--payload-json <json>               # additional structured payload
+--external-url <url|null>           # store or clear a deep link to the live session
+--external-session-id <id|null>
+--change-rationales-json <json>
+--change-rationales-file <path>
+\`\`\`
+
+## record-change-rationales
+
+Persist structured file-change rationale records without also posting a progress update.
+
+\`\`\`bash
+ovld protocol record-change-rationales \\
+  --session-key <key> --ticket-id <id> \\
+  --change-rationales-json '[ ... ]'
+\`\`\`
+
+## ask
+
+Raise a blocking question. Stop working until a human responds.
+
+\`\`\`bash
+ovld protocol ask \\
+  --session-key <key> --ticket-id <id> \\
+  --question "Specific question for the reviewer."
+\`\`\`
+
+Optional: \`--question-file <path>\`, \`--phase <status>\`, \`--payload-json <json>\`.
+
+## permission-request
+
+Notify Overlord that the local runtime is requesting tool permission. Primarily used by
+installed permission hooks, not called directly by agent logic.
+
+\`\`\`bash
+ovld protocol permission-request --ticket-id <id> --payload-file -
+\`\`\`
+
+---
+
+## read-context
+
+Read persistent shared context written by earlier sessions.
+
+\`\`\`bash
+ovld protocol read-context --session-key <key> --ticket-id <id>
+ovld protocol read-context --session-key <key> --ticket-id <id> --query arch --limit 5
+\`\`\`
+
+## write-context
+
+Save shared facts for future sessions. The value is parsed as JSON first and stored as a
+string if that fails.
+
+\`\`\`bash
+ovld protocol write-context --session-key <key> --ticket-id <id> \\
+  --key "arch" --value '"monorepo"' --tags repo,agent
+\`\`\`
+
+---
+
+## deliver
+
+Conclude the session with the final summary, artifacts, and change rationales.
+
+\`\`\`bash
+ovld protocol deliver \\
+  --session-key <key> --ticket-id <id> \\
+  --summary "Done — narrative of what changed and next steps." \\
+  --change-rationales-json '[ ... ]'
+\`\`\`
+
+Optional:
+
+\`\`\`text
+--summary-file <path>
+--artifacts-json <json>
+--artifacts-file <path|->
+--change-rationales-file <path|->
+--payload-file <path|->            # full { summary, artifacts, changeRationales } JSON
+--skip-file-change-check           # bypass local git vs changeRationales validation
+\`\`\`
+
+In a git workspace, \`deliver\` validates that changed files are represented by
+\`changeRationales\` unless the check is skipped.
+
+## Artifacts
+
+Upload and download ticket artifacts.
+
+\`\`\`bash
+# Upload a local file in one call
+ovld protocol artifact-upload-file \\
+  --session-key <key> --ticket-id <id> \\
+  --file ./spec.pdf --content-type application/pdf
+
+# Or do it in two steps with a signed URL
+ovld protocol artifact-prepare-upload \\
+  --session-key <key> --ticket-id <id> \\
+  --file-name spec.pdf --content-type application/pdf
+ovld protocol artifact-finalize-upload \\
+  --session-key <key> --ticket-id <id> \\
+  --storage-path <path> --label "Spec"
+
+# Get a signed download URL
+ovld protocol artifact-download-url \\
+  --session-key <key> --ticket-id <id> \\
+  --artifact-id <artifact-id>
+\`\`\`
+
+---
+
+## Related pages
+
+- [Ticket lifecycle](/docs/for-agents/lifecycle)
+- [Context &amp; artifacts](/docs/for-agents/context-and-artifacts)
+- [Rules for agents](/docs/for-agents/rules)
+      `}
+    </DocsMarkdownPage>
+  );
+}

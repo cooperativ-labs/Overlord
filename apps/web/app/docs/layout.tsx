@@ -30,6 +30,36 @@ const data = {
         {
           title: 'Quick Start',
           url: '/docs/quick-start'
+        },
+        {
+          title: 'Agent Plugins',
+          url: '/docs/agent-plugins'
+        }
+      ]
+    },
+    {
+      title: 'For Agents',
+      url: '/docs/for-agents',
+      items: [
+        {
+          title: 'Overview',
+          url: '/docs/for-agents'
+        },
+        {
+          title: 'Ticket Lifecycle',
+          url: '/docs/for-agents/lifecycle'
+        },
+        {
+          title: 'CLI Reference',
+          url: '/docs/for-agents/cli-reference'
+        },
+        {
+          title: 'Context & Artifacts',
+          url: '/docs/for-agents/context-and-artifacts'
+        },
+        {
+          title: 'Rules for Agents',
+          url: '/docs/for-agents/rules'
         }
       ]
     },
