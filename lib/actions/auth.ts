@@ -39,7 +39,7 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
   const supabase = await createClient();
   const nextPath = sanitizeNextPath(formData.get('next'), '/u');
 
-  const email = (formData.get('email') as string | null) ?? '';
+  const email = ((formData.get('email') as string | null) ?? '').trim();
   const password = (formData.get('password') as string | null) ?? '';
   const rawName = (formData.get('name') as string | null) ?? '';
   const name = rawName.trim();
@@ -64,7 +64,9 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
     return { error: error.message };
   }
 
-  return { redirect: '/confirm-email' };
+  const params = new URLSearchParams({ email, next: nextPath });
+
+  return { redirect: `/confirm-email?${params.toString()}` };
 }
 
 export async function signOut(): Promise<AuthResult> {
