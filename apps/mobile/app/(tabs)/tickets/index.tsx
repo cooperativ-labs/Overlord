@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -67,7 +67,7 @@ type TicketWithProject = TicketListItem & {
   has_unread?: boolean;
 };
 
-const ALL_PROJECTS_LABEL = 'All projects';
+const ALL_PROJECTS_LABEL = 'My Tickets';
 
 function formatAgentLabel(agent: AssignedAgent | null): string | null {
   if (!agent?.agent) return null;
@@ -77,7 +77,12 @@ function formatAgentLabel(agent: AssignedAgent | null): string | null {
 export default function TicketsScreen() {
   const router = useRouter();
   const { projects } = useSelectedProject();
-  const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
+  const { projectId: projectIdParam } = useLocalSearchParams<{ projectId?: string }>();
+  const [filterProjectId, setFilterProjectId] = useState<string | null>(projectIdParam ?? null);
+
+  useEffect(() => {
+    setFilterProjectId(projectIdParam ?? null);
+  }, [projectIdParam]);
   const [tickets, setTickets] = useState<TicketWithProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

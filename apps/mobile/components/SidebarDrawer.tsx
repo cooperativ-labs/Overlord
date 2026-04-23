@@ -16,7 +16,7 @@ interface SidebarDrawerProps {
 export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { projects, selectedProjectId, selectProject } = useSelectedProject();
+  const { projects } = useSelectedProject();
 
   const userLabel = useMemo(() => {
     if (!user) return 'Not signed in';
@@ -25,11 +25,6 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   }, [user]);
 
   const userEmail = user?.email ?? '';
-
-  function handleSelectProject(projectId: string | null) {
-    selectProject(projectId);
-    onClose();
-  }
 
   function navigate(path: string) {
     onClose();
@@ -91,40 +86,30 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
             {projects.length === 0 ? (
               <Text style={styles.emptyHint}>No projects yet</Text>
             ) : (
-              projects.map(project => {
-                const selected = project.id === selectedProjectId;
-                return (
-                  <Pressable
-                    key={project.id}
-                    style={({ pressed }) => [
-                      styles.projectRow,
-                      selected && styles.projectRowSelected,
-                      pressed && styles.pressed
+              projects.map(project => (
+                <Pressable
+                  key={project.id}
+                  style={({ pressed }) => [styles.projectRow, pressed && styles.pressed]}
+                  onPress={() => navigate(`/(tabs)/tickets?projectId=${project.id}`)}
+                >
+                  <View
+                    style={[
+                      styles.projectDot,
+                      { backgroundColor: project.color || colors.primary }
                     ]}
-                    onPress={() => handleSelectProject(project.id)}
-                  >
-                    <View
-                      style={[
-                        styles.projectDot,
-                        { backgroundColor: project.color || colors.primary }
-                      ]}
+                  />
+                  <Text style={styles.projectName} numberOfLines={1}>
+                    {project.name}
+                  </Text>
+                  <Pressable hitSlop={8} style={styles.projectMore} onPress={onClose}>
+                    <Ionicons
+                      name="ellipsis-horizontal"
+                      size={16}
+                      color={colors.mutedForeground}
                     />
-                    <Text
-                      style={[styles.projectName, selected && styles.projectNameSelected]}
-                      numberOfLines={1}
-                    >
-                      {project.name}
-                    </Text>
-                    <Pressable hitSlop={8} style={styles.projectMore} onPress={onClose}>
-                      <Ionicons
-                        name="ellipsis-horizontal"
-                        size={16}
-                        color={colors.mutedForeground}
-                      />
-                    </Pressable>
                   </Pressable>
-                );
-              })
+                </Pressable>
+              ))
             )}
 
             {/* Footer nav */}

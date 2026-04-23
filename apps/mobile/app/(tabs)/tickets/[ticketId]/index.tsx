@@ -102,6 +102,8 @@ export default function TicketDetailScreen() {
   const [showDocuments, setShowDocuments] = useState(false);
   const [showCliQuickstart, setShowCliQuickstart] = useState(false);
   const [activityFilter, setActivityFilter] = useState<'all' | 'completed'>('all');
+  const [showPromptMenu, setShowPromptMenu] = useState(false);
+  const [copyingPromptContext, setCopyingPromptContext] = useState<'cli' | 'web' | null>(null);
 
   const loadData = useCallback(async () => {
     const supabase = getSupabase();
@@ -160,58 +162,45 @@ export default function TicketDetailScreen() {
   }, [events, activityFilter]);
 
   const handleCopyPrompt = useCallback(
-    async (context: 'cli' | 'web', label: 'local' | 'cloud') => {
+    async (context: 'cli' | 'web') => {
       if (!ticket) return;
 
-      const agentToken = await ensureAgentToken();
-      const platformUrl = resolvePlatformUrl();
-      const url = new URL(`/api/protocol/context/${ticket.id}`, `${platformUrl}/`);
-      url.searchParams.set('context', context);
-      url.searchParams.set('mode', 'run');
-      const response = await fetch(url.toString(), {
-        headers: {
-          authorization: `Bearer ${agentToken}`
+      setCopyingPromptContext(context);
+      try {
+        const agentToken = await ensureAgentToken();
+        const platformUrl = resolvePlatformUrl();
+        const url = new URL(`/api/protocol/context/${ticket.id}`, `${platformUrl}/`);
+        url.searchParams.set('context', context);
+        url.searchParams.set('mode', 'run');
+        const response = await fetch(url.toString(), {
+          headers: {
+            authorization: `Bearer ${agentToken}`
+          }
+        });
+        const prompt = await response.text();
+
+        if (!response.ok || prompt.trim().length === 0) {
+          throw new Error(prompt || `Failed to build ${context === 'cli' ? 'local' : 'cloud'} prompt.`);
         }
-      });
-      const prompt = await response.text();
 
-      if (!response.ok || prompt.trim().length === 0) {
-        throw new Error(prompt || `Failed to build ${label} prompt.`);
+        await Clipboard.setStringAsync(prompt);
+        setShowPromptMenu(false);
+      } catch (error) {
+        setShowPromptMenu(false);
+        Alert.alert(
+          'Unable to copy prompt',
+          error instanceof Error ? error.message : 'An unexpected error occurred.'
+        );
+      } finally {
+        setCopyingPromptContext(null);
       }
-
-      await Clipboard.setStringAsync(prompt);
-      Alert.alert('Copied', `${label === 'local' ? 'Local' : 'Cloud'} prompt copied.`);
     },
     [ticket]
   );
 
   const handleOpenPromptMenu = useCallback(() => {
-    Alert.alert('Copy prompt', 'Choose the prompt format to copy.', [
-      {
-        text: 'Local prompt',
-        onPress: () => {
-          void handleCopyPrompt('cli', 'local').catch(error => {
-            Alert.alert(
-              'Unable to copy prompt',
-              error instanceof Error ? error.message : 'An unexpected error occurred.'
-            );
-          });
-        }
-      },
-      {
-        text: 'Cloud prompt',
-        onPress: () => {
-          void handleCopyPrompt('web', 'cloud').catch(error => {
-            Alert.alert(
-              'Unable to copy prompt',
-              error instanceof Error ? error.message : 'An unexpected error occurred.'
-            );
-          });
-        }
-      },
-      { text: 'Cancel', style: 'cancel' }
-    ]);
-  }, [handleCopyPrompt]);
+    setShowPromptMenu(true);
+  }, []);
 
   const handleCopyCliCommand = useCallback(async () => {
     if (!ticket) return;
@@ -1209,6 +1198,43 @@ export default function TicketDetailScreen() {
         )}
       </ScrollView>
 
+      {/* Prompt menu popover */}
+      <Modal
+        visible={showPromptMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!copyingPromptContext) setShowPromptMenu(false);
+        }}
+      >
+        <Pressable
+          style={styles.promptMenuBackdrop}
+          onPress={() => {
+            if (!copyingPromptContext) setShowPromptMenu(false);
+          }}
+        >
+          <Pressable style={styles.promptMenuCard} onPress={() => undefined}>
+            <Text style={styles.modalTitle}>Copy prompt</Text>
+            <PromptOption
+              label="Local prompt"
+              description="For Claude Code CLI"
+              icon="terminal-outline"
+              loading={copyingPromptContext === 'cli'}
+              disabled={copyingPromptContext !== null}
+              onPress={() => void handleCopyPrompt('cli')}
+            />
+            <PromptOption
+              label="Cloud prompt"
+              description="For Claude.ai or web"
+              icon="cloud-outline"
+              loading={copyingPromptContext === 'web'}
+              disabled={copyingPromptContext !== null}
+              onPress={() => void handleCopyPrompt('web')}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Agent chooser modal */}
       <Modal
         visible={showAgentModal}
@@ -1318,6 +1344,47 @@ function OverflowAction({
     >
       <Ionicons name={icon} size={16} color={colors.foreground} />
       <Text style={styles.overflowText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function PromptOption({
+  label,
+  description,
+  icon,
+  loading,
+  disabled,
+  onPress
+}: {
+  label: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  loading: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.promptOptionRow,
+        disabled && !loading && styles.promptOptionDisabled,
+        pressed && !disabled && styles.pressed
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <View style={styles.promptOptionIcon}>
+        <Ionicons name={icon} size={18} color={colors.foreground} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.promptOptionLabel}>{label}</Text>
+        <Text style={styles.promptOptionDesc}>{description}</Text>
+      </View>
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : (
+        <Ionicons name="copy-outline" size={16} color={colors.mutedForeground} />
+      )}
     </Pressable>
   );
 }
@@ -1685,5 +1752,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6
   },
   overflowText: { color: colors.foreground, fontSize: 14 },
-  pressed: { opacity: 0.82 }
+  pressed: { opacity: 0.82 },
+  promptMenuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 72,
+    paddingHorizontal: 24
+  },
+  promptMenuCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    gap: 4
+  },
+  promptOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 10
+  },
+  promptOptionDisabled: { opacity: 0.4 },
+  promptOptionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  promptOptionLabel: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+  promptOptionDesc: { color: colors.mutedForeground, fontSize: 12, marginTop: 1 }
 });
