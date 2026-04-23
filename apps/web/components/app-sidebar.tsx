@@ -329,7 +329,7 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Tutorial" onClick={() => openTutorial({ startAtStep: 3 })}>
+            <SidebarMenuButton tooltip="Tutorial" onClick={() => openTutorial()}>
               <GraduationCap />
               <span>Take Tutorial</span>
             </SidebarMenuButton>

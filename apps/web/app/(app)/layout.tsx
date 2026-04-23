@@ -93,7 +93,8 @@ export default async function RootLayout({
           firstOrganizationId: organizations[0]?.id ?? null,
           onboardingCompletedStep: 0,
           onboardingSkipped: false,
-          desktopSetupDone: false
+          desktopSetupDone: false,
+          desktopCompletedStep: 0
         };
       } else {
         // Existing user with org+project — check tutorial progress

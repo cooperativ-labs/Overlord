@@ -325,9 +325,9 @@ export default function TicketDetailScreen() {
     setTicket(current =>
       current
         ? {
-            ...current,
-            assigned_agent: nextAssignedAgent
-          }
+          ...current,
+          assigned_agent: nextAssignedAgent
+        }
         : current
     );
     setSavingAssignedAgent(true);
@@ -356,9 +356,9 @@ export default function TicketDetailScreen() {
       setTicket(current =>
         current
           ? {
-              ...current,
-              assigned_agent: previousAssignedAgent
-            }
+            ...current,
+            assigned_agent: previousAssignedAgent
+          }
           : current
       );
       Alert.alert(
@@ -537,19 +537,19 @@ export default function TicketDetailScreen() {
       // 6. Launch — use key if pubkey auth works, otherwise use password
       const result = keyAuthWorks
         ? await launchTicketOnServer({
-            ticketId: ticket.id,
-            ticketSequence: ticket.ticket_sequence,
-            agent: resolvedAssignedSelection.agent,
-            server,
-            keyTag: tag
-          })
+          ticketId: ticket.id,
+          ticketSequence: ticket.ticket_sequence,
+          agent: resolvedAssignedSelection.agent,
+          server,
+          keyTag: tag
+        })
         : await launchTicketOnServerWithPassword({
-            ticketId: ticket.id,
-            ticketSequence: ticket.ticket_sequence,
-            agent: resolvedAssignedSelection.agent,
-            server,
-            password
-          });
+          ticketId: ticket.id,
+          ticketSequence: ticket.ticket_sequence,
+          agent: resolvedAssignedSelection.agent,
+          server,
+          password
+        });
 
       Alert.alert(
         'Remote Session Started',
@@ -745,9 +745,9 @@ export default function TicketDetailScreen() {
       Alert.alert(
         'No Connected Servers',
         `Found ${freshAllServers.length} server(s) but none are connected. ` +
-          (freshAllServers.length > 0
-            ? freshAllServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')
-            : 'Add and verify a server on this device.')
+        (freshAllServers.length > 0
+          ? freshAllServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')
+          : 'Add and verify a server on this device.')
       );
       return;
     }
@@ -827,11 +827,7 @@ export default function TicketDetailScreen() {
           <Ionicons name="ellipsis-vertical" size={18} color={colors.foreground} />
         </Pressable>
         <View style={styles.topBarActions}>
-          <Pressable hitSlop={8} style={styles.topPillButton} onPress={handleOpenPromptMenu}>
-            <Ionicons name="copy-outline" size={13} color={colors.foreground} />
-            <Text style={styles.topPillText}>Copy prompt</Text>
-            <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-          </Pressable>
+
           <Pressable
             hitSlop={8}
             style={styles.topPillButton}
@@ -853,6 +849,11 @@ export default function TicketDetailScreen() {
             ) : (
               <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
             )}
+          </Pressable>
+          <Pressable hitSlop={8} style={styles.topPillButton} onPress={handleOpenPromptMenu}>
+            <Ionicons name="copy-outline" size={13} color={colors.foreground} />
+            <Text style={styles.topPillText}>Copy prompt</Text>
+            <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
           </Pressable>
         </View>
         <Pressable
@@ -1056,7 +1057,7 @@ export default function TicketDetailScreen() {
                 launchingServerId !== null ||
                 !isSSHSupported ||
                 !resolvedAssignedSelection) &&
-                styles.launchServerButtonDisabled,
+              styles.launchServerButtonDisabled,
               pressed && styles.pressed
             ]}
           >

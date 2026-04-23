@@ -26,6 +26,7 @@ import {
   updateOnboardingProgressAction
 } from '@/lib/actions/onboarding';
 import { cn } from '@/lib/utils';
+import { useTutorialWizard } from './TutorialWizardContext';
 
 /**
  * Unified onboarding wizard.
@@ -44,7 +45,6 @@ import { cn } from '@/lib/utils';
 const WEB_TOTAL_STEPS = 4;
 const DESKTOP_TOTAL_STEPS = 5;
 const TUTORIAL_START_STEP = 3;
-const DESKTOP_CONNECTOR_STEP = 4;
 
 type TutorialWizardProps = {
   initialState: OnboardingState;
@@ -56,6 +56,7 @@ type TutorialWizardProps = {
 export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialWizardProps) {
   const router = useRouter();
   const { api, isElectron } = useElectron();
+  const { updateState } = useTutorialWizard();
   const totalSteps = isElectron ? DESKTOP_TOTAL_STEPS : WEB_TOTAL_STEPS;
 
   const stepLabels: Record<number, string> = isElectron
@@ -116,22 +117,55 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     totalVisibleSteps > 1 ? (currentVisibleIndex / (totalVisibleSteps - 1)) * 100 : 100;
 
   async function handleSkip() {
-    await updateOnboardingProgressAction({ skipped: true });
-    onClose();
+    await handleStepComplete(currentStep);
   }
 
   async function handleStepComplete(completedStepNumber: number) {
     if (completedStepNumber >= TUTORIAL_START_STEP) {
-      await updateOnboardingProgressAction({ completedStep: completedStepNumber });
-      // Mark desktop setup done when completing the connector step on desktop
-      if (completedStepNumber === DESKTOP_CONNECTOR_STEP && isElectron) {
-        await updateOnboardingProgressAction({ desktopSetupDone: true });
-      }
+      const update = isElectron
+        ? {
+            completedStep: completedStepNumber,
+            desktopCompletedStep: completedStepNumber,
+            desktopSetupDone:
+              initialState.desktopSetupDone || completedStepNumber >= DESKTOP_TOTAL_STEPS
+          }
+        : { completedStep: completedStepNumber };
+
+      await updateOnboardingProgressAction(update);
+      updateState({
+        onboardingCompletedStep: Math.max(initialState.onboardingCompletedStep, completedStepNumber),
+        ...(isElectron
+          ? {
+              desktopCompletedStep: Math.max(
+                initialState.desktopCompletedStep,
+                completedStepNumber
+              ),
+              desktopSetupDone:
+                initialState.desktopSetupDone || completedStepNumber >= DESKTOP_TOTAL_STEPS
+            }
+          : {})
+      });
     }
     const completedIndex = visibleSteps.indexOf(completedStepNumber);
     const nextStep = completedIndex >= 0 ? visibleSteps[completedIndex + 1] : undefined;
     if (!nextStep) {
-      await updateOnboardingProgressAction({ completedStep: totalSteps });
+      const update = isElectron
+        ? {
+            completedStep: totalSteps,
+            desktopCompletedStep: DESKTOP_TOTAL_STEPS,
+            desktopSetupDone: true
+          }
+        : { completedStep: totalSteps };
+      await updateOnboardingProgressAction(update);
+      updateState({
+        onboardingCompletedStep: Math.max(initialState.onboardingCompletedStep, totalSteps),
+        ...(isElectron
+          ? {
+              desktopCompletedStep: DESKTOP_TOTAL_STEPS,
+              desktopSetupDone: true
+            }
+          : {})
+      });
       onClose();
     } else {
       setCurrentStep(nextStep);

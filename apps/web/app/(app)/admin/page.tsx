@@ -129,7 +129,7 @@ export default async function AdminPage() {
           </p>
         </section>
 
-        <AgentModelOfferingsPanel initialModels={agentModels} />
+
 
         <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
@@ -219,6 +219,7 @@ export default async function AdminPage() {
             </div>
           )}
         </section>
+        <AgentModelOfferingsPanel initialModels={agentModels} />
       </div>
     </div>
   );
