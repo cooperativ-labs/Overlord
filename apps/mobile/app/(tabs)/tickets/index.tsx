@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,12 +10,18 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from 'react-native';
 
+import { SidebarDrawer } from '@/components/SidebarDrawer';
 import { colors } from '@/lib/colors';
+import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import type { AssignedAgent, TicketListItem } from '@/lib/types';
+
+type SortMode = 'updated' | 'created' | 'priority';
+type StatusFilter = 'all' | 'open' | 'draft' | 'next-up' | 'execute' | 'review' | 'complete';
 
 const statusColors: Record<string, string> = {
   draft: colors.mutedForeground,
@@ -28,29 +34,60 @@ const statusColors: Record<string, string> = {
   icebox: colors.mutedForeground
 };
 
+const statusLabel: Record<string, string> = {
+  draft: 'Draft',
+  'next-up': 'Next up',
+  execute: 'Execute',
+  review: 'Review',
+  complete: 'Complete',
+  blocked: 'Blocked',
+  cancelled: 'Cancelled',
+  icebox: 'Icebox'
+};
+
+const sortLabels: Record<SortMode, string> = {
+  updated: 'Last updated',
+  created: 'Recently created',
+  priority: 'Priority'
+};
+
+const statusFilterLabels: Record<StatusFilter, string> = {
+  all: 'All statuses',
+  open: 'Open',
+  draft: 'Draft',
+  'next-up': 'Next up',
+  execute: 'Executing',
+  review: 'In review',
+  complete: 'Complete'
+};
+
+type TicketWithProject = TicketListItem & {
+  project_id: string | null;
+  has_unread?: boolean;
+};
+
 function formatAgentLabel(agent: AssignedAgent | null): string | null {
   if (!agent?.agent) return null;
-  if (agent.model) return `${agent.agent} · ${agent.model}`;
   return agent.agent;
-}
-
-function formatDueDate(dueDatetime: string | null): string | null {
-  if (!dueDatetime) return null;
-  const due = new Date(dueDatetime);
-  const now = new Date();
-  const diffMs = due.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return 'Overdue';
-  if (diffDays === 0) return 'Due today';
-  if (diffDays === 1) return 'Due tomorrow';
-  return `Due ${due.toLocaleDateString()}`;
 }
 
 export default function TicketsScreen() {
   const router = useRouter();
-  const [tickets, setTickets] = useState<TicketListItem[]>([]);
+  const {
+    projects,
+    selectedProject,
+    selectedProjectId,
+    loading: loadingProjects
+  } = useSelectedProject();
+  const [tickets, setTickets] = useState<TicketWithProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('updated');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   const handleCreateTicket = useCallback(() => {
     router.push('/(tabs)/tickets/create');
@@ -58,31 +95,34 @@ export default function TicketsScreen() {
 
   const fetchTickets = useCallback(async () => {
     const supabase = getSupabase();
-    const { data, error } = await supabase
+    let query = supabase
       .from('tickets')
       .select(
-        'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, updated_at'
+        'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, updated_at, project_id'
       )
       .order('updated_at', { ascending: false })
-      .limit(50);
+      .limit(100);
 
-    if (!error && data) {
-      setTickets(data as TicketListItem[]);
-      return;
+    if (selectedProjectId) {
+      query = query.eq('project_id', selectedProjectId);
     }
 
+    const { data, error } = await query;
+
+    if (!error && data) {
+      setTickets(data as TicketWithProject[]);
+      return;
+    }
     if (error) {
       Alert.alert('Unable to load tickets', error.message);
     }
-  }, []);
+  }, [selectedProjectId]);
 
   useEffect(() => {
+    setLoading(true);
     fetchTickets().finally(() => setLoading(false));
   }, [fetchTickets]);
 
-  // Realtime subscription + foreground refresh. The realtime channel is the
-  // primary source of truth; we only fall back to polling when the channel
-  // reports an error or closes, so we don't burn cellular bandwidth 3×/min.
   useEffect(() => {
     const supabase = getSupabase();
     let pollId: ReturnType<typeof setInterval> | null = null;
@@ -136,98 +176,290 @@ export default function TicketsScreen() {
     setRefreshing(false);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const displayTickets = useMemo(() => {
+    let result = [...tickets];
+
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'open') {
+        result = result.filter(
+          ticket => !['complete', 'cancelled', 'icebox'].includes(ticket.status)
+        );
+      } else {
+        result = result.filter(ticket => ticket.status === statusFilter);
+      }
+    }
+
+    if (search.trim()) {
+      const needle = search.trim().toLowerCase();
+      result = result.filter(ticket => {
+        const title = (ticket.title ?? '').toLowerCase();
+        return title.includes(needle) || String(ticket.ticket_sequence).includes(needle);
+      });
+    }
+
+    const priorityWeight: Record<string, number> = {
+      urgent: 0,
+      high: 1,
+      medium: 2,
+      low: 3
+    };
+
+    if (sortMode === 'priority') {
+      result.sort((a, b) => {
+        return (priorityWeight[a.priority] ?? 99) - (priorityWeight[b.priority] ?? 99);
+      });
+    } else if (sortMode === 'created') {
+      // We don't select created_at here; fallback to updated_at ordering (server already returns it).
+      // tickets already ordered by updated_at desc; leave as is
+    } else {
+      // updated already default
+    }
+
+    return result;
+  }, [tickets, statusFilter, search, sortMode]);
+
+  const projectColor = selectedProject?.color || colors.primary;
+  const projectName = selectedProject?.name ?? (loadingProjects ? 'Loading…' : 'No project');
 
   return (
     <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerRight: () => (
-            <Pressable onPress={handleCreateTicket} hitSlop={8}>
-              <Ionicons name="add-circle" size={28} color={colors.primary} />
-            </Pressable>
-          )
-        }}
-      />
-      <FlatList
-        data={tickets}
-        keyExtractor={item => item.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        renderItem={({ item }) => {
-          const agentLabel = formatAgentLabel(item.assigned_agent);
-          const dueLabel = formatDueDate(item.due_datetime);
-          const isOverdue = dueLabel === 'Overdue';
+      <Stack.Screen options={{ headerShown: false }} />
 
-          return (
+      {/* Top toolbar */}
+      <View style={styles.topBar}>
+        <Pressable
+          hitSlop={10}
+          style={styles.iconButton}
+          onPress={() => setDrawerOpen(true)}
+          accessibilityLabel="Open navigation"
+        >
+          <Ionicons name="menu-outline" size={20} color={colors.foreground} />
+        </Pressable>
+        <Pressable
+          hitSlop={10}
+          style={styles.iconButton}
+          onPress={() => void fetchTickets()}
+          accessibilityLabel="Refresh"
+        >
+          <Ionicons name="refresh-outline" size={18} color={colors.foreground} />
+        </Pressable>
+        <Pressable
+          hitSlop={10}
+          style={styles.iconButton}
+          onPress={() => router.back()}
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+        </Pressable>
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={14} color={colors.mutedForeground} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search ticket"
+            placeholderTextColor={colors.mutedForeground}
+            style={styles.searchInput}
+          />
+        </View>
+        <Pressable
+          hitSlop={10}
+          style={styles.createButton}
+          onPress={handleCreateTicket}
+          accessibilityLabel="Create ticket"
+        >
+          <Ionicons name="add" size={16} color={colors.foreground} />
+          <Ionicons name="ticket-outline" size={14} color={colors.foreground} />
+        </Pressable>
+      </View>
+
+      {/* Project header */}
+      <View style={styles.projectHeader}>
+        <View style={[styles.projectSquare, { backgroundColor: projectColor }]} />
+        <Text style={styles.projectHeaderName} numberOfLines={1}>
+          {projectName}
+        </Text>
+        <Pressable hitSlop={8} onPress={() => setDrawerOpen(true)}>
+          <Ionicons name="settings-outline" size={16} color={colors.mutedForeground} />
+        </Pressable>
+      </View>
+
+      {/* Filter chips */}
+      <View style={styles.filterRow}>
+        <FilterChip
+          icon="swap-vertical-outline"
+          label={sortLabels[sortMode]}
+          onPress={() => {
+            setStatusMenuOpen(false);
+            setSortMenuOpen(open => !open);
+          }}
+          active={sortMenuOpen}
+        />
+        <FilterChip
+          icon="funnel-outline"
+          label={statusFilterLabels[statusFilter]}
+          onPress={() => {
+            setSortMenuOpen(false);
+            setStatusMenuOpen(open => !open);
+          }}
+          active={statusMenuOpen}
+        />
+      </View>
+
+      {sortMenuOpen && (
+        <View style={styles.menu}>
+          {(Object.keys(sortLabels) as SortMode[]).map(mode => (
             <Pressable
-              style={styles.card}
-              onPress={() => router.push(`/(tabs)/tickets/${item.id}`)}
+              key={mode}
+              style={styles.menuItem}
+              onPress={() => {
+                setSortMode(mode);
+                setSortMenuOpen(false);
+              }}
             >
-              <View style={styles.cardHeader}>
-                <Text style={styles.sequence}>#{item.ticket_sequence}</Text>
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: statusColors[item.status] ?? colors.mutedForeground }
-                  ]}
-                />
-                <Text style={styles.status}>{item.status}</Text>
-                <View style={{ flex: 1 }} />
-                <View style={styles.targetBadge}>
-                  <Ionicons
-                    name={
-                      item.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
-                    }
-                    size={12}
-                    color={colors.secondaryForeground}
-                  />
-                  <Text style={styles.targetText}>{item.execution_target}</Text>
-                </View>
-              </View>
-              <Text style={styles.title} numberOfLines={2}>
-                {item.title || 'Untitled'}
-              </Text>
-              <View style={styles.metaRow}>
-                <Text style={styles.meta}>{item.priority}</Text>
-                {agentLabel && (
-                  <>
-                    <Text style={styles.metaSep}>·</Text>
-                    <Ionicons
-                      name="hardware-chip-outline"
-                      size={11}
-                      color={colors.mutedForeground}
-                    />
-                    <Text style={styles.meta}>{agentLabel}</Text>
-                  </>
-                )}
-              </View>
-              {dueLabel && (
-                <Text style={[styles.dueText, isOverdue && styles.dueOverdue]}>{dueLabel}</Text>
+              <Text style={styles.menuItemText}>{sortLabels[mode]}</Text>
+              {sortMode === mode && <Ionicons name="checkmark" size={14} color={colors.primary} />}
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {statusMenuOpen && (
+        <View style={styles.menu}>
+          {(Object.keys(statusFilterLabels) as StatusFilter[]).map(filter => (
+            <Pressable
+              key={filter}
+              style={styles.menuItem}
+              onPress={() => {
+                setStatusFilter(filter);
+                setStatusMenuOpen(false);
+              }}
+            >
+              <Text style={styles.menuItemText}>{statusFilterLabels[filter]}</Text>
+              {statusFilter === filter && (
+                <Ionicons name="checkmark" size={14} color={colors.primary} />
               )}
             </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="ticket-outline" size={48} color={colors.mutedForeground} />
-            <Text style={styles.emptyText}>No tickets yet</Text>
-          </View>
-        }
-        contentContainerStyle={tickets.length === 0 ? styles.emptyContainer : styles.list}
-      />
+          ))}
+        </View>
+      )}
+
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={displayTickets}
+          keyExtractor={item => item.id}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+          renderItem={({ item }) => {
+            const agentLabel = formatAgentLabel(item.assigned_agent);
+            const projectForTicket =
+              projects.find(p => p.id === item.project_id)?.color || projectColor;
+            return (
+              <Pressable
+                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                onPress={() => router.push(`/(tabs)/tickets/${item.id}`)}
+              >
+                <View style={styles.cardRow}>
+                  <View style={[styles.ticketSquare, { backgroundColor: projectForTicket }]} />
+                  <Text style={styles.ticketTitle} numberOfLines={1}>
+                    {item.title || 'Untitled'}
+                  </Text>
+                  {item.has_unread && <View style={styles.unreadDot} />}
+                </View>
+                <View style={styles.actionRow}>
+                  <Pressable
+                    hitSlop={8}
+                    style={styles.playButton}
+                    onPress={() => router.push(`/(tabs)/tickets/${item.id}`)}
+                  >
+                    <Ionicons name="play-outline" size={12} color={colors.foreground} />
+                  </Pressable>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      {
+                        borderColor: statusColors[item.status] ?? colors.border
+                      }
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: statusColors[item.status] ?? colors.mutedForeground }
+                      ]}
+                    >
+                      {statusLabel[item.status] ?? item.status}
+                    </Text>
+                  </View>
+                  {agentLabel && (
+                    <View style={styles.agentBadge}>
+                      <Ionicons
+                        name={
+                          item.execution_target === 'agent'
+                            ? 'hardware-chip-outline'
+                            : 'person-outline'
+                        }
+                        size={11}
+                        color={colors.success}
+                      />
+                      <Text style={styles.agentBadgeText}>
+                        {item.execution_target === 'agent' ? 'Agent' : 'Human'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Pressable>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons name="ticket-outline" size={48} color={colors.mutedForeground} />
+              <Text style={styles.emptyText}>No tickets</Text>
+              <Text style={styles.emptySub}>
+                {search.trim() || statusFilter !== 'all'
+                  ? 'Try clearing filters.'
+                  : selectedProject
+                    ? `No tickets in ${selectedProject.name}.`
+                    : 'Create a ticket to get started.'}
+              </Text>
+            </View>
+          }
+          contentContainerStyle={displayTickets.length === 0 ? styles.emptyContainer : styles.list}
+        />
+      )}
+
+      <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </View>
+  );
+}
+
+function FilterChip({
+  icon,
+  label,
+  onPress,
+  active
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  active: boolean;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}
+      onPress={onPress}
+    >
+      <Ionicons name={icon} size={13} color={colors.foreground} />
+      <Text style={styles.chipText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -239,85 +471,199 @@ const styles = StyleSheet.create({
   centered: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center'
+  },
+  topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10
+  },
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  searchWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 10,
+    height: 34
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.foreground,
+    fontSize: 13,
+    padding: 0
+  },
+  createButton: {
+    height: 34,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 2
+  },
+  projectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 10
+  },
+  projectSquare: {
+    width: 14,
+    height: 14,
+    borderRadius: 3
+  },
+  projectHeaderName: {
+    flex: 1,
+    color: colors.foreground,
+    fontSize: 17,
+    fontWeight: '700'
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 10
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  chipActive: {
+    borderColor: colors.primary
+  },
+  chipText: {
+    color: colors.foreground,
+    fontSize: 13
+  },
+  menu: {
+    marginHorizontal: 16,
+    marginBottom: 6,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden'
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border
+  },
+  menuItemText: {
+    color: colors.foreground,
+    fontSize: 14
   },
   list: {
-    padding: 16
+    paddingHorizontal: 12,
+    paddingBottom: 16,
+    gap: 8
+  },
+  pressed: {
+    opacity: 0.8
   },
   card: {
     backgroundColor: colors.card,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: colors.border
   },
-  cardHeader: {
+  cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 6
+    gap: 10
   },
-  sequence: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums']
+  ticketSquare: {
+    width: 10,
+    height: 10,
+    borderRadius: 2
   },
-  statusDot: {
+  ticketTitle: {
+    flex: 1,
+    color: colors.foreground,
+    fontSize: 15,
+    fontWeight: '600'
+  },
+  unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginLeft: 4
+    backgroundColor: colors.destructive
   },
-  status: {
-    color: colors.secondaryForeground,
-    fontSize: 13,
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    marginLeft: 20
+  },
+  playButton: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: 'transparent'
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
     textTransform: 'capitalize'
   },
-  targetBadge: {
+  agentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.secondary,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.4)',
+    backgroundColor: 'rgba(34, 197, 94, 0.08)'
   },
-  targetText: {
-    color: colors.secondaryForeground,
+  agentBadgeText: {
+    color: colors.success,
     fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'capitalize'
-  },
-  title: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 6
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4
-  },
-  meta: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    textTransform: 'capitalize'
-  },
-  metaSep: {
-    color: colors.mutedForeground,
-    fontSize: 13
-  },
-  dueText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    marginTop: 6
-  },
-  dueOverdue: {
-    color: colors.destructive,
     fontWeight: '600'
   },
   emptyContainer: {
@@ -334,5 +680,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginTop: 16
+  },
+  emptySub: {
+    color: colors.mutedForeground,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 6
   }
 });

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
-import { AiConnectionSection } from '@/components/features/ai-connections/AiConnectionSection';
 import { EverhourSettings } from '@/components/features/everhour/EverhourSettings';
+import { SlackSettings } from '@/components/features/slack/SlackSettings';
 import { Separator } from '@/components/ui/separator';
 import { getEverhourConnectionStatus } from '@/lib/actions/everhour';
 
@@ -29,33 +29,16 @@ export function IntegrationsPage({ open }: { open: boolean }) {
 
   return (
     <div className="space-y-6">
-      {/* <AiConnectionSection
-        provider="claude-code"
-        title="Claude Code"
-        description="Connect your Anthropic account to view your Claude Code subscription usage, including 5-hour and weekly token consumption."
-        connectHref="/api/auth/claude-code/initiate"
-        open={open}
-      />
+      <SlackSettings open={open} />
 
       <Separator />
 
-      <AiConnectionSection
-        provider="codex"
-        title="Codex"
-        description="Connect your OpenAI account to view your Codex subscription usage, including 5-hour rate limits and weekly consumption."
-        connectHref="/api/auth/codex/initiate"
-        open={open}
-      /> */}
-
       {everhourStatusLoaded ? (
-        <>
-          {/* <Separator /> */}
-          <EverhourSettings
-            initiallyConnected={everhourConnected}
-            lastUpdatedAt={everhourUpdatedAt}
-            compact
-          />
-        </>
+        <EverhourSettings
+          initiallyConnected={everhourConnected}
+          lastUpdatedAt={everhourUpdatedAt}
+          compact
+        />
       ) : null}
     </div>
   );

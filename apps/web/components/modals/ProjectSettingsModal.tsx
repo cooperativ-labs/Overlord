@@ -209,6 +209,7 @@ export function ProjectSettingsModal({
                   organizationId={organizationId}
                   initialEverhourProjectId={initialEverhourProjectId}
                   hasEverhourApiKey={hasEverhourApiKey}
+                  open={open}
                 />
               )}
               {activeNav === 'Danger zone' && (

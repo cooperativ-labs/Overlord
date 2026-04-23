@@ -830,6 +830,7 @@ export type Database = {
           id: string;
           name: string;
           organization_id: number;
+          slack_default_status: string | null;
           updated_at: string;
         };
         Insert: {
@@ -839,6 +840,7 @@ export type Database = {
           id?: string;
           name: string;
           organization_id: number;
+          slack_default_status?: string | null;
           updated_at?: string;
         };
         Update: {
@@ -848,6 +850,7 @@ export type Database = {
           id?: string;
           name?: string;
           organization_id?: number;
+          slack_default_status?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -1047,6 +1050,93 @@ export type Database = {
           }
         ];
       };
+      slack_event_dedupe: {
+        Row: {
+          event_id: string;
+          received_at: string;
+        };
+        Insert: {
+          event_id: string;
+          received_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          received_at?: string;
+        };
+        Relationships: [];
+      };
+      slack_workspaces: {
+        Row: {
+          bot_access_token: string;
+          bot_user_id: string;
+          created_at: string;
+          default_execution_target: Database['public']['Enums']['ticket_execution_target'];
+          default_priority: string;
+          default_project_id: string | null;
+          default_status: string;
+          id: string;
+          include_context: boolean;
+          organization_id: number;
+          restrict_to_owner: boolean;
+          slack_user_id: string;
+          team_id: string;
+          team_name: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          bot_access_token: string;
+          bot_user_id: string;
+          created_at?: string;
+          default_execution_target?: Database['public']['Enums']['ticket_execution_target'];
+          default_priority?: string;
+          default_project_id?: string | null;
+          default_status?: string;
+          id?: string;
+          include_context?: boolean;
+          organization_id: number;
+          restrict_to_owner?: boolean;
+          slack_user_id: string;
+          team_id: string;
+          team_name: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          bot_access_token?: string;
+          bot_user_id?: string;
+          created_at?: string;
+          default_execution_target?: Database['public']['Enums']['ticket_execution_target'];
+          default_priority?: string;
+          default_project_id?: string | null;
+          default_status?: string;
+          id?: string;
+          include_context?: boolean;
+          organization_id?: number;
+          restrict_to_owner?: boolean;
+          slack_user_id?: string;
+          team_id?: string;
+          team_name?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'slack_workspaces_default_project_id_fkey';
+            columns: ['default_project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'slack_workspaces_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       ticket_events: {
         Row: {
           created_at: string;
@@ -1161,6 +1251,10 @@ export type Database = {
           project_id: string | null;
           schedule_id: number | null;
           search_vector: unknown;
+          slack_channel_id: string | null;
+          slack_thread_ts: string | null;
+          slack_workspace_id: string | null;
+          source: string | null;
           status: string;
           ticket_sequence: number;
           title: string | null;
@@ -1187,6 +1281,10 @@ export type Database = {
           project_id?: string | null;
           schedule_id?: number | null;
           search_vector?: unknown;
+          slack_channel_id?: string | null;
+          slack_thread_ts?: string | null;
+          slack_workspace_id?: string | null;
+          source?: string | null;
           status?: string;
           ticket_sequence?: number;
           title?: string | null;
@@ -1213,6 +1311,10 @@ export type Database = {
           project_id?: string | null;
           schedule_id?: number | null;
           search_vector?: unknown;
+          slack_channel_id?: string | null;
+          slack_thread_ts?: string | null;
+          slack_workspace_id?: string | null;
+          source?: string | null;
           status?: string;
           ticket_sequence?: number;
           title?: string | null;
@@ -1239,6 +1341,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'schedule';
             referencedColumns: ['id', 'organization_id'];
+          },
+          {
+            foreignKeyName: 'tickets_slack_workspace_id_fkey';
+            columns: ['slack_workspace_id'];
+            isOneToOne: false;
+            referencedRelation: 'slack_workspaces';
+            referencedColumns: ['id'];
           },
           {
             foreignKeyName: 'tickets_status_org_fk';

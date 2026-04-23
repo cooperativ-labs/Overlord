@@ -1,4 +1,4 @@
-import { Bot } from 'lucide-react';
+import { Bot, MessageSquare } from 'lucide-react';
 import { headers } from 'next/headers';
 import fs from 'node:fs/promises';
 
@@ -341,6 +341,12 @@ export async function TicketPanelContent({
                 <div className="mb-3 flex items-center gap-1.5 text-xs text-orange-500/90">
                   <Bot className="h-3.5 w-3.5 shrink-0" />
                   <span>Created by agent: {ticket.delegate}</span>
+                </div>
+              ) : null}
+              {ticket.source === 'slack' ? (
+                <div className="mb-3 flex items-center gap-1.5 text-xs text-sky-500/90">
+                  <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                  <span>Created via Slack</span>
                 </div>
               ) : null}
               <div className="mb-4">

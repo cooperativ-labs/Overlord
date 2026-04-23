@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 
+import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
@@ -28,6 +30,14 @@ function upsertObjective(objectives: ObjectiveRow[], incoming: ObjectiveRow): Ob
   return sortByCreatedAtDesc(next);
 }
 
+function removeObjective(
+  objectives: ObjectiveRow[],
+  objectiveId: string | undefined
+): ObjectiveRow[] {
+  if (!objectiveId) return objectives;
+  return objectives.filter(objective => objective.id !== objectiveId);
+}
+
 type UseTicketObjectivesRealtimeOptions = {
   ticketId: string;
   initialObjectives: ObjectiveRow[];
@@ -37,11 +47,18 @@ export function useTicketObjectivesRealtime({
   ticketId,
   initialObjectives
 }: UseTicketObjectivesRealtimeOptions) {
-  const [objectives, setObjectives] = useState<ObjectiveRow[]>(initialObjectives);
+  const queryClient = useQueryClient();
+  const objectivesQuery = useQuery({
+    queryKey: ticketQueryKeys.ticketObjectives(ticketId),
+    queryFn: async () => initialObjectives,
+    initialData: initialObjectives,
+    staleTime: 30_000,
+    refetchOnMount: false
+  });
 
   useEffect(() => {
-    setObjectives(initialObjectives);
-  }, [initialObjectives, ticketId]);
+    queryClient.setQueryData(ticketQueryKeys.ticketObjectives(ticketId), initialObjectives);
+  }, [initialObjectives, queryClient, ticketId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +72,10 @@ export function useTicketObjectivesRealtime({
         .order('created_at', { ascending: false });
 
       if (cancelled || !data) return;
-      setObjectives(sortByCreatedAtDesc(data));
+      queryClient.setQueryData<ObjectiveRow[]>(
+        ticketQueryKeys.ticketObjectives(ticketId),
+        sortByCreatedAtDesc(data)
+      );
     };
 
     void syncObjectives();
@@ -74,22 +94,35 @@ export function useTicketObjectivesRealtime({
           const incoming = payload.new as ObjectiveRow;
           const previous = payload.old as ObjectiveRow | undefined;
 
-          setObjectives(current => {
-            if (payload.eventType === 'DELETE') {
-              return current.filter(objective => objective.id !== previous?.id);
-            }
+          queryClient.setQueryData<ObjectiveRow[]>(
+            ticketQueryKeys.ticketObjectives(ticketId),
+            current => {
+              const existing = current ?? [];
+              if (payload.eventType === 'DELETE') {
+                return removeObjective(existing, previous?.id);
+              }
 
-            return upsertObjective(current, incoming);
-          });
+              return upsertObjective(existing, incoming);
+            }
+          );
         }
       )
-      .subscribe();
+      .subscribe(status => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          void syncObjectives();
+        }
+      });
+
+    const pollId = window.setInterval(() => {
+      void syncObjectives();
+    }, 4_000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
-  }, [ticketId]);
+  }, [queryClient, ticketId]);
 
-  return objectives;
+  return objectivesQuery.data ?? [];
 }

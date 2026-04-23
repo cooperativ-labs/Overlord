@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 
+import { ProjectSlackSettings } from '@/components/features/slack/ProjectSlackSettings';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
+import { Separator } from '@/components/ui/separator';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import { useDisconnectProjectEverhourMutation } from '@/lib/client-data/projects/mutations';
 
@@ -12,13 +14,15 @@ type IntegrationsPageProps = {
   organizationId: number;
   initialEverhourProjectId: string | null;
   hasEverhourApiKey: boolean;
+  open: boolean;
 };
 
 export function IntegrationsPage({
   projectId,
   organizationId,
   initialEverhourProjectId,
-  hasEverhourApiKey
+  hasEverhourApiKey,
+  open
 }: IntegrationsPageProps) {
   const disconnectEverhourMutation = useDisconnectProjectEverhourMutation();
   const [savedEverhourProjectId, setSavedEverhourProjectId] = useState(initialEverhourProjectId);
@@ -68,53 +72,53 @@ export function IntegrationsPage({
     }
   }
 
-  if (!hasEverhourApiKey) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No integrations are configured. Add an Everhour API key in organization settings to enable
-        time tracking.
-      </p>
-    );
-  }
-
   return (
-    <div className="grid gap-2">
-      <label className="text-xs font-medium text-muted-foreground">Everhour</label>
-      <p className="text-xs text-muted-foreground">
-        This project syncs with the identically named project in your Everhour account. Make sure
-        only one Everhour project has this exact name.
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <LoadingButton
-          buttonState={syncButtonState}
-          setButtonState={setSyncButtonState}
-          text="Sync Everhour"
-          loadingText="Syncing…"
-          successText="Synced"
-          errorText="Retry"
-          reset
-          size="sm"
-          variant="outline"
-          onClick={handleSyncEverhour}
-        />
-        <LoadingButton
-          buttonState={disconnectButtonState}
-          setButtonState={setDisconnectButtonState}
-          text="Disconnect"
-          loadingText="Disconnecting…"
-          successText="Disconnected"
-          errorText="Retry"
-          reset
-          size="sm"
-          variant="outline"
-          disabled={!savedEverhourProjectId || syncButtonState === 'loading'}
-          onClick={handleDisconnectEverhour}
-        />
-      </div>
-      {syncMessage ? (
-        <p className="text-xs text-muted-foreground" title={syncMessage}>
-          {syncMessage}
-        </p>
+    <div className="space-y-6">
+      <ProjectSlackSettings projectId={projectId} open={open} />
+
+      {hasEverhourApiKey ? (
+        <>
+          <Separator />
+          <div className="grid gap-2">
+            <label className="text-xs font-medium text-muted-foreground">Everhour</label>
+            <p className="text-xs text-muted-foreground">
+              This project syncs with the identically named project in your Everhour account. Make
+              sure only one Everhour project has this exact name.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <LoadingButton
+                buttonState={syncButtonState}
+                setButtonState={setSyncButtonState}
+                text="Sync Everhour"
+                loadingText="Syncing…"
+                successText="Synced"
+                errorText="Retry"
+                reset
+                size="sm"
+                variant="outline"
+                onClick={handleSyncEverhour}
+              />
+              <LoadingButton
+                buttonState={disconnectButtonState}
+                setButtonState={setDisconnectButtonState}
+                text="Disconnect"
+                loadingText="Disconnecting…"
+                successText="Disconnected"
+                errorText="Retry"
+                reset
+                size="sm"
+                variant="outline"
+                disabled={!savedEverhourProjectId || syncButtonState === 'loading'}
+                onClick={handleDisconnectEverhour}
+              />
+            </div>
+            {syncMessage ? (
+              <p className="text-xs text-muted-foreground" title={syncMessage}>
+                {syncMessage}
+              </p>
+            ) : null}
+          </div>
+        </>
       ) : null}
     </div>
   );

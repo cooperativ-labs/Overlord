@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -39,6 +41,7 @@ import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from 
 type Project = {
   id: string;
   name: string;
+  color: string;
 };
 
 const eventIcons: Record<string, { name: string; color: string }> = {
@@ -65,6 +68,7 @@ const objectiveStateColors: Record<string, string> = {
 
 export default function TicketDetailScreen() {
   const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
+  const router = useRouter();
   const {
     servers: allServers,
     connectedSSHServers: availableServers,
@@ -87,6 +91,11 @@ export default function TicketDetailScreen() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [savingProject, setSavingProject] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [showAgentModal, setShowAgentModal] = useState(false);
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const [showDocuments, setShowDocuments] = useState(false);
+  const [showCliQuickstart, setShowCliQuickstart] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<'all' | 'completed'>('all');
 
   const loadData = useCallback(async () => {
     const supabase = getSupabase();
@@ -109,7 +118,7 @@ export default function TicketDetailScreen() {
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false })
         .limit(30),
-      supabase.from('projects').select('id, name').order('name', { ascending: true })
+      supabase.from('projects').select('id, name, color').order('name', { ascending: true })
     ]);
 
     if (ticketRes.data) {
@@ -137,6 +146,31 @@ export default function TicketDetailScreen() {
     () => objectives.find(objective => objective.state === 'draft') ?? null,
     [objectives]
   );
+  const filteredEvents = useMemo(() => {
+    if (activityFilter === 'completed') {
+      return events.filter(event => event.event_type === 'deliver' || event.phase === 'complete');
+    }
+    return events;
+  }, [events, activityFilter]);
+
+  const handleCopyPrompt = useCallback(async () => {
+    const parts = [
+      ticket?.title ? `# ${ticket.title}` : null,
+      ticket?.context?.trim() ? `## Context\n${ticket.context}` : null,
+      ticket?.constraints?.trim() ? `## Constraints\n${ticket.constraints}` : null,
+      ticket?.acceptance_criteria ? `## Acceptance Criteria\n${ticket.acceptance_criteria}` : null,
+      draftObjective?.objective ? `## Objective\n${draftObjective.objective}` : null
+    ].filter(Boolean);
+    await Clipboard.setStringAsync(parts.join('\n\n'));
+    Alert.alert('Copied', 'Ticket prompt copied to clipboard.');
+  }, [ticket, draftObjective]);
+
+  const handleCopyCliCommand = useCallback(async () => {
+    if (!ticket) return;
+    await Clipboard.setStringAsync(`ovld protocol attach --ticket-id ${ticket.id}`);
+    Alert.alert('Copied', 'Attach command copied.');
+  }, [ticket]);
+
   const executedObjectives = useMemo(
     () =>
       objectives
@@ -732,77 +766,139 @@ export default function TicketDetailScreen() {
     );
   }
 
-  return (
-    <ScrollView style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: `#${ticket.ticket_sequence}`,
-          headerShown: true,
-          headerBackTitle: 'Tickets',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.foreground
-        }}
-      />
+  const currentProject = projects.find(p => p.id === selectedProjectId) ?? null;
+  const dueLabel = ticket.due_datetime ? new Date(ticket.due_datetime).toLocaleDateString() : null;
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{ticket.title || 'Untitled'}</Text>
-        <View style={styles.metaRow}>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{ticket.status}</Text>
+  return (
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Top action bar */}
+      <View style={styles.topBar}>
+        <Pressable
+          hitSlop={8}
+          style={styles.topIconButton}
+          onPress={() => setOverflowOpen(true)}
+          accessibilityLabel="More actions"
+        >
+          <Ionicons name="ellipsis-vertical" size={18} color={colors.foreground} />
+        </Pressable>
+        <Pressable
+          hitSlop={8}
+          style={styles.topPillButton}
+          onPress={() => Alert.alert('Local runtime', 'Remote runtime selection coming soon.')}
+        >
+          <Ionicons name="desktop-outline" size={13} color={colors.foreground} />
+          <Text style={styles.topPillText}>Local</Text>
+          <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
+        </Pressable>
+        <Pressable
+          hitSlop={8}
+          style={styles.topPillButton}
+          onPress={() => Alert.alert('Discuss', 'In-ticket discussion is coming soon.')}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={13} color={colors.foreground} />
+          <Text style={styles.topPillText}>Discuss</Text>
+        </Pressable>
+        <Pressable hitSlop={8} style={styles.topPillButton} onPress={handleCopyPrompt}>
+          <Ionicons name="copy-outline" size={13} color={colors.foreground} />
+          <Text style={styles.topPillText}>Copy prompt</Text>
+        </Pressable>
+        <View style={{ flex: 1 }} />
+        <Pressable
+          hitSlop={8}
+          style={styles.topIconButton}
+          onPress={() => router.back()}
+          accessibilityLabel="Close"
+        >
+          <Ionicons name="close" size={18} color={colors.foreground} />
+        </Pressable>
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {/* Time Tracking */}
+        <View style={styles.tracker}>
+          <View style={styles.trackerTextWrap}>
+            <View style={styles.trackerHeaderRow}>
+              <Text style={styles.trackerLabel}>TIME TRACKING</Text>
+              <Ionicons
+                name="information-circle-outline"
+                size={13}
+                color={colors.mutedForeground}
+              />
+            </View>
+            <Text style={styles.trackerSub}>Track time on this ticket.</Text>
           </View>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{ticket.priority}</Text>
+          <Pressable
+            hitSlop={8}
+            style={styles.trackerButton}
+            onPress={() => Alert.alert('Time tracking', 'Time tracking starts soon.')}
+          >
+            <Ionicons name="play" size={12} color={colors.foreground} />
+            <Text style={styles.trackerButtonText}>Start</Text>
+          </Pressable>
+        </View>
+
+        {/* Title + sequence */}
+        <View style={styles.titleBlock}>
+          <Text style={styles.sequence}>#{ticket.ticket_sequence}</Text>
+          <Text style={styles.titleText}>{ticket.title || 'Untitled'}</Text>
+        </View>
+
+        {/* Pill selectors: project · status · agent */}
+        <View style={styles.pillRow}>
+          <Pressable
+            style={({ pressed }) => [styles.selectPill, pressed && styles.pressed]}
+            onPress={() => setShowProjectPicker(prev => !prev)}
+            disabled={savingProject}
+          >
+            {currentProject && (
+              <View
+                style={[
+                  styles.pillDot,
+                  { backgroundColor: currentProject.color || colors.primary }
+                ]}
+              />
+            )}
+            <Text style={styles.selectPillText} numberOfLines={1}>
+              {currentProject?.name ?? 'No project'}
+            </Text>
+            {savingProject ? (
+              <ActivityIndicator size="small" color={colors.mutedForeground} />
+            ) : (
+              <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
+            )}
+          </Pressable>
+
+          <View style={styles.selectPill}>
+            <View style={[styles.pillDot, { backgroundColor: statusPillColor(ticket.status) }]} />
+            <Text style={styles.selectPillText}>{ticket.status}</Text>
+            <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
           </View>
-          <View style={styles.chip}>
+
+          <Pressable
+            style={({ pressed }) => [styles.selectPill, pressed && styles.pressed]}
+            onPress={() => setShowAgentModal(true)}
+            disabled={savingAssignedAgent}
+          >
             <Ionicons
               name={
                 ticket.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
               }
               size={12}
-              color={colors.secondaryForeground}
-              style={{ marginRight: 4 }}
+              color={colors.foreground}
             />
-            <Text style={styles.chipText}>{ticket.execution_target}</Text>
-          </View>
-        </View>
-        {agentLabel && (
-          <View style={styles.agentRow}>
-            <Ionicons name="hardware-chip-outline" size={14} color={colors.mutedForeground} />
-            <Text style={styles.agentText}>{agentLabel}</Text>
-          </View>
-        )}
-        {ticket.due_datetime && (
-          <View style={styles.dueRow}>
-            <Ionicons name="calendar-outline" size={14} color={colors.mutedForeground} />
-            <Text style={styles.dueText}>
-              Due {new Date(ticket.due_datetime).toLocaleDateString()}
+            <Text style={styles.selectPillText} numberOfLines={1}>
+              {agentLabel ?? 'Agent'}
             </Text>
-          </View>
-        )}
-
-        {/* Project selector */}
-        <View style={styles.projectRow}>
-          <Ionicons name="folder-outline" size={14} color={colors.mutedForeground} />
-          <Pressable
-            onPress={() => setShowProjectPicker(prev => !prev)}
-            disabled={savingProject}
-            style={({ pressed }) => [styles.projectSelector, pressed && styles.pressed]}
-          >
-            <Text style={styles.projectSelectorText}>
-              {projects.find(p => p.id === selectedProjectId)?.name ?? 'No project'}
-            </Text>
-            {savingProject ? (
-              <ActivityIndicator size="small" color={colors.mutedForeground} style={{ marginLeft: 4 }} />
+            {savingAssignedAgent ? (
+              <ActivityIndicator size="small" color={colors.mutedForeground} />
             ) : (
-              <Ionicons
-                name={showProjectPicker ? 'chevron-up' : 'chevron-down'}
-                size={14}
-                color={colors.mutedForeground}
-              />
+              <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
             )}
           </Pressable>
         </View>
+
         {showProjectPicker && (
           <View style={styles.projectPickerList}>
             {projects.map(project => {
@@ -821,356 +917,494 @@ export default function TicketDetailScreen() {
                   >
                     {project.name}
                   </Text>
-                  {isSelected && (
-                    <Ionicons name="checkmark" size={16} color={colors.primary} />
-                  )}
+                  {isSelected && <Ionicons name="checkmark" size={16} color={colors.primary} />}
                 </Pressable>
               );
             })}
           </View>
         )}
 
-        {/* SSH Connection Status Banner */}
-        <View
-          style={[
-            styles.sshBanner,
-            loadingServers
-              ? styles.sshBannerLoading
-              : availableServers.length > 0
-                ? styles.sshBannerConnected
-                : styles.sshBannerDisconnected
-          ]}
-        >
-          <View style={styles.sshBannerRow}>
-            {loadingServers ? (
-              <ActivityIndicator size="small" color={colors.mutedForeground} />
-            ) : (
-              <View
-                style={[
-                  styles.sshStatusDot,
-                  {
-                    backgroundColor:
-                      availableServers.length > 0 ? colors.success : colors.destructive
-                  }
-                ]}
-              />
-            )}
-            <Text style={styles.sshBannerText}>
-              {loadingServers
-                ? 'Checking servers...'
-                : availableServers.length > 0
-                  ? `${availableServers.length} server${availableServers.length !== 1 ? 's' : ''} connected`
-                  : 'No servers connected'}
-            </Text>
-          </View>
-          {!loadingServers && allServers.length > 0 && availableServers.length === 0 && (
-            <Text style={styles.sshBannerDetail}>
-              {allServers.length} server{allServers.length !== 1 ? 's' : ''} found but none are
-              connected. {allServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')}
-            </Text>
-          )}
-          {!loadingServers && allServers.length === 0 && (
-            <Text style={styles.sshBannerDetail}>
-              No servers registered for this device. Add one from the Servers tab.
-            </Text>
-          )}
+        {/* Schedule buttons */}
+        <View style={styles.scheduleRow}>
+          <Pressable
+            style={({ pressed }) => [styles.scheduleButton, pressed && styles.pressed]}
+            onPress={() =>
+              Alert.alert('Due date', dueLabel ? `Due ${dueLabel}` : 'Due date picker coming soon.')
+            }
+          >
+            <Ionicons name="calendar-outline" size={13} color={colors.foreground} />
+            <Text style={styles.scheduleText}>{dueLabel ? `Due ${dueLabel}` : 'Set due date'}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.scheduleButton, pressed && styles.pressed]}
+            onPress={() => Alert.alert('Schedule', 'Scheduling coming soon.')}
+          >
+            <Ionicons name="time-outline" size={13} color={colors.foreground} />
+            <Text style={styles.scheduleText}>Add schedule</Text>
+          </Pressable>
         </View>
-      </View>
 
-      {/* Assigned agent */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Assigned Agent</Text>
-          {savingAssignedAgent ? (
-            <View style={styles.inlineStatus}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.inlineStatusText}>Saving...</Text>
-            </View>
-          ) : null}
+        {/* Objectives list */}
+        {executedObjectives.length > 0 && (
+          <View style={styles.objectivesBlock}>
+            {executedObjectives.map(obj => {
+              const expanded = expandedObjectiveIds.includes(obj.id);
+              return (
+                <View key={obj.id} style={styles.objectiveRow}>
+                  <Pressable
+                    onPress={() => toggleObjectiveExpanded(obj.id)}
+                    style={({ pressed }) => [styles.objectiveRowHeader, pressed && styles.pressed]}
+                  >
+                    <View style={styles.objectiveStatusIcon}>
+                      <Ionicons
+                        name={obj.state === 'complete' ? 'checkmark-circle' : 'radio-button-on'}
+                        size={16}
+                        color={objectiveStateColors[obj.state] ?? colors.mutedForeground}
+                      />
+                    </View>
+                    <Text
+                      style={styles.objectiveTitleText}
+                      numberOfLines={expanded ? undefined : 1}
+                    >
+                      {obj.title ?? obj.objective}
+                    </Text>
+                    <Pressable hitSlop={6} onPress={() => toggleObjectiveExpanded(obj.id)}>
+                      <Ionicons
+                        name="ellipsis-horizontal"
+                        size={16}
+                        color={colors.mutedForeground}
+                      />
+                    </Pressable>
+                  </Pressable>
+                  {expanded && obj.title && obj.objective && (
+                    <Text style={styles.objectiveBody}>{obj.objective}</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Draft objective editor */}
+        <View style={styles.draftBlock}>
+          <TextInput
+            style={styles.draftInput}
+            value={objectiveDraft}
+            onChangeText={setObjectiveDraft}
+            placeholder="Click to add an objective..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            textAlignVertical="top"
+          />
+          {canSaveObjective && (
+            <Pressable
+              onPress={handleSaveObjective}
+              style={({ pressed }) => [styles.saveObjective, pressed && styles.pressed]}
+            >
+              {savingObjective ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <Text style={styles.saveObjectiveText}>{objectiveActionLabel}</Text>
+              )}
+            </Pressable>
+          )}
         </View>
-        <AgentModelChooser
-          value={assignedSelection}
-          onChange={handleAssignedAgentChange}
-          onResolvedSelectionChange={setResolvedAssignedSelection}
-          helperText="Tap the button to choose the agent and model."
-          disabled={savingAssignedAgent}
-        />
-        <Pressable
-          onPress={promptForServerLaunch}
-          disabled={
-            savingAssignedAgent ||
-            loadingServers ||
-            launchingServerId !== null ||
-            !isSSHSupported ||
-            !resolvedAssignedSelection
-          }
-          style={({ pressed }) => [
-            styles.launchServerButton,
-            (savingAssignedAgent ||
+
+        {/* Run on server (kept functional, styled as section) */}
+        <View style={styles.runSection}>
+          <Pressable
+            onPress={promptForServerLaunch}
+            disabled={
+              savingAssignedAgent ||
               loadingServers ||
               launchingServerId !== null ||
               !isSSHSupported ||
-              !resolvedAssignedSelection) &&
-              styles.launchServerButtonDisabled,
-            pressed &&
-              !(
-                savingAssignedAgent ||
+              !resolvedAssignedSelection
+            }
+            style={({ pressed }) => [
+              styles.launchServerButton,
+              (savingAssignedAgent ||
                 loadingServers ||
                 launchingServerId !== null ||
                 !isSSHSupported ||
-                !resolvedAssignedSelection
-              ) &&
-              styles.launchServerButtonPressed
-          ]}
-        >
-          {loadingServers || launchingServerId !== null ? (
-            <ActivityIndicator size="small" color={colors.primaryForeground} />
-          ) : (
-            <Ionicons name="terminal-outline" size={16} color={colors.primaryForeground} />
+                !resolvedAssignedSelection) &&
+                styles.launchServerButtonDisabled,
+              pressed && styles.pressed
+            ]}
+          >
+            {loadingServers || launchingServerId !== null ? (
+              <ActivityIndicator size="small" color={colors.primaryForeground} />
+            ) : (
+              <Ionicons name="terminal-outline" size={14} color={colors.primaryForeground} />
+            )}
+            <Text style={styles.launchServerButtonText}>
+              {launchingServerId !== null
+                ? 'Starting Remote Session…'
+                : loadingServers
+                  ? 'Loading Servers…'
+                  : 'Run on Server'}
+            </Text>
+          </Pressable>
+          {!isSSHSupported && (
+            <Text style={styles.runHint}>
+              Remote SSH launch is currently available on iOS only.
+            </Text>
           )}
-          <Text style={styles.launchServerButtonText}>
-            {launchingServerId !== null
-              ? 'Starting Remote Session...'
-              : loadingServers
-                ? 'Loading Servers...'
-                : 'Run on Server'}
-          </Text>
-        </Pressable>
-        <Text style={styles.sectionHelperText}>
-          {isSSHSupported
-            ? availableServers.length > 0
-              ? `Launches ${resolvedAssignedSelection?.agent ?? 'the selected agent'} on a connected SSH server using your server terminal preference.`
-              : 'No connected SSH servers are currently available on this device.'
-            : 'Remote SSH launch is currently available on iOS only.'}
-        </Text>
-      </View>
+          {isSSHSupported && availableServers.length === 0 && (
+            <Text style={styles.runHint}>
+              {allServers.length > 0
+                ? 'No connected SSH servers on this device.'
+                : 'Add a server from the Servers tab to launch remotely.'}
+            </Text>
+          )}
+        </View>
 
-      {/* Objective history */}
-      {executedObjectives.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Objectives</Text>
-          {executedObjectives.map(obj => (
-            <View key={obj.id} style={styles.objectiveCard}>
-              <Pressable
-                onPress={() => toggleObjectiveExpanded(obj.id)}
-                style={({ pressed }) => [styles.objectiveCardHeader, pressed && styles.pressed]}
-              >
-                <View style={styles.objectiveHeaderLeft}>
-                  <View
-                    style={[
-                      styles.objectiveStateDot,
-                      { backgroundColor: objectiveStateColors[obj.state] ?? colors.mutedForeground }
-                    ]}
-                  />
-                  <View style={styles.objectiveHeaderTextWrap}>
-                    <Text style={styles.objectiveTitle}>{obj.title ?? 'Objective'}</Text>
-                    <View style={styles.objectiveMetaRow}>
-                      <Text style={styles.objectiveMeta}>{obj.state}</Text>
-                      {obj.agent_identifier && (
-                        <>
-                          <Text style={styles.objectiveMetaSep}>·</Text>
-                          <Text style={styles.objectiveMeta}>{obj.agent_identifier}</Text>
-                        </>
-                      )}
-                      {obj.model_identifier && (
-                        <>
-                          <Text style={styles.objectiveMetaSep}>·</Text>
-                          <Text style={styles.objectiveMeta}>{obj.model_identifier}</Text>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                </View>
-                <Ionicons
-                  name={expandedObjectiveIds.includes(obj.id) ? 'chevron-up' : 'chevron-down'}
-                  size={16}
-                  color={colors.mutedForeground}
-                />
-              </Pressable>
-              {expandedObjectiveIds.includes(obj.id) ? (
-                <Text style={styles.objectiveText}>{obj.objective}</Text>
-              ) : null}
+        {/* Collapsible sections */}
+        <CollapsibleSection
+          label="DOCUMENTS"
+          open={showDocuments}
+          onToggle={() => setShowDocuments(open => !open)}
+        >
+          {ticket.context.trim() !== '' && (
+            <View style={styles.docBlock}>
+              <Text style={styles.docLabel}>Context</Text>
+              <Text style={styles.docBody}>{ticket.context}</Text>
             </View>
-          ))}
-        </View>
-      )}
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Draft Objective</Text>
-        <TextInput
-          style={styles.objectiveEditor}
-          value={objectiveDraft}
-          onChangeText={setObjectiveDraft}
-          placeholder="Write the next objective..."
-          placeholderTextColor={colors.mutedForeground}
-          multiline
-          textAlignVertical="top"
-        />
-        <Pressable
-          onPress={handleSaveObjective}
-          disabled={!canSaveObjective}
-          style={({ pressed }) => [
-            styles.objectiveActionButton,
-            !canSaveObjective && styles.objectiveActionButtonDisabled,
-            pressed && canSaveObjective && styles.objectiveActionButtonPressed
-          ]}
-        >
-          {savingObjective ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <Text style={styles.objectiveActionText}>{objectiveActionLabel}</Text>
           )}
-        </Pressable>
-      </View>
+          {ticket.constraints.trim() !== '' && (
+            <View style={styles.docBlock}>
+              <Text style={styles.docLabel}>Constraints</Text>
+              <Text style={styles.docBody}>{ticket.constraints}</Text>
+            </View>
+          )}
+          {ticket.acceptance_criteria && (
+            <View style={styles.docBlock}>
+              <Text style={styles.docLabel}>Acceptance Criteria</Text>
+              <Text style={styles.docBody}>{ticket.acceptance_criteria}</Text>
+            </View>
+          )}
+          {ticket.context.trim() === '' &&
+            ticket.constraints.trim() === '' &&
+            !ticket.acceptance_criteria && (
+              <Text style={styles.docEmpty}>No documents attached.</Text>
+            )}
+        </CollapsibleSection>
 
-      {/* Context */}
-      {ticket.context.trim() !== '' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Context</Text>
-          <Text style={styles.sectionBody}>{ticket.context}</Text>
+        <CollapsibleSection
+          label="CLI QUICKSTART"
+          open={showCliQuickstart}
+          onToggle={() => setShowCliQuickstart(open => !open)}
+        >
+          <Pressable
+            style={({ pressed }) => [styles.cliCopy, pressed && styles.pressed]}
+            onPress={handleCopyCliCommand}
+          >
+            <Text style={styles.cliText} selectable>
+              ovld protocol attach --ticket-id {ticket.id}
+            </Text>
+            <Ionicons name="copy-outline" size={14} color={colors.mutedForeground} />
+          </Pressable>
+          <Text style={styles.cliHint}>
+            Paste in a terminal already authenticated with Overlord to attach this session.
+          </Text>
+        </CollapsibleSection>
+
+        {/* Activity */}
+        <View style={styles.activityHeader}>
+          <Text style={styles.sectionLabel}>ACTIVITY</Text>
+          <Pressable
+            style={({ pressed }) => [styles.activityFilter, pressed && styles.pressed]}
+            onPress={() =>
+              setActivityFilter(current => (current === 'completed' ? 'all' : 'completed'))
+            }
+          >
+            <Text style={styles.activityFilterText}>
+              {activityFilter === 'completed' ? 'Completed' : 'All'}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
+          </Pressable>
         </View>
-      )}
-
-      {/* Constraints */}
-      {ticket.constraints.trim() !== '' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Constraints</Text>
-          <Text style={styles.sectionBody}>{ticket.constraints}</Text>
-        </View>
-      )}
-
-      {/* Acceptance Criteria */}
-      {ticket.acceptance_criteria && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Acceptance Criteria</Text>
-          <Text style={styles.sectionBody}>{ticket.acceptance_criteria}</Text>
-        </View>
-      )}
-
-      {/* Activity */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Activity</Text>
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <Text style={styles.noActivity}>No activity yet</Text>
         ) : (
-          events.map(event => {
-            const icon = eventIcons[event.event_type] ?? { name: 'ellipse', color: colors.primary };
+          filteredEvents.map(event => {
+            const icon = eventIcons[event.event_type] ?? {
+              name: 'ellipse',
+              color: colors.primary
+            };
             return (
               <View
                 key={event.id}
-                style={[styles.eventCard, event.is_blocking && styles.eventBlocking]}
+                style={[styles.eventRow, event.is_blocking && styles.eventBlocking]}
               >
-                <View style={styles.eventHeader}>
+                <View style={styles.eventIconBadge}>
                   <Ionicons
                     name={icon.name as keyof typeof Ionicons.glyphMap}
-                    size={14}
+                    size={12}
                     color={icon.color}
                   />
-                  <Text style={styles.eventType}>{event.event_type.replace(/_/g, ' ')}</Text>
-                  {event.phase && <Text style={styles.eventPhase}>· {event.phase}</Text>}
-                  {event.is_blocking && (
-                    <View style={styles.blockingBadge}>
-                      <Text style={styles.blockingText}>blocking</Text>
-                    </View>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={styles.eventHeader}>
+                    <Text style={styles.eventType}>{event.event_type.replace(/_/g, ' ')}</Text>
+                    {event.phase && <Text style={styles.eventPhase}>{event.phase}</Text>}
+                    <Text style={styles.eventTime}>
+                      {new Date(event.created_at).toLocaleString(undefined, {
+                        month: 'numeric',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })}
+                    </Text>
+                  </View>
+                  {event.summary && (
+                    <Text style={styles.eventSummary} numberOfLines={4}>
+                      {event.summary}
+                    </Text>
                   )}
                 </View>
-                {event.summary && (
-                  <Text style={styles.eventSummary} numberOfLines={4}>
-                    {event.summary}
-                  </Text>
-                )}
-                <Text style={styles.eventTime}>{new Date(event.created_at).toLocaleString()}</Text>
               </View>
             );
           })
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Agent chooser modal */}
+      <Modal
+        visible={showAgentModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAgentModal(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowAgentModal(false)}>
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <Text style={styles.modalTitle}>Assigned Agent</Text>
+            <AgentModelChooser
+              value={assignedSelection}
+              onChange={handleAssignedAgentChange}
+              onResolvedSelectionChange={setResolvedAssignedSelection}
+              helperText="Choose the agent and model."
+              disabled={savingAssignedAgent}
+            />
+            <Pressable
+              style={({ pressed }) => [styles.modalDone, pressed && styles.pressed]}
+              onPress={() => setShowAgentModal(false)}
+            >
+              <Text style={styles.modalDoneText}>Done</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Overflow modal */}
+      <Modal
+        visible={overflowOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOverflowOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setOverflowOpen(false)}>
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <OverflowAction
+              icon="copy-outline"
+              label="Copy ticket link"
+              onPress={() => {
+                void Clipboard.setStringAsync(`overlord://tickets/${ticket.id}`);
+                setOverflowOpen(false);
+              }}
+            />
+            <OverflowAction
+              icon="refresh-outline"
+              label="Reload"
+              onPress={() => {
+                setOverflowOpen(false);
+                void loadData();
+              }}
+            />
+            <OverflowAction
+              icon="close-outline"
+              label="Close"
+              onPress={() => setOverflowOpen(false)}
+            />
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
 
+function CollapsibleSection({
+  label,
+  open,
+  onToggle,
+  children
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.collapsible}>
+      <Pressable
+        style={({ pressed }) => [styles.collapsibleHeader, pressed && styles.pressed]}
+        onPress={onToggle}
+      >
+        <Text style={styles.sectionLabel}>{label}</Text>
+        <Ionicons
+          name={open ? 'chevron-up' : 'chevron-down'}
+          size={14}
+          color={colors.mutedForeground}
+        />
+      </Pressable>
+      {open && <View style={styles.collapsibleBody}>{children}</View>}
+    </View>
+  );
+}
+
+function OverflowAction({
+  icon,
+  label,
+  onPress
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+      onPress={onPress}
+    >
+      <Ionicons name={icon} size={16} color={colors.foreground} />
+      <Text style={styles.overflowText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function statusPillColor(status: string): string {
+  const map: Record<string, string> = {
+    draft: colors.mutedForeground,
+    'next-up': colors.primary,
+    execute: colors.success,
+    review: '#f59e0b',
+    complete: colors.success,
+    blocked: colors.destructive,
+    cancelled: colors.mutedForeground,
+    icebox: colors.mutedForeground
+  };
+  return map[status] ?? colors.mutedForeground;
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background
   },
-  errorText: {
-    color: colors.mutedForeground,
-    fontSize: 16
-  },
-  header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border
-  },
-  title: {
-    color: colors.foreground,
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 12
-  },
-  metaRow: {
+  errorText: { color: colors.mutedForeground, fontSize: 16 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
+  topBar: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap'
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.secondary,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6
+    paddingTop: 8,
+    paddingBottom: 10
   },
-  chipText: {
-    color: colors.secondaryForeground,
-    fontSize: 13,
-    fontWeight: '500',
-    textTransform: 'capitalize'
+  topIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
   },
-  agentRow: {
+  topPillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  topPillText: { color: colors.foreground, fontSize: 12, fontWeight: '500' },
+  tracker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  trackerTextWrap: { flex: 1 },
+  trackerHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trackerLabel: {
+    color: colors.mutedForeground,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6
+  },
+  trackerSub: { color: colors.mutedForeground, fontSize: 13, marginTop: 4 },
+  trackerButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 10
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: colors.secondary,
+    borderWidth: 1,
+    borderColor: colors.border
   },
-  agentText: {
+  trackerButtonText: { color: colors.foreground, fontSize: 13, fontWeight: '600' },
+  titleBlock: { paddingHorizontal: 16, marginBottom: 12, gap: 6 },
+  sequence: {
     color: colors.mutedForeground,
-    fontSize: 13
+    fontSize: 12,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums']
   },
-  dueRow: {
+  titleText: { color: colors.foreground, fontSize: 22, fontWeight: '700', lineHeight: 28 },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10
+  },
+  selectPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 6
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    maxWidth: 170
   },
-  dueText: {
-    color: colors.mutedForeground,
-    fontSize: 13
-  },
-  projectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10
-  },
-  projectSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4
-  },
-  projectSelectorText: {
-    color: colors.mutedForeground,
-    fontSize: 13
-  },
+  pillDot: { width: 8, height: 8, borderRadius: 4 },
+  selectPillText: { color: colors.foreground, fontSize: 13, textTransform: 'capitalize' },
   projectPickerList: {
-    marginTop: 6,
+    marginHorizontal: 16,
+    marginBottom: 8,
     backgroundColor: colors.card,
     borderRadius: 10,
     borderWidth: 1,
@@ -1182,265 +1416,225 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border
   },
-  projectPickerItemSelected: {
-    backgroundColor: colors.secondary
+  projectPickerItemSelected: { backgroundColor: colors.secondary },
+  projectPickerItemText: { color: colors.secondaryForeground, fontSize: 15 },
+  projectPickerItemTextSelected: { color: colors.foreground, fontWeight: '600' },
+  scheduleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 14
   },
-  projectPickerItemText: {
-    color: colors.secondaryForeground,
-    fontSize: 15
-  },
-  projectPickerItemTextSelected: {
-    color: colors.foreground,
-    fontWeight: '600'
-  },
-  sshBanner: {
-    marginTop: 12,
+  scheduleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 8,
-    padding: 10,
-    borderWidth: 1
-  },
-  sshBannerLoading: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.card,
+    borderWidth: 1,
     borderColor: colors.border
   },
-  sshBannerConnected: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderColor: 'rgba(34, 197, 94, 0.3)'
+  scheduleText: { color: colors.foreground, fontSize: 13 },
+  objectivesBlock: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden'
   },
-  sshBannerDisconnected: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: 'rgba(239, 68, 68, 0.3)'
+  objectiveRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border
   },
-  sshBannerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
+  objectiveRowHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  objectiveStatusIcon: {},
+  objectiveTitleText: { flex: 1, color: colors.foreground, fontSize: 14, fontWeight: '500' },
+  objectiveBody: {
+    color: colors.secondaryForeground,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
+    marginLeft: 26
   },
-  sshStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
+  draftBlock: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 100
   },
-  sshBannerText: {
+  draftInput: {
     color: colors.foreground,
-    fontSize: 13,
-    fontWeight: '600'
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 72,
+    padding: 0
   },
-  sshBannerDetail: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 4,
-    marginLeft: 16
+  saveObjective: {
+    alignSelf: 'flex-end',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: colors.primary
   },
-  section: {
-    padding: 16
-  },
-  sectionTitle: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12
-  },
-  inlineStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  inlineStatusText: {
-    color: colors.mutedForeground,
-    fontSize: 13
-  },
+  saveObjectiveText: { color: colors.primaryForeground, fontSize: 13, fontWeight: '600' },
+  runSection: { paddingHorizontal: 16, marginBottom: 18 },
   launchServerButton: {
-    marginTop: 12,
     backgroundColor: colors.primary,
     borderRadius: 10,
-    minHeight: 44,
+    minHeight: 40,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8
   },
-  launchServerButtonDisabled: {
-    opacity: 0.45
+  launchServerButtonDisabled: { opacity: 0.45 },
+  launchServerButtonText: { color: colors.primaryForeground, fontSize: 14, fontWeight: '600' },
+  runHint: { color: colors.mutedForeground, fontSize: 12, marginTop: 8 },
+  collapsible: {
+    marginHorizontal: 16,
+    marginBottom: 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border
   },
-  launchServerButtonPressed: {
-    opacity: 0.8
-  },
-  launchServerButtonText: {
-    color: colors.primaryForeground,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  sectionHelperText: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 10
-  },
-  sectionBody: {
-    color: colors.foreground,
-    fontSize: 15,
-    lineHeight: 22
-  },
-  objectiveEditor: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    minHeight: 120,
-    color: colors.foreground,
-    fontSize: 15,
-    lineHeight: 22
-  },
-  objectiveActionButton: {
-    marginTop: 12,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    minHeight: 44,
+  collapsibleHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16
+    justifyContent: 'space-between',
+    paddingVertical: 14
   },
-  objectiveActionButtonDisabled: {
-    opacity: 0.45
+  collapsibleBody: { paddingBottom: 14, gap: 10 },
+  sectionLabel: {
+    color: colors.mutedForeground,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6
   },
-  objectiveActionButtonPressed: {
-    opacity: 0.8
-  },
-  objectiveActionText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  objectiveCard: {
-    backgroundColor: colors.card,
+  docBlock: { gap: 4 },
+  docLabel: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
+  docBody: { color: colors.foreground, fontSize: 14, lineHeight: 20 },
+  docEmpty: { color: colors.mutedForeground, fontSize: 13, fontStyle: 'italic' },
+  cliCopy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    padding: 10,
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
+    backgroundColor: colors.secondary,
     borderWidth: 1,
     borderColor: colors.border
   },
-  objectiveCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10
-  },
-  objectiveHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    flex: 1,
-    minWidth: 0
-  },
-  objectiveHeaderTextWrap: {
-    flex: 1,
-    minWidth: 0
-  },
-  objectiveMetaRow: {
+  cliText: { color: colors.foreground, fontSize: 12, flex: 1 },
+  cliHint: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
+  activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 0,
-    marginTop: 2
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    marginTop: 6
   },
-  pressed: {
-    opacity: 0.82
+  activityFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.secondary,
+    borderWidth: 1,
+    borderColor: colors.border
   },
-  objectiveStateDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 4
-  },
-  objectiveMetaSep: {
-    color: colors.mutedForeground,
-    fontSize: 12
-  },
-  objectiveMeta: {
-    color: colors.mutedForeground,
-    fontSize: 12
-  },
-  objectiveTitle: {
-    color: colors.foreground,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  objectiveText: {
-    color: colors.secondaryForeground,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 8
-  },
+  activityFilterText: { color: colors.foreground, fontSize: 12, fontWeight: '500' },
   noActivity: {
     color: colors.mutedForeground,
-    fontSize: 14
+    fontSize: 13,
+    paddingHorizontal: 16,
+    paddingVertical: 10
   },
-  eventCard: {
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  eventBlocking: {
-    borderColor: colors.destructive,
-    borderWidth: 1
-  },
-  eventHeader: {
+  eventRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8
   },
+  eventIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2
+  },
+  eventBlocking: { backgroundColor: 'rgba(239, 68, 68, 0.06)' },
+  eventHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   eventType: {
     color: colors.foreground,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    textTransform: 'capitalize'
-  },
-  eventPhase: {
-    color: colors.mutedForeground,
-    fontSize: 13
-  },
-  blockingBadge: {
-    backgroundColor: colors.destructive,
+    textTransform: 'capitalize',
+    backgroundColor: colors.muted,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 'auto'
+    borderRadius: 4
   },
-  blockingText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase'
+  eventPhase: { color: colors.mutedForeground, fontSize: 12 },
+  eventTime: { color: colors.mutedForeground, fontSize: 11 },
+  eventSummary: { color: colors.secondaryForeground, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24
   },
-  eventSummary: {
-    color: colors.secondaryForeground,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 4,
-    marginBottom: 4
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    gap: 10
   },
-  eventTime: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    marginTop: 4
-  }
+  modalTitle: { color: colors.foreground, fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  modalDone: {
+    marginTop: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: 'center'
+  },
+  modalDoneText: { color: colors.primaryForeground, fontSize: 14, fontWeight: '600' },
+  overflowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 6
+  },
+  overflowText: { color: colors.foreground, fontSize: 14 },
+  pressed: { opacity: 0.82 }
 });
