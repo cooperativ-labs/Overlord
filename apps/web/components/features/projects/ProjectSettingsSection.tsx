@@ -1,6 +1,6 @@
 'use client';
 
-import { GitCompareArrows, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -57,16 +57,12 @@ export function ProjectSettingsSection({
   const hasSavedWorkingDirectory =
     savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
   const isCurrentChangesView = pathname.startsWith(`/projects/${projectId}/current-changes`);
-  const currentChangesToggleLabel = isCurrentChangesView ? 'Work Board' : 'Current Changes';
-  const currentChangesToggleHref = isCurrentChangesView
-    ? buildProjectPath({ projectId })
-    : `/projects/${projectId}/current-changes`;
+  const workBoardHref = buildProjectPath({ projectId });
+  const currentChangesHref = `/projects/${projectId}/current-changes`;
   const currentChangesToggleDisabled = !isCurrentChangesView && !hasSavedWorkingDirectory;
   const currentChangesToggleTitle = currentChangesToggleDisabled
     ? 'Link a project directory to inspect current changes'
-    : isCurrentChangesView
-      ? 'Open Work Board'
-      : 'Open Current Changes';
+    : 'Open Current Changes';
   const localDirectoryLabel = hasSavedWorkingDirectory ? savedWorkingDirectory : 'configure';
   const hasSshDirectory = Boolean(initialSshCommand?.trim());
   const sshDirectoryLabel = initialRemoteWorkingDirectory?.trim() || 'configure';
@@ -194,26 +190,48 @@ export function ProjectSettingsSection({
             ) : null}
           </div>
           {isElectron ? (
-            <>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               <ProjectExecutionWorkspaceSelector
                 localDirectoryLabel={localDirectoryLabel}
                 sshDirectoryLabel={sshDirectoryLabel}
                 sshTitle={sshTitle}
               />
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-1 h-7 gap-1.5 text-xs md:mt-0"
-                onClick={() => router.push(currentChangesToggleHref)}
-                disabled={currentChangesToggleDisabled}
-                title={currentChangesToggleTitle}
-              >
-                <GitCompareArrows className="h-3.5 w-3.5" />
-                {currentChangesToggleLabel}
-              </Button>
-            </>
+              <div className="flex items-center rounded-lg border bg-muted/40 p-1">
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    !isCurrentChangesView
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => router.push(workBoardHref)}
+                  aria-pressed={!isCurrentChangesView}
+                  title="Open Work Board"
+                >
+                  Work Board
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'relative overflow-hidden rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    isCurrentChangesView
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => router.push(currentChangesHref)}
+                  disabled={currentChangesToggleDisabled}
+                  aria-pressed={isCurrentChangesView}
+                  title={currentChangesToggleTitle}
+                >
+                  {!isCurrentChangesView && !currentChangesToggleDisabled ? (
+                    <span className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_6s_ease-in-out_infinite] bg-linear-to-r from-transparent via-sky-500/20 to-transparent" />
+                  ) : null}
+                  <span className="relative z-10">Current Changes</span>
+                </button>
+              </div>
+            </div>
           ) : null}
         </div>
       </div>

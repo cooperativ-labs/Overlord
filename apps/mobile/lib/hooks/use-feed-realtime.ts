@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { enrichFeedPost, type FeedPostInsertRow } from '@/lib/feed-posts';
 import { getSupabase } from '@/lib/supabase';
 import type { FeedPost } from '@/lib/types';
 
@@ -29,14 +30,15 @@ export function useFeedRealtime() {
           schema: 'public',
           table: 'feed_posts'
         },
-        (payload: { new: FeedPost }) => {
-          const row = payload.new as FeedPost;
+        async (payload: { new: FeedPostInsertRow }) => {
+          const row = payload.new;
           if (knownIdsRef.current.has(row.id)) return;
           knownIdsRef.current.add(row.id);
 
+          const enriched = await enrichFeedPost(row);
           setNewPosts(prev => {
-            if (prev.some(p => p.id === row.id)) return prev;
-            return [row, ...prev];
+            if (prev.some(p => p.id === enriched.id)) return prev;
+            return [enriched, ...prev];
           });
         }
       )

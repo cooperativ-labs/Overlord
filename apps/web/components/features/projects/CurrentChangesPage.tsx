@@ -1,19 +1,15 @@
 'use client';
 
-import { ArrowLeft, FileCode2, GitBranch, RefreshCw } from 'lucide-react';
-import Link from 'next/link';
+import { FileCode2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { ChangesToolbar } from '@/components/features/projects/current-changes/ChangesToolbar';
 import { DiffPane } from '@/components/features/projects/current-changes/DiffPane';
 import { FileListPane } from '@/components/features/projects/current-changes/FileListPane';
-import { GitBranchPanel } from '@/components/features/projects/current-changes/GitBranchPanel';
-import { PullRequestPanel } from '@/components/features/projects/current-changes/PullRequestPanel';
-import { PushToGithubPanel } from '@/components/features/projects/current-changes/PushToGithubPanel';
 import type { EnrichedCurrentChangeFile } from '@/components/features/projects/current-changes/types';
 import { UnavailableStateCard } from '@/components/features/projects/current-changes/UnavailableStateCard';
 import { buildEnrichedCurrentChangeFiles } from '@/components/features/projects/current-changes/view-model';
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { Button } from '@/components/ui/button';
 import {
   useCurrentChangeFileChanges,
   useGitBranchesQuery,
@@ -177,98 +173,55 @@ export function CurrentChangesPage({
   const selectedFile = enrichedFiles.find(file => file.path === selectedPath) ?? null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <FileCode2 className="h-5 w-5 text-primary" />
-            <h1 className="text-xl font-semibold text-foreground">Current Changes</h1>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Explore uncommitted Git changes for {projectName} and inspect the ticket rationale
-            attached to each hunk.
-          </p>
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <ChangesToolbar
+        backHref={backHref}
+        branchesResponse={branchesResponse}
+        statusResponse={statusResponse}
+        workingDirectory={displayDirectory}
+        projectName={projectName}
+        tickets={uniqueTickets}
+        selectedTicketIds={selectedTicketIds}
+        onRefresh={() => void refreshAll()}
+        onToggleTicketFilter={toggleTicketFilter}
+        onClearTicketFilter={clearTicketFilter}
+      />
+
+      {rationalesError ? (
+        <div className="border-b bg-amber-500/10 px-4 py-1.5 text-[11px] text-amber-800">
+          {rationalesError}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {statusResponse?.branch ? (
-            <div className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-muted-foreground">
-              <GitBranch className="h-3.5 w-3.5" />
-              {statusResponse.branch}
+      ) : null}
+
+      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)]">
+        <FileListPane
+          filteredFiles={filteredFiles}
+          selectedPath={selectedPath}
+          selectedTicketIds={selectedTicketIds}
+          statusLoading={statusLoading}
+          statusResponse={statusResponse}
+          tickets={uniqueTickets}
+          workingDirectory={displayDirectory}
+          onClearTicketFilter={clearTicketFilter}
+          onSelectFile={setSelectedPath}
+        />
+
+        <div className="min-h-0">
+          {selectedFile ? (
+            <DiffPane
+              diff={diffState.parsed}
+              diffError={diffState.error}
+              file={selectedFile}
+              isLoading={diffState.isLoading}
+              projectId={projectId}
+              selectedFilePath={selectedFile.path}
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
+              <FileCode2 className="h-8 w-8 opacity-40" />
+              <p>Select a file to inspect its diff.</p>
             </div>
-          ) : null}
-          <Button type="button" variant="outline" size="sm" onClick={() => void refreshAll()}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-          <Button asChild size="sm" variant="ghost">
-            <Link href={backHref}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to project
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <GitBranchPanel
-          branches={branchesResponse?.branches ?? []}
-          currentBranch={branchesResponse?.currentBranch ?? statusResponse?.branch ?? null}
-          defaultBranch={branchesResponse?.defaultBranch ?? null}
-          workingDirectory={displayDirectory}
-          onChanged={() => void refreshAll()}
-        />
-
-        <PushToGithubPanel
-          branch={statusResponse?.branch ?? null}
-          hasChanges={(statusResponse?.files.length ?? 0) > 0}
-          workingDirectory={displayDirectory}
-          onPushed={() => void refreshAll()}
-        />
-
-        <PullRequestPanel
-          baseBranch={branchesResponse?.defaultBranch ?? null}
-          currentBranch={branchesResponse?.currentBranch ?? statusResponse?.branch ?? null}
-          workingDirectory={displayDirectory}
-          onCreated={() => void refreshAll()}
-        />
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-background">
-        <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">
-          <FileListPane
-            filteredFiles={filteredFiles}
-            selectedPath={selectedPath}
-            selectedTicketIds={selectedTicketIds}
-            statusLoading={statusLoading}
-            statusResponse={statusResponse}
-            tickets={uniqueTickets}
-            workingDirectory={displayDirectory}
-            onClearTicketFilter={clearTicketFilter}
-            onSelectFile={setSelectedPath}
-            onToggleTicketFilter={toggleTicketFilter}
-          />
-
-          <div className="min-h-0">
-            {rationalesError ? (
-              <div className="border-b bg-amber-500/10 px-4 py-2 text-xs text-amber-800">
-                {rationalesError}
-              </div>
-            ) : null}
-            {selectedFile ? (
-              <DiffPane
-                diff={diffState.parsed}
-                diffError={diffState.error}
-                file={selectedFile}
-                isLoading={diffState.isLoading}
-                projectId={projectId}
-                selectedFilePath={selectedFile.path}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-                Select a file to inspect its diff.
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>

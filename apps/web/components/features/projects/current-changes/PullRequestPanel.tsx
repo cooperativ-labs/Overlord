@@ -115,19 +115,15 @@ export function PullRequestPanel({
   }
 
   return (
-    <div className="rounded-lg border bg-background p-4">
+    <div>
       <div className="mb-3">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <GitPullRequest className="h-4 w-4 text-primary" />
-          <span>Create GitHub pull request</span>
+          <span>Create pull request</span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Draft text uses the current working tree diff. Commit and push before creating the PR so
-          GitHub matches the summary.
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Head: {currentBranch ?? '(unknown)'}
-          {baseBranch ? `  Base: ${baseBranch}` : ''}
+          {currentBranch ?? '(unknown)'}
+          {baseBranch ? ` → ${baseBranch}` : ''}
         </p>
       </div>
 

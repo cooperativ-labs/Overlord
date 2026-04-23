@@ -160,104 +160,102 @@ export function GitBranchPanel({
   }
 
   return (
-    <div className="rounded-lg border bg-background p-4">
-      <div className="mb-3">
-        <p className="text-sm font-medium text-foreground">Branch controls</p>
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-medium text-foreground">Branch</p>
         <p className="text-xs text-muted-foreground">
-          {currentBranch ? `Current: ${currentBranch}` : 'No active branch detected.'}
-          {defaultBranch ? ` Default base: ${defaultBranch}.` : null}
+          {currentBranch ? `On ${currentBranch}` : 'No active branch.'}
+          {defaultBranch ? ` Base ${defaultBranch}.` : null}
         </p>
       </div>
 
-      <div className="space-y-3">
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose a branch" />
-            </SelectTrigger>
-            <SelectContent>
-              {branches.map(branch => (
-                <SelectItem key={branch.name} value={branch.name}>
-                  {branch.name}
-                  {branch.upstream ? ` (${branch.upstream})` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <LoadingButton
-            buttonState={switchButtonState}
-            disabled={!selectedBranch || selectedBranch === currentBranch}
-            loadingText="Switching..."
-            onClick={handleSwitchBranch}
-            reset
-            setButtonState={setSwitchButtonState}
-            size="sm"
-            text={
-              <>
-                <RefreshCw className="h-4 w-4" />
-                Switch
-              </>
-            }
-          />
-        </div>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+          <SelectTrigger>
+            <SelectValue placeholder="Choose a branch" />
+          </SelectTrigger>
+          <SelectContent>
+            {branches.map(branch => (
+              <SelectItem key={branch.name} value={branch.name}>
+                {branch.name}
+                {branch.upstream ? ` (${branch.upstream})` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <LoadingButton
+          buttonState={switchButtonState}
+          disabled={!selectedBranch || selectedBranch === currentBranch}
+          loadingText="Switching..."
+          onClick={handleSwitchBranch}
+          reset
+          setButtonState={setSwitchButtonState}
+          size="sm"
+          text={
+            <>
+              <RefreshCw className="h-4 w-4" />
+              Switch
+            </>
+          }
+        />
+      </div>
 
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <Input
-            placeholder="feature/branch-name"
-            value={newBranchName}
-            onChange={event => setNewBranchName(event.target.value)}
-          />
-          <LoadingButton
-            buttonState={createButtonState}
-            disabled={!newBranchName.trim()}
-            loadingText="Creating..."
-            onClick={handleCreateBranch}
-            reset
-            setButtonState={setCreateButtonState}
-            size="sm"
-            text={
-              <>
-                <GitBranchPlus className="h-4 w-4" />
-                Create
-              </>
-            }
-          />
-        </div>
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <Input
+          placeholder="feature/branch-name"
+          value={newBranchName}
+          onChange={event => setNewBranchName(event.target.value)}
+        />
+        <LoadingButton
+          buttonState={createButtonState}
+          disabled={!newBranchName.trim()}
+          loadingText="Creating..."
+          onClick={handleCreateBranch}
+          reset
+          setButtonState={setCreateButtonState}
+          size="sm"
+          text={
+            <>
+              <GitBranchPlus className="h-4 w-4" />
+              Create
+            </>
+          }
+        />
+      </div>
 
-        <div className="flex flex-wrap gap-2">
-          <LoadingButton
-            buttonState={pullButtonState}
-            disabled={!currentBranch}
-            loadingText="Pulling..."
-            onClick={handlePull}
-            reset
-            setButtonState={setPullButtonState}
-            size="sm"
-            text={
-              <>
-                <ArrowDownToLine className="h-4 w-4" />
-                Pull
-              </>
-            }
-            variant="outline"
-          />
-          <LoadingButton
-            buttonState={pushButtonState}
-            disabled={!currentBranch}
-            loadingText="Pushing..."
-            onClick={handlePush}
-            reset
-            setButtonState={setPushButtonState}
-            size="sm"
-            text={
-              <>
-                <ArrowUpToLine className="h-4 w-4" />
-                Push
-              </>
-            }
-            variant="outline"
-          />
-        </div>
+      <div className="flex flex-wrap gap-2">
+        <LoadingButton
+          buttonState={pullButtonState}
+          disabled={!currentBranch}
+          loadingText="Pulling..."
+          onClick={handlePull}
+          reset
+          setButtonState={setPullButtonState}
+          size="sm"
+          text={
+            <>
+              <ArrowDownToLine className="h-4 w-4" />
+              Pull
+            </>
+          }
+          variant="outline"
+        />
+        <LoadingButton
+          buttonState={pushButtonState}
+          disabled={!currentBranch}
+          loadingText="Pushing..."
+          onClick={handlePush}
+          reset
+          setButtonState={setPushButtonState}
+          size="sm"
+          text={
+            <>
+              <ArrowUpToLine className="h-4 w-4" />
+              Push
+            </>
+          }
+          variant="outline"
+        />
       </div>
     </div>
   );

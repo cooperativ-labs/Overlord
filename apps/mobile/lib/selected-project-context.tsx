@@ -35,7 +35,7 @@ export function SelectedProjectProvider({ children }: { children: React.ReactNod
       setProjects(data as ProjectSummary[]);
       setSelectedProjectId(current => {
         if (current && data.some(project => project.id === current)) return current;
-        return data[0]?.id ?? null;
+        return null;
       });
     }
   }, []);

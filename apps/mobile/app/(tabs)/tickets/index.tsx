@@ -67,6 +67,8 @@ type TicketWithProject = TicketListItem & {
   has_unread?: boolean;
 };
 
+const ALL_PROJECTS_LABEL = 'All projects';
+
 function formatAgentLabel(agent: AssignedAgent | null): string | null {
   if (!agent?.agent) return null;
   return agent.agent;
@@ -74,12 +76,8 @@ function formatAgentLabel(agent: AssignedAgent | null): string | null {
 
 export default function TicketsScreen() {
   const router = useRouter();
-  const {
-    projects,
-    selectedProject,
-    selectedProjectId,
-    loading: loadingProjects
-  } = useSelectedProject();
+  const { projects } = useSelectedProject();
+  const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
   const [tickets, setTickets] = useState<TicketWithProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,6 +87,7 @@ export default function TicketsScreen() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
 
   const handleCreateTicket = useCallback(() => {
     router.push('/(tabs)/tickets/create');
@@ -104,8 +103,8 @@ export default function TicketsScreen() {
       .order('updated_at', { ascending: false })
       .limit(100);
 
-    if (selectedProjectId) {
-      query = query.eq('project_id', selectedProjectId);
+    if (filterProjectId) {
+      query = query.eq('project_id', filterProjectId);
     }
 
     const { data, error } = await query;
@@ -117,7 +116,7 @@ export default function TicketsScreen() {
     if (error) {
       Alert.alert('Unable to load tickets', error.message);
     }
-  }, [selectedProjectId]);
+  }, [filterProjectId]);
 
   useEffect(() => {
     setLoading(true);
@@ -219,8 +218,12 @@ export default function TicketsScreen() {
     return result;
   }, [tickets, statusFilter, search, sortMode]);
 
-  const projectColor = selectedProject?.color || colors.primary;
-  const projectName = selectedProject?.name ?? (loadingProjects ? 'Loading…' : 'No project');
+  const filterProject = useMemo(
+    () => projects.find(p => p.id === filterProjectId) ?? null,
+    [projects, filterProjectId]
+  );
+  const projectColor = filterProject?.color || colors.primary;
+  const projectName = filterProject?.name ?? ALL_PROJECTS_LABEL;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -235,14 +238,6 @@ export default function TicketsScreen() {
           accessibilityLabel="Open navigation"
         >
           <Ionicons name="menu-outline" size={20} color={colors.foreground} />
-        </Pressable>
-        <Pressable
-          hitSlop={10}
-          style={styles.iconButton}
-          onPress={() => void fetchTickets()}
-          accessibilityLabel="Refresh"
-        >
-          <Ionicons name="refresh-outline" size={18} color={colors.foreground} />
         </Pressable>
         <Pressable
           hitSlop={10}
@@ -279,17 +274,37 @@ export default function TicketsScreen() {
         <Text style={styles.projectHeaderName} numberOfLines={1}>
           {projectName}
         </Text>
-        <Pressable hitSlop={8} onPress={() => setDrawerOpen(true)}>
-          <Ionicons name="settings-outline" size={16} color={colors.mutedForeground} />
+        <Pressable
+          hitSlop={8}
+          style={styles.projectFilterButton}
+          onPress={() => {
+            setSortMenuOpen(false);
+            setStatusMenuOpen(false);
+            setProjectMenuOpen(open => !open);
+          }}
+          accessibilityLabel="Filter by project"
+        >
+          <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
         </Pressable>
       </View>
 
       {/* Filter chips */}
       <View style={styles.filterRow}>
         <FilterChip
+          icon="folder-open-outline"
+          label={projectName}
+          onPress={() => {
+            setSortMenuOpen(false);
+            setStatusMenuOpen(false);
+            setProjectMenuOpen(open => !open);
+          }}
+          active={projectMenuOpen}
+        />
+        <FilterChip
           icon="swap-vertical-outline"
           label={sortLabels[sortMode]}
           onPress={() => {
+            setProjectMenuOpen(false);
             setStatusMenuOpen(false);
             setSortMenuOpen(open => !open);
           }}
@@ -299,12 +314,48 @@ export default function TicketsScreen() {
           icon="funnel-outline"
           label={statusFilterLabels[statusFilter]}
           onPress={() => {
+            setProjectMenuOpen(false);
             setSortMenuOpen(false);
             setStatusMenuOpen(open => !open);
           }}
           active={statusMenuOpen}
         />
       </View>
+
+      {projectMenuOpen && (
+        <View style={styles.menu}>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setFilterProjectId(null);
+              setProjectMenuOpen(false);
+            }}
+          >
+            <Text style={styles.menuItemText}>{ALL_PROJECTS_LABEL}</Text>
+            {filterProjectId === null && (
+              <Ionicons name="checkmark" size={14} color={colors.primary} />
+            )}
+          </Pressable>
+          {projects.map(project => (
+            <Pressable
+              key={project.id}
+              style={styles.menuItem}
+              onPress={() => {
+                setFilterProjectId(project.id);
+                setProjectMenuOpen(false);
+              }}
+            >
+              <View style={styles.projectMenuLabel}>
+                <View style={[styles.projectMenuDot, { backgroundColor: project.color }]} />
+                <Text style={styles.menuItemText}>{project.name}</Text>
+              </View>
+              {filterProjectId === project.id && (
+                <Ionicons name="checkmark" size={14} color={colors.primary} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       {sortMenuOpen && (
         <View style={styles.menu}>
@@ -363,6 +414,7 @@ export default function TicketsScreen() {
             const agentLabel = formatAgentLabel(item.assigned_agent);
             const projectForTicket =
               projects.find(p => p.id === item.project_id)?.color || projectColor;
+            const projectLabel = projects.find(p => p.id === item.project_id)?.name ?? 'Personal';
             return (
               <Pressable
                 style={({ pressed }) => [styles.card, pressed && styles.pressed]}
@@ -370,9 +422,16 @@ export default function TicketsScreen() {
               >
                 <View style={styles.cardRow}>
                   <View style={[styles.ticketSquare, { backgroundColor: projectForTicket }]} />
-                  <Text style={styles.ticketTitle} numberOfLines={1}>
-                    {item.title || 'Untitled'}
-                  </Text>
+                  <View style={styles.ticketTitleWrap}>
+                    <Text style={styles.ticketTitle} numberOfLines={1}>
+                      {item.title || 'Untitled'}
+                    </Text>
+                    {filterProjectId === null && (
+                      <Text style={styles.ticketProjectName} numberOfLines={1}>
+                        {projectLabel}
+                      </Text>
+                    )}
+                  </View>
                   {item.has_unread && <View style={styles.unreadDot} />}
                 </View>
                 <View style={styles.actionRow}>
@@ -427,9 +486,9 @@ export default function TicketsScreen() {
               <Text style={styles.emptySub}>
                 {search.trim() || statusFilter !== 'all'
                   ? 'Try clearing filters.'
-                  : selectedProject
-                    ? `No tickets in ${selectedProject.name}.`
-                    : 'Create a ticket to get started.'}
+                  : filterProject
+                    ? `No tickets in ${filterProject.name}.`
+                    : 'No tickets across your projects yet.'}
               </Text>
             </View>
           }
@@ -541,8 +600,16 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700'
   },
+  projectFilterButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   filterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     paddingHorizontal: 16,
     paddingBottom: 10
@@ -587,6 +654,16 @@ const styles = StyleSheet.create({
     color: colors.foreground,
     fontSize: 14
   },
+  projectMenuLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  projectMenuDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4
+  },
   list: {
     paddingHorizontal: 12,
     paddingBottom: 16,
@@ -607,16 +684,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10
   },
+  ticketTitleWrap: {
+    flex: 1,
+    gap: 3
+  },
   ticketSquare: {
     width: 10,
     height: 10,
     borderRadius: 2
   },
   ticketTitle: {
-    flex: 1,
     color: colors.foreground,
     fontSize: 15,
     fontWeight: '600'
+  },
+  ticketProjectName: {
+    color: colors.mutedForeground,
+    fontSize: 12
   },
   unreadDot: {
     width: 8,

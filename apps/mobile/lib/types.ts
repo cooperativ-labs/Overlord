@@ -47,6 +47,7 @@ export interface AgentModelRecord {
 /** Subset of feed_posts used in the feed list. */
 export interface FeedPost {
   id: string;
+  project_id: string;
   title: string;
   body: string;
   impact_level: string;
@@ -64,6 +65,10 @@ export interface FeedPost {
     sequence: number;
     title: string;
   }>;
+  ticket_title: string | null;
+  ticket_sequence: number | null;
+  project_name: string;
+  project_color: string;
   ticket_id: string;
   created_at: string;
 }

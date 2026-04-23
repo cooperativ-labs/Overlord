@@ -1,20 +1,15 @@
-import { Bot, Loader2 } from 'lucide-react';
+import { Bot, ChevronDown, Info, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger
-} from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
-import { buildHunkMatches, lineNumber } from './helpers';
+import { buildHunkMatches, formatStatus, lineNumber } from './helpers';
 import { HunkPopoverContent } from './HunkPopoverContent';
 import type { EnrichedCurrentChangeFile } from './types';
 
@@ -45,6 +40,7 @@ export function DiffPane({
   selectedFilePath
 }: DiffPaneProps) {
   const [openPopoverKey, setOpenPopoverKey] = useState<string | null>(null);
+  const [rationaleOpen, setRationaleOpen] = useState(true);
 
   const secondaryTickets = useMemo(() => {
     if (!file.primaryTicket) return file.tickets;
@@ -55,113 +51,162 @@ export function DiffPane({
     setOpenPopoverKey(null);
   }, [selectedFilePath]);
 
+  const primaryTicketTitle =
+    file.primaryTicket?.title?.trim() ||
+    (file.primaryTicket ? `Ticket ${file.primaryTicket.id.slice(-8)}` : null);
+  const changeLabel = file.primaryFileChange?.label || file.summary;
+  const hasRationale = Boolean(file.primaryFileChange || file.primaryTicket);
+  const linesAdded = file.file.linesAdded;
+  const linesRemoved = file.file.linesRemoved;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b px-4 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate font-medium text-foreground">{file.path}</p>
-            <p className="text-xs text-muted-foreground">
-              Click a changed line to see which review ticket changed it.
+      <div className="flex items-center gap-3 border-b px-4 py-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-mono text-xs text-foreground">{file.path}</p>
+          {file.file.originalPath ? (
+            <p className="truncate text-[10px] text-muted-foreground">
+              from {file.file.originalPath}
             </p>
-          </div>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-3 text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-muted-foreground">
+            {formatStatus(file.file.status)}
+          </span>
+          {linesAdded !== null && linesAdded !== undefined ? (
+            <span className="font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+              +{linesAdded}
+            </span>
+          ) : null}
+          {linesRemoved !== null && linesRemoved !== undefined ? (
+            <span className="font-mono tabular-nums text-rose-600 dark:text-rose-400">
+              −{linesRemoved}
+            </span>
+          ) : null}
           {file.primaryTicket?.latest_objective_agent ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Bot className="h-3.5 w-3.5" />
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Bot className="h-3 w-3" />
               {formatAgentName(file.primaryTicket.latest_objective_agent)}
-            </div>
+            </span>
           ) : null}
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        <div className="space-y-4 p-4">
-          <div className="rounded-lg border bg-muted/20 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">Review context</Badge>
+      {hasRationale ? (
+        <Collapsible open={rationaleOpen} onOpenChange={setRationaleOpen} className="border-b">
+          <div className="flex items-center gap-2 px-4 py-2">
+            <Info className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
               {file.primaryTicket ? (
                 <Link
-                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                  className="truncate text-xs font-medium text-foreground underline-offset-4 hover:underline"
                   href={buildTicketPath({ projectId, ticketId: file.primaryTicket.id })}
                 >
-                  {file.primaryTicket.title?.trim() || `Ticket ${file.primaryTicket.id.slice(-8)}`}
+                  {primaryTicketTitle}
                 </Link>
               ) : (
-                <p className="font-medium text-foreground">No linked ticket yet</p>
+                <span className="text-xs font-medium text-foreground">No linked ticket</span>
               )}
-              {file.primaryTicket?.status ? (
-                <Badge variant="outline" className="rounded-full text-[10px]">
-                  {file.primaryTicket.status}
-                </Badge>
-              ) : null}
+              <span className="mx-1.5 text-muted-foreground/60">·</span>
+              <span className="text-xs text-muted-foreground">{changeLabel}</span>
             </div>
+            {file.primaryTicket?.status ? (
+              <Badge variant="outline" className="shrink-0 rounded-full text-[10px]">
+                {file.primaryTicket.status}
+              </Badge>
+            ) : null}
+            {secondaryTickets.length > 0 ? (
+              <Badge variant="secondary" className="shrink-0 rounded-full text-[10px]">
+                +{secondaryTickets.length}
+              </Badge>
+            ) : null}
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label={rationaleOpen ? 'Collapse rationale' : 'Expand rationale'}
+              >
+                <ChevronDown
+                  className={cn('h-4 w-4 transition-transform', rationaleOpen ? '' : '-rotate-90')}
+                />
+              </button>
+            </CollapsibleTrigger>
+          </div>
 
-            <p className="mt-2 text-sm text-muted-foreground">
-              {file.primaryTicket?.objective?.trim() || file.summary}
-            </p>
+          <CollapsibleContent className="space-y-3 px-4 pb-3">
+            {file.primaryTicket?.objective?.trim() ? (
+              <p className="text-xs text-muted-foreground">{file.primaryTicket.objective}</p>
+            ) : null}
+
+            {file.primaryFileChange?.why || file.primaryFileChange?.impact ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {file.primaryFileChange?.why ? (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Why
+                    </p>
+                    <p className="mt-0.5 text-xs text-foreground">{file.primaryFileChange.why}</p>
+                  </div>
+                ) : null}
+                {file.primaryFileChange?.impact ? (
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Impact
+                    </p>
+                    <p className="mt-0.5 text-xs text-foreground">
+                      {file.primaryFileChange.impact}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {secondaryTickets.length > 0 ? (
-              <Accordion type="single" collapsible className="mt-3 rounded-md border bg-background">
-                <AccordionItem value="secondary-review-tickets" className="border-b-0">
-                  <AccordionTrigger className="px-3 py-2 text-xs font-medium text-foreground hover:no-underline">
-                    <span className="flex flex-wrap items-center gap-2">
-                      <span>More review tickets</span>
-                      <Badge variant="outline" className="rounded-full text-[10px]">
-                        {secondaryTickets.length}
-                      </Badge>
-                    </span>
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-2 px-3 pb-3">
-                    {secondaryTickets.map(ticket => (
-                      <div key={ticket.id} className="rounded-md border bg-muted/20 p-3">
-                        <div className="flex flex-wrap items-center gap-2">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Other linked tickets
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {secondaryTickets.map(ticket => (
+                    <Popover key={ticket.id}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border bg-background px-2 py-0.5 text-[10px] text-foreground hover:bg-muted"
+                        >
+                          <span className="truncate">
+                            {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                          </span>
+                          {ticket.status ? (
+                            <span className="text-muted-foreground">· {ticket.status}</span>
+                          ) : null}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-80">
+                        <div className="space-y-2">
                           <Link
-                            className="font-medium text-foreground underline-offset-4 hover:underline"
+                            className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
                             href={buildTicketPath({ projectId, ticketId: ticket.id })}
                           >
                             {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
                           </Link>
-                          {ticket.status ? (
-                            <Badge variant="outline" className="rounded-full text-[10px]">
-                              {ticket.status}
-                            </Badge>
-                          ) : null}
+                          <p className="text-xs text-muted-foreground">
+                            {ticket.objective?.trim() || 'No ticket objective yet.'}
+                          </p>
                         </div>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {ticket.objective?.trim() || 'No ticket objective yet.'}
-                        </p>
-                      </div>
-                    ))}
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            ) : null}
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-md border bg-background p-3">
-                <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <span>Change</span>
+                      </PopoverContent>
+                    </Popover>
+                  ))}
                 </div>
-                <p className="mt-1 text-sm text-foreground">
-                  {file.primaryFileChange?.label || file.summary}
-                </p>
               </div>
-              <div className="rounded-md border bg-background p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Why</p>
-                <p className="mt-1 text-sm text-foreground">
-                  {file.primaryFileChange?.why || 'No rationale has been linked to this file yet.'}
-                </p>
-              </div>
-              <div className="rounded-md border bg-background p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Impact</p>
-                <p className="mt-1 text-sm text-foreground">
-                  {file.primaryFileChange?.impact ||
-                    'Review the diff below to confirm the intended impact.'}
-                </p>
-              </div>
-            </div>
-          </div>
+            ) : null}
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
 
+      <div className="min-h-0 flex-1 overflow-auto bg-muted/10">
+        <div className="space-y-3 p-3">
           {isLoading ? (
             <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -180,16 +225,12 @@ export function DiffPane({
               const matches = buildHunkMatches(file.rationales, file.file, hunk);
 
               return (
-                <div key={hunk.id} className="overflow-hidden rounded-lg border">
-                  <div className="flex items-center justify-between gap-3 bg-muted/50 px-3 py-2 font-mono text-xs text-muted-foreground">
+                <div key={hunk.id} className="overflow-hidden rounded-md border bg-background">
+                  <div className="flex items-center justify-between gap-3 border-b bg-muted/40 px-3 py-1 font-mono text-[10px] text-muted-foreground">
                     <span className="truncate">{hunk.header}</span>
                     {matches.length > 0 ? (
-                      <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
-                        {matches.length} matched
-                      </span>
-                    ) : file.tickets.length > 0 ? (
-                      <span className="rounded-full border border-muted-foreground/20 bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                        {file.tickets.length} {file.tickets.length === 1 ? 'ticket' : 'tickets'}
+                      <span className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">
+                        {matches.length} linked
                       </span>
                     ) : null}
                   </div>
@@ -200,16 +241,16 @@ export function DiffPane({
                       const row = (
                         <div
                           className={cn(
-                            'grid grid-cols-[56px_56px_minmax(0,1fr)] items-start gap-3 px-3 py-1.5 text-left',
+                            'grid grid-cols-[44px_44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5 text-left',
                             line.kind === 'add' && 'bg-emerald-500/10',
                             line.kind === 'del' && 'bg-rose-500/10',
                             isChanged && 'hover:bg-muted/60'
                           )}
                         >
-                          <span className="select-none text-right text-[11px] text-muted-foreground">
+                          <span className="select-none text-right text-[10px] text-muted-foreground">
                             {lineNumber(line.oldLineNumber)}
                           </span>
-                          <span className="select-none text-right text-[11px] text-muted-foreground">
+                          <span className="select-none text-right text-[10px] text-muted-foreground">
                             {lineNumber(line.newLineNumber)}
                           </span>
                           <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">

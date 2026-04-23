@@ -6,6 +6,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View
@@ -13,9 +14,10 @@ import {
 
 import { ExecutingTicketsSection } from '@/components/ExecutingTicketsSection';
 import { colors } from '@/lib/colors';
+import { loadFeedPosts } from '@/lib/feed-posts';
 import { useExecutingFeedTickets } from '@/lib/hooks/use-executing-feed-tickets';
 import { useFeedRealtime } from '@/lib/hooks/use-feed-realtime';
-import { getSupabase } from '@/lib/supabase';
+import { useSelectedProject } from '@/lib/selected-project-context';
 import type { FeedPost } from '@/lib/types';
 
 const impactConfig: Record<string, { label: string; color: string; backgroundColor: string }> = {
@@ -38,36 +40,28 @@ const impactConfig: Record<string, { label: string; color: string; backgroundCol
 
 export default function FeedScreen() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingPosts, setLoadingPosts] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedPostIds, setExpandedPostIds] = useState<Set<string>>(new Set());
+  const [selectedProjectId, setSelectedProjectId] = useState<string | 'all'>('all');
 
+  const { projects, loading: loadingProjects } = useSelectedProject();
   const executingTickets = useExecutingFeedTickets();
   const { newPosts, markKnown } = useFeedRealtime();
 
   const fetchPosts = useCallback(async () => {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('feed_posts')
-      .select(
-        'id, title, body, impact_level, agent_type, tags, files_touched, human_actions, tradeoffs, tickets_created, ticket_id, created_at'
-      )
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (!error && data) {
-      setPosts(data);
-      markKnown(data.map(p => p.id));
-      return;
+    try {
+      const nextPosts = await loadFeedPosts(selectedProjectId === 'all' ? null : selectedProjectId);
+      setPosts(nextPosts);
+      markKnown(nextPosts.map(p => p.id));
+    } catch (error) {
+      Alert.alert('Unable to load feed', error instanceof Error ? error.message : 'Unknown error');
     }
-
-    if (error) {
-      Alert.alert('Unable to load feed', error.message);
-    }
-  }, [markKnown]);
+  }, [markKnown, selectedProjectId]);
 
   useEffect(() => {
-    fetchPosts().finally(() => setLoading(false));
+    setLoadingPosts(true);
+    fetchPosts().finally(() => setLoadingPosts(false));
   }, [fetchPosts]);
 
   const onRefresh = async () => {
@@ -95,7 +89,17 @@ export default function FeedScreen() {
     return [...realtimeOnly, ...posts];
   }, [posts, newPosts]);
 
-  if (loading) {
+  const filteredPosts = useMemo(() => {
+    if (selectedProjectId === 'all') return allPosts;
+    return allPosts.filter(post => post.project_id === selectedProjectId);
+  }, [allPosts, selectedProjectId]);
+
+  const selectedProject = useMemo(
+    () => projects.find(project => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
+
+  if (loadingPosts || loadingProjects) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -106,7 +110,7 @@ export default function FeedScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={allPosts}
+        data={filteredPosts}
         keyExtractor={item => item.id}
         refreshControl={
           <RefreshControl
@@ -116,9 +120,74 @@ export default function FeedScreen() {
           />
         }
         ListHeaderComponent={
-          executingTickets.length > 0 ? (
-            <ExecutingTicketsSection tickets={executingTickets} />
-          ) : null
+          <View style={styles.headerStack}>
+            <View style={styles.filterSection}>
+              <View style={styles.filterHeaderRow}>
+                <Ionicons name="funnel-outline" size={14} color={colors.mutedForeground} />
+                <Text style={styles.filterLabel}>Project</Text>
+                {selectedProjectId !== 'all' && selectedProject ? (
+                  <Text style={styles.filterSummary} numberOfLines={1}>
+                    {selectedProject.name}
+                  </Text>
+                ) : null}
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterChipRow}
+              >
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.filterChip,
+                    selectedProjectId === 'all' && styles.filterChipSelected,
+                    pressed && styles.pressed
+                  ]}
+                  onPress={() => setSelectedProjectId('all')}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      selectedProjectId === 'all' && styles.filterChipTextSelected
+                    ]}
+                  >
+                    All projects
+                  </Text>
+                </Pressable>
+                {projects.map(project => {
+                  const selected = project.id === selectedProjectId;
+                  return (
+                    <Pressable
+                      key={project.id}
+                      style={({ pressed }) => [
+                        styles.filterChip,
+                        selected && styles.filterChipSelected,
+                        pressed && styles.pressed
+                      ]}
+                      onPress={() => setSelectedProjectId(project.id)}
+                    >
+                      <View
+                        style={[
+                          styles.projectDot,
+                          { backgroundColor: project.color || colors.primary }
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          selected && styles.filterChipTextSelected
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {project.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {executingTickets.length > 0 ? <ExecutingTicketsSection tickets={executingTickets} /> : null}
+          </View>
         }
         renderItem={({ item }) => {
           const isExpanded = expandedPostIds.has(item.id);
@@ -158,6 +227,12 @@ export default function FeedScreen() {
                     color={colors.mutedForeground}
                   />
                 </View>
+              </View>
+              <View style={styles.projectRow}>
+                <View style={[styles.projectDot, { backgroundColor: item.project_color }]} />
+                <Text style={styles.projectText} numberOfLines={1}>
+                  {item.project_name}
+                </Text>
               </View>
               <Text style={styles.title} numberOfLines={isExpanded ? undefined : 2}>
                 {item.title}
@@ -273,13 +348,15 @@ export default function FeedScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="newspaper-outline" size={48} color={colors.mutedForeground} />
-            <Text style={styles.emptyText}>No feed activity yet</Text>
+            <Text style={styles.emptyText}>
+              {selectedProjectId === 'all' ? 'No feed activity yet' : 'No activity for this project'}
+            </Text>
             <Text style={styles.emptySubtext}>
               Activity from your agents and team will appear here
             </Text>
           </View>
         }
-        contentContainerStyle={allPosts.length === 0 ? styles.emptyContainer : styles.list}
+        contentContainerStyle={filteredPosts.length === 0 ? styles.emptyContainer : styles.list}
       />
     </View>
   );
@@ -298,6 +375,57 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingBottom: 16
+  },
+  headerStack: {
+    gap: 2
+  },
+  filterSection: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
+    gap: 10
+  },
+  filterHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  filterLabel: {
+    color: colors.foreground,
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  filterSummary: {
+    color: colors.mutedForeground,
+    fontSize: 12,
+    flex: 1
+  },
+  filterChipRow: {
+    gap: 8,
+    paddingRight: 16
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.card,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  filterChipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  filterChipText: {
+    color: colors.secondaryForeground,
+    fontSize: 13,
+    fontWeight: '500'
+  },
+  filterChipTextSelected: {
+    color: colors.primaryForeground
   },
   card: {
     backgroundColor: colors.card,
@@ -356,6 +484,22 @@ const styles = StyleSheet.create({
   timestamp: {
     color: colors.mutedForeground,
     fontSize: 12
+  },
+  projectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8
+  },
+  projectDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4
+  },
+  projectText: {
+    color: colors.mutedForeground,
+    fontSize: 12,
+    flex: 1
   },
   title: {
     color: colors.foreground,
@@ -520,6 +664,9 @@ const styles = StyleSheet.create({
   fileChipText: {
     color: colors.secondaryForeground,
     fontSize: 12
+  },
+  pressed: {
+    opacity: 0.7
   },
   emptyContainer: {
     flex: 1,

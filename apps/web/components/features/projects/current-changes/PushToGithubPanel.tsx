@@ -106,13 +106,13 @@ export function PushToGithubPanel({
   }
 
   return (
-    <div className="rounded-lg border bg-background p-4">
+    <div>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <GitCommit className="h-4 w-4 text-primary" />
-          <span>Commit &amp; push to GitHub</span>
+          <span>Commit &amp; push</span>
         </div>
-        {branch ? <span className="text-xs text-muted-foreground">branch: {branch}</span> : null}
+        {branch ? <span className="text-xs text-muted-foreground">on {branch}</span> : null}
       </div>
 
       <div className="relative">

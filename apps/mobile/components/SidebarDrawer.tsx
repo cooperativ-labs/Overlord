@@ -26,7 +26,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
 
   const userEmail = user?.email ?? '';
 
-  function handleSelectProject(projectId: string) {
+  function handleSelectProject(projectId: string | null) {
     selectProject(projectId);
     onClose();
   }
@@ -72,7 +72,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
             />
             <DrawerItem
               icon="list-outline"
-              label="My Tasks"
+              label="My Tickets"
               onPress={() => navigate('/(tabs)/tickets')}
             />
             <DrawerItem
