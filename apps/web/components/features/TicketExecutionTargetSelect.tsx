@@ -1,8 +1,8 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useEffect, useState } from 'react';
 
-import { updateTicketExecutionTargetAction } from '@/lib/actions/tickets';
+import { useUpdateTicketExecutionTargetMutation } from '@/lib/client-data/tickets/mutations';
 import { capitalizeFirst, ticketExecutionTargetOptions } from '@/lib/options';
 import type { Database } from '@/types/database.types';
 
@@ -16,19 +16,31 @@ type Props = {
 };
 
 export function TicketExecutionTargetSelect({ ticketId, currentExecutionTarget }: Props) {
-  const [pending, startTransition] = useTransition();
+  const [executionTarget, setExecutionTarget] = useState(currentExecutionTarget);
+  const mutation = useUpdateTicketExecutionTargetMutation();
+
+  useEffect(() => {
+    setExecutionTarget(currentExecutionTarget);
+  }, [currentExecutionTarget]);
 
   function handleChange(value: string) {
     const nextExecutionTarget = value as ExecutionTarget;
-    startTransition(async () => {
-      await updateTicketExecutionTargetAction(ticketId, nextExecutionTarget);
-    });
+    const previousExecutionTarget = executionTarget;
+    setExecutionTarget(nextExecutionTarget);
+    mutation.mutate(
+      { ticketId, executionTarget: nextExecutionTarget },
+      {
+        onError: () => {
+          setExecutionTarget(previousExecutionTarget);
+        }
+      }
+    );
   }
 
   return (
     <Select
-      value={currentExecutionTarget}
-      disabled={pending}
+      value={executionTarget}
+      disabled={mutation.isPending}
       onValueChange={handleChange}
       aria-label="Execution target"
     >
@@ -37,7 +49,7 @@ export function TicketExecutionTargetSelect({ ticketId, currentExecutionTarget }
         aria-label="Select execution target"
         className="h-6 w-auto rounded-lg border bg-transparent px-3 text-xs font-base hover:bg-muted"
       >
-        {capitalizeFirst(currentExecutionTarget)}
+        {capitalizeFirst(executionTarget)}
       </SelectTrigger>
       <SelectContent>
         {ticketExecutionTargetOptions.map(({ value, label }) => (

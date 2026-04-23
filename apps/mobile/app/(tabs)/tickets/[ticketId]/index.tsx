@@ -36,6 +36,11 @@ import type {
 } from '@/lib/types';
 import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from '@/modules/ssh';
 
+type Project = {
+  id: string;
+  name: string;
+};
+
 const eventIcons: Record<string, { name: string; color: string }> = {
   system: { name: 'settings-outline', color: colors.mutedForeground },
   question: { name: 'help-circle-outline', color: '#f59e0b' },
@@ -78,10 +83,14 @@ export default function TicketDetailScreen() {
   const [savingAssignedAgent, setSavingAssignedAgent] = useState(false);
   const [expandedObjectiveIds, setExpandedObjectiveIds] = useState<string[]>([]);
   const [launchingServerId, setLaunchingServerId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [savingProject, setSavingProject] = useState(false);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
 
   const loadData = useCallback(async () => {
     const supabase = getSupabase();
-    const [ticketRes, objectivesRes, eventsRes] = await Promise.all([
+    const [ticketRes, objectivesRes, eventsRes, projectsRes] = await Promise.all([
       supabase
         .from('tickets')
         .select(
@@ -99,12 +108,17 @@ export default function TicketDetailScreen() {
         .select('id, event_type, summary, phase, is_blocking, created_at')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false })
-        .limit(30)
+        .limit(30),
+      supabase.from('projects').select('id, name').order('name', { ascending: true })
     ]);
 
-    if (ticketRes.data) setTicket(ticketRes.data as unknown as TicketDetail);
+    if (ticketRes.data) {
+      setTicket(ticketRes.data as unknown as TicketDetail);
+      setSelectedProjectId((ticketRes.data as unknown as TicketDetail).project_id ?? null);
+    }
     if (objectivesRes.data) setObjectives(objectivesRes.data);
     if (eventsRes.data) setEvents(eventsRes.data as TicketEvent[]);
+    if (projectsRes.data) setProjects(projectsRes.data);
     if (ticketRes.error) {
       Alert.alert('Unable to load ticket', ticketRes.error.message);
     } else if (eventsRes.error) {
@@ -276,6 +290,35 @@ export default function TicketDetailScreen() {
       );
     } finally {
       setSavingAssignedAgent(false);
+    }
+  }
+
+  async function handleProjectChange(nextProjectId: string) {
+    if (!ticket || savingProject) return;
+
+    const previousProjectId = selectedProjectId;
+    setSelectedProjectId(nextProjectId);
+    setShowProjectPicker(false);
+    setSavingProject(true);
+
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('tickets')
+        .update({ project_id: nextProjectId })
+        .eq('id', ticket.id);
+
+      if (error) throw new Error(error.message);
+
+      setTicket(current => (current ? { ...current, project_id: nextProjectId } : current));
+    } catch (error) {
+      setSelectedProjectId(previousProjectId);
+      Alert.alert(
+        'Unable to update project',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      setSavingProject(false);
     }
   }
 
@@ -738,6 +781,55 @@ export default function TicketDetailScreen() {
           </View>
         )}
 
+        {/* Project selector */}
+        <View style={styles.projectRow}>
+          <Ionicons name="folder-outline" size={14} color={colors.mutedForeground} />
+          <Pressable
+            onPress={() => setShowProjectPicker(prev => !prev)}
+            disabled={savingProject}
+            style={({ pressed }) => [styles.projectSelector, pressed && styles.pressed]}
+          >
+            <Text style={styles.projectSelectorText}>
+              {projects.find(p => p.id === selectedProjectId)?.name ?? 'No project'}
+            </Text>
+            {savingProject ? (
+              <ActivityIndicator size="small" color={colors.mutedForeground} style={{ marginLeft: 4 }} />
+            ) : (
+              <Ionicons
+                name={showProjectPicker ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={colors.mutedForeground}
+              />
+            )}
+          </Pressable>
+        </View>
+        {showProjectPicker && (
+          <View style={styles.projectPickerList}>
+            {projects.map(project => {
+              const isSelected = project.id === selectedProjectId;
+              return (
+                <Pressable
+                  key={project.id}
+                  style={[styles.projectPickerItem, isSelected && styles.projectPickerItemSelected]}
+                  onPress={() => handleProjectChange(project.id)}
+                >
+                  <Text
+                    style={[
+                      styles.projectPickerItemText,
+                      isSelected && styles.projectPickerItemTextSelected
+                    ]}
+                  >
+                    {project.name}
+                  </Text>
+                  {isSelected && (
+                    <Ionicons name="checkmark" size={16} color={colors.primary} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
         {/* SSH Connection Status Banner */}
         <View
           style={[
@@ -1061,6 +1153,48 @@ const styles = StyleSheet.create({
   dueText: {
     color: colors.mutedForeground,
     fontSize: 13
+  },
+  projectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10
+  },
+  projectSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
+  },
+  projectSelectorText: {
+    color: colors.mutedForeground,
+    fontSize: 13
+  },
+  projectPickerList: {
+    marginTop: 6,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden'
+  },
+  projectPickerItem: {
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
+  },
+  projectPickerItemSelected: {
+    backgroundColor: colors.secondary
+  },
+  projectPickerItemText: {
+    color: colors.secondaryForeground,
+    fontSize: 15
+  },
+  projectPickerItemTextSelected: {
+    color: colors.foreground,
+    fontWeight: '600'
   },
   sshBanner: {
     marginTop: 12,

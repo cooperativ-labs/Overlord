@@ -35,11 +35,13 @@ import {
   reorderTicketsAction,
   updateTicketAssignedAgentAction,
   updateTicketDueDateAction,
+  updateTicketExecutionTargetAction,
   updateTicketFieldAction,
   updateTicketStatusAction
 } from '@/lib/actions/tickets';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { createTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { Database } from '@/types/database.types';
 
 import {
   clearPendingMutation,
@@ -60,6 +62,7 @@ import {
   snapshotBoards,
   updateTicketInBoards
 } from './cache';
+import { ticketQueryKeys } from './query-keys';
 
 export { reconcileServerTicketRow } from './cache';
 
@@ -355,6 +358,52 @@ export function useUpdateTicketAssignmentMutation(): UseMutationResult<
     },
     onError: (_err, _input, ctx) => {
       if (ctx) restoreBoards(qc, ctx.snapshot);
+    }
+  });
+}
+
+// ---- execution target ---------------------------------------------------
+
+export type UpdateTicketExecutionTargetInput = {
+  ticketId: string;
+  executionTarget: Database['public']['Enums']['ticket_execution_target'];
+};
+
+type UpdateTicketExecutionTargetContext = {
+  snapshot: [readonly unknown[], TicketBoardState][];
+  previousDetail: BoardTicket | null | undefined;
+};
+
+export function useUpdateTicketExecutionTargetMutation(): UseMutationResult<
+  void,
+  Error,
+  UpdateTicketExecutionTargetInput,
+  UpdateTicketExecutionTargetContext
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: input => updateTicketExecutionTargetAction(input.ticketId, input.executionTarget),
+    onMutate: input => {
+      const snapshot = snapshotBoards(qc);
+      const previousDetail = qc.getQueryData<BoardTicket | null>(
+        ticketQueryKeys.ticketById(input.ticketId)
+      );
+      applyToAllBoards(qc, state =>
+        updateTicketFields(state, input.ticketId, { execution_target: input.executionTarget })
+      );
+      qc.setQueryData<BoardTicket | null>(ticketQueryKeys.ticketById(input.ticketId), previous => {
+        if (!previous) return previous;
+        return { ...previous, execution_target: input.executionTarget };
+      });
+      return { snapshot, previousDetail };
+    },
+    onError: (_err, input, ctx) => {
+      if (ctx) {
+        restoreBoards(qc, ctx.snapshot);
+        if (ctx.previousDetail !== undefined) {
+          qc.setQueryData(ticketQueryKeys.ticketById(input.ticketId), ctx.previousDetail);
+        }
+      }
     }
   });
 }

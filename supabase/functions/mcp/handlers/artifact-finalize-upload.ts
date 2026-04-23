@@ -65,7 +65,6 @@ export async function handleArtifactFinalizeUpload(
       session_id: access.session.id,
       storage_path: storagePath,
       ticket_id: ticketId,
-      uploaded_by: ctx.userId,
       created_by: ctx.userId
     })
     .select('id, artifact_type, label, storage_path, ticket_id, created_at, metadata')

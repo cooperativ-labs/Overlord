@@ -188,7 +188,6 @@ export async function uploadTicketDocumentAction(
       artifact_type: artifactType,
       label: file.name,
       storage_path: storagePath,
-      uploaded_by: user.id,
       created_by: user.id,
       metadata: {
         size: file.size,
