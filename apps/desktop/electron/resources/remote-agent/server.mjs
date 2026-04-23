@@ -92,6 +92,7 @@ var DEFAULT_MAX_FILES = 2e3;
 var DEFAULT_MAX_DEPTH = 8;
 var DEFAULT_MAX_ENTRIES_PER_DIRECTORY = 5e3;
 var DEFAULT_GIT_TIMEOUT_MS = 15e3;
+var DEFAULT_GH_TIMEOUT_MS = 3e4;
 var DEFAULT_READ_MAX_BYTES = 512 * 1024;
 var IGNORED_DIRECTORY_NAMES = /* @__PURE__ */ new Set([
   ".git",
@@ -129,6 +130,45 @@ async function resolveRepo(directory) {
     branch: branch.ok ? branch.output.trim() || null : null,
     repoRoot
   };
+}
+function normalizeGitOutput(output) {
+  return output.trim();
+}
+async function resolveDefaultBranch(repoRoot) {
+  const symbolic = await runGit(
+    repoRoot,
+    ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+    {
+      allowFailure: true
+    }
+  );
+  const ref = symbolic.ok ? symbolic.output.trim() : "";
+  if (ref.startsWith("origin/")) return ref.slice("origin/".length) || null;
+  return null;
+}
+async function pushCurrentBranch(repoRoot, branch) {
+  try {
+    const { stdout, stderr } = await execFileAsync("git", ["push"], {
+      cwd: repoRoot,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: DEFAULT_GIT_TIMEOUT_MS * 4
+    });
+    return { output: `${stdout ?? ""}${stderr ?? ""}` };
+  } catch (error) {
+    const stderr = error instanceof Error && "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
+    const stdout = error instanceof Error && "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
+    const combined = `${stdout}${stderr}`.trim();
+    if (/has no upstream branch/i.test(combined)) {
+      const upstream = await execFileAsync("git", ["push", "--set-upstream", "origin", branch], {
+        cwd: repoRoot,
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: DEFAULT_GIT_TIMEOUT_MS * 4
+      });
+      return { output: `${upstream.stdout ?? ""}${upstream.stderr ?? ""}` };
+    }
+    const msg = combined || (error instanceof Error ? error.message : "git push failed. Ensure an upstream is set.");
+    throw new Error(msg, { cause: error });
+  }
 }
 async function readUntrackedStats(repoRoot, relativePath) {
   try {
@@ -418,6 +458,120 @@ ${untrackedDiff}` : ""),
       };
     }
   }
+  async getGitBranches() {
+    try {
+      const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
+      const defaultBranch = await resolveDefaultBranch(repoRoot);
+      const refs = await runGit(repoRoot, [
+        "for-each-ref",
+        "--format=%(refname:short)	%(HEAD)	%(upstream:short)",
+        "refs/heads"
+      ]);
+      const branches = refs.output.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+        const [name, headMarker, upstreamRaw] = line.split("	");
+        return {
+          current: headMarker === "*",
+          name,
+          upstream: upstreamRaw?.trim() ? upstreamRaw.trim() : null
+        };
+      }).sort((left, right) => {
+        if (left.current && !right.current) return -1;
+        if (!left.current && right.current) return 1;
+        return left.name.localeCompare(right.name);
+      });
+      return {
+        branches,
+        currentBranch: branch,
+        defaultBranch,
+        repoRoot
+      };
+    } catch (error) {
+      return {
+        branches: [],
+        currentBranch: null,
+        defaultBranch: null,
+        repoRoot: null,
+        error: error instanceof Error ? error.message : "Failed to read Git branches."
+      };
+    }
+  }
+  async checkoutBranch(options) {
+    const branchName = options.name.trim();
+    if (!branchName) return { ok: false, branch: null, error: "Branch name is required." };
+    try {
+      const { repoRoot } = await resolveRepo(this.workingDirectory);
+      await runGit(repoRoot, ["checkout", branchName]);
+      const next = await resolveRepo(repoRoot);
+      return { ok: true, branch: next.branch };
+    } catch (error) {
+      return {
+        ok: false,
+        branch: null,
+        error: error instanceof Error ? error.message : "Failed to switch branches."
+      };
+    }
+  }
+  async createBranch(options) {
+    const branchName = options.name.trim();
+    if (!branchName) return { ok: false, branch: null, error: "Branch name is required." };
+    try {
+      const { repoRoot } = await resolveRepo(this.workingDirectory);
+      await runGit(repoRoot, ["checkout", "-b", branchName]);
+      const next = await resolveRepo(repoRoot);
+      return { ok: true, branch: next.branch };
+    } catch (error) {
+      return {
+        ok: false,
+        branch: null,
+        error: error instanceof Error ? error.message : "Failed to create branch."
+      };
+    }
+  }
+  async pullBranch() {
+    try {
+      const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
+      if (!branch) throw new Error("Cannot pull from a detached HEAD. Check out a branch first.");
+      const result = await execFileAsync("git", ["pull", "--ff-only"], {
+        cwd: repoRoot,
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: DEFAULT_GIT_TIMEOUT_MS * 4
+      });
+      return {
+        ok: true,
+        branch,
+        output: normalizeGitOutput(`${result.stdout ?? ""}${result.stderr ?? ""}`)
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to pull the current branch.";
+      return {
+        ok: false,
+        branch: null,
+        output: "",
+        error: message
+      };
+    }
+  }
+  async pushBranch() {
+    try {
+      const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
+      if (!branch) throw new Error("Cannot push from a detached HEAD. Check out a branch first.");
+      const result = await pushCurrentBranch(repoRoot, branch);
+      return {
+        ok: true,
+        branch,
+        pushed: true,
+        output: normalizeGitOutput(result.output)
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        branch: null,
+        pushed: false,
+        output: "",
+        error: error instanceof Error ? error.message : "Failed to push the current branch."
+      };
+    }
+  }
   async commitAndPush(options) {
     const message = options.message.trim();
     if (!message) {
@@ -438,17 +592,7 @@ ${untrackedDiff}` : ""),
       await runGit(repoRoot, ["commit", "-m", message]);
       const shaResult = await runGit(repoRoot, ["rev-parse", "HEAD"], { allowFailure: true });
       const commitSha = shaResult.ok ? shaResult.output.trim() || null : null;
-      try {
-        await execFileAsync("git", ["push"], {
-          cwd: repoRoot,
-          maxBuffer: 10 * 1024 * 1024,
-          timeout: DEFAULT_GIT_TIMEOUT_MS * 4
-        });
-      } catch (error) {
-        const stderr = error instanceof Error && "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
-        const msg = stderr || (error instanceof Error ? error.message : "git push failed. Ensure an upstream is set.");
-        throw new Error(msg, { cause: error });
-      }
+      await pushCurrentBranch(repoRoot, branch);
       return { ok: true, branch, commitSha, pushed: true };
     } catch (error) {
       return {
@@ -457,6 +601,49 @@ ${untrackedDiff}` : ""),
         commitSha: null,
         pushed: false,
         error: error instanceof Error ? error.message : "Failed to commit and push."
+      };
+    }
+  }
+  async createPullRequest(options) {
+    const title = options.title.trim();
+    const body = options.body.trim();
+    if (!title)
+      return { ok: false, branch: null, number: null, url: null, error: "PR title is required." };
+    if (!body)
+      return { ok: false, branch: null, number: null, url: null, error: "PR body is required." };
+    try {
+      const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
+      if (!branch) {
+        throw new Error("Cannot create a PR from a detached HEAD. Check out a branch first.");
+      }
+      const defaultBranch = await resolveDefaultBranch(repoRoot);
+      const baseBranch = options.baseBranch?.trim() || defaultBranch || void 0;
+      if (baseBranch && branch === baseBranch) {
+        throw new Error("Switch to a feature branch before creating a pull request.");
+      }
+      const args = ["pr", "create", "--head", branch, "--title", title, "--body", body];
+      if (baseBranch) args.push("--base", baseBranch);
+      const result = await execFileAsync("gh", args, {
+        cwd: repoRoot,
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: DEFAULT_GH_TIMEOUT_MS
+      });
+      const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+      const url = output.split("\n").map((line) => line.trim()).filter(Boolean).at(-1) ?? null;
+      const number = url ? Number(url.match(/\/pull\/(\d+)(?:\/|$)/)?.[1] ?? NaN) : NaN;
+      return {
+        ok: true,
+        branch,
+        number: Number.isFinite(number) ? number : null,
+        url
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        branch: null,
+        number: null,
+        url: null,
+        error: error instanceof Error ? error.message : "Failed to create a GitHub pull request."
       };
     }
   }

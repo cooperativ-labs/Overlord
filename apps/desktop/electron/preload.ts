@@ -70,8 +70,25 @@ const electronAPI = {
     ) => ipcRenderer.invoke('filesystem:get-git-diff', options),
     getAggregateDiff: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-aggregate-diff', options),
+    getGitBranches: (options?: WorkspacePayload) =>
+      ipcRenderer.invoke('filesystem:get-git-branches', options),
+    gitCheckoutBranch: (options: WorkspacePayload & { options: { name: string } }) =>
+      ipcRenderer.invoke('filesystem:git-checkout-branch', options),
+    gitCreateBranch: (options: WorkspacePayload & { options: { name: string } }) =>
+      ipcRenderer.invoke('filesystem:git-create-branch', options),
+    gitPull: (options?: WorkspacePayload) => ipcRenderer.invoke('filesystem:git-pull', options),
+    gitPush: (options?: WorkspacePayload) => ipcRenderer.invoke('filesystem:git-push', options),
     gitCommitAndPush: (options: WorkspacePayload & { message: string }) =>
       ipcRenderer.invoke('filesystem:git-commit-and-push', options),
+    gitCreatePullRequest: (
+      options: WorkspacePayload & {
+        options: {
+          baseBranch?: string;
+          body: string;
+          title: string;
+        };
+      }
+    ) => ipcRenderer.invoke('filesystem:git-create-pull-request', options),
     readFile: (options: WorkspacePayload & { path: string; maxBytes?: number }) =>
       ipcRenderer.invoke('filesystem:read-file', options)
   },

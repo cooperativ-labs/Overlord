@@ -13,6 +13,7 @@ import {
   TextInput,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AgentModelChooser } from '@/components/AgentModelChooser';
 import {
@@ -22,7 +23,12 @@ import {
 } from '@/lib/agent-models';
 import { colors } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
-import { launchTicketOnServer, launchTicketOnServerWithPassword } from '@/lib/remote-ticket-launch';
+import {
+  ensureAgentToken,
+  launchTicketOnServer,
+  launchTicketOnServerWithPassword,
+  resolvePlatformUrl
+} from '@/lib/remote-ticket-launch';
 import { getConnectedSSHServers, useServerConnections } from '@/lib/server-connections-context';
 import {
   getServerDeviceCredential,
@@ -153,22 +159,70 @@ export default function TicketDetailScreen() {
     return events;
   }, [events, activityFilter]);
 
-  const handleCopyPrompt = useCallback(async () => {
-    const parts = [
-      ticket?.title ? `# ${ticket.title}` : null,
-      ticket?.context?.trim() ? `## Context\n${ticket.context}` : null,
-      ticket?.constraints?.trim() ? `## Constraints\n${ticket.constraints}` : null,
-      ticket?.acceptance_criteria ? `## Acceptance Criteria\n${ticket.acceptance_criteria}` : null,
-      draftObjective?.objective ? `## Objective\n${draftObjective.objective}` : null
-    ].filter(Boolean);
-    await Clipboard.setStringAsync(parts.join('\n\n'));
-    Alert.alert('Copied', 'Ticket prompt copied to clipboard.');
-  }, [ticket, draftObjective]);
+  const handleCopyPrompt = useCallback(
+    async (context: 'cli' | 'web', label: 'local' | 'cloud') => {
+      if (!ticket) return;
+
+      const agentToken = await ensureAgentToken();
+      const platformUrl = resolvePlatformUrl();
+      const url = new URL(`/api/protocol/context/${ticket.id}`, `${platformUrl}/`);
+      url.searchParams.set('context', context);
+      url.searchParams.set('mode', 'run');
+      const response = await fetch(url.toString(), {
+        headers: {
+          authorization: `Bearer ${agentToken}`
+        }
+      });
+      const prompt = await response.text();
+
+      if (!response.ok || prompt.trim().length === 0) {
+        throw new Error(prompt || `Failed to build ${label} prompt.`);
+      }
+
+      await Clipboard.setStringAsync(prompt);
+      Alert.alert('Copied', `${label === 'local' ? 'Local' : 'Cloud'} prompt copied.`);
+    },
+    [ticket]
+  );
+
+  const handleOpenPromptMenu = useCallback(() => {
+    Alert.alert('Copy prompt', 'Choose the prompt format to copy.', [
+      {
+        text: 'Local prompt',
+        onPress: () => {
+          void handleCopyPrompt('cli', 'local').catch(error => {
+            Alert.alert(
+              'Unable to copy prompt',
+              error instanceof Error ? error.message : 'An unexpected error occurred.'
+            );
+          });
+        }
+      },
+      {
+        text: 'Cloud prompt',
+        onPress: () => {
+          void handleCopyPrompt('web', 'cloud').catch(error => {
+            Alert.alert(
+              'Unable to copy prompt',
+              error instanceof Error ? error.message : 'An unexpected error occurred.'
+            );
+          });
+        }
+      },
+      { text: 'Cancel', style: 'cancel' }
+    ]);
+  }, [handleCopyPrompt]);
 
   const handleCopyCliCommand = useCallback(async () => {
     if (!ticket) return;
     await Clipboard.setStringAsync(`ovld protocol attach --ticket-id ${ticket.id}`);
     Alert.alert('Copied', 'Attach command copied.');
+  }, [ticket]);
+
+  const handleCopyTicketId = useCallback(async () => {
+    if (!ticket) return;
+    await Clipboard.setStringAsync(ticket.id);
+    Alert.alert('Copied', 'Ticket ID copied to clipboard.');
   }, [ticket]);
 
   const executedObjectives = useMemo(
@@ -770,7 +824,7 @@ export default function TicketDetailScreen() {
   const dueLabel = ticket.due_datetime ? new Date(ticket.due_datetime).toLocaleDateString() : null;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Top action bar */}
@@ -783,28 +837,35 @@ export default function TicketDetailScreen() {
         >
           <Ionicons name="ellipsis-vertical" size={18} color={colors.foreground} />
         </Pressable>
-        <Pressable
-          hitSlop={8}
-          style={styles.topPillButton}
-          onPress={() => Alert.alert('Local runtime', 'Remote runtime selection coming soon.')}
-        >
-          <Ionicons name="desktop-outline" size={13} color={colors.foreground} />
-          <Text style={styles.topPillText}>Local</Text>
-          <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-        </Pressable>
-        <Pressable
-          hitSlop={8}
-          style={styles.topPillButton}
-          onPress={() => Alert.alert('Discuss', 'In-ticket discussion is coming soon.')}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={13} color={colors.foreground} />
-          <Text style={styles.topPillText}>Discuss</Text>
-        </Pressable>
-        <Pressable hitSlop={8} style={styles.topPillButton} onPress={handleCopyPrompt}>
-          <Ionicons name="copy-outline" size={13} color={colors.foreground} />
-          <Text style={styles.topPillText}>Copy prompt</Text>
-        </Pressable>
-        <View style={{ flex: 1 }} />
+        <View style={styles.topBarActions}>
+          <Pressable hitSlop={8} style={styles.topPillButton} onPress={handleOpenPromptMenu}>
+            <Ionicons name="copy-outline" size={13} color={colors.foreground} />
+            <Text style={styles.topPillText}>Copy prompt</Text>
+            <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
+          </Pressable>
+          <Pressable
+            hitSlop={8}
+            style={styles.topPillButton}
+            onPress={() => setShowAgentModal(true)}
+            disabled={savingAssignedAgent}
+          >
+            <Ionicons
+              name={
+                ticket.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
+              }
+              size={13}
+              color={colors.foreground}
+            />
+            <Text style={styles.topPillText} numberOfLines={1}>
+              {agentLabel ?? 'Agent'}
+            </Text>
+            {savingAssignedAgent ? (
+              <ActivityIndicator size="small" color={colors.mutedForeground} />
+            ) : (
+              <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
+            )}
+          </Pressable>
+        </View>
         <Pressable
           hitSlop={8}
           style={styles.topIconButton}
@@ -845,7 +906,7 @@ export default function TicketDetailScreen() {
           <Text style={styles.titleText}>{ticket.title || 'Untitled'}</Text>
         </View>
 
-        {/* Pill selectors: project · status · agent */}
+        {/* Pill selectors: project · status */}
         <View style={styles.pillRow}>
           <Pressable
             style={({ pressed }) => [styles.selectPill, pressed && styles.pressed]}
@@ -875,28 +936,6 @@ export default function TicketDetailScreen() {
             <Text style={styles.selectPillText}>{ticket.status}</Text>
             <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
           </View>
-
-          <Pressable
-            style={({ pressed }) => [styles.selectPill, pressed && styles.pressed]}
-            onPress={() => setShowAgentModal(true)}
-            disabled={savingAssignedAgent}
-          >
-            <Ionicons
-              name={
-                ticket.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
-              }
-              size={12}
-              color={colors.foreground}
-            />
-            <Text style={styles.selectPillText} numberOfLines={1}>
-              {agentLabel ?? 'Agent'}
-            </Text>
-            {savingAssignedAgent ? (
-              <ActivityIndicator size="small" color={colors.mutedForeground} />
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-            )}
-          </Pressable>
         </View>
 
         {showProjectPicker && (
@@ -1208,10 +1247,10 @@ export default function TicketDetailScreen() {
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <OverflowAction
               icon="copy-outline"
-              label="Copy ticket link"
+              label="Copy ticket ID"
               onPress={() => {
-                void Clipboard.setStringAsync(`overlord://tickets/${ticket.id}`);
                 setOverflowOpen(false);
+                void handleCopyTicketId();
               }}
             />
             <OverflowAction
@@ -1230,7 +1269,7 @@ export default function TicketDetailScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -1316,6 +1355,14 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10
   },
+  topBarActions: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0
+  },
   topIconButton: {
     width: 32,
     height: 32,
@@ -1332,10 +1379,12 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     height: 32,
+    maxWidth: 170,
     borderRadius: 8,
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.border
+    borderColor: colors.border,
+    minWidth: 0
   },
   topPillText: { color: colors.foreground, fontSize: 12, fontWeight: '500' },
   tracker: {

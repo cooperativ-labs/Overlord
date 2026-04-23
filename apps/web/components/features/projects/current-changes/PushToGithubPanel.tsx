@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
-import { Button } from '@/components/ui/button';
+import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { generateCommitMessageAction } from '@/lib/actions/generate-commit-message';
 import { cn } from '@/lib/utils';
@@ -25,25 +25,30 @@ export function PushToGithubPanel({
 }: PushToGithubPanelProps) {
   const { api } = useElectron();
   const [message, setMessage] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isPushing, setIsPushing] = useState(false);
+  const [generateButtonState, setGenerateButtonState] = useState<ButtonLoadingState>('default');
+  const [pushButtonState, setPushButtonState] = useState<ButtonLoadingState>('default');
 
   const disabled = !hasChanges || !api?.filesystem;
+  const isGenerating = generateButtonState === 'loading';
+  const isPushing = pushButtonState === 'loading';
 
   async function handleGenerate() {
     if (!api?.filesystem?.getAggregateDiff) {
       toast.error('Commit message generation requires the desktop app.');
+      setGenerateButtonState('error');
       return;
     }
-    setIsGenerating(true);
+    setGenerateButtonState('loading');
     try {
       const aggregate = await api.filesystem.getAggregateDiff({ directory: workingDirectory });
       if (aggregate.error) {
         toast.error(aggregate.error);
+        setGenerateButtonState('error');
         return;
       }
       if (!aggregate.diff?.trim()) {
         toast.error('No diff found to summarize.');
+        setGenerateButtonState('error');
         return;
       }
       const result = await generateCommitMessageAction({
@@ -53,26 +58,29 @@ export function PushToGithubPanel({
       });
       if ('error' in result) {
         toast.error(result.error);
+        setGenerateButtonState('error');
         return;
       }
       setMessage(result.message);
+      setGenerateButtonState('success');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to generate commit message.');
-    } finally {
-      setIsGenerating(false);
+      setGenerateButtonState('error');
     }
   }
 
   async function handlePush() {
     if (!api?.filesystem?.gitCommitAndPush) {
       toast.error('Push requires the desktop app.');
+      setPushButtonState('error');
       return;
     }
     if (!message.trim()) {
       toast.error('Enter a commit message first.');
+      setPushButtonState('error');
       return;
     }
-    setIsPushing(true);
+    setPushButtonState('loading');
     try {
       const result = await api.filesystem.gitCommitAndPush({
         directory: workingDirectory,
@@ -80,6 +88,7 @@ export function PushToGithubPanel({
       });
       if (!result.ok || result.error) {
         toast.error(result.error ?? 'Push failed.');
+        setPushButtonState('error');
         return;
       }
       toast.success(
@@ -89,10 +98,10 @@ export function PushToGithubPanel({
       );
       setMessage('');
       onPushed?.();
+      setPushButtonState('success');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to push to GitHub.');
-    } finally {
-      setIsPushing(false);
+      setPushButtonState('error');
     }
   }
 
@@ -119,44 +128,51 @@ export function PushToGithubPanel({
           disabled={disabled}
           className="pr-10"
         />
-        <button
-          type="button"
+        <LoadingButton
           aria-label="Generate commit message with AI"
-          title="Generate commit message with AI"
-          onClick={handleGenerate}
-          disabled={disabled || isGenerating || isPushing}
+          buttonState={generateButtonState}
           className={cn(
-            'absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors',
-            'hover:bg-muted hover:text-primary disabled:cursor-not-allowed disabled:opacity-50'
+            'absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md p-0 text-muted-foreground transition-colors',
+            'hover:bg-muted hover:text-primary'
           )}
-        >
-          {isGenerating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-        </button>
+          onClick={handleGenerate}
+          reset
+          setButtonState={setGenerateButtonState}
+          size="icon"
+          disabled={disabled || isGenerating || isPushing}
+          text={<Sparkles className="h-4 w-4" />}
+          loadingText={<Loader2 className="h-4 w-4 animate-spin" />}
+          successText={<Sparkles className="h-4 w-4 text-emerald-600" />}
+          errorText={<Sparkles className="h-4 w-4 text-destructive" />}
+          title="Generate commit message with AI"
+          variant="ghost"
+        />
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-2">
-        <Button
-          type="button"
-          size="sm"
+        <LoadingButton
+          buttonState={pushButtonState}
+          className="h-8"
           onClick={handlePush}
+          reset
+          setButtonState={setPushButtonState}
+          size="sm"
           disabled={disabled || isPushing || isGenerating || !message.trim()}
-        >
-          {isPushing ? (
+          text={
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Pushing…
-            </>
-          ) : (
-            <>
-              <Upload className="mr-2 h-4 w-4" />
+              <Upload className="h-4 w-4" />
               Commit &amp; push
             </>
-          )}
-        </Button>
+          }
+          loadingText={
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Pushing…
+            </>
+          }
+          successText="Pushed"
+          errorText="Push failed"
+        ></LoadingButton>
       </div>
     </div>
   );

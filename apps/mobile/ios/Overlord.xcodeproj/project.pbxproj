@@ -9,27 +9,27 @@
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		5B8C9C60E5DACEE8C5FFFCC5 /* libPods-Overlord.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8DED9DE401B67A8EA13827F2 /* libPods-Overlord.a */; };
-		ABF162EDFEC85D81D4AAF23E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1FC2F59A05D5A2B5CF762CE4 /* PrivacyInfo.xcprivacy */; };
+		8CFBD92A95CB18B370BF526A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1E42EFE1B123DECE5469805F /* PrivacyInfo.xcprivacy */; };
+		B8BEA5716041A476A924776D /* libPods-Overlord.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F492E674AA0B4F0878E7901D /* libPods-Overlord.a */; };
+		B91123C4CBEFC18C1CB1C5C3 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E36F27175C2757FF21B8FA86 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
-		F6A545D914CB5FA7A3AB54DA /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C176B2BAB4CB2F6709FB84D /* ExpoModulesProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13B07F961A680F5B00A75B9A /* Overlord.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Overlord.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Overlord/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Overlord/Info.plist; sourceTree = "<group>"; };
-		1C176B2BAB4CB2F6709FB84D /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Overlord/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		1FC2F59A05D5A2B5CF762CE4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Overlord/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		8DED9DE401B67A8EA13827F2 /* libPods-Overlord.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overlord.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1E42EFE1B123DECE5469805F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = Overlord/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		32B9E0C1C412A2A52CE9E1AC /* Pods-Overlord.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overlord.release.xcconfig"; path = "Target Support Files/Pods-Overlord/Pods-Overlord.release.xcconfig"; sourceTree = "<group>"; };
+		9C77E0128472344F45E997F0 /* Pods-Overlord.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overlord.debug.xcconfig"; path = "Target Support Files/Pods-Overlord/Pods-Overlord.debug.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Overlord/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		DDF67886824A4C715460E36F /* Pods-Overlord.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overlord.debug.xcconfig"; path = "Target Support Files/Pods-Overlord/Pods-Overlord.debug.xcconfig"; sourceTree = "<group>"; };
+		E36F27175C2757FF21B8FA86 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Overlord/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Overlord/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Overlord-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Overlord-Bridging-Header.h"; path = "Overlord/Overlord-Bridging-Header.h"; sourceTree = "<group>"; };
-		F911E94E992854CB3F68DD3A /* Pods-Overlord.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Overlord.release.xcconfig"; path = "Target Support Files/Pods-Overlord/Pods-Overlord.release.xcconfig"; sourceTree = "<group>"; };
+		F492E674AA0B4F0878E7901D /* libPods-Overlord.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Overlord.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -37,7 +37,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5B8C9C60E5DACEE8C5FFFCC5 /* libPods-Overlord.a in Frameworks */,
+				B8BEA5716041A476A924776D /* libPods-Overlord.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,7 +53,7 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				1FC2F59A05D5A2B5CF762CE4 /* PrivacyInfo.xcprivacy */,
+				1E42EFE1B123DECE5469805F /* PrivacyInfo.xcprivacy */,
 			);
 			name = Overlord;
 			sourceTree = "<group>";
@@ -62,15 +62,15 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				8DED9DE401B67A8EA13827F2 /* libPods-Overlord.a */,
+				F492E674AA0B4F0878E7901D /* libPods-Overlord.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		581CF10CCAB4C32AD0F36754 /* ExpoModulesProviders */ = {
+		6975FF8958B8250A79E42486 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				E28D316D718F6E19E21B46E0 /* Overlord */,
+				BA96CB3D8BCE06EB2250DB4A /* Overlord */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -89,8 +89,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				D2761C2409C7710BF6D7740D /* Pods */,
-				581CF10CCAB4C32AD0F36754 /* ExpoModulesProviders */,
+				906232F3440407D4FB315986 /* Pods */,
+				6975FF8958B8250A79E42486 /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -105,6 +105,24 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		906232F3440407D4FB315986 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				9C77E0128472344F45E997F0 /* Pods-Overlord.debug.xcconfig */,
+				32B9E0C1C412A2A52CE9E1AC /* Pods-Overlord.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		BA96CB3D8BCE06EB2250DB4A /* Overlord */ = {
+			isa = PBXGroup;
+			children = (
+				E36F27175C2757FF21B8FA86 /* ExpoModulesProvider.swift */,
+			);
+			name = Overlord;
+			sourceTree = "<group>";
+		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -112,24 +130,6 @@
 			);
 			name = Supporting;
 			path = Overlord/Supporting;
-			sourceTree = "<group>";
-		};
-		D2761C2409C7710BF6D7740D /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				DDF67886824A4C715460E36F /* Pods-Overlord.debug.xcconfig */,
-				F911E94E992854CB3F68DD3A /* Pods-Overlord.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		E28D316D718F6E19E21B46E0 /* Overlord */ = {
-			isa = PBXGroup;
-			children = (
-				1C176B2BAB4CB2F6709FB84D /* ExpoModulesProvider.swift */,
-			);
-			name = Overlord;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,13 +140,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Overlord" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				8F532F94763DAC5BCC25BCA7 /* [Expo] Configure project */,
+				90D2A6CEB1CC48B0AEE5843A /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				5300BF7A9AD63D93AC27B5F3 /* [CP] Embed Pods Frameworks */,
+				CE80E2F56212BCF6FAAA1834 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -198,7 +198,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				ABF162EDFEC85D81D4AAF23E /* PrivacyInfo.xcprivacy in Resources */,
+				8CFBD92A95CB18B370BF526A /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,28 +244,6 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		5300BF7A9AD63D93AC27B5F3 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-Overlord/Pods-Overlord-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Overlord/Pods-Overlord-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -296,7 +274,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Overlord/Pods-Overlord-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		8F532F94763DAC5BCC25BCA7 /* [Expo] Configure project */ = {
+		90D2A6CEB1CC48B0AEE5843A /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -320,6 +298,28 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-Overlord/expo-configure-project.sh\"\n";
 		};
+		CE80E2F56212BCF6FAAA1834 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-Overlord/Pods-Overlord-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Overlord/Pods-Overlord-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -328,7 +328,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				F6A545D914CB5FA7A3AB54DA /* ExpoModulesProvider.swift in Sources */,
+				B91123C4CBEFC18C1CB1C5C3 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -337,7 +337,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = DDF67886824A4C715460E36F /* Pods-Overlord.debug.xcconfig */;
+			baseConfigurationReference = 9C77E0128472344F45E997F0 /* Pods-Overlord.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -376,7 +376,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F911E94E992854CB3F68DD3A /* Pods-Overlord.release.xcconfig */;
+			baseConfigurationReference = 32B9E0C1C412A2A52CE9E1AC /* Pods-Overlord.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

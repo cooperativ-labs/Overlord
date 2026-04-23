@@ -19,6 +19,54 @@ export type GitStatusResponse = {
   repoRoot: string | null;
 };
 
+export type GitBranchEntry = {
+  current: boolean;
+  name: string;
+  upstream: string | null;
+};
+
+export type GitBranchesResponse = {
+  branches: GitBranchEntry[];
+  currentBranch: string | null;
+  defaultBranch: string | null;
+  repoRoot: string | null;
+  error?: string;
+};
+
+export type GitBranchActionResponse = {
+  ok: boolean;
+  branch: string | null;
+  error?: string;
+};
+
+export type GitPullResponse = {
+  ok: boolean;
+  branch: string | null;
+  output: string;
+  error?: string;
+};
+
+export type GitPushResponse = {
+  ok: boolean;
+  branch: string | null;
+  pushed: boolean;
+  output: string;
+  error?: string;
+};
+
+export type GitCreatePullRequestResponse = {
+  ok: boolean;
+  branch: string | null;
+  number: number | null;
+  url: string | null;
+  error?: string;
+};
+
+export type PullRequestDraft = {
+  body: string;
+  title: string;
+};
+
 export type GitDiffResponse = {
   diff: string;
   error?: string;

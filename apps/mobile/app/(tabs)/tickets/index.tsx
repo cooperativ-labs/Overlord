@@ -13,6 +13,7 @@ import {
   TextInput,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SidebarDrawer } from '@/components/SidebarDrawer';
 import { colors } from '@/lib/colors';
@@ -222,7 +223,7 @@ export default function TicketsScreen() {
   const projectName = selectedProject?.name ?? (loadingProjects ? 'Loading…' : 'No project');
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Top toolbar */}
@@ -437,7 +438,7 @@ export default function TicketsScreen() {
       )}
 
       <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
-    </View>
+    </SafeAreaView>
   );
 }
 

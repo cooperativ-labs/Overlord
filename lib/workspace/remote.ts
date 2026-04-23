@@ -13,8 +13,15 @@ import type {
   AggregateDiffResult,
   CommitAndPushOptions,
   CommitAndPushResult,
+  CreatePullRequestOptions,
+  GitBranchesResult,
+  GitBranchOperationResult,
+  GitBranchOptions,
+  GitCreatePullRequestResult,
   GitDiffOptions,
   GitDiffResult,
+  GitPullResult,
+  GitPushResult,
   GitStatusResult,
   ListFilesOptions,
   ListFilesResult,
@@ -119,7 +126,31 @@ export class RemoteWorkspaceClient implements WorkspaceClient {
     return this.request<AggregateDiffResult>('/git/aggregate-diff');
   }
 
+  getGitBranches(): Promise<GitBranchesResult> {
+    return this.request<GitBranchesResult>('/git/branches');
+  }
+
+  checkoutBranch(options: GitBranchOptions): Promise<GitBranchOperationResult> {
+    return this.request<GitBranchOperationResult>('/git/checkout-branch', { options });
+  }
+
+  createBranch(options: GitBranchOptions): Promise<GitBranchOperationResult> {
+    return this.request<GitBranchOperationResult>('/git/create-branch', { options });
+  }
+
+  pullBranch(): Promise<GitPullResult> {
+    return this.request<GitPullResult>('/git/pull');
+  }
+
+  pushBranch(): Promise<GitPushResult> {
+    return this.request<GitPushResult>('/git/push');
+  }
+
   commitAndPush(options: CommitAndPushOptions): Promise<CommitAndPushResult> {
     return this.request<CommitAndPushResult>('/git/commit-and-push', { options });
+  }
+
+  createPullRequest(options: CreatePullRequestOptions): Promise<GitCreatePullRequestResult> {
+    return this.request<GitCreatePullRequestResult>('/git/create-pull-request', { options });
   }
 }

@@ -203,8 +203,7 @@ const styles = StyleSheet.create({
     width: DRAWER_WIDTH,
     backgroundColor: colors.background,
     borderRightWidth: 1,
-    borderRightColor: colors.border,
-    flex: 1
+    borderRightColor: colors.border
   },
   scrim: {
     flex: 1

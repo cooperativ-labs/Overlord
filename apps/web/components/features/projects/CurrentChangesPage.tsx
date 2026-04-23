@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { DiffPane } from '@/components/features/projects/current-changes/DiffPane';
 import { FileListPane } from '@/components/features/projects/current-changes/FileListPane';
+import { GitBranchPanel } from '@/components/features/projects/current-changes/GitBranchPanel';
+import { PullRequestPanel } from '@/components/features/projects/current-changes/PullRequestPanel';
 import { PushToGithubPanel } from '@/components/features/projects/current-changes/PushToGithubPanel';
 import type { EnrichedCurrentChangeFile } from '@/components/features/projects/current-changes/types';
 import { UnavailableStateCard } from '@/components/features/projects/current-changes/UnavailableStateCard';
@@ -14,6 +16,7 @@ import { useElectron } from '@/components/features/terminal/useElectron';
 import { Button } from '@/components/ui/button';
 import {
   useCurrentChangeFileChanges,
+  useGitBranchesQuery,
   useGitDiffQuery,
   useGitStatusQuery
 } from '@/lib/client-data/current-changes/hooks';
@@ -38,6 +41,12 @@ export function CurrentChangesPage({
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
   const hasLocalDirectory = !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
   const canInspectChanges = hasLocalDirectory;
+  const branchesQuery = useGitBranchesQuery({
+    api: api?.filesystem,
+    canInspectChanges,
+    directory: workingDirectory,
+    isElectron
+  });
   const statusQuery = useGitStatusQuery({
     api: api?.filesystem,
     canInspectChanges,
@@ -63,8 +72,16 @@ export function CurrentChangesPage({
     isLoading: diffQuery.isFetching,
     parsed: null
   };
+  const branchesResponse = branchesQuery.data ?? null;
   const statusLoading = statusQuery.isLoading || statusQuery.isFetching;
   const rationalesError = fileChangesQuery.error?.message ?? null;
+
+  async function refreshAll() {
+    await branchesQuery.refetch();
+    await statusQuery.refetch();
+    await fileChangesQuery.refetch();
+    await diffQuery.refetch();
+  }
 
   const enrichedFiles = useMemo(
     () =>
@@ -179,18 +196,7 @@ export function CurrentChangesPage({
               {statusResponse.branch}
             </div>
           ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              void (async () => {
-                await statusQuery.refetch();
-                await fileChangesQuery.refetch();
-                await diffQuery.refetch();
-              })()
-            }
-          >
+          <Button type="button" variant="outline" size="sm" onClick={() => void refreshAll()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -203,18 +209,29 @@ export function CurrentChangesPage({
         </div>
       </div>
 
-      <PushToGithubPanel
-        branch={statusResponse?.branch ?? null}
-        hasChanges={(statusResponse?.files.length ?? 0) > 0}
-        workingDirectory={displayDirectory}
-        onPushed={() => {
-          void (async () => {
-            await statusQuery.refetch();
-            await fileChangesQuery.refetch();
-            await diffQuery.refetch();
-          })();
-        }}
-      />
+      <div className="grid gap-4 xl:grid-cols-3">
+        <GitBranchPanel
+          branches={branchesResponse?.branches ?? []}
+          currentBranch={branchesResponse?.currentBranch ?? statusResponse?.branch ?? null}
+          defaultBranch={branchesResponse?.defaultBranch ?? null}
+          workingDirectory={displayDirectory}
+          onChanged={() => void refreshAll()}
+        />
+
+        <PushToGithubPanel
+          branch={statusResponse?.branch ?? null}
+          hasChanges={(statusResponse?.files.length ?? 0) > 0}
+          workingDirectory={displayDirectory}
+          onPushed={() => void refreshAll()}
+        />
+
+        <PullRequestPanel
+          baseBranch={branchesResponse?.defaultBranch ?? null}
+          currentBranch={branchesResponse?.currentBranch ?? statusResponse?.branch ?? null}
+          workingDirectory={displayDirectory}
+          onCreated={() => void refreshAll()}
+        />
+      </div>
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-xl border bg-background">
         <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">

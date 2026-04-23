@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.18.0] - 2026-04-23:10:30
+
+### Added
+- Add Git branch management and pull request creation to the desktop current-changes workflow.
+- Add mobile prompt-copy and ticket-detail actions that use the protocol context endpoint for local and cloud prompt formats.
+
+### Fixed
+- Keep mobile ticket screens within safe-area boundaries so top bars and drawers render correctly on modern devices.
+- Expand desktop and mobile Git helpers so commit, push, branch, and PR operations handle upstream-less repositories more cleanly.
+
+### Changed
+- Turn the current-changes page into a three-panel workflow for branches, pushes, and pull requests with shared refresh behavior.
+- Make the desktop remote-agent workspace layer expose branch listing, branch switching, branch creation, pull, push, and PR helpers to the UI.
+- Update mobile ticket detail actions to copy ticket IDs, choose prompt formats, and surface the assigned agent control in the top bar.
+
+### Security
+- None.
+
+### Refactor
+- Centralize Git output normalization and branch resolution in the workspace clients to support the new Git actions.
+
+### Removed
+- Remove the standalone mobile README as part of the mobile shell cleanup.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.18.0`.
+
 ## [4.17.0] - 2026-04-22:09:49
 
 ### Added

@@ -6,6 +6,7 @@ import { getRationalePaths } from '@/components/features/projects/current-change
 import type {
   DiffState,
   FileChangeRecord,
+  GitBranchesResponse,
   GitDiffResponse,
   GitStatusFile,
   GitStatusResponse
@@ -13,6 +14,7 @@ import type {
 import { parseUnifiedDiff } from '@/lib/git/unified-diff';
 
 type ElectronFilesystemApi = {
+  getGitBranches?: (input: { directory: string }) => Promise<unknown>;
   getGitStatus?: (input: { directory: string }) => Promise<unknown>;
   getGitDiff?: (input: {
     directory: string;
@@ -24,6 +26,7 @@ type ElectronFilesystemApi = {
 
 export const currentChangesQueryKeys = {
   all: ['current-changes'] as const,
+  branches: (directory: string | null) => ['current-changes', 'branches', directory] as const,
   status: (directory: string | null) => ['current-changes', 'status', directory] as const,
   fileChanges: (projectId: string, filePaths: string[]) =>
     ['current-changes', 'file-changes', projectId, filePaths] as const,
@@ -40,6 +43,26 @@ export const currentChangesQueryKeys = {
       file?.status ?? null
     ] as const
 };
+
+export function useGitBranchesQuery(input: {
+  api: ElectronFilesystemApi | undefined;
+  canInspectChanges: boolean;
+  directory: string | null;
+  isElectron: boolean;
+}) {
+  return useQuery<GitBranchesResponse | null, Error>({
+    queryKey: currentChangesQueryKeys.branches(input.directory),
+    queryFn: async () => {
+      if (!input.api?.getGitBranches || !input.directory) return null;
+      return (await input.api.getGitBranches({
+        directory: input.directory
+      })) as GitBranchesResponse;
+    },
+    enabled: input.isElectron && input.canInspectChanges && Boolean(input.api?.getGitBranches),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false
+  });
+}
 
 export function useGitStatusQuery(input: {
   api: ElectronFilesystemApi | undefined;

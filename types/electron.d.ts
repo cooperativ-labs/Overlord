@@ -61,6 +61,17 @@ interface ElectronAPI {
     chooseDirectory: () => Promise<string | null>;
   };
   filesystem: {
+    getGitBranches: (options?: WorkspacePayload) => Promise<{
+      branches: Array<{
+        current: boolean;
+        name: string;
+        upstream: string | null;
+      }>;
+      currentBranch: string | null;
+      defaultBranch: string | null;
+      repoRoot: string | null;
+      error?: string;
+    }>;
     getGitDiff: (
       options?: WorkspacePayload & {
         originalPath?: string;
@@ -116,11 +127,57 @@ interface ElectronAPI {
       status: string;
       error?: string;
     }>;
+    gitCheckoutBranch: (
+      options: WorkspacePayload & {
+        options: { name: string };
+      }
+    ) => Promise<{
+      ok: boolean;
+      branch: string | null;
+      error?: string;
+    }>;
+    gitCreateBranch: (
+      options: WorkspacePayload & {
+        options: { name: string };
+      }
+    ) => Promise<{
+      ok: boolean;
+      branch: string | null;
+      error?: string;
+    }>;
+    gitPull: (options?: WorkspacePayload) => Promise<{
+      ok: boolean;
+      branch: string | null;
+      output: string;
+      error?: string;
+    }>;
+    gitPush: (options?: WorkspacePayload) => Promise<{
+      ok: boolean;
+      branch: string | null;
+      pushed: boolean;
+      output: string;
+      error?: string;
+    }>;
     gitCommitAndPush: (options: WorkspacePayload & { message: string }) => Promise<{
       ok: boolean;
       branch: string | null;
       commitSha: string | null;
       pushed: boolean;
+      error?: string;
+    }>;
+    gitCreatePullRequest: (
+      options: WorkspacePayload & {
+        options: {
+          baseBranch?: string;
+          body: string;
+          title: string;
+        };
+      }
+    ) => Promise<{
+      ok: boolean;
+      branch: string | null;
+      number: number | null;
+      url: string | null;
       error?: string;
     }>;
     readFile: (options: WorkspacePayload & { path: string; maxBytes?: number }) => Promise<{

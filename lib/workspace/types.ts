@@ -49,6 +49,49 @@ export type AggregateDiffResult = {
   error?: string;
 };
 
+export type GitBranchEntry = {
+  current: boolean;
+  name: string;
+  upstream: string | null;
+};
+
+export type GitBranchesResult = {
+  branches: GitBranchEntry[];
+  currentBranch: string | null;
+  defaultBranch: string | null;
+  repoRoot: string | null;
+  error?: string;
+};
+
+export type GitBranchOperationResult = {
+  ok: boolean;
+  branch: string | null;
+  error?: string;
+};
+
+export type GitPullResult = {
+  ok: boolean;
+  branch: string | null;
+  output: string;
+  error?: string;
+};
+
+export type GitPushResult = {
+  ok: boolean;
+  branch: string | null;
+  pushed: boolean;
+  output: string;
+  error?: string;
+};
+
+export type GitCreatePullRequestResult = {
+  ok: boolean;
+  branch: string | null;
+  number: number | null;
+  url: string | null;
+  error?: string;
+};
+
 export type CommitAndPushResult = {
   ok: boolean;
   branch: string | null;
@@ -82,6 +125,10 @@ export type GitDiffOptions = {
   status?: string;
 };
 
+export type GitBranchOptions = {
+  name: string;
+};
+
 export type ReadFileOptions = {
   path: string;
   maxBytes?: number;
@@ -89,6 +136,12 @@ export type ReadFileOptions = {
 
 export type CommitAndPushOptions = {
   message: string;
+};
+
+export type CreatePullRequestOptions = {
+  baseBranch?: string;
+  body: string;
+  title: string;
 };
 
 /**
@@ -107,7 +160,13 @@ export interface WorkspaceClient {
   getGitStatus(): Promise<GitStatusResult>;
   getGitDiff(options: GitDiffOptions): Promise<GitDiffResult>;
   getAggregateDiff(): Promise<AggregateDiffResult>;
+  getGitBranches(): Promise<GitBranchesResult>;
+  checkoutBranch(options: GitBranchOptions): Promise<GitBranchOperationResult>;
+  createBranch(options: GitBranchOptions): Promise<GitBranchOperationResult>;
+  pullBranch(): Promise<GitPullResult>;
+  pushBranch(): Promise<GitPushResult>;
   commitAndPush(options: CommitAndPushOptions): Promise<CommitAndPushResult>;
+  createPullRequest(options: CreatePullRequestOptions): Promise<GitCreatePullRequestResult>;
   dispose?(): Promise<void> | void;
 }
 

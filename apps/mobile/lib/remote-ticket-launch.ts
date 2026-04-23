@@ -20,7 +20,7 @@ function quoteShell(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function resolvePlatformUrl(): string {
+export function resolvePlatformUrl(): string {
   const explicitUrl = process.env.EXPO_PUBLIC_OVERLORD_URL?.trim();
   if (explicitUrl) {
     return explicitUrl.replace(/\/+$/, '');
@@ -48,7 +48,7 @@ function resolvePlatformUrl(): string {
   return 'https://www.ovld.ai';
 }
 
-async function ensureAgentToken(): Promise<string> {
+export async function ensureAgentToken(): Promise<string> {
   const supabase = getSupabase();
   const {
     data: { user }

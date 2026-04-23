@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/lib/auth-context';
 import { colors } from '@/lib/colors';
@@ -20,7 +21,7 @@ export default function RootLayout() {
 
   if (!isSupabaseConfigured()) {
     return (
-      <>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <View style={styles.container}>
           <View style={styles.card}>
             <Text style={styles.title}>Mobile app configuration required</Text>
@@ -34,24 +35,26 @@ export default function RootLayout() {
           </View>
         </View>
         <StatusBar style="light" />
-      </>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <AuthProvider>
-      <NotificationsProvider>
-        <ServerConnectionsProvider>
-          <SelectedProjectProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="(auth)" />
-            </Stack>
-            <StatusBar style="light" />
-          </SelectedProjectProvider>
-        </ServerConnectionsProvider>
-      </NotificationsProvider>
-    </AuthProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <AuthProvider>
+        <NotificationsProvider>
+          <ServerConnectionsProvider>
+            <SelectedProjectProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="(auth)" />
+              </Stack>
+              <StatusBar style="light" />
+            </SelectedProjectProvider>
+          </ServerConnectionsProvider>
+        </NotificationsProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

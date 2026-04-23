@@ -11,6 +11,8 @@ import { z } from 'zod';
 
 import { LocalWorkspaceClient } from '../../../../lib/workspace/local';
 import type {
+  CreatePullRequestOptions,
+  GitBranchOptions,
   GitDiffOptions,
   ListFilesOptions,
   SshConnectionConfig,
@@ -43,6 +45,20 @@ const ListFilesOptionsSchema = z
     maxDepth: z.number().int().min(0).max(32).optional(),
     maxEntriesPerDirectory: z.number().int().min(1).max(5000).optional(),
     maxFiles: z.number().int().min(1).max(50_000).optional()
+  })
+  .passthrough();
+
+const GitBranchOptionsSchema = z
+  .object({
+    name: z.string().min(1).max(255)
+  })
+  .passthrough();
+
+const CreatePullRequestOptionsSchema = z
+  .object({
+    baseBranch: z.string().min(1).max(255).optional(),
+    body: z.string().min(1).max(200_000),
+    title: z.string().min(1).max(512)
   })
   .passthrough();
 
@@ -177,6 +193,65 @@ export function registerFilesystemIpc(): void {
     }
   });
 
+  ipcMain.handle('filesystem:get-git-branches', async (_event, rawPayload?: unknown) => {
+    try {
+      const payload = safeParseWorkspace(rawPayload);
+      const client = await resolveClient(payload);
+      return await client.getGitBranches();
+    } catch (error) {
+      return failure(error, {
+        branches: [],
+        currentBranch: null,
+        defaultBranch: null,
+        repoRoot: null
+      });
+    }
+  });
+
+  ipcMain.handle('filesystem:git-checkout-branch', async (_event, rawPayload?: unknown) => {
+    try {
+      const payload = safeParseWorkspace(rawPayload);
+      const rawOptions = (rawPayload as { options?: unknown } | undefined)?.options;
+      const options = GitBranchOptionsSchema.parse(rawOptions) as GitBranchOptions;
+      const client = await resolveClient(payload);
+      return await client.checkoutBranch(options);
+    } catch (error) {
+      return failure(error, { ok: false, branch: null });
+    }
+  });
+
+  ipcMain.handle('filesystem:git-create-branch', async (_event, rawPayload?: unknown) => {
+    try {
+      const payload = safeParseWorkspace(rawPayload);
+      const rawOptions = (rawPayload as { options?: unknown } | undefined)?.options;
+      const options = GitBranchOptionsSchema.parse(rawOptions) as GitBranchOptions;
+      const client = await resolveClient(payload);
+      return await client.createBranch(options);
+    } catch (error) {
+      return failure(error, { ok: false, branch: null });
+    }
+  });
+
+  ipcMain.handle('filesystem:git-pull', async (_event, rawPayload?: unknown) => {
+    try {
+      const payload = safeParseWorkspace(rawPayload);
+      const client = await resolveClient(payload);
+      return await client.pullBranch();
+    } catch (error) {
+      return failure(error, { ok: false, branch: null, output: '' });
+    }
+  });
+
+  ipcMain.handle('filesystem:git-push', async (_event, rawPayload?: unknown) => {
+    try {
+      const payload = safeParseWorkspace(rawPayload);
+      const client = await resolveClient(payload);
+      return await client.pushBranch();
+    } catch (error) {
+      return failure(error, { ok: false, branch: null, pushed: false, output: '' });
+    }
+  });
+
   ipcMain.handle('filesystem:git-commit-and-push', async (_event, rawPayload?: unknown) => {
     try {
       const payload = safeParseWorkspace(rawPayload);
@@ -204,6 +279,18 @@ export function registerFilesystemIpc(): void {
       return await client.commitAndPush({ message });
     } catch (error) {
       return failure(error, { ok: false, branch: null, commitSha: null, pushed: false });
+    }
+  });
+
+  ipcMain.handle('filesystem:git-create-pull-request', async (_event, rawPayload?: unknown) => {
+    try {
+      const payload = safeParseWorkspace(rawPayload);
+      const rawOptions = (rawPayload as { options?: unknown } | undefined)?.options;
+      const options = CreatePullRequestOptionsSchema.parse(rawOptions) as CreatePullRequestOptions;
+      const client = await resolveClient(payload);
+      return await client.createPullRequest(options);
+    } catch (error) {
+      return failure(error, { ok: false, branch: null, number: null, url: null });
     }
   });
 
