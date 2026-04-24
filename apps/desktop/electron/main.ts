@@ -38,6 +38,12 @@ Sentry.init({
   dsn: 'https://4217dfda3fcd82c64dab291ea1d15aef@o4508852831977472.ingest.us.sentry.io/4511274027450368'
 });
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
+
 function getRendererCsp(targetUrl: string): string {
   const targetOrigin = (() => {
     try {
@@ -250,6 +256,16 @@ function createWindow(targetUrl: string) {
   appUpdater.setMainWindow(mainWindow);
 }
 
+function focusMainWindow(): void {
+  if (!mainWindow) return;
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 function registerNativeContextMenu(window: BrowserWindow): void {
   window.webContents.on('context-menu', (_event, params) => {
     const template: MenuItemConstructorOptions[] = [];
@@ -294,6 +310,8 @@ function registerNativeContextMenu(window: BrowserWindow): void {
 }
 
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) return;
+
   loadLocalEnvForPackagedRuns();
 
   // Start local Supabase only in dev — production uses Supabase Cloud
@@ -350,6 +368,12 @@ app.whenReady().then(async () => {
     }
   });
 });
+
+if (hasSingleInstanceLock) {
+  app.on('second-instance', () => {
+    focusMainWindow();
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

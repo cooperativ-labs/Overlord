@@ -145,20 +145,25 @@ function waitForOAuthCallback(
     });
 
     activeCallbackServer = server;
-    server.listen(port, host);
     server.on('error', (err: NodeJS.ErrnoException) => {
       activeCallbackServer = null;
       if (err.code === 'EADDRINUSE') {
+        console.error('[auth] OAuth callback port is already in use', {
+          host,
+          port
+        });
         reject(
           new Error(
             `OAuth callback port ${port} is already in use. ` +
-              'Close the application using that port or check for firewall/proxy interference, then try again.'
+              'Another Overlord instance or local process may already be using it. ' +
+              'Close that application or check for firewall/proxy interference, then try again.'
           )
         );
       } else {
         reject(err);
       }
     });
+    server.listen(port, host);
   });
 }
 
