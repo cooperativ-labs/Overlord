@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +12,6 @@ import { NotificationsProvider } from '@/lib/notifications';
 import { SelectedProjectProvider } from '@/lib/selected-project-context';
 import { ServerConnectionsProvider } from '@/lib/server-connections-context';
 import { isSupabaseConfigured, supabaseConfigError } from '@/lib/supabase';
-import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
   dsn: 'https://59bf9df007f49ae0c9bb7b7878ab4d47@o4508852831977472.ingest.us.sentry.io/4511274313449472',
@@ -26,7 +26,7 @@ Sentry.init({
   // Configure Session Replay
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1,
-  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
+  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()]
 
   // uncomment the line below to enable Spotlight (https://spotlightjs.com)
   // spotlight: __DEV__,

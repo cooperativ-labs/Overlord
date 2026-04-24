@@ -173,8 +173,31 @@ async function runAgent(agent, mode = 'run') {
       } else {
         execFileSync('opencode', ['--prompt', context], { stdio: 'inherit', env: childEnv });
       }
-    } else {
-      execFileSync('gemini', [context], { stdio: 'inherit', env: childEnv });
+    } else if (agent === 'gemini') {
+      // Write context to a temp file. Passing inline content as a positional arg
+      // causes Gemini's @-reference parser to lstat(cwd + content) when it encounters
+      // @ symbols in the markdown (e.g. "@@ -10,6 +10,14 @@" in JSON hunk examples),
+      // producing an ENAMETOOLONG crash. Using @file keeps the path short.
+      const tag = `overlord-${ticketId.slice(-8)}-${Date.now()}`;
+      const contextFile = path.join(os.tmpdir(), `${tag}-ctx.md`);
+      fs.writeFileSync(contextFile, context, 'utf-8');
+      setTimeout(() => { try { fs.unlinkSync(contextFile); } catch { /* already gone */ } }, 30 * 60_000).unref();
+
+      if (mode === 'resume') {
+        const geminiSessionId = process.env.GEMINI_SESSION_ID?.trim();
+        const resumeTarget = geminiSessionId ?? 'latest';
+        execFileSync(
+          'gemini',
+          ['--resume', resumeTarget, '--include-directories', os.tmpdir(), `@${contextFile}`],
+          { stdio: 'inherit', env: childEnv }
+        );
+      } else {
+        execFileSync(
+          'gemini',
+          ['--include-directories', os.tmpdir(), `@${contextFile}`],
+          { stdio: 'inherit', env: childEnv }
+        );
+      }
     }
   } catch (error) {
     const isResume = mode === 'resume';

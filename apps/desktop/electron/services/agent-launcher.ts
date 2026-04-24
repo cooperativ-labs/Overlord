@@ -421,7 +421,17 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   } else if (input.agent === 'cursor') {
     command = `agent${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
   } else if (input.agent === 'gemini') {
-    command = `gemini${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
+    if (isRemote) {
+      command = `gemini${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} ${contextRef}`;
+    } else {
+      // Pass context as an @file reference instead of inlining via $(cat ...).
+      // Inlining causes Gemini's @-reference parser to scan the full markdown
+      // for @ symbols (e.g. "@@ -10,6 +10,14 @@" in JSON hunk examples),
+      // which triggers lstat on cwd+<entire-content> → ENAMETOOLONG crash.
+      // Using @contextFile keeps the path short and --include-directories
+      // allows the temp file to be read without a user approval prompt.
+      command = `gemini --include-directories ${shellQuote(os.tmpdir())}${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} @${contextFile}`;
+    }
   } else if (input.agent === 'opencode') {
     command = `opencode${modelThinkingFlags}${extraFlags ? ` ${extraFlags}` : ''} --prompt ${contextRef}`;
   } else {

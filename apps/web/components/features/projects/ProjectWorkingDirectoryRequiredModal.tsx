@@ -57,13 +57,32 @@ export function ProjectWorkingDirectoryRequiredModal({
     setSelectFolderState('loading');
     setError(null);
 
-    try {
-      const chosenPath = await api.terminal.chooseDirectory();
-      if (!chosenPath) {
-        setSelectFolderState('default');
-        return;
-      }
+    let chosenPath: string | null = null;
 
+    try {
+      chosenPath = await api.terminal.chooseDirectory();
+    } catch (pickerError) {
+      setSelectFolderState('error');
+      console.error('Failed to open directory picker', {
+        projectId: project.id,
+        projectName: project.name,
+        pickerError
+      });
+      setError(
+        pickerError instanceof Error
+          ? `Could not open the directory picker: ${pickerError.message}`
+          : 'Could not open the directory picker due to an unknown error.'
+      );
+      return;
+    }
+
+    if (!chosenPath) {
+      setSelectFolderState('default');
+      setError('No folder was selected. Choose a folder to continue.');
+      return;
+    }
+
+    try {
       await updateWorkingDirectoryMutation.mutateAsync({
         projectId: project.id,
         workingDirectory: chosenPath
@@ -74,8 +93,16 @@ export function ProjectWorkingDirectoryRequiredModal({
       onOpenChange(false);
     } catch (updateError) {
       setSelectFolderState('error');
+      console.error('Failed to save project working directory', {
+        projectId: project.id,
+        projectName: project.name,
+        chosenPath,
+        updateError
+      });
       setError(
-        updateError instanceof Error ? updateError.message : 'Failed to save the project folder.'
+        updateError instanceof Error
+          ? `Failed to link folder "${chosenPath}" to "${project.name}": ${updateError.message}`
+          : `Failed to link folder "${chosenPath}" to "${project.name}" due to an unknown error.`
       );
     }
   }

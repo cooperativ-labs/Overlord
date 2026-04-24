@@ -1,13 +1,19 @@
 'use client';
 
 import {
+  MutationCache,
   QueryClient,
   QueryClientProvider as TanstackQueryClientProvider
 } from '@tanstack/react-query';
 import * as React from 'react';
 
+import { ensureFreshElectronSession } from '@/lib/electron-auth/ensure-session';
+
 function makeQueryClient() {
   return new QueryClient({
+    mutationCache: new MutationCache({
+      onMutate: () => ensureFreshElectronSession()
+    }),
     defaultOptions: {
       queries: {
         // Server-rendered bootstraps provide fresh initialData; we don't want

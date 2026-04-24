@@ -21,7 +21,12 @@ export default function AdminScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Sentry</Text>
-        <Button title="Try!" onPress={() => { Sentry.captureException(new Error('First error')); }} />
+        <Button
+          title="Try!"
+          onPress={() => {
+            Sentry.captureException(new Error('First error'));
+          }}
+        />
       </View>
     </ScrollView>
   );

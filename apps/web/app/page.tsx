@@ -15,8 +15,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { VideoSection } from '@/components/marketing/VideoSection';
 import { HomepageFooter } from '@/components/marketing/HomepageFooter';
+import { VideoSection } from '@/components/marketing/VideoSection';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/supabase/utils/server';
 
@@ -489,7 +489,6 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
-
       </div>
       <HomepageFooter />
     </div>

@@ -1,9 +1,9 @@
 'use client';
 
+import * as Sentry from '@sentry/nextjs';
 import { Building2, FolderKanban, FolderSearch } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
-import * as Sentry from '@sentry/nextjs';
 
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
 import {

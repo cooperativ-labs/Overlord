@@ -28,13 +28,13 @@ import { handleUpdate } from './handlers/update.ts';
 import { handleWriteContext } from './handlers/write-context.ts';
 import { getUiResourceByUri, listUiResources } from './ui/resources.ts';
 import { resolveToken } from './auth.ts';
+import { negotiateProtocolVersion } from './protocol.ts';
 import { buildCorsHeaders, rpcError, rpcResult } from './rpc.ts';
 import { TOOLS } from './tools.ts';
 import { validateToolInput } from './validate.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-05', '2025-06-18', '2025-03-26', '2024-11-05'];
 
 /**
  * Build the Protected Resource Metadata document (RFC 9728).
@@ -47,14 +47,6 @@ function buildProtectedResourceMetadata() {
     scopes_supported: ['openid', 'email', 'profile'],
     bearer_methods_supported: ['header']
   };
-}
-
-function negotiateProtocolVersion(requested: unknown): string | null {
-  if (typeof requested !== 'string') {
-    return SUPPORTED_PROTOCOL_VERSIONS[0];
-  }
-
-  return SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -141,13 +133,6 @@ Deno.serve(async (req: Request) => {
 
   if (method === 'initialize') {
     const protocolVersion = negotiateProtocolVersion(params?.protocolVersion);
-    if (!protocolVersion) {
-      return rpcError(
-        id,
-        -32602,
-        `Unsupported protocol version: ${String(params?.protocolVersion ?? 'undefined')}`
-      );
-    }
 
     return new Response(
       JSON.stringify({

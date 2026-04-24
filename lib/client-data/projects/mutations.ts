@@ -22,6 +22,17 @@ type ProjectSnapshot = {
   boards: [readonly unknown[], TicketBoardState][];
 };
 
+type CreateProjectInput = {
+  organizationId: number;
+  name: string;
+  color: string;
+};
+
+type CreateProjectContext = {
+  snapshot: ProjectSnapshot;
+  temporaryId: string;
+};
+
 function snapshotProjectState(queryClient: QueryClient): ProjectSnapshot {
   return {
     projects: queryClient.getQueryData<SidebarProject[]>(ticketQueryKeys.projects()),
@@ -112,7 +123,7 @@ function appendCreatedProject(queryClient: QueryClient, created: CreateProjectRe
 
 export function useCreateProjectMutation() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<CreateProjectResult, Error, CreateProjectInput, CreateProjectContext>({
     mutationFn: createProject,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
@@ -175,8 +186,50 @@ export function useUpdateProjectNameMutation() {
 
 export function useUpdateProjectWorkingDirectoryMutation() {
   const queryClient = useQueryClient();
+
+  const mutationFn = async (input: { projectId: string; workingDirectory: string | null }) => {
+    try {
+      await updateProjectWorkingDirectoryAction(input);
+    } catch (error) {
+      const normalizedWorkingDirectory =
+        typeof input.workingDirectory === 'string' ? input.workingDirectory.trim() : '';
+      const isClearingDirectory = normalizedWorkingDirectory.length === 0;
+      const fallbackMessage = isClearingDirectory
+        ? 'Failed to clear the project working directory. Please try again.'
+        : `Failed to save "${normalizedWorkingDirectory}" as the project working directory.`;
+
+      if (error instanceof Error) {
+        const message = error.message.toLowerCase();
+
+        if (message.includes('must be signed in')) {
+          throw new Error('Your session expired. Sign in again to update the working directory.', {
+            cause: error
+          });
+        }
+        if (message.includes('row-level security')) {
+          throw new Error('You do not have permission to update this project working directory.', {
+            cause: error
+          });
+        }
+        if (message.includes('invalid') && message.includes('directory')) {
+          throw new Error(
+            'The selected path is not valid for this project. Choose a different folder.',
+            { cause: error }
+          );
+        }
+
+        throw new Error(fallbackMessage, { cause: error });
+      }
+
+      throw new Error(
+        'Something went wrong while updating the project working directory. Please try again.',
+        { cause: error }
+      );
+    }
+  };
+
   return useMutation({
-    mutationFn: updateProjectWorkingDirectoryAction,
+    mutationFn,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       patchProjectCache(queryClient, input.projectId, {

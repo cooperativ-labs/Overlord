@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.21.0] - 2026-04-24:15:22
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Update the Electron login loading copy to clarify when browser authorization is pending during sign-in.
+- Install a global React Query mutation preflight in `query-client-provider` that calls `ensureFreshElectronSession` before mutations, broadening Electron session checks across app-wide `useMutation` flows (projects, tickets, status/scheduling, Everhour timers, and similar hooks).
+- Clarify that direct server action calls are still outside this preflight path, including ticket objective/title generation and settings actions.
+
+### Security
+- None.
+
 ## [4.20.0] - 2026-04-24:09:19
 
 ### Added
