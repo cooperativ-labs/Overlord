@@ -3,11 +3,10 @@
 import { useEffect } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
-import type { SettingsNavSection } from '@/components/modals/SettingsModal';
 
 import { useSystemNotifications } from './SystemNotificationContext';
 
-export function useCliUpdateNotifications(onOpenSettings?: (section?: SettingsNavSection) => void) {
+export function useCliUpdateNotifications() {
   const { api, isElectron } = useElectron();
   const { addNotification, dismissNotification } = useSystemNotifications();
 
@@ -31,12 +30,16 @@ export function useCliUpdateNotifications(onOpenSettings?: (section?: SettingsNa
           title: 'CLI update available',
           message: `Version ${status.latestVersion} is available for ovld.`,
           dismissKey: `overlord-cli-update-${status.latestVersion}`,
-          action: onOpenSettings
-            ? {
-                label: 'Open CLI settings',
-                onClick: () => onOpenSettings('CLI & Local Agents')
-              }
-            : undefined
+          action: {
+            label: 'Install',
+            loadingText: 'Installing…',
+            successText: 'Installed',
+            onClick: async () => {
+              const result = await api.cli!.install();
+              if (!result.ok) throw new Error(result.error);
+              dismissNotification('cli-update-available');
+            }
+          }
         });
       })
       .catch(() => {
@@ -46,5 +49,5 @@ export function useCliUpdateNotifications(onOpenSettings?: (section?: SettingsNa
     return () => {
       cancelled = true;
     };
-  }, [addNotification, api, dismissNotification, isElectron, onOpenSettings]);
+  }, [addNotification, api, dismissNotification, isElectron]);
 }

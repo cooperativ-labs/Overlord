@@ -65,3 +65,4 @@ apps/web/public/swe-worker*.js
 
 # Sentry Config File
 .env.sentry-build-plugin
+apps/mobile/ios/sentry.properties

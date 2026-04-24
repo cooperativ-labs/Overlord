@@ -1,9 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
+import { useAuth } from '@/lib/auth-context';
 import { colors } from '@/lib/colors';
 
+const ADMIN_EMAIL = 'jake@cooperativ.io';
+
 export default function TabLayout() {
+  const { user } = useAuth();
+  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
+
   return (
     <Tabs
       screenOptions={{
@@ -52,6 +58,16 @@ export default function TabLayout() {
           title: 'Account',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
+          )
+        }}
+      />
+      <Tabs.Screen
+        name="admin/index"
+        options={{
+          title: 'Admin',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="shield-checkmark-outline" size={size} color={color} />
           )
         }}
       />

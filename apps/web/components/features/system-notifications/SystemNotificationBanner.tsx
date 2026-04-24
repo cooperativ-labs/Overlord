@@ -55,9 +55,20 @@ export function SystemNotificationBanner() {
                   setActionStates(prev => ({ ...prev, [notification.id]: state }))
                 }
                 text={notification.action.label}
-                onClick={() => {
-                  setActionStates(prev => ({ ...prev, [notification.id]: 'loading' }));
-                  notification.action!.onClick();
+                loadingText={notification.action.loadingText}
+                successText={notification.action.successText}
+                onClick={async () => {
+                  const setState = (state: ButtonLoadingState) =>
+                    setActionStates(prev => ({ ...prev, [notification.id]: state }));
+                  setState('loading');
+                  try {
+                    await notification.action!.onClick();
+                    setState('success');
+                    setTimeout(() => setState('default'), 2000);
+                  } catch {
+                    setState('error');
+                    setTimeout(() => setState('default'), 2000);
+                  }
                 }}
                 variant="link"
                 size="sm"

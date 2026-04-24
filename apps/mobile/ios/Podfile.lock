@@ -2097,6 +2097,33 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNSentry (8.9.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-hermes
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Sentry (= 9.11.0)
+    - Yoga
+  - Sentry (9.11.0):
+    - Sentry/Core (= 9.11.0)
+  - Sentry/Core (9.11.0)
   - SSHModule (1.0.0):
     - ExpoModulesCore
   - Yoga (0.0.0)
@@ -2195,8 +2222,13 @@ DEPENDENCIES:
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
+  - "RNSentry (from `../node_modules/@sentry/react-native`)"
   - SSHModule (from `../modules/ssh/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
+
+SPEC REPOS:
+  trunk:
+    - Sentry
 
 EXTERNAL SOURCES:
   EXApplication:
@@ -2384,6 +2416,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-reanimated"
   RNScreens:
     :path: "../node_modules/react-native-screens"
+  RNSentry:
+    :path: "../node_modules/@sentry/react-native"
   SSHModule:
     :path: "../modules/ssh/ios"
   Yoga:
@@ -2482,6 +2516,8 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: f5e7bd03378745362370df30eb19f644de428948
   RNReanimated: 171d7a70692998b17cea51918b0104fbe94a3da7
   RNScreens: bd2d42698ceb9fffa8d89210488dc5c5bdf5a651
+  RNSentry: eba3b7eacac8ef72ef6dc5dd74b43206149a1fad
+  Sentry: 7561357fd868b329d1aab8152449733b2191ed6c
   SSHModule: d57e039187e0ac814952bdb39252d4d5ca93761e
   Yoga: acd565934addf7423687593ec490bd4491b2a802
 

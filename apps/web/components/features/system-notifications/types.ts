@@ -8,7 +8,9 @@ export type SystemNotification = {
   /** Optional action button */
   action?: {
     label: string;
-    onClick: () => void;
+    loadingText?: string;
+    successText?: string;
+    onClick: () => void | Promise<void>;
   };
   /** If set, dismissal is persisted in localStorage under this key */
   dismissKey?: string;

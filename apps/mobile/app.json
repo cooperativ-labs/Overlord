@@ -35,6 +35,14 @@
           "icon": "./assets/notification-icon.png",
           "color": "#09090b"
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "overlord-mobile",
+          "organization": "cooperativ-labs"
+        }
       ]
     ],
     "experiments": {
