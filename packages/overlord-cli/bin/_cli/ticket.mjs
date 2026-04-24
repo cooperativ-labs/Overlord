@@ -15,11 +15,11 @@ export async function ticketContext(ticketId) {
     process.exit(1);
   }
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
 
   const url = `${platformUrl}/api/protocol/context/${ticketId}`;
   const res = await fetch(url, {
-    headers: buildAuthHeaders(agentToken, localSecret)
+    headers: buildAuthHeaders(bearerToken, localSecret, organizationId)
   });
 
   if (!res.ok) {

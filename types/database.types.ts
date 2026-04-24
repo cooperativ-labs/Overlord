@@ -333,34 +333,46 @@ export type Database = {
       device_auth_codes: {
         Row: {
           access_token: string | null;
+          access_token_expires_at: string | null;
           approved_at: string | null;
           created_at: string;
           device_code: string;
           expires_at: string;
           id: string;
           next_poll_at: string | null;
+          oauth_state: string | null;
+          pkce_verifier: string | null;
+          refresh_token: string | null;
           user_code: string;
           user_id: string | null;
         };
         Insert: {
           access_token?: string | null;
+          access_token_expires_at?: string | null;
           approved_at?: string | null;
           created_at?: string;
           device_code: string;
           expires_at?: string;
           id?: string;
           next_poll_at?: string | null;
+          oauth_state?: string | null;
+          pkce_verifier?: string | null;
+          refresh_token?: string | null;
           user_code: string;
           user_id?: string | null;
         };
         Update: {
           access_token?: string | null;
+          access_token_expires_at?: string | null;
           approved_at?: string | null;
           created_at?: string;
           device_code?: string;
           expires_at?: string;
           id?: string;
           next_poll_at?: string | null;
+          oauth_state?: string | null;
+          pkce_verifier?: string | null;
+          refresh_token?: string | null;
           user_code?: string;
           user_id?: string | null;
         };

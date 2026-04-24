@@ -172,10 +172,7 @@ export default function FeedScreen() {
                         ]}
                       />
                       <Text
-                        style={[
-                          styles.filterChipText,
-                          selected && styles.filterChipTextSelected
-                        ]}
+                        style={[styles.filterChipText, selected && styles.filterChipTextSelected]}
                         numberOfLines={1}
                       >
                         {project.name}
@@ -186,7 +183,9 @@ export default function FeedScreen() {
               </ScrollView>
             </View>
 
-            {executingTickets.length > 0 ? <ExecutingTicketsSection tickets={executingTickets} /> : null}
+            {executingTickets.length > 0 ? (
+              <ExecutingTicketsSection tickets={executingTickets} />
+            ) : null}
           </View>
         }
         renderItem={({ item }) => {
@@ -349,7 +348,9 @@ export default function FeedScreen() {
           <View style={styles.empty}>
             <Ionicons name="newspaper-outline" size={48} color={colors.mutedForeground} />
             <Text style={styles.emptyText}>
-              {selectedProjectId === 'all' ? 'No feed activity yet' : 'No activity for this project'}
+              {selectedProjectId === 'all'
+                ? 'No feed activity yet'
+                : 'No activity for this project'}
             </Text>
             <Text style={styles.emptySubtext}>
               Activity from your agents and team will appear here

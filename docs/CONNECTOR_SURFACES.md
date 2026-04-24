@@ -8,8 +8,8 @@ Use it before shipping any connector-related change. If one surface changes, che
 
 | Agent | Local connector | Cloud/headless connector |
 |-------|-----------------|--------------------------|
-| Claude Code | Overlord bundle (skill + permission hook) via `ovld setup claude` | `/api/mcp` with `AGENT_TOKEN` |
-| Codex | Home-local chat plugin via Desktop app Settings → CLI | `/api/mcp` with `AGENT_TOKEN` (`~/.codex/config.toml`) |
+| Claude Code | Overlord bundle (skill + permission hook) via `ovld setup claude` | `/api/mcp` with shared OAuth credentials or temporary `AGENT_TOKEN` override |
+| Codex | Home-local chat plugin via Desktop app Settings → CLI | `/api/mcp` with shared OAuth credentials or temporary `AGENT_TOKEN` override (`~/.codex/config.toml`) |
 | Cursor | Local Cursor plugin via `ovld setup cursor` | — |
 | Gemini CLI | TOML slash commands via `ovld setup gemini` | — |
 | OpenCode | Overlord bundle (AGENTS.md + config) via `ovld setup opencode` | — |
@@ -153,7 +153,7 @@ Checklist:
 Checklist:
 - Codex cloud instructions point to `~/.codex/config.toml`
 - Codex cloud instructions use `/api/mcp`
-- Codex cloud instructions use `AGENT_TOKEN`
+- Codex cloud instructions use shared OAuth credentials where supported; `AGENT_TOKEN` is only a compatibility override
 - Codex cloud guidance is clearly separated from the local plugin path
 
 ### 4. Onboarding

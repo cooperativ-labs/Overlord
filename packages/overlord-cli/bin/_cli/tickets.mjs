@@ -33,11 +33,11 @@ function parseFlags(args, knownFlags) {
   return result;
 }
 
-async function apiPost(url, token, localSecret, body) {
+async function apiPost(url, token, localSecret, organizationId, body) {
   const res = await fetch(url, {
     method: 'POST',
     headers: {
-      ...buildAuthHeaders(token, localSecret),
+      ...buildAuthHeaders(token, localSecret, organizationId),
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
@@ -59,7 +59,7 @@ export async function ticketsCreate(args) {
 export async function ticketsList(args) {
   const flags = parseFlags(args, ['status', 'include-completed']);
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
 
   const body = {
     includeCompleted: flags['include-completed'] !== false,
@@ -68,8 +68,9 @@ export async function ticketsList(args) {
 
   const data = await apiPost(
     `${platformUrl}/api/protocol/list-tickets`,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     body
   );
 

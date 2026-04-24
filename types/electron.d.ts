@@ -361,13 +361,22 @@ interface ElectronAPI {
       session?: { access_token: string; refresh_token: string };
       error?: string;
     }>;
+    checkOAuthSession: () => Promise<{
+      valid: boolean;
+      reason?: string;
+    }>;
+    refreshOAuthSession: () => Promise<{
+      ok: boolean;
+      accessToken?: string;
+      error?: string;
+    }>;
     checkAgentToken: () => Promise<{
       valid: boolean;
       reason?: string;
     }>;
     refreshAgentToken: () => Promise<{
       ok: boolean;
-      agentToken?: string;
+      accessToken?: string;
       error?: string;
     }>;
   };

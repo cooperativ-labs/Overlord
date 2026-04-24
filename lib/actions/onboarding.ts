@@ -229,19 +229,24 @@ export async function createFirstProjectWithDirectory(input: {
   projectId: string;
   organizationId: number;
 }> {
-  const created = await createProject({
-    organizationId: input.organizationId,
-    name: input.name,
-    color: input.color
-  });
+  console.log('createFirstProjectWithDirectory', input);
+  try {
+    const created = await createProject({
+      organizationId: input.organizationId,
+      name: input.name,
+      color: input.color
+    });
+    await updateProjectWorkingDirectoryAction({
+      projectId: created.id,
+      workingDirectory: input.workingDirectory
+    });
 
-  await updateProjectWorkingDirectoryAction({
-    projectId: created.id,
-    workingDirectory: input.workingDirectory
-  });
-
-  return {
-    projectId: created.id,
-    organizationId: created.organizationId
-  };
+    return {
+      projectId: created.id,
+      organizationId: created.organizationId
+    };
+  } catch (error) {
+    console.error('createFirstProjectWithDirectory', error);
+    throw error;
+  }
 }

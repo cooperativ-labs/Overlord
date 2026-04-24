@@ -1,14 +1,11 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import {
-  getDefaultAgentTokenAction,
-  updateOnboardingProgressAction
-} from '@/lib/actions/onboarding';
+import { updateOnboardingProgressAction } from '@/lib/actions/onboarding';
 import { AGENT_TYPES, type AgentTypeValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 
@@ -99,13 +96,6 @@ export function AgentSetupStep({ initialPreferredAgent, onContinue }: Props) {
   const [selectedAgent, setSelectedAgent] = useState<AgentTypeValue>(
     initialPreferredAgent ?? 'claude'
   );
-  const [agentToken, setAgentToken] = useState<string | null>(null);
-
-  useEffect(() => {
-    getDefaultAgentTokenAction()
-      .then(token => setAgentToken(token))
-      .catch(() => null);
-  }, []);
 
   async function handleSelectAgent(value: AgentTypeValue) {
     setSelectedAgent(value);
@@ -173,23 +163,11 @@ export function AgentSetupStep({ initialPreferredAgent, onContinue }: Props) {
           <p className="mb-1 text-sm font-medium">Connect Overlord</p>
           <p className="text-muted-foreground mb-1.5 text-xs">{info.overlordSetupDescription}</p>
           <CodeBlock value={info.overlordSetupCommand} />
+          <p className="text-muted-foreground mt-2 text-xs">
+            Sign in with Overlord Desktop or run <code>ovld auth login</code> in the CLI to use your
+            shared OAuth session.
+          </p>
         </div>
-
-        {agentToken && (
-          <div>
-            <p className="mb-1 text-sm font-medium">Your agent token</p>
-            <p className="text-muted-foreground mb-1.5 text-xs">
-              The setup command will ask for this. Keep it safe — it authorises agents to act on
-              your behalf.
-            </p>
-            <div className="bg-muted flex items-center justify-between gap-2 rounded-md px-3 py-2">
-              <code className="text-muted-foreground min-w-0 truncate text-xs font-mono">
-                {agentToken}
-              </code>
-              <CopyButton value={agentToken} label="Copy token" />
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -17,15 +17,15 @@ export default function AuthenticationPage() {
 
 The web app uses a normal Supabase Auth session for signed-in users.
 
-## Agent tokens
+## Desktop and CLI login
 
-Desktop and CLI workflows use agent tokens that are scoped to a user and organization.
+Desktop and CLI workflows use a shared OAuth session stored locally after Overlord Desktop login or \`ovld auth login\`.
 
-These tokens are sensitive and should be treated as secrets.
+OAuth protocol requests include an explicit organization scope.
 
 ## MCP access
 
-Cloud or hosted agents can use OAuth-based access through the MCP server, and legacy flows can still use agent tokens when needed.
+Cloud or hosted agents should use OAuth-based access through the MCP server when supported. Legacy agent tokens remain a compatibility fallback for non-interactive runtimes, CI, and remote shells that cannot complete OAuth login.
 
 ## Local protocol routes
 

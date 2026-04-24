@@ -55,8 +55,8 @@ async function refreshViaIpc(): Promise<{
 const REFRESH_MARGIN_MS = 5 * 60 * 1000; // 5 minutes
 /** Minimum delay for the timer (prevents tight loops on very short-lived tokens). */
 const MIN_DELAY_MS = 10_000; // 10 seconds
-/** Minimum interval between agent-token health checks (prevents hammering on rapid focus changes). */
-const AGENT_TOKEN_CHECK_INTERVAL_MS = 60_000; // 1 minute
+/** Minimum interval between OAuth session checks (prevents hammering on rapid focus changes). */
+const OAUTH_SESSION_CHECK_INTERVAL_MS = 60_000; // 1 minute
 
 export function ElectronAuthGate() {
   const router = useRouter();
@@ -169,28 +169,26 @@ export function ElectronAuthGate() {
     restoreSession();
 
     // -----------------------------------------------------------------------
-    // Agent-token health check on window focus
+    // OAuth session health check on window focus
     // -----------------------------------------------------------------------
-    // When the window regains focus, verify the stored agent token is still
-    // valid. If it has been revoked or expired (e.g. rotated from another
-    // device or the settings UI), silently re-exchange for a fresh one using
-    // the current Supabase session.
+    // When the window regains focus, verify a shared OAuth refresh token is
+    // still available and refresh the session if the stored state is missing.
     // -----------------------------------------------------------------------
-    let lastAgentTokenCheck = 0;
+    let lastOAuthSessionCheck = 0;
 
     const handleFocus = async () => {
-      if (!window.electronAPI?.auth?.checkAgentToken) return;
+      if (!window.electronAPI?.auth?.checkOAuthSession) return;
 
       const now = Date.now();
-      if (now - lastAgentTokenCheck < AGENT_TOKEN_CHECK_INTERVAL_MS) return;
-      lastAgentTokenCheck = now;
+      if (now - lastOAuthSessionCheck < OAUTH_SESSION_CHECK_INTERVAL_MS) return;
+      lastOAuthSessionCheck = now;
 
-      const { valid } = await window.electronAPI.auth.checkAgentToken();
+      const { valid } = await window.electronAPI.auth.checkOAuthSession();
       if (valid) return;
 
-      const result = await window.electronAPI.auth.refreshAgentToken();
+      const result = await window.electronAPI.auth.refreshOAuthSession();
       if (!result.ok) {
-        console.warn('Agent token refresh failed on focus:', result.error);
+        console.warn('OAuth session refresh failed on focus:', result.error);
       }
     };
 

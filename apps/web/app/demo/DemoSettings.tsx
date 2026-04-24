@@ -148,7 +148,7 @@ function DemoMcpSettings() {
   }
 
   const mcpUrl = 'https://mcp.ovld.ai/sse';
-  const tokenPlaceholder = 'ovld_tk_••••••••••••••••';
+  const sessionPlaceholder = 'oauth_session_active';
 
   return (
     <div className="grid gap-6">
@@ -175,14 +175,14 @@ function DemoMcpSettings() {
       </div>
 
       <div className="grid gap-2">
-        <Label>Agent Token</Label>
+        <Label>Signed-in session</Label>
         <div className="flex items-center gap-2">
-          <Input value={tokenPlaceholder} readOnly className="font-mono text-xs" />
+          <Input value={sessionPlaceholder} readOnly className="font-mono text-xs" />
           <Button
             variant="outline"
             size="icon"
             className="shrink-0"
-            onClick={() => handleCopy('token', 'demo-token')}
+            onClick={() => handleCopy('token', 'demo-session')}
           >
             {copied === 'token' ? (
               <Check className="h-3.5 w-3.5 text-emerald-500" />
@@ -192,7 +192,7 @@ function DemoMcpSettings() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Agents use this token to authenticate with your workspace.
+          Agents use your shared OAuth session to authenticate with your workspace.
         </p>
       </div>
 
@@ -200,13 +200,13 @@ function DemoMcpSettings() {
         <Label>Environment snippet</Label>
         <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs leading-relaxed">
           <div>export OVERLORD_URL=&quot;https://ovld.ai&quot;</div>
-          <div>export AGENT_TOKEN=&quot;{tokenPlaceholder}&quot;</div>
+          <div># Sign in with Desktop or `ovld auth login` to populate shared credentials</div>
         </div>
         <Button
           variant="outline"
           size="sm"
           className="w-fit gap-1.5"
-          onClick={() => handleCopy('env', 'demo-env-snippet')}
+          onClick={() => handleCopy('env', 'demo-oauth-session')}
         >
           {copied === 'env' ? (
             <Check className="h-3.5 w-3.5 text-emerald-500" />

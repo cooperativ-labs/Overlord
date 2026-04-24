@@ -1,16 +1,34 @@
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 
+import { getSupabaseUrl } from '@/lib/env';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 const LOCAL_SECRET_HEADER = 'x-overlord-local-secret';
 
-export type AgentTokenContext = {
+let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+let cachedIssuer: string | null = null;
+
+function getSupabaseJwks(): { jwks: ReturnType<typeof createRemoteJWKSet>; issuer: string } {
+  const supabaseUrl = getSupabaseUrl();
+  const issuer = `${supabaseUrl}/auth/v1`;
+  if (!cachedJwks || cachedIssuer !== issuer) {
+    cachedJwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
+    cachedIssuer = issuer;
+  }
+  return { jwks: cachedJwks, issuer };
+}
+
+export type ProtocolAuthContext = {
   userId: string;
   organizationId: number;
-  tokenId: string;
+  tokenId: string | null;
   tokenValue: string;
+  authMethod: 'agent_token' | 'oauth_jwt';
 };
+
+export type AgentTokenContext = ProtocolAuthContext;
 
 function extractBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization');
@@ -36,13 +54,114 @@ function resolveLocalSecretError(request: Request): NextResponse | null {
   return null;
 }
 
+function parseOrganizationIdHeader(request: Request): number | null {
+  const raw = request.headers.get('x-organization-id')?.trim();
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function resolveAgentTokenContext(
+  providedToken: string
+): Promise<ProtocolAuthContext | null> {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from('agent_tokens')
+    .select('id, user_id, organization_id, token, revoked_at, expires_at')
+    .eq('token', providedToken)
+    .single();
+
+  if (!data || data.revoked_at) return null;
+  if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
+
+  supabase
+    .from('agent_tokens')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('id', data.id)
+    .then(() => {});
+
+  return {
+    userId: data.user_id,
+    organizationId: data.organization_id,
+    tokenId: data.id,
+    tokenValue: providedToken,
+    authMethod: 'agent_token'
+  };
+}
+
+async function verifySupabaseJwt(providedToken: string): Promise<string | null> {
+  try {
+    const { jwks, issuer } = getSupabaseJwks();
+    const { payload } = await jwtVerify(providedToken, jwks, { issuer });
+    return typeof payload.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveOAuthJwtContext(
+  providedToken: string,
+  organizationIdHint: number | null
+): Promise<{ context: ProtocolAuthContext | null; error: NextResponse | null }> {
+  const userId = await verifySupabaseJwt(providedToken);
+  if (!userId) {
+    return { context: null, error: null };
+  }
+
+  if (organizationIdHint === null) {
+    return {
+      context: null,
+      error: NextResponse.json(
+        { error: 'OAuth-authenticated protocol requests must include x-organization-id.' },
+        { status: 400 }
+      )
+    };
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data: member, error: memberError } = await supabase
+    .from('members')
+    .select('organization_id')
+    .eq('user_id', userId)
+    .eq('organization_id', organizationIdHint)
+    .maybeSingle();
+
+  if (memberError) {
+    return {
+      context: null,
+      error: NextResponse.json({ error: memberError.message }, { status: 500 })
+    };
+  }
+
+  if (!member) {
+    return {
+      context: null,
+      error: NextResponse.json(
+        { error: 'Selected organization is not available to this OAuth session.' },
+        { status: 403 }
+      )
+    };
+  }
+
+  return {
+    context: {
+      userId,
+      organizationId: member.organization_id,
+      tokenId: null,
+      tokenValue: providedToken,
+      authMethod: 'oauth_jwt'
+    },
+    error: null
+  };
+}
+
 /**
- * Resolves an agent token from the Authorization header.
- * Returns a context object with user/org info on success, or a 401 NextResponse on failure.
+ * Resolves protocol auth from the Authorization header.
+ * Returns a context object with user/org info on success, or an error response on failure.
  */
-export async function resolveAgentToken(
+export async function resolveProtocolAuth(
   request: Request
-): Promise<{ context: AgentTokenContext; error: null } | { context: null; error: NextResponse }> {
+): Promise<{ context: ProtocolAuthContext; error: null } | { context: null; error: NextResponse }> {
   const localSecretError = resolveLocalSecretError(request);
   if (localSecretError) {
     return {
@@ -52,72 +171,53 @@ export async function resolveAgentToken(
   }
 
   const providedToken = extractBearerToken(request);
-  const tokenInstructions =
-    'Stop all work immediately. Your agent token is invalid, expired, or revoked. ' +
-    'Tell the user to open Overlord Settings → Agent Tokens and retrieve an updated token for this project. ' +
+  const reauthInstructions =
+    'Stop all work immediately. The current Overlord auth session is missing, invalid, or expired. ' +
+    'Tell the user to sign in again with Overlord Desktop or `ovld auth login`. ' +
     'Ask the user if they would like to proceed without submitting updates to Overlord.';
 
   if (!providedToken) {
     return {
       context: null,
       error: NextResponse.json(
-        { error: `Missing bearer token. ${tokenInstructions}` },
+        { error: `Missing bearer token. ${reauthInstructions}` },
         { status: 401 }
       )
     };
   }
 
-  const supabase = createServiceRoleClient();
-  const { data } = await supabase
-    .from('agent_tokens')
-    .select('id, user_id, organization_id, token, revoked_at, expires_at')
-    .eq('token', providedToken)
-    .single();
+  const agentContext = await resolveAgentTokenContext(providedToken);
+  if (agentContext) {
+    return {
+      context: agentContext,
+      error: null
+    };
+  }
 
-  if (!data) {
+  const oauthResult = await resolveOAuthJwtContext(
+    providedToken,
+    parseOrganizationIdHeader(request)
+  );
+  if (oauthResult.error) {
     return {
       context: null,
-      error: NextResponse.json(
-        { error: `Invalid bearer token. ${tokenInstructions}` },
-        { status: 401 }
-      )
+      error: oauthResult.error
     };
   }
-
-  if (data.revoked_at) {
+  if (oauthResult.context) {
     return {
-      context: null,
-      error: NextResponse.json(
-        { error: `Token has been revoked. ${tokenInstructions}` },
-        { status: 401 }
-      )
+      context: oauthResult.context,
+      error: null
     };
   }
-
-  if (data.expires_at && new Date(data.expires_at) < new Date()) {
-    return {
-      context: null,
-      error: NextResponse.json(
-        { error: `Token has expired. ${tokenInstructions}` },
-        { status: 401 }
-      )
-    };
-  }
-
-  // Fire-and-forget last_used_at update
-  supabase
-    .from('agent_tokens')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', data.id)
-    .then(() => {});
 
   return {
-    context: {
-      userId: data.user_id,
-      organizationId: data.organization_id,
-      tokenId: data.id,
-      tokenValue: providedToken
-    },
-    error: null
+    context: null,
+    error: NextResponse.json(
+      { error: `Invalid bearer token. ${reauthInstructions}` },
+      { status: 401 }
+    )
   };
 }
+
+export const resolveAgentToken = resolveProtocolAuth;

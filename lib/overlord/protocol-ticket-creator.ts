@@ -13,9 +13,8 @@ type TicketCreatorContext = {
 /**
  * Resolve the ticket creator from protocol auth context.
  *
- * The happy path uses the resolved userId from resolveAgentToken(). The token
- * lookup fallback keeps ticket creation robust even if a caller forwards only
- * the raw agent token context.
+ * The happy path uses the resolved userId from protocol auth. The token lookup
+ * fallback keeps ticket creation robust during the agent-token compatibility window.
  */
 export async function resolveProtocolTicketCreatorUserId(
   supabase: ServiceSupabaseClient,
@@ -53,5 +52,5 @@ export async function resolveProtocolTicketCreatorUserId(
     if (data?.user_id) return data.user_id;
   }
 
-  throw new Error('Unable to resolve ticket creator from the current agent token.');
+  throw new Error('Unable to resolve ticket creator from the current auth context.');
 }

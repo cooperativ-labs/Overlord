@@ -229,21 +229,21 @@ async function exchangeCodeForSupabaseTokens(
   };
 }
 
-async function exchangeForAgentToken(
+async function fetchOrganizations(
   platformUrl: string,
-  supabaseAccessToken: string
-): Promise<{ access_token: string; platform_url: string }> {
-  const res = await fetch(`${platformUrl}/api/auth/token`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${supabaseAccessToken}` }
+  accessToken: string
+): Promise<Array<{ id: number; name: string }>> {
+  const res = await fetch(`${platformUrl}/api/auth/organizations`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Agent token exchange failed (${res.status}): ${text.slice(0, 180)}`);
+    throw new Error(`Organization lookup failed (${res.status}): ${text.slice(0, 180)}`);
   }
 
-  return res.json() as Promise<{ access_token: string; platform_url: string }>;
+  const data = (await res.json()) as { organizations?: Array<{ id: number; name: string }> };
+  return Array.isArray(data.organizations) ? data.organizations : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +253,7 @@ async function exchangeForAgentToken(
 type SupabaseSession = {
   access_token: string;
   refresh_token: string;
+  expires_in?: number;
 };
 
 async function performLogin(platformUrl: string): Promise<SupabaseSession> {
@@ -320,18 +321,19 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
     redirectUri
   );
 
-  // 10. Exchange Supabase access token → Overlord agent_token
-  const agentTokenData = await exchangeForAgentToken(
-    resolvedPlatformUrl,
-    supabaseTokens.access_token
-  );
+  const organizations = await fetchOrganizations(resolvedPlatformUrl, supabaseTokens.access_token);
+  const defaultOrganizationId = organizations[0]?.id ?? null;
 
-  // 11. Persist credentials including refresh token for session renewal
-  // The refresh_token allows the browser session to automatically refresh the Supabase access token
+  // 10. Persist credentials including refresh token for session renewal
   saveElectronCredentials({
-    agent_token: agentTokenData.access_token,
-    platform_url: agentTokenData.platform_url ?? resolvedPlatformUrl,
-    supabase_refresh_token: supabaseTokens.refresh_token
+    access_token: supabaseTokens.access_token,
+    access_token_expires_at:
+      typeof supabaseTokens.expires_in === 'number' && supabaseTokens.expires_in > 0
+        ? new Date(Date.now() + supabaseTokens.expires_in * 1000).toISOString()
+        : undefined,
+    refresh_token: supabaseTokens.refresh_token,
+    organization_id: defaultOrganizationId,
+    platform_url: resolvedPlatformUrl
   });
 
   return {
@@ -378,7 +380,8 @@ async function refreshOAuthTokens(
   const data = await res.json();
   return {
     access_token: data.access_token,
-    refresh_token: data.refresh_token
+    refresh_token: data.refresh_token,
+    expires_in: data.expires_in
   };
 }
 
@@ -407,96 +410,79 @@ export function registerAuthIpc({ getPlatformUrl }: RegisterAuthIpcOptions): voi
     return {
       isAuthenticated: credentials !== null,
       platformUrl: credentials?.platform_url ?? null,
-      supabaseRefreshToken: credentials?.supabase_refresh_token ?? null
+      supabaseRefreshToken: credentials?.refresh_token ?? null
     };
   });
 
   ipcMain.handle('auth:saveRefreshToken', (_, refreshToken: string) => {
     const credentials = loadElectronCredentials();
     if (credentials && refreshToken) {
-      saveElectronCredentials({ ...credentials, supabase_refresh_token: refreshToken });
+      saveElectronCredentials({ ...credentials, refresh_token: refreshToken });
     }
     return { ok: true };
   });
 
-  // Check whether the stored agent token is still valid (not revoked/expired).
-  // Called by ElectronAuthGate on window focus to detect stale tokens.
-  ipcMain.handle('auth:checkAgentToken', async () => {
+  const checkOAuthSession = async () => {
     const credentials = loadElectronCredentials();
-    if (!credentials?.agent_token) {
+    if (!credentials?.refresh_token) {
       return { valid: false, reason: 'no_token' };
     }
+    return { valid: true };
+  };
 
-    try {
-      const res = await fetch(`${credentials.platform_url}/api/auth/check-token`, {
-        headers: { Authorization: `Bearer ${credentials.agent_token}` }
-      });
-      if (res.ok) {
-        return { valid: true };
-      }
-      const data = await res.json().catch(() => ({}));
-      return { valid: false, reason: data.reason ?? 'invalid' };
-    } catch {
-      // Network error — don't treat as invalid (user may be offline)
-      return { valid: true, reason: 'network_error' };
-    }
-  });
+  ipcMain.handle('auth:checkOAuthSession', checkOAuthSession);
+  ipcMain.handle('auth:checkAgentToken', checkOAuthSession);
 
-  // Re-exchange the current Supabase session for a fresh agent token.
-  // Called when checkAgentToken detects a revoked/expired token.
-  ipcMain.handle('auth:refreshAgentToken', async () => {
+  const refreshOAuthSession = async () => {
     const credentials = loadElectronCredentials();
-    if (!credentials?.supabase_refresh_token) {
+    if (!credentials?.refresh_token) {
       return { ok: false, error: 'No refresh token available' };
     }
 
     try {
-      // First, get a fresh Supabase access token
-      const session = await refreshOAuthTokens(
-        credentials.platform_url,
-        credentials.supabase_refresh_token
-      );
+      const session = await refreshOAuthTokens(credentials.platform_url, credentials.refresh_token);
 
-      // Exchange the fresh Supabase token for a new agent token
-      const agentTokenData = await exchangeForAgentToken(
-        credentials.platform_url,
-        session.access_token
-      );
-
-      // Persist both the rotated refresh token and the new agent token
       saveElectronCredentials({
-        agent_token: agentTokenData.access_token,
-        platform_url: agentTokenData.platform_url ?? credentials.platform_url,
-        supabase_refresh_token: session.refresh_token
+        ...credentials,
+        access_token: session.access_token,
+        access_token_expires_at:
+          typeof session.expires_in === 'number' && session.expires_in > 0
+            ? new Date(Date.now() + session.expires_in * 1000).toISOString()
+            : credentials.access_token_expires_at,
+        refresh_token: session.refresh_token
       });
 
-      return { ok: true, agentToken: agentTokenData.access_token };
+      return { ok: true, accessToken: session.access_token };
     } catch (err) {
       return {
         ok: false,
-        error: err instanceof Error ? err.message : 'Agent token refresh failed'
+        error: err instanceof Error ? err.message : 'OAuth session refresh failed'
       };
     }
-  });
+  };
+
+  ipcMain.handle('auth:refreshOAuthSession', refreshOAuthSession);
+  ipcMain.handle('auth:refreshAgentToken', refreshOAuthSession);
 
   // Refresh the Supabase session via the OAuth token endpoint.
   // Called by ElectronAuthGate to proactively renew tokens before expiry.
   ipcMain.handle('auth:refreshSession', async () => {
     const credentials = loadElectronCredentials();
-    if (!credentials?.supabase_refresh_token) {
+    if (!credentials?.refresh_token) {
       return { ok: false, error: 'No refresh token available' };
     }
 
     try {
-      const session = await refreshOAuthTokens(
-        credentials.platform_url,
-        credentials.supabase_refresh_token
-      );
+      const session = await refreshOAuthTokens(credentials.platform_url, credentials.refresh_token);
 
-      // Persist the rotated refresh token for next time
       saveElectronCredentials({
         ...credentials,
-        supabase_refresh_token: session.refresh_token
+        access_token: session.access_token,
+        access_token_expires_at:
+          typeof session.expires_in === 'number' && session.expires_in > 0
+            ? new Date(Date.now() + session.expires_in * 1000).toISOString()
+            : credentials.access_token_expires_at,
+        refresh_token: session.refresh_token
       });
 
       return { ok: true, session };

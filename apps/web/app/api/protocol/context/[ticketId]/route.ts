@@ -194,7 +194,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const authResult = await resolveAgentToken(request);
   if (authResult.error) return authResult.error;
 
-  const { organizationId, tokenValue } = authResult.context;
+  const { organizationId } = authResult.context;
   const { ticketId: rawTicketId } = await params;
   const ticketId = await resolveTicketId(rawTicketId, organizationId);
   if (!ticketId) {
@@ -218,8 +218,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const platformUrl = getPlatformUrl(requestOrigin);
   const { claudeCode, codex, cursor, gemini, opencode, contextUrl } = buildLaunchCommands({
     platformUrl,
-    ticketId,
-    token: tokenValue
+    ticketId
   });
 
   // Include the configured MCP URL for agent setup snippets.

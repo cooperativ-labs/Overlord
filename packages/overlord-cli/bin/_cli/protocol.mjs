@@ -91,7 +91,15 @@ function resolveProtocolMetadata(flags = {}, base = {}) {
  */
 const DEFAULT_TIMEOUT_MS = 30000;
 
-async function apiPost(platformUrl, token, localSecret, path, body, timeoutMs = DEFAULT_TIMEOUT_MS) {
+async function apiPost(
+  platformUrl,
+  token,
+  localSecret,
+  organizationId,
+  path,
+  body,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+) {
   const requestUrl = `${platformUrl}${path}`;
   const requestStart = Date.now();
   let res;
@@ -99,7 +107,7 @@ async function apiPost(platformUrl, token, localSecret, path, body, timeoutMs = 
     res = await fetch(requestUrl, {
       method: 'POST',
       headers: {
-        ...buildAuthHeaders(token, localSecret),
+        ...buildAuthHeaders(token, localSecret, organizationId),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body),
@@ -150,8 +158,8 @@ async function apiPost(platformUrl, token, localSecret, path, body, timeoutMs = 
   if (res.status === 401) {
     throw new Error(
       `Authentication failed (401): ${data.error ?? 'Invalid or missing token.'}\n` +
-      `IMPORTANT: Stop all work immediately. Your agent token is invalid, expired, or revoked.\n` +
-      `The user should open Overlord Settings → Agent Tokens and retrieve an updated token for this project.\n` +
+      `IMPORTANT: Stop all work immediately. Your Overlord auth session is invalid, expired, or missing required scope.\n` +
+      `The user should sign in again with Overlord Desktop or \`ovld auth login\`.\n` +
       `Ask the user if they would like to proceed without submitting updates to Overlord.`
     );
   }
@@ -474,7 +482,7 @@ function resolveExternalSessionId(flags) {
 async function protocolAttach(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const externalSessionId = resolveExternalSessionId(flags);
@@ -489,8 +497,9 @@ async function protocolAttach(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/attach',
     body,
     timeoutMs
@@ -519,7 +528,7 @@ async function protocolUpdate(args) {
     ? readTextFile(String(flags['summary-file']), '--summary-file')
     : requireFlag(flags, 'summary', undefined);
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
   const changeRationales = await resolveChangeRationales(flags);
   const externalSessionId = resolveExternalSessionId(flags);
@@ -545,8 +554,9 @@ async function protocolUpdate(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/update',
     body,
     timeoutMs
@@ -571,7 +581,7 @@ async function protocolRecordChangeRationales(args) {
     );
   }
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -588,8 +598,9 @@ async function protocolRecordChangeRationales(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/change-rationales',
     body,
     timeoutMs
@@ -610,7 +621,7 @@ async function protocolAsk(args) {
     ? readTextFile(String(flags['question-file']), '--question-file')
     : requireFlag(flags, 'question', undefined);
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -621,7 +632,15 @@ async function protocolAsk(args) {
     ...(flags['payload-json'] ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) } : {})
   };
 
-  const data = await apiPost(platformUrl, agentToken, localSecret, '/api/protocol/ask', body, timeoutMs);
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/ask',
+    body,
+    timeoutMs
+  );
   console.log(JSON.stringify(data, null, 2));
 }
 
@@ -636,13 +655,14 @@ async function protocolPermissionRequest(args) {
     ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
     : {};
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     `/api/protocol/permission-request?ticketId=${encodeURIComponent(ticketId)}`,
     payload,
     timeoutMs
@@ -660,7 +680,7 @@ async function protocolReadContext(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -672,8 +692,9 @@ async function protocolReadContext(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/read-context',
     body,
     timeoutMs
@@ -703,7 +724,7 @@ async function protocolWriteContext(args) {
     value = String(flags.value);
   }
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -716,8 +737,9 @@ async function protocolWriteContext(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/write-context',
     body,
     timeoutMs
@@ -742,7 +764,7 @@ async function protocolDeliver(args) {
       ? readTextFile(String(flags['summary-file']), '--summary-file')
       : requireFlag(flags, 'summary', undefined));
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   let artifacts = deliverPayload?.artifacts ?? [];
@@ -775,8 +797,9 @@ async function protocolDeliver(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/deliver',
     body,
     timeoutMs
@@ -795,7 +818,7 @@ async function protocolArtifactPrepareUpload(args) {
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   const fileName = requireFlag(flags, 'file-name', undefined);
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -811,8 +834,9 @@ async function protocolArtifactPrepareUpload(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/artifacts/prepare-upload',
     body,
     timeoutMs
@@ -828,7 +852,7 @@ async function protocolArtifactFinalizeUpload(args) {
   const storagePath = requireFlag(flags, 'storage-path', undefined);
   const label = requireFlag(flags, 'label', undefined);
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -844,8 +868,9 @@ async function protocolArtifactFinalizeUpload(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/artifacts/finalize-upload',
     body,
     timeoutMs
@@ -862,7 +887,7 @@ async function protocolArtifactGetDownloadUrl(args) {
     throw new Error('--artifact-id or --storage-path is required');
   }
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -875,8 +900,9 @@ async function protocolArtifactGetDownloadUrl(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/artifacts/get-download-url',
     body,
     timeoutMs
@@ -900,13 +926,14 @@ async function protocolArtifactUploadFile(args) {
   const fileStats = await stat(filePath);
   const fileBytes = await readFile(filePath);
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const prepared = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/artifacts/prepare-upload',
     {
       sessionKey,
@@ -931,8 +958,9 @@ async function protocolArtifactUploadFile(args) {
 
   const finalized = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/artifacts/finalize-upload',
     {
       sessionKey,
@@ -956,15 +984,16 @@ async function protocolArtifactUploadFile(args) {
 
 async function protocolDiscoverProject(args) {
   const flags = parseFlags(args);
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const workingDirectory = String(flags['working-directory'] ?? process.cwd());
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/discover-project',
     { workingDirectory },
     timeoutMs
@@ -983,7 +1012,7 @@ async function protocolDiscoverProject(args) {
 async function protocolConnect(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -995,8 +1024,9 @@ async function protocolConnect(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/connect',
     body,
     timeoutMs
@@ -1017,15 +1047,16 @@ async function protocolConnect(args) {
 async function protocolLoadContext(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
   const body = { ticketId };
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/load-context',
     body,
     timeoutMs
@@ -1040,7 +1071,7 @@ async function protocolLoadContext(args) {
 async function protocolSpawn(args) {
   const flags = parseFlags(args);
   const objective = requireFlag(flags, 'objective', undefined);
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
@@ -1072,8 +1103,9 @@ async function protocolSpawn(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/spawn',
     body,
     timeoutMs
@@ -1099,7 +1131,7 @@ async function protocolCreateTicket(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   const objective = requireFlag(flags, 'objective', undefined);
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
@@ -1122,8 +1154,9 @@ async function protocolCreateTicket(args) {
 
     const data = await apiPost(
       platformUrl,
-      agentToken,
+      bearerToken,
       localSecret,
+      organizationId,
       '/api/protocol/create-ticket',
       body,
       timeoutMs
@@ -1159,8 +1192,9 @@ async function protocolCreateTicket(args) {
 
   const data = await apiPost(
     platformUrl,
-    agentToken,
+    bearerToken,
     localSecret,
+    organizationId,
     '/api/protocol/tickets',
     standaloneBody,
     timeoutMs
@@ -1173,7 +1207,7 @@ async function protocolCreateTicket(args) {
 // ---------------------------------------------------------------------------
 
 async function protocolAuthStatus() {
-  const status = getAuthStatus();
+  const status = await getAuthStatus();
 
   console.log(
     JSON.stringify(
@@ -1185,6 +1219,9 @@ async function protocolAuthStatus() {
           platformUrlSource: status.platformUrlSource,
           tokenSource: status.tokenSource,
           tokenPresent: status.tokenPresent,
+          organizationId: status.organizationId,
+          authMode: status.authMode,
+          error: status.error,
           hasLocalSecret: status.hasLocalSecret,
           credentialsFileExists: status.credentialsFileExists,
           electronCredentialsFileExists: status.electronCredentialsFileExists
@@ -1243,7 +1280,7 @@ Subcommands:
 Environment fallback:
   --session-key <- SESSION_KEY
   --ticket-id   <- TICKET_ID
-  auth/host     <- OVERLORD_URL, AGENT_TOKEN, or shared credentials from ovld auth/Desktop login
+  auth/host     <- OVERLORD_URL, optional legacy AGENT_TOKEN, or shared OAuth credentials from ovld auth/Desktop login
   --timeout     <- OVERLORD_TIMEOUT
 
 Common flags:

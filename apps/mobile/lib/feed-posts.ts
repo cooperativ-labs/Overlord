@@ -92,8 +92,8 @@ function normalizeTicketsCreated(value: unknown): FeedPost['tickets_created'] {
 }
 
 export function normalizeFeedPostRow(row: FeedPostRow): FeedPost {
-  const project = Array.isArray(row.projects) ? row.projects[0] ?? null : row.projects ?? null;
-  const ticket = Array.isArray(row.tickets) ? row.tickets[0] ?? null : row.tickets ?? null;
+  const project = Array.isArray(row.projects) ? (row.projects[0] ?? null) : (row.projects ?? null);
+  const ticket = Array.isArray(row.tickets) ? (row.tickets[0] ?? null) : (row.tickets ?? null);
 
   return {
     id: row.id,
