@@ -7,11 +7,8 @@ import path from 'node:path';
 import { getWorkspaceRoot } from '@/lib/env';
 import { resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import { buildTicketStoragePath, ensureTicketStoragePath } from '@/lib/overlord/protocol-artifacts';
 import { createClient } from '@/supabase/utils/server';
-
-function getTicketStorageProjectSegment(projectId: string | null) {
-  return projectId ?? 'personal';
-}
 
 export async function uploadImageArtifactAction(
   ticketId: string,
@@ -137,13 +134,29 @@ export type TicketDocument = {
   createdAt: string;
 };
 
-export async function uploadTicketDocumentAction(
+export type TicketDocumentUploadDraft = {
+  contentType: string;
+  fileSize: number;
+  label: string;
+  storagePath: string;
+  token: string;
+};
+
+export async function prepareTicketDocumentUploadAction(
   ticketId: string,
-  formData: FormData
-): Promise<TicketDocument> {
-  const file = formData.get('file') as File;
-  if (!file) {
-    throw new Error('No file provided.');
+  input: {
+    fileName: string;
+    fileSize: number;
+    contentType: string;
+  }
+): Promise<TicketDocumentUploadDraft> {
+  const fileName = input.fileName.trim();
+  if (!fileName) {
+    throw new Error('File name is required.');
+  }
+
+  if (!Number.isFinite(input.fileSize) || input.fileSize < 0) {
+    throw new Error('File size is required.');
   }
 
   const supabase = await createClient();
@@ -165,48 +178,88 @@ export async function uploadTicketDocumentAction(
     throw new Error('Ticket not found.');
   }
 
-  // Build path: <organization_id>/<project_id>/<ticket_id>/<timestamp>-<filename>
-  const storagePath = `${ticket.organization_id}/${getTicketStorageProjectSegment(ticket.project_id)}/${ticketId}/${Date.now()}-${file.name}`;
+  const storagePath = buildTicketStoragePath({ ...ticket, id: ticketId }, fileName);
 
-  const { error: uploadError } = await supabase.storage
+  const { data: upload, error: uploadError } = await supabase.storage
     .from('artifacts')
-    .upload(storagePath, file, {
-      cacheControl: '3600',
-      upsert: false
-    });
+    .createSignedUploadUrl(storagePath);
 
-  if (uploadError) {
-    throw new Error(uploadError.message ?? 'Failed to upload file.');
+  if (uploadError || !upload?.token) {
+    throw new Error(uploadError?.message ?? 'Failed to prepare file upload.');
   }
 
-  const artifactType = file.type.startsWith('image/') ? 'image' : 'document';
+  return {
+    contentType: input.contentType,
+    fileSize: input.fileSize,
+    label: fileName,
+    storagePath,
+    token: upload.token
+  };
+}
+
+export async function finalizeTicketDocumentUploadAction(
+  ticketId: string,
+  draft: Omit<TicketDocumentUploadDraft, 'token'>
+): Promise<TicketDocument> {
+  const supabase = await createClient();
+
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  const { data: ticket, error: ticketError } = await supabase
+    .from('tickets')
+    .select('id, project_id, organization_id')
+    .eq('id', ticketId)
+    .single();
+
+  if (ticketError || !ticket) {
+    throw new Error('Ticket not found.');
+  }
+
+  if (!ensureTicketStoragePath(draft.storagePath, ticket)) {
+    throw new Error('Upload path does not match the ticket.');
+  }
+
+  const fileName = draft.storagePath.split('/').pop() ?? draft.label;
+  const objectPrefix = draft.storagePath.split('/').slice(0, -1).join('/');
+  const { data: listedObjects, error: listError } = await supabase.storage
+    .from('artifacts')
+    .list(objectPrefix, { limit: 100, search: fileName });
+
+  if (listError || !(listedObjects ?? []).some(object => object.name === fileName)) {
+    throw new Error(listError?.message ?? 'Uploaded file was not found.');
+  }
+
+  const artifactType = draft.contentType.startsWith('image/') ? 'image' : 'document';
 
   const { data: artifact, error: artifactError } = await supabase
     .from('artifacts')
     .insert({
       ticket_id: ticketId,
       artifact_type: artifactType,
-      label: file.name,
-      storage_path: storagePath,
+      label: draft.label,
+      storage_path: draft.storagePath,
       created_by: user.id,
       metadata: {
-        size: file.size,
-        type: file.type,
-        fileName: file.name
+        size: draft.fileSize,
+        type: draft.contentType,
+        fileName: draft.label
       }
     })
     .select()
     .single();
 
   if (artifactError || !artifact) {
-    // Clean up the uploaded file if the record failed
-    await supabase.storage.from('artifacts').remove([storagePath]);
     throw new Error('Failed to create artifact record.');
   }
 
   await supabase.from('ticket_events').insert({
     event_type: 'artifact',
-    summary: `Document uploaded: ${file.name}`,
+    summary: `Document uploaded: ${draft.label}`,
     ticket_id: ticketId,
     created_by: user.id,
     payload: { artifactId: artifact.id }
@@ -223,9 +276,9 @@ export async function uploadTicketDocumentAction(
   return {
     id: artifact.id,
     label: artifact.label,
-    storagePath,
-    fileType: file.type,
-    fileSize: file.size,
+    storagePath: draft.storagePath,
+    fileType: draft.contentType,
+    fileSize: draft.fileSize,
     createdAt: artifact.created_at
   };
 }

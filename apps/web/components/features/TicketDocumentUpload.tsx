@@ -12,11 +12,14 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   deleteTicketDocumentAction,
+  finalizeTicketDocumentUploadAction,
   getDocumentSignedUrlAction,
+  prepareTicketDocumentUploadAction,
   type TicketDocument,
-  uploadTicketDocumentAction
+  type TicketDocumentUploadDraft
 } from '@/lib/actions/artifacts';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/supabase/utils/client';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -69,9 +72,31 @@ export function TicketDocumentUpload({
         fileArray.map(async (file, i) => {
           const uploadId = pending[i].id;
           try {
-            const formData = new FormData();
-            formData.set('file', file);
-            const doc = await uploadTicketDocumentAction(ticketId, formData);
+            const draft = await prepareTicketDocumentUploadAction(ticketId, {
+              contentType: file.type || 'application/octet-stream',
+              fileName: file.name,
+              fileSize: file.size
+            });
+            const supabase = createClient();
+            const { error: uploadError } = await supabase.storage
+              .from('artifacts')
+              .uploadToSignedUrl(draft.storagePath, draft.token, file, {
+                cacheControl: '3600',
+                contentType: draft.contentType,
+                upsert: false
+              });
+
+            if (uploadError) {
+              throw new Error(uploadError.message ?? 'Failed to upload file.');
+            }
+
+            const finalizedDraft: Omit<TicketDocumentUploadDraft, 'token'> = {
+              contentType: draft.contentType,
+              fileSize: draft.fileSize,
+              label: draft.label,
+              storagePath: draft.storagePath
+            };
+            const doc = await finalizeTicketDocumentUploadAction(ticketId, finalizedDraft);
             setDocuments(prev => [doc, ...prev]);
             setUploading(prev => prev.filter(u => u.id !== uploadId));
           } catch (err) {
