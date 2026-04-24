@@ -31,7 +31,7 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
     label: 'Claude (Custom Connector)',
     location: 'https://claude.ai/customize/connectors',
     description:
-      'Create a custom connector in Claude at https://claude.ai/customize/connectors. Use the MCP address below and authenticate with your agent token via OAuth 2.1.',
+      'Create a custom connector in Claude at https://claude.ai/customize/connectors. Use the MCP address below and authenticate through OAuth 2.1.',
     authMode: 'oauth',
     installSteps: [
       'Open Claude connector settings and create a new custom connector.',
@@ -68,7 +68,7 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
     label: 'Codex (Headless / Cloud Runtime)',
     location: '~/.codex/config.toml',
     description:
-      'Use this path when Codex runs in a cloud or otherwise non-interactive environment. Add the MCP server block to ~/.codex/config.toml, then provide AGENT_TOKEN through environment variables or your cloud secret manager before launching Codex.',
+      'Use this compatibility path only when Codex runs in a cloud or otherwise non-interactive environment that cannot complete OAuth login. Add the MCP server block to ~/.codex/config.toml, then provide AGENT_TOKEN through environment variables or your cloud secret manager before launching Codex.',
     authMode: 'token',
     installSteps: [
       'Add the Codex MCP block below to ~/.codex/config.toml or the runtime image that launches Codex.',
@@ -260,7 +260,8 @@ export function AgentsAndMcpPage({
           <p className="text-sm font-medium">MCP & cloud agents</p>
           <p className="text-xs text-muted-foreground">
             Agents running in cloud environments communicate with Overlord through MCP. Configure
-            your MCP endpoint and token here, then use the snippets below in your agent platform.
+            OAuth-capable clients with the MCP endpoint below. Use token snippets only for
+            non-interactive runtimes that cannot complete OAuth login.
           </p>
         </div>
       </div>
@@ -298,7 +299,7 @@ export function AgentsAndMcpPage({
           <p className="text-xs text-muted-foreground">
             Copy the MCP server config snippet to connect your AI coding agent to Overlord. OAuth
             connectors should use the public MCP URL directly. Headless or cloud runtimes should use
-            the token-based snippets.
+            the legacy token snippets only when OAuth is unavailable.
           </p>
         </div>
         <Select value={selectedMcpAgent} onValueChange={setSelectedMcpAgent}>
@@ -306,7 +307,7 @@ export function AgentsAndMcpPage({
             <SelectValue placeholder="Select agent" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="claude-cloud">Agent Environment Variables</SelectItem>
+            <SelectItem value="claude-cloud">Legacy environment variables</SelectItem>
             {Object.entries(MCP_AGENT_CONFIGS).map(([key, cfg]) => (
               <SelectItem key={key} value={key}>
                 {cfg.label}
@@ -319,7 +320,8 @@ export function AgentsAndMcpPage({
             <div className="space-y-2 rounded-md border bg-muted/30 p-3">
               <p className="text-xs text-muted-foreground">
                 Use the snippets below for non-interactive cloud environments, CI runners, or hosted
-                Codex sessions that cannot complete an OAuth browser login.
+                Codex sessions that cannot complete an OAuth browser login. Desktop and local CLI
+                users should sign in with Overlord Desktop or <code>ovld auth login</code> instead.
               </p>
               <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
                 <li>Create or update the cloud environment that launches your agent runtime.</li>
@@ -479,10 +481,10 @@ export function AgentsAndMcpPage({
 
       <div className="grid gap-4">
         <div className="grid gap-1">
-          <p className="text-sm font-medium">Agent token</p>
+          <p className="text-sm font-medium">Legacy agent token</p>
           <p className="text-xs text-muted-foreground">
-            Agent tokens are scoped per user and per workspace. Select a workspace to view and copy
-            the token to use in cloud environments.
+            Agent tokens are a compatibility fallback for cloud, CI, and remote shell environments
+            that cannot use OAuth. Normal Desktop and CLI workflows use the shared OAuth session.
           </p>
         </div>
         <div className="grid gap-2">

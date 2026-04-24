@@ -13,10 +13,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
-import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
   AGENT_SELECTOR_VALUES,
@@ -42,8 +40,6 @@ type AgentSplitButtonProps = {
   onSelectAgent: (agent: AgentSelectorValue) => void;
   ticketId: string;
   projectId?: string | null;
-  organizationId?: number;
-  agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   commands?: Record<LaunchAgentTypeValue, string>;
   workingDirectory?: string | null;
@@ -107,8 +103,6 @@ export function AgentSplitButton({
   onSelectAgent,
   ticketId,
   projectId,
-  organizationId,
-  agentToken,
   agentFlags,
   commands,
   workingDirectory,
@@ -200,19 +194,11 @@ export function AgentSplitButton({
       setIsLaunching(true);
       try {
         await submitTicketObjectiveAction(ticketId);
-        const providedAgentToken = normalizeAgentToken(agentToken);
-        const resolvedAgentToken =
-          providedAgentToken ??
-          (organizationId
-            ? await ensureAgentTokenAction(organizationId)
-            : (() => {
-                throw new Error('No workspace is available for agent token resolution.');
-              })());
         await launchAgent(
           ticketId,
           agentValue,
           effectiveWorkingDirectory ?? undefined,
-          resolvedAgentToken,
+          undefined,
           'run',
           agentFlags?.[agentValue],
           options?.useStoredModelPreference ? (effectiveSelection.model ?? undefined) : undefined,
@@ -228,7 +214,7 @@ export function AgentSplitButton({
           description:
             error instanceof Error && error.message.trim().length > 0
               ? error.message
-              : 'Check your terminal settings and agent token, then try again.'
+              : 'Check your terminal settings and sign in again, then try again.'
         });
       } finally {
         setIsLaunching(false);

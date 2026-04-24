@@ -212,6 +212,7 @@ export async function updateProjectWorkingDirectoryAction(input: {
   );
 
   if (error) {
+    console.error('updateProjectWorkingDirectoryAction', error ?? 'no error message');
     throw new Error(error.message ?? 'Failed to update project working directory.');
   }
 

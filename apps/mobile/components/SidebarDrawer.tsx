@@ -102,11 +102,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                     {project.name}
                   </Text>
                   <Pressable hitSlop={8} style={styles.projectMore} onPress={onClose}>
-                    <Ionicons
-                      name="ellipsis-horizontal"
-                      size={16}
-                      color={colors.mutedForeground}
-                    />
+                    <Ionicons name="ellipsis-horizontal" size={16} color={colors.mutedForeground} />
                   </Pressable>
                 </Pressable>
               ))

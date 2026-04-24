@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-/* global process, URL */
+/* global Buffer, fetch, process, URL, URLSearchParams */
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -16,7 +16,15 @@ const LOCAL_DEV_OVERLORD_URL = 'http://localhost:3000';
 const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
 
 /**
- * @typedef {{ access_token: string, platform_url: string, user_email?: string }} Credentials
+ * @typedef {{
+ *   access_token?: string,
+ *   access_token_expires_at?: string,
+ *   refresh_token?: string,
+ *   organization_id?: number | null,
+ *   platform_url: string,
+ *   user_email?: string,
+ *   legacy_agent_token?: string
+ * }} Credentials
  */
 
 function ensureCredentialsDir() {
@@ -53,44 +61,74 @@ function writeJsonFileAtomic(filePath, data) {
   fs.chmodSync(filePath, 0o600);
 }
 
-function parseStoredCredentialsData(parsed, { requireAccessToken = false } = {}) {
+function parseStoredCredentialsData(parsed, { requireAuthData = false } = {}) {
   if (!parsed || typeof parsed !== 'object') return null;
 
-  const accessToken = normalizeAgentToken(parsed.access_token);
   const platformUrl = typeof parsed.platform_url === 'string' ? parsed.platform_url.trim() : '';
-  if (requireAccessToken && !accessToken) return null;
-  if (!accessToken && !platformUrl) return null;
+  const refreshToken =
+    typeof parsed.refresh_token === 'string'
+      ? parsed.refresh_token.trim()
+      : typeof parsed.supabase_refresh_token === 'string'
+        ? parsed.supabase_refresh_token.trim()
+        : '';
+  const accessToken = typeof parsed.access_token === 'string' ? parsed.access_token.trim() : '';
+  const accessTokenExpiresAt =
+    typeof parsed.access_token_expires_at === 'string'
+      ? parsed.access_token_expires_at.trim()
+      : '';
+  const organizationId =
+    typeof parsed.organization_id === 'number' && Number.isFinite(parsed.organization_id)
+      ? parsed.organization_id
+      : null;
+  const legacyAgentToken = accessToken && !refreshToken ? accessToken : '';
+
+  if (!platformUrl) return null;
+  if (requireAuthData && !refreshToken && !legacyAgentToken) return null;
 
   return {
-    access_token: accessToken,
     platform_url: platformUrl,
+    ...(refreshToken ? { refresh_token: refreshToken } : {}),
+    ...(accessToken ? { access_token: accessToken } : {}),
+    ...(accessTokenExpiresAt ? { access_token_expires_at: accessTokenExpiresAt } : {}),
+    ...(organizationId ? { organization_id: organizationId } : {}),
     ...(typeof parsed.user_email === 'string' && parsed.user_email.trim()
       ? { user_email: parsed.user_email.trim() }
-      : {})
+      : {}),
+    ...(legacyAgentToken ? { legacy_agent_token: legacyAgentToken } : {})
   };
 }
 
 function normalizeCredentialsForSave(data) {
-  const parsed = parseStoredCredentialsData(data, { requireAccessToken: true });
+  const parsed = parseStoredCredentialsData(data, { requireAuthData: true });
   if (!parsed) return null;
 
   const platformUrl = normalizePlatformUrl(parsed.platform_url);
   if (!platformUrl) return null;
 
   return {
-    ...parsed,
-    platform_url: platformUrl
+    platform_url: platformUrl,
+    ...(parsed.refresh_token ? { refresh_token: parsed.refresh_token } : {}),
+    ...(parsed.access_token ? { access_token: parsed.access_token } : {}),
+    ...(parsed.access_token_expires_at
+      ? { access_token_expires_at: parsed.access_token_expires_at }
+      : {}),
+    ...(parsed.organization_id ? { organization_id: parsed.organization_id } : {}),
+    ...(parsed.user_email ? { user_email: parsed.user_email } : {})
   };
 }
 
 /** @returns {Credentials | null} */
 export function loadCredentials() {
-  return (
-    parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
-      requireAccessToken: true
-    }) ??
-    parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE))
-  );
+  const cliCredentials = parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE), {
+    requireAuthData: true
+  });
+  const electronCredentials = parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
+    requireAuthData: true
+  });
+
+  if (cliCredentials?.refresh_token) return cliCredentials;
+  if (electronCredentials?.refresh_token) return electronCredentials;
+  return cliCredentials ?? electronCredentials;
 }
 
 /** @param {Credentials} data */
@@ -100,16 +138,23 @@ export function saveCredentials(data) {
     throw new Error('Cannot save empty Overlord credentials.');
   }
 
-  writeJsonFileAtomic(CREDENTIALS_FILE, credentials);
+  const sharedCredentials = { ...credentials, updated_at: new Date().toISOString() };
+  writeJsonFileAtomic(CREDENTIALS_FILE, sharedCredentials);
 
-  // `electron-credentials.json` is now the shared desktop/CLI credential record.
-  // Preserve Electron-only encrypted fields when CLI login refreshes the agent token.
   const existingElectronCredentials = readJsonFile(ELECTRON_CREDENTIALS_FILE);
-  const electronPayload =
-    existingElectronCredentials && typeof existingElectronCredentials === 'object'
-      ? { ...existingElectronCredentials, ...credentials }
-      : credentials;
-  writeJsonFileAtomic(ELECTRON_CREDENTIALS_FILE, electronPayload);
+  if (existingElectronCredentials && typeof existingElectronCredentials === 'object') {
+    const electronPayload = { ...existingElectronCredentials };
+    electronPayload.updated_at = sharedCredentials.updated_at;
+    if (credentials.platform_url) electronPayload.platform_url = credentials.platform_url;
+    if (credentials.access_token_expires_at) {
+      electronPayload.access_token_expires_at = credentials.access_token_expires_at;
+    }
+    if (credentials.organization_id) electronPayload.organization_id = credentials.organization_id;
+    if (credentials.user_email) electronPayload.user_email = credentials.user_email;
+    delete electronPayload.legacy_agent_token;
+    delete electronPayload.supabase_refresh_token;
+    writeJsonFileAtomic(ELECTRON_CREDENTIALS_FILE, electronPayload);
+  }
 }
 
 export function clearCredentials() {
@@ -123,13 +168,16 @@ export function clearCredentials() {
 }
 
 function getCredentialFileSource() {
-  const electronCredentials = parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
-    requireAccessToken: true
+  const cliCredentials = parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE), {
+    requireAuthData: true
   });
-  if (electronCredentials) return 'electron-credentials.json';
-
-  const cliCredentials = parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE));
+  const electronCredentials = parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
+    requireAuthData: true
+  });
+  if (cliCredentials?.refresh_token) return 'credentials.json';
+  if (electronCredentials?.refresh_token) return 'electron-credentials.json';
   if (cliCredentials) return 'credentials.json';
+  if (electronCredentials) return 'electron-credentials.json';
 
   return 'none';
 }
@@ -261,6 +309,88 @@ function isRunningPid(pid) {
   }
 }
 
+function decodeJwtExpiry(accessToken) {
+  try {
+    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1] ?? '', 'base64url').toString('utf8'));
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function computeAccessTokenExpiry(data) {
+  const expiresIn = Number.parseInt(String(data?.expires_in ?? ''), 10);
+  if (Number.isFinite(expiresIn) && expiresIn > 0) {
+    return new Date(Date.now() + expiresIn * 1000).toISOString();
+  }
+
+  const jwtExp = typeof data?.access_token === 'string' ? decodeJwtExpiry(data.access_token) : null;
+  return jwtExp ? new Date(jwtExp * 1000).toISOString() : null;
+}
+
+function resolveAccessTokenExpiry(credentials) {
+  if (!credentials?.access_token) return null;
+  if (credentials.access_token_expires_at) {
+    const parsed = Date.parse(credentials.access_token_expires_at);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  const jwtExp = decodeJwtExpiry(credentials.access_token);
+  return jwtExp ? jwtExp * 1000 : null;
+}
+
+function isAccessTokenFresh(credentials) {
+  const expiresAt = resolveAccessTokenExpiry(credentials);
+  if (expiresAt === null) return false;
+  return expiresAt - Date.now() > 60_000;
+}
+
+const authConfigCache = new Map();
+
+async function fetchAuthConfig(platformUrl, localSecret) {
+  if (authConfigCache.has(platformUrl)) return authConfigCache.get(platformUrl);
+  const res = await fetch(`${platformUrl}/api/auth/config`, {
+    headers: buildAuthHeaders('', localSecret)
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch auth config (${res.status}).`);
+  }
+  const data = await res.json();
+  authConfigCache.set(platformUrl, data);
+  return data;
+}
+
+async function refreshOAuthAccessToken(platformUrl, refreshToken, localSecret) {
+  const config = await fetchAuthConfig(platformUrl, localSecret);
+  const clientId = config.cli_client_id ?? config.electron_client_id;
+  const supabaseUrl = config.supabase_url;
+
+  if (!supabaseUrl || !clientId) {
+    throw new Error('OAuth is not configured for Overlord CLI auth.');
+  }
+
+  const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId
+    })
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`OAuth token refresh failed (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    access_token_expires_at: computeAccessTokenExpiry(data)
+  };
+}
+
 /** @returns {{ platform_url?: string, local_secret?: string } | null} */
 export function loadRuntime(targetUrl) {
   if (targetUrl) {
@@ -284,9 +414,10 @@ export function loadRuntime(targetUrl) {
 /**
  * @param {string} token
  * @param {string} [localSecret]
+ * @param {number | null | undefined} [organizationId]
  * @returns {Record<string, string>}
  */
-export function buildAuthHeaders(token, localSecret) {
+export function buildAuthHeaders(token, localSecret, organizationId) {
   const headers = {};
 
   if (token) {
@@ -295,6 +426,10 @@ export function buildAuthHeaders(token, localSecret) {
 
   if (localSecret) {
     headers[LOCAL_SECRET_HEADER] = localSecret;
+  }
+
+  if (organizationId && Number.isFinite(organizationId)) {
+    headers['x-organization-id'] = String(organizationId);
   }
 
   return headers;
@@ -310,23 +445,17 @@ function isLocalDevCli() {
 }
 
 /**
- * Resolve the overlord URL and agent token from credentials file or env vars.
- * @returns {{ platformUrl: string, agentToken: string }}
+ * Resolve the Overlord auth session from env vars or shared credentials.
+ * Refreshes OAuth access tokens when possible.
  */
-export function resolveAuth() {
+export async function resolveAuth() {
   const creds = loadCredentials();
   const overlordUrlFromEnv = normalizePlatformUrl(process.env.OVERLORD_URL);
   const overlordUrlFromCreds = normalizeStoredPlatformUrl(creds?.platform_url);
 
-  const runtime = overlordUrlFromEnv && isLocalhostUrl(overlordUrlFromEnv)
-    ? loadRuntime(overlordUrlFromEnv)
-    : null;
+  const platformUrl = overlordUrlFromEnv ?? overlordUrlFromCreds ?? getDefaultOverlordUrl();
+  const runtime = isLocalhostUrl(platformUrl) ? loadRuntime(platformUrl) : null;
   const runtimeOverlordUrl = runtime?.platform_url;
-
-  const platformUrl =
-    overlordUrlFromEnv ??
-    overlordUrlFromCreds ??
-    getDefaultOverlordUrl();
   const localSecret =
     runtime &&
     runtime.local_secret &&
@@ -336,25 +465,111 @@ export function resolveAuth() {
       ? runtime.local_secret
       : '';
 
+  const envAgentToken = normalizeAgentToken(process.env.AGENT_TOKEN);
+  if (envAgentToken) {
+    return {
+      platformUrl,
+      bearerToken: envAgentToken,
+      localSecret,
+      organizationId:
+        typeof process.env.OVERLORD_ORGANIZATION_ID === 'string'
+          ? Number.parseInt(process.env.OVERLORD_ORGANIZATION_ID, 10)
+          : null,
+      authMode: 'legacy_agent_token'
+    };
+  }
+
+  if (!creds) {
+    return {
+      platformUrl,
+      bearerToken: 'overlord-local-dev-token',
+      localSecret,
+      organizationId: null,
+      authMode: 'local_fallback'
+    };
+  }
+
+  if (creds.refresh_token) {
+    let nextCredentials = creds;
+    if (!isAccessTokenFresh(creds)) {
+      try {
+        const refreshed = await refreshOAuthAccessToken(platformUrl, creds.refresh_token, localSecret);
+        nextCredentials = {
+          ...creds,
+          access_token: refreshed.access_token,
+          access_token_expires_at: refreshed.access_token_expires_at,
+          refresh_token: refreshed.refresh_token || creds.refresh_token
+        };
+        saveCredentials(nextCredentials);
+      } catch (refreshError) {
+        if (!creds.access_token) throw refreshError;
+        // Transient refresh failure — keep the existing access token and let the server
+        // reject it if it's truly expired/revoked.
+      }
+    }
+
+    if (!Number.isFinite(nextCredentials.organization_id)) {
+      throw new Error('Overlord login is missing an organization selection. Run `ovld auth login` again.');
+    }
+
+    if (!nextCredentials.access_token) {
+      throw new Error('No OAuth access token is available. Run `ovld auth login` again.');
+    }
+
+    return {
+      platformUrl,
+      bearerToken: nextCredentials.access_token,
+      localSecret,
+      organizationId: nextCredentials.organization_id,
+      authMode: 'oauth'
+    };
+  }
+
+  if (creds.legacy_agent_token) {
+    return {
+      platformUrl,
+      bearerToken: creds.legacy_agent_token,
+      localSecret,
+      organizationId: creds.organization_id ?? null,
+      authMode: 'legacy_agent_token'
+    };
+  }
+
   return {
     platformUrl,
-    agentToken:
-      normalizeAgentToken(process.env.AGENT_TOKEN) ||
-      normalizeAgentToken(creds?.access_token) ||
-      'overlord-local-dev-token',
-    localSecret
+    bearerToken: 'overlord-local-dev-token',
+    localSecret,
+    organizationId: null,
+    authMode: 'local_fallback'
   };
 }
 
-export function getAuthStatus() {
+export async function getAuthStatus() {
   const creds = loadCredentials();
-  const resolved = resolveAuth();
+  let resolved;
+  let error = null;
+  try {
+    resolved = await resolveAuth();
+  } catch (resolveError) {
+    error = resolveError instanceof Error ? resolveError.message : String(resolveError);
+    resolved = {
+      platformUrl:
+        normalizePlatformUrl(process.env.OVERLORD_URL) ??
+        normalizeStoredPlatformUrl(creds?.platform_url) ??
+        getDefaultOverlordUrl(),
+      localSecret: '',
+      organizationId: creds?.organization_id ?? null,
+      authMode: 'error'
+    };
+  }
 
   let tokenSource = 'fallback';
   if (normalizeAgentToken(process.env.AGENT_TOKEN)) {
     tokenSource = 'AGENT_TOKEN';
-  } else if (normalizeAgentToken(creds?.access_token)) {
+  } else if (creds?.refresh_token) {
     tokenSource = getCredentialFileSource();
+  } else if (creds?.legacy_agent_token) {
+    tokenSource = `${getCredentialFileSource()} (legacy)`;
   }
 
   let platformUrlSource = 'default';
@@ -371,6 +586,9 @@ export function getAuthStatus() {
     tokenPresent: tokenSource !== 'fallback',
     tokenSource,
     hasLocalSecret: Boolean(resolved.localSecret),
+    organizationId: resolved.organizationId ?? null,
+    authMode: resolved.authMode,
+    error,
     credentialsFileExists: fileExists(CREDENTIALS_FILE),
     electronCredentialsFileExists: fileExists(ELECTRON_CREDENTIALS_FILE)
   };
@@ -378,12 +596,12 @@ export function getAuthStatus() {
 
 export function repairCredentials() {
   const creds = loadCredentials();
-  if (!creds || !normalizeAgentToken(creds.access_token)) {
+  if (!creds) {
     ensureCredentialsDir();
     return {
       repaired: false,
-      reason: 'No valid stored credentials with an access token were found.',
-      status: getAuthStatus()
+      reason: 'No valid stored credentials were found.',
+      status: null
     };
   }
 
@@ -391,7 +609,7 @@ export function repairCredentials() {
 
   return {
     repaired: true,
-    status: getAuthStatus()
+    status: null
   };
 }
 

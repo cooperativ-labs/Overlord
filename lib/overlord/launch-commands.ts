@@ -22,7 +22,7 @@ export function sshConnectionConfigToCommand(
 type BuildLaunchCommandsInput = {
   ticketId: string;
   platformUrl: string;
-  token: string;
+  legacyAgentToken?: string;
 };
 
 export type LaunchCommands = {
@@ -82,30 +82,17 @@ export function buildResumeCommands({ ticketId }: BuildLaunchCommandsInput): Res
 }
 
 /**
- * Builds the raw fallback command (no CLI dependency) for restart artifacts.
- * Uses $(curl ...) to fetch context inline — works in standard shells.
+ * Builds the fallback command shown in restart artifacts.
+ * Normal usage goes through ovld so shared OAuth credentials are resolved from ~/.ovld.
  */
 export function buildRawLaunchCommand(
   agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
-  { ticketId, platformUrl, token }: BuildLaunchCommandsInput
+  { ticketId, platformUrl, legacyAgentToken }: BuildLaunchCommandsInput
 ): string {
-  const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
-  const curlFragment = `"$(curl -s -H 'Authorization: Bearer ${token}' ${contextUrl})"`;
-  const envPrefix = `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${token} TICKET_ID=${ticketId}`;
-
-  if (agent === 'claude') {
-    return `${envPrefix} claude --append-system-prompt ${curlFragment} "Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt."`;
-  }
-  if (agent === 'codex') {
-    return `${envPrefix} codex ${curlFragment}`;
-  }
-  if (agent === 'cursor') {
-    return `${envPrefix} agent ${curlFragment}`;
-  }
-  if (agent === 'opencode') {
-    return `${envPrefix} opencode --prompt ${curlFragment}`;
-  }
-  return `${envPrefix} gemini ${curlFragment}`;
+  const envPrefix = legacyAgentToken
+    ? `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${legacyAgentToken}`
+    : `OVERLORD_URL=${platformUrl}`;
+  return `${envPrefix} ovld connect ${agent} --ticket-id ${ticketId}`;
 }
 
 export function selectRestartSessionCommand(

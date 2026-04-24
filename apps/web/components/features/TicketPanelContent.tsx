@@ -16,7 +16,6 @@ import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
-import { ensureAgentTokenForLaunchAction } from '@/lib/actions/agent-tokens';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
@@ -106,7 +105,6 @@ export async function TicketPanelContent({
     projectsResult,
     scheduleResult,
     agentSessionResult,
-    agentTokenResult,
     objectivesResult
   ] = await Promise.all([
     supabase
@@ -165,15 +163,6 @@ export async function TicketPanelContent({
       .limit(1)
       .maybeSingle(),
     supabase
-      .from('agent_tokens')
-      .select('token, expires_at')
-      .eq('user_id', user?.id ?? '')
-      .eq('organization_id', organizationId)
-      .is('revoked_at', null)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
       .from('objectives')
       .select('id,objective,created_at,title,state,agent_identifier,model_identifier')
       .eq('ticket_id', ticketId)
@@ -189,7 +178,6 @@ export async function TicketPanelContent({
   const projects = projectsResult.data;
   const schedule = scheduleResult.data;
   const agentSession = agentSessionResult.data;
-  const agentTokenRow = agentTokenResult.data;
   const objectives = objectivesResult.data;
   const projectOptionsRaw = projects ?? [];
   const projectIdsForSettings = projectOptionsRaw.map(project => project.id);
@@ -206,19 +194,6 @@ export async function TicketPanelContent({
 
   const platformUrl = getPlatformUrl();
   const agentConfigs = user ? await getAllAgentConfigsByUserIdAction(user.id, supabase) : {};
-  const existingAgentToken =
-    agentTokenRow &&
-    (!agentTokenRow.expires_at || new Date(agentTokenRow.expires_at).getTime() > Date.now())
-      ? agentTokenRow.token
-      : null;
-  const agentToken =
-    existingAgentToken ??
-    (user
-      ? await ensureAgentTokenForLaunchAction(organizationId).catch(error => {
-          console.error('Failed to ensure agent token for ticket launch:', error);
-          return null;
-        })
-      : null);
   const agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>> = {
     claude: agentConfigs.claude?.flags ?? [],
     codex: agentConfigs.codex?.flags ?? [],
@@ -228,8 +203,7 @@ export async function TicketPanelContent({
   };
   const { claudeCode, codex, cursor, gemini, opencode } = buildLaunchCommands({
     platformUrl,
-    ticketId,
-    token: agentToken ?? ''
+    ticketId
   });
   const {
     claudeCode: claudeResume,
@@ -239,8 +213,7 @@ export async function TicketPanelContent({
     opencode: opencodeResume
   } = buildResumeCommands({
     platformUrl,
-    ticketId,
-    token: agentToken ?? ''
+    ticketId
   });
   const ticketIdentifier = getTicketIdentifier(ticket.id);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
@@ -310,8 +283,6 @@ export async function TicketPanelContent({
           ticketId={ticketId}
           ticketIdentifier={ticketIdentifier}
           projectId={activeProjectId}
-          organizationId={organizationId}
-          agentToken={agentToken}
           agentFlags={agentFlags}
           agentIdentifier={agentSession?.agent_identifier ?? null}
           assignedAgent={assignedAgent}
@@ -444,7 +415,6 @@ export async function TicketPanelContent({
                 workspaceRoot={workspaceRoot}
                 workingDirectory={workingDirectory}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-                agentToken={agentToken}
                 claudeCommand={claudeCode}
                 codexCommand={codex}
                 cursorCommand={cursor}

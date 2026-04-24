@@ -43,7 +43,7 @@ function getInstructionMode(agent) {
   return 'legacy';
 }
 
-async function fetchContext(platformUrl, agentToken, localSecret, ticketId, agent) {
+async function fetchContext(platformUrl, bearerToken, localSecret, organizationId, ticketId, agent) {
   const params = new URLSearchParams({
     context: 'cli',
     agent,
@@ -51,7 +51,7 @@ async function fetchContext(platformUrl, agentToken, localSecret, ticketId, agen
   });
   const url = `${platformUrl}/api/protocol/context/${ticketId}?${params.toString()}`;
   const response = await fetch(url, {
-    headers: buildAuthHeaders(agentToken, localSecret)
+    headers: buildAuthHeaders(bearerToken, localSecret, organizationId)
   });
 
   if (!response.ok) {
@@ -116,8 +116,15 @@ async function runAgent(agent, mode = 'run') {
     process.exit(1);
   }
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
-  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId, agent);
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const context = await fetchContext(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    ticketId,
+    agent
+  );
 
   const childEnv = { ...process.env, AGENT_IDENTIFIER: agentIdentifierMap[agent] };
 
@@ -199,8 +206,15 @@ async function printContext() {
     process.exit(1);
   }
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
-  const context = await fetchContext(platformUrl, agentToken, localSecret, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const context = await fetchContext(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    ticketId,
+    'claude'
+  );
   process.stdout.write(context);
 }
 

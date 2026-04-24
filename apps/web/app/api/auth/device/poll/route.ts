@@ -22,7 +22,9 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from('device_auth_codes')
-    .select('id, expires_at, access_token, approved_at, next_poll_at')
+    .select(
+      'id, expires_at, access_token, refresh_token, access_token_expires_at, approved_at, next_poll_at'
+    )
     .eq('device_code', device_code)
     .single();
 
@@ -60,13 +62,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'pending' });
   }
 
-  // Authorized — return token and clean up the code
-  const accessToken = data.access_token;
-  await supabase.from('device_auth_codes').delete().eq('id', data.id);
+  // Authorized — atomically consume the code so concurrent polls don't both receive the token.
+  const { data: consumed, error: consumeError } = await supabase
+    .from('device_auth_codes')
+    .delete()
+    .eq('id', data.id)
+    .eq('access_token', data.access_token)
+    .select('access_token, refresh_token, access_token_expires_at')
+    .maybeSingle();
+
+  if (consumeError || !consumed) {
+    return NextResponse.json({ status: 'pending' });
+  }
 
   return NextResponse.json({
     status: 'authorized',
-    access_token: accessToken,
+    access_token: consumed.access_token,
+    refresh_token: consumed.refresh_token,
+    access_token_expires_at: consumed.access_token_expires_at,
     platform_url: getPlatformUrl()
   });
 }

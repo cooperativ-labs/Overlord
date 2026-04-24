@@ -435,8 +435,7 @@ function buildMcpConfigSection(mcpUrl: string, ticketId: string): string {
       mcpServers: {
         overlord: {
           type: 'url',
-          url: mcpUrl,
-          headers: { authorization: 'Bearer <AGENT_TOKEN>' }
+          url: mcpUrl
         }
       }
     },
@@ -481,7 +480,7 @@ Ticket ID: \`${ticketId}\`
 
 Environment variables:
 - \`OVERLORD_MCP_URL\` — MCP endpoint
-- \`AGENT_TOKEN\` — bearer token
+- OAuth bearer tokens are preferred; use the client's OAuth flow when supported rather than pasting \`AGENT_TOKEN\`
 
 Always include \`ticketId: "${ticketId}"\` in every MCP tool call.
 ${mcpSection}
@@ -540,7 +539,7 @@ ${buildMcpCoreRules(launchMode)}
 function buildLocalLaunchNote(context?: PromptContext): string {
   return context === 'electron'
     ? '> **Launched from Overlord desktop.** This terminal already has the needed Overlord environment. Use `ovld protocol ...` commands for all ticket lifecycle work.'
-    : '> **Running locally.** `ovld protocol` uses `OVERLORD_URL` and `AGENT_TOKEN` when set; otherwise it reads shared credentials from `ovld auth login` or Overlord Desktop. Export env vars only when overriding stored credentials or running in a remote shell without copied credentials.';
+    : '> **Running locally.** `ovld protocol` uses `OVERLORD_URL` plus shared OAuth credentials from `ovld auth login` or Overlord Desktop. Legacy `AGENT_TOKEN` env vars still work only as a compatibility fallback.';
 }
 
 function buildLocalEventTypeHelp(launchMode: PromptLaunchMode): string {

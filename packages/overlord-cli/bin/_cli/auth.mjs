@@ -240,23 +240,6 @@ async function exchangeCodeForSupabaseTokens(supabaseUrl, clientId, code, codeVe
   return readJsonOrThrow(res, 'Token exchange', supabaseUrl);
 }
 
-async function exchangeForAgentToken(platformUrl, supabaseAccessToken, localSecret) {
-  const res = await fetch(`${platformUrl}/api/auth/token`, {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders('', localSecret),
-      Authorization: `Bearer ${supabaseAccessToken}`
-    }
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Agent token exchange failed (${res.status}): ${snippet(text)}`);
-  }
-
-  return readJsonOrThrow(res, 'Agent token exchange', platformUrl);
-}
-
 function openBrowser(url) {
   try {
     const platform = process.platform;
@@ -331,6 +314,8 @@ export async function authLoginViaDeviceFlow(
       logger.log('\n');
       return {
         access_token: result.access_token,
+        access_token_expires_at: result.access_token_expires_at ?? null,
+        refresh_token: result.refresh_token,
         platform_url: result.platform_url ?? platformUrl
       };
     }
@@ -403,17 +388,86 @@ export async function authLoginViaOAuthLoopback(platformUrl, localSecret) {
     redirectUri
   );
 
-  // 8. Exchange Supabase access token → Overlord agent_token
-  const agentTokenData = await exchangeForAgentToken(
-    resolvedPlatformUrl,
-    supabaseTokens.access_token,
-    localSecret
-  );
-
   return {
-    access_token: agentTokenData.access_token,
-    platform_url: agentTokenData.platform_url ?? resolvedPlatformUrl
+    access_token: supabaseTokens.access_token,
+    access_token_expires_at:
+      typeof supabaseTokens.expires_in === 'number' && supabaseTokens.expires_in > 0
+        ? new Date(Date.now() + supabaseTokens.expires_in * 1000).toISOString()
+        : null,
+    refresh_token: supabaseTokens.refresh_token,
+    platform_url: resolvedPlatformUrl
   };
+}
+
+async function fetchOrganizations(platformUrl, accessToken, localSecret) {
+  const res = await fetch(`${platformUrl}/api/auth/organizations`, {
+    headers: {
+      ...buildAuthHeaders('', localSecret),
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to load organizations (${res.status}): ${snippet(text)}`);
+  }
+
+  const data = await readJsonOrThrow(res, 'Organizations', platformUrl);
+  return Array.isArray(data.organizations) ? data.organizations : [];
+}
+
+async function promptForOrganization(organizations, preselectedId = null) {
+  if (!organizations.length) {
+    throw new Error('No organizations found. Please complete onboarding first.');
+  }
+
+  if (preselectedId !== null) {
+    const match = organizations.find(org => org.id === preselectedId);
+    if (!match) {
+      throw new Error(
+        `Organization ${preselectedId} is not available to this account. ` +
+          `Available: ${organizations.map(o => o.id).join(', ')}`
+      );
+    }
+    return match;
+  }
+
+  if (organizations.length === 1) {
+    return organizations[0];
+  }
+
+  if (!process.stdin.isTTY) {
+    throw new Error(
+      'Multiple organizations available but stdin is not a TTY. ' +
+        'Pass --organization-id <id> to select non-interactively.'
+    );
+  }
+
+  const rl = (await import('node:readline')).createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  try {
+    for (;;) {
+      console.log('\nOrganizations');
+      organizations.forEach((organization, index) => {
+        console.log(`  ${index + 1}. ${organization.name} (${organization.id})`);
+      });
+
+      const answer = await new Promise(resolve => {
+        rl.question('\nSelect an organization by number: ', resolve);
+      });
+      const selected = Number.parseInt(String(answer).trim(), 10);
+      if (Number.isFinite(selected) && selected >= 1 && selected <= organizations.length) {
+        return organizations[selected - 1];
+      }
+
+      console.log(`Enter a number between 1 and ${organizations.length}.`);
+    }
+  } finally {
+    rl.close();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -424,7 +478,19 @@ export function resolveLoginPlatformUrl(runtime = null) {
   return process.env.OVERLORD_URL ?? runtime?.platform_url ?? getDefaultOverlordUrl();
 }
 
-export async function authLogin() {
+function parseOrganizationFlag(args) {
+  const index = args.findIndex(arg => arg === '--organization-id' || arg.startsWith('--organization-id='));
+  if (index === -1) return null;
+  const raw = args[index].includes('=') ? args[index].split('=')[1] : args[index + 1];
+  const parsed = Number.parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('--organization-id must be a numeric id');
+  }
+  return parsed;
+}
+
+export async function authLogin(args = []) {
+  const preselectedOrganizationId = parseOrganizationFlag(args);
   const platformUrl = resolveLoginPlatformUrl();
   const runtime = loadRuntime(platformUrl);
   const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
@@ -454,16 +520,27 @@ export async function authLogin() {
     }
   }
 
+  const resolvedPlatformUrl = credentials.platform_url ?? platformUrl;
+  const organizations = await fetchOrganizations(
+    resolvedPlatformUrl,
+    credentials.access_token,
+    localSecret
+  );
+  const selectedOrganization = await promptForOrganization(organizations, preselectedOrganizationId);
+
   saveCredentials({
     access_token: credentials.access_token,
-    platform_url: credentials.platform_url ?? platformUrl
+    access_token_expires_at: credentials.access_token_expires_at ?? undefined,
+    refresh_token: credentials.refresh_token,
+    organization_id: selectedOrganization.id,
+    platform_url: resolvedPlatformUrl
   });
 
   console.log('Logged in successfully!');
 }
 
-function printVerboseAuthStatus() {
-  const status = getAuthStatus();
+async function printVerboseAuthStatus() {
+  const status = await getAuthStatus();
   if (!status.isLoggedIn) {
     console.log('Not logged in. Run: ovld auth login');
   } else {
@@ -473,6 +550,11 @@ function printVerboseAuthStatus() {
   console.log(`  Platform source: ${status.platformUrlSource}`);
   console.log(`  Token source: ${status.tokenSource}`);
   console.log(`  Token present: ${status.tokenPresent ? 'yes' : 'no'}`);
+  console.log(`  Auth mode: ${status.authMode}`);
+  console.log(`  Organization ID: ${status.organizationId ?? 'none'}`);
+  if (status.error) {
+    console.log(`  Error: ${status.error}`);
+  }
   console.log(`  Local secret: ${status.hasLocalSecret ? 'yes' : 'no'}`);
   console.log(`  credentials.json: ${status.credentialsFileExists ? 'present' : 'missing'}`);
   console.log(
@@ -480,9 +562,9 @@ function printVerboseAuthStatus() {
   );
 }
 
-export function authStatus(args = []) {
+export async function authStatus(args = []) {
   if (args.includes('--verbose') || args.includes('-v')) {
-    printVerboseAuthStatus();
+    await printVerboseAuthStatus();
     return;
   }
 
@@ -510,7 +592,7 @@ export function authRepair() {
   } else {
     console.log(`Credentials not repaired: ${result.reason}`);
   }
-  printVerboseAuthStatus();
+  void printVerboseAuthStatus();
 }
 
 export async function runAuthCommand(subcommand, args = []) {
@@ -527,12 +609,12 @@ Subcommands:
   }
 
   if (subcommand === 'login') {
-    await authLogin();
+    await authLogin(args);
     return;
   }
 
   if (subcommand === 'status') {
-    authStatus(args);
+    await authStatus(args);
     return;
   }
 

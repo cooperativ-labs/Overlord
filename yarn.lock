@@ -8518,6 +8518,7 @@ __metadata:
     eslint-plugin-react-hooks: "npm:^7.0.1"
     eslint-plugin-simple-import-sort: "npm:^12.1.1"
     eslint-plugin-sort-imports-es6-autofix: "npm:^0.6.0"
+    jose: "npm:^6.1.3"
     lucide-react: "npm:^0.575.0"
     next: "npm:^16.1.6"
     next-themes: "npm:^0.4.6"

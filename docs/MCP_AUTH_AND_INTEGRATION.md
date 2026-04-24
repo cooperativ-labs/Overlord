@@ -18,10 +18,10 @@ Overlord intentionally uses different auth flows for different surfaces.
 | Surface | Transport | Runtime auth | Notes |
 | --- | --- | --- | --- |
 | Web MCP clients | `{PLATFORM_URL}/api/mcp` | Supabase OAuth 2.1 / OIDC | Primary path for browser-hosted MCP clients and connector-style integrations. |
-| Cloud or headless agents configured by env vars | `{PLATFORM_URL}/api/mcp` | `AGENT_TOKEN` | Used when the agent cannot complete an interactive browser login. |
-| Electron desktop app login | Platform auth endpoints | Supabase OAuth Authorization Code + PKCE, then `/api/auth/token` | Electron stores an Overlord agent token after login. |
-| Terminal agents launched from Electron | Local agent command + protocol/MCP calls | `AGENT_TOKEN` injected by Electron | Electron pre-fills `OVERLORD_URL`, `AGENT_TOKEN`, and `TICKET_ID`. |
-| Human CLI login | Platform auth endpoints | Depends on CLI build | The local repo CLI uses loopback PKCE. The packaged CLI uses device-code flow. Both end up storing an Overlord agent token. |
+| Cloud or headless agents configured by env vars | `{PLATFORM_URL}/api/mcp` | Shared OAuth credentials, with `AGENT_TOKEN` as a temporary compatibility override | Used when the agent cannot complete an interactive browser login. |
+| Electron desktop app login | Platform auth endpoints | Supabase OAuth Authorization Code + PKCE | Electron stores the shared OAuth session locally after login. |
+| Terminal agents launched from Electron | Local agent command + protocol/MCP calls | Shared OAuth credentials from Desktop login | Electron pre-fills `OVERLORD_URL` and `TICKET_ID`; `AGENT_TOKEN` is compatibility-only. |
+| Human CLI login | Platform auth endpoints | Depends on CLI build | The local repo CLI uses loopback PKCE. The packaged CLI uses device-code flow. Both end up storing the shared OAuth session locally. |
 
 ## MCP Endpoint Shape
 
@@ -100,21 +100,19 @@ This is the recommended flow for OAuth-capable MCP clients.
 
 There is no Overlord token-exchange step in this MCP flow.
 
-## Agent Token MCP Flow
+## Legacy Agent Token MCP Flow
 
 This is the compatibility and headless-runtime path.
 
-1. A human-facing surface authenticates with Overlord.
-2. Overlord exchanges an allowlisted Supabase OAuth token at `/api/auth/token`.
-3. Overlord returns or creates a long-lived `agent_token`.
-4. The runtime stores that token and uses it as `Authorization: Bearer <AGENT_TOKEN>` when calling `{PLATFORM_URL}/api/mcp`.
+1. A user creates or rotates a compatibility token for a specific organization.
+2. The non-interactive runtime stores that token outside Overlord's shared OAuth credential record.
+3. The runtime uses it as `Authorization: Bearer <AGENT_TOKEN>` when calling `{PLATFORM_URL}/api/mcp`.
 
-This flow is still required for:
+This flow is only intended for:
 
-- Electron-launched terminal agents
 - Headless cloud agents configured by environment variables
-- Codex CLI setup in the current product UI
-- CLI and Electron login flows that persist an Overlord agent token locally
+- CI jobs or remote shells that cannot complete OAuth login
+- Temporary rollout compatibility for older clients
 
 ## MCP Token Resolution
 
@@ -237,7 +235,7 @@ Response:
 }
 ```
 
-This endpoint exists for Overlord-managed login flows. It is not part of the primary OAuth MCP flow.
+This endpoint is deprecated for normal Desktop and CLI login. It remains only for rollout compatibility with older builds that still exchange OAuth sessions for agent tokens.
 
 ## Human Login Flows
 
@@ -248,9 +246,9 @@ Electron uses:
 1. `GET /api/auth/config`
 2. Supabase OAuth Authorization Code + PKCE on `/auth/v1/oauth/authorize`
 3. Token exchange on `/auth/v1/oauth/token`
-4. Overlord exchange on `/api/auth/token`
+4. Organization lookup on `/api/auth/organizations`
 
-Electron then stores the returned Overlord `agent_token` locally for later runtime use.
+Electron then stores the shared OAuth session in `~/.ovld` so Desktop launches and CLI protocol commands can use the same credentials.
 
 ### Local repo CLI
 
@@ -260,7 +258,7 @@ The local repo CLI currently uses the same loopback PKCE model as Electron:
 2. Open browser to Supabase `/auth/v1/oauth/authorize`
 3. Receive callback on the configured loopback redirect URI
 4. Exchange on `/auth/v1/oauth/token`
-5. Exchange on `/api/auth/token`
+5. Select an organization and store the shared OAuth session in `~/.ovld`
 
 ### Packaged CLI
 
@@ -269,9 +267,9 @@ The packaged CLI currently uses Overlord's device-code endpoints:
 1. `POST /api/auth/device/request`
 2. Human opens `verification_uri` in the browser
 3. CLI polls `POST /api/auth/device/poll`
-4. On approval, CLI receives a stored Overlord `agent_token`
+4. On approval, CLI receives OAuth access and refresh tokens
 
-The packaged CLI therefore does not perform local loopback PKCE itself.
+The packaged CLI therefore does not perform local loopback PKCE itself, but it stores the same OAuth-centered credential schema.
 
 ## Client Setup Guidance
 
@@ -307,9 +305,9 @@ Guidance:
 - Cursor should use the public MCP URL.
 - The intended path is OAuth-capable MCP auth, not direct edge-function access.
 
-### Codex CLI
+### Codex CLI headless compatibility
 
-The current product UI configures Codex with a bearer token env var:
+Use this only for headless or cloud Codex runtimes that cannot complete OAuth login:
 
 ```toml
 [mcp_servers.overlord]
@@ -326,10 +324,11 @@ AGENT_TOKEN=<agent-token>
 
 Guidance:
 
-- This is the current supported headless/cloud-agent path for Codex in this repo.
+- Prefer `ovld auth login` or Overlord Desktop shared credentials for local Codex use.
+- This is a compatibility path for non-interactive runtimes.
 - The token variable is `AGENT_TOKEN`, not `OVERLORD_AGENT_TOKEN`.
 
-### Headless cloud agents
+### Headless cloud agents compatibility
 
 For non-interactive runtimes, use:
 
@@ -393,10 +392,10 @@ curl -X POST https://your-overlord-instance.com/api/auth/token \
 | --- | --- | --- |
 | `OVERLORD_URL` | Platform base URL | Electron, CLI, protocol routes |
 | `OVERLORD_MCP_URL` | Public MCP URL | Headless/cloud agent setup snippets |
-| `AGENT_TOKEN` | Overlord bearer token | Electron-launched agents, Codex, cloud agents |
+| `AGENT_TOKEN` | Legacy compatibility bearer token | Headless/cloud agents, CI, remote shell overrides |
 | `TICKET_ID` | Ticket context for launched local agents | Electron-launched terminal agents |
-| `SUPABASE_OAUTH_CLI_CLIENT_ID` | CLI OAuth client allowlist/config | `/api/auth/config`, `/api/auth/token` |
-| `SUPABASE_OAUTH_ELECTRON_CLIENT_ID` | Electron OAuth client allowlist/config | `/api/auth/config`, `/api/auth/token` |
+| `SUPABASE_OAUTH_CLI_CLIENT_ID` | CLI OAuth client config | `/api/auth/config`, OAuth refresh |
+| `SUPABASE_OAUTH_ELECTRON_CLIENT_ID` | Electron OAuth client config | `/api/auth/config`, OAuth refresh |
 
 ## Troubleshooting
 

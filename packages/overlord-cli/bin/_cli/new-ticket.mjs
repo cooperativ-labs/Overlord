@@ -131,9 +131,9 @@ async function promptForSelection({ items, label, prompt, renderItem }) {
   }
 }
 
-async function fetchProjects(platformUrl, agentToken, localSecret) {
+async function fetchProjects(platformUrl, bearerToken, localSecret, organizationId) {
   const res = await fetch(`${platformUrl}/api/protocol/projects`, {
-    headers: buildAuthHeaders(agentToken, localSecret)
+    headers: buildAuthHeaders(bearerToken, localSecret, organizationId)
   });
 
   const data = await res.json().catch(() => ({}));
@@ -146,11 +146,11 @@ async function fetchProjects(platformUrl, agentToken, localSecret) {
   return Array.isArray(data.projects) ? sortProjects(data.projects) : [];
 }
 
-async function createTicket(platformUrl, agentToken, localSecret, body) {
+async function createTicket(platformUrl, bearerToken, localSecret, organizationId, body) {
   const res = await fetch(`${platformUrl}/api/protocol/tickets`, {
     method: 'POST',
     headers: {
-      ...buildAuthHeaders(agentToken, localSecret),
+      ...buildAuthHeaders(bearerToken, localSecret, organizationId),
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
@@ -224,8 +224,8 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
   const objective = String(flags.objective ?? positionals.join(' ')).trim();
   ensureObjective(commandName, objective);
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
-  const projects = await fetchProjects(platformUrl, agentToken, localSecret);
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const projects = await fetchProjects(platformUrl, bearerToken, localSecret, organizationId);
 
   if (!projects.length) {
     throw new Error('No projects available. Create a project first.');
@@ -253,7 +253,7 @@ async function runTicketCreationFlow(args, { commandName, launchAgent }) {
   const modelIdentifier = resolveTicketCreationModelIdentifier(flags);
   const ticketDelegate = resolveTicketCreationDelegate(flags, selectedAgent, modelIdentifier);
 
-  const ticket = await createTicket(platformUrl, agentToken, localSecret, {
+  const ticket = await createTicket(platformUrl, bearerToken, localSecret, organizationId, {
     objective,
     title: String(flags.title ?? ''),
     acceptanceCriteria: String(flags['acceptance-criteria'] ?? ''),

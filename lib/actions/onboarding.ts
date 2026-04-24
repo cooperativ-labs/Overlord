@@ -241,41 +241,46 @@ export async function createFirstProjectWithDirectory(input: {
   projectId: string;
   organizationId: number;
 }> {
-  const created = await createProject({
-    organizationId: input.organizationId,
-    name: input.name,
-    color: input.color
-  });
+  try {
+    const created = await createProject({
+      organizationId: input.organizationId,
+      name: input.name,
+      color: input.color
+    });
 
-  // Only persist a working directory when the user actually picked one.
-  // The upsert is a separate round-trip that can race with Supabase's
-  // refresh-token rotation mid-request; if we always fire it — even for
-  // null directories — we double the chance of session churn and surface
-  // Next.js' generic "An unexpected response was received from the server"
-  // when the second call fails after the project has already been created.
-  const trimmedDirectory = input.workingDirectory?.trim() ?? '';
-  if (trimmedDirectory.length > 0) {
-    try {
-      await updateProjectWorkingDirectoryAction({
-        projectId: created.id,
-        workingDirectory: trimmedDirectory
-      });
-    } catch (error) {
-      // The project row is committed; reporting failure here would make the
-      // UI look like nothing worked and tempt the user into a retry that
-      // creates a duplicate project. Record the failure so we can still
-      // triage it, and let the user set the directory from project settings.
-      Sentry.captureException(
-        error instanceof Error
-          ? error
-          : new Error(`Failed to set initial working directory: ${String(error)}`),
-        { extra: { projectId: created.id, organizationId: created.organizationId } }
-      );
+    // Only persist a working directory when the user actually picked one.
+    // The upsert is a separate round-trip that can race with Supabase's
+    // refresh-token rotation mid-request; if we always fire it - even for
+    // null directories - we double the chance of session churn and surface
+    // Next.js' generic "An unexpected response was received from the server"
+    // when the second call fails after the project has already been created.
+    const trimmedDirectory = input.workingDirectory?.trim() ?? '';
+    if (trimmedDirectory.length > 0) {
+      try {
+        await updateProjectWorkingDirectoryAction({
+          projectId: created.id,
+          workingDirectory: trimmedDirectory
+        });
+      } catch (error) {
+        // The project row is committed; reporting failure here would make the
+        // UI look like nothing worked and tempt the user into a retry that
+        // creates a duplicate project. Record the failure so we can still
+        // triage it, and let the user set the directory from project settings.
+        Sentry.captureException(
+          error instanceof Error
+            ? error
+            : new Error(`Failed to set initial working directory: ${String(error)}`),
+          { extra: { projectId: created.id, organizationId: created.organizationId } }
+        );
+      }
     }
-  }
 
-  return {
-    projectId: created.id,
-    organizationId: created.organizationId
-  };
+    return {
+      projectId: created.id,
+      organizationId: created.organizationId
+    };
+  } catch (error) {
+    console.error('createFirstProjectWithDirectory', error);
+    throw error;
+  }
 }

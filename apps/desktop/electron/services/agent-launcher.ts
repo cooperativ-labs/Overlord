@@ -6,6 +6,7 @@ import path from 'path';
 import { parseSshCommand } from '../../../../lib/ssh/shell-utils';
 
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
+import { loadElectronCredentials, saveElectronCredentials } from './electron-credentials';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
 
@@ -24,7 +25,10 @@ type LaunchAgentInput = {
   ticketId: string;
   agent: AgentType;
   cwd?: string;
-  /** Per-user agent token from the agent_tokens table. Falls back to AGENT_TOKEN env var. */
+  /**
+   * Legacy compatibility override for manual launches.
+   * Normal launches should resolve the shared OAuth session from disk.
+   */
   agentToken?: string;
   launchMode?: AgentLaunchMode;
   /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
@@ -72,13 +76,20 @@ function claudeSourcePluginDir(): string | null {
   return fs.existsSync(path.join(sourceDir, '.claude-plugin', 'plugin.json')) ? sourceDir : null;
 }
 
-function buildProtocolHeaders(agentToken: string): Record<string, string> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${agentToken}`
-  };
+function buildProtocolHeaders(
+  bearerToken: string,
+  organizationId?: number | null
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (bearerToken) {
+    headers.Authorization = `Bearer ${bearerToken}`;
+  }
   const localSecret = process.env.OVERLORD_LOCAL_SECRET?.trim();
   if (localSecret) {
     headers['X-Overlord-Local-Secret'] = localSecret;
+  }
+  if (typeof organizationId === 'number' && Number.isFinite(organizationId)) {
+    headers['x-organization-id'] = String(organizationId);
   }
   return headers;
 }
@@ -106,6 +117,156 @@ function getConnectorUrl(): string {
 
 function normalizeAgentToken(value?: string): string {
   return value?.trim() ?? '';
+}
+
+function decodeJwtExpiry(accessToken: string): number | null {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(accessToken.split('.')[1] ?? '', 'base64url').toString('utf8')
+    ) as {
+      exp?: unknown;
+    };
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAccessTokenFresh(accessToken?: string, expiresAt?: string): boolean {
+  const parsedExpiry = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  const expiresAtMs = Number.isFinite(parsedExpiry)
+    ? parsedExpiry
+    : accessToken
+      ? (decodeJwtExpiry(accessToken) ?? 0) * 1000
+      : 0;
+  return expiresAtMs - Date.now() > 60_000;
+}
+
+function computeAccessTokenExpiry(data: {
+  access_token?: string;
+  expires_in?: unknown;
+}): string | undefined {
+  const expiresIn = Number.parseInt(String(data.expires_in ?? ''), 10);
+  if (Number.isFinite(expiresIn) && expiresIn > 0) {
+    return new Date(Date.now() + expiresIn * 1000).toISOString();
+  }
+
+  const jwtExp = data.access_token ? decodeJwtExpiry(data.access_token) : null;
+  return jwtExp ? new Date(jwtExp * 1000).toISOString() : undefined;
+}
+
+async function refreshLaunchOAuthSession(
+  platformUrl: string,
+  refreshToken: string
+): Promise<{ access_token: string; refresh_token?: string; access_token_expires_at?: string }> {
+  const configResponse = await fetch(`${platformUrl}/api/auth/config`, {
+    headers: buildProtocolHeaders('')
+  });
+  if (!configResponse.ok) {
+    throw new Error(`Failed to load OAuth config (${configResponse.status}).`);
+  }
+
+  const config = (await configResponse.json()) as {
+    supabase_url?: string;
+    electron_client_id?: string;
+    cli_client_id?: string;
+  };
+  const supabaseUrl = config.supabase_url;
+  const clientId = config.electron_client_id ?? config.cli_client_id;
+  if (!supabaseUrl || !clientId) {
+    throw new Error('OAuth is not configured for Desktop launch.');
+  }
+
+  const tokenResponse = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId
+    })
+  });
+  if (!tokenResponse.ok) {
+    const text = await tokenResponse.text().catch(() => '');
+    throw new Error(
+      `OAuth session refresh failed (${tokenResponse.status}): ${text.slice(0, 180)}`
+    );
+  }
+
+  const data = (await tokenResponse.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: unknown;
+  };
+  if (!data.access_token) {
+    throw new Error('OAuth session refresh did not return an access token.');
+  }
+
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    access_token_expires_at: computeAccessTokenExpiry(data)
+  };
+}
+
+async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
+  bearerToken: string;
+  organizationId: number | null;
+  authMode: 'oauth' | 'legacy_agent_token';
+  platformUrl: string | null;
+}> {
+  const credentials = loadElectronCredentials();
+  let oauthToken = credentials?.access_token?.trim() ?? '';
+  const organizationId =
+    typeof credentials?.organization_id === 'number' && Number.isFinite(credentials.organization_id)
+      ? credentials.organization_id
+      : null;
+
+  if (
+    credentials?.refresh_token &&
+    credentials.platform_url &&
+    !isAccessTokenFresh(oauthToken, credentials.access_token_expires_at)
+  ) {
+    const refreshed = await refreshLaunchOAuthSession(
+      credentials.platform_url,
+      credentials.refresh_token
+    );
+    saveElectronCredentials({
+      ...credentials,
+      access_token: refreshed.access_token,
+      access_token_expires_at: refreshed.access_token_expires_at,
+      refresh_token: refreshed.refresh_token ?? credentials.refresh_token
+    });
+    oauthToken = refreshed.access_token;
+  }
+
+  if (oauthToken) {
+    return {
+      bearerToken: oauthToken,
+      organizationId,
+      authMode: 'oauth',
+      platformUrl: credentials?.platform_url ?? null
+    };
+  }
+
+  const legacyToken =
+    normalizeAgentToken(input.agentToken) || normalizeAgentToken(process.env.AGENT_TOKEN);
+  if (legacyToken) {
+    return {
+      bearerToken: legacyToken,
+      organizationId:
+        organizationId ??
+        (Number.isFinite(Number.parseInt(String(process.env.OVERLORD_ORGANIZATION_ID ?? ''), 10))
+          ? Number.parseInt(String(process.env.OVERLORD_ORGANIZATION_ID ?? ''), 10)
+          : null),
+      authMode: 'legacy_agent_token',
+      platformUrl: credentials?.platform_url ?? null
+    };
+  }
+
+  throw new Error(
+    'No Overlord OAuth session is available for this workspace. Open Desktop or run `ovld auth login`.'
+  );
 }
 
 /**
@@ -148,14 +309,7 @@ function buildModelThinkingFlags(agent: AgentType, model?: string, thinking?: st
 export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<LaunchAgentResult> {
   const connectorUrl = getConnectorUrl();
   const isRemote = Boolean(input.sshCommand?.trim());
-  // Use the per-user token passed from the UI; fall back to AGENT_TOKEN env var
-  const agentToken =
-    normalizeAgentToken(input.agentToken) || normalizeAgentToken(process.env.AGENT_TOKEN);
-  if (!agentToken) {
-    throw new Error(
-      'No agent token is available for this workspace. Open Settings > Agents & MCP and refresh the token.'
-    );
-  }
+  const launchAuth = await resolveLaunchAuth(input);
   const launchMode = input.launchMode ?? 'run';
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
@@ -176,18 +330,21 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchEnv = {
     OVERLORD_URL: connectorUrl,
     OVERLORD_CONNECTOR_URL: connectorUrl,
-    AGENT_TOKEN: agentToken,
     TICKET_ID: input.ticketId,
     AGENT_IDENTIFIER: agentIdentifierMap[input.agent],
     OVERLORD_MODEL_IDENTIFIER: input.model ?? '',
     MODEL_IDENTIFIER: input.model ?? '',
-    OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET ?? ''
+    OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET ?? '',
+    ...(launchAuth.organizationId !== null
+      ? { OVERLORD_ORGANIZATION_ID: String(launchAuth.organizationId) }
+      : {}),
+    ...(launchAuth.authMode === 'legacy_agent_token' ? { AGENT_TOKEN: launchAuth.bearerToken } : {})
   };
 
   // Fetch context from the API (runs in the main process — no shell needed).
   // Use redirect: 'manual' so that cross-origin redirects don't strip the
   // Authorization header (Node fetch drops auth headers on redirect per spec).
-  const headers = buildProtocolHeaders(agentToken);
+  const headers = buildProtocolHeaders(launchAuth.bearerToken, launchAuth.organizationId);
   let response = await fetch(contextUrl, { headers, redirect: 'manual' });
 
   // Follow up to 5 redirects manually, preserving the Authorization header.
@@ -201,7 +358,12 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   }
 
   if (!response.ok) {
-    const fallback = await fetchContextCommandFallback(contextUrl, agentToken, input.agent);
+    const fallback = await fetchContextCommandFallback(
+      contextUrl,
+      launchAuth.bearerToken,
+      launchAuth.organizationId,
+      input.agent
+    );
     if (fallback) {
       return {
         command: fallback,
@@ -514,11 +676,12 @@ async function readErrorBody(response: Response): Promise<string> {
 
 async function fetchContextCommandFallback(
   contextUrl: string,
-  agentToken: string,
+  bearerToken: string,
+  organizationId: number | null,
   agent: AgentType
 ): Promise<string | null> {
   try {
-    const headers = buildProtocolHeaders(agentToken);
+    const headers = buildProtocolHeaders(bearerToken, organizationId);
     let response = await fetch(contextUrl, {
       method: 'POST',
       headers,

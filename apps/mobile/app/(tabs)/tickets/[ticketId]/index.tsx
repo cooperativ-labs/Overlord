@@ -180,7 +180,9 @@ export default function TicketDetailScreen() {
         const prompt = await response.text();
 
         if (!response.ok || prompt.trim().length === 0) {
-          throw new Error(prompt || `Failed to build ${context === 'cli' ? 'local' : 'cloud'} prompt.`);
+          throw new Error(
+            prompt || `Failed to build ${context === 'cli' ? 'local' : 'cloud'} prompt.`
+          );
         }
 
         await Clipboard.setStringAsync(prompt);

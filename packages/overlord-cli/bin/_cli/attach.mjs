@@ -58,11 +58,11 @@ function statusColor(status) {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-async function searchTickets(platformUrl, agentToken, localSecret, query) {
+async function searchTickets(platformUrl, bearerToken, localSecret, organizationId, query) {
   const res = await fetch(`${platformUrl}/api/protocol/search-tickets`, {
     method: 'POST',
     headers: {
-      ...buildAuthHeaders(agentToken, localSecret),
+      ...buildAuthHeaders(bearerToken, localSecret, organizationId),
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
@@ -287,7 +287,7 @@ function runInteractivePrompt({ label, items = [], search, prefix = '' }) {
 export async function runAttachCommand(args) {
   const [ticketIdArg, agentArg] = args;
 
-  const { platformUrl, agentToken, localSecret } = resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
 
   // ── Phase 1: Ticket selection ──────────────────────────────────────────────
 
@@ -301,7 +301,8 @@ export async function runAttachCommand(args) {
 
     const selectedTicket = await runInteractivePrompt({
       label: 'Search tickets',
-      search: nextQuery => searchTickets(platformUrl, agentToken, localSecret, nextQuery)
+      search: nextQuery =>
+        searchTickets(platformUrl, bearerToken, localSecret, organizationId, nextQuery)
     });
 
     if (!selectedTicket) {

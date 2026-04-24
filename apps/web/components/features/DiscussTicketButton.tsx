@@ -16,9 +16,7 @@ import {
   PopoverTitle,
   PopoverTrigger
 } from '@/components/ui/popover';
-import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
-import { normalizeAgentToken } from '@/lib/helpers/agent-token';
 import {
   getAgentTypeByValue,
   getLaunchAgentTypeByIdentifier,
@@ -34,10 +32,8 @@ import type { WebAgentMode } from './WebAgentModeButton';
 type DiscussTicketButtonProps = {
   ticketId: string;
   projectId?: string | null;
-  organizationId?: number;
   agentIdentifier?: string | null;
   assignedAgent?: TicketAssignedAgent | null;
-  agentToken?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   workingDirectory?: string | null;
   sshCommand?: string | null;
@@ -56,10 +52,8 @@ const defaultAgentButtonStates: Record<LaunchAgentTypeValue, ButtonLoadingState>
 export function DiscussTicketButton({
   ticketId,
   projectId,
-  organizationId,
   agentIdentifier,
   assignedAgent,
-  agentToken,
   agentFlags,
   workingDirectory,
   sshCommand,
@@ -101,19 +95,11 @@ export function DiscussTicketButton({
     try {
       if (isElectron) {
         await submitTicketObjectiveAction(ticketId);
-        const providedAgentToken = normalizeAgentToken(agentToken);
-        const resolvedAgentToken =
-          providedAgentToken ??
-          (organizationId
-            ? await ensureAgentTokenAction(organizationId)
-            : (() => {
-                throw new Error('No workspace is available for agent token resolution.');
-              })());
         await launchAgent(
           ticketId,
           agentValue,
           effectiveWorkingDirectory ?? undefined,
-          resolvedAgentToken,
+          undefined,
           'ask',
           agentFlags?.[agentValue],
           agentValue === assignedAgent?.agent ? (assignedAgent.model ?? undefined) : undefined,
@@ -138,7 +124,7 @@ export function DiscussTicketButton({
         description:
           error instanceof Error && error.message.trim().length > 0
             ? error.message
-            : 'Check your terminal settings and agent token, then try again.'
+            : 'Check your terminal settings and sign in again, then try again.'
       });
     }
   }

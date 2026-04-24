@@ -3,14 +3,13 @@ import { NextResponse } from 'next/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 /**
- * Lightweight agent-token health check.
+ * Deprecated compatibility health check for legacy agent tokens.
  *
  * GET /api/auth/check-token
  * Authorization: Bearer <agent-token>
  *
  * Returns 200 `{ ok: true }` if the token is valid, or 401 otherwise.
- * Used by the Electron app to detect revoked/expired tokens on window focus
- * so it can silently re-exchange for a fresh one.
+ * Desktop no longer uses this endpoint for normal OAuth session refresh.
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');

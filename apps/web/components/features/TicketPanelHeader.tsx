@@ -17,8 +17,6 @@ type TicketPanelHeaderProps = {
   ticketId: string;
   ticketIdentifier: string;
   projectId: string | null;
-  organizationId: number;
-  agentToken: string | null;
   agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>>;
   agentIdentifier: string | null;
   assignedAgent: TicketAssignedAgent | null;
@@ -39,8 +37,6 @@ export function TicketPanelHeader({
   ticketId,
   ticketIdentifier,
   projectId,
-  organizationId,
-  agentToken,
   agentFlags,
   agentIdentifier,
   assignedAgent,
@@ -87,8 +83,6 @@ export function TicketPanelHeader({
         <TicketHeaderAction
           ticketId={ticketId}
           projectId={projectId}
-          organizationId={organizationId}
-          agentToken={agentToken}
           agentFlags={agentFlags}
           agentIdentifier={agentIdentifier}
           assignedAgent={assignedAgent}

@@ -25,7 +25,6 @@ type TicketPanelLiveProps = {
   workspaceRoot: string;
   workingDirectory?: string | null;
   hasProjectWorkingDirectory?: boolean;
-  agentToken?: string | null;
   claudeCommand?: string;
   codexCommand?: string;
   cursorCommand?: string;

@@ -22,7 +22,6 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { ensureAgentTokenAction } from '@/lib/actions/agent-tokens';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import {
   useCreateTicketMutation,
@@ -175,12 +174,11 @@ export function QuickRunModal({
             });
           }
 
-          const agentToken = await ensureAgentTokenAction(resolvedOrganizationId);
           await launchAgent(
             clientTicketId,
             selection.agent,
             selectedProject?.local_working_directory ?? undefined,
-            agentToken,
+            undefined,
             'run',
             undefined,
             selection.model ?? undefined,
@@ -198,7 +196,7 @@ export function QuickRunModal({
             description:
               error instanceof Error && error.message.trim().length > 0
                 ? error.message
-                : 'Check your terminal settings and agent token, then try again.'
+                : 'Check your terminal settings and sign in again, then try again.'
           });
         }
       })();
@@ -209,7 +207,7 @@ export function QuickRunModal({
         description:
           error instanceof Error && error.message.trim().length > 0
             ? error.message
-            : 'Check your terminal settings and agent token, then try again.'
+            : 'Check your terminal settings and sign in again, then try again.'
       });
     } finally {
       setIsSubmitting(false);

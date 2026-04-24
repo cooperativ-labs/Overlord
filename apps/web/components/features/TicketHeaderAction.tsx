@@ -18,8 +18,6 @@ import { type WebAgentMode, WebAgentModeButton } from './WebAgentModeButton';
 type TicketHeaderActionProps = {
   ticketId: string;
   projectId: string | null;
-  organizationId: number;
-  agentToken: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   agentIdentifier: string | null;
   assignedAgent: TicketAssignedAgent | null;
@@ -37,8 +35,6 @@ type TicketHeaderActionProps = {
 export function TicketHeaderAction({
   ticketId,
   projectId,
-  organizationId,
-  agentToken,
   agentFlags,
   agentIdentifier,
   assignedAgent,
@@ -59,12 +55,7 @@ export function TicketHeaderAction({
     return (
       <div className="flex items-center gap-2">
         <WebAgentModeButton mode={webMode} onModeChange={setWebMode} />
-        <DiscussTicketButton
-          ticketId={ticketId}
-          agentToken={agentToken}
-          agentFlags={agentFlags}
-          webMode={webMode}
-        />
+        <DiscussTicketButton ticketId={ticketId} agentFlags={agentFlags} webMode={webMode} />
         <CopyTicketPromptButton
           ticketId={ticketId}
           context={webMode === 'local' ? 'cli' : 'web'}
@@ -80,10 +71,8 @@ export function TicketHeaderAction({
       <DiscussTicketButton
         ticketId={ticketId}
         projectId={projectId}
-        organizationId={organizationId}
         agentIdentifier={agentIdentifier}
         assignedAgent={assignedAgent}
-        agentToken={agentToken}
         agentFlags={agentFlags}
         workingDirectory={workingDirectory}
         sshCommand={sshCommand}
@@ -98,8 +87,6 @@ export function TicketHeaderAction({
         assignedSelection={assignedAgent}
         ticketId={ticketId}
         projectId={projectId}
-        organizationId={organizationId}
-        agentToken={agentToken}
         agentFlags={agentFlags}
         commands={{
           claude: claudeCommand,

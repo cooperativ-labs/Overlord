@@ -19,7 +19,8 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
  * Expected body (Claude hook JSON piped from stdin):
  *   { tool_name?: string, tool_input?: object, session_id?: string, ... }
  *
- * Auth: Bearer <AGENT_TOKEN> (same token as other protocol endpoints)
+ * Auth: Bearer <OAuth access token>, with legacy AGENT_TOKEN accepted only as
+ * a rollout compatibility fallback.
  */
 export async function POST(request: Request) {
   const authResult = await resolveAgentToken(request);
