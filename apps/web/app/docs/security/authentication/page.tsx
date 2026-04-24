@@ -25,7 +25,7 @@ OAuth protocol requests include an explicit organization scope.
 
 ## MCP access
 
-Cloud or hosted agents should use OAuth-based access through the MCP server when supported. Legacy agent tokens remain a compatibility fallback for non-interactive runtimes, CI, and remote shells that cannot complete OAuth login.
+Cloud or hosted agents should use OAuth-based access through the MCP server. Local CLI and Desktop sessions share the OAuth credentials created by Overlord Desktop or \`ovld auth login\`.
 
 ## Local protocol routes
 

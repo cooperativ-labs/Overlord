@@ -5,7 +5,6 @@ import {
   Edit3,
   Info,
   Keyboard,
-  KeyRound,
   Link2,
   Monitor,
   Newspaper,
@@ -44,7 +43,6 @@ import {
   SidebarMenuItem,
   SidebarProvider
 } from '@/components/ui/sidebar';
-import type { UserOrganization } from '@/lib/actions/organizations';
 
 import { AboutPage } from './settings/AboutPage';
 import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
@@ -57,13 +55,10 @@ import { IntegrationsPage } from './settings/IntegrationsPage';
 import { LinkedAccountsPage } from './settings/LinkedAccountsPage';
 import { TerminalPage } from './settings/TerminalPage';
 import { UserProfilePage } from './settings/UserProfilePage';
-import { UserTokensPage } from './settings/UserTokensPage';
 
 type SettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organizations: UserOrganization[];
-  selectedOrgId: number | null;
   initialNav?: SettingsNavSection;
 };
 
@@ -90,20 +85,13 @@ const appNavItems: NavItem[] = [
 
 const userNavItems: NavItem[] = [
   { name: 'Profile', icon: User },
-  { name: 'Linked Accounts', icon: Shield },
-  { name: 'Agent tokens', icon: KeyRound }
+  { name: 'Linked Accounts', icon: Shield }
 ];
 
 const navItems: NavItem[] = [...workflowNavItems, ...appNavItems, ...userNavItems];
 export type SettingsNavSection = (typeof navItems)[number]['name'];
 
-export function SettingsModal({
-  open,
-  onOpenChange,
-  organizations,
-  selectedOrgId,
-  initialNav
-}: SettingsModalProps) {
+export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalProps) {
   const { isElectron } = useElectron();
   const visibleNavItems = navItems.filter(item => !item.electronOnly || isElectron);
   const visibleWorkflowNavItems = workflowNavItems.filter(item => !item.electronOnly || isElectron);
@@ -224,13 +212,7 @@ export function SettingsModal({
             </header>
             <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
               {activeNav === 'Integrations' && <IntegrationsPage open={open} />}
-              {activeNav === 'MCP & Cloud Agents' && (
-                <AgentsAndMcpPage
-                  open={open}
-                  organizations={organizations}
-                  selectedOrgId={selectedOrgId}
-                />
-              )}
+              {activeNav === 'MCP & Cloud Agents' && <AgentsAndMcpPage open={open} />}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
               {activeNav === 'Feed' && <FeedSettingsPage open={open} />}
@@ -238,12 +220,6 @@ export function SettingsModal({
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}
               {activeNav === 'Linked Accounts' && <LinkedAccountsPage open={open} />}
-              {activeNav === 'Agent tokens' && (
-                <UserTokensPage
-                  open={open}
-                  onViewAgentsAndMcp={() => setActiveNav('MCP & Cloud Agents')}
-                />
-              )}
               {activeNav === 'Terminal & IDE' && <TerminalPage open={open} />}
               {activeNav === 'About' && <AboutPage open={open} />}
             </div>

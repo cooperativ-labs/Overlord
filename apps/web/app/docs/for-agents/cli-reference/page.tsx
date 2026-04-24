@@ -22,7 +22,6 @@ SESSION_KEY=<key>        # falls back to --session-key
 TICKET_ID=<id>           # falls back to --ticket-id
 OVERLORD_URL=<url>       # API host
 OVERLORD_ORGANIZATION_ID=<id>  # optional org scope for shared OAuth credentials
-AGENT_TOKEN=<token>      # legacy compatibility override only
 OVERLORD_TIMEOUT=<ms>    # falls back to --timeout
 AGENT_IDENTIFIER=<name>  # falls back to --agent (default: claude-code)
 \`\`\`

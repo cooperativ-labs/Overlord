@@ -143,8 +143,11 @@ export function AppSidebar({
     if (requestedSection === 'Sessions') {
       return 'Linked Accounts';
     }
+    if (requestedSection === 'Agent tokens') {
+      return 'MCP & Cloud Agents';
+    }
 
-    return (['Profile', 'Linked Accounts', 'Agent tokens'] as const).find(
+    return (['Profile', 'Linked Accounts', 'MCP & Cloud Agents'] as const).find(
       section => section === requestedSection
     );
   }, [searchParams]);
@@ -352,8 +355,6 @@ export function AppSidebar({
             setSettingsInitialNav(undefined);
           }
         }}
-        organizations={organizations}
-        selectedOrgId={selectedOrgId}
         initialNav={settingsInitialNav}
       />
       <ProjectWorkingDirectoryRequiredModal

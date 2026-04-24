@@ -21,7 +21,7 @@ The web app is where you:
 - organize work by project
 - review ticket activity and artifacts
 - answer agent questions
-- manage account settings and agent tokens
+- manage account settings and connected agents
 
 ## Why it matters
 
@@ -32,7 +32,7 @@ The web app gives everyone a common view of the work without forcing them into a
 - turning a request into a ticket
 - watching live progress from an agent
 - reviewing deliverables before approval
-- checking account or token settings
+- checking account, auth, and agent settings
 
 ## Related pages
 

@@ -14,7 +14,7 @@ personal marketplace entry at `~/.agents/plugins/marketplace.json`.
 ## Requirements
 
 - Install the Overlord CLI so `ovld` is available on `PATH`.
-- Authenticate with `ovld auth login` or Overlord Desktop. `OVERLORD_URL` and `AGENT_TOKEN` are optional overrides, mainly for remote shells, CI, or explicit token injection.
+- Authenticate with `ovld auth login` or Overlord Desktop. `OVERLORD_URL` can be used to point the CLI at a non-default host.
 - Optionally set `OVLD_BIN` if the CLI lives at a non-standard path.
 
 ## Tool coverage
