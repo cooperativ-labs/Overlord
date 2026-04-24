@@ -21,11 +21,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Protocol and MCP endpoints are authenticated via bearer token, not
-  // Supabase session cookies. Bypass auth session refresh entirely so these
-  // routes can return their own auth challenges instead of being redirected
-  // to the web login screen.
+  // Machine-facing auth/protocol endpoints do not use browser Supabase session
+  // cookies. Bypass refresh so stale Electron/webview cookies cannot trigger
+  // noisy refresh-token errors on public config or bearer-token requests.
   if (
+    request.nextUrl.pathname.startsWith('/api/auth') ||
     request.nextUrl.pathname.startsWith('/api/protocol') ||
     request.nextUrl.pathname.startsWith('/api/mcp')
   ) {
