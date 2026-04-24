@@ -2,7 +2,7 @@ import { config as loadDotenv } from 'dotenv';
 import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
-
+import * as Sentry from '@sentry/electron';
 import { registerAppIpc } from './ipc/app';
 import { registerAuthIpc } from './ipc/auth';
 import { registerFilesystemIpc, teardownFilesystemIpc } from './ipc/filesystem';
@@ -31,6 +31,10 @@ const supabaseManager = new SupabaseManager();
 const appUpdater = new AppUpdaterService({
   isPackaged: app.isPackaged,
   currentVersion: app.getVersion()
+});
+
+Sentry.init({
+  dsn: 'https://4217dfda3fcd82c64dab291ea1d15aef@o4508852831977472.ingest.us.sentry.io/4511274027450368'
 });
 
 function getRendererCsp(targetUrl: string): string {

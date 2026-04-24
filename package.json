@@ -36,7 +36,7 @@
     "generate": "node scripts/generate-supabase-types.js local",
     "new": "rm -rf node_modules && yarn cache clean && yarn install",
     "nuke": "yarn install && supabase db reset && supabase start && supabase status && yarn generate",
-    "build": "yarn workspace @overlord/web build",
+    "build": "yarn workspace @overlord/web build && yarn sentry:sourcemaps",
     "build:web": "yarn workspace @overlord/web build",
     "build-branch": "yarn workspace @overlord/web build",
     "build-staging": "yarn workspace @overlord/web build",
@@ -82,7 +82,8 @@
     "install-agent-permissions": "node scripts/install-agent-permissions.mjs",
     "verify-agent-permissions": "node scripts/verify-agent-permissions.mjs",
     "cli:sync": "node scripts/sync-cli-package.mjs",
-    "cli:publish": "node scripts/publish-overlord-cli.mjs"
+    "cli:publish": "node scripts/publish-overlord-cli.mjs",
+    "sentry:sourcemaps": "sentry-cli sourcemaps inject --org cooperativ-labs --project overlord-electron apps/desktop/dist-electron && sentry-cli sourcemaps upload --org cooperativ-labs --project overlord-electron apps/desktop/dist-electron"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -91,6 +92,7 @@
     "@google/genai": "^1.46.0",
     "@modelcontextprotocol/ext-apps": "^1.2.2",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@sentry/cli": "^2",
     "@sentry/electron": "^7.11.0",
     "@sentry/nextjs": "^10.38.0",
     "@supabase/ssr": "^0.8.0",

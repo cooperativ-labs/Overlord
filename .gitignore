@@ -59,3 +59,6 @@ apps/desktop/electron/_prod-env.generated.ts
 apps/web/public/sw.js
 apps/web/public/sw.js.map
 apps/web/public/swe-worker*.js
+
+# Sentry Config File
+.sentryclirc
