@@ -3,6 +3,7 @@
 import { Building2, FolderKanban, FolderSearch } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import * as Sentry from '@sentry/nextjs';
 
 import { DownloadAppStep } from '@/components/features/onboarding/steps/DownloadAppStep';
 import {
@@ -111,10 +112,15 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
   async function handleChooseDirectory() {
     setProjectError(null);
     if (isElectron && api) {
-      const chosenPath = await api.terminal.chooseDirectory();
-      if (!chosenPath) return;
-      setWorkingDirectory(chosenPath);
-      return;
+      try {
+        const chosenPath = await api.terminal.chooseDirectory();
+        if (!chosenPath) return;
+        setWorkingDirectory(chosenPath);
+        return;
+      } catch (err) {
+        Sentry.captureException(err);
+        console.error('handleChooseDirectory', err);
+      }
     }
     const w =
       typeof window !== 'undefined'
@@ -127,6 +133,9 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           setProjectError('Could not access the selected folder.');
+        } else {
+          Sentry.captureException(err);
+          console.error('handleChooseDirectory', err);
         }
       }
       return;
