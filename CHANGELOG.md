@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.23.0] - 2026-04-24:16:24
+
+### Added
+- Enforce a single running desktop instance and focus the existing window when Overlord is opened again.
+
+### Fixed
+- Register the Electron OAuth loopback callback server error handler before listening so port-in-use failures surface reliably, with clearer guidance when the callback port is busy.
+
+### Changed
+- Turn off Supabase browser auto token refresh in the Electron webview so refresh stays aligned with the desktop OAuth and IPC session path.
+- In middleware, treat Electron protected requests with missing, invalid, or soon-expiring Supabase auth cookies as needing the Electron login bridge, redirect to `/electron-login` with a sanitized `next` path, and emit structured redirect diagnostics instead of relying on the default refresh flow alone.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.23.0`.
+
 ## [4.22.0] - 2026-04-24:15:45
 
 ### Added
