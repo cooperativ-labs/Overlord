@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.19.0] - 2026-04-24:08:20
+
+### Added
+- Add OAuth session management in the Electron app so token refresh and organization handling work through a shared login session.
+
+### Fixed
+- Prevent project onboarding from failing when the working-directory save step cannot complete after project creation.
+
+### Changed
+- Replace legacy agent-token usage with shared OAuth sessions across desktop, web, and mobile auth flows.
+- Improve authentication error handling and user feedback across the app.
+
+### Security
+- None.
+
+### Documentation
+- Update auth and CLI docs to reflect the new OAuth-based session model.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.19.0`.
+
 ## [4.18.0] - 2026-04-23:10:30
 
 ### Added
