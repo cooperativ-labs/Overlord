@@ -73,7 +73,8 @@ test('resolveProtocolModelIdentifier prefers explicit model, then environment', 
 test('permission-request posts hook payload through protocol auth resolver', async () => {
   const previousFetch = global.fetch;
   const previousOverlordUrl = process.env.OVERLORD_URL;
-  const previousAgentToken = process.env.AGENT_TOKEN;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
   const previousTicketId = process.env.TICKET_ID;
   const previousLog = console.log;
   const calls = [];
@@ -81,7 +82,8 @@ test('permission-request posts hook payload through protocol auth resolver', asy
 
   try {
     process.env.OVERLORD_URL = 'https://www.ovld.ai';
-    process.env.AGENT_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
     delete process.env.TICKET_ID;
 
     global.fetch = async (url, init = {}) => {
@@ -109,8 +111,10 @@ test('permission-request posts hook payload through protocol auth resolver', asy
     console.log = previousLog;
     if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
     else process.env.OVERLORD_URL = previousOverlordUrl;
-    if (previousAgentToken === undefined) delete process.env.AGENT_TOKEN;
-    else process.env.AGENT_TOKEN = previousAgentToken;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
     if (previousTicketId === undefined) delete process.env.TICKET_ID;
     else process.env.TICKET_ID = previousTicketId;
   }
@@ -122,6 +126,7 @@ test('permission-request posts hook payload through protocol auth resolver', asy
   );
   assert.equal(calls[0].method, 'POST');
   assert.equal(calls[0].headers.Authorization, 'Bearer test-agent-token');
+  assert.equal(calls[0].headers['x-organization-id'], '42');
   assert.equal(calls[0].headers['Content-Type'], 'application/json');
   assert.equal(calls[0].body, '{}');
   assert.match(logs.join('\n'), /"ok": true/);

@@ -3,7 +3,7 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'npm:jose@6.1.0';
 
 // ---------------------------------------------------------------------------
-// Auth — supports both legacy agent_tokens and Supabase OAuth JWTs
+// Auth — Supabase OAuth JWTs only
 // ---------------------------------------------------------------------------
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -13,21 +13,16 @@ const SUPABASE_JWKS = createRemoteJWKSet(new URL(`${SUPABASE_AUTH_ISSUER}/.well-
 export type TokenContext = {
   userId: string;
   organizationId: number;
-  /** Populated for agent_token auth; null for OAuth JWT auth. */
-  tokenId: string | null;
   /** The raw bearer value. */
   tokenValue: string;
-  /** 'agent_token' or 'oauth_jwt' — identifies how the caller authenticated. */
-  authMethod: 'agent_token' | 'oauth_jwt';
+  /** Identifies how the caller authenticated. */
+  authMethod: 'oauth_jwt';
   /** Streamable HTTP session id when provided by MCP clients. */
   mcpSessionId?: string | null;
 };
 
 /**
  * Resolve the bearer token from the request.
- *
- * 1. Try matching against `agent_tokens` (legacy flow).
- * 2. If that fails, validate as a Supabase OAuth JWT (new flow for MCP OAuth clients).
  *
  * For OAuth JWT auth with multi-org users, the `x-organization-id` header
  * selects which organization to scope the request to. Without it, the first
@@ -45,49 +40,7 @@ export async function resolveToken(
   const orgIdHint = req.headers.get('x-organization-id');
   const parsedOrgId = orgIdHint ? parseInt(orgIdHint, 10) : null;
 
-  // --- Path 1: agent_token lookup ---
-  const agentCtx = await resolveAgentToken(token, supabase);
-  if (agentCtx) return agentCtx;
-
-  // --- Path 2: Supabase OAuth JWT ---
-  const oauthCtx = await resolveOAuthJwt(token, supabase, parsedOrgId);
-  if (oauthCtx) return oauthCtx;
-
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Agent token resolution (legacy)
-// ---------------------------------------------------------------------------
-
-async function resolveAgentToken(
-  token: string,
-  supabase: SupabaseClient
-): Promise<TokenContext | null> {
-  const { data } = await supabase
-    .from('agent_tokens')
-    .select('id, user_id, organization_id, token, revoked_at, expires_at')
-    .eq('token', token)
-    .single();
-
-  if (!data) return null;
-  if (data.revoked_at) return null;
-  if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
-
-  // Fire-and-forget last_used_at
-  supabase
-    .from('agent_tokens')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', data.id)
-    .then(() => {});
-
-  return {
-    userId: data.user_id,
-    organizationId: data.organization_id,
-    tokenId: data.id,
-    tokenValue: token,
-    authMethod: 'agent_token'
-  };
+  return resolveOAuthJwt(token, supabase, parsedOrgId);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +107,6 @@ async function resolveOAuthJwt(
       return {
         userId,
         organizationId: targetMember.organization_id,
-        tokenId: null,
         tokenValue: token,
         authMethod: 'oauth_jwt'
       };
@@ -176,7 +128,6 @@ async function resolveOAuthJwt(
   return {
     userId,
     organizationId: member.organization_id,
-    tokenId: null,
     tokenValue: token,
     authMethod: 'oauth_jwt'
   };

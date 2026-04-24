@@ -36,8 +36,6 @@ export type SpawnParams = {
   metadata: Json;
   organizationId: number;
   userId?: string;
-  tokenId?: string | null;
-  tokenValue?: string | null;
 };
 
 /**
@@ -66,9 +64,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     connectionMethod,
     metadata,
     organizationId,
-    userId,
-    tokenId,
-    tokenValue
+    userId
   } = params;
 
   // Resolve project — use provided projectId, then try workingDirectory, then fall back to first in org
@@ -102,9 +98,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
   const nextTitle = title.trim() || deriveTitleFromObjective(objective);
   const ticketDelegate = resolveTicketDelegate(delegate, modelIdentifier ?? null, agentIdentifier);
   const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
-    userId,
-    tokenId: tokenId ?? null,
-    tokenValue: tokenValue ?? ''
+    userId
   });
   const executeStatusName = await resolvePreferredStatusNameByType(
     supabase,

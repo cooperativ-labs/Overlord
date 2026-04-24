@@ -26,15 +26,13 @@ export async function POST(request: Request) {
       ticketId: rawTicketId,
       title
     } = parsed.data;
-    const { organizationId, tokenId, tokenValue, userId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
     const supabase = createServiceRoleClient();
     const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
-      userId,
-      tokenId,
-      tokenValue
+      userId
     });
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {

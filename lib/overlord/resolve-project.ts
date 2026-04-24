@@ -42,7 +42,7 @@ function normalizeDirPath(dir: string): string {
  * trailing slashes). Returns the first exact match, or null.
  *
  * When `userId` is provided, matching is restricted to project_user rows
- * belonging to that user — this is what agent-token flows want, because the
+ * belonging to that user — this is what protocol-authenticated agent flows want, because the
  * same repo path can legitimately map to different projects for different
  * teammates. When omitted, all project_user rows for the org are considered
  * (used by the UI).

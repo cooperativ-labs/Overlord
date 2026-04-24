@@ -99,7 +99,6 @@ export function DiscussTicketButton({
           ticketId,
           agentValue,
           effectiveWorkingDirectory ?? undefined,
-          undefined,
           'ask',
           agentFlags?.[agentValue],
           agentValue === assignedAgent?.agent ? (assignedAgent.model ?? undefined) : undefined,

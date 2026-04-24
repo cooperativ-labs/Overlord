@@ -22,7 +22,8 @@ export function sshConnectionConfigToCommand(
 type BuildLaunchCommandsInput = {
   ticketId: string;
   platformUrl: string;
-  legacyAgentToken?: string;
+  oauthAccessToken?: string;
+  organizationId?: number | null;
 };
 
 export type LaunchCommands = {
@@ -87,11 +88,16 @@ export function buildResumeCommands({ ticketId }: BuildLaunchCommandsInput): Res
  */
 export function buildRawLaunchCommand(
   agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
-  { ticketId, platformUrl, legacyAgentToken }: BuildLaunchCommandsInput
+  { ticketId, platformUrl, oauthAccessToken, organizationId }: BuildLaunchCommandsInput
 ): string {
-  const envPrefix = legacyAgentToken
-    ? `OVERLORD_URL=${platformUrl} AGENT_TOKEN=${legacyAgentToken}`
-    : `OVERLORD_URL=${platformUrl}`;
+  const envParts = [`OVERLORD_URL=${platformUrl}`];
+  if (oauthAccessToken) {
+    envParts.push(`OVERLORD_ACCESS_TOKEN=${oauthAccessToken}`);
+  }
+  if (typeof organizationId === 'number' && Number.isFinite(organizationId)) {
+    envParts.push(`OVERLORD_ORGANIZATION_ID=${organizationId}`);
+  }
+  const envPrefix = envParts.join(' ');
   return `${envPrefix} ovld connect ${agent} --ticket-id ${ticketId}`;
 }
 

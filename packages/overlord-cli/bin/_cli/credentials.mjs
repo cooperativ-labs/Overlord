@@ -22,8 +22,7 @@ const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
  *   refresh_token?: string,
  *   organization_id?: number | null,
  *   platform_url: string,
- *   user_email?: string,
- *   legacy_agent_token?: string
+ *   user_email?: string
  * }} Credentials
  */
 
@@ -80,10 +79,9 @@ function parseStoredCredentialsData(parsed, { requireAuthData = false } = {}) {
     typeof parsed.organization_id === 'number' && Number.isFinite(parsed.organization_id)
       ? parsed.organization_id
       : null;
-  const legacyAgentToken = accessToken && !refreshToken ? accessToken : '';
 
   if (!platformUrl) return null;
-  if (requireAuthData && !refreshToken && !legacyAgentToken) return null;
+  if (requireAuthData && !refreshToken) return null;
 
   return {
     platform_url: platformUrl,
@@ -93,8 +91,7 @@ function parseStoredCredentialsData(parsed, { requireAuthData = false } = {}) {
     ...(organizationId ? { organization_id: organizationId } : {}),
     ...(typeof parsed.user_email === 'string' && parsed.user_email.trim()
       ? { user_email: parsed.user_email.trim() }
-      : {}),
-    ...(legacyAgentToken ? { legacy_agent_token: legacyAgentToken } : {})
+      : {})
   };
 }
 
@@ -151,7 +148,6 @@ export function saveCredentials(data) {
     }
     if (credentials.organization_id) electronPayload.organization_id = credentials.organization_id;
     if (credentials.user_email) electronPayload.user_email = credentials.user_email;
-    delete electronPayload.legacy_agent_token;
     delete electronPayload.supabase_refresh_token;
     writeJsonFileAtomic(ELECTRON_CREDENTIALS_FILE, electronPayload);
   }
@@ -465,17 +461,23 @@ export async function resolveAuth() {
       ? runtime.local_secret
       : '';
 
-  const envAgentToken = normalizeAgentToken(process.env.AGENT_TOKEN);
-  if (envAgentToken) {
+  const envAccessToken = normalizeAccessToken(process.env.OVERLORD_ACCESS_TOKEN);
+  if (envAccessToken) {
+    const envOrganizationId =
+      typeof process.env.OVERLORD_ORGANIZATION_ID === 'string'
+        ? Number.parseInt(process.env.OVERLORD_ORGANIZATION_ID, 10)
+        : null;
+    if (!Number.isFinite(envOrganizationId)) {
+      throw new Error(
+        'OVERLORD_ACCESS_TOKEN requires OVERLORD_ORGANIZATION_ID so protocol requests stay scoped.'
+      );
+    }
     return {
       platformUrl,
-      bearerToken: envAgentToken,
+      bearerToken: envAccessToken,
       localSecret,
-      organizationId:
-        typeof process.env.OVERLORD_ORGANIZATION_ID === 'string'
-          ? Number.parseInt(process.env.OVERLORD_ORGANIZATION_ID, 10)
-          : null,
-      authMode: 'legacy_agent_token'
+      organizationId: envOrganizationId,
+      authMode: 'oauth_env'
     };
   }
 
@@ -525,16 +527,6 @@ export async function resolveAuth() {
     };
   }
 
-  if (creds.legacy_agent_token) {
-    return {
-      platformUrl,
-      bearerToken: creds.legacy_agent_token,
-      localSecret,
-      organizationId: creds.organization_id ?? null,
-      authMode: 'legacy_agent_token'
-    };
-  }
-
   return {
     platformUrl,
     bearerToken: 'overlord-local-dev-token',
@@ -564,12 +556,10 @@ export async function getAuthStatus() {
   }
 
   let tokenSource = 'fallback';
-  if (normalizeAgentToken(process.env.AGENT_TOKEN)) {
-    tokenSource = 'AGENT_TOKEN';
+  if (normalizeAccessToken(process.env.OVERLORD_ACCESS_TOKEN)) {
+    tokenSource = 'OVERLORD_ACCESS_TOKEN';
   } else if (creds?.refresh_token) {
     tokenSource = getCredentialFileSource();
-  } else if (creds?.legacy_agent_token) {
-    tokenSource = `${getCredentialFileSource()} (legacy)`;
   }
 
   let platformUrlSource = 'default';
@@ -613,7 +603,7 @@ export function repairCredentials() {
   };
 }
 
-function normalizeAgentToken(value) {
+function normalizeAccessToken(value) {
   if (typeof value !== 'string') return '';
   return value.trim();
 }

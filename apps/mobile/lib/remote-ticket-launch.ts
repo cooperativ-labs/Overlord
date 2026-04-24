@@ -48,41 +48,26 @@ export function resolvePlatformUrl(): string {
   return 'https://www.ovld.ai';
 }
 
-export async function ensureAgentToken(): Promise<string> {
+export async function resolveLaunchOAuthSession(): Promise<{
+  accessToken: string;
+  organizationId: number;
+}> {
   const supabase = getSupabase();
   const {
-    data: { user }
-  } = await supabase.auth.getUser();
+    data: { session }
+  } = await supabase.auth.getSession();
 
-  if (!user) {
+  const accessToken = session?.access_token?.trim();
+  const userId = session?.user?.id?.trim();
+
+  if (!accessToken || !userId) {
     throw new Error('You must be signed in to launch a remote ticket session.');
-  }
-
-  const now = Date.now();
-  const { data: existingToken, error: tokenError } = await supabase
-    .from('agent_tokens')
-    .select('token, expires_at')
-    .eq('user_id', user.id)
-    .is('revoked_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (tokenError) {
-    throw new Error(tokenError.message);
-  }
-
-  if (
-    existingToken?.token &&
-    (!existingToken.expires_at || new Date(existingToken.expires_at).getTime() > now)
-  ) {
-    return existingToken.token;
   }
 
   const { data: member, error: memberError } = await supabase
     .from('members')
     .select('organization_id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('organization_id', { ascending: true })
     .limit(1)
     .single();
@@ -91,21 +76,10 @@ export async function ensureAgentToken(): Promise<string> {
     throw new Error(memberError?.message ?? 'Could not determine your organization.');
   }
 
-  const { data: createdToken, error: createError } = await supabase
-    .from('agent_tokens')
-    .insert({
-      user_id: user.id,
-      organization_id: member.organization_id,
-      name: 'CLI Token'
-    })
-    .select('token')
-    .single();
-
-  if (createError || !createdToken?.token) {
-    throw new Error(createError?.message ?? 'Failed to create a new agent token.');
-  }
-
-  return createdToken.token;
+  return {
+    accessToken,
+    organizationId: member.organization_id
+  };
 }
 
 function buildRemoteLaunchCommand({
@@ -113,14 +87,16 @@ function buildRemoteLaunchCommand({
   ticketSequence,
   agent,
   platformUrl,
-  agentToken,
+  accessToken,
+  organizationId,
   terminalPreference
 }: {
   ticketId: string;
   ticketSequence: number | null;
   agent: LaunchAgentType;
   platformUrl: string;
-  agentToken: string;
+  accessToken: string;
+  organizationId: number;
   terminalPreference: ServerTerminalPreference;
 }): string {
   const windowName = `ticket-${ticketSequence ?? ticketId.slice(0, 8)}`;
@@ -129,7 +105,8 @@ function buildRemoteLaunchCommand({
   // error visible instead of closing immediately.
   const innerCmd = [
     `OVERLORD_URL=${quoteShell(platformUrl)}`,
-    `AGENT_TOKEN=${quoteShell(agentToken)}`,
+    `OVERLORD_ACCESS_TOKEN=${quoteShell(accessToken)}`,
+    `OVERLORD_ORGANIZATION_ID=${quoteShell(String(organizationId))}`,
     `TICKET_ID=${quoteShell(ticketId)}`,
     'ovld connect',
     agent,
@@ -191,14 +168,15 @@ export async function launchTicketOnServerWithPassword({
   password
 }: LaunchTicketOnServerWithPasswordParams) {
   const platformUrl = resolvePlatformUrl();
-  const agentToken = await ensureAgentToken();
+  const { accessToken, organizationId } = await resolveLaunchOAuthSession();
   const terminalPreference = await getServerTerminalPreference();
   const command = buildRemoteLaunchCommand({
     ticketId,
     ticketSequence,
     agent,
     platformUrl,
-    agentToken,
+    accessToken,
+    organizationId,
     terminalPreference
   });
 
@@ -221,14 +199,15 @@ export async function launchTicketOnServer({
   keyTag
 }: LaunchTicketOnServerParams) {
   const platformUrl = resolvePlatformUrl();
-  const agentToken = await ensureAgentToken();
+  const { accessToken, organizationId } = await resolveLaunchOAuthSession();
   const terminalPreference = await getServerTerminalPreference();
   const command = buildRemoteLaunchCommand({
     ticketId,
     ticketSequence,
     agent,
     platformUrl,
-    agentToken,
+    accessToken,
+    organizationId,
     terminalPreference
   });
 

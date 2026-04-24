@@ -23,12 +23,9 @@ function getSupabaseJwks(): { jwks: ReturnType<typeof createRemoteJWKSet>; issue
 export type ProtocolAuthContext = {
   userId: string;
   organizationId: number;
-  tokenId: string | null;
   tokenValue: string;
-  authMethod: 'agent_token' | 'oauth_jwt';
+  authMethod: 'oauth_jwt';
 };
-
-export type AgentTokenContext = ProtocolAuthContext;
 
 function extractBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization');
@@ -59,34 +56,6 @@ function parseOrganizationIdHeader(request: Request): number | null {
   if (!raw) return null;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-async function resolveAgentTokenContext(
-  providedToken: string
-): Promise<ProtocolAuthContext | null> {
-  const supabase = createServiceRoleClient();
-  const { data } = await supabase
-    .from('agent_tokens')
-    .select('id, user_id, organization_id, token, revoked_at, expires_at')
-    .eq('token', providedToken)
-    .single();
-
-  if (!data || data.revoked_at) return null;
-  if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
-
-  supabase
-    .from('agent_tokens')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', data.id)
-    .then(() => {});
-
-  return {
-    userId: data.user_id,
-    organizationId: data.organization_id,
-    tokenId: data.id,
-    tokenValue: providedToken,
-    authMethod: 'agent_token'
-  };
 }
 
 async function verifySupabaseJwt(providedToken: string): Promise<string | null> {
@@ -147,7 +116,6 @@ async function resolveOAuthJwtContext(
     context: {
       userId,
       organizationId: member.organization_id,
-      tokenId: null,
       tokenValue: providedToken,
       authMethod: 'oauth_jwt'
     },
@@ -183,14 +151,6 @@ export async function resolveProtocolAuth(
         { error: `Missing bearer token. ${reauthInstructions}` },
         { status: 401 }
       )
-    };
-  }
-
-  const agentContext = await resolveAgentTokenContext(providedToken);
-  if (agentContext) {
-    return {
-      context: agentContext,
-      error: null
     };
   }
 

@@ -31,18 +31,18 @@ function buildMcpRestartCommand(
   }
 
   if (normalized.includes('cursor')) {
-    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume cursor`;
+    return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume cursor`;
   }
   if (normalized.includes('gemini')) {
-    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume gemini`;
+    return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume gemini`;
   }
   if (normalized.includes('opencode')) {
-    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume opencode`;
+    return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume opencode`;
   }
   if (normalized.includes('codex')) {
-    return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume codex`;
+    return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume codex`;
   }
-  return `OVERLORD_URL=$OVERLORD_URL AGENT_TOKEN=$AGENT_TOKEN TICKET_ID=${ticketId} ovld resume claude`;
+  return `OVERLORD_URL=$OVERLORD_URL OVERLORD_ACCESS_TOKEN=$OVERLORD_ACCESS_TOKEN OVERLORD_ORGANIZATION_ID=$OVERLORD_ORGANIZATION_ID TICKET_ID=${ticketId} ovld resume claude`;
 }
 
 export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: TokenContext) {

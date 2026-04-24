@@ -229,10 +229,11 @@ When the ticket detail screen launches work on a connected server:
 
 1. The app loads the saved `DeviceServerCredential` from SecureStore.
 2. It uses the stored `keyTag` to find the private key in the Keychain / Secure Enclave.
-3. It creates or reuses an Overlord agent token.
+3. It uses the current Overlord OAuth session.
 4. It builds a remote shell command that exports:
    - `OVERLORD_URL`
-   - `AGENT_TOKEN`
+   - `OVERLORD_ACCESS_TOKEN`
+   - `OVERLORD_ORGANIZATION_ID`
    - `TICKET_ID`
 5. It starts the agent inside `tmux` by running `ovld connect <agent> --ticket-id <ticket-id>`.
 

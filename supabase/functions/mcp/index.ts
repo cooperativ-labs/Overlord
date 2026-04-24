@@ -7,7 +7,7 @@
  * (Claude Code, Codex, etc.) can interact with tickets natively.
  *
  * Protocol: JSON-RPC 2.0 / MCP Streamable HTTP
- * Auth: OAuth 2.1 JWT (primary) or legacy agent_token bearer
+ * Auth: OAuth 2.1 JWT bearer
  */
 
 // deno-lint-ignore-file no-explicit-any
@@ -105,8 +105,8 @@ Deno.serve(async (req: Request) => {
           code: -32600,
           message:
             'Unauthorized: missing or invalid bearer token. ' +
-            'IMPORTANT: Stop all work immediately. Your agent token is invalid, expired, or revoked. ' +
-            'Tell the user to open Overlord Settings → Agent Tokens and retrieve an updated token for this project. ' +
+            'IMPORTANT: Stop all work immediately. Your Overlord OAuth session is invalid, expired, or revoked. ' +
+            'Tell the user to sign in again with Overlord Desktop or `ovld auth login`. ' +
             'Ask the user if they would like to proceed without submitting updates to Overlord.'
         }
       }),

@@ -198,7 +198,6 @@ export function AgentSplitButton({
           ticketId,
           agentValue,
           effectiveWorkingDirectory ?? undefined,
-          undefined,
           'run',
           agentFlags?.[agentValue],
           options?.useStoredModelPreference ? (effectiveSelection.model ?? undefined) : undefined,

@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.20.0] - 2026-04-24:09:19
+
+### Added
+- Add Sentry error tracking to the Electron app and upload sourcemaps during desktop builds.
+
+### Fixed
+- None.
+
+### Changed
+- Remove the legacy agent-token auth flow and switch CLI, web, mobile, and MCP paths to the shared OAuth session model.
+- Refresh auth-related UI, prompts, and docs to refer to MCP and Cloud Agents instead of agent tokens.
+
+### Security
+- None.
+
+### Removed
+- Remove legacy `AGENT_TOKEN` routes, actions, and settings UI from the authentication stack.
+
+### Refactor
+- Consolidate credential, ticket-launch, and protocol routing around the new OAuth session helpers.
+
+### Test
+- Update CLI credential, protocol, and delivery tests for the new auth flow.
+
+### Documentation
+- Update auth, connector, SSH key, and plugin docs for OAuth-based sessions and the removed agent-token flow.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `4.20.0`.
+
 ## [4.19.0] - 2026-04-24:08:20
 
 ### Added

@@ -1,8 +1,9 @@
+import * as Sentry from '@sentry/electron';
 import { config as loadDotenv } from 'dotenv';
 import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
-import * as Sentry from '@sentry/electron';
+
 import { registerAppIpc } from './ipc/app';
 import { registerAuthIpc } from './ipc/auth';
 import { registerFilesystemIpc, teardownFilesystemIpc } from './ipc/filesystem';

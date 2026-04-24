@@ -33,8 +33,8 @@ function normalizeDirPath(dir: string): string {
 }
 
 /**
- * Resolve the project_user row for the caller, given an AGENT_TOKEN (via
- * `userId`) and the working directory reported by the agent. Returns the
+ * Resolve the project_user row for the caller, given the authenticated
+ * `userId` and the working directory reported by the agent. Returns the
  * project_user id plus derived project + user identifiers.
  *
  * Matching: exact normalized match first, then parent-directory match. If the

@@ -15,7 +15,6 @@ export type ElectronCredentials = {
   organization_id?: number | null;
   platform_url: string;
   user_email?: string;
-  legacy_agent_token?: string;
 };
 
 function ensureOvldDir(): void {
@@ -57,9 +56,7 @@ function parseCredentials(parsed: Record<string, unknown> | null): ElectronCrede
       : null;
   const accessTokenExpiresAt =
     typeof parsed.access_token_expires_at === 'string' ? parsed.access_token_expires_at.trim() : '';
-  const legacyAgentToken = accessToken && !refreshToken ? accessToken : '';
-
-  if (!refreshToken && !legacyAgentToken) return null;
+  if (!refreshToken) return null;
 
   return {
     platform_url: platformUrl,
@@ -69,8 +66,7 @@ function parseCredentials(parsed: Record<string, unknown> | null): ElectronCrede
     ...(organizationId ? { organization_id: organizationId } : {}),
     ...(typeof parsed.user_email === 'string' && parsed.user_email.trim()
       ? { user_email: parsed.user_email.trim() }
-      : {}),
-    ...(legacyAgentToken ? { legacy_agent_token: legacyAgentToken } : {})
+      : {})
   };
 }
 

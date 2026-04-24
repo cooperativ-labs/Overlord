@@ -25,11 +25,6 @@ type LaunchAgentInput = {
   ticketId: string;
   agent: AgentType;
   cwd?: string;
-  /**
-   * Legacy compatibility override for manual launches.
-   * Normal launches should resolve the shared OAuth session from disk.
-   */
-  agentToken?: string;
   launchMode?: AgentLaunchMode;
   /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
   flags?: string[];
@@ -113,10 +108,6 @@ function getConnectorUrl(): string {
   }
 
   return OVERLORD_URL_DEFAULT;
-}
-
-function normalizeAgentToken(value?: string): string {
-  return value?.trim() ?? '';
 }
 
 function decodeJwtExpiry(accessToken: string): number | null {
@@ -212,7 +203,7 @@ async function refreshLaunchOAuthSession(
 async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
   bearerToken: string;
   organizationId: number | null;
-  authMode: 'oauth' | 'legacy_agent_token';
+  authMode: 'oauth';
   platformUrl: string | null;
 }> {
   const credentials = loadElectronCredentials();
@@ -245,21 +236,6 @@ async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
       bearerToken: oauthToken,
       organizationId,
       authMode: 'oauth',
-      platformUrl: credentials?.platform_url ?? null
-    };
-  }
-
-  const legacyToken =
-    normalizeAgentToken(input.agentToken) || normalizeAgentToken(process.env.AGENT_TOKEN);
-  if (legacyToken) {
-    return {
-      bearerToken: legacyToken,
-      organizationId:
-        organizationId ??
-        (Number.isFinite(Number.parseInt(String(process.env.OVERLORD_ORGANIZATION_ID ?? ''), 10))
-          ? Number.parseInt(String(process.env.OVERLORD_ORGANIZATION_ID ?? ''), 10)
-          : null),
-      authMode: 'legacy_agent_token',
       platformUrl: credentials?.platform_url ?? null
     };
   }
@@ -330,6 +306,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const launchEnv = {
     OVERLORD_URL: connectorUrl,
     OVERLORD_CONNECTOR_URL: connectorUrl,
+    OVERLORD_ACCESS_TOKEN: launchAuth.bearerToken,
     TICKET_ID: input.ticketId,
     AGENT_IDENTIFIER: agentIdentifierMap[input.agent],
     OVERLORD_MODEL_IDENTIFIER: input.model ?? '',
@@ -337,8 +314,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET ?? '',
     ...(launchAuth.organizationId !== null
       ? { OVERLORD_ORGANIZATION_ID: String(launchAuth.organizationId) }
-      : {}),
-    ...(launchAuth.authMode === 'legacy_agent_token' ? { AGENT_TOKEN: launchAuth.bearerToken } : {})
+      : {})
   };
 
   // Fetch context from the API (runs in the main process — no shell needed).

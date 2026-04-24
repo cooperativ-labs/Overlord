@@ -7,7 +7,7 @@ Claude Code plugin that exposes the Overlord local ticket workflow to any Claude
 - `skills/overlord-ticket/SKILL.md` — durable attach → update → ask → deliver workflow.
 - `commands/{connect,load,create,spawn}.md` — slash commands for session routing and ticket creation.
 - `hooks/hooks.json` + `scripts/permission-hook.sh` — PermissionRequest notifier that posts to `/api/protocol/permission-request` on the Overlord platform.
-- `userConfig` for `overlord_url` (non-sensitive) and `agent_token` (sensitive → OS keychain) so the hook and CLI know where to talk.
+- `userConfig` for `overlord_url`. Auth is expected to come from shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` env vars.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ claude plugin marketplace add cooperativ/overlord-marketplace
 claude plugin install overlord@cooperativ
 ```
 
-The plugin prompts for `overlord_url` and `agent_token` at install time. The token is persisted to the OS keychain; the URL is stored in `~/.claude/settings.json` under `pluginConfigs["overlord"].options`.
+The plugin prompts for `overlord_url` at install time. Authentication should come from `ovld auth login`, Overlord Desktop, or explicit OAuth env vars in the launched shell.
 
 ## Namespaced components
 

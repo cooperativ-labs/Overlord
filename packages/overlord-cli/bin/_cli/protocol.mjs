@@ -1280,7 +1280,7 @@ Subcommands:
 Environment fallback:
   --session-key <- SESSION_KEY
   --ticket-id   <- TICKET_ID
-  auth/host     <- OVERLORD_URL, optional legacy AGENT_TOKEN, or shared OAuth credentials from ovld auth/Desktop login
+  auth/host     <- OVERLORD_URL, optional OVERLORD_ACCESS_TOKEN + OVERLORD_ORGANIZATION_ID, or shared OAuth credentials from ovld auth/Desktop login
   --timeout     <- OVERLORD_TIMEOUT
 
 Common flags:

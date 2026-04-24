@@ -178,7 +178,6 @@ export function QuickRunModal({
             clientTicketId,
             selection.agent,
             selectedProject?.local_working_directory ?? undefined,
-            undefined,
             'run',
             undefined,
             selection.model ?? undefined,
@@ -316,7 +315,7 @@ export function QuickRunModal({
           </div>
         </div>
 
-        <DialogFooter className="mt-2 flex-shrink-0 gap-2 sm:mt-4">
+        <DialogFooter className="mt-2 shrink-0 gap-2 sm:mt-4">
           <Button
             variant="outline"
             onClick={handleCancel}

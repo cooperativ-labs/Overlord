@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const authResult = await resolveAgentToken(request);
   if (authResult.error) return authResult.error;
 
-  const { organizationId, tokenId, tokenValue, userId } = authResult.context;
+  const { organizationId, userId } = authResult.context;
 
   let body: unknown;
   try {
@@ -47,9 +47,7 @@ export async function POST(request: Request) {
 
     const supabase = createServiceRoleClient();
     const createdBy = await resolveProtocolTicketCreatorUserId(supabase, {
-      userId,
-      tokenId,
-      tokenValue
+      userId
     });
 
     // Resolve project_id — use provided projectId, then try workingDirectory,

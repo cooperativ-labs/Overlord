@@ -2,9 +2,9 @@ import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { ZodType } from 'zod';
 
-import { type AgentTokenContext, resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import { type ProtocolAuthContext, resolveAgentToken } from '@/lib/overlord/protocol-auth';
 
-type ParseOk<T> = { ok: true; data: T; tokenContext: AgentTokenContext };
+type ParseOk<T> = { ok: true; data: T; tokenContext: ProtocolAuthContext };
 type ParseError = { ok: false; errorResponse: NextResponse };
 export type ParseResult<T> = ParseOk<T> | ParseError;
 

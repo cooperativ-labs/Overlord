@@ -26,6 +26,7 @@ import {
   updateOnboardingProgressAction
 } from '@/lib/actions/onboarding';
 import { cn } from '@/lib/utils';
+
 import { useTutorialWizard } from './TutorialWizardContext';
 
 /**
@@ -133,7 +134,10 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
 
       await updateOnboardingProgressAction(update);
       updateState({
-        onboardingCompletedStep: Math.max(initialState.onboardingCompletedStep, completedStepNumber),
+        onboardingCompletedStep: Math.max(
+          initialState.onboardingCompletedStep,
+          completedStepNumber
+        ),
         ...(isElectron
           ? {
               desktopCompletedStep: Math.max(

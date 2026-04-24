@@ -83,7 +83,8 @@ async function withProtocolEnv(callback) {
   const tempHome = createTempDir('ovld-home');
   const previousOverlordUrl = process.env.OVERLORD_URL;
   const previousConnectorUrl = process.env.OVERLORD_CONNECTOR_URL;
-  const previousAgentToken = process.env.AGENT_TOKEN;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
   const previousTicketId = process.env.TICKET_ID;
   const previousSessionKey = process.env.SESSION_KEY;
   const previousHome = process.env.HOME;
@@ -92,6 +93,7 @@ async function withProtocolEnv(callback) {
   try {
     mkdirSync(tempHome, { recursive: true });
     process.env.HOME = tempHome;
+    process.env.OVERLORD_ORGANIZATION_ID = process.env.OVERLORD_ORGANIZATION_ID ?? '42';
     delete process.env.OVERLORD_CONNECTOR_URL;
     return await callback();
   } finally {
@@ -101,8 +103,11 @@ async function withProtocolEnv(callback) {
     if (previousConnectorUrl === undefined) delete process.env.OVERLORD_CONNECTOR_URL;
     else process.env.OVERLORD_CONNECTOR_URL = previousConnectorUrl;
 
-    if (previousAgentToken === undefined) delete process.env.AGENT_TOKEN;
-    else process.env.AGENT_TOKEN = previousAgentToken;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
 
     if (previousTicketId === undefined) delete process.env.TICKET_ID;
     else process.env.TICKET_ID = previousTicketId;
@@ -387,7 +392,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await withStubbedConsole(async () => {
@@ -427,7 +432,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = 'http://127.0.0.1:9';
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await assert.rejects(
@@ -469,7 +474,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = 'http://127.0.0.1:9';
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await assert.rejects(
@@ -520,7 +525,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await withStubbedConsole(async () => {
@@ -591,7 +596,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await withStubbedConsole(async () => {
@@ -653,7 +658,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await withStubbedStdin(payload, async () => {
@@ -704,7 +709,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(nonRepoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await withStubbedConsole(async () => {
@@ -750,7 +755,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await withStubbedConsole(async () => {
@@ -801,7 +806,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           // Use the real absolute path (resolve symlinks like /var → /private/var on macOS)
           const { realpathSync } = await import('node:fs');
@@ -854,7 +859,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = 'http://127.0.0.1:9';
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await assert.rejects(
@@ -920,7 +925,7 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
         await withProtocolEnv(async () => {
           process.chdir(repoDir);
           process.env.OVERLORD_URL = url;
-          process.env.AGENT_TOKEN = 'test-token';
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
 
           const { runProtocolCommand } = await importFresh(modulePath);
           await withStubbedConsole(async () => {

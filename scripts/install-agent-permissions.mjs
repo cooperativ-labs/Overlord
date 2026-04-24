@@ -179,9 +179,9 @@ function installCodex(platformUrl, _dryRun) {
   console.log("  (Codex will prompt for approval; approve each one to persist the prefix.)\n");
 
   for (const endpoint of PROTOCOL_ENDPOINTS) {
-    console.log(`  curl -s -X POST "${platformUrl}/api/protocol/${endpoint}" -H "Content-Type: application/json" -H "Authorization: Bearer \\$AGENT_TOKEN" -d '{}'`);
+    console.log(`  curl -s -X POST "${platformUrl}/api/protocol/${endpoint}" -H "Content-Type: application/json" -H "Authorization: Bearer \\$OVERLORD_ACCESS_TOKEN" -H "x-organization-id: \\$OVERLORD_ORGANIZATION_ID" -d '{}'`);
   }
-  console.log(`  curl -s -H "Authorization: Bearer \\$AGENT_TOKEN" "${platformUrl}/api/protocol/context/test"`);
+  console.log(`  curl -s -H "Authorization: Bearer \\$OVERLORD_ACCESS_TOKEN" -H "x-organization-id: \\$OVERLORD_ORGANIZATION_ID" "${platformUrl}/api/protocol/context/test"`);
   console.log();
   return true;
 }

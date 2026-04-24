@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       connectionMethod,
       metadata
     } = parsed.data;
-    const { organizationId, tokenId, tokenValue, userId } = parsed.tokenContext;
+    const { organizationId, userId } = parsed.tokenContext;
 
     const result = await runSpawnProtocol(supabase, {
       title,
@@ -48,8 +48,6 @@ export async function POST(request: Request) {
       connectionMethod,
       metadata: metadata as Record<string, never>,
       organizationId,
-      tokenId,
-      tokenValue,
       userId
     });
 

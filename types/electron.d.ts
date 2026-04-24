@@ -50,7 +50,6 @@ interface ElectronAPI {
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
       cwd?: string,
-      agentToken?: string,
       launchMode?: 'run' | 'ask',
       flags?: string[],
       model?: string,

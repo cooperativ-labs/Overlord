@@ -6,7 +6,6 @@ import { redirect } from 'next/navigation';
 import { createProject, updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
 import type { AgentTypeValue } from '@/lib/helpers/agent-types';
 import { createClient } from '@/supabase/utils/server';
-import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export type OnboardingProgress = {
   completedStep: number;
@@ -174,27 +173,6 @@ export async function updateOnboardingProgressAction(update: {
   }
 }
 
-export async function getDefaultAgentTokenAction(): Promise<string | null> {
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const { data } = await supabase
-    .from('agent_tokens')
-    .select('token')
-    .eq('user_id', user.id)
-    .eq('name', 'Default CLI Token')
-    .is('revoked_at', null)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  return data?.token ?? null;
-}
-
 export async function createFirstOrganization(input: { name: string }): Promise<{
   organizationId: number;
 }> {
@@ -210,24 +188,6 @@ export async function createFirstOrganization(input: { name: string }): Promise<
   }
 
   const organizationId = data as number;
-
-  // Auto-create a default agent token for this user + org
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  if (user) {
-    const serviceSupabase = createServiceRoleClient();
-    const { error: tokenError } = await serviceSupabase.from('agent_tokens').insert({
-      user_id: user.id,
-      organization_id: organizationId,
-      name: 'Default CLI Token'
-    });
-    if (tokenError) {
-      Sentry.captureException(
-        new Error(`Failed to create default agent token: ${tokenError.message}`)
-      );
-    }
-  }
 
   return { organizationId };
 }
