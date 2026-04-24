@@ -1,3 +1,4 @@
+import { withSentryConfig } from '@sentry/nextjs';
 import { withSerwist } from '@serwist/turbopack';
 import path from 'node:path';
 
@@ -28,7 +29,7 @@ const securityHeaders = async () => [
   }
 ];
 
-export default withSerwist({
+const nextConfig = withSerwist({
   reactStrictMode: true,
   output: 'standalone',
   experimental: {
@@ -60,5 +61,19 @@ export default withSerwist({
         hostname: 'localhost'
       }
     ]
+  }
+});
+
+export default withSentryConfig(nextConfig, {
+  org: 'cooperativ-labs',
+  project: 'overlord-webapp',
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  tunnelRoute: '/monitoring',
+  webpack: {
+    automaticVercelMonitors: true,
+    treeshake: {
+      removeDebugLogging: true
+    }
   }
 });

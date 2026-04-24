@@ -61,7 +61,8 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: DO NOT REMOVE auth.getUser()
 
   const {
-    data: { user }
+    data: { user },
+    error: getUserError
   } = await supabase.auth.getUser();
 
   // Electron embeds "Electron" in the User-Agent.
@@ -75,6 +76,32 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (!user && !isPublicRoute(request.nextUrl.pathname)) {
+    if (isElectron) {
+      const supabaseCookieCount = request.cookies
+        .getAll()
+        .filter(cookie => cookie.name.includes('auth-token')).length;
+      console.error('[overlord:electron-auth-redirect]', {
+        authErrorMessage: getUserError?.message ?? null,
+        authErrorName: getUserError?.name ?? null,
+        authErrorStatus: getUserError?.status ?? null,
+        hasNextActionHeader: request.headers.has('next-action'),
+        method: request.method,
+        pathname: request.nextUrl.pathname,
+        refererPath: (() => {
+          const referer = request.headers.get('referer');
+          if (!referer) return null;
+          try {
+            const parsed = new URL(referer);
+            return `${parsed.pathname}${parsed.search}`;
+          } catch {
+            return null;
+          }
+        })(),
+        supabaseCookieCount,
+        vercelId: request.headers.get('x-vercel-id')
+      });
+    }
+
     const url = request.nextUrl.clone();
     const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
     url.pathname = isElectron ? '/electron-login' : '/login';

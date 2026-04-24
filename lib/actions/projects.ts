@@ -18,6 +18,13 @@ import {
   type SidebarProject,
   type UpdateProjectSshConfigInput
 } from '@/lib/actions/project-types';
+import {
+  getAuthDiagnostics,
+  getServerActionRequestDiagnostics,
+  idSuffix,
+  logElectronServerActionDiagnostic,
+  toErrorDiagnostics
+} from '@/lib/diagnostics/server-action';
 import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { createClient } from '@/supabase/utils/server';
@@ -325,6 +332,7 @@ export async function createProject(input: {
   name: string;
   color: string;
 }): Promise<CreateProjectResult> {
+  const requestDiagnostics = await getServerActionRequestDiagnostics();
   const trimmedName = input.name.trim();
   if (!trimmedName) {
     throw new Error('Project name is required.');
@@ -332,10 +340,32 @@ export async function createProject(input: {
 
   const color = normalizeHexColor(input.color);
   const supabase = await createClient();
-  await ensureDefaultStatusesForOrganization({
-    organizationId: input.organizationId,
-    supabase
-  });
+
+  if (requestDiagnostics.isElectron) {
+    const authDiagnostics = await getAuthDiagnostics(supabase);
+    logElectronServerActionDiagnostic('createProject', 'attempt', {
+      auth: authDiagnostics,
+      organizationId: input.organizationId,
+      request: requestDiagnostics
+    });
+  }
+
+  try {
+    await ensureDefaultStatusesForOrganization({
+      organizationId: input.organizationId,
+      supabase
+    });
+  } catch (error) {
+    if (requestDiagnostics.isElectron) {
+      logElectronServerActionDiagnostic('createProject', 'default_statuses_failed', {
+        ...toErrorDiagnostics(error),
+        organizationId: input.organizationId,
+        request: requestDiagnostics
+      });
+    }
+    throw error;
+  }
+
   const { data, error } = await supabase
     .from('projects')
     .insert({
@@ -347,7 +377,24 @@ export async function createProject(input: {
     .single();
 
   if (error || !data) {
+    if (requestDiagnostics.isElectron) {
+      logElectronServerActionDiagnostic('createProject', 'insert_failed', {
+        errorMessage: error?.message ?? 'No project row returned.',
+        errorName: error?.name ?? null,
+        errorCode: error?.code ?? null,
+        organizationId: input.organizationId,
+        request: requestDiagnostics
+      });
+    }
     throw new Error(error?.message ?? 'Failed to create project.');
+  }
+
+  if (requestDiagnostics.isElectron) {
+    logElectronServerActionDiagnostic('createProject', 'created', {
+      organizationId: data.organization_id,
+      projectIdSuffix: idSuffix(data.id),
+      request: requestDiagnostics
+    });
   }
 
   revalidateProjectPaths(data.id);

@@ -220,6 +220,10 @@ interface ElectronAPI {
     openExternal: (url: string) => Promise<boolean>;
     revealFile: (filePath: string) => Promise<string>;
     reload: () => Promise<boolean>;
+    captureSentryTestEvent: () => Promise<{
+      ok: boolean;
+      eventId?: string;
+    }>;
   };
   cli?: {
     getInstallStatus: () => Promise<{

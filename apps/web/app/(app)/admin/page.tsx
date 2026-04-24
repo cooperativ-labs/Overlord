@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { AgentModelOfferingsPanel } from '@/components/features/admin/AgentModelOfferingsPanel';
+import { SentryTestPanel } from '@/components/features/admin/SentryTestPanel';
 import { getAdminAgentModelsAction } from '@/lib/actions/admin-agent-models';
 import { ADMIN_EMAIL, isAdminEmail } from '@/lib/auth/admin';
 import { createClient } from '@/supabase/utils/server';
@@ -128,6 +129,8 @@ export default async function AdminPage() {
             product feedback in one place.
           </p>
         </section>
+
+        <SentryTestPanel />
 
         <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">

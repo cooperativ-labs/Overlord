@@ -14,6 +14,13 @@ import type {
   BoardStatus
 } from '@/lib/client-data/tickets/board-types';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
+import {
+  getAuthDiagnostics,
+  getServerActionRequestDiagnostics,
+  idSuffix,
+  logElectronServerActionDiagnostic,
+  toErrorDiagnostics
+} from '@/lib/diagnostics/server-action';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { normalizeHexColor } from '@/lib/helpers/color';
@@ -621,25 +628,70 @@ export async function createTicketInColumnAction(
   position: 'top' | 'bottom' = 'top',
   generateTitle = true
 ) {
+  const requestDiagnostics = await getServerActionRequestDiagnostics();
   const supabase = await createClient();
-  const selected = await resolveTicketProjectAndOrganization(supabase, {
-    organizationId,
-    projectId
-  });
-  let normalizedStatus = await resolveNamedStatus(supabase, selected.organizationId, status);
-  if (!normalizedStatus) {
-    try {
-      normalizedStatus = await resolveNewTicketDraftStatus(supabase, selected.organizationId);
-    } catch {
-      normalizedStatus = await resolveAnyTicketStatus(supabase, selected.organizationId);
-    }
+
+  if (requestDiagnostics.isElectron) {
+    const authDiagnostics = await getAuthDiagnostics(supabase);
+    logElectronServerActionDiagnostic('createTicketInColumnAction', 'attempt', {
+      auth: authDiagnostics,
+      inputOrganizationId: organizationId ?? null,
+      inputProjectIdSuffix: idSuffix(projectId),
+      request: requestDiagnostics,
+      status,
+      ticketIdSuffix: idSuffix(ticketId)
+    });
   }
+
+  let selected: { organizationId: number; projectId: string | null };
+  let normalizedStatus: string | null;
+  try {
+    selected = await resolveTicketProjectAndOrganization(supabase, {
+      organizationId,
+      projectId
+    });
+    normalizedStatus = await resolveNamedStatus(supabase, selected.organizationId, status);
+    if (!normalizedStatus) {
+      try {
+        normalizedStatus = await resolveNewTicketDraftStatus(supabase, selected.organizationId);
+      } catch {
+        normalizedStatus = await resolveAnyTicketStatus(supabase, selected.organizationId);
+      }
+    }
+  } catch (error) {
+    if (requestDiagnostics.isElectron) {
+      logElectronServerActionDiagnostic('createTicketInColumnAction', 'resolve_context_failed', {
+        ...toErrorDiagnostics(error),
+        inputOrganizationId: organizationId ?? null,
+        inputProjectIdSuffix: idSuffix(projectId),
+        request: requestDiagnostics,
+        status,
+        ticketIdSuffix: idSuffix(ticketId)
+      });
+    }
+    throw error;
+  }
+
   const statusForInsert = normalizedStatus ?? 'draft';
   const trimmedObjective = objective.trim() || null;
 
   // Generate title: AI-summarised for long objectives, truncated for short ones
-  const title =
-    generateTitle && trimmedObjective ? await generateTicketTitleAction(trimmedObjective) : null;
+  let title: string | null;
+  try {
+    title =
+      generateTitle && trimmedObjective ? await generateTicketTitleAction(trimmedObjective) : null;
+  } catch (error) {
+    if (requestDiagnostics.isElectron) {
+      logElectronServerActionDiagnostic('createTicketInColumnAction', 'title_generation_failed', {
+        ...toErrorDiagnostics(error),
+        organizationId: selected.organizationId,
+        projectIdSuffix: idSuffix(selected.projectId),
+        request: requestDiagnostics,
+        ticketIdSuffix: idSuffix(ticketId)
+      });
+    }
+    throw error;
+  }
 
   const insertPayload: {
     id: string;
@@ -662,14 +714,49 @@ export async function createTicketInColumnAction(
     .single();
 
   if (error || !data) {
+    if (requestDiagnostics.isElectron) {
+      logElectronServerActionDiagnostic('createTicketInColumnAction', 'insert_failed', {
+        errorCode: error?.code ?? null,
+        errorMessage: error?.message ?? 'No ticket row returned.',
+        organizationId: selected.organizationId,
+        projectIdSuffix: idSuffix(selected.projectId),
+        request: requestDiagnostics,
+        status: statusForInsert,
+        ticketIdSuffix: idSuffix(ticketId)
+      });
+    }
     throw new Error(error?.message ?? 'Failed to create ticket.');
   }
 
-  await upsertDraftObjective(supabase, data.id, trimmedObjective);
-  if (position === 'bottom') {
-    await assignTicketToColumnEnd(supabase, data.id, statusForInsert, data.organization_id);
-  } else {
-    await assignTicketToColumnStart(supabase, data.id, statusForInsert, data.organization_id);
+  try {
+    await upsertDraftObjective(supabase, data.id, trimmedObjective);
+    if (position === 'bottom') {
+      await assignTicketToColumnEnd(supabase, data.id, statusForInsert, data.organization_id);
+    } else {
+      await assignTicketToColumnStart(supabase, data.id, statusForInsert, data.organization_id);
+    }
+  } catch (error) {
+    if (requestDiagnostics.isElectron) {
+      logElectronServerActionDiagnostic('createTicketInColumnAction', 'post_insert_failed', {
+        ...toErrorDiagnostics(error),
+        organizationId: data.organization_id,
+        projectIdSuffix: idSuffix(data.project_id),
+        request: requestDiagnostics,
+        status: statusForInsert,
+        ticketIdSuffix: idSuffix(data.id)
+      });
+    }
+    throw error;
+  }
+
+  if (requestDiagnostics.isElectron) {
+    logElectronServerActionDiagnostic('createTicketInColumnAction', 'created', {
+      organizationId: data.organization_id,
+      projectIdSuffix: idSuffix(data.project_id),
+      request: requestDiagnostics,
+      status: statusForInsert,
+      ticketIdSuffix: idSuffix(data.id)
+    });
   }
 
   revalidateTicketBoards();

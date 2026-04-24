@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/electron/main';
 import { BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
@@ -120,6 +121,20 @@ export function registerAppIpc({
 
     window.webContents.reloadIgnoringCache();
     return true;
+  });
+
+  ipcMain.handle('app:capture-sentry-test-event', async () => {
+    const error = new Error(`Electron main Sentry test event at ${new Date().toISOString()}`);
+    const eventId = Sentry.captureException(error, {
+      tags: {
+        source: 'admin-sentry-test',
+        target: 'electron-main'
+      }
+    });
+
+    await Sentry.flush(2_000);
+
+    return { ok: true, eventId };
   });
 
   ipcMain.handle('app-update:get-status', () => {

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.22.0] - 2026-04-24:15:45
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Install a global React Query `MutationCache.onMutate` preflight in `query-client-provider` that runs `ensureFreshElectronSession` before any React Query mutation.
+- Broaden Electron session coverage across app-wide `useMutation` flows including project updates, ticket updates, status changes, scheduling/status mutation hooks, and Everhour timer mutations.
+- Clarify that direct server action calls are still outside this preflight path, including `submitTicketObjectiveAction`, `generateTicketTitleAction`, and settings-related actions.
+
+### Security
+- None.
+
 ## [4.21.0] - 2026-04-24:15:22
 
 ### Added
@@ -13,7 +29,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Update the Electron login loading copy to clarify when browser authorization is pending during sign-in.
 - Install a global React Query mutation preflight in `query-client-provider` that calls `ensureFreshElectronSession` before mutations, broadening Electron session checks across app-wide `useMutation` flows (projects, tickets, status/scheduling, Everhour timers, and similar hooks).
-- Clarify that direct server action calls are still outside this preflight path, including ticket objective/title generation and settings actions.
+- Clarify that this preflight does not cover every server action path yet; direct calls such as `submitTicketObjectiveAction`, `generateTicketTitleAction`, and settings-related actions still bypass the React Query mutation preflight.
 
 ### Security
 - None.

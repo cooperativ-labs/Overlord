@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/electron';
+import * as Sentry from '@sentry/electron/main';
 import { config as loadDotenv } from 'dotenv';
 import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron';
 import fs from 'fs';

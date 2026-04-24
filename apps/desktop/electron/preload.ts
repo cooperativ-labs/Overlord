@@ -112,7 +112,8 @@ const electronAPI = {
     notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', { title, body }),
     openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
     revealFile: (filePath: string) => ipcRenderer.invoke('app:reveal-file', filePath),
-    reload: () => ipcRenderer.invoke('app:reload')
+    reload: () => ipcRenderer.invoke('app:reload'),
+    captureSentryTestEvent: () => ipcRenderer.invoke('app:capture-sentry-test-event')
   },
   cli: {
     getInstallStatus: () => ipcRenderer.invoke('cli:get-install-status'),
