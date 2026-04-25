@@ -7,9 +7,10 @@ import path from 'path';
 
 const execFileAsync = promisify(execFile);
 const REQUIRED_NODE_MAJOR = 20;
-const WRAPPER_VERSION = 2;
+const WRAPPER_VERSION = 3;
 const OVLD_HOME = path.join(os.homedir(), '.ovld');
 const CLI_INSTALL_ROOT = path.join(OVLD_HOME, 'cli');
+const HOSTED_OVERLORD_URL = 'https://www.ovld.ai';
 
 const WRAPPER_SCRIPT = `#!/bin/sh
 # Overlord CLI wrapper - installed by Overlord desktop app
@@ -17,6 +18,9 @@ const WRAPPER_SCRIPT = `#!/bin/sh
 DEFAULT_NODE_BIN=%NODE_BIN%
 NODE_BIN="\${OVLD_NODE_BIN:-$DEFAULT_NODE_BIN}"
 CLI_DIR=%CLI_DIR%
+DEFAULT_OVERLORD_URL='${HOSTED_OVERLORD_URL}'
+OVERLORD_URL="\${OVERLORD_URL:-$DEFAULT_OVERLORD_URL}"
+export OVERLORD_URL
 
 if ! command -v "$NODE_BIN" >/dev/null 2>&1; then
   echo "Overlord CLI requires Node.js ${REQUIRED_NODE_MAJOR} or newer, but '$NODE_BIN' was not found." >&2
@@ -368,9 +372,13 @@ export async function installCli(): Promise<CliInstallResult> {
       ? `Installed to ~/.local/bin. Add it to PATH if needed (e.g. in ~/.zshrc: export PATH="$HOME/.local/bin:$PATH"). It will use ${nodeRuntime.version} from ${nodeRuntime.binPath}.`
       : `Installed to ${installDir}. Ensure it is included in your PATH. It will use ${nodeRuntime.version} from ${nodeRuntime.binPath}.`;
 
+  const authNote =
+    ` The installed wrapper defaults OVERLORD_URL to ${HOSTED_OVERLORD_URL}. ` +
+    'For local dev, override it explicitly with OVERLORD_URL=http://localhost:3000 before running ovld.';
+
   return {
     ok: true,
     installPath: wrapperPath,
-    pathInstruction
+    pathInstruction: `${pathInstruction}${authNote}`
   };
 }

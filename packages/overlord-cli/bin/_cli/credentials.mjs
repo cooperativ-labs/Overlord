@@ -354,13 +354,29 @@ function isAccessTokenFresh(credentials) {
   return expiresAt - Date.now() > 60_000;
 }
 
+function describeNetworkError(error, context) {
+  const cause = error?.cause;
+  const details = [cause?.code, cause?.message].filter(Boolean).join(': ');
+  if (details) {
+    return new Error(`${context}: ${details}`);
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(`${context}: ${message}`);
+}
+
 const authConfigCache = new Map();
 
 async function fetchAuthConfig(platformUrl, localSecret) {
   if (authConfigCache.has(platformUrl)) return authConfigCache.get(platformUrl);
-  const res = await fetch(`${platformUrl}/api/auth/config`, {
-    headers: buildAuthHeaders('', localSecret)
-  });
+  let res;
+  try {
+    res = await fetch(`${platformUrl}/api/auth/config`, {
+      headers: buildAuthHeaders('', localSecret)
+    });
+  } catch (error) {
+    throw describeNetworkError(error, `Failed to fetch auth config from ${platformUrl}`);
+  }
   if (!res.ok) {
     throw new Error(`Failed to fetch auth config (${res.status}).`);
   }
@@ -378,15 +394,23 @@ async function refreshOAuthAccessToken(platformUrl, refreshToken, localSecret) {
     throw new Error('OAuth is not configured for Overlord CLI auth.');
   }
 
-  const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId
-    })
-  });
+  let res;
+  try {
+    res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: clientId
+      })
+    });
+  } catch (error) {
+    throw describeNetworkError(
+      error,
+      `OAuth token refresh failed for ${new URL(supabaseUrl).host}`
+    );
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -518,9 +542,9 @@ export async function resolveAuth() {
         };
         saveCredentials(nextCredentials);
       } catch (refreshError) {
-        if (!creds.access_token) throw refreshError;
-        // Transient refresh failure — keep the existing access token and let the server
-        // reject it if it's truly expired/revoked.
+        throw new Error(
+          `Stored Overlord session expired and refresh failed. ${refreshError instanceof Error ? refreshError.message : String(refreshError)} Run \`ovld auth login\` again.`
+        );
       }
     }
 
@@ -584,7 +608,7 @@ export async function getAuthStatus() {
   }
 
   return {
-    isLoggedIn: tokenSource !== 'fallback',
+    isLoggedIn: tokenSource !== 'fallback' && !error,
     platformUrl: resolved.platformUrl,
     platformUrlSource,
     tokenPresent: tokenSource !== 'fallback',

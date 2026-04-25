@@ -32,6 +32,13 @@ Overlord now uses Supabase OAuth access tokens for protocol and MCP authenticati
   - `organization_id`
   - `platform_url`
 - The CLI refreshes access tokens automatically with the OAuth refresh token flow.
+- Desktop-installed CLI wrappers default `OVERLORD_URL` to `https://www.ovld.ai`.
+- For local dev against the web app on `http://localhost:3000`, explicitly override it before login or protocol commands:
+
+```bash
+export OVERLORD_URL=http://localhost:3000
+ovld auth login
+```
 
 ### Device flow
 

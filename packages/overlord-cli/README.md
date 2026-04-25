@@ -25,6 +25,14 @@ overlord help
 The CLI exposes the same command set under both names.
 `ovld auth login` opens a browser when possible and also prints a verification URL/code so login can be completed from another machine over SSH.
 
+Desktop-installed wrappers default `OVERLORD_URL` to `https://www.ovld.ai` unless you override it explicitly.
+For local dev against the web app on port 3000, export the override before running auth or protocol commands:
+
+```bash
+export OVERLORD_URL=http://localhost:3000
+ovld auth login
+```
+
 Common commands:
 
 ```bash

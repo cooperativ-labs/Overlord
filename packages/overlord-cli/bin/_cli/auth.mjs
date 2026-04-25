@@ -144,6 +144,17 @@ function snippet(value, max = 180) {
   return normalized.length <= max ? normalized : `${normalized.slice(0, max)}...`;
 }
 
+function describeNetworkError(error, context) {
+  const cause = error?.cause;
+  const details = [cause?.code, cause?.message].filter(Boolean).join(': ');
+  if (details) {
+    return new Error(`${context}: ${details}`);
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(`${context}: ${message}`);
+}
+
 async function readJsonOrThrow(res, context, baseUrl) {
   const contentType = res.headers.get('content-type') ?? '';
   const bodyText = await res.text();
@@ -165,9 +176,14 @@ async function readJsonOrThrow(res, context, baseUrl) {
 }
 
 async function fetchAuthConfig(platformUrl, localSecret) {
-  const res = await fetch(`${platformUrl}/api/auth/config`, {
-    headers: buildAuthHeaders('', localSecret)
-  });
+  let res;
+  try {
+    res = await fetch(`${platformUrl}/api/auth/config`, {
+      headers: buildAuthHeaders('', localSecret)
+    });
+  } catch (error) {
+    throw describeNetworkError(error, `Failed to fetch auth config from ${platformUrl}`);
+  }
   if (!res.ok) {
     throw new Error(
       `Failed to fetch auth config (${res.status}). Check that Overlord is running at ${platformUrl}.`
@@ -181,10 +197,18 @@ async function fetchAuthConfig(platformUrl, localSecret) {
 }
 
 async function requestDeviceAuthorization(platformUrl, localSecret) {
-  const res = await fetch(`${platformUrl}/api/auth/device/request`, {
-    method: 'POST',
-    headers: buildAuthHeaders('', localSecret)
-  });
+  let res;
+  try {
+    res = await fetch(`${platformUrl}/api/auth/device/request`, {
+      method: 'POST',
+      headers: buildAuthHeaders('', localSecret)
+    });
+  } catch (error) {
+    throw describeNetworkError(
+      error,
+      `Device authorization request failed for ${platformUrl}`
+    );
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -195,14 +219,22 @@ async function requestDeviceAuthorization(platformUrl, localSecret) {
 }
 
 async function pollDeviceAuthorization(platformUrl, deviceCode, localSecret) {
-  const res = await fetch(`${platformUrl}/api/auth/device/poll`, {
-    method: 'POST',
-    headers: {
-      ...buildAuthHeaders('', localSecret),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ device_code: deviceCode })
-  });
+  let res;
+  try {
+    res = await fetch(`${platformUrl}/api/auth/device/poll`, {
+      method: 'POST',
+      headers: {
+        ...buildAuthHeaders('', localSecret),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ device_code: deviceCode })
+    });
+  } catch (error) {
+    throw describeNetworkError(
+      error,
+      `Device authorization poll failed for ${platformUrl}`
+    );
+  }
 
   const body = await readJsonOrThrow(res, 'Device authorization poll', platformUrl);
 
@@ -220,17 +252,25 @@ function sleep(ms) {
 }
 
 async function exchangeCodeForSupabaseTokens(supabaseUrl, clientId, code, codeVerifier, redirectUri) {
-  const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      code_verifier: codeVerifier
-    })
-  });
+  let res;
+  try {
+    res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        code_verifier: codeVerifier
+      })
+    });
+  } catch (error) {
+    throw describeNetworkError(
+      error,
+      `Token exchange failed for ${new URL(supabaseUrl).host}`
+    );
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -474,8 +514,8 @@ async function promptForOrganization(organizations, preselectedId = null) {
 // Public auth commands
 // ---------------------------------------------------------------------------
 
-export function resolveLoginPlatformUrl(runtime = null) {
-  return process.env.OVERLORD_URL ?? runtime?.platform_url ?? getDefaultOverlordUrl();
+export function resolveLoginPlatformUrl(runtime = null, storedPlatformUrl = null) {
+  return process.env.OVERLORD_URL ?? storedPlatformUrl ?? runtime?.platform_url ?? getDefaultOverlordUrl();
 }
 
 function parseOrganizationFlag(args) {
@@ -491,7 +531,8 @@ function parseOrganizationFlag(args) {
 
 export async function authLogin(args = []) {
   const preselectedOrganizationId = parseOrganizationFlag(args);
-  const platformUrl = resolveLoginPlatformUrl();
+  const storedCredentials = loadCredentials();
+  const platformUrl = resolveLoginPlatformUrl(null, storedCredentials?.platform_url ?? null);
   const runtime = loadRuntime(platformUrl);
   const localSecret = runtime?.local_secret ?? process.env.OVERLORD_LOCAL_SECRET ?? '';
 

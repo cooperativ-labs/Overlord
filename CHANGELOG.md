@@ -2,12 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.1.0] - 2026-04-25:15:58
+
+### Added
+- Default desktop-installed CLI wrappers to `OVERLORD_URL=https://www.ovld.ai` and surface explicit local-dev override guidance for `http://localhost:3000`.
+- Preserve detailed network failure metadata in CLI auth/device and token-refresh flows so DNS and connectivity issues are actionable.
+
+### Fixed
+- Fix CLI login URL resolution so existing stored hosted credentials are preferred over source-tree localhost defaults.
+- Fix expired-session handling in CLI auth status by reporting refresh failures as logged-out state instead of leaving stale credentials as active.
+
+### Changed
+- Make CLI credential refresh failures fail fast with a clear re-authentication message that tells users to run `ovld auth login` again.
+- Update desktop installer messaging to include hosted-default and local-override behavior for CLI auth endpoints.
+
+### Security
+- None.
+
+### Test
+- Add coverage for network error propagation in device auth, hosted URL preference during login resolution, and expired-credential refresh failure handling.
+
+### Documentation
+- Document hosted `OVERLORD_URL` defaults and localhost override steps in MCP auth integration docs and the CLI README.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.1.0`.
+
 ## [5.0.0] - 2026-04-25:15:31
 
 ### Added
 - Add Electron bearer-auth infrastructure in the desktop main process, including request header injection, centralized session storage, and single-flight token refresh control.
 - Add server-side Electron token verification with Supabase JWKS validation, issuer/audience checks, and `client_id` enforcement for desktop OAuth client isolation.
 - Add Electron auth recovery helpers for web clients (`action-retry`, `fetch-retry`, and route refresh preflight) to recover from expired bearer tokens.
+- Add dedicated OAuth runtime support for device authorization client IDs so device flows can use separate client registration.
 
 ### Fixed
 - Fix recurring Electron session expiry/re-login loops by moving token lifecycle control from browser cookie refresh to main-process OAuth refresh.
@@ -19,6 +46,8 @@ All notable changes to this project will be documented in this file.
 - Rework middleware auth behavior for Electron requests to validate bearer tokens up front and return bearer 401 challenges for machine/API contexts while preserving browser redirects for navigation.
 - Simplify Electron login/gate flows to rely on access-token retrieval (`getAccessToken`/`forceRefresh`) instead of browser Supabase session bootstrapping in the renderer.
 - Separate desktop and CLI credential storage (`credentials.desktop.json` and `credentials.cli.json`) with one-time legacy migration support.
+- Update desktop OAuth callback binding to try a registered loopback port range and continue when individual ports are already occupied.
+- Treat `/api/health` as a public route so auth middleware does not interfere with health probes.
 
 ### Security
 - Reduce token exposure by removing renderer-facing refresh-token persistence APIs from Electron preload auth contracts.
@@ -30,6 +59,9 @@ All notable changes to this project will be documented in this file.
 
 ### Test
 - Add and update auth coverage for Electron header injection, refresh controller behavior, JWT verification, bearer retry helpers, Supabase proxy/client/server auth utilities, and CLI credential migration paths.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.0.0`.
 
 ## [4.23.0] - 2026-04-24:16:24
 

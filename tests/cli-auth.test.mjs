@@ -100,6 +100,8 @@ for (const modulePath of [
 
       assert.deepEqual(credentials, {
         access_token: 'agent-token-123',
+        access_token_expires_at: null,
+        refresh_token: undefined,
         platform_url: 'https://ovld.test'
       });
       assert.equal(openedUrl, 'https://ovld.test/auth/device?code=ABCD-EFGH');
@@ -160,10 +162,46 @@ for (const modulePath of [
     }
   });
 
+  test(`${modulePath} authLoginViaDeviceFlow preserves network failure details`, async () => {
+    const { authLoginViaDeviceFlow } = await importFresh(modulePath);
+    const originalFetch = global.fetch;
+
+    global.fetch = async () => {
+      const error = new TypeError('fetch failed');
+      error.cause = {
+        code: 'ENOTFOUND',
+        message: 'getaddrinfo ENOTFOUND www.ovld.ai'
+      };
+      throw error;
+    };
+
+    try {
+      await assert.rejects(
+        () =>
+          authLoginViaDeviceFlow('https://www.ovld.ai', '', {
+            browserOpener: () => {},
+            logger: { log: () => {} },
+            sleepFn: async () => {},
+            stdout: { write: () => {} }
+          }),
+        /Device authorization request failed for https:\/\/www\.ovld\.ai: ENOTFOUND/
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
   test(`${modulePath} resolveLoginPlatformUrl defaults to localhost when running from the source tree`, async () => {
     await withTempHome(async () => {
       const { resolveLoginPlatformUrl } = await importFresh(modulePath);
       assert.equal(resolveLoginPlatformUrl(null), 'http://localhost:3000');
+    });
+  });
+
+  test(`${modulePath} resolveLoginPlatformUrl prefers stored hosted platform over source-tree localhost default`, async () => {
+    await withTempHome(async () => {
+      const { resolveLoginPlatformUrl } = await importFresh(modulePath);
+      assert.equal(resolveLoginPlatformUrl(null, 'https://www.ovld.ai'), 'https://www.ovld.ai');
     });
   });
 }

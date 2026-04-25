@@ -225,6 +225,57 @@ test(`${MODULE_PATH} getAuthStatus reports CLI credential sources`, async () => 
   });
 });
 
+test(`${MODULE_PATH} resolveAuth rejects expired credentials when refresh fails`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(
+      path.join(ovldDir, 'credentials.cli.json'),
+      buildOAuthCredentials({
+        access_token_expires_at: '2000-01-01T00:00:00.000Z'
+      })
+    );
+
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init = {}) => {
+      if (String(url).endsWith('/api/auth/config')) {
+        return {
+          ok: true,
+          json: async () => ({
+            supabase_url: 'https://zitmmhvbilhjjdwgxlfm.supabase.co',
+            cli_client_id: 'cli-client-id'
+          })
+        };
+      }
+
+      if (String(url).includes('/auth/v1/oauth/token') && init.method === 'POST') {
+        const error = new TypeError('fetch failed');
+        error.cause = {
+          code: 'ENOTFOUND',
+          message: 'getaddrinfo ENOTFOUND zitmmhvbilhjjdwgxlfm.supabase.co'
+        };
+        throw error;
+      }
+
+      throw new Error(`Unexpected fetch: ${String(url)}`);
+    };
+
+    try {
+      const { resolveAuth, getAuthStatus } = await importFresh(MODULE_PATH);
+
+      await assert.rejects(
+        resolveAuth(),
+        /Stored Overlord session expired and refresh failed.*ENOTFOUND/
+      );
+
+      const status = await getAuthStatus();
+      assert.equal(status.isLoggedIn, false);
+      assert.match(status.error, /Stored Overlord session expired and refresh failed/);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
 test(`${MODULE_PATH} repairCredentials writes to credentials.cli.json`, async () => {
   await withTempHome(async tempHome => {
     const ovldDir = path.join(tempHome, '.ovld');
