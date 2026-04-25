@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 export async function fetchProfileSettings(
@@ -108,7 +108,7 @@ export async function upsertProfileEditorScheme(
 }
 
 export async function getCustomInstructionsAction(): Promise<string> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -123,7 +123,7 @@ export async function getCustomInstructionsAction(): Promise<string> {
 export async function saveCustomInstructionsAction(
   customAgentInstructions: string
 ): Promise<string> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -135,7 +135,7 @@ export async function saveCustomInstructionsAction(
 }
 
 export async function getEditorSchemeAction(): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -148,7 +148,7 @@ export async function getEditorSchemeAction(): Promise<string | null> {
 }
 
 export async function saveEditorSchemeAction(editorScheme: string): Promise<string> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -160,7 +160,7 @@ export async function saveEditorSchemeAction(editorScheme: string): Promise<stri
 }
 
 export async function getDefaultProjectAction(): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -175,7 +175,7 @@ export async function getDefaultProjectAction(): Promise<string | null> {
 export async function saveDefaultProjectAction(
   defaultProjectId: string | null
 ): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -187,7 +187,7 @@ export async function saveDefaultProjectAction(
 }
 
 export async function getAiTitleGenerationAction(): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -200,7 +200,7 @@ export async function getAiTitleGenerationAction(): Promise<boolean> {
 }
 
 export async function saveAiTitleGenerationAction(enabled: boolean): Promise<boolean> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

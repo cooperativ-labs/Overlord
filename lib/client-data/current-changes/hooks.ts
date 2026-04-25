@@ -11,6 +11,7 @@ import type {
   GitStatusFile,
   GitStatusResponse
 } from '@/components/features/projects/current-changes/types';
+import { fetchWithElectronRetry } from '@/lib/electron-auth/fetch-retry';
 import { parseUnifiedDiff } from '@/lib/git/unified-diff';
 
 type ElectronFilesystemApi = {
@@ -94,7 +95,7 @@ export function useCurrentChangeFileChanges(input: { projectId: string; files: G
         searchParams.append('filePath', filePath);
       }
 
-      const response = await fetch(
+      const response = await fetchWithElectronRetry(
         `/api/projects/${input.projectId}/file-changes?${searchParams}`,
         {
           cache: 'no-store'

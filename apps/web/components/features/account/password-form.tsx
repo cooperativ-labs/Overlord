@@ -7,6 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { setPasswordAction, updatePasswordAction } from '@/lib/actions/account';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { refreshElectronRoute } from '@/lib/electron-auth/route-refresh';
+
+const setPasswordActionWithRetry = withElectronActionRetry(setPasswordAction);
+const updatePasswordActionWithRetry = withElectronActionRetry(updatePasswordAction);
 
 type PasswordFormProps = {
   hasPassword: boolean;
@@ -47,16 +52,16 @@ export function PasswordForm({ hasPassword }: PasswordFormProps) {
 
     try {
       if (hasSavedPassword) {
-        await updatePasswordAction(currentPassword, newPassword);
+        await updatePasswordActionWithRetry(currentPassword, newPassword);
       } else {
-        await setPasswordAction(newPassword);
+        await setPasswordActionWithRetry(newPassword);
       }
       setHasSavedPassword(true);
       setButtonState('success');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      router.refresh();
+      await refreshElectronRoute(router);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Failed to update password.');
       setButtonState('error');

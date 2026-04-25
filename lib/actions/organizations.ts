@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export type UserOrganization = {
   id: number;
@@ -11,7 +11,7 @@ export type UserOrganization = {
 };
 
 export async function getUserOrganizations(): Promise<UserOrganization[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

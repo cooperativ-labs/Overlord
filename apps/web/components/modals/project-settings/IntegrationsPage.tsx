@@ -8,6 +8,11 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { Separator } from '@/components/ui/separator';
 import { syncEverhourProjectsForOrganization } from '@/lib/actions/everhour';
 import { useDisconnectProjectEverhourMutation } from '@/lib/client-data/projects/mutations';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const syncEverhourProjectsForOrganizationWithRetry = withElectronActionRetry(
+  syncEverhourProjectsForOrganization
+);
 
 type IntegrationsPageProps = {
   projectId: string;
@@ -38,7 +43,7 @@ export function IntegrationsPage({
     setSyncButtonState('loading');
     setSyncMessage(null);
     try {
-      const result = await syncEverhourProjectsForOrganization(organizationId);
+      const result = await syncEverhourProjectsForOrganizationWithRetry(organizationId);
       const syncedProject = result.projects.find(project => project.id === projectId);
       setSavedEverhourProjectId(syncedProject?.everhour_project_id ?? null);
       setSyncButtonState('success');

@@ -1,10 +1,10 @@
 'use server';
 
 import { type AgentConfig, agentConfigSchema } from '@/lib/schemas/agent-config';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export async function getAgentConfigAction(agentType: string): Promise<AgentConfig | null> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -32,7 +32,7 @@ export async function getAgentConfigAction(agentType: string): Promise<AgentConf
 }
 
 export async function getAllAgentConfigsAction(): Promise<Record<string, AgentConfig>> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -44,7 +44,7 @@ export async function getAllAgentConfigsAction(): Promise<Record<string, AgentCo
   return getAllAgentConfigsByUserIdAction(user.id, supabase);
 }
 
-type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type SupabaseClient = Awaited<ReturnType<typeof createClientForRequest>>;
 
 export async function getAllAgentConfigsByUserIdAction(
   userId: string,
@@ -55,7 +55,7 @@ export async function getAllAgentConfigsByUserIdAction(
     // server action from the browser. Require the requested userId to match
     // the authenticated user so a caller can't read someone else's configs
     // if RLS ever regresses.
-    supabase = await createClient();
+    supabase = await createClientForRequest();
     const {
       data: { user }
     } = await supabase.auth.getUser();
@@ -88,7 +88,7 @@ export async function upsertAgentConfigAction(
   agentType: string,
   config: Partial<AgentConfig>
 ): Promise<AgentConfig> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -161,7 +161,7 @@ export async function updateAgentModelPreferenceAction(
 }
 
 export async function deleteAgentConfigAction(agentType: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

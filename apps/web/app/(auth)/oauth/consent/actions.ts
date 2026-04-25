@@ -2,10 +2,10 @@
 
 import { redirect } from 'next/navigation';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export async function approveAuthorization(authorizationId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const {
     data: { user }
@@ -27,7 +27,7 @@ export async function approveAuthorization(authorizationId: string): Promise<voi
 }
 
 export async function denyAuthorization(authorizationId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const {
     data: { user }

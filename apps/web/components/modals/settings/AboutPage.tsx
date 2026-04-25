@@ -22,11 +22,19 @@ import {
   type RunningAgentSession,
   stopRunningAgentSessionAction
 } from '@/lib/actions/agent-sessions';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 
 type ElectronAppUpdateStatus = Awaited<
   ReturnType<NonNullable<Window['electronAPI']>['appUpdate']['getStatus']>
 >;
+
+const getRunningAgentSessionsActionWithRetry = withElectronActionRetry(
+  getRunningAgentSessionsAction
+);
+const stopRunningAgentSessionActionWithRetry = withElectronActionRetry(
+  stopRunningAgentSessionAction
+);
 
 export function AboutPage({ open }: { open: boolean }) {
   const { api, isElectron } = useElectron();
@@ -128,7 +136,7 @@ export function AboutPage({ open }: { open: boolean }) {
   async function loadRunningAgentSessions() {
     setLoadingRunningAgentSessions(true);
     try {
-      const sessions = await getRunningAgentSessionsAction();
+      const sessions = await getRunningAgentSessionsActionWithRetry();
       setRunningAgentSessions(sessions);
       setRunningAgentCount(sessions.length);
       return sessions;
@@ -144,7 +152,7 @@ export function AboutPage({ open }: { open: boolean }) {
   async function handleStopRunningAgentSession(sessionId: string) {
     setStopAgentButtonStates(previous => ({ ...previous, [sessionId]: 'loading' }));
     try {
-      await stopRunningAgentSessionAction(sessionId);
+      await stopRunningAgentSessionActionWithRetry(sessionId);
       setRunningAgentSessions(previous => previous.filter(session => session.id !== sessionId));
       setRunningAgentCount(previous => Math.max(0, previous - 1));
       setStopAgentButtonStates(previous => ({ ...previous, [sessionId]: 'success' }));

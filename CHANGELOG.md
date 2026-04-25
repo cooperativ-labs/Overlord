@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.0] - 2026-04-25:15:31
+
+### Added
+- Add Electron bearer-auth infrastructure in the desktop main process, including request header injection, centralized session storage, and single-flight token refresh control.
+- Add server-side Electron token verification with Supabase JWKS validation, issuer/audience checks, and `client_id` enforcement for desktop OAuth client isolation.
+- Add Electron auth recovery helpers for web clients (`action-retry`, `fetch-retry`, and route refresh preflight) to recover from expired bearer tokens.
+
+### Fixed
+- Fix recurring Electron session expiry/re-login loops by moving token lifecycle control from browser cookie refresh to main-process OAuth refresh.
+- Fix race conditions during concurrent refresh attempts by deduplicating in-flight refresh operations.
+- Fix device OAuth authorization to use a dedicated device client ID instead of reusing CLI client configuration.
+
+### Changed
+- Switch request-scoped auth handling to `createClientForRequest()` so server routes and actions can authenticate with bearer headers for Electron and cookies for browser sessions.
+- Rework middleware auth behavior for Electron requests to validate bearer tokens up front and return bearer 401 challenges for machine/API contexts while preserving browser redirects for navigation.
+- Simplify Electron login/gate flows to rely on access-token retrieval (`getAccessToken`/`forceRefresh`) instead of browser Supabase session bootstrapping in the renderer.
+- Separate desktop and CLI credential storage (`credentials.desktop.json` and `credentials.cli.json`) with one-time legacy migration support.
+
+### Security
+- Reduce token exposure by removing renderer-facing refresh-token persistence APIs from Electron preload auth contracts.
+- Add explicit bearer `WWW-Authenticate` error responses for invalid/expired Electron tokens on machine-facing endpoints.
+- Improve auth observability with structured Sentry breadcrumbs for bearer validation and refresh attempt/success/failure paths.
+
+### Removed
+- Remove `ensureFreshElectronSession`-based mutation preflight flow that depended on browser-managed Supabase cookie sessions.
+
+### Test
+- Add and update auth coverage for Electron header injection, refresh controller behavior, JWT verification, bearer retry helpers, Supabase proxy/client/server auth utilities, and CLI credential migration paths.
+
 ## [4.23.0] - 2026-04-24:16:24
 
 ### Added

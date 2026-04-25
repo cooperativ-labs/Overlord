@@ -1,6 +1,7 @@
 type OAuthRuntimeConfig = {
   cliClientId: string | null;
   electronClientId: string | null;
+  deviceClientId: string | null;
   cliRedirectUri: string | null;
   electronRedirectUri: string | null;
   allowedClientIds: string[];
@@ -43,6 +44,10 @@ export function getOAuthRuntimeConfig(): OAuthRuntimeConfig {
     'NEXT_PUBLIC_SUPABASE_OAUTH_ELECTRON_CLIENT_ID',
     'NEXT_PUBLIC_SUPABASE_OAUTH_CLIENT_ID'
   ]);
+  const deviceClientId = readFirstDefinedEnv([
+    'SUPABASE_OAUTH_DEVICE_CLIENT_ID',
+    'NEXT_PUBLIC_SUPABASE_OAUTH_DEVICE_CLIENT_ID'
+  ]);
   const cliRedirectUri = readFirstDefinedEnv([
     'SUPABASE_OAUTH_CLI_REDIRECT_URI',
     'SUPABASE_OAUTH_REDIRECT_URI',
@@ -59,8 +64,9 @@ export function getOAuthRuntimeConfig(): OAuthRuntimeConfig {
   return {
     cliClientId,
     electronClientId,
+    deviceClientId,
     cliRedirectUri,
     electronRedirectUri,
-    allowedClientIds: dedupe([cliClientId, electronClientId])
+    allowedClientIds: dedupe([cliClientId, electronClientId, deviceClientId])
   };
 }

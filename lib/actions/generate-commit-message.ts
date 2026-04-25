@@ -1,7 +1,7 @@
 'use server';
 
 import { generateCommitMessageWithGemini } from '@/lib/ai/generate-commit-message';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type GenerateInput = {
   branch: string | null;
@@ -12,7 +12,7 @@ type GenerateInput = {
 type GenerateResult = { message: string } | { error: string };
 
 export async function generateCommitMessageAction(input: GenerateInput): Promise<GenerateResult> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

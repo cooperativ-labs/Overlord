@@ -45,8 +45,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${getPlatformUrl()}/auth/device?error=already_approved`);
   }
 
-  const { cliClientId } = getOAuthRuntimeConfig();
-  if (!cliClientId) {
+  const { deviceClientId } = getOAuthRuntimeConfig();
+  if (!deviceClientId) {
     return NextResponse.redirect(`${getPlatformUrl()}/auth/device?error=oauth_not_configured`);
   }
 
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      client_id: cliClientId,
+      client_id: deviceClientId,
       redirect_uri: redirectUri,
       code_verifier: row.pkce_verifier
     })

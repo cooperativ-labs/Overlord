@@ -10,7 +10,7 @@ import {
   getProjectUserLocalSettingsByProjectId,
   getProjectUserSshSettingsByProjectId
 } from '@/lib/actions/projects';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 import TicketsBoardContent from '../../tickets/(components)/TicketsBoardContent';
 
@@ -22,7 +22,7 @@ type LayoutProps = {
 export default async function ProjectLayout({ children, params }: LayoutProps) {
   const { projectId } = await params;
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

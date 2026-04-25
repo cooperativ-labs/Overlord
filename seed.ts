@@ -34,7 +34,7 @@ async function main() {
     'eeeeeeee-0000-4000-8000-000000000002'
   ];
 
-  // Register OAuth clients for CLI and Electron login
+  // Register OAuth clients for CLI, Electron, and browser-based device approval.
   // Explicitly control nullable fields to prevent Snaplet from auto-generating
   // random values that break things (e.g. a non-null deleted_at soft-deletes
   // the client). Keep client_secret_hash as empty string for public clients,
@@ -59,6 +59,19 @@ async function main() {
       client_type: 'public',
       registration_type: 'manual',
       redirect_uris: 'http://127.0.0.1:45620/callback',
+      grant_types: 'authorization_code',
+      token_endpoint_auth_method: 'none',
+      client_secret_hash: '',
+      client_uri: null,
+      logo_uri: null,
+      deleted_at: null
+    },
+    {
+      id: 'c90772e6-6f54-4a14-964f-198c72821a45',
+      client_name: 'Overlord Device',
+      client_type: 'public',
+      registration_type: 'manual',
+      redirect_uris: 'http://localhost:3000/auth/device/oauth-callback',
       grant_types: 'authorization_code',
       token_endpoint_auth_method: 'none',
       client_secret_hash: '',
@@ -117,50 +130,23 @@ async function main() {
     { organization_id: orgId, user_id: aliceId, role: 'MANAGER' }
   ]);
 
-  // Seed default ticket statuses for the organization
+  // Seed canonical default statuses (one per status_type) so it is
+  // compatible with Snaplet plan-time uniqueness checks.
   await seed.ticket_statuses([
-    { organization_id: orgId, name: 'icebox', status_type: 'draft', position: 0, is_default: true },
-    { organization_id: orgId, name: 'draft', status_type: 'draft', position: 1, is_default: true },
+    { organization_id: orgId, name: 'draft', status_type: 'draft', position: 0, is_default: true },
     {
       organization_id: orgId,
-      name: 'next-up',
-      status_type: 'draft',
-      position: 2,
-      is_default: true
-    },
-    {
-      organization_id: orgId,
-      name: 'in-progress',
+      name: 'execute',
       status_type: 'execute',
-      position: 3,
+      position: 1,
       is_default: true
     },
-    {
-      organization_id: orgId,
-      name: 'review',
-      status_type: 'review',
-      position: 4,
-      is_default: true
-    },
+    { organization_id: orgId, name: 'review', status_type: 'review', position: 2, is_default: true },
     {
       organization_id: orgId,
       name: 'complete',
       status_type: 'complete',
-      position: 5,
-      is_default: true
-    },
-    {
-      organization_id: orgId,
-      name: 'blocked',
-      status_type: 'execute',
-      position: 6,
-      is_default: true
-    },
-    {
-      organization_id: orgId,
-      name: 'cancelled',
-      status_type: 'complete',
-      position: 7,
+      position: 3,
       is_default: true
     }
   ]);
@@ -372,7 +358,8 @@ async function main() {
       label: 'CI workflow updates',
       summary: 'Added lint and test jobs with cached dependencies and fail-fast behavior.',
       why: 'This mirrors the first completed objective and gives the review card a concrete diff to inspect.',
-      impact: 'Improves pipeline feedback time and makes the review state feel like an in-progress deliverable.',
+      impact:
+        'Improves pipeline feedback time and makes the review state feel like an in-progress deliverable.',
       change_kind: 'modify',
       attribution_source: 'explicit',
       confidence: 'explicit',
@@ -386,7 +373,8 @@ async function main() {
       file_name: 'deploy.yml',
       file_path: '.github/workflows/deploy.yml',
       label: 'Deploy workflow updates',
-      summary: 'Wired production secrets into the deploy job and gated releases on the main branch.',
+      summary:
+        'Wired production secrets into the deploy job and gated releases on the main branch.',
       why: 'This mirrors the second completed objective and shows a second file in the same review batch.',
       impact: 'Shows how the review ticket can carry multiple related file changes before merge.',
       change_kind: 'modify',

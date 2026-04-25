@@ -6,7 +6,7 @@ import { TicketPanelSkeleton } from '@/components/features/TicketPanelSkeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { SidePanelSlot } from '@/components/ui/side-panel';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type LayoutProps = {
   children: React.ReactNode;
@@ -20,7 +20,7 @@ export default async function TicketDetailLayout({ children, params }: LayoutPro
     notFound();
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: project } = await supabase
     .from('projects')
     .select('organization_id')

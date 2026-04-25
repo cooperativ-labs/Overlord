@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/electron/main';
 import { config as loadDotenv } from 'dotenv';
-import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron';
+import { app, BrowserWindow, Menu, MenuItemConstructorOptions, session, shell } from 'electron';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,10 +14,21 @@ import { registerTerminalIpc } from './ipc/terminal';
 import { registerAppMenu } from './services/app-menu';
 import { AppUpdaterService } from './services/app-updater';
 import {
+  installAuthHeaderInjector,
+  installRendererResponseHeaders
+} from './services/header-injector';
+import {
   clearLocalRuntime,
   generateLocalSecret,
   writeLocalRuntime
 } from './services/local-runtime';
+import {
+  computeAccessTokenExpiresAt,
+  getSupabaseOrigin,
+  refreshOAuthTokens
+} from './services/oauth-tokens';
+import { createRefreshController } from './services/refresh-controller';
+import { createElectronSessionStore } from './services/session-store';
 import { SupabaseManager } from './services/supabase-manager';
 // Baked-in production runtime vars (generated from an explicit allowlist before build).
 // In dev mode, the committed default file exports an empty object.
@@ -29,6 +40,18 @@ let unsubscribeAppMenu: (() => void) | null = null;
 let platformUrl = '';
 let connectorUrl = '';
 const supabaseManager = new SupabaseManager();
+const sessionStore = createElectronSessionStore();
+const refreshController = createRefreshController({
+  store: sessionStore,
+  refreshTokens: async ({ platformUrl: currentPlatformUrl, refreshToken }) => {
+    const sessionToken = await refreshOAuthTokens(currentPlatformUrl, refreshToken);
+    return {
+      accessToken: sessionToken.access_token,
+      refreshToken: sessionToken.refresh_token,
+      accessTokenExpiresAt: computeAccessTokenExpiresAt(sessionToken)
+    };
+  }
+});
 const appUpdater = new AppUpdaterService({
   isPackaged: app.isPackaged,
   currentVersion: app.getVersion()
@@ -110,18 +133,11 @@ async function openUrlInDefaultBrowser(url: string): Promise<boolean> {
   }
 }
 
-function applyRendererCsp(window: BrowserWindow, targetUrl: string): void {
-  const csp = getRendererCsp(targetUrl);
-  const session = window.webContents.session;
+function isElectronBearerAuthEnabled(): boolean {
+  const explicitValue =
+    process.env.OVLD_ELECTRON_BEARER_AUTH ?? process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH;
 
-  session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [csp]
-      }
-    });
-  });
+  return explicitValue !== '0';
 }
 
 function loadLocalEnvForPackagedRuns() {
@@ -224,7 +240,6 @@ function createWindow(targetUrl: string) {
     }
   });
 
-  applyRendererCsp(mainWindow, targetUrl);
   registerNativeContextMenu(mainWindow);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (targetOrigin && getUrlOrigin(url) !== targetOrigin) {
@@ -338,6 +353,7 @@ app.whenReady().then(async () => {
 
   // Always open to /u — the middleware will redirect to /electron-login if not authenticated.
   const windowUrl = `${platformUrl}/u`;
+  const platformOrigin = new URL(platformUrl).origin;
 
   if (localSecret) {
     process.env.OVERLORD_LOCAL_SECRET = localSecret;
@@ -349,6 +365,16 @@ app.whenReady().then(async () => {
 
   writeLocalRuntime(connectorUrl, localSecret);
 
+  installRendererResponseHeaders(session.defaultSession, getRendererCsp(windowUrl), platformOrigin);
+  if (isElectronBearerAuthEnabled()) {
+    installAuthHeaderInjector({
+      session: session.defaultSession,
+      platformOrigin,
+      supabaseOrigin: getSupabaseOrigin(),
+      refreshController
+    });
+  }
+
   // Register IPC handlers
   registerTerminalIpc();
   registerFilesystemIpc();
@@ -356,7 +382,11 @@ app.whenReady().then(async () => {
   registerTailscaleIpc();
   registerSupabaseIpc(supabaseManager);
   registerAppIpc({ appUpdater, platformUrl, connectorUrl });
-  registerAuthIpc({ getPlatformUrl: () => platformUrl });
+  registerAuthIpc({
+    getPlatformUrl: () => platformUrl,
+    sessionStore,
+    refreshController
+  });
 
   createWindow(windowUrl);
   appUpdater.initialize();

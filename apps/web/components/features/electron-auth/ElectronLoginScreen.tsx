@@ -4,7 +4,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
-import { createClient } from '@/supabase/utils/client';
 
 function sanitizeNextPath(value: string | null, fallback = '/u') {
   if (!value || value === '/') return fallback;
@@ -52,32 +51,16 @@ export function ElectronLoginScreen() {
       setSignInButtonState('loading');
 
       try {
-        const client = createClient();
-        const { data } = await client.auth.getSession();
-        if (cancelled) return;
-        if (data.session?.access_token) {
-          routerRef.current.replace(nextPathRef.current);
-          return;
-        }
-
         const status = await electronAuth.getStatus();
         if (cancelled) return;
-        if (!status.isAuthenticated) {
-          giveUp();
-          return;
+        if (status.isAuthenticated) {
+          const tokenResult = await electronAuth.getAccessToken();
+          if (!cancelled && tokenResult?.ok) {
+            routerRef.current.replace(nextPathRef.current);
+            return;
+          }
         }
-
-        const result = await electronAuth.refreshSession();
-        if (cancelled) return;
-        if (!result.ok || !result.session) {
-          giveUp();
-          return;
-        }
-
-        await client.auth.setSession(result.session);
-        if (!cancelled) {
-          routerRef.current.replace(nextPathRef.current);
-        }
+        giveUp();
       } catch (err) {
         console.warn('Electron session recovery failed:', err);
         giveUp();
@@ -96,7 +79,6 @@ export function ElectronLoginScreen() {
 
   async function handleLogout() {
     await window.electronAPI?.auth.logout?.();
-    await createClient().auth.signOut();
     setIsRestoringSession(false);
     setSignInButtonState('default');
   }
@@ -114,12 +96,8 @@ export function ElectronLoginScreen() {
     refreshTimerRef.current = setTimeout(() => setShowRefreshButton(true), 5000);
 
     try {
-      const { session } = await electronAuth.login();
+      await electronAuth.login();
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-      // Establish a Supabase session in the webview so server components can read it.
-      await createClient().auth.setSession(session);
-      // Full reload so Next.js server components pick up the new session cookie.
-      // After a fresh login the cookie IS set, so the middleware will see it.
       window.location.href = nextPath;
     } catch (err) {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);

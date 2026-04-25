@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
+import { fetchWithElectronRetry } from '@/lib/electron-auth/fetch-retry';
 import { findOpenBlockingQuestions } from '@/lib/overlord/conversation';
 import type { Database } from '@/types/database.types';
 
@@ -28,7 +29,7 @@ async function postConversationEntry(
     parentEventId?: string;
   }
 ) {
-  const response = await fetch(`/api/tickets/${ticketId}/conversation`, {
+  const response = await fetchWithElectronRetry(`/api/tickets/${ticketId}/conversation`, {
     body: JSON.stringify(input),
     headers: { 'Content-Type': 'application/json' },
     method: 'POST'

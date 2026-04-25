@@ -8,7 +8,7 @@ import { getWorkspaceRoot } from '@/lib/env';
 import { resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { buildTicketStoragePath, ensureTicketStoragePath } from '@/lib/overlord/protocol-artifacts';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export async function uploadImageArtifactAction(
   ticketId: string,
@@ -20,7 +20,7 @@ export async function uploadImageArtifactAction(
     throw new Error('No file provided.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const {
     data: { user }
@@ -159,7 +159,7 @@ export async function prepareTicketDocumentUploadAction(
     throw new Error('File size is required.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const {
     data: { user }
@@ -201,7 +201,7 @@ export async function finalizeTicketDocumentUploadAction(
   ticketId: string,
   draft: Omit<TicketDocumentUploadDraft, 'token'>
 ): Promise<TicketDocument> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const {
     data: { user }
@@ -284,7 +284,7 @@ export async function finalizeTicketDocumentUploadAction(
 }
 
 export async function listTicketDocumentsAction(ticketId: string): Promise<TicketDocument[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data: artifacts, error } = await supabase
     .from('artifacts')
@@ -311,7 +311,7 @@ export async function deleteTicketDocumentAction(
   ticketId: string,
   artifactId: string
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data: artifact, error: findError } = await supabase
     .from('artifacts')
@@ -353,7 +353,7 @@ export async function deleteTicketDocumentAction(
 }
 
 export async function getDocumentSignedUrlAction(storagePath: string): Promise<string> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data, error } = await supabase.storage
     .from('artifacts')

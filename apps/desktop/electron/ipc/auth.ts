@@ -1,12 +1,16 @@
-import { ipcMain, shell } from 'electron';
+import * as Sentry from '@sentry/electron/main';
+import { ipcMain, session as electronSession, shell } from 'electron';
 import crypto from 'node:crypto';
 import http from 'node:http';
 
+import { clearElectronCredentials } from '../services/electron-credentials';
 import {
-  clearElectronCredentials,
-  loadElectronCredentials,
-  saveElectronCredentials
-} from '../services/electron-credentials';
+  computeAccessTokenExpiresAt,
+  fetchAuthConfig,
+  refreshOAuthTokens
+} from '../services/oauth-tokens';
+import { createRefreshController } from '../services/refresh-controller';
+import { createElectronSessionStore, type ElectronSession } from '../services/session-store';
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
@@ -28,53 +32,14 @@ function generateState(): string {
 // Redirect + callback listener
 // ---------------------------------------------------------------------------
 
-const DEFAULT_ELECTRON_REDIRECT_URI = 'http://127.0.0.1:45620/callback';
+const LOOPBACK_HOST = '127.0.0.1';
+const LOOPBACK_PORT_START = 45620;
+const LOOPBACK_PORT_END = 45629;
+const LOOPBACK_CALLBACK_PATH = '/callback';
 
 // Track the active callback server so we can close it before starting a new one.
 // This prevents EADDRINUSE when Electron hot-reloads or the user retries login.
 let activeCallbackServer: http.Server | null = null;
-
-type LoopbackRedirect = {
-  callbackPath: string;
-  host: string;
-  port: number;
-  redirectUri: string;
-};
-
-function parseLoopbackRedirectUri(rawValue: string): LoopbackRedirect {
-  const value = rawValue.trim();
-  if (!value) {
-    throw new Error('OAuth redirect URI is missing.');
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(`Invalid OAuth redirect URI: ${value}`);
-  }
-
-  if (parsed.protocol !== 'http:') {
-    throw new Error('OAuth redirect URI must use http:// for loopback callbacks.');
-  }
-
-  if (parsed.hostname !== '127.0.0.1' && parsed.hostname !== 'localhost') {
-    throw new Error('OAuth redirect URI host must be 127.0.0.1 or localhost.');
-  }
-
-  const port = Number(parsed.port);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    throw new Error(`OAuth redirect URI must include a valid port: ${value}`);
-  }
-
-  const callbackPath = parsed.pathname || '/';
-  return {
-    callbackPath,
-    host: parsed.hostname,
-    port,
-    redirectUri: `${parsed.origin}${callbackPath}`
-  };
-}
 
 function closeActiveCallbackServer(): Promise<void> {
   return new Promise(resolve => {
@@ -90,13 +55,20 @@ function closeActiveCallbackServer(): Promise<void> {
   });
 }
 
-function waitForOAuthCallback(
+function createCallbackServer(
   host: string,
   port: number,
   callbackPath: string,
   expectedState: string
-): Promise<string> {
+): Promise<{ server: http.Server; codePromise: Promise<string> }> {
   return new Promise((resolve, reject) => {
+    let resolveCode: (code: string) => void;
+    let rejectCode: (err: Error) => void;
+    const codePromise = new Promise<string>((res, rej) => {
+      resolveCode = res;
+      rejectCode = rej;
+    });
+
     const server = http.createServer((req, res) => {
       const url = new URL(req.url ?? '/', `http://${host}:${port}`);
       if (url.pathname !== callbackPath) {
@@ -118,7 +90,7 @@ function waitForOAuthCallback(
         res.end(html('Authorization Denied', 'You can close this window and return to Overlord.'));
         activeCallbackServer = null;
         server.close();
-        reject(new Error(`Authorization denied: ${errorParam}`));
+        rejectCode(new Error(`Authorization denied: ${errorParam}`));
         return;
       }
 
@@ -126,7 +98,7 @@ function waitForOAuthCallback(
         res.end(html('Error', 'State mismatch. Please try again.'));
         activeCallbackServer = null;
         server.close();
-        reject(new Error('State mismatch — possible CSRF. Please try again.'));
+        rejectCode(new Error('State mismatch — possible CSRF. Please try again.'));
         return;
       }
 
@@ -134,73 +106,76 @@ function waitForOAuthCallback(
         res.end(html('Error', 'No authorization code received.'));
         activeCallbackServer = null;
         server.close();
-        reject(new Error('No authorization code in callback.'));
+        rejectCode(new Error('No authorization code in callback.'));
         return;
       }
 
       res.end(html('Authorization Complete', 'You can close this window and return to Overlord.'));
       activeCallbackServer = null;
       server.close();
-      resolve(code);
+      resolveCode(code);
     });
 
-    activeCallbackServer = server;
     server.on('error', (err: NodeJS.ErrnoException) => {
-      activeCallbackServer = null;
-      if (err.code === 'EADDRINUSE') {
-        console.error('[auth] OAuth callback port is already in use', {
-          host,
-          port
-        });
-        reject(
-          new Error(
-            `OAuth callback port ${port} is already in use. ` +
-              'Another Overlord instance or local process may already be using it. ' +
-              'Close that application or check for firewall/proxy interference, then try again.'
-          )
-        );
-      } else {
-        reject(err);
-      }
+      reject(err);
     });
-    server.listen(port, host);
+
+    server.listen(port, host, () => {
+      activeCallbackServer = server;
+      resolve({ server, codePromise });
+    });
   });
+}
+
+async function bindLoopbackServer(
+  expectedState: string
+): Promise<{ port: number; redirectUri: string; codePromise: Promise<string> }> {
+  const bindFailures: number[] = [];
+
+  for (let port = LOOPBACK_PORT_START; port <= LOOPBACK_PORT_END; port++) {
+    try {
+      const { codePromise } = await createCallbackServer(
+        LOOPBACK_HOST,
+        port,
+        LOOPBACK_CALLBACK_PATH,
+        expectedState
+      );
+      if (bindFailures.length > 0) {
+        console.warn('[auth] Loopback bind succeeded after skipping occupied ports', {
+          skipped: bindFailures,
+          bound: port
+        });
+      }
+      return {
+        port,
+        redirectUri: `http://${LOOPBACK_HOST}:${port}${LOOPBACK_CALLBACK_PATH}`,
+        codePromise
+      };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+        Sentry.addBreadcrumb({
+          category: 'electron_auth',
+          level: 'warning',
+          message: 'electron_auth.loopback_bind_failed',
+          data: { port }
+        });
+        console.warn('[auth] Loopback port in use, trying next', { port });
+        bindFailures.push(port);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw new Error(
+    `All loopback callback ports (${LOOPBACK_PORT_START}–${LOOPBACK_PORT_END}) are in use. ` +
+      'Close other Overlord instances or local processes using those ports, then try again.'
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Network helpers
 // ---------------------------------------------------------------------------
-
-async function fetchAuthConfig(platformUrl: string): Promise<{
-  electron_client_id: string;
-  electron_redirect_uri?: string | null;
-  platform_url: string;
-  supabase_url: string;
-}> {
-  const res = await fetch(`${platformUrl}/api/auth/config`);
-  if (!res.ok) {
-    throw new Error(
-      `Failed to fetch auth config (${res.status}). Check that Overlord is reachable at ${platformUrl}.`
-    );
-  }
-  const json = await res.json();
-  if (!json.supabase_url || !json.electron_client_id) {
-    throw new Error(
-      'Auth config is missing supabase_url or electron_client_id. Check SUPABASE_OAUTH_ELECTRON_CLIENT_ID is set.'
-    );
-  }
-
-  const resolvedPlatformUrl = new URL(res.url).origin;
-  return {
-    ...json,
-    platform_url: resolvedPlatformUrl
-  } as {
-    electron_client_id: string;
-    electron_redirect_uri?: string | null;
-    platform_url: string;
-    supabase_url: string;
-  };
-}
 
 async function exchangeCodeForSupabaseTokens(
   supabaseUrl: string,
@@ -261,12 +236,18 @@ type SupabaseSession = {
   expires_in?: number;
 };
 
-async function performLogin(platformUrl: string): Promise<SupabaseSession> {
+type RendererSessionResponse = {
+  access_token: string;
+};
+
+async function performLogin(
+  platformUrl: string,
+  saveSession: (session: ElectronSession) => void
+): Promise<RendererSessionResponse> {
   // 1. Discover OAuth config from the platform
   const {
     supabase_url: supabaseUrl,
     electron_client_id: clientId,
-    electron_redirect_uri: configuredRedirectUri,
     platform_url: resolvedPlatformUrl
   } = await fetchAuthConfig(platformUrl);
 
@@ -275,15 +256,13 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   const codeChallenge = generateCodeChallenge(codeVerifier);
   const state = generateState();
 
-  // 3. Use exact loopback redirect URI (Supabase does not support wildcard callback URLs)
-  const { redirectUri, host, port, callbackPath } = parseLoopbackRedirectUri(
-    configuredRedirectUri ?? DEFAULT_ELECTRON_REDIRECT_URI
-  );
-
-  // 3b. Close any leftover callback server from a previous attempt or hot-reload
+  // 3. Close any leftover callback server from a previous attempt or hot-reload
   await closeActiveCallbackServer();
 
-  // 4. Build the Supabase OAuth authorization URL
+  // 4. Bind the first available loopback port from the registered range
+  const { redirectUri, codePromise: callbackPromise } = await bindLoopbackServer(state);
+
+  // 5. Build the Supabase OAuth authorization URL
   const authorizeUrl = new URL(`${supabaseUrl}/auth/v1/oauth/authorize`);
   authorizeUrl.searchParams.set('response_type', 'code');
   authorizeUrl.searchParams.set('client_id', clientId);
@@ -293,7 +272,7 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   authorizeUrl.searchParams.set('state', state);
   authorizeUrl.searchParams.set('scope', 'openid email');
 
-  // 5. Pre-flight the authorize request from Node.js (cookie-free) to get
+  // 6. Pre-flight the authorize request from Node.js (cookie-free) to get
   //    the consent page redirect URL. When the browser opens the authorize
   //    URL directly, Kong may reject it due to stale cookies from Supabase
   //    Studio on the same localhost domain.
@@ -307,9 +286,6 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   } catch {
     // Fall back to opening the authorize URL directly
   }
-
-  // 6. Start listener before opening browser
-  const callbackPromise = waitForOAuthCallback(host, port, callbackPath, state);
 
   // 7. Open browser to the consent page (or authorize URL as fallback)
   await shell.openExternal(browserUrl);
@@ -330,63 +306,16 @@ async function performLogin(platformUrl: string): Promise<SupabaseSession> {
   const defaultOrganizationId = organizations[0]?.id ?? null;
 
   // 10. Persist credentials including refresh token for session renewal
-  saveElectronCredentials({
-    access_token: supabaseTokens.access_token,
-    access_token_expires_at:
-      typeof supabaseTokens.expires_in === 'number' && supabaseTokens.expires_in > 0
-        ? new Date(Date.now() + supabaseTokens.expires_in * 1000).toISOString()
-        : undefined,
-    refresh_token: supabaseTokens.refresh_token,
-    organization_id: defaultOrganizationId,
-    platform_url: resolvedPlatformUrl
+  saveSession({
+    platformUrl: resolvedPlatformUrl,
+    accessToken: supabaseTokens.access_token,
+    accessTokenExpiresAt: computeAccessTokenExpiresAt(supabaseTokens),
+    refreshToken: supabaseTokens.refresh_token,
+    organizationId: defaultOrganizationId
   });
 
   return {
-    access_token: supabaseTokens.access_token,
-    refresh_token: supabaseTokens.refresh_token
-  };
-}
-
-// ---------------------------------------------------------------------------
-// OAuth token refresh
-// ---------------------------------------------------------------------------
-// The @supabase/ssr auto-refresh calls /auth/v1/token?grant_type=refresh_token,
-// which is the standard GoTrue endpoint. OAuth-issued refresh tokens require
-// the OAuth endpoint (/auth/v1/oauth/token) with the client_id parameter.
-// Without this, the browser session silently expires every jwt_expiry interval
-// (default 3600s) and the user is forced to re-login.
-//
-// This function calls the correct OAuth endpoint so the Electron main process
-// can refresh tokens on behalf of the webview.
-// ---------------------------------------------------------------------------
-
-async function refreshOAuthTokens(
-  platformUrl: string,
-  refreshToken: string
-): Promise<SupabaseSession> {
-  const { supabase_url: supabaseUrl, electron_client_id: clientId } =
-    await fetchAuthConfig(platformUrl);
-
-  const res = await fetch(`${supabaseUrl}/auth/v1/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId
-    })
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`OAuth token refresh failed (${res.status}): ${text.slice(0, 180)}`);
-  }
-
-  const data = await res.json();
-  return {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_in: data.expires_in
+    access_token: supabaseTokens.access_token
   };
 }
 
@@ -396,103 +325,198 @@ async function refreshOAuthTokens(
 
 type RegisterAuthIpcOptions = {
   getPlatformUrl: () => string;
+  sessionStore?: ReturnType<typeof createElectronSessionStore>;
+  refreshController?: ReturnType<typeof createRefreshController>;
 };
 
-export function registerAuthIpc({ getPlatformUrl }: RegisterAuthIpcOptions): void {
-  ipcMain.handle('auth:login', async () => {
-    const platformUrl = getPlatformUrl();
-    const session = await performLogin(platformUrl);
-    return { ok: true, session };
-  });
-
-  ipcMain.handle('auth:logout', () => {
-    clearElectronCredentials();
-    return { ok: true };
-  });
-
-  ipcMain.handle('auth:getStatus', () => {
-    const credentials = loadElectronCredentials();
-    return {
-      isAuthenticated: credentials !== null,
-      platformUrl: credentials?.platform_url ?? null,
-      supabaseRefreshToken: credentials?.refresh_token ?? null
-    };
-  });
-
-  ipcMain.handle('auth:saveRefreshToken', (_, refreshToken: string) => {
-    const credentials = loadElectronCredentials();
-    if (credentials && refreshToken) {
-      saveElectronCredentials({ ...credentials, refresh_token: refreshToken });
+export function registerAuthIpc({
+  getPlatformUrl,
+  sessionStore = createElectronSessionStore(),
+  refreshController = createRefreshController({
+    store: sessionStore,
+    refreshTokens: async ({ platformUrl, refreshToken }) => {
+      const session = await refreshOAuthTokens(platformUrl, refreshToken);
+      return {
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token,
+        accessTokenExpiresAt: computeAccessTokenExpiresAt(session)
+      };
     }
-    return { ok: true };
+  })
+}: RegisterAuthIpcOptions): void {
+  const buildAccessTokenResponse = (accessToken: string) => ({
+    ok: true,
+    accessToken,
+    accessTokenExpiresAt: sessionStore.getSession()?.accessTokenExpiresAt ?? null
   });
 
-  const checkOAuthSession = async () => {
-    const credentials = loadElectronCredentials();
-    if (!credentials?.refresh_token) {
-      return { valid: false, reason: 'no_token' };
-    }
-    return { valid: true };
+  const addRefreshBreadcrumb = (
+    message:
+      | 'electron_auth.refresh_attempt'
+      | 'electron_auth.refresh_success'
+      | 'electron_auth.refresh_failed',
+    data: Record<string, unknown>,
+    level: 'info' | 'warning' | 'error' = 'info'
+  ) => {
+    Sentry.addBreadcrumb({
+      category: 'electron_auth',
+      level,
+      message,
+      data
+    });
   };
 
-  ipcMain.handle('auth:checkOAuthSession', checkOAuthSession);
-  ipcMain.handle('auth:checkAgentToken', checkOAuthSession);
-
-  const refreshOAuthSession = async () => {
-    const credentials = loadElectronCredentials();
-    if (!credentials?.refresh_token) {
-      return { ok: false, error: 'No refresh token available' };
-    }
+  const refreshSession = async (
+    forceRefresh: boolean,
+    reason: 'preemptive' | 'on_401' | 'first_boot'
+  ) => {
+    const startedAt = Date.now();
+    const previousRefreshToken = sessionStore.getSession()?.refreshToken ?? null;
+    addRefreshBreadcrumb('electron_auth.refresh_attempt', { reason });
 
     try {
-      const session = await refreshOAuthTokens(credentials.platform_url, credentials.refresh_token);
+      const accessToken = forceRefresh
+        ? await refreshController.forceRefresh()
+        : await refreshController.getValidAccessToken();
 
-      saveElectronCredentials({
-        ...credentials,
-        access_token: session.access_token,
-        access_token_expires_at:
-          typeof session.expires_in === 'number' && session.expires_in > 0
-            ? new Date(Date.now() + session.expires_in * 1000).toISOString()
-            : credentials.access_token_expires_at,
-        refresh_token: session.refresh_token
+      const session = sessionStore.getSession();
+      if (!session?.refreshToken) {
+        return { ok: false, error: 'No refresh token available' };
+      }
+
+      addRefreshBreadcrumb('electron_auth.refresh_success', {
+        rotated: previousRefreshToken !== null && previousRefreshToken !== session.refreshToken,
+        latency_ms: Date.now() - startedAt
       });
 
-      return { ok: true, accessToken: session.access_token };
+      return {
+        ok: true,
+        session: {
+          access_token: accessToken
+        }
+      };
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Refresh failed';
+      const statusMatch = message.match(/\((\d{3})\)/);
+      addRefreshBreadcrumb(
+        'electron_auth.refresh_failed',
+        {
+          code: message.split(':')[0] || 'refresh_failed',
+          ...(statusMatch ? { status: Number(statusMatch[1]) } : {})
+        },
+        'error'
+      );
+
       return {
         ok: false,
-        error: err instanceof Error ? err.message : 'OAuth session refresh failed'
+        error: message
       };
     }
   };
 
-  ipcMain.handle('auth:refreshOAuthSession', refreshOAuthSession);
-  ipcMain.handle('auth:refreshAgentToken', refreshOAuthSession);
+  const revokeOAuthGrant = async (currentSession: ElectronSession): Promise<void> => {
+    const accessToken =
+      currentSession.accessToken ??
+      (await refreshController.getValidAccessToken().catch(() => null));
+    if (!accessToken) return;
+
+    const { supabase_url: supabaseUrl, electron_client_id: clientId } = await fetchAuthConfig(
+      currentSession.platformUrl
+    );
+
+    const response = await fetch(`${supabaseUrl}/auth/v1/oauth/revoke`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({ client_id: clientId })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OAuth revoke failed (${response.status})`);
+    }
+  };
+
+  ipcMain.handle('auth:login', async () => {
+    const platformUrl = getPlatformUrl();
+    const session = await performLogin(platformUrl, sessionStore.setSession);
+    return { ok: true, session };
+  });
+
+  ipcMain.handle('auth:logout', async () => {
+    const currentSession = sessionStore.getSession();
+
+    if (currentSession) {
+      try {
+        await revokeOAuthGrant(currentSession);
+      } catch (err) {
+        console.warn('[auth] OAuth grant revoke failed', err);
+      }
+    }
+
+    clearElectronCredentials();
+    sessionStore.clear();
+
+    const platformOrigin = currentSession?.platformUrl
+      ? new URL(currentSession.platformUrl).origin
+      : null;
+    if (platformOrigin) {
+      await electronSession.defaultSession.clearStorageData({
+        origin: platformOrigin,
+        storages: ['cookies']
+      });
+    }
+
+    return { ok: true };
+  });
+
+  ipcMain.handle('auth:getStatus', () => {
+    const session = sessionStore.getSession();
+    return {
+      isAuthenticated: session !== null,
+      platformUrl: session?.platformUrl ?? null
+    };
+  });
+
+  ipcMain.handle('auth:getAccessToken', async () => {
+    const currentSession = sessionStore.getSession();
+    const result = await refreshSession(
+      false,
+      currentSession?.accessToken ? 'preemptive' : 'first_boot'
+    );
+    if (!result.ok || !result.session) {
+      return {
+        ok: false,
+        error: result.error ?? 'Unable to load access token.'
+      };
+    }
+
+    return buildAccessTokenResponse(result.session.access_token);
+  });
+
+  ipcMain.handle('auth:forceRefresh', async () => {
+    const result = await refreshSession(true, 'on_401');
+    if (!result.ok || !result.session) {
+      return {
+        ok: false,
+        error: result.error ?? 'Refresh failed'
+      };
+    }
+
+    return buildAccessTokenResponse(result.session.access_token);
+  });
 
   // Refresh the Supabase session via the OAuth token endpoint.
-  // Called by ElectronAuthGate to proactively renew tokens before expiry.
   ipcMain.handle('auth:refreshSession', async () => {
-    const credentials = loadElectronCredentials();
-    if (!credentials?.refresh_token) {
-      return { ok: false, error: 'No refresh token available' };
+    const result = await refreshSession(false, 'preemptive');
+    if (!result.ok || !result.session) {
+      return result;
     }
 
-    try {
-      const session = await refreshOAuthTokens(credentials.platform_url, credentials.refresh_token);
-
-      saveElectronCredentials({
-        ...credentials,
-        access_token: session.access_token,
-        access_token_expires_at:
-          typeof session.expires_in === 'number' && session.expires_in > 0
-            ? new Date(Date.now() + session.expires_in * 1000).toISOString()
-            : credentials.access_token_expires_at,
-        refresh_token: session.refresh_token
-      });
-
-      return { ok: true, session };
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : 'Refresh failed' };
-    }
+    return {
+      ok: true,
+      session: result.session
+    };
   });
 }

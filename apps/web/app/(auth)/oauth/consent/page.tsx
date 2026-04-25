@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 import { OAuthActions } from './oauth-actions';
 
@@ -35,7 +35,7 @@ export default async function OAuthConsentPage({
     );
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

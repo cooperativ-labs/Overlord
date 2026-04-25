@@ -5,7 +5,7 @@ import { Resend } from 'resend';
 import { z } from 'zod';
 
 import { EARLY_ACCESS_ROLES } from '@/lib/data/early-access';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 const earlyAccessSchema = z.object({
   name: z
@@ -64,7 +64,7 @@ export async function requestEarlyAccess(formData: FormData): Promise<EarlyAcces
   const { name, email, role } = parsed.data;
 
   try {
-    const supabase = await createClient();
+    const supabase = await createClientForRequest();
     const { error: insertError } = await supabase.from('early_access_requests').insert({
       name,
       email,

@@ -9,6 +9,10 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { submitFeedbackAction, uploadFeedbackScreenshot } from '@/lib/actions/feedback';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const uploadFeedbackScreenshotWithRetry = withElectronActionRetry(uploadFeedbackScreenshot);
+const submitFeedbackActionWithRetry = withElectronActionRetry(submitFeedbackAction);
 
 type Screenshot = {
   file: File;
@@ -67,7 +71,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
     for (const screenshot of newScreenshots) {
       const formData = new FormData();
       formData.append('file', screenshot.file);
-      const result = await uploadFeedbackScreenshot(formData);
+      const result = await uploadFeedbackScreenshotWithRetry(formData);
 
       setScreenshots(prev =>
         prev.map(s =>
@@ -111,7 +115,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
     setError(null);
 
     const paths = screenshots.filter(s => s.path).map(s => s.path!);
-    const result = await submitFeedbackAction(description, paths);
+    const result = await submitFeedbackActionWithRetry(description, paths);
 
     if (result.error) {
       setSubmitState('error');

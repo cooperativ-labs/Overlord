@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export type RunningAgentSession = {
   id: string;
@@ -13,7 +13,7 @@ export type RunningAgentSession = {
 };
 
 export async function getRunningAgentSessionCountAction(): Promise<number> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { count, error } = await supabase
     .from('agent_sessions')
     .select('id', { count: 'exact', head: true })
@@ -28,7 +28,7 @@ export async function getRunningAgentSessionCountAction(): Promise<number> {
 }
 
 export async function getRunningAgentSessionsAction(): Promise<RunningAgentSession[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: sessions, error: sessionsError } = await supabase
     .from('agent_sessions')
     .select('id,ticket_id,agent_identifier,attached_at')
@@ -75,7 +75,7 @@ export async function getRunningAgentSessionsAction(): Promise<RunningAgentSessi
 }
 
 export async function stopRunningAgentSessionAction(sessionId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { error } = await supabase
     .from('agent_sessions')
     .update({ session_state: 'disconnected', detached_at: new Date().toISOString() })

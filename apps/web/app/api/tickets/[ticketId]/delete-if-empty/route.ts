@@ -1,13 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ ticketId: string }> }
 ) {
   const { ticketId } = await params;
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data: ticket } = await supabase
     .from('tickets')

@@ -25,6 +25,8 @@ import {
   createFirstProjectWithDirectory,
   updateOnboardingProgressAction
 } from '@/lib/actions/onboarding';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { refreshElectronRoute } from '@/lib/electron-auth/route-refresh';
 import { cn } from '@/lib/utils';
 
 import { useTutorialWizard } from './TutorialWizardContext';
@@ -46,6 +48,14 @@ import { useTutorialWizard } from './TutorialWizardContext';
 const WEB_TOTAL_STEPS = 4;
 const DESKTOP_TOTAL_STEPS = 5;
 const TUTORIAL_START_STEP = 3;
+
+const createFirstOrganizationWithRetry = withElectronActionRetry(createFirstOrganization);
+const createFirstProjectWithDirectoryWithRetry = withElectronActionRetry(
+  createFirstProjectWithDirectory
+);
+const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
+  updateOnboardingProgressAction
+);
 
 type TutorialWizardProps = {
   initialState: OnboardingState;
@@ -132,7 +142,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
           }
         : { completedStep: completedStepNumber };
 
-      await updateOnboardingProgressAction(update);
+      await updateOnboardingProgressActionWithRetry(update);
       updateState({
         onboardingCompletedStep: Math.max(
           initialState.onboardingCompletedStep,
@@ -160,7 +170,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
             desktopSetupDone: true
           }
         : { completedStep: totalSteps };
-      await updateOnboardingProgressAction(update);
+      await updateOnboardingProgressActionWithRetry(update);
       updateState({
         onboardingCompletedStep: Math.max(initialState.onboardingCompletedStep, totalSteps),
         ...(isElectron
@@ -186,7 +196,7 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     setOrgButtonState('loading');
     setOrgError(null);
     try {
-      const result = await createFirstOrganization({ name: trimmed });
+      const result = await createFirstOrganizationWithRetry({ name: trimmed });
       setOrganizationId(result.organizationId);
       setOrgButtonState('success');
       setCurrentStep(2);
@@ -245,14 +255,14 @@ export function TutorialWizard({ initialState, startAtStep, onClose }: TutorialW
     setProjectButtonState('loading');
     setProjectError(null);
     try {
-      await createFirstProjectWithDirectory({
+      await createFirstProjectWithDirectoryWithRetry({
         organizationId,
         name: trimmedName,
         color: projectColor,
         workingDirectory: workingDirectory.trim() || null
       });
       setProjectButtonState('success');
-      router.refresh();
+      await refreshElectronRoute(router);
       setCurrentStep(3);
     } catch (error) {
       setProjectButtonState('error');

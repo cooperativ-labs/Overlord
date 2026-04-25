@@ -351,35 +351,27 @@ interface ElectronAPI {
     onStatus: (callback: (status: AppUpdateStatus) => void) => () => void;
   };
   auth: {
-    login: () => Promise<{ ok: true; session: { access_token: string; refresh_token: string } }>;
+    login: () => Promise<{ ok: true; session: { access_token: string } }>;
     logout: () => Promise<{ ok: true }>;
     getStatus: () => Promise<{
       isAuthenticated: boolean;
       platformUrl: string | null;
-      supabaseRefreshToken: string | null;
     }>;
-    saveRefreshToken: (token: string) => Promise<{ ok: true }>;
+    getAccessToken: () => Promise<{
+      ok: boolean;
+      accessToken?: string;
+      accessTokenExpiresAt?: string | null;
+      error?: string;
+    }>;
+    forceRefresh: () => Promise<{
+      ok: boolean;
+      accessToken?: string;
+      accessTokenExpiresAt?: string | null;
+      error?: string;
+    }>;
     refreshSession: () => Promise<{
       ok: boolean;
-      session?: { access_token: string; refresh_token: string };
-      error?: string;
-    }>;
-    checkOAuthSession: () => Promise<{
-      valid: boolean;
-      reason?: string;
-    }>;
-    refreshOAuthSession: () => Promise<{
-      ok: boolean;
-      accessToken?: string;
-      error?: string;
-    }>;
-    checkAgentToken: () => Promise<{
-      valid: boolean;
-      reason?: string;
-    }>;
-    refreshAgentToken: () => Promise<{
-      ok: boolean;
-      accessToken?: string;
+      session?: { access_token: string };
       error?: string;
     }>;
   };

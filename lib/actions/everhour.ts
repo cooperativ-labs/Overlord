@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 const EVERHOUR_BASE_URL = 'https://api.everhour.com';
 const EVERHOUR_PROVIDER = 'everhour';
@@ -44,7 +44,7 @@ export type EverhourSyncedProject = {
 };
 
 type AuthenticatedContext = {
-  supabase: Awaited<ReturnType<typeof createClient>>;
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>;
   userId: string;
 };
 
@@ -395,7 +395,7 @@ function revalidateProjectTicketPaths(projectId: string | null, ticketId: string
 }
 
 async function getAuthenticatedContext(): Promise<AuthenticatedContext> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -408,7 +408,7 @@ async function getAuthenticatedContext(): Promise<AuthenticatedContext> {
 }
 
 async function getEverhourApiKey(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   userId: string
 ): Promise<string | null> {
   const { data, error } = await supabase
@@ -426,7 +426,7 @@ async function getEverhourApiKey(
 }
 
 async function requireEverhourApiKey(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   userId: string
 ): Promise<string> {
   const apiKey = await getEverhourApiKey(supabase, userId);
@@ -462,7 +462,7 @@ async function everhourFetch<T>(apiKey: string, path: string, init?: RequestInit
 }
 
 async function getTicketEverhourState(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   ticketId: string
 ): Promise<TicketEverhourState> {
   const { data, error } = await supabase
@@ -479,7 +479,7 @@ async function getTicketEverhourState(
 }
 
 async function getProjectEverhourState(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   projectId: string
 ): Promise<ProjectEverhourState> {
   const { data, error } = await supabase
@@ -496,7 +496,7 @@ async function getProjectEverhourState(
 }
 
 async function getEverhourProjectIdForTicket(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   ticket: TicketEverhourState
 ): Promise<string> {
   if (!ticket.project_id) {
@@ -526,7 +526,7 @@ async function getEverhourProjectIdForTicket(
 }
 
 async function getProjectInfoByEverhourTaskId(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   taskId: string,
   taskName?: string
 ): Promise<{ projectId: string; projectName: string } | null> {

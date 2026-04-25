@@ -2,7 +2,7 @@
 
 import { generateTitleWithGemini } from '@/lib/ai/generate-ticket-title';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 const AI_TITLE_THRESHOLD = 100;
 
@@ -23,7 +23,7 @@ export async function generateTicketTitleAction(objective: string): Promise<stri
   }
 
   // Check user preference
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

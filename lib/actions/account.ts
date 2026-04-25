@@ -5,7 +5,7 @@ import type { User } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
 import { getPlatformUrl } from '@/lib/env';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export type OAuthIdentity = {
   id: string;
@@ -71,7 +71,7 @@ function getOwnedUserImageStoragePath(imageUrl: string, userId: string): string 
 async function updateProfileImageMetadata(
   userId: string,
   imageUrl: string | null,
-  supabase: Awaited<ReturnType<typeof createClient>>
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>
 ): Promise<void> {
   const { error: authError } = await supabase.auth.updateUser({
     data: {
@@ -98,7 +98,7 @@ async function updateProfileImageMetadata(
 }
 
 export async function getProfileDataAction(): Promise<ProfileData> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user },
     error
@@ -134,7 +134,7 @@ export async function updateProfileNameAction(name: string): Promise<void> {
     throw new Error('Name cannot be empty.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -172,7 +172,7 @@ export async function updatePasswordAction(
     throw new Error('New password must be at least 8 characters.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -203,7 +203,7 @@ export async function setPasswordAction(newPassword: string): Promise<void> {
     throw new Error('Password must be at least 8 characters.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -220,7 +220,7 @@ export async function setPasswordAction(newPassword: string): Promise<void> {
 }
 
 export async function linkGithubIdentityAction(): Promise<LinkIdentityResult> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data, error } = await supabase.auth.linkIdentity({
     provider: 'github',
@@ -240,7 +240,7 @@ export async function linkGithubIdentityAction(): Promise<LinkIdentityResult> {
 }
 
 export async function disconnectIdentityAction(identityId: string): Promise<LinkIdentityResult> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -289,7 +289,7 @@ export async function uploadProfileImageAction(formData: FormData): Promise<stri
     throw new Error('Image must be 5 MB or smaller.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -342,7 +342,7 @@ export async function uploadProfileImageAction(formData: FormData): Promise<stri
 }
 
 export async function removeProfileImageAction(): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

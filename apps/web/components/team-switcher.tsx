@@ -20,6 +20,10 @@ import {
 } from '@/components/ui/sidebar';
 import type { UserOrganization } from '@/lib/actions/organizations';
 import { setSelectedOrgAction } from '@/lib/actions/organizations';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { refreshElectronRoute } from '@/lib/electron-auth/route-refresh';
+
+const setSelectedOrgActionWithRetry = withElectronActionRetry(setSelectedOrgAction);
 
 export function TeamSwitcher({
   organizations,
@@ -35,8 +39,8 @@ export function TeamSwitcher({
   const activeLabel = activeOrg?.name ?? 'All Teams';
 
   async function handleSelect(orgId: number | null) {
-    await setSelectedOrgAction(orgId);
-    router.refresh();
+    await setSelectedOrgActionWithRetry(orgId);
+    await refreshElectronRoute(router);
   }
 
   return (

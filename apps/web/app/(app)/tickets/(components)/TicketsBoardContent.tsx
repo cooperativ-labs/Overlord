@@ -12,7 +12,7 @@ import type {
 import BoardHydrationBoundary from '@/lib/client-data/tickets/BoardHydrationBoundary';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 import CalendarView from './CalendarView';
@@ -120,7 +120,7 @@ export default async function TicketsBoardContent({
   const view = isMobile ? 'list' : (preferredView ?? 'board');
   const initialHiddenColumns = projectPreferences?.hidden_columns ?? [];
   const initialListFilters = projectPreferences?.list_filters ?? null;
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

@@ -11,6 +11,13 @@ import {
   type SlackWorkspace,
   updateSlackWorkspaceAction
 } from '@/lib/actions/slack';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const disconnectSlackWorkspaceActionWithRetry = withElectronActionRetry(
+  disconnectSlackWorkspaceAction
+);
+const getSlackWorkspacesActionWithRetry = withElectronActionRetry(getSlackWorkspacesAction);
+const updateSlackWorkspaceActionWithRetry = withElectronActionRetry(updateSlackWorkspaceAction);
 
 function buildAddToSlackUrl(redirectUri: string): string {
   const clientId = process.env.NEXT_PUBLIC_SLACK_CLIENT_ID ?? '';
@@ -42,7 +49,7 @@ function WorkspaceRow({ workspace, onRemove }: WorkspaceRowProps) {
 
   async function handleDisconnect() {
     setDisconnectState('loading');
-    const result = await disconnectSlackWorkspaceAction(workspace.id);
+    const result = await disconnectSlackWorkspaceActionWithRetry(workspace.id);
     if (result.error) {
       setDisconnectState('error');
       setStatusMsg(result.error);
@@ -53,7 +60,7 @@ function WorkspaceRow({ workspace, onRemove }: WorkspaceRowProps) {
 
   async function handleSaveStatus() {
     setSavingStatus('loading');
-    const result = await updateSlackWorkspaceAction(workspace.id, {
+    const result = await updateSlackWorkspaceActionWithRetry(workspace.id, {
       default_status: defaultStatus
     });
     if (result.error) {
@@ -124,7 +131,7 @@ export function SlackSettings({ open }: SlackSettingsProps) {
   useEffect(() => {
     if (!open) return;
     setLoaded(false);
-    getSlackWorkspacesAction()
+    getSlackWorkspacesActionWithRetry()
       .then(ws => setWorkspaces(ws))
       .finally(() => setLoaded(true));
     if (typeof window !== 'undefined') {

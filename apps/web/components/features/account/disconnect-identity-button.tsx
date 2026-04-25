@@ -4,6 +4,9 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { disconnectIdentityAction } from '@/lib/actions/account';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const disconnectIdentityActionWithRetry = withElectronActionRetry(disconnectIdentityAction);
 
 const PROVIDER_LABELS: Record<string, string> = {
   email: 'Email / Password',
@@ -37,7 +40,7 @@ export function DisconnectIdentityButton({
     setErrorMessage(null);
 
     try {
-      const result = await disconnectIdentityAction(identityId);
+      const result = await disconnectIdentityActionWithRetry(identityId);
 
       if (result.error) {
         setErrorMessage(result.error);

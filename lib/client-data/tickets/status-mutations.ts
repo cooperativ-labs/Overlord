@@ -8,6 +8,7 @@ import {
   reorderTicketStatusesAction,
   updateTicketStatusNameAction
 } from '@/lib/actions/ticket-statuses';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 
 import { renameTicketStatus } from './board-reducers';
 import type { BoardStatus, TicketBoardState } from './board-types';
@@ -86,10 +87,15 @@ function toBoardStatus(status: {
   };
 }
 
+const createTicketStatusActionWithRetry = withElectronActionRetry(createTicketStatusAction);
+const deleteTicketStatusActionWithRetry = withElectronActionRetry(deleteTicketStatusAction);
+const updateTicketStatusNameActionWithRetry = withElectronActionRetry(updateTicketStatusNameAction);
+const reorderTicketStatusesActionWithRetry = withElectronActionRetry(reorderTicketStatusesAction);
+
 export function useCreateTicketStatusMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: createTicketStatusAction,
+    mutationFn: createTicketStatusActionWithRetry,
     onMutate: input => {
       const snapshot = snapshotStatusState(queryClient, input.organizationId);
       patchStatuses(queryClient, input.organizationId, statuses => {
@@ -125,7 +131,7 @@ export function useCreateTicketStatusMutation() {
 export function useDeleteTicketStatusMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: deleteTicketStatusAction,
+    mutationFn: deleteTicketStatusActionWithRetry,
     onMutate: input => {
       const snapshot = snapshotStatusState(queryClient, input.organizationId);
       const name = normalizeStatusName(input.name);
@@ -143,7 +149,7 @@ export function useDeleteTicketStatusMutation() {
 export function useRenameTicketStatusMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: updateTicketStatusNameAction,
+    mutationFn: updateTicketStatusNameActionWithRetry,
     onMutate: input => {
       const snapshot = snapshotStatusState(queryClient, input.organizationId);
       const currentName = normalizeStatusName(input.currentName);
@@ -180,7 +186,7 @@ export function useRenameTicketStatusMutation() {
 export function useReorderTicketStatusesMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: reorderTicketStatusesAction,
+    mutationFn: reorderTicketStatusesActionWithRetry,
     onMutate: input => {
       const snapshot = snapshotStatusState(queryClient, input.organizationId);
       const orderedNames = input.orderedNames.map(normalizeStatusName);

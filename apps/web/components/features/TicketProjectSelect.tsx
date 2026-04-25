@@ -32,8 +32,10 @@ import { setTicketProjectAction } from '@/lib/actions/tickets';
 import { useCreateProjectMutation } from '@/lib/client-data/projects/mutations';
 import { moveTicketProjectInBoards } from '@/lib/client-data/tickets/cache';
 import { useProjects } from '@/lib/client-data/tickets/hooks';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 
 const PERSONAL_PROJECT_VALUE = '__personal__';
+const setTicketProjectActionWithRetry = withElectronActionRetry(setTicketProjectAction);
 
 type ProjectOption = {
   id: string;
@@ -118,7 +120,7 @@ export function TicketProjectSelect({
 
     startSavingProject(async () => {
       try {
-        await setTicketProjectAction(ticketId, nextProjectId);
+        await setTicketProjectActionWithRetry(ticketId, nextProjectId);
         const nextProject = availableProjects.find(project => project.id === nextProjectId) ?? null;
         if (nextProjectId && nextProject) {
           moveTicketProjectInBoards(queryClient, ticketId, {
@@ -172,7 +174,7 @@ export function TicketProjectSelect({
         name: trimmedName,
         color
       });
-      await setTicketProjectAction(ticketId, created.id);
+      await setTicketProjectActionWithRetry(ticketId, created.id);
       moveTicketProjectInBoards(queryClient, ticketId, {
         project_id: created.id,
         project_name: created.name,

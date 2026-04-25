@@ -39,6 +39,7 @@ import {
   updateTicketFieldAction,
   updateTicketStatusAction
 } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { createTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import type { Database } from '@/types/database.types';
@@ -73,6 +74,22 @@ function newMutationId(): string {
   // Electron targets a modern Chromium, so no polyfill needed here.
   return crypto.randomUUID();
 }
+
+const createTicketInColumnActionWithRetry = withElectronActionRetry(createTicketInColumnAction);
+const createBlankTicketActionWithRetry = withElectronActionRetry(createBlankTicketAction);
+const deleteTicketActionWithRetry = withElectronActionRetry(deleteTicketAction);
+const markTicketReadActionWithRetry = withElectronActionRetry(markTicketReadAction);
+const markTicketUnreadActionWithRetry = withElectronActionRetry(markTicketUnreadAction);
+const reorderTicketsActionWithRetry = withElectronActionRetry(reorderTicketsAction);
+const updateTicketAssignedAgentActionWithRetry = withElectronActionRetry(
+  updateTicketAssignedAgentAction
+);
+const updateTicketDueDateActionWithRetry = withElectronActionRetry(updateTicketDueDateAction);
+const updateTicketExecutionTargetActionWithRetry = withElectronActionRetry(
+  updateTicketExecutionTargetAction
+);
+const updateTicketFieldActionWithRetry = withElectronActionRetry(updateTicketFieldAction);
+const updateTicketStatusActionWithRetry = withElectronActionRetry(updateTicketStatusAction);
 
 // ---- create --------------------------------------------------------------
 
@@ -109,7 +126,7 @@ export function useCreateTicketMutation(): UseMutationResult<
   return useMutation<CreateTicketResult, Error, CreateTicketInput, CreateTicketContext>({
     mutationFn: async input => {
       const placement = input.placement ?? 'top';
-      return createTicketInColumnAction(
+      return createTicketInColumnActionWithRetry(
         input.status,
         input.objective,
         input.optimisticTicket.id,
@@ -173,7 +190,7 @@ export function useDeleteTicketMutation(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input => deleteTicketAction(input.ticketId),
+    mutationFn: input => deleteTicketActionWithRetry(input.ticketId),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       applyToAllBoards(qc, state => deleteTicketReducer(state, input.ticketId));
@@ -207,7 +224,7 @@ export function useUpdateTicketFieldsMutation(): UseMutationResult<
     mutationFn: async input => {
       const entries = Object.entries(input.patch) as Array<[UpdatableField, string]>;
       for (const [field, value] of entries) {
-        await updateTicketFieldAction(input.ticketId, field, value);
+        await updateTicketFieldActionWithRetry(input.ticketId, field, value);
       }
     },
     onMutate: input => {
@@ -246,7 +263,7 @@ export function useUpdateTicketStatusMutation(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input => updateTicketStatusAction(input.ticketId, input.status),
+    mutationFn: input => updateTicketStatusActionWithRetry(input.ticketId, input.status),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       applyToAllBoards(qc, state =>
@@ -278,7 +295,7 @@ export function useReorderTicketsMutation(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input => reorderTicketsAction(input.orderedIds, input.statusChange),
+    mutationFn: input => reorderTicketsActionWithRetry(input.orderedIds, input.statusChange),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       applyToAllBoards(qc, state => {
@@ -318,7 +335,9 @@ export function useMarkTicketReadMutation(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: input =>
-      input.isRead ? markTicketReadAction(input.ticketId) : markTicketUnreadAction(input.ticketId),
+      input.isRead
+        ? markTicketReadActionWithRetry(input.ticketId)
+        : markTicketUnreadActionWithRetry(input.ticketId),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       applyToAllBoards(qc, state => markTicketReadReducer(state, input.ticketId, input.isRead));
@@ -347,7 +366,7 @@ export function useUpdateTicketAssignmentMutation(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input => updateTicketAssignedAgentAction(input.ticketId, input.selection),
+    mutationFn: input => updateTicketAssignedAgentActionWithRetry(input.ticketId, input.selection),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       const assigned = createTicketAssignedAgent(input.selection);
@@ -382,7 +401,8 @@ export function useUpdateTicketExecutionTargetMutation(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input => updateTicketExecutionTargetAction(input.ticketId, input.executionTarget),
+    mutationFn: input =>
+      updateTicketExecutionTargetActionWithRetry(input.ticketId, input.executionTarget),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       const previousDetail = qc.getQueryData<BoardTicket | null>(
@@ -425,7 +445,7 @@ export function useUpdateTicketDueDateMutation(): UseMutationResult<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: input => updateTicketDueDateAction(input.ticketId, input.dueDate),
+    mutationFn: input => updateTicketDueDateActionWithRetry(input.ticketId, input.dueDate),
     onMutate: input => {
       const snapshot = snapshotBoards(qc);
       applyToAllBoards(qc, state =>

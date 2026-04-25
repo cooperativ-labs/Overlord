@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { assertOrgMembership } from '@/app/api/projects/_lib';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 
@@ -28,7 +28,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     );
     const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
 
-    const supabase = await createClient();
+    const supabase = await createClientForRequest();
     const {
       data: { user }
     } = await supabase.auth.getUser();

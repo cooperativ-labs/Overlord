@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { assertOrgMembership } from '@/app/api/projects/_lib';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 
@@ -13,7 +13,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       .filter(Boolean)
       .slice(0, 200);
 
-    const supabase = await createClient();
+    const supabase = await createClientForRequest();
     const {
       data: { user }
     } = await supabase.auth.getUser();

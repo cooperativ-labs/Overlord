@@ -167,45 +167,34 @@ const electronAPI = {
     login: () =>
       ipcRenderer.invoke('auth:login') as Promise<{
         ok: true;
-        session: { access_token: string; refresh_token: string };
+        session: { access_token: string };
       }>,
     logout: () => ipcRenderer.invoke('auth:logout'),
     getStatus: () =>
       ipcRenderer.invoke('auth:getStatus') as Promise<{
         isAuthenticated: boolean;
         platformUrl: string | null;
-        supabaseRefreshToken: string | null;
       }>,
-    saveRefreshToken: (token: string) =>
-      ipcRenderer.invoke('auth:saveRefreshToken', token) as Promise<{ ok: true }>,
+    getAccessToken: () =>
+      ipcRenderer.invoke('auth:getAccessToken') as Promise<{
+        ok: boolean;
+        accessToken?: string;
+        accessTokenExpiresAt?: string | null;
+        error?: string;
+      }>,
+    forceRefresh: () =>
+      ipcRenderer.invoke('auth:forceRefresh') as Promise<{
+        ok: boolean;
+        accessToken?: string;
+        accessTokenExpiresAt?: string | null;
+        error?: string;
+      }>,
     // Refresh session via the OAuth token endpoint (not the standard GoTrue endpoint).
     // Required because OAuth-issued refresh tokens are not accepted by /auth/v1/token.
     refreshSession: () =>
       ipcRenderer.invoke('auth:refreshSession') as Promise<{
         ok: boolean;
-        session?: { access_token: string; refresh_token: string };
-        error?: string;
-      }>,
-    checkOAuthSession: () =>
-      ipcRenderer.invoke('auth:checkOAuthSession') as Promise<{
-        valid: boolean;
-        reason?: string;
-      }>,
-    refreshOAuthSession: () =>
-      ipcRenderer.invoke('auth:refreshOAuthSession') as Promise<{
-        ok: boolean;
-        accessToken?: string;
-        error?: string;
-      }>,
-    checkAgentToken: () =>
-      ipcRenderer.invoke('auth:checkOAuthSession') as Promise<{
-        valid: boolean;
-        reason?: string;
-      }>,
-    refreshAgentToken: () =>
-      ipcRenderer.invoke('auth:refreshOAuthSession') as Promise<{
-        ok: boolean;
-        accessToken?: string;
+        session?: { access_token: string };
         error?: string;
       }>
   },

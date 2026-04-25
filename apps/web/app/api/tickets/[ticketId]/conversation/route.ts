@@ -7,7 +7,7 @@ import {
   resolveStatusNameForPhase,
   resolveStatusTypeForName
 } from '@/lib/ticket-statuses';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 const createConversationEntrySchema = z
   .object({
@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
 
     const { entryType, message, parentEventId, phase } = parsedBody.data;
-    const supabase = await createClient();
+    const supabase = await createClientForRequest();
 
     const { data: ticket, error: ticketError } = await supabase
       .from('tickets')

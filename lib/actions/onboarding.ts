@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { createProject, updateProjectWorkingDirectoryAction } from '@/lib/actions/projects';
 import type { AgentTypeValue } from '@/lib/helpers/agent-types';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export type OnboardingProgress = {
   completedStep: number;
@@ -47,7 +47,7 @@ function parseOnboardingProgress(raw: unknown): OnboardingProgress {
 }
 
 export async function getOnboardingState(): Promise<OnboardingState> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const {
     data: { user }
@@ -130,7 +130,7 @@ export async function updateOnboardingProgressAction(update: {
   desktopSetupDone?: boolean;
   desktopCompletedStep?: number;
 }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -176,7 +176,7 @@ export async function updateOnboardingProgressAction(update: {
 export async function createFirstOrganization(input: { name: string }): Promise<{
   organizationId: number;
 }> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const trimmedName = input.name.trim();
 
   const { data, error } = await supabase.rpc('create_organization_for_current_user', {

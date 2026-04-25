@@ -4,11 +4,11 @@ import { revalidatePath } from 'next/cache';
 
 import { isAdminEmail } from '@/lib/auth/admin';
 import type { AgentModel } from '@/lib/helpers/agent-model-catalog';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 async function requireAdminUser(): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

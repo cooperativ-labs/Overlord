@@ -11,6 +11,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { markObjectiveDraftAction, markObjectiveExecutedAction } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const markObjectiveDraftActionWithRetry = withElectronActionRetry(markObjectiveDraftAction);
+const markObjectiveExecutedActionWithRetry = withElectronActionRetry(markObjectiveExecutedAction);
 
 type ObjectiveMenuButtonProps = {
   ticketId: string;
@@ -29,13 +33,13 @@ export function ObjectiveMenuButton({
 
   function handleMarkExecuted() {
     startTransition(async () => {
-      await markObjectiveExecutedAction(ticketId, objectiveId);
+      await markObjectiveExecutedActionWithRetry(ticketId, objectiveId);
     });
   }
 
   function handleMarkDraft() {
     startTransition(async () => {
-      await markObjectiveDraftAction(ticketId, objectiveId);
+      await markObjectiveDraftActionWithRetry(ticketId, objectiveId);
     });
   }
 

@@ -27,7 +27,7 @@ import {
 } from '@/lib/diagnostics/server-action';
 import { normalizeHexColor } from '@/lib/helpers/color';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 type ServerSupabase = SupabaseClient<Database>;
@@ -107,7 +107,7 @@ export async function getProjectUserLocalSettingsByProjectId(
 }
 
 export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -149,7 +149,7 @@ export async function updateProjectColorAction(input: {
   color: string;
 }): Promise<void> {
   const color = normalizeHexColor(input.color);
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data, error } = await supabase
     .from('projects')
@@ -174,7 +174,7 @@ export async function updateProjectNameAction(input: {
     throw new Error('Project name is required.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data, error } = await supabase
     .from('projects')
@@ -199,7 +199,7 @@ export async function updateProjectWorkingDirectoryAction(input: {
       ? input.workingDirectory.trim()
       : null;
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -229,7 +229,7 @@ export async function updateProjectWorkingDirectoryAction(input: {
 export async function disconnectProjectFromEverhourAction(input: {
   projectId: string;
 }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data, error } = await supabase
     .from('projects')
     .update({ everhour_project_id: null })
@@ -253,7 +253,7 @@ const defaultProjectStatuses = [
 
 async function ensureDefaultStatusesForOrganization(input: {
   organizationId: number;
-  supabase: Awaited<ReturnType<typeof createClient>>;
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>;
 }): Promise<void> {
   const { error } = await input.supabase.from('ticket_statuses').upsert(
     defaultProjectStatuses.map(status => ({
@@ -275,7 +275,7 @@ async function ensureDefaultStatusesForOrganization(input: {
 }
 
 export async function deleteProjectAction(input: { projectId: string }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { error } = await supabase.from('projects').delete().eq('id', input.projectId);
 
   if (error) {
@@ -289,7 +289,7 @@ export async function deleteProjectAction(input: { projectId: string }): Promise
 export async function updateProjectSshConfigAction(
   input: UpdateProjectSshConfigInput
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -339,7 +339,7 @@ export async function createProject(input: {
   }
 
   const color = normalizeHexColor(input.color);
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   if (requestDiagnostics.isElectron) {
     const authDiagnostics = await getAuthDiagnostics(supabase);

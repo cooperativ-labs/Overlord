@@ -6,7 +6,10 @@ import { saveDefaultProjectAction } from '@/lib/actions/profile-settings';
 import type { SidebarProject } from '@/lib/actions/project-types';
 import { useProjects } from '@/lib/client-data/tickets/hooks';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { cacheProjectsForOffline } from '@/lib/offline/offline-projects-cache';
+
+const saveDefaultProjectActionWithRetry = withElectronActionRetry(saveDefaultProjectAction);
 
 type DefaultProjectContextValue = {
   defaultProject: SidebarProject | null;
@@ -71,7 +74,7 @@ export function DefaultProjectProvider({
     setDefaultProjectIdState(projectId);
     startTransition(async () => {
       try {
-        await saveDefaultProjectAction(projectId);
+        await saveDefaultProjectActionWithRetry(projectId);
       } catch (error) {
         console.error('Failed to save default project:', error);
       }

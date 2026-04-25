@@ -3,12 +3,12 @@
 import * as Sentry from '@sentry/nextjs';
 
 import { type AgentModel, filterOfferedAgentModels } from '@/lib/helpers/agent-model-catalog';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export type { AgentModel } from '@/lib/helpers/agent-model-catalog';
 
 export async function getAgentModelsAction(agentType?: string): Promise<AgentModel[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const query = supabase
     .from('agent_models')

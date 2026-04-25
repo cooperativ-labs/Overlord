@@ -1,7 +1,7 @@
 'use server';
 
 import { getPlatformUrl } from '@/lib/env';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): string {
   if (typeof value !== 'string') return fallback;
@@ -20,7 +20,7 @@ function sanitizeNextPath(value: FormDataEntryValue | null, fallback: string): s
 export type AuthResult = { error?: string; redirect?: string };
 
 export async function signIn(formData: FormData): Promise<AuthResult> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const nextPath = sanitizeNextPath(formData.get('next'), '/u');
 
   const { error } = await supabase.auth.signInWithPassword({
@@ -36,7 +36,7 @@ export async function signIn(formData: FormData): Promise<AuthResult> {
 }
 
 export async function signUp(formData: FormData): Promise<AuthResult> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const nextPath = sanitizeNextPath(formData.get('next'), '/u');
 
   const email = ((formData.get('email') as string | null) ?? '').trim();
@@ -70,7 +70,7 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
 }
 
 export async function signOut(): Promise<AuthResult> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await supabase.auth.signOut();
   return { redirect: '/login' };
 }
@@ -78,7 +78,7 @@ export async function signOut(): Promise<AuthResult> {
 export type OAuthResult = { error?: string; url?: string };
 
 export async function signInWithGithub(next?: string): Promise<OAuthResult> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const redirectTo =
     `${getPlatformUrl()}/auth/callback` +
     (next ? `?next=${encodeURIComponent(next)}` : '?next=%2Fu');

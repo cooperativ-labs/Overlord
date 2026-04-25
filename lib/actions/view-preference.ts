@@ -2,6 +2,8 @@
 
 import { cookies } from 'next/headers';
 
+import { getRequestTicketViewPreference } from '@/supabase/utils/server';
+
 const COOKIE_NAME = 'tickets_view';
 const VALID_VIEWS = new Set(['board', 'list', 'calendar']);
 
@@ -17,14 +19,10 @@ export async function setViewPreferenceAction(view: string): Promise<void> {
 }
 
 export async function getViewPreference(): Promise<string> {
-  const cookieStore = await cookies();
-  const value = cookieStore.get(COOKIE_NAME)?.value;
-  return VALID_VIEWS.has(value ?? '') ? (value as string) : 'board';
+  return (await getRequestTicketViewPreference()) ?? 'board';
 }
 
 /** Returns null if no preference has been explicitly saved. */
 export async function getRawViewPreference(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const value = cookieStore.get(COOKIE_NAME)?.value;
-  return VALID_VIEWS.has(value ?? '') ? (value as string) : null;
+  return getRequestTicketViewPreference();
 }

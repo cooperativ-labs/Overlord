@@ -621,13 +621,18 @@ Each step is independently shippable and reversible.
 13. **Disable cookie writes in Electron entirely**: remove the
     `setSession`-in-webview path; strip Supabase cookies on the
     platform origin via the composed response-header pipeline.
-14. **Flip the feature flag default to on. Remove the flag a release
-    later.**
+14. **Flip the feature flag default to on.** Keep
+    `OVLD_ELECTRON_BEARER_AUTH=0` /
+    `NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH=0` as the documented rollback
+    switch for one release, then remove the flag in the follow-up cleanup
+    release.
 15. **Split CLI credentials store; backfill once.**
 16. **Loopback port range.**
 
-A safe rollback at any point before step 13 is "turn the flag off" —
-cookies are still being written, so the old code path remains live.
+A safe rollback through the default-on release is "set
+`OVLD_ELECTRON_BEARER_AUTH=0` and
+`NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH=0`" — that restores the legacy
+cookie-backed Electron path for one release while the cleanup ticket lands.
 
 ---
 

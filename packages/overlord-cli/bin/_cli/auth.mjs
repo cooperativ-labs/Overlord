@@ -556,10 +556,13 @@ async function printVerboseAuthStatus() {
     console.log(`  Error: ${status.error}`);
   }
   console.log(`  Local secret: ${status.hasLocalSecret ? 'yes' : 'no'}`);
-  console.log(`  credentials.json: ${status.credentialsFileExists ? 'present' : 'missing'}`);
-  console.log(
-    `  electron-credentials.json: ${status.electronCredentialsFileExists ? 'present' : 'missing'}`
-  );
+  console.log(`  credentials.cli.json: ${status.credentialsFileExists ? 'present' : 'missing'}`);
+  if (status.legacyCredentialsFileExists) {
+    console.log(`  credentials.json (legacy): present`);
+  }
+  if (status.electronCredentialsFileExists) {
+    console.log(`  electron-credentials.json (legacy): present`);
+  }
 }
 
 export async function authStatus(args = []) {

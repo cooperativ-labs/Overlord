@@ -2,7 +2,7 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export type FeedPost = {
   id: string;
@@ -49,7 +49,7 @@ export async function getFeedPostsAction(options?: {
   limit?: number;
   offset?: number;
 }): Promise<FeedPost[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -194,7 +194,7 @@ export async function getFeedPostsAction(options?: {
 }
 
 export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTicket[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -350,7 +350,7 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
 }
 
 export async function getFeedRetentionDaysAction(): Promise<number> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -378,7 +378,7 @@ export async function getFeedRetentionDaysAction(): Promise<number> {
 export async function updateFeedRetentionDaysAction(days: number): Promise<number> {
   if (days < 1 || days > 365) throw new Error('Retention must be between 1 and 365 days.');
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

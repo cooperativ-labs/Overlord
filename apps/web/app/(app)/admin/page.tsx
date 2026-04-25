@@ -4,7 +4,7 @@ import { AgentModelOfferingsPanel } from '@/components/features/admin/AgentModel
 import { SentryTestPanel } from '@/components/features/admin/SentryTestPanel';
 import { getAdminAgentModelsAction } from '@/lib/actions/admin-agent-models';
 import { ADMIN_EMAIL, isAdminEmail } from '@/lib/auth/admin';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type AccessRequestRow = {
@@ -101,7 +101,7 @@ function EmptyState({ message }: { message: string }) {
 }
 
 export default async function AdminPage() {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

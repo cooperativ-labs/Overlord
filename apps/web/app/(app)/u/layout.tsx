@@ -1,4 +1,3 @@
-import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
@@ -7,8 +6,11 @@ import { UserTicketsSettingsPanel } from '@/components/features/UserTicketsSetti
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
-import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
-import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
+import {
+  getRequestDefaultProjectId,
+  getRequestSelectedOrganizationId,
+  isElectronRequestFromHeaders
+} from '@/supabase/utils/server';
 
 import TicketsBoardContent from '../tickets/(components)/TicketsBoardContent';
 
@@ -17,18 +19,19 @@ type LayoutProps = {
 };
 
 export default async function UserLayout({ children }: LayoutProps) {
-  const cookieStore = await cookies();
-  const rawOrgId = cookieStore.get(SELECTED_ORG_COOKIE)?.value;
-  const selectedOrgId = rawOrgId ? Number(rawOrgId) : undefined;
-  const defaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? undefined;
   const [organizations, projects] = await Promise.all([
     getUserOrganizations(),
     getProjectsForCurrentUser()
   ]);
+  const defaultProjectId = await getRequestDefaultProjectId();
+  const defaultProjectOrganizationId =
+    projects.find(project => project.id === defaultProjectId)?.organizationId ?? null;
+  const selectedOrgId = await getRequestSelectedOrganizationId({
+    defaultProjectOrganizationId,
+    organizations
+  });
 
-  const headersList = await headers();
-  const userAgent = headersList.get('user-agent') ?? '';
-  const isElectronRequest = userAgent.toLowerCase().includes('electron');
+  const isElectronRequest = await isElectronRequestFromHeaders();
   if (!isElectronRequest && (organizations.length === 0 || projects.length === 0)) {
     // Web users without org/project data still need the onboarding flow.
     redirect('/onboarding');
@@ -42,7 +45,7 @@ export default async function UserLayout({ children }: LayoutProps) {
           <TicketsBoardContent
             organizationId={selectedOrgId}
             showOrganizationName={!selectedOrgId}
-            mentionProjectId={defaultProjectId}
+            mentionProjectId={defaultProjectId ?? undefined}
           />
         </Suspense>
         {children}

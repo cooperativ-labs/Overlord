@@ -10,10 +10,15 @@ import {
   stopEverhourTimer
 } from '@/lib/actions/everhour';
 import { updateTicketInBoards } from '@/lib/client-data/tickets/cache';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 
 const ACTIVE_INTERVAL_MS = 5_000;
 const HIDDEN_INTERVAL_MS = 30_000;
 const INACTIVE_INTERVAL_MS = 15_000;
+
+const startEverhourTimerForTicketWithRetry = withElectronActionRetry(startEverhourTimerForTicket);
+const startEverhourTimerForProjectWithRetry = withElectronActionRetry(startEverhourTimerForProject);
+const stopEverhourTimerWithRetry = withElectronActionRetry(stopEverhourTimer);
 
 export const everhourQueryKeys = {
   all: ['everhour'] as const,
@@ -47,7 +52,7 @@ export function useEverhourTimerQuery() {
   });
 
   const startMutation = useMutation({
-    mutationFn: (ticketId: string) => startEverhourTimerForTicket(ticketId),
+    mutationFn: (ticketId: string) => startEverhourTimerForTicketWithRetry(ticketId),
     onSuccess: (timer, ticketId) => {
       queryClient.setQueryData(everhourQueryKeys.activeTimer(), timer);
       if (timer.task?.id) {
@@ -57,14 +62,14 @@ export function useEverhourTimerQuery() {
   });
 
   const startProjectMutation = useMutation({
-    mutationFn: (projectId: string) => startEverhourTimerForProject(projectId),
+    mutationFn: (projectId: string) => startEverhourTimerForProjectWithRetry(projectId),
     onSuccess: timer => {
       queryClient.setQueryData(everhourQueryKeys.activeTimer(), timer);
     }
   });
 
   const stopMutation = useMutation({
-    mutationFn: stopEverhourTimer,
+    mutationFn: stopEverhourTimerWithRetry,
     onMutate: () => {
       queryClient.setQueryData(everhourQueryKeys.activeTimer(), inactiveTimer());
     },

@@ -28,6 +28,7 @@ import {
   useUpdateTicketAssignmentMutation,
   useUpdateTicketFieldsMutation
 } from '@/lib/client-data/tickets/mutations';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { EditableTextareaHandle } from '@/lib/types/text-control';
@@ -35,6 +36,7 @@ import { cn } from '@/lib/utils';
 
 const EMPTY_FILE_MENTION_PATHS: string[] = [];
 const PERSONAL_PROJECT_VALUE = '__personal__';
+const generateTicketTitleActionWithRetry = withElectronActionRetry(generateTicketTitleAction);
 
 type ProjectOption = {
   id: string;
@@ -167,7 +169,7 @@ export function QuickRunModal({
           await createPromise;
           await updateAssignmentMutation.mutateAsync({ ticketId: clientTicketId, selection });
           if (trimmedObjective) {
-            const title = await generateTicketTitleAction(trimmedObjective);
+            const title = await generateTicketTitleActionWithRetry(trimmedObjective);
             await updateFieldsMutation.mutateAsync({
               ticketId: clientTicketId,
               patch: { title, objective: trimmedObjective }

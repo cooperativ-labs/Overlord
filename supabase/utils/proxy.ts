@@ -1,6 +1,9 @@
+import * as Sentry from '@sentry/nextjs';
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { isElectronRequest } from '@/lib/auth/electron-detect';
+import { ElectronAuthError, getElectronUserFromRequest } from '@/lib/auth/get-electron-user';
 import { isPublicRoute } from '@/lib/auth/public-routes';
 import {
   getPlatformUrl,
@@ -10,116 +13,40 @@ import {
 } from '@/lib/env';
 
 const CANONICAL_HOST = 'www.ovld.ai';
-const ELECTRON_AUTH_REDIRECT_REFRESH_MARGIN_MS = 30_000;
+const MACHINE_ENDPOINT_PREFIXES = ['/api/health', '/api/protocol', '/api/mcp'];
 
-type ElectronCookieSessionState =
-  | { status: 'fresh'; expiresInSeconds: number | null }
-  | { status: 'expired'; expiresInSeconds: number | null }
-  | { status: 'missing' | 'missing_access_token' | 'unreadable' | 'unknown_expiry' };
-
-function base64UrlDecode(value: string): string {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  return Buffer.from(padded, 'base64').toString('utf8');
+export function isMachineEndpoint(pathname: string): boolean {
+  return MACHINE_ENDPOINT_PREFIXES.some(prefix => pathname.startsWith(prefix));
 }
 
-function getJwtExpiry(accessToken: string): number | null {
-  try {
-    const payload = JSON.parse(base64UrlDecode(accessToken.split('.')[1] ?? '')) as {
-      exp?: unknown;
-    };
-    return typeof payload.exp === 'number' ? payload.exp : null;
-  } catch {
-    return null;
-  }
+export function shouldReturnBearer401(request: NextRequest): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return true;
+  if (request.headers.has('next-action')) return true;
+  if (request.nextUrl.searchParams.has('_rsc')) return true;
+  if (request.nextUrl.pathname.startsWith('/api/')) return true;
+
+  const acceptHeader = request.headers.get('accept');
+  if (!acceptHeader) return false;
+
+  return acceptHeader
+    .split(',')
+    .map(part => part.trim().toLowerCase())
+    .includes('application/json');
 }
 
-function getSupabaseStorageKey(): string {
-  const supabaseUrl = new URL(getSupabaseUrl());
-  return `sb-${supabaseUrl.hostname.split('.')[0]}-auth-token`;
-}
-
-function getCookieStorageValue(request: NextRequest, storageKey: string): string | null {
-  const exactCookie = request.cookies.get(storageKey)?.value;
-  if (exactCookie) return exactCookie;
-
-  const chunks: string[] = [];
-  for (let index = 0; index < 20; index += 1) {
-    const chunk = request.cookies.get(`${storageKey}.${index}`)?.value;
-    if (!chunk) break;
-    chunks.push(chunk);
-  }
-
-  return chunks.length > 0 ? chunks.join('') : null;
-}
-
-function getElectronCookieSessionState(request: NextRequest): ElectronCookieSessionState {
-  const rawValue = getCookieStorageValue(request, getSupabaseStorageKey());
-  if (!rawValue) return { status: 'missing' };
-
-  try {
-    const decodedValue = rawValue.startsWith('base64-')
-      ? base64UrlDecode(rawValue.slice('base64-'.length))
-      : rawValue;
-    const session = JSON.parse(decodedValue) as {
-      access_token?: unknown;
-      expires_at?: unknown;
-    };
-    const accessToken = typeof session.access_token === 'string' ? session.access_token : null;
-    if (!accessToken) return { status: 'missing_access_token' };
-
-    const expiresAt =
-      typeof session.expires_at === 'number' ? session.expires_at : getJwtExpiry(accessToken);
-    if (!expiresAt) return { status: 'unknown_expiry' };
-
-    const expiresInMs = expiresAt * 1000 - Date.now();
-    const expiresInSeconds = Math.round(expiresInMs / 1000);
-    return expiresInMs > ELECTRON_AUTH_REDIRECT_REFRESH_MARGIN_MS
-      ? { status: 'fresh', expiresInSeconds }
-      : { status: 'expired', expiresInSeconds };
-  } catch {
-    return { status: 'unreadable' };
-  }
-}
-
-function getRefererPath(request: NextRequest): string | null {
-  const referer = request.headers.get('referer');
-  if (!referer) return null;
-  try {
-    const parsed = new URL(referer);
-    return `${parsed.pathname}${parsed.search}`;
-  } catch {
-    return null;
-  }
-}
-
-function getSupabaseAuthCookieCount(request: NextRequest): number {
-  return request.cookies.getAll().filter(cookie => cookie.name.includes('auth-token')).length;
-}
-
-function logElectronAuthRedirect(
+export function buildElectronRequestHeaders(
   request: NextRequest,
-  details: {
-    authErrorMessage?: string | null;
-    authErrorName?: string | null;
-    authErrorStatus?: number | null;
-    cookieSessionStatus?: ElectronCookieSessionState['status'] | null;
-    reason: string;
+  auth: {
+    accessToken: string;
+    clientId: string;
+    userId: string;
   }
-) {
-  console.error('[overlord:electron-auth-redirect]', {
-    authErrorMessage: details.authErrorMessage ?? null,
-    authErrorName: details.authErrorName ?? null,
-    authErrorStatus: details.authErrorStatus ?? null,
-    cookieSessionStatus: details.cookieSessionStatus ?? null,
-    hasNextActionHeader: request.headers.has('next-action'),
-    method: request.method,
-    pathname: request.nextUrl.pathname,
-    reason: details.reason,
-    refererPath: getRefererPath(request),
-    supabaseCookieCount: getSupabaseAuthCookieCount(request),
-    vercelId: request.headers.get('x-vercel-id')
-  });
+): Headers {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-overlord-access-token', auth.accessToken);
+  requestHeaders.set('x-overlord-user-id', auth.userId);
+  requestHeaders.set('x-overlord-client-id', auth.clientId);
+  return requestHeaders;
 }
 
 function redirectToLogin(request: NextRequest, isElectron: boolean): NextResponse {
@@ -134,6 +61,31 @@ function redirectToLogin(request: NextRequest, isElectron: boolean): NextRespons
   return NextResponse.redirect(url, redirectStatus);
 }
 
+function electronUnauthorizedResponse(code: 'invalid_token' | 'expired_token') {
+  return NextResponse.json(
+    { error: code },
+    {
+      status: 401,
+      headers: {
+        'WWW-Authenticate': `Bearer error="${code}"`
+      }
+    }
+  );
+}
+
+async function resolveElectronAuth(request: NextRequest): Promise<{
+  accessToken: string;
+  clientId: string;
+  userId: string;
+}> {
+  const user = await getElectronUserFromRequest(request);
+  return {
+    accessToken: user.accessToken,
+    clientId: user.clientId,
+    userId: user.userId
+  };
+}
+
 export async function updateSession(request: NextRequest) {
   const hostname = request.nextUrl.hostname;
   if (hostname === 'ovld.ai') {
@@ -144,34 +96,53 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Machine-facing auth/protocol endpoints do not use browser Supabase session
-  // cookies. Bypass refresh so stale Electron/webview cookies cannot trigger
-  // noisy refresh-token errors on public config or bearer-token requests.
-  if (
-    request.nextUrl.pathname.startsWith('/api/auth') ||
-    request.nextUrl.pathname.startsWith('/api/protocol') ||
-    request.nextUrl.pathname.startsWith('/api/mcp')
-  ) {
+  const pathname = request.nextUrl.pathname;
+  const isElectron = isElectronRequest(request);
+
+  if (isElectron && pathname === '/login') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/electron-login';
+    return NextResponse.redirect(url);
+  }
+
+  if (isPublicRoute(pathname) || isMachineEndpoint(pathname)) {
     return NextResponse.next({ request });
   }
 
-  // Electron sessions are refreshed by the desktop main process against the
-  // OAuth token endpoint. If the webview cookie is already expired, do not let
-  // @supabase/ssr attempt the standard refresh endpoint in middleware; send
-  // the renderer to the Electron login bridge so it can restore via IPC.
-  const isElectron = request.headers.get('user-agent')?.includes('Electron') ?? false;
-  const isProtectedRoute = !isPublicRoute(request.nextUrl.pathname);
-  if (isElectron && isProtectedRoute) {
-    const cookieSessionState = getElectronCookieSessionState(request);
-    if (
-      cookieSessionState.status === 'missing' ||
-      cookieSessionState.status === 'missing_access_token' ||
-      cookieSessionState.status === 'expired'
-    ) {
-      logElectronAuthRedirect(request, {
-        cookieSessionStatus: cookieSessionState.status,
-        reason: 'electron_cookie_not_fresh'
+  if (isElectron) {
+    try {
+      const auth = await resolveElectronAuth(request);
+      return NextResponse.next({
+        request: { headers: buildElectronRequestHeaders(request, auth) }
       });
+    } catch (error) {
+      const code =
+        error instanceof ElectronAuthError && error.code === 'expired_token'
+          ? 'expired_token'
+          : 'invalid_token';
+
+      if (error instanceof ElectronAuthError && error.code === 'missing_token') {
+        Sentry.addBreadcrumb({
+          category: 'electron_auth',
+          level: 'warning',
+          message: 'electron_auth.bearer_missing',
+          data: { pathname, method: request.method }
+        });
+      } else {
+        Sentry.addBreadcrumb({
+          category: 'electron_auth',
+          level: 'warning',
+          message: 'electron_auth.bearer_invalid',
+          data: {
+            code: error instanceof ElectronAuthError ? error.code : 'invalid_token'
+          }
+        });
+      }
+
+      if (shouldReturnBearer401(request)) {
+        return electronUnauthorizedResponse(code);
+      }
+
       return redirectToLogin(request, true);
     }
   }
@@ -205,27 +176,10 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: DO NOT REMOVE auth.getUser()
 
   const {
-    data: { user },
-    error: getUserError
+    data: { user }
   } = await supabase.auth.getUser();
 
-  // In the Electron app, /login should always go to /electron-login.
-  if (isElectron && request.nextUrl.pathname === '/login') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/electron-login';
-    return NextResponse.redirect(url);
-  }
-
-  if (!user && !isPublicRoute(request.nextUrl.pathname)) {
-    if (isElectron) {
-      logElectronAuthRedirect(request, {
-        authErrorMessage: getUserError?.message ?? null,
-        authErrorName: getUserError?.name ?? null,
-        authErrorStatus: getUserError?.status ?? null,
-        reason: 'supabase_get_user_no_user'
-      });
-    }
-
+  if (!user && !isPublicRoute(pathname)) {
     return redirectToLogin(request, isElectron);
   }
 

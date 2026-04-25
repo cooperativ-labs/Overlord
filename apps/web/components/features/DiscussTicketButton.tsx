@@ -17,6 +17,7 @@ import {
   PopoverTrigger
 } from '@/components/ui/popover';
 import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import {
   getAgentTypeByValue,
   getLaunchAgentTypeByIdentifier,
@@ -48,6 +49,8 @@ const defaultAgentButtonStates: Record<LaunchAgentTypeValue, ButtonLoadingState>
   gemini: 'default',
   opencode: 'default'
 };
+
+const submitTicketObjectiveActionWithRetry = withElectronActionRetry(submitTicketObjectiveAction);
 
 export function DiscussTicketButton({
   ticketId,
@@ -94,7 +97,7 @@ export function DiscussTicketButton({
 
     try {
       if (isElectron) {
-        await submitTicketObjectiveAction(ticketId);
+        await submitTicketObjectiveActionWithRetry(ticketId);
         await launchAgent(
           ticketId,
           agentValue,
@@ -130,7 +133,7 @@ export function DiscussTicketButton({
 
   if (!isElectron && webMode !== undefined) {
     const handleWebDiscuss = async () => {
-      await submitTicketObjectiveAction(ticketId);
+      await submitTicketObjectiveActionWithRetry(ticketId);
       const context = webMode === 'local' ? 'cli' : 'web';
       const { error, prompt } = await getTicketPromptForCopy(ticketId, 'ask', context);
       if (error || !prompt) return;

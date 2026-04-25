@@ -8,7 +8,10 @@ import { useElectron } from '@/components/features/terminal/useElectron';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { generateCommitMessageAction } from '@/lib/actions/generate-commit-message';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { cn } from '@/lib/utils';
+
+const generateCommitMessageActionWithRetry = withElectronActionRetry(generateCommitMessageAction);
 
 type PushToGithubPanelProps = {
   branch: string | null;
@@ -51,7 +54,7 @@ export function PushToGithubPanel({
         setGenerateButtonState('error');
         return;
       }
-      const result = await generateCommitMessageAction({
+      const result = await generateCommitMessageActionWithRetry({
         branch: aggregate.branch,
         diff: aggregate.diff,
         status: aggregate.status

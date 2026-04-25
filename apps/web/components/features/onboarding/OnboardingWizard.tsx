@@ -23,7 +23,16 @@ import {
   createFirstProjectWithDirectory,
   updateOnboardingProgressAction
 } from '@/lib/actions/onboarding';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { cn } from '@/lib/utils';
+
+const createFirstOrganizationWithRetry = withElectronActionRetry(createFirstOrganization);
+const createFirstProjectWithDirectoryWithRetry = withElectronActionRetry(
+  createFirstProjectWithDirectory
+);
+const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
+  updateOnboardingProgressAction
+);
 
 type OnboardingWizardProps = {
   initialState: OnboardingState;
@@ -92,7 +101,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
     setOrgButtonState('loading');
     setOrgError(null);
     try {
-      const result = await createFirstOrganization({ name: trimmed });
+      const result = await createFirstOrganizationWithRetry({ name: trimmed });
       setOrganizationId(result.organizationId);
       setOrgButtonState('success');
       // After org creation, go to download app step
@@ -105,7 +114,7 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
 
   async function handleDownloadAppContinue() {
     // User downloaded app or skipped — mark step complete and go to project creation
-    await updateOnboardingProgressAction({ completedStep: 3 });
+    await updateOnboardingProgressActionWithRetry({ completedStep: 3 });
     setCurrentStep('project');
   }
 
@@ -165,14 +174,14 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
     setProjectButtonState('loading');
     setProjectError(null);
     try {
-      await createFirstProjectWithDirectory({
+      await createFirstProjectWithDirectoryWithRetry({
         organizationId,
         name: trimmedName,
         color: projectColor,
         workingDirectory: workingDirectory.trim() || null
       });
       setProjectButtonState('success');
-      await updateOnboardingProgressAction({ completedStep: 4, skipped: true });
+      await updateOnboardingProgressActionWithRetry({ completedStep: 4, skipped: true });
       router.push('/u');
     } catch (error) {
       setProjectButtonState('error');

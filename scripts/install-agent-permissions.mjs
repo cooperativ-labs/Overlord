@@ -36,6 +36,10 @@ const PROTOCOL_ENDPOINTS = [
   "list-tickets",
 ];
 
+const CODEX_TARGET_RULES = path.join(os.homedir(), ".codex", "rules", "default.rules");
+const CODEX_RULES_START = "# overlord:permissions:start";
+const CODEX_RULES_END = "# overlord:permissions:end";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -82,6 +86,54 @@ Examples:
 
 function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function readTextFile(filePath) {
+  try {
+    return fs.readFileSync(filePath, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
+function mergeCodexRules(existingContent) {
+  const managedBlock = [
+    CODEX_RULES_START,
+    "prefix_rule(",
+    '  pattern = ["npx", "overlord", "protocol"],',
+    '  decision = "allow",',
+    '  justification = "Allow all Overlord protocol commands without prompts.",',
+    ")",
+    "",
+    "prefix_rule(",
+    '  pattern = ["ovld", "protocol"],',
+    '  decision = "allow",',
+    '  justification = "Allow all Overlord protocol commands without prompts.",',
+    ")",
+    "",
+    "prefix_rule(",
+    '  pattern = ["curl", "-sS", "-X", "POST"],',
+    '  decision = "allow",',
+    '  justification = "Allow curl protocol POST commands without prompts.",',
+    ")",
+    CODEX_RULES_END,
+  ].join("\n");
+
+  const startIndex = existingContent.indexOf(CODEX_RULES_START);
+  const endIndex = existingContent.indexOf(CODEX_RULES_END);
+
+  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+    const before = existingContent.slice(0, startIndex).trimEnd();
+    const after = existingContent.slice(endIndex + CODEX_RULES_END.length).trimStart();
+    if (!before && !after) return `${managedBlock}\n`;
+    if (!before) return `${managedBlock}\n\n${after}`;
+    if (!after) return `${before}\n\n${managedBlock}\n`;
+    return `${before}\n\n${managedBlock}\n\n${after}`;
+  }
+
+  const trimmed = existingContent.trimEnd();
+  if (!trimmed) return `${managedBlock}\n`;
+  return `${trimmed}\n\n${managedBlock}\n`;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,20 +221,27 @@ function installClaude(platformUrl, dryRun) {
 // Codex permissions
 // ---------------------------------------------------------------------------
 
-function installCodex(platformUrl, _dryRun) {
+function installCodex(platformUrl, dryRun) {
   console.log(`\n--- Codex ---`);
+  console.log(`Rules file: ${CODEX_TARGET_RULES}`);
 
-  // Codex does not currently support file-based permission pre-configuration.
-  // Print warmup commands so the user can approve scoped prefixes interactively.
-  console.log("  Codex does not support file-based permission configuration.");
-  console.log("  To warm up permissions, run the following commands once inside a Codex session:");
-  console.log("  (Codex will prompt for approval; approve each one to persist the prefix.)\n");
+  const nextRules = mergeCodexRules(readTextFile(CODEX_TARGET_RULES));
 
-  for (const endpoint of PROTOCOL_ENDPOINTS) {
-    console.log(`  curl -s -X POST "${platformUrl}/api/protocol/${endpoint}" -H "Content-Type: application/json" -H "Authorization: Bearer \\$OVERLORD_ACCESS_TOKEN" -H "x-organization-id: \\$OVERLORD_ORGANIZATION_ID" -d '{}'`);
+  if (dryRun) {
+    console.log("  Would write Codex prefix rules for ovld protocol, npx overlord protocol, and curl POST.");
+    return true;
   }
-  console.log(`  curl -s -H "Authorization: Bearer \\$OVERLORD_ACCESS_TOKEN" -H "x-organization-id: \\$OVERLORD_ORGANIZATION_ID" "${platformUrl}/api/protocol/context/test"`);
-  console.log();
+
+  if (fs.existsSync(CODEX_TARGET_RULES)) {
+    const backupPath = `${CODEX_TARGET_RULES}.backup-${timestamp()}`;
+    fs.copyFileSync(CODEX_TARGET_RULES, backupPath);
+    console.log(`  Backup: ${backupPath}`);
+  }
+
+  const dir = path.dirname(CODEX_TARGET_RULES);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(CODEX_TARGET_RULES, nextRules);
+  console.log("  Rules updated.");
   return true;
 }
 

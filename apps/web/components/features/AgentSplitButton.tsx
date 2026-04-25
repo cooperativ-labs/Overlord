@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getTicketPromptForCopy, submitTicketObjectiveAction } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
@@ -97,6 +98,8 @@ const sizeStyles: Record<
     chevron: 'h-3.5 w-3.5'
   }
 };
+
+const submitTicketObjectiveActionWithRetry = withElectronActionRetry(submitTicketObjectiveAction);
 
 export function AgentSplitButton({
   selectedAgent,
@@ -193,7 +196,7 @@ export function AgentSplitButton({
     if (isElectron) {
       setIsLaunching(true);
       try {
-        await submitTicketObjectiveAction(ticketId);
+        await submitTicketObjectiveActionWithRetry(ticketId);
         await launchAgent(
           ticketId,
           agentValue,

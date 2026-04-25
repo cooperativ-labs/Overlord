@@ -94,10 +94,10 @@ test(`${MODULE_PATH} resolveAuth rejects OVERLORD_ACCESS_TOKEN without organizat
   });
 });
 
-test(`${MODULE_PATH} resolveAuth uses stored OAuth credentials and normalizes platform URL`, async () => {
+test(`${MODULE_PATH} resolveAuth uses stored CLI credentials from credentials.cli.json`, async () => {
   await withTempHome(async tempHome => {
     const ovldDir = path.join(tempHome, '.ovld');
-    writeJson(path.join(ovldDir, 'credentials.json'), buildOAuthCredentials());
+    writeJson(path.join(ovldDir, 'credentials.cli.json'), buildOAuthCredentials());
 
     process.env.OVERLORD_URL = 'https://www.ovld.ai/api/protocol';
     delete process.env.OVERLORD_ACCESS_TOKEN;
@@ -114,40 +114,98 @@ test(`${MODULE_PATH} resolveAuth uses stored OAuth credentials and normalizes pl
   });
 });
 
-test(`${MODULE_PATH} saveCredentials writes shared OAuth credentials and preserves encrypted electron fields`, async () => {
+test(`${MODULE_PATH} saveCredentials writes to credentials.cli.json only`, async () => {
   await withTempHome(async tempHome => {
     const ovldDir = path.join(tempHome, '.ovld');
-    const electronCredentialsPath = path.join(ovldDir, 'electron-credentials.json');
-    writeJson(electronCredentialsPath, {
-      encrypted_access_token: 'old-encrypted-access-token',
-      encrypted_refresh_token: 'old-encrypted-refresh-token',
-      platform_url: 'https://old.ovld.test'
-    });
 
-    const { loadCredentials, saveCredentials } = await importFresh(MODULE_PATH);
+    const { saveCredentials, loadCredentials } = await importFresh(MODULE_PATH);
     saveCredentials(buildOAuthCredentials({ organization_id: 11 }));
 
     const cliCredentials = JSON.parse(
-      fs.readFileSync(path.join(ovldDir, 'credentials.json'), 'utf8')
+      fs.readFileSync(path.join(ovldDir, 'credentials.cli.json'), 'utf8')
     );
-    const electronCredentials = JSON.parse(fs.readFileSync(electronCredentialsPath, 'utf8'));
 
     assert.equal(cliCredentials.access_token, 'stored-access-token');
     assert.equal(cliCredentials.refresh_token, 'stored-refresh-token');
     assert.equal(cliCredentials.organization_id, 11);
     assert.equal(cliCredentials.platform_url, 'https://www.ovld.ai');
-    assert.equal(electronCredentials.platform_url, 'https://www.ovld.ai');
-    assert.equal(electronCredentials.organization_id, 11);
-    assert.equal(electronCredentials.encrypted_access_token, 'old-encrypted-access-token');
-    assert.equal(electronCredentials.encrypted_refresh_token, 'old-encrypted-refresh-token');
+
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.json')), false);
+    assert.equal(fs.existsSync(path.join(ovldDir, 'electron-credentials.json')), false);
+
     assert.deepEqual(loadCredentials(), buildOAuthCredentials({ organization_id: 11 }));
   });
 });
 
-test(`${MODULE_PATH} getAuthStatus reports shared OAuth credential sources`, async () => {
+test(`${MODULE_PATH} legacy migration copies credentials.json to credentials.cli.json once`, async () => {
   await withTempHome(async tempHome => {
     const ovldDir = path.join(tempHome, '.ovld');
-    writeJson(path.join(ovldDir, 'electron-credentials.json'), buildOAuthCredentials());
+    writeJson(path.join(ovldDir, 'credentials.json'), buildOAuthCredentials());
+
+    delete process.env.OVERLORD_URL;
+    delete process.env.OVERLORD_ACCESS_TOKEN;
+    delete process.env.OVERLORD_ORGANIZATION_ID;
+    delete process.env.OVERLORD_CONNECTOR_URL;
+
+    const { loadCredentials } = await importFresh(MODULE_PATH);
+    const creds = loadCredentials();
+
+    assert.equal(creds.access_token, 'stored-access-token');
+    assert.equal(creds.refresh_token, 'stored-refresh-token');
+    assert.equal(creds.organization_id, 7);
+
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.cli.json')), true);
+    assert.equal(fs.existsSync(path.join(ovldDir, '.cli-migrated')), true);
+
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.json')), true);
+  });
+});
+
+test(`${MODULE_PATH} legacy migration does not overwrite existing credentials.cli.json`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(path.join(ovldDir, 'credentials.cli.json'), buildOAuthCredentials({ access_token: 'cli-token' }));
+    writeJson(path.join(ovldDir, 'credentials.json'), buildOAuthCredentials({ access_token: 'legacy-token' }));
+
+    const { loadCredentials } = await importFresh(MODULE_PATH);
+    const creds = loadCredentials();
+
+    assert.equal(creds.access_token, 'cli-token');
+  });
+});
+
+test(`${MODULE_PATH} legacy migration does not repeat after marker is set`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(path.join(ovldDir, 'credentials.json'), buildOAuthCredentials());
+    fs.mkdirSync(ovldDir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(ovldDir, '.cli-migrated'), '2026-01-01', { mode: 0o600 });
+
+    const { loadCredentials } = await importFresh(MODULE_PATH);
+    const creds = loadCredentials();
+
+    assert.equal(creds, null);
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.cli.json')), false);
+  });
+});
+
+test(`${MODULE_PATH} legacy migration falls back to electron-credentials.json`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(path.join(ovldDir, 'electron-credentials.json'), buildOAuthCredentials({ access_token: 'electron-token' }));
+
+    const { loadCredentials } = await importFresh(MODULE_PATH);
+    const creds = loadCredentials();
+
+    assert.equal(creds.access_token, 'electron-token');
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.cli.json')), true);
+  });
+});
+
+test(`${MODULE_PATH} getAuthStatus reports CLI credential sources`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(path.join(ovldDir, 'credentials.cli.json'), buildOAuthCredentials());
 
     delete process.env.OVERLORD_URL;
     delete process.env.OVERLORD_ACCESS_TOKEN;
@@ -159,32 +217,77 @@ test(`${MODULE_PATH} getAuthStatus reports shared OAuth credential sources`, asy
 
     assert.equal(status.isLoggedIn, true);
     assert.equal(status.platformUrl, 'https://www.ovld.ai');
-    assert.equal(status.platformUrlSource, 'electron-credentials.json');
-    assert.equal(status.tokenSource, 'electron-credentials.json');
+    assert.equal(status.tokenSource, 'credentials.cli.json');
     assert.equal(status.tokenPresent, true);
     assert.equal(status.organizationId, 7);
     assert.equal(status.authMode, 'oauth');
-    assert.equal(status.electronCredentialsFileExists, true);
-    assert.equal(status.credentialsFileExists, false);
+    assert.equal(status.credentialsFileExists, true);
   });
 });
 
-test(`${MODULE_PATH} repairCredentials mirrors a valid shared OAuth credential into credentials.json`, async () => {
+test(`${MODULE_PATH} repairCredentials writes to credentials.cli.json`, async () => {
   await withTempHome(async tempHome => {
     const ovldDir = path.join(tempHome, '.ovld');
-    writeJson(path.join(ovldDir, 'electron-credentials.json'), buildOAuthCredentials());
+    writeJson(path.join(ovldDir, 'credentials.json'), buildOAuthCredentials());
 
     const { repairCredentials } = await importFresh(MODULE_PATH);
     const result = repairCredentials();
 
     assert.equal(result.repaired, true);
-    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.json')), true);
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.cli.json')), true);
 
     const cliCredentials = JSON.parse(
-      fs.readFileSync(path.join(ovldDir, 'credentials.json'), 'utf8')
+      fs.readFileSync(path.join(ovldDir, 'credentials.cli.json'), 'utf8')
     );
     assert.equal(cliCredentials.access_token, 'stored-access-token');
     assert.equal(cliCredentials.refresh_token, 'stored-refresh-token');
     assert.equal(cliCredentials.platform_url, 'https://www.ovld.ai');
+  });
+});
+
+test(`${MODULE_PATH} CLI and Desktop credential files are independent`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+
+    writeJson(path.join(ovldDir, 'credentials.cli.json'), buildOAuthCredentials({
+      access_token: 'cli-access-token',
+      refresh_token: 'cli-refresh-token'
+    }));
+    writeJson(path.join(ovldDir, 'credentials.desktop.json'), buildOAuthCredentials({
+      access_token: 'desktop-access-token',
+      refresh_token: 'desktop-refresh-token'
+    }));
+
+    const { loadCredentials, saveCredentials } = await importFresh(MODULE_PATH);
+
+    const creds = loadCredentials();
+    assert.equal(creds.access_token, 'cli-access-token');
+    assert.equal(creds.refresh_token, 'cli-refresh-token');
+
+    saveCredentials({
+      ...creds,
+      access_token: 'rotated-cli-token',
+      refresh_token: 'rotated-cli-refresh'
+    });
+
+    const desktopCreds = JSON.parse(
+      fs.readFileSync(path.join(ovldDir, 'credentials.desktop.json'), 'utf8')
+    );
+    assert.equal(desktopCreds.access_token, 'desktop-access-token');
+    assert.equal(desktopCreds.refresh_token, 'desktop-refresh-token');
+  });
+});
+
+test(`${MODULE_PATH} clearCredentials removes only CLI credential file`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(path.join(ovldDir, 'credentials.cli.json'), buildOAuthCredentials());
+    writeJson(path.join(ovldDir, 'credentials.desktop.json'), buildOAuthCredentials());
+
+    const { clearCredentials } = await importFresh(MODULE_PATH);
+    clearCredentials();
+
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.cli.json')), false);
+    assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.desktop.json')), true);
   });
 });

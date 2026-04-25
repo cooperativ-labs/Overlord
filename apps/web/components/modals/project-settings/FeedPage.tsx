@@ -11,6 +11,14 @@ import {
   getProjectUserPreferencesAction,
   upsertProjectUserPreferencesAction
 } from '@/lib/actions/project-user-preferences';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const getProjectUserPreferencesActionWithRetry = withElectronActionRetry(
+  getProjectUserPreferencesAction
+);
+const upsertProjectUserPreferencesActionWithRetry = withElectronActionRetry(
+  upsertProjectUserPreferencesAction
+);
 
 const FEED_POST_PARAMETERS = [
   {
@@ -84,7 +92,7 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
       setFeedInstructionsLoading(true);
       setFeedInstructionsError(null);
       try {
-        const preferences = await getProjectUserPreferencesAction(projectId);
+        const preferences = await getProjectUserPreferencesActionWithRetry(projectId);
         if (cancelled) return;
         const instructions = preferences.feed_post_instructions ?? '';
         setFeedInstructions(instructions);
@@ -118,7 +126,7 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
     setFeedInstructionsSaveState('loading');
     setFeedInstructionsError(null);
     try {
-      await upsertProjectUserPreferencesAction(projectId, {
+      await upsertProjectUserPreferencesActionWithRetry(projectId, {
         feed_post_instructions: trimmedInstructions
       });
       setFeedInstructions(trimmedInstructions);

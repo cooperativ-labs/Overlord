@@ -8,8 +8,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const CREDENTIALS_DIR = path.join(os.homedir(), '.ovld');
-const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
-const ELECTRON_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'electron-credentials.json');
+const CLI_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.cli.json');
+const LEGACY_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
+const LEGACY_ELECTRON_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'electron-credentials.json');
+const LEGACY_MIGRATION_MARKER = path.join(CREDENTIALS_DIR, '.cli-migrated');
 const RUNTIME_FILE_PATTERN = /^runtime\..+\.json$/;
 const HOSTED_OVERLORD_URL = 'https://www.ovld.ai';
 const LOCAL_DEV_OVERLORD_URL = 'http://localhost:3000';
@@ -114,18 +116,39 @@ function normalizeCredentialsForSave(data) {
   };
 }
 
-/** @returns {Credentials | null} */
-export function loadCredentials() {
-  const cliCredentials = parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE), {
+function migrateLegacyCredentials() {
+  if (fileExists(LEGACY_MIGRATION_MARKER)) return null;
+
+  const legacyShared = parseStoredCredentialsData(readJsonFile(LEGACY_CREDENTIALS_FILE), {
     requireAuthData: true
   });
-  const electronCredentials = parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
+  const legacyElectron = parseStoredCredentialsData(readJsonFile(LEGACY_ELECTRON_CREDENTIALS_FILE), {
+    requireAuthData: true
+  });
+
+  const source = legacyShared ?? legacyElectron;
+  if (!source) return null;
+
+  try {
+    writeJsonFileAtomic(CLI_CREDENTIALS_FILE, { ...source, updated_at: new Date().toISOString() });
+    ensureCredentialsDir();
+    fs.writeFileSync(LEGACY_MIGRATION_MARKER, new Date().toISOString(), { mode: 0o600 });
+  } catch {
+    // Best-effort migration
+  }
+
+  return source;
+}
+
+/** @returns {Credentials | null} */
+export function loadCredentials() {
+  const cliCredentials = parseStoredCredentialsData(readJsonFile(CLI_CREDENTIALS_FILE), {
     requireAuthData: true
   });
 
   if (cliCredentials?.refresh_token) return cliCredentials;
-  if (electronCredentials?.refresh_token) return electronCredentials;
-  return cliCredentials ?? electronCredentials;
+
+  return migrateLegacyCredentials();
 }
 
 /** @param {Credentials} data */
@@ -135,45 +158,36 @@ export function saveCredentials(data) {
     throw new Error('Cannot save empty Overlord credentials.');
   }
 
-  const sharedCredentials = { ...credentials, updated_at: new Date().toISOString() };
-  writeJsonFileAtomic(CREDENTIALS_FILE, sharedCredentials);
-
-  const existingElectronCredentials = readJsonFile(ELECTRON_CREDENTIALS_FILE);
-  if (existingElectronCredentials && typeof existingElectronCredentials === 'object') {
-    const electronPayload = { ...existingElectronCredentials };
-    electronPayload.updated_at = sharedCredentials.updated_at;
-    if (credentials.platform_url) electronPayload.platform_url = credentials.platform_url;
-    if (credentials.access_token_expires_at) {
-      electronPayload.access_token_expires_at = credentials.access_token_expires_at;
-    }
-    if (credentials.organization_id) electronPayload.organization_id = credentials.organization_id;
-    if (credentials.user_email) electronPayload.user_email = credentials.user_email;
-    delete electronPayload.supabase_refresh_token;
-    writeJsonFileAtomic(ELECTRON_CREDENTIALS_FILE, electronPayload);
-  }
+  writeJsonFileAtomic(CLI_CREDENTIALS_FILE, { ...credentials, updated_at: new Date().toISOString() });
 }
 
 export function clearCredentials() {
-  for (const filePath of [CREDENTIALS_FILE, ELECTRON_CREDENTIALS_FILE]) {
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      // Already gone
-    }
+  try {
+    fs.unlinkSync(CLI_CREDENTIALS_FILE);
+  } catch {
+    // Already gone
   }
 }
 
 function getCredentialFileSource() {
-  const cliCredentials = parseStoredCredentialsData(readJsonFile(CREDENTIALS_FILE), {
+  const cliCredentials = parseStoredCredentialsData(readJsonFile(CLI_CREDENTIALS_FILE), {
     requireAuthData: true
   });
-  const electronCredentials = parseStoredCredentialsData(readJsonFile(ELECTRON_CREDENTIALS_FILE), {
-    requireAuthData: true
-  });
-  if (cliCredentials?.refresh_token) return 'credentials.json';
-  if (electronCredentials?.refresh_token) return 'electron-credentials.json';
-  if (cliCredentials) return 'credentials.json';
-  if (electronCredentials) return 'electron-credentials.json';
+  if (cliCredentials?.refresh_token) return 'credentials.cli.json';
+
+  if (fileExists(LEGACY_CREDENTIALS_FILE)) {
+    const legacyShared = parseStoredCredentialsData(readJsonFile(LEGACY_CREDENTIALS_FILE), {
+      requireAuthData: true
+    });
+    if (legacyShared?.refresh_token) return 'credentials.json (legacy)';
+  }
+
+  if (fileExists(LEGACY_ELECTRON_CREDENTIALS_FILE)) {
+    const legacyElectron = parseStoredCredentialsData(readJsonFile(LEGACY_ELECTRON_CREDENTIALS_FILE), {
+      requireAuthData: true
+    });
+    if (legacyElectron?.refresh_token) return 'electron-credentials.json (legacy)';
+  }
 
   return 'none';
 }
@@ -579,8 +593,9 @@ export async function getAuthStatus() {
     organizationId: resolved.organizationId ?? null,
     authMode: resolved.authMode,
     error,
-    credentialsFileExists: fileExists(CREDENTIALS_FILE),
-    electronCredentialsFileExists: fileExists(ELECTRON_CREDENTIALS_FILE)
+    credentialsFileExists: fileExists(CLI_CREDENTIALS_FILE),
+    legacyCredentialsFileExists: fileExists(LEGACY_CREDENTIALS_FILE),
+    electronCredentialsFileExists: fileExists(LEGACY_ELECTRON_CREDENTIALS_FILE)
   };
 }
 

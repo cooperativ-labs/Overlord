@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
@@ -72,7 +72,7 @@ export async function createTicketStatusAction(input: {
   const name = normalizeStatusName(input.name);
   const statusType = normalizeStatusType(input.statusType);
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   if (isExclusiveStatusType(statusType)) {
     const { data: existingExclusiveStatuses, error: existingExclusiveStatusesError } =
@@ -152,7 +152,7 @@ export async function deleteTicketStatusAction(input: {
 
   const name = normalizeStatusName(input.name);
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: targetStatus, error: targetStatusError } = await supabase
     .from('ticket_statuses')
     .select('status_type')
@@ -224,7 +224,7 @@ export async function updateTicketStatusNameAction(input: {
     return;
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data, error } = await supabase
     .from('ticket_statuses')
     .update({ name: nextName })
@@ -275,7 +275,7 @@ export async function reorderTicketStatusesAction(input: {
     throw new Error('Status order contains duplicates.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data: existingStatuses, error: existingError } = await supabase
     .from('ticket_statuses')

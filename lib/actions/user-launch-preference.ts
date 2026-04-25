@@ -4,7 +4,7 @@ import {
   type AgentModelSelection,
   type UserLaunchPreference
 } from '@/lib/helpers/agent-model-preference';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type LaunchPreferenceRow = {
   agent_type: string;
@@ -13,7 +13,7 @@ type LaunchPreferenceRow = {
 };
 
 export async function getUserLaunchPreferenceAction(): Promise<UserLaunchPreference | null> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -41,7 +41,7 @@ export async function getUserLaunchPreferenceAction(): Promise<UserLaunchPrefere
 export async function upsertUserLaunchPreferenceAction(
   selection: AgentModelSelection
 ): Promise<UserLaunchPreference> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

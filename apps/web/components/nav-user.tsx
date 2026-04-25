@@ -38,6 +38,9 @@ import {
   useSidebar
 } from '@/components/ui/sidebar';
 import { signOut } from '@/lib/actions/auth';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const signOutWithRetry = withElectronActionRetry(signOut);
 
 export function NavUser({
   user,
@@ -153,7 +156,7 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={async () => {
-                const result = await signOut();
+                const result = await signOutWithRetry();
                 if (result.redirect) router.push(result.redirect);
               }}
             >

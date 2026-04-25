@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { CurrentChangesPage } from '@/components/features/projects/CurrentChangesPage';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type PageProps = {
   params: Promise<{ projectId: string }>;
@@ -12,7 +12,7 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
   const { projectId } = await params;
   const { file } = await searchParams;
   const initialFilePath = Array.isArray(file) ? file[0] : file;
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

@@ -3,7 +3,7 @@
 import * as Sentry from '@sentry/nextjs';
 import { Resend } from 'resend';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 function getResendClient(): Resend {
   const apiKey = process.env.RESEND_API_KEY?.trim();
@@ -41,7 +41,7 @@ export async function submitFeedbackAction(
     return { error: 'Please enter a description.' };
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -109,7 +109,7 @@ export async function uploadFeedbackScreenshot(
     return { error: 'No file provided.' };
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

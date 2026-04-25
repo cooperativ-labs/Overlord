@@ -7,7 +7,7 @@ import {
   parseTicketListFilters,
   type TicketListFilters
 } from '@/lib/helpers/ticket-list-filters';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 export type ProjectUserPreferences = {
   feed_post_instructions: string | null;
@@ -45,7 +45,7 @@ function parsePreferences(raw: unknown): ProjectUserPreferences {
 export async function getProjectUserPreferencesAction(
   projectId: string
 ): Promise<ProjectUserPreferences> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -68,7 +68,7 @@ export async function upsertProjectUserPreferencesAction(
   projectId: string,
   patch: Partial<ProjectUserPreferences>
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { saveEverhourApiKey } from '@/lib/actions/everhour';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const saveEverhourApiKeyWithRetry = withElectronActionRetry(saveEverhourApiKey);
 
 type EverhourSettingsProps = {
   initiallyConnected: boolean;
@@ -43,7 +46,7 @@ export function EverhourSettings({
     setErrorMessage(null);
 
     try {
-      await saveEverhourApiKey(apiKey);
+      await saveEverhourApiKeyWithRetry(apiKey);
       const now = new Date().toISOString();
       setConnected(true);
       setSavedAt(now);

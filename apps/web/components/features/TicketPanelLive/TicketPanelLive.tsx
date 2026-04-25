@@ -9,8 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { markSessionDisconnectedAction } from '@/lib/actions/tickets';
 import { reconcileRealtimeTicketRow } from '@/lib/client-data/tickets/cache';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { createClient } from '@/supabase/utils/client';
+
+const markSessionDisconnectedActionWithRetry = withElectronActionRetry(
+  markSessionDisconnectedAction
+);
 
 import { AgentSessionBadge } from './AgentSessionBadge';
 import { LiveActivityFeed } from './LiveActivityFeed';
@@ -88,7 +93,7 @@ export function TicketPanelLive({
   function handleForceDisconnect() {
     if (!session) return;
     startTransition(async () => {
-      await markSessionDisconnectedAction(session.id);
+      await markSessionDisconnectedActionWithRetry(session.id);
     });
   }
 

@@ -5,6 +5,9 @@ import * as React from 'react';
 
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { linkGithubIdentityAction } from '@/lib/actions/account';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const linkGithubIdentityActionWithRetry = withElectronActionRetry(linkGithubIdentityAction);
 
 type LinkGithubIdentityButtonProps = {
   className?: string;
@@ -19,7 +22,7 @@ export function LinkGithubIdentityButton({ className }: LinkGithubIdentityButton
     setError(null);
 
     try {
-      const result = await linkGithubIdentityAction();
+      const result = await linkGithubIdentityActionWithRetry();
 
       if (result.error) {
         setButtonState('error');

@@ -38,6 +38,13 @@ const PROTOCOL_ENDPOINTS = [
   "list-tickets",
 ];
 
+const CODEX_TARGET_RULES = path.join(os.homedir(), ".codex", "rules", "default.rules");
+const CODEX_EXPECTED_RULES = [
+  'pattern = ["npx", "overlord", "protocol"]',
+  'pattern = ["ovld", "protocol"]',
+  'pattern = ["curl", "-sS", "-X", "POST"]'
+];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -137,9 +144,34 @@ function verifyClaude(platformUrl) {
 
 function verifyCodex() {
   console.log(`\n--- Codex ---`);
-  console.log("  Codex permissions cannot be verified via file inspection.");
-  console.log("  Run a test protocol call inside Codex to confirm approval prefix persistence.");
-  return true; // non-blocking — informational only
+  console.log(`Rules file: ${CODEX_TARGET_RULES}`);
+
+  if (!fs.existsSync(CODEX_TARGET_RULES)) {
+    console.log("  FAIL: Rules file not found.");
+    console.log("  Run: node scripts/install-agent-permissions.mjs --agent=codex");
+    return false;
+  }
+
+  let rulesContent = "";
+  try {
+    rulesContent = fs.readFileSync(CODEX_TARGET_RULES, "utf-8");
+  } catch (e) {
+    console.log(`  FAIL: Could not read rules file: ${e.message}`);
+    return false;
+  }
+
+  const missing = CODEX_EXPECTED_RULES.filter((entry) => !rulesContent.includes(entry));
+  if (missing.length === 0) {
+    console.log(`  OK: All ${CODEX_EXPECTED_RULES.length} required Codex prefix rules are present.`);
+    return true;
+  }
+
+  console.log(`  FAIL: Missing ${missing.length} required Codex prefix rules:`);
+  for (const entry of missing) {
+    console.log(`    - ${entry}`);
+  }
+  console.log(`\n  Run: node scripts/install-agent-permissions.mjs --agent=codex`);
+  return false;
 }
 
 function verifyOpenCode() {

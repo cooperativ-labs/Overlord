@@ -16,6 +16,7 @@ import { updateTicketFields } from '@/lib/client-data/tickets/board-reducers';
 import type { TicketBoardState } from '@/lib/client-data/tickets/board-types';
 import { applyToAllBoards, restoreBoards, snapshotBoards } from '@/lib/client-data/tickets/cache';
 import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 
 type ProjectSnapshot = {
   projects: SidebarProject[] | undefined;
@@ -95,6 +96,18 @@ function emptySshFields() {
   } as const;
 }
 
+const createProjectWithRetry = withElectronActionRetry(createProject);
+const updateProjectColorWithRetry = withElectronActionRetry(updateProjectColorAction);
+const updateProjectNameWithRetry = withElectronActionRetry(updateProjectNameAction);
+const updateProjectWorkingDirectoryWithRetry = withElectronActionRetry(
+  updateProjectWorkingDirectoryAction
+);
+const updateProjectSshConfigWithRetry = withElectronActionRetry(updateProjectSshConfigAction);
+const disconnectProjectFromEverhourWithRetry = withElectronActionRetry(
+  disconnectProjectFromEverhourAction
+);
+const deleteProjectWithRetry = withElectronActionRetry(deleteProjectAction);
+
 function deriveSshCommand(input: {
   sshHost: string | null;
   sshPort: number | null;
@@ -124,7 +137,7 @@ function appendCreatedProject(queryClient: QueryClient, created: CreateProjectRe
 export function useCreateProjectMutation() {
   const queryClient = useQueryClient();
   return useMutation<CreateProjectResult, Error, CreateProjectInput, CreateProjectContext>({
-    mutationFn: createProject,
+    mutationFn: createProjectWithRetry,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       const temporaryId = `optimistic:${crypto.randomUUID()}`;
@@ -157,7 +170,7 @@ export function useCreateProjectMutation() {
 export function useUpdateProjectColorMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: updateProjectColorAction,
+    mutationFn: updateProjectColorWithRetry,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       patchProjectCache(queryClient, input.projectId, { color: input.color.toLowerCase() });
@@ -172,7 +185,7 @@ export function useUpdateProjectColorMutation() {
 export function useUpdateProjectNameMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: updateProjectNameAction,
+    mutationFn: updateProjectNameWithRetry,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       patchProjectCache(queryClient, input.projectId, { name: input.name.trim() });
@@ -189,7 +202,7 @@ export function useUpdateProjectWorkingDirectoryMutation() {
 
   const mutationFn = async (input: { projectId: string; workingDirectory: string | null }) => {
     try {
-      await updateProjectWorkingDirectoryAction(input);
+      await updateProjectWorkingDirectoryWithRetry(input);
     } catch (error) {
       const normalizedWorkingDirectory =
         typeof input.workingDirectory === 'string' ? input.workingDirectory.trim() : '';
@@ -249,7 +262,7 @@ export function useUpdateProjectWorkingDirectoryMutation() {
 export function useUpdateProjectSshConfigMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: updateProjectSshConfigAction,
+    mutationFn: updateProjectSshConfigWithRetry,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       const trim = (value: string | null | undefined) =>
@@ -277,14 +290,14 @@ export function useUpdateProjectSshConfigMutation() {
 
 export function useDisconnectProjectEverhourMutation() {
   return useMutation({
-    mutationFn: disconnectProjectFromEverhourAction
+    mutationFn: disconnectProjectFromEverhourWithRetry
   });
 }
 
 export function useDeleteProjectMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: deleteProjectAction,
+    mutationFn: deleteProjectWithRetry,
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       removeProjectFromCache(queryClient, input.projectId);

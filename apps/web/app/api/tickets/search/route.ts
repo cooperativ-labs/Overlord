@@ -1,9 +1,12 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
+import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { searchTicketsByTitle } from '@/lib/helpers/ticket-search';
-import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
-import { createClient } from '@/supabase/utils/server';
+import {
+  createClientForRequest,
+  getRequestDefaultProjectId,
+  getRequestSelectedOrganizationId
+} from '@/supabase/utils/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,7 +15,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ tickets: [] });
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -20,11 +23,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const cookieStore = await cookies();
-  const selectedOrgValue = cookieStore.get(SELECTED_ORG_COOKIE)?.value;
-  const parsedOrgId = selectedOrgValue ? Number(selectedOrgValue) : undefined;
-  const organizationId =
-    Number.isFinite(parsedOrgId ?? 0) && (parsedOrgId ?? 0) > 0 ? parsedOrgId : undefined;
+  const [{ data: memberRows }, profileSettings] = await Promise.all([
+    supabase.from('members').select('organizations!inner(id)').eq('user_id', user.id),
+    fetchProfileSettings(supabase, user.id)
+  ]);
+  const defaultProjectId = await getRequestDefaultProjectId({
+    profileDefaultProjectId: profileSettings?.default_project_id ?? null
+  });
+  let defaultProjectOrganizationId: number | null = null;
+  if (defaultProjectId) {
+    const { data: defaultProject } = await supabase
+      .from('projects')
+      .select('organization_id')
+      .eq('id', defaultProjectId)
+      .maybeSingle();
+    defaultProjectOrganizationId = defaultProject?.organization_id ?? null;
+  }
+
+  const organizations = (memberRows ?? []).flatMap(row => {
+    const organization = row.organizations;
+    if (!organization) return [];
+    return Array.isArray(organization) ? organization : [organization];
+  });
+  const organizationId = await getRequestSelectedOrganizationId({
+    defaultProjectOrganizationId,
+    organizations
+  });
 
   const { data, error } = await searchTicketsByTitle(supabase, {
     limit: 6,

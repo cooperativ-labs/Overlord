@@ -3,14 +3,14 @@ import fs from 'node:fs/promises';
 
 import { assertOrgMembership } from '@/app/api/projects/_lib';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 
 export async function GET(_request: Request, { params }: RouteContext) {
   try {
     const { projectId } = await params;
-    const supabase = await createClient();
+    const supabase = await createClientForRequest();
 
     const {
       data: { user }

@@ -2,7 +2,6 @@
 
 import * as Sentry from '@sentry/nextjs';
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
 
 import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
@@ -13,7 +12,6 @@ import type {
   BoardScope,
   BoardStatus
 } from '@/lib/client-data/tickets/board-types';
-import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import {
   getAuthDiagnostics,
   getServerActionRequestDiagnostics,
@@ -40,7 +38,7 @@ import { createTicketSchema } from '@/lib/overlord/validation';
 import { generateDateFromSchedule } from '@/lib/schedulingEngine';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { resolveNamedStatus, resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest, getRequestDefaultProjectId } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 function revalidateTicketBoards() {
@@ -59,7 +57,7 @@ function revalidateTicketDetails(
   }
 }
 
-type ServerSupabase = Awaited<ReturnType<typeof createClient>>;
+type ServerSupabase = Awaited<ReturnType<typeof createClientForRequest>>;
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
 
 /**
@@ -434,7 +432,7 @@ async function resolvePromptTicketSource(
 }
 
 export async function submitTicketObjectiveAction(ticketId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
   const submission = await submitDraftObjective(supabase, ticketId);
 
@@ -473,13 +471,21 @@ async function resolveTicketProjectAndOrganization(
     projectId?: string | null;
   }
 ): Promise<{ organizationId: number; projectId: string | null }> {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  const { data: profileSettings } = user
+    ? await supabase.from('profiles').select('default_project_id').eq('id', user.id).maybeSingle()
+    : { data: null };
+  const defaultProjectId = await getRequestDefaultProjectId({
+    profileDefaultProjectId: profileSettings?.default_project_id ?? null
+  });
+
   if (input.projectId === null) {
     if (input.organizationId !== undefined) {
       return { organizationId: input.organizationId, projectId: null };
     }
 
-    const cookieStore = await cookies();
-    const defaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value?.trim() || null;
     if (defaultProjectId) {
       const { data: cookieProject, error: cookieProjectError } = await supabase
         .from('projects')
@@ -527,8 +533,6 @@ async function resolveTicketProjectAndOrganization(
     return { organizationId: explicitProject.organization_id, projectId: explicitProject.id };
   }
 
-  const cookieStore = await cookies();
-  const defaultProjectId = cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value?.trim() || null;
   if (defaultProjectId) {
     let query = supabase.from('projects').select('id,organization_id').eq('id', defaultProjectId);
     if (input.organizationId !== undefined) {
@@ -560,7 +564,7 @@ async function resolveTicketProjectAndOrganization(
 }
 
 async function assignTicketToColumnStart(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   ticketId: string,
   status: string,
   organizationId: number
@@ -590,7 +594,7 @@ async function assignTicketToColumnStart(
 }
 
 async function assignTicketToColumnEnd(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createClientForRequest>>,
   ticketId: string,
   status: string,
   organizationId: number
@@ -629,7 +633,7 @@ export async function createTicketInColumnAction(
   generateTitle = true
 ) {
   const requestDiagnostics = await getServerActionRequestDiagnostics();
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   if (requestDiagnostics.isElectron) {
     const authDiagnostics = await getAuthDiagnostics(supabase);
@@ -775,7 +779,7 @@ export async function createCalendarTicketAction(
   organizationId?: number,
   projectId?: string | null
 ) {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const selected = await resolveTicketProjectAndOrganization(supabase, {
     organizationId,
     projectId
@@ -813,7 +817,7 @@ export async function createCalendarTicketAction(
 }
 
 export async function createBlankTicketAction(organizationId?: number, projectId?: string | null) {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const selected = await resolveTicketProjectAndOrganization(supabase, {
     organizationId,
     projectId
@@ -865,7 +869,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid ticket.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const selected = await resolveTicketProjectAndOrganization(supabase, { organizationId });
 
   const insertPayload: {
@@ -928,7 +932,7 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid ticket.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data, error } = await supabase
     .from('tickets')
     .update({
@@ -973,7 +977,7 @@ export async function updateTicketFieldAction(
     throw new Error('Invalid field.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
 
   const normalizedValue = value.trim();
@@ -1033,7 +1037,7 @@ export async function updateTicketStatusAction(ticketId: string, status: string)
     throw new Error('Status is required.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
   const affectedTickets = await updateTicketStatusAndSchedule(supabase, ticketId, trimmedStatus);
 
@@ -1053,7 +1057,7 @@ export async function updateTicketPriorityAction(
   ticketId: string,
   priority: Database['public']['Enums']['ticket_priority']
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
 
   const { data, error } = await supabase
@@ -1091,7 +1095,7 @@ export async function updateTicketExecutionTargetAction(
     throw new Error('Invalid execution target.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
 
   const { data, error } = await supabase
@@ -1124,7 +1128,7 @@ export async function setTicketProjectAction(
   ticketId: string,
   projectId: string | null
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const nextProjectId = typeof projectId === 'string' ? projectId.trim() || null : null;
 
   // assertTicketAccess verifies RLS access; reuse the result as existingTicket
@@ -1167,7 +1171,7 @@ export async function markObjectiveExecutedAction(
   ticketId: string,
   objectiveId: string
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: objective, error: objectiveError } = await supabase
     .from('objectives')
     .select('id,state,objective,ticket_id')
@@ -1263,7 +1267,7 @@ export async function markObjectiveDraftAction(
   ticketId: string,
   objectiveId: string
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   // 1. Get all objectives for this ticket to check conditions
   const { data: objectives, error: objectivesError } = await supabase
@@ -1348,7 +1352,7 @@ export async function createProjectAction(input: {
   }
 
   const color = normalizeHexColor(input.color);
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data, error } = await supabase
     .from('projects')
     .insert({
@@ -1371,7 +1375,7 @@ export async function reorderTicketsAction(
   orderedIds: string[],
   statusChange?: { ticketId: string; newStatus: string }
 ) {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const organizationIds = new Set<number>();
 
   if (orderedIds.length > 0) {
@@ -1424,7 +1428,7 @@ export async function reorderTicketsAction(
 }
 
 export async function markTicketReadAction(ticketId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { error } = await supabase.from('tickets').update({ is_read: true }).eq('id', ticketId);
   if (error) throw new Error(`Failed to mark ticket as read: ${error.message}`);
   revalidateTicketBoards();
@@ -1432,21 +1436,21 @@ export async function markTicketReadAction(ticketId: string): Promise<void> {
 
 export async function markTicketsReadAction(ticketIds: string[]): Promise<void> {
   if (ticketIds.length === 0) return;
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { error } = await supabase.from('tickets').update({ is_read: true }).in('id', ticketIds);
   if (error) throw new Error(`Failed to mark tickets as read: ${error.message}`);
   revalidateTicketBoards();
 }
 
 export async function markTicketUnreadAction(ticketId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { error } = await supabase.from('tickets').update({ is_read: false }).eq('id', ticketId);
   if (error) throw new Error(`Failed to mark ticket as unread: ${error.message}`);
   revalidateTicketBoards();
 }
 
 export async function markSessionDisconnectedAction(sessionId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   // Verify the session exists and the user has access (RLS on agent_sessions)
   const { data: session, error: sessionError } = await supabase
@@ -1472,7 +1476,7 @@ export async function markSessionDisconnectedAction(sessionId: string): Promise<
 export async function deleteTicketAction(
   ticketId: string
 ): Promise<{ organizationId: number; projectId: string | null }> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
 
   const { data, error } = await supabase
@@ -1500,7 +1504,7 @@ export async function getTicketPromptForCopy(
   launchMode: PromptLaunchMode = 'run',
   context?: PromptContext
 ): Promise<{ error?: string; prompt?: string }> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   await submitDraftObjective(supabase, ticketId);
   const { error, source } = await resolvePromptTicketSource(supabase, ticketId);
   if (error || !source) {
@@ -1621,7 +1625,7 @@ function mapBoardTicket(
 }
 
 export async function getTicketStatusesAction(organizationId?: number): Promise<BoardStatus[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   let query = supabase
     .from('ticket_statuses')
     .select('name,position,status_type')
@@ -1645,7 +1649,7 @@ export async function getTicketBoardBootstrapAction(
   scope: BoardScope,
   dataset: BoardDataset = 'board'
 ): Promise<BoardBootstrap> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const organizationId = scope.organizationId;
   const projectId = scope.kind === 'project' ? scope.projectId : undefined;
   const statuses = await getTicketStatusesAction(organizationId);
@@ -1753,7 +1757,7 @@ export async function loadMoreTicketsAction({
   projectId?: string;
   beforeDate: string;
 }): Promise<{ tickets: ReturnType<typeof mapBoardTicket>[] }> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   let query = supabase
     .from('tickets')
@@ -1816,7 +1820,7 @@ export async function updateTicketDueDateAction(
   ticketId: string,
   dueDate: string | null
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const ticket = await assertTicketAccess(supabase, ticketId);
 
   const { error } = await supabase
@@ -1840,7 +1844,7 @@ export async function updateTicketAssignedAgentAction(
   ticketId: string,
   selection: AgentModelSelection
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const ticket = await assertTicketAccess(supabase, ticketId);
 
   const { error } = await supabase

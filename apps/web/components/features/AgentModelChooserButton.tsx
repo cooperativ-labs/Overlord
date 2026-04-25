@@ -13,10 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { AgentModel } from '@/lib/actions/agent-models';
 import { updateTicketAssignedAgentAction } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { getAgentTypeByValue } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { cn } from '@/lib/utils';
+
+const updateTicketAssignedAgentActionWithRetry = withElectronActionRetry(
+  updateTicketAssignedAgentAction
+);
 
 function getSelectionLabel(models: AgentModel[], modelId: string | null): string {
   if (!modelId) return 'Default model';
@@ -84,7 +89,7 @@ export function AgentModelChooserButton({
             onSelectionChange?.(nextSelection);
             if (persistSelection && ticketId) {
               startTransition(() => {
-                void updateTicketAssignedAgentAction(ticketId, nextSelection);
+                void updateTicketAssignedAgentActionWithRetry(ticketId, nextSelection);
               });
             }
           }}

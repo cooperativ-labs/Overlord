@@ -9,7 +9,10 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { updateTicketDueDateAction } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { cn } from '@/lib/utils';
+
+const updateTicketDueDateActionWithRetry = withElectronActionRetry(updateTicketDueDateAction);
 
 type DueDateEditorProps = {
   initialDueDatetime: string | null;
@@ -66,7 +69,7 @@ export function DueDateEditor({ initialDueDatetime, ticketId }: DueDateEditorPro
 
     try {
       const nextDueDatetime = buildDueDatetime(selectedDate, dueDatetime);
-      await updateTicketDueDateAction(ticketId, nextDueDatetime);
+      await updateTicketDueDateActionWithRetry(ticketId, nextDueDatetime);
       setDueDatetime(nextDueDatetime);
       setSaveButtonState('success');
       setOpen(false);
@@ -79,7 +82,7 @@ export function DueDateEditor({ initialDueDatetime, ticketId }: DueDateEditorPro
     setClearButtonState('loading');
 
     try {
-      await updateTicketDueDateAction(ticketId, null);
+      await updateTicketDueDateActionWithRetry(ticketId, null);
       setDueDatetime(null);
       setSelectedDate(undefined);
       setClearButtonState('success');

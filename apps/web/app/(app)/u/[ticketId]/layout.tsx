@@ -5,7 +5,7 @@ import { TicketPanelContent } from '@/components/features/TicketPanelContent';
 import { TicketPanelSkeleton } from '@/components/features/TicketPanelSkeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { SidePanelSlot } from '@/components/ui/side-panel';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type LayoutProps = {
   children: React.ReactNode;
@@ -17,7 +17,7 @@ const CLOSE_PATH = '/u';
 export default async function UserTicketDetailLayout({ children, params }: LayoutProps) {
   const { ticketId } = await params;
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: ticket } = await supabase
     .from('tickets')
     .select('organization_id')

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
 type SlackWorkspaceRow = Database['public']['Tables']['slack_workspaces']['Row'];
@@ -23,7 +23,7 @@ export type SlackWorkspace = Pick<
 >;
 
 export async function getSlackWorkspacesAction(): Promise<SlackWorkspace[]> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -58,7 +58,7 @@ export async function updateSlackWorkspaceAction(
   workspaceId: string,
   input: UpdateSlackWorkspaceInput
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -79,7 +79,7 @@ export async function updateSlackWorkspaceAction(
 export async function disconnectSlackWorkspaceAction(
   workspaceId: string
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -100,7 +100,7 @@ export async function disconnectSlackWorkspaceAction(
 export async function getProjectSlackDefaultStatusAction(
   projectId: string
 ): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data, error } = await supabase
     .from('projects')
@@ -116,7 +116,7 @@ export async function updateProjectSlackDefaultStatusAction(
   projectId: string,
   status: string | null
 ): Promise<{ error?: string }> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();

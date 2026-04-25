@@ -9,6 +9,11 @@ import { Input } from '@/components/ui/input';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
 import { generatePullRequestDraftAction } from '@/lib/actions/generate-pull-request';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const generatePullRequestDraftActionWithRetry = withElectronActionRetry(
+  generatePullRequestDraftAction
+);
 
 type PullRequestPanelProps = {
   baseBranch: string | null;
@@ -50,7 +55,7 @@ export function PullRequestPanel({
         return;
       }
 
-      const result = await generatePullRequestDraftAction({
+      const result = await generatePullRequestDraftActionWithRetry({
         baseBranch,
         branch: aggregate.branch,
         diff: aggregate.diff,

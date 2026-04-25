@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 
 import { getOAuthRuntimeConfig } from '@/lib/auth/oauth-runtime';
 import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 function base64UrlEncode(buffer: Buffer): string {
@@ -19,7 +19,7 @@ function buildPkce(): { verifier: string; challenge: string } {
 }
 
 export async function approveDevice(userCode: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -60,8 +60,8 @@ export async function approveDevice(userCode: string): Promise<void> {
     redirect('/auth/device?error=no_organization');
   }
 
-  const { cliClientId } = getOAuthRuntimeConfig();
-  if (!cliClientId) {
+  const { deviceClientId } = getOAuthRuntimeConfig();
+  if (!deviceClientId) {
     redirect('/auth/device?error=oauth_not_configured');
   }
 
@@ -91,7 +91,7 @@ export async function approveDevice(userCode: string): Promise<void> {
   const redirectUri = `${getPlatformUrl()}/auth/device/oauth-callback`;
   const authorizeUrl = new URL(`${supabaseUrl}/auth/v1/oauth/authorize`);
   authorizeUrl.searchParams.set('response_type', 'code');
-  authorizeUrl.searchParams.set('client_id', cliClientId);
+  authorizeUrl.searchParams.set('client_id', deviceClientId);
   authorizeUrl.searchParams.set('redirect_uri', redirectUri);
   authorizeUrl.searchParams.set('state', state);
   authorizeUrl.searchParams.set('code_challenge', challenge);

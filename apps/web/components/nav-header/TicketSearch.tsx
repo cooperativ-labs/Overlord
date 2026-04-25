@@ -7,6 +7,7 @@ import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { fetchWithElectronRetry } from '@/lib/electron-auth/fetch-retry';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
@@ -56,9 +57,12 @@ export function TicketSearch({ className }: TicketSearchProps) {
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const response = await fetch(`/api/tickets/search?q=${encodeURIComponent(query.trim())}`, {
-          signal: controller.signal
-        });
+        const response = await fetchWithElectronRetry(
+          `/api/tickets/search?q=${encodeURIComponent(query.trim())}`,
+          {
+            signal: controller.signal
+          }
+        );
         if (!response.ok) {
           throw new Error('Ticket search failed.');
         }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getPlatformUrl } from '@/lib/env';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 const SLACK_CLIENT_ID = process.env.SLACK_CLIENT_ID ?? '';
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   // Require a logged-in Overlord user to bind this install
-  const userSupabase = await createClient();
+  const userSupabase = await createClientForRequest();
   const {
     data: { user }
   } = await userSupabase.auth.getUser();

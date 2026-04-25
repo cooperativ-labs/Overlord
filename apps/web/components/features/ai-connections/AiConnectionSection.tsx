@@ -11,6 +11,11 @@ import {
   getAiConnectionStatus,
   getAiUsage
 } from '@/lib/actions/ai-connections';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const disconnectAiProviderWithRetry = withElectronActionRetry(disconnectAiProvider);
+const getAiConnectionStatusWithRetry = withElectronActionRetry(getAiConnectionStatus);
+const getAiUsageWithRetry = withElectronActionRetry(getAiUsage);
 
 type Props = {
   provider: AiProvider;
@@ -105,7 +110,7 @@ export function AiConnectionSection({ provider, title, description, connectHref,
 
   const loadStatus = useCallback(async () => {
     try {
-      const s = await getAiConnectionStatus(provider);
+      const s = await getAiConnectionStatusWithRetry(provider);
       setStatus(s);
     } catch {
       setStatus({ connected: false, updatedAt: null });
@@ -117,7 +122,7 @@ export function AiConnectionSection({ provider, title, description, connectHref,
   const loadUsage = useCallback(async () => {
     setUsageError(null);
     try {
-      const u = await getAiUsage(provider);
+      const u = await getAiUsageWithRetry(provider);
       setUsage(u);
     } catch (err) {
       setUsageError(err instanceof Error ? err.message : 'Failed to load usage.');
@@ -141,7 +146,7 @@ export function AiConnectionSection({ provider, title, description, connectHref,
   async function handleDisconnect() {
     setDisconnectState('loading');
     try {
-      await disconnectAiProvider(provider);
+      await disconnectAiProviderWithRetry(provider);
       setStatus({ connected: false, updatedAt: null });
       setUsage(null);
       setDisconnectState('default');

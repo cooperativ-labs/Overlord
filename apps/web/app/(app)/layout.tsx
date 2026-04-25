@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { cookies, headers } from 'next/headers';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
@@ -26,9 +25,13 @@ import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import { isAdminEmail } from '@/lib/auth/admin';
-import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
-import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
-import { createClient } from '@/supabase/utils/server';
+import {
+  createClientForRequest,
+  getRequestDefaultProjectId,
+  getRequestSelectedOrganizationId,
+  getRequestSidebarOpen,
+  isElectronRequestFromHeaders
+} from '@/supabase/utils/server';
 
 export const metadata: Metadata = {
   title: 'Overlord',
@@ -49,8 +52,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const cookieStore = await cookies();
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const {
     data: { user }
   } = await supabase.auth.getUser();
@@ -61,21 +63,24 @@ export default async function RootLayout({
     user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null)
   ]);
 
-  const initialDefaultProjectId =
-    profileSettings?.default_project_id ?? cookieStore.get(DEFAULT_PROJECT_COOKIE)?.value ?? null;
-  const selectedOrgIdStr = cookieStore.get(SELECTED_ORG_COOKIE)?.value ?? null;
-  const selectedOrgId = selectedOrgIdStr ? Number(selectedOrgIdStr) : null;
-  const sidebarDefaultOpen = cookieStore.get('sidebar_state')?.value !== 'false';
+  const initialDefaultProjectId = await getRequestDefaultProjectId({
+    profileDefaultProjectId: profileSettings?.default_project_id ?? null
+  });
+  const defaultProjectOrganizationId =
+    projects.find(project => project.id === initialDefaultProjectId)?.organizationId ?? null;
+  const selectedOrgId =
+    (await getRequestSelectedOrganizationId({
+      defaultProjectOrganizationId,
+      organizations
+    })) ?? null;
+  const sidebarDefaultOpen = await getRequestSidebarOpen();
 
   let tutorialAutoOpen = false;
   let tutorialAutoStep = 1;
   let onboardingState = null;
 
   if (user) {
-    // Check if this is an Electron request via User-Agent header
-    const headersList = await headers();
-    const userAgent = headersList.get('user-agent') ?? '';
-    const isElectronRequest = userAgent.toLowerCase().includes('electron');
+    const isElectronRequest = await isElectronRequestFromHeaders();
     if (isElectronRequest) {
       // Web users without org/project → redirect to full-page onboarding
       if (organizations.length === 0 || projects.length === 0) {

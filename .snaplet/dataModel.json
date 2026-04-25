@@ -591,237 +591,6 @@
         }
       ]
     },
-    "agent_tokens": {
-      "id": "public.agent_tokens",
-      "schemaName": "public",
-      "tableName": "agent_tokens",
-      "fields": [
-        {
-          "id": "public.agent_tokens.id",
-          "name": "id",
-          "columnName": "id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": true,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.user_id",
-          "name": "user_id",
-          "columnName": "user_id",
-          "type": "uuid",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.organization_id",
-          "name": "organization_id",
-          "columnName": "organization_id",
-          "type": "int4",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.token",
-          "name": "token",
-          "columnName": "token",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.name",
-          "name": "name",
-          "columnName": "name",
-          "type": "text",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.last_used_at",
-          "name": "last_used_at",
-          "columnName": "last_used_at",
-          "type": "timestamptz",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.created_at",
-          "name": "created_at",
-          "columnName": "created_at",
-          "type": "timestamptz",
-          "isRequired": true,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": true,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.revoked_at",
-          "name": "revoked_at",
-          "columnName": "revoked_at",
-          "type": "timestamptz",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.expires_at",
-          "name": "expires_at",
-          "columnName": "expires_at",
-          "type": "timestamptz",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.agent_tokens.created_by_grant_id",
-          "name": "created_by_grant_id",
-          "columnName": "created_by_grant_id",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "name": "users",
-          "type": "users",
-          "isRequired": true,
-          "kind": "object",
-          "relationName": "agent_tokensTousers",
-          "relationFromFields": [
-            "user_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "auth_grants",
-          "type": "auth_grants",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_tokensToauth_grants",
-          "relationFromFields": [
-            "created_by_grant_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "organizations",
-          "type": "organizations",
-          "isRequired": true,
-          "kind": "object",
-          "relationName": "agent_tokensToorganizations",
-          "relationFromFields": [
-            "organization_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "auth_grants",
-          "type": "auth_grants",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "auth_grantsToagent_tokens",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        }
-      ],
-      "uniqueConstraints": [
-        {
-          "name": "agent_tokens_pkey",
-          "fields": [
-            "id"
-          ],
-          "nullNotDistinct": false
-        },
-        {
-          "name": "agent_tokens_token_key",
-          "fields": [
-            "token"
-          ],
-          "nullNotDistinct": false
-        }
-      ]
-    },
     "artifacts": {
       "id": "public.artifacts",
       "schemaName": "public",
@@ -982,16 +751,16 @@
           "maxLength": null
         },
         {
-          "id": "public.artifacts.uploaded_by",
-          "name": "uploaded_by",
-          "columnName": "uploaded_by",
+          "id": "public.artifacts.created_by",
+          "name": "created_by",
+          "columnName": "created_by",
           "type": "uuid",
           "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
           "sequence": false,
-          "hasDefaultValue": false,
+          "hasDefaultValue": true,
           "isId": false,
           "maxLength": null
         },
@@ -1002,7 +771,7 @@
           "kind": "object",
           "relationName": "artifactsTousers",
           "relationFromFields": [
-            "uploaded_by"
+            "created_by"
           ],
           "relationToFields": [
             "id"
@@ -1288,20 +1057,6 @@
           "maxLength": null
         },
         {
-          "id": "public.auth_grants.agent_token_id",
-          "name": "agent_token_id",
-          "columnName": "agent_token_id",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
           "id": "public.auth_grants.created_at",
           "name": "created_at",
           "columnName": "created_at",
@@ -1328,38 +1083,6 @@
             "id"
           ],
           "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "agent_tokens",
-          "type": "agent_tokens",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "auth_grantsToagent_tokens",
-          "relationFromFields": [
-            "agent_token_id"
-          ],
-          "relationToFields": [
-            "id"
-          ],
-          "isList": false,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
-          "name": "agent_tokens",
-          "type": "agent_tokens",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_tokensToauth_grants",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
           "isId": false,
           "isGenerated": false,
           "sequence": false,
@@ -2452,6 +2175,62 @@
           "maxLength": null
         },
         {
+          "id": "public.device_auth_codes.refresh_token",
+          "name": "refresh_token",
+          "columnName": "refresh_token",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.device_auth_codes.access_token_expires_at",
+          "name": "access_token_expires_at",
+          "columnName": "access_token_expires_at",
+          "type": "timestamptz",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.device_auth_codes.pkce_verifier",
+          "name": "pkce_verifier",
+          "columnName": "pkce_verifier",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.device_auth_codes.oauth_state",
+          "name": "oauth_state",
+          "columnName": "oauth_state",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "users",
           "type": "users",
           "isRequired": false,
@@ -2983,6 +2762,38 @@
           "hasDefaultValue": false,
           "isId": false,
           "maxLength": null
+        },
+        {
+          "id": "public.feed_posts.created_by",
+          "name": "created_by",
+          "columnName": "created_by",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "users",
+          "type": "users",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "feed_postsTousers",
+          "relationFromFields": [
+            "created_by"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
         },
         {
           "name": "agent_sessions",
@@ -6548,6 +6359,38 @@
           "maxLength": null
         },
         {
+          "id": "public.objectives.created_by",
+          "name": "created_by",
+          "columnName": "created_by",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "users",
+          "type": "users",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "objectivesTousers",
+          "relationFromFields": [
+            "created_by"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "tickets",
           "type": "tickets",
           "isRequired": true,
@@ -7006,20 +6849,6 @@
           "maxLength": null
         },
         {
-          "name": "agent_tokens",
-          "type": "agent_tokens",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_tokensToorganizations",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
           "name": "feed_posts",
           "type": "feed_posts",
           "isRequired": false,
@@ -7081,6 +6910,20 @@
           "isRequired": false,
           "kind": "object",
           "relationName": "serversToorganizations",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "slack_workspaces",
+          "type": "slack_workspaces",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "slack_workspacesToorganizations",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -7334,13 +7177,13 @@
         }
       ]
     },
-    "project_user_preferences": {
-      "id": "public.project_user_preferences",
+    "project_user": {
+      "id": "public.project_user",
       "schemaName": "public",
-      "tableName": "project_user_preferences",
+      "tableName": "project_user",
       "fields": [
         {
-          "id": "public.project_user_preferences.id",
+          "id": "public.project_user.id",
           "name": "id",
           "columnName": "id",
           "type": "uuid",
@@ -7354,7 +7197,7 @@
           "maxLength": null
         },
         {
-          "id": "public.project_user_preferences.user_id",
+          "id": "public.project_user.user_id",
           "name": "user_id",
           "columnName": "user_id",
           "type": "uuid",
@@ -7368,7 +7211,7 @@
           "maxLength": null
         },
         {
-          "id": "public.project_user_preferences.project_id",
+          "id": "public.project_user.project_id",
           "name": "project_id",
           "columnName": "project_id",
           "type": "uuid",
@@ -7382,7 +7225,7 @@
           "maxLength": null
         },
         {
-          "id": "public.project_user_preferences.preferences",
+          "id": "public.project_user.preferences",
           "name": "preferences",
           "columnName": "preferences",
           "type": "jsonb",
@@ -7396,7 +7239,7 @@
           "maxLength": null
         },
         {
-          "id": "public.project_user_preferences.created_at",
+          "id": "public.project_user.created_at",
           "name": "created_at",
           "columnName": "created_at",
           "type": "timestamptz",
@@ -7410,7 +7253,7 @@
           "maxLength": null
         },
         {
-          "id": "public.project_user_preferences.updated_at",
+          "id": "public.project_user.updated_at",
           "name": "updated_at",
           "columnName": "updated_at",
           "type": "timestamptz",
@@ -7424,11 +7267,151 @@
           "maxLength": null
         },
         {
+          "id": "public.project_user.ssh_command",
+          "name": "ssh_command",
+          "columnName": "ssh_command",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.remote_working_directory",
+          "name": "remote_working_directory",
+          "columnName": "remote_working_directory",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.ssh_host",
+          "name": "ssh_host",
+          "columnName": "ssh_host",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.ssh_port",
+          "name": "ssh_port",
+          "columnName": "ssh_port",
+          "type": "int4",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.ssh_user",
+          "name": "ssh_user",
+          "columnName": "ssh_user",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.ssh_auth_method",
+          "name": "ssh_auth_method",
+          "columnName": "ssh_auth_method",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.ssh_private_key_path",
+          "name": "ssh_private_key_path",
+          "columnName": "ssh_private_key_path",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.local_working_directory",
+          "name": "local_working_directory",
+          "columnName": "local_working_directory",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.remote_helper_installed_at",
+          "name": "remote_helper_installed_at",
+          "columnName": "remote_helper_installed_at",
+          "type": "timestamptz",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.project_user.remote_helper_version",
+          "name": "remote_helper_version",
+          "columnName": "remote_helper_version",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "users",
           "type": "users",
           "isRequired": true,
           "kind": "object",
-          "relationName": "project_user_preferencesTousers",
+          "relationName": "project_userTousers",
           "relationFromFields": [
             "user_id"
           ],
@@ -7446,7 +7429,7 @@
           "type": "projects",
           "isRequired": true,
           "kind": "object",
-          "relationName": "project_user_preferencesToprojects",
+          "relationName": "project_userToprojects",
           "relationFromFields": [
             "project_id"
           ],
@@ -7582,37 +7565,9 @@
           "maxLength": null
         },
         {
-          "id": "public.projects.local_working_directory",
-          "name": "local_working_directory",
-          "columnName": "local_working_directory",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.projects.ssh_command",
-          "name": "ssh_command",
-          "columnName": "ssh_command",
-          "type": "text",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
-          "id": "public.projects.remote_working_directory",
-          "name": "remote_working_directory",
-          "columnName": "remote_working_directory",
+          "id": "public.projects.slack_default_status",
+          "name": "slack_default_status",
+          "columnName": "slack_default_status",
           "type": "text",
           "isRequired": false,
           "kind": "scalar",
@@ -7670,11 +7625,25 @@
           "hasDefaultValue": false
         },
         {
-          "name": "project_user_preferences",
-          "type": "project_user_preferences",
+          "name": "project_user",
+          "type": "project_user",
           "isRequired": false,
           "kind": "object",
-          "relationName": "project_user_preferencesToprojects",
+          "relationName": "project_userToprojects",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "slack_workspaces",
+          "type": "slack_workspaces",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "slack_workspacesToprojects",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -9926,6 +9895,366 @@
         }
       ]
     },
+    "slack_event_dedupe": {
+      "id": "public.slack_event_dedupe",
+      "schemaName": "public",
+      "tableName": "slack_event_dedupe",
+      "fields": [
+        {
+          "id": "public.slack_event_dedupe.event_id",
+          "name": "event_id",
+          "columnName": "event_id",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_event_dedupe.received_at",
+          "name": "received_at",
+          "columnName": "received_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "slack_event_dedupe_pkey",
+          "fields": [
+            "event_id"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "slack_workspaces": {
+      "id": "public.slack_workspaces",
+      "schemaName": "public",
+      "tableName": "slack_workspaces",
+      "fields": [
+        {
+          "id": "public.slack_workspaces.id",
+          "name": "id",
+          "columnName": "id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.user_id",
+          "name": "user_id",
+          "columnName": "user_id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.organization_id",
+          "name": "organization_id",
+          "columnName": "organization_id",
+          "type": "int4",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.team_id",
+          "name": "team_id",
+          "columnName": "team_id",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.team_name",
+          "name": "team_name",
+          "columnName": "team_name",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.bot_user_id",
+          "name": "bot_user_id",
+          "columnName": "bot_user_id",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.bot_access_token",
+          "name": "bot_access_token",
+          "columnName": "bot_access_token",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.slack_user_id",
+          "name": "slack_user_id",
+          "columnName": "slack_user_id",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.default_project_id",
+          "name": "default_project_id",
+          "columnName": "default_project_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.default_status",
+          "name": "default_status",
+          "columnName": "default_status",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.default_priority",
+          "name": "default_priority",
+          "columnName": "default_priority",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.default_execution_target",
+          "name": "default_execution_target",
+          "columnName": "default_execution_target",
+          "type": "ticket_execution_target",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.include_context",
+          "name": "include_context",
+          "columnName": "include_context",
+          "type": "bool",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.restrict_to_owner",
+          "name": "restrict_to_owner",
+          "columnName": "restrict_to_owner",
+          "type": "bool",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.created_at",
+          "name": "created_at",
+          "columnName": "created_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.slack_workspaces.updated_at",
+          "name": "updated_at",
+          "columnName": "updated_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "users",
+          "type": "users",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "slack_workspacesTousers",
+          "relationFromFields": [
+            "user_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "organizations",
+          "type": "organizations",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "slack_workspacesToorganizations",
+          "relationFromFields": [
+            "organization_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "projects",
+          "type": "projects",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "slack_workspacesToprojects",
+          "relationFromFields": [
+            "default_project_id"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "tickets",
+          "type": "tickets",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ticketsToslack_workspaces",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "slack_workspaces_pkey",
+          "fields": [
+            "id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "slack_workspaces_user_id_team_id_key",
+          "fields": [
+            "team_id",
+            "user_id"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
     "sso_domains": {
       "id": "auth.sso_domains",
       "schemaName": "auth",
@@ -10761,6 +11090,38 @@
           "maxLength": null
         },
         {
+          "id": "public.ticket_events.created_by",
+          "name": "created_by",
+          "columnName": "created_by",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "users",
+          "type": "users",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ticket_eventsTousers",
+          "relationFromFields": [
+            "created_by"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "agent_sessions",
           "type": "agent_sessions",
           "isRequired": false,
@@ -11158,7 +11519,7 @@
           "name": "created_by",
           "columnName": "created_by",
           "type": "uuid",
-          "isRequired": true,
+          "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
@@ -11242,7 +11603,7 @@
           "name": "project_id",
           "columnName": "project_id",
           "type": "uuid",
-          "isRequired": true,
+          "isRequired": false,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
@@ -11336,9 +11697,65 @@
           "maxLength": null
         },
         {
+          "id": "public.tickets.source",
+          "name": "source",
+          "columnName": "source",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.tickets.slack_workspace_id",
+          "name": "slack_workspace_id",
+          "columnName": "slack_workspace_id",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.tickets.slack_channel_id",
+          "name": "slack_channel_id",
+          "columnName": "slack_channel_id",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.tickets.slack_thread_ts",
+          "name": "slack_thread_ts",
+          "columnName": "slack_thread_ts",
+          "type": "text",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "users",
           "type": "users",
-          "isRequired": true,
+          "isRequired": false,
           "kind": "object",
           "relationName": "ticketsTousers",
           "relationFromFields": [
@@ -11374,7 +11791,7 @@
         {
           "name": "projects",
           "type": "projects",
-          "isRequired": true,
+          "isRequired": false,
           "kind": "object",
           "relationName": "ticketsToprojects",
           "relationFromFields": [
@@ -11403,6 +11820,24 @@
           ],
           "relationToFields": [
             "organization_id",
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "slack_workspaces",
+          "type": "slack_workspaces",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ticketsToslack_workspaces",
+          "relationFromFields": [
+            "slack_workspace_id"
+          ],
+          "relationToFields": [
             "id"
           ],
           "isList": false,
@@ -12560,20 +12995,6 @@
           "hasDefaultValue": false
         },
         {
-          "name": "agent_tokens",
-          "type": "agent_tokens",
-          "isRequired": false,
-          "kind": "object",
-          "relationName": "agent_tokensTousers",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
-          "isId": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false
-        },
-        {
           "name": "artifacts",
           "type": "artifacts",
           "isRequired": false,
@@ -12630,6 +13051,20 @@
           "hasDefaultValue": false
         },
         {
+          "name": "feed_posts",
+          "type": "feed_posts",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "feed_postsTousers",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "feedback",
           "type": "feedback",
           "isRequired": false,
@@ -12658,6 +13093,20 @@
           "hasDefaultValue": false
         },
         {
+          "name": "objectives",
+          "type": "objectives",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "objectivesTousers",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
           "name": "profiles",
           "type": "profiles",
           "isRequired": false,
@@ -12672,11 +13121,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "project_user_preferences",
-          "type": "project_user_preferences",
+          "name": "project_user",
+          "type": "project_user",
           "isRequired": false,
           "kind": "object",
-          "relationName": "project_user_preferencesTousers",
+          "relationName": "project_userTousers",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -12705,6 +13154,34 @@
           "isRequired": false,
           "kind": "object",
           "relationName": "serversTousers",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "slack_workspaces",
+          "type": "slack_workspaces",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "slack_workspacesTousers",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "ticket_events",
+          "type": "ticket_events",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ticket_eventsTousers",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,

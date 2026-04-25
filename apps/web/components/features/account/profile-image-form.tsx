@@ -8,6 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { removeProfileImageAction, uploadProfileImageAction } from '@/lib/actions/account';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { refreshElectronRoute } from '@/lib/electron-auth/route-refresh';
 import { cn } from '@/lib/utils';
 
 type ProfileImageFormProps = {
@@ -24,6 +26,9 @@ function getInitials(name: string): string {
 
   return parts.map(part => part[0]?.toUpperCase() ?? '').join('');
 }
+
+const uploadProfileImageActionWithRetry = withElectronActionRetry(uploadProfileImageAction);
+const removeProfileImageActionWithRetry = withElectronActionRetry(removeProfileImageAction);
 
 export function ProfileImageForm({ fallbackName, initialImageUrl }: ProfileImageFormProps) {
   const router = useRouter();
@@ -56,9 +61,9 @@ export function ProfileImageForm({ fallbackName, initialImageUrl }: ProfileImage
       try {
         const formData = new FormData();
         formData.set('file', file);
-        const nextImageUrl = await uploadProfileImageAction(formData);
+        const nextImageUrl = await uploadProfileImageActionWithRetry(formData);
         setImageUrl(nextImageUrl);
-        router.refresh();
+        await refreshElectronRoute(router);
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : 'Failed to upload image.');
       } finally {
@@ -119,10 +124,10 @@ export function ProfileImageForm({ fallbackName, initialImageUrl }: ProfileImage
     setErrorMessage(null);
 
     try {
-      await removeProfileImageAction();
+      await removeProfileImageActionWithRetry();
       setImageUrl('');
       setRemoveButtonState('success');
-      router.refresh();
+      await refreshElectronRoute(router);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Failed to remove image.');
       setRemoveButtonState('error');

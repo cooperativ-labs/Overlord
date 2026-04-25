@@ -7,6 +7,13 @@ import { useOptimistic, useTransition } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { setViewPreferenceAction } from '@/lib/actions/view-preference';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { refreshElectronRoute } from '@/lib/electron-auth/route-refresh';
+
+const upsertProjectUserPreferencesActionWithRetry = withElectronActionRetry(
+  upsertProjectUserPreferencesAction
+);
+const setViewPreferenceActionWithRetry = withElectronActionRetry(setViewPreferenceAction);
 
 export default function TicketsViewToggle({
   initialView,
@@ -23,11 +30,13 @@ export default function TicketsViewToggle({
     startTransition(async () => {
       setOptimisticView(nextView);
       if (projectId) {
-        await upsertProjectUserPreferencesAction(projectId, { preferred_view: nextView });
+        await upsertProjectUserPreferencesActionWithRetry(projectId, {
+          preferred_view: nextView
+        });
       } else {
-        await setViewPreferenceAction(nextView);
+        await setViewPreferenceActionWithRetry(nextView);
       }
-      router.refresh();
+      await refreshElectronRoute(router);
     });
   }
 

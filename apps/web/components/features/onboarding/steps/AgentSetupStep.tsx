@@ -6,8 +6,13 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { updateOnboardingProgressAction } from '@/lib/actions/onboarding';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { AGENT_TYPES, type AgentTypeValue } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
+
+const updateOnboardingProgressActionWithRetry = withElectronActionRetry(
+  updateOnboardingProgressAction
+);
 
 type Props = {
   initialPreferredAgent?: AgentTypeValue;
@@ -100,7 +105,7 @@ export function AgentSetupStep({ initialPreferredAgent, onContinue }: Props) {
   async function handleSelectAgent(value: AgentTypeValue) {
     setSelectedAgent(value);
     try {
-      await updateOnboardingProgressAction({ preferredAgent: value });
+      await updateOnboardingProgressActionWithRetry({ preferredAgent: value });
     } catch {
       // Non-blocking — preference save failure shouldn't interrupt the flow
     }

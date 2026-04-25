@@ -8,6 +8,14 @@ import {
   getProjectSlackDefaultStatusAction,
   updateProjectSlackDefaultStatusAction
 } from '@/lib/actions/slack';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+
+const getProjectSlackDefaultStatusActionWithRetry = withElectronActionRetry(
+  getProjectSlackDefaultStatusAction
+);
+const updateProjectSlackDefaultStatusActionWithRetry = withElectronActionRetry(
+  updateProjectSlackDefaultStatusAction
+);
 
 type ProjectSlackSettingsProps = {
   projectId: string;
@@ -23,7 +31,7 @@ export function ProjectSlackSettings({ projectId, open }: ProjectSlackSettingsPr
   useEffect(() => {
     if (!open) return;
     setLoaded(false);
-    getProjectSlackDefaultStatusAction(projectId)
+    getProjectSlackDefaultStatusActionWithRetry(projectId)
       .then(status => setDefaultStatus(status ?? ''))
       .finally(() => setLoaded(true));
   }, [open, projectId]);
@@ -31,7 +39,7 @@ export function ProjectSlackSettings({ projectId, open }: ProjectSlackSettingsPr
   async function handleSave() {
     setSaveState('loading');
     setMessage(null);
-    const result = await updateProjectSlackDefaultStatusAction(
+    const result = await updateProjectSlackDefaultStatusActionWithRetry(
       projectId,
       defaultStatus.trim() || null
     );

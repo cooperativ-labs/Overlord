@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { generateDateFromSchedule } from '@/lib/schedulingEngine';
 import { type ScheduleInput, scheduleInputSchema } from '@/lib/schemas/schedule';
-import { createClient } from '@/supabase/utils/server';
+import { createClientForRequest } from '@/supabase/utils/server';
 
 type ScheduleRow = {
   created_at: string;
@@ -90,7 +90,7 @@ export async function previewScheduledTicketDueDatetimeAction(
 }
 
 export async function getTicketScheduleAction(ticketId: string) {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
 
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
@@ -145,7 +145,7 @@ export async function upsertTicketScheduleAction(ticketId: string, input: Schedu
     throw new Error(parsed.error.issues[0]?.message ?? 'Invalid schedule.');
   }
 
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select('id,organization_id,project_id,due_datetime,schedule_id')
@@ -222,7 +222,7 @@ export async function upsertTicketScheduleAction(ticketId: string, input: Schedu
 }
 
 export async function clearTicketScheduleAction(ticketId: string) {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select('id,organization_id,project_id,schedule_id')
@@ -281,7 +281,7 @@ export async function clearTicketScheduleAction(ticketId: string) {
 }
 
 export async function getNextScheduledDueDatetimeForTicketAction(ticketId: string) {
-  const supabase = await createClient();
+  const supabase = await createClientForRequest();
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select('id,due_datetime,schedule_id')
