@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [5.1.0] - 2026-04-25:15:58
 
+## [5.2.0] - 2026-04-25:16:44
+
+### Added
+- None.
+
+### Fixed
+- aligned desktop with CLI.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Test
+- None.
+
+## [5.1.0] - 2026-04-25:15:58
+
 ### Added
 - Default desktop-installed CLI wrappers to `OVERLORD_URL=https://www.ovld.ai` and surface explicit local-dev override guidance for `http://localhost:3000`.
 - Preserve detailed network failure metadata in CLI auth/device and token-refresh flows so DNS and connectivity issues are actionable.
