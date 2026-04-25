@@ -174,22 +174,18 @@ function KanbanCardBody({
   return (
     <CardContent className="flex h-full flex-col p-0 pt-3  ">
       <div className="px-3">
-        <div className="min-w-0 gap-1">
-          <div className="flex items-start gap-2">
-            <div className="flex min-w-0 flex-1 items-start gap-2">
-              <span className="mt-1">
-                <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h4 className="text-sm leading-snug font-medium">{getDisplayTitle(ticket)}</h4>
-                {!ticket.project_id ? (
-                  <p className="text-[10px] text-muted-foreground">Personal • private to you</p>
-                ) : null}
-              </div>
-            </div>
+        <div className="min-w-0">
+          <h4 className="text-sm leading-snug font-semibold">{getDisplayTitle(ticket)}</h4>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
+            {ticket.project_id ? (
+              <span className="truncate text-xs text-muted-foreground">{ticket.project_name}</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Personal</span>
+            )}
           </div>
           {showOrganizationName && ticket.organization_name ? (
-            <p className="text-muted-foreground text-xs">{ticket.organization_name}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{ticket.organization_name}</p>
           ) : null}
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">

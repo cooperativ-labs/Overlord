@@ -3,9 +3,6 @@
     "shadcn": {
       "command": "npx",
       "args": ["shadcn@latest", "mcp"]
-    },
-    "Sentry": {
-      "url": "https://mcp.sentry.dev/mcp/cooperativ-labs/overlord-webapp"
     }
   }
 }

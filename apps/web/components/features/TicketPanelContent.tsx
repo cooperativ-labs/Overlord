@@ -32,6 +32,7 @@ import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
 import { createClient } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
+import { TicketToolsAndCriteria } from './TicketToolsAndCriteria';
 
 const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
 const CREATED_TICKET_WAIT_RETRIES = 12;
@@ -150,10 +151,10 @@ export async function TicketPanelContent({
       .order('name', { ascending: true }),
     ticket.schedule_id
       ? supabase
-          .from('schedule')
-          .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
-          .eq('id', ticket.schedule_id)
-          .maybeSingle()
+        .from('schedule')
+        .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
+        .eq('id', ticket.schedule_id)
+        .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
@@ -368,15 +369,15 @@ export async function TicketPanelContent({
                   initialSchedule={
                     schedule
                       ? {
-                          periodType: schedule.period_type,
-                          periodInterval: schedule.period_interval,
-                          daysOfWeek: Array.isArray(schedule.days_of_week)
-                            ? schedule.days_of_week
-                            : [],
-                          daysOfMonth: schedule.days_of_month ?? undefined,
-                          weeksOfMonth: schedule.weeks_of_month ?? undefined,
-                          timezone: schedule.timezone
-                        }
+                        periodType: schedule.period_type,
+                        periodInterval: schedule.period_interval,
+                        daysOfWeek: Array.isArray(schedule.days_of_week)
+                          ? schedule.days_of_week
+                          : [],
+                        daysOfMonth: schedule.days_of_month ?? undefined,
+                        weeksOfMonth: schedule.weeks_of_month ?? undefined,
+                        timezone: schedule.timezone
+                      }
                       : null
                   }
                 />
@@ -398,12 +399,12 @@ export async function TicketPanelContent({
             </div>
           </section>
           <section className="flex flex-col px-5 pt-5 ">
-            {/* <TicketToolsAndCriteria
+            <TicketToolsAndCriteria
               organizationId={organizationId}
               ticketId={ticketId}
               availableTools={ticket.available_tools}
               acceptanceCriteria={ticket.acceptance_criteria}
-            /> */}
+            />
 
             <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
 
