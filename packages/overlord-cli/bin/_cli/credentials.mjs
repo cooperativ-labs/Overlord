@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const CREDENTIALS_DIR = path.join(os.homedir(), '.ovld');
 const CLI_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.cli.json');
+const DESKTOP_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.desktop.json');
 const LEGACY_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
 const LEGACY_ELECTRON_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'electron-credentials.json');
 const LEGACY_MIGRATION_MARKER = path.join(CREDENTIALS_DIR, '.cli-migrated');
@@ -24,7 +25,8 @@ const LOCAL_SECRET_HEADER = 'X-Overlord-Local-Secret';
  *   refresh_token?: string,
  *   organization_id?: number | null,
  *   platform_url: string,
- *   user_email?: string
+ *   user_email?: string,
+ *   updated_at?: string
  * }} Credentials
  */
 
@@ -93,6 +95,9 @@ function parseStoredCredentialsData(parsed, { requireAuthData = false } = {}) {
     ...(organizationId ? { organization_id: organizationId } : {}),
     ...(typeof parsed.user_email === 'string' && parsed.user_email.trim()
       ? { user_email: parsed.user_email.trim() }
+      : {}),
+    ...(typeof parsed.updated_at === 'string' && parsed.updated_at.trim()
+      ? { updated_at: parsed.updated_at.trim() }
       : {})
   };
 }
@@ -112,7 +117,8 @@ function normalizeCredentialsForSave(data) {
       ? { access_token_expires_at: parsed.access_token_expires_at }
       : {}),
     ...(parsed.organization_id ? { organization_id: parsed.organization_id } : {}),
-    ...(parsed.user_email ? { user_email: parsed.user_email } : {})
+    ...(parsed.user_email ? { user_email: parsed.user_email } : {}),
+    ...(parsed.updated_at ? { updated_at: parsed.updated_at } : {})
   };
 }
 
@@ -140,13 +146,57 @@ function migrateLegacyCredentials() {
   return source;
 }
 
+function resolveAccessTokenExpiry(credentials) {
+  if (!credentials?.access_token) return null;
+  if (credentials.access_token_expires_at) {
+    const parsed = Date.parse(credentials.access_token_expires_at);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  const jwtExp = decodeJwtExpiry(credentials.access_token);
+  return jwtExp ? jwtExp * 1000 : null;
+}
+
+function isAccessTokenFresh(credentials) {
+  const expiresAt = resolveAccessTokenExpiry(credentials);
+  if (expiresAt === null) return false;
+  return expiresAt - Date.now() > 60_000;
+}
+
+function credentialsUpdatedAt(credentials) {
+  const parsed = Date.parse(credentials?.updated_at ?? '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function selectStoredCredentials() {
+  const candidates = [
+    {
+      source: 'credentials.cli.json',
+      credentials: parseStoredCredentialsData(readJsonFile(CLI_CREDENTIALS_FILE), {
+        requireAuthData: true
+      })
+    },
+    {
+      source: 'credentials.desktop.json',
+      credentials: parseStoredCredentialsData(readJsonFile(DESKTOP_CREDENTIALS_FILE), {
+        requireAuthData: true
+      })
+    }
+  ].filter(candidate => candidate.credentials?.refresh_token);
+
+  if (candidates.length === 0) return null;
+
+  const fresh = candidates.filter(candidate => isAccessTokenFresh(candidate.credentials));
+  const pool = fresh.length > 0 ? fresh : candidates;
+  return pool.sort(
+    (left, right) =>
+      credentialsUpdatedAt(right.credentials) - credentialsUpdatedAt(left.credentials)
+  )[0];
+}
+
 /** @returns {Credentials | null} */
 export function loadCredentials() {
-  const cliCredentials = parseStoredCredentialsData(readJsonFile(CLI_CREDENTIALS_FILE), {
-    requireAuthData: true
-  });
-
-  if (cliCredentials?.refresh_token) return cliCredentials;
+  const selected = selectStoredCredentials();
+  if (selected?.credentials) return selected.credentials;
 
   return migrateLegacyCredentials();
 }
@@ -161,6 +211,16 @@ export function saveCredentials(data) {
   writeJsonFileAtomic(CLI_CREDENTIALS_FILE, { ...credentials, updated_at: new Date().toISOString() });
 }
 
+function saveCredentialsToSource(data, source) {
+  const credentials = normalizeCredentialsForSave(data);
+  if (!credentials) {
+    throw new Error('Cannot save empty Overlord credentials.');
+  }
+
+  const filePath = source === 'credentials.desktop.json' ? DESKTOP_CREDENTIALS_FILE : CLI_CREDENTIALS_FILE;
+  writeJsonFileAtomic(filePath, { ...credentials, updated_at: new Date().toISOString() });
+}
+
 export function clearCredentials() {
   try {
     fs.unlinkSync(CLI_CREDENTIALS_FILE);
@@ -170,10 +230,8 @@ export function clearCredentials() {
 }
 
 function getCredentialFileSource() {
-  const cliCredentials = parseStoredCredentialsData(readJsonFile(CLI_CREDENTIALS_FILE), {
-    requireAuthData: true
-  });
-  if (cliCredentials?.refresh_token) return 'credentials.cli.json';
+  const selected = selectStoredCredentials();
+  if (selected) return selected.source;
 
   if (fileExists(LEGACY_CREDENTIALS_FILE)) {
     const legacyShared = parseStoredCredentialsData(readJsonFile(LEGACY_CREDENTIALS_FILE), {
@@ -338,22 +396,6 @@ function computeAccessTokenExpiry(data) {
   return jwtExp ? new Date(jwtExp * 1000).toISOString() : null;
 }
 
-function resolveAccessTokenExpiry(credentials) {
-  if (!credentials?.access_token) return null;
-  if (credentials.access_token_expires_at) {
-    const parsed = Date.parse(credentials.access_token_expires_at);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  const jwtExp = decodeJwtExpiry(credentials.access_token);
-  return jwtExp ? jwtExp * 1000 : null;
-}
-
-function isAccessTokenFresh(credentials) {
-  const expiresAt = resolveAccessTokenExpiry(credentials);
-  if (expiresAt === null) return false;
-  return expiresAt - Date.now() > 60_000;
-}
-
 function describeNetworkError(error, context) {
   const cause = error?.cause;
   const details = [cause?.code, cause?.message].filter(Boolean).join(': ');
@@ -483,7 +525,8 @@ function isLocalDevCli() {
  * Refreshes OAuth access tokens when possible.
  */
 export async function resolveAuth() {
-  const creds = loadCredentials();
+  const selectedCredentials = selectStoredCredentials();
+  const creds = selectedCredentials?.credentials ?? migrateLegacyCredentials();
   const overlordUrlFromEnv = normalizePlatformUrl(process.env.OVERLORD_URL);
   const overlordUrlFromCreds = normalizeStoredPlatformUrl(creds?.platform_url);
 
@@ -540,7 +583,7 @@ export async function resolveAuth() {
           access_token_expires_at: refreshed.access_token_expires_at,
           refresh_token: refreshed.refresh_token || creds.refresh_token
         };
-        saveCredentials(nextCredentials);
+        saveCredentialsToSource(nextCredentials, selectedCredentials?.source);
       } catch (refreshError) {
         throw new Error(
           `Stored Overlord session expired and refresh failed. ${refreshError instanceof Error ? refreshError.message : String(refreshError)} Run \`ovld auth login\` again.`

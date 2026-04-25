@@ -64,6 +64,12 @@ export async function GET(request: Request) {
   });
 
   if (!tokenRes.ok) {
+    const body = await tokenRes.text().catch(() => '');
+    console.error('[device-oauth] token exchange failed', {
+      status: tokenRes.status,
+      body: body.slice(0, 500),
+      redirectUri
+    });
     return NextResponse.redirect(`${getPlatformUrl()}/auth/device?error=approval_failed`);
   }
 

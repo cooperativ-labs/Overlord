@@ -43,6 +43,7 @@ const priorityColors: Record<TicketPriority, string> = {
 export default function CreateTicketScreen() {
   const router = useRouter();
   const [objective, setObjective] = useState('');
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('medium');
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
@@ -102,6 +103,8 @@ export default function CreateTicketScreen() {
           priority,
           organization_id: selectedProject.organization_id,
           project_id: selectedProjectId,
+          acceptance_criteria:
+            acceptanceCriteria.trim().length > 0 ? acceptanceCriteria.trim() : null,
           assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null
         })
         .select('id, organization_id')
@@ -188,6 +191,19 @@ export default function CreateTicketScreen() {
             placeholderTextColor={colors.mutedForeground}
             multiline
             autoFocus
+            textAlignVertical="top"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Acceptance criteria</Text>
+          <TextInput
+            style={styles.criteriaInput}
+            value={acceptanceCriteria}
+            onChangeText={setAcceptanceCriteria}
+            placeholder="Define when this ticket is complete..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
             textAlignVertical="top"
           />
         </View>
@@ -325,6 +341,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     minHeight: 140
+  },
+  criteriaInput: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    color: colors.foreground,
+    fontSize: 15,
+    lineHeight: 22,
+    minHeight: 110
   },
   selector: {
     backgroundColor: colors.card,

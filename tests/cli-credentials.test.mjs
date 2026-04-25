@@ -133,7 +133,17 @@ test(`${MODULE_PATH} saveCredentials writes to credentials.cli.json only`, async
     assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.json')), false);
     assert.equal(fs.existsSync(path.join(ovldDir, 'electron-credentials.json')), false);
 
-    assert.deepEqual(loadCredentials(), buildOAuthCredentials({ organization_id: 11 }));
+    const loadedCredentials = loadCredentials();
+    assert.deepEqual(
+      {
+        access_token: loadedCredentials.access_token,
+        access_token_expires_at: loadedCredentials.access_token_expires_at,
+        refresh_token: loadedCredentials.refresh_token,
+        organization_id: loadedCredentials.organization_id,
+        platform_url: loadedCredentials.platform_url
+      },
+      buildOAuthCredentials({ organization_id: 11 })
+    );
   });
 });
 
@@ -296,7 +306,97 @@ test(`${MODULE_PATH} repairCredentials writes to credentials.cli.json`, async ()
   });
 });
 
-test(`${MODULE_PATH} CLI and Desktop credential files are independent`, async () => {
+test(`${MODULE_PATH} loadCredentials prefers fresh desktop credentials over stale CLI credentials`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+
+    writeJson(
+      path.join(ovldDir, 'credentials.cli.json'),
+      buildOAuthCredentials({
+        access_token: 'stale-cli-token',
+        refresh_token: 'stale-cli-refresh',
+        access_token_expires_at: '2000-01-01T00:00:00.000Z',
+        updated_at: '2000-01-01T00:00:00.000Z'
+      })
+    );
+    writeJson(
+      path.join(ovldDir, 'credentials.desktop.json'),
+      buildOAuthCredentials({
+        access_token: 'fresh-desktop-token',
+        refresh_token: 'fresh-desktop-refresh',
+        updated_at: '2999-01-01T00:00:00.000Z'
+      })
+    );
+
+    const { loadCredentials, getAuthStatus } = await importFresh(MODULE_PATH);
+
+    const creds = loadCredentials();
+    assert.equal(creds.access_token, 'fresh-desktop-token');
+    assert.equal(creds.refresh_token, 'fresh-desktop-refresh');
+
+    const status = await getAuthStatus();
+    assert.equal(status.tokenSource, 'credentials.desktop.json');
+  });
+});
+
+test(`${MODULE_PATH} resolveAuth refreshes expired desktop credentials back to desktop file`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(
+      path.join(ovldDir, 'credentials.desktop.json'),
+      buildOAuthCredentials({
+        access_token: 'expired-desktop-token',
+        refresh_token: 'desktop-refresh-token',
+        access_token_expires_at: '2000-01-01T00:00:00.000Z',
+        updated_at: '2999-01-01T00:00:00.000Z'
+      })
+    );
+
+    const originalFetch = global.fetch;
+    global.fetch = async (url, init = {}) => {
+      if (String(url).endsWith('/api/auth/config')) {
+        return {
+          ok: true,
+          json: async () => ({
+            supabase_url: 'https://zitmmhvbilhjjdwgxlfm.supabase.co',
+            cli_client_id: 'cli-client-id'
+          })
+        };
+      }
+
+      if (String(url).includes('/auth/v1/oauth/token') && init.method === 'POST') {
+        return {
+          ok: true,
+          json: async () => ({
+            access_token: 'refreshed-desktop-token',
+            refresh_token: 'rotated-desktop-refresh-token',
+            expires_in: 3600
+          })
+        };
+      }
+
+      throw new Error(`Unexpected fetch: ${String(url)}`);
+    };
+
+    try {
+      const { resolveAuth } = await importFresh(MODULE_PATH);
+      const result = await resolveAuth();
+
+      assert.equal(result.bearerToken, 'refreshed-desktop-token');
+
+      const desktopCredentials = JSON.parse(
+        fs.readFileSync(path.join(ovldDir, 'credentials.desktop.json'), 'utf8')
+      );
+      assert.equal(desktopCredentials.access_token, 'refreshed-desktop-token');
+      assert.equal(desktopCredentials.refresh_token, 'rotated-desktop-refresh-token');
+      assert.equal(fs.existsSync(path.join(ovldDir, 'credentials.cli.json')), false);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+test(`${MODULE_PATH} CLI and Desktop credential files are independent when saving`, async () => {
   await withTempHome(async tempHome => {
     const ovldDir = path.join(tempHome, '.ovld');
 

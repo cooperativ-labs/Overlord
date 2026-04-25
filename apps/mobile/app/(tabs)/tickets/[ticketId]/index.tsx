@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -48,6 +51,15 @@ type Project = {
   id: string;
   name: string;
   color: string;
+};
+
+type TicketDocument = {
+  id: string;
+  label: string;
+  storagePath: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: string;
 };
 
 const eventIcons: Record<string, { name: string; color: string }> = {
@@ -100,18 +112,23 @@ export default function TicketDetailScreen() {
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
+  const [showAcceptanceCriteria, setShowAcceptanceCriteria] = useState(true);
+  const [documents, setDocuments] = useState<TicketDocument[]>([]);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
   const [showCliQuickstart, setShowCliQuickstart] = useState(false);
   const [activityFilter, setActivityFilter] = useState<'all' | 'completed'>('all');
   const [showPromptMenu, setShowPromptMenu] = useState(false);
   const [copyingPromptContext, setCopyingPromptContext] = useState<'cli' | 'web' | null>(null);
+  const [acceptanceCriteriaDraft, setAcceptanceCriteriaDraft] = useState('');
+  const [savingAcceptanceCriteria, setSavingAcceptanceCriteria] = useState(false);
 
   const loadData = useCallback(async () => {
     const supabase = getSupabase();
-    const [ticketRes, objectivesRes, eventsRes, projectsRes] = await Promise.all([
+    const [ticketRes, objectivesRes, eventsRes, projectsRes, documentsRes] = await Promise.all([
       supabase
         .from('tickets')
         .select(
-          'id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
+          'id, organization_id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
         )
         .eq('id', ticketId)
         .single(),
@@ -126,7 +143,13 @@ export default function TicketDetailScreen() {
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false })
         .limit(30),
-      supabase.from('projects').select('id, name, color').order('name', { ascending: true })
+      supabase.from('projects').select('id, name, color').order('name', { ascending: true }),
+      supabase
+        .from('artifacts')
+        .select('id, label, storage_path, metadata, created_at')
+        .eq('ticket_id', ticketId)
+        .not('storage_path', 'is', null)
+        .order('created_at', { ascending: false })
     ]);
 
     if (ticketRes.data) {
@@ -136,6 +159,21 @@ export default function TicketDetailScreen() {
     if (objectivesRes.data) setObjectives(objectivesRes.data);
     if (eventsRes.data) setEvents(eventsRes.data as TicketEvent[]);
     if (projectsRes.data) setProjects(projectsRes.data);
+    if (documentsRes.data) {
+      setDocuments(
+        documentsRes.data.map(document => {
+          const metadata = (document.metadata ?? {}) as Record<string, unknown>;
+          return {
+            id: document.id,
+            label: document.label,
+            storagePath: document.storage_path ?? '',
+            fileType: typeof metadata.type === 'string' ? metadata.type : '',
+            fileSize: typeof metadata.size === 'number' ? metadata.size : 0,
+            createdAt: document.created_at
+          };
+        })
+      );
+    }
     if (ticketRes.error) {
       Alert.alert('Unable to load ticket', ticketRes.error.message);
     } else if (eventsRes.error) {
@@ -235,6 +273,10 @@ export default function TicketDetailScreen() {
   useEffect(() => {
     setAssignedSelection(selectionFromAssignedAgent(ticket?.assigned_agent));
   }, [ticket?.assigned_agent]);
+
+  useEffect(() => {
+    setAcceptanceCriteriaDraft(ticket?.acceptance_criteria ?? '');
+  }, [ticket?.acceptance_criteria]);
 
   useFocusEffect(
     useCallback(() => {
@@ -399,6 +441,198 @@ export default function TicketDetailScreen() {
       );
     } finally {
       setSavingProject(false);
+    }
+  }
+
+  function sanitizeFileName(fileName: string): string {
+    const sanitized = fileName
+      .replace(/[\\/\0]/g, '-')
+      .replace(/[\r\n\t]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!sanitized) {
+      return 'artifact';
+    }
+    return sanitized.slice(0, 180);
+  }
+
+  async function uploadDocument(options: {
+    uri: string;
+    fileName: string;
+    mimeType: string;
+    fileSize: number;
+  }) {
+    if (!ticket || uploadingDocument) return;
+
+    setUploadingDocument(true);
+    try {
+      const supabase = getSupabase();
+      const storagePath = `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${Date.now()}-${sanitizeFileName(options.fileName)}`;
+      const response = await fetch(options.uri);
+      const blob = await response.blob();
+      const buffer = await blob.arrayBuffer();
+
+      const { error: uploadError } = await supabase.storage.from('artifacts').upload(storagePath, buffer, {
+        contentType: options.mimeType,
+        upsert: false
+      });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { error: artifactError } = await supabase.from('artifacts').insert({
+        ticket_id: ticket.id,
+        artifact_type: options.mimeType.startsWith('image/') ? 'image' : 'document',
+        label: options.fileName,
+        storage_path: storagePath,
+        metadata: {
+          size: options.fileSize,
+          type: options.mimeType,
+          fileName: options.fileName
+        }
+      });
+
+      if (artifactError) {
+        throw new Error(artifactError.message);
+      }
+
+      const { error: eventError } = await supabase.from('ticket_events').insert({
+        event_type: 'artifact',
+        summary: `Document uploaded from mobile: ${options.fileName}`,
+        ticket_id: ticket.id
+      });
+
+      if (eventError) {
+        console.error('Failed to record upload event:', eventError.message);
+      }
+
+      await loadData();
+      setShowDocuments(true);
+    } catch (error) {
+      Alert.alert(
+        'Upload failed',
+        error instanceof Error ? error.message : 'An unexpected upload error occurred.'
+      );
+    } finally {
+      setUploadingDocument(false);
+    }
+  }
+
+  async function handleTakePhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Camera permission needed', 'Enable camera access to take a photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.85
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    await uploadDocument({
+      uri: asset.uri,
+      fileName: asset.fileName ?? `photo-${Date.now()}.jpg`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      fileSize: asset.fileSize ?? 0
+    });
+  }
+
+  async function handleSelectImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Photo library permission needed', 'Enable photo library access to select images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    await uploadDocument({
+      uri: asset.uri,
+      fileName: asset.fileName ?? `image-${Date.now()}.jpg`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      fileSize: asset.fileSize ?? 0
+    });
+  }
+
+  async function handleSelectFile() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      multiple: false
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    await uploadDocument({
+      uri: asset.uri,
+      fileName: asset.name,
+      mimeType: asset.mimeType ?? 'application/octet-stream',
+      fileSize: asset.size ?? 0
+    });
+  }
+
+  async function handleOpenDocument(document: TicketDocument) {
+    try {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.storage
+        .from('artifacts')
+        .createSignedUrl(document.storagePath, 3600);
+
+      if (error || !data?.signedUrl) {
+        throw new Error(error?.message ?? 'Unable to open document.');
+      }
+
+      await Linking.openURL(data.signedUrl);
+    } catch (error) {
+      Alert.alert(
+        'Unable to open document',
+        error instanceof Error ? error.message : 'Please try again.'
+      );
+    }
+  }
+
+  async function handleSaveAcceptanceCriteria() {
+    if (!ticket || savingAcceptanceCriteria) return;
+
+    setSavingAcceptanceCriteria(true);
+    try {
+      const nextCriteria = acceptanceCriteriaDraft.trim();
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('tickets')
+        .update({ acceptance_criteria: nextCriteria.length > 0 ? nextCriteria : null })
+        .eq('id', ticket.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { error: eventError } = await supabase.from('ticket_events').insert({
+        event_type: 'system',
+        summary: 'Acceptance criteria updated from mobile.',
+        ticket_id: ticket.id
+      });
+
+      if (eventError) {
+        console.error('Failed to record acceptance criteria update:', eventError.message);
+      }
+
+      await loadData();
+    } catch (error) {
+      Alert.alert(
+        'Unable to save acceptance criteria',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      setSavingAcceptanceCriteria(false);
     }
   }
 
@@ -803,6 +1037,10 @@ export default function TicketDetailScreen() {
   const hasObjectiveChanges = normalizedObjectiveDraft !== normalizedSavedDraft;
   const canSaveObjective =
     !savingObjective && normalizedObjectiveDraft.length > 0 && hasObjectiveChanges;
+  const normalizedCriteriaDraft = acceptanceCriteriaDraft.trim();
+  const normalizedSavedCriteria = (ticket.acceptance_criteria ?? '').trim();
+  const canSaveAcceptanceCriteria =
+    !savingAcceptanceCriteria && normalizedCriteriaDraft !== normalizedSavedCriteria;
 
   function toggleObjectiveExpanded(objectiveId: string) {
     setExpandedObjectiveIds(current =>
@@ -1096,6 +1334,73 @@ export default function TicketDetailScreen() {
           open={showDocuments}
           onToggle={() => setShowDocuments(open => !open)}
         >
+          <View style={styles.documentActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.documentActionButton,
+                uploadingDocument && styles.documentActionButtonDisabled,
+                pressed && styles.pressed
+              ]}
+              onPress={() => void handleTakePhoto()}
+              disabled={uploadingDocument}
+            >
+              <Ionicons name="camera-outline" size={14} color={colors.foreground} />
+              <Text style={styles.documentActionText}>Take image</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.documentActionButton,
+                uploadingDocument && styles.documentActionButtonDisabled,
+                pressed && styles.pressed
+              ]}
+              onPress={() => void handleSelectImage()}
+              disabled={uploadingDocument}
+            >
+              <Ionicons name="images-outline" size={14} color={colors.foreground} />
+              <Text style={styles.documentActionText}>Select image</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.documentActionButton,
+                uploadingDocument && styles.documentActionButtonDisabled,
+                pressed && styles.pressed
+              ]}
+              onPress={() => void handleSelectFile()}
+              disabled={uploadingDocument}
+            >
+              <Ionicons name="document-attach-outline" size={14} color={colors.foreground} />
+              <Text style={styles.documentActionText}>Select file</Text>
+            </Pressable>
+          </View>
+          {uploadingDocument && (
+            <View style={styles.documentUploadingRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.documentUploadingText}>Uploading document...</Text>
+            </View>
+          )}
+          {documents.length > 0 && (
+            <View style={styles.documentList}>
+              {documents.map(document => (
+                <Pressable
+                  key={document.id}
+                  style={({ pressed }) => [styles.documentRow, pressed && styles.pressed]}
+                  onPress={() => void handleOpenDocument(document)}
+                >
+                  <Ionicons
+                    name={document.fileType.startsWith('image/') ? 'image-outline' : 'document-outline'}
+                    size={15}
+                    color={colors.foreground}
+                  />
+                  <Text style={styles.documentName} numberOfLines={1}>
+                    {document.label}
+                  </Text>
+                  <Text style={styles.documentMeta}>
+                    {new Date(document.createdAt).toLocaleDateString()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
           {ticket.context.trim() !== '' && (
             <View style={styles.docBlock}>
               <Text style={styles.docLabel}>Context</Text>
@@ -1116,9 +1421,43 @@ export default function TicketDetailScreen() {
           )}
           {ticket.context.trim() === '' &&
             ticket.constraints.trim() === '' &&
-            !ticket.acceptance_criteria && (
+            !ticket.acceptance_criteria &&
+            documents.length === 0 && (
               <Text style={styles.docEmpty}>No documents attached.</Text>
             )}
+        </CollapsibleSection>
+
+        <CollapsibleSection
+          label="ACCEPTANCE CRITERIA"
+          open={showAcceptanceCriteria}
+          onToggle={() => setShowAcceptanceCriteria(open => !open)}
+        >
+          <TextInput
+            style={styles.criteriaInput}
+            value={acceptanceCriteriaDraft}
+            onChangeText={setAcceptanceCriteriaDraft}
+            placeholder="Define completion criteria for this ticket..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            textAlignVertical="top"
+          />
+          {canSaveAcceptanceCriteria && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.saveCriteriaButton,
+                savingAcceptanceCriteria && styles.documentActionButtonDisabled,
+                pressed && styles.pressed
+              ]}
+              onPress={() => void handleSaveAcceptanceCriteria()}
+              disabled={savingAcceptanceCriteria}
+            >
+              {savingAcceptanceCriteria ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <Text style={styles.saveCriteriaButtonText}>Save acceptance criteria</Text>
+              )}
+            </Pressable>
+          )}
         </CollapsibleSection>
 
         <CollapsibleSection
@@ -1649,6 +1988,57 @@ const styles = StyleSheet.create({
   docLabel: { color: colors.mutedForeground, fontSize: 12, fontWeight: '600' },
   docBody: { color: colors.foreground, fontSize: 14, lineHeight: 20 },
   docEmpty: { color: colors.mutedForeground, fontSize: 13, fontStyle: 'italic' },
+  documentActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  documentActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.secondary,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  documentActionButtonDisabled: { opacity: 0.55 },
+  documentActionText: { color: colors.foreground, fontSize: 12, fontWeight: '500' },
+  documentUploadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  documentUploadingText: { color: colors.mutedForeground, fontSize: 12 },
+  documentList: { marginTop: 4, borderRadius: 8, overflow: 'hidden' },
+  documentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    marginBottom: 6
+  },
+  documentName: { flex: 1, color: colors.foreground, fontSize: 13 },
+  documentMeta: { color: colors.mutedForeground, fontSize: 11 },
+  criteriaInput: {
+    minHeight: 96,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    padding: 12,
+    color: colors.foreground,
+    fontSize: 14,
+    lineHeight: 20
+  },
+  saveCriteriaButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.primary
+  },
+  saveCriteriaButtonText: { color: colors.primaryForeground, fontSize: 13, fontWeight: '600' },
   cliCopy: {
     flexDirection: 'row',
     alignItems: 'center',

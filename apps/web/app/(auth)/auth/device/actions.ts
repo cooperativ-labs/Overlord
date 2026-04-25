@@ -96,7 +96,7 @@ export async function approveDevice(userCode: string): Promise<void> {
   authorizeUrl.searchParams.set('state', state);
   authorizeUrl.searchParams.set('code_challenge', challenge);
   authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-  authorizeUrl.searchParams.set('scope', 'openid email profile offline_access');
+  authorizeUrl.searchParams.set('scope', 'openid email profile');
 
   redirect(authorizeUrl.toString());
 }

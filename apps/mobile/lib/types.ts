@@ -89,6 +89,7 @@ export interface TicketListItem {
 /** Full ticket detail view. */
 export interface TicketDetail {
   id: string;
+  organization_id: number;
   title: string | null;
   status: string;
   priority: TicketPriority;

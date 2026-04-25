@@ -28,6 +28,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Overlord to use your camera to attach ticket photos.",
+          "photosPermission": "Allow Overlord to access your photos to attach ticket images."
+        }
+      ],
+      "expo-document-picker",
       "expo-secure-store",
       [
         "expo-notifications",
