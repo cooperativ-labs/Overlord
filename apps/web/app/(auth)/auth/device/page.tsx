@@ -41,7 +41,7 @@ export default async function DeviceAuthPage({
     no_organization: 'Your account has no organization. Please complete onboarding first.',
     session_missing: 'A valid OAuth session was not available. Please sign in and try again.',
     oauth_not_configured:
-      'OAuth is not configured on this server. Ask an admin to set SUPABASE_OAUTH_CLI_CLIENT_ID.',
+      'Device OAuth is not configured on this server. Ask an admin to set SUPABASE_OAUTH_DEVICE_CLIENT_ID.',
     approval_failed: 'Failed to approve device. Please try again.'
   };
 
