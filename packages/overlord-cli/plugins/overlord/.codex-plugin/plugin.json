@@ -1,6 +1,6 @@
 {
   "name": "overlord",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Chat-driven access to Overlord ticket protocol workflows.",
   "author": {
     "name": "Cooperativ",
@@ -23,9 +23,9 @@
     "privacyPolicyURL": "https://www.ovld.ai/privacy",
     "termsOfServiceURL": "https://www.ovld.ai/terms",
     "defaultPrompt": [
-      "Attach to Overlord ticket 123 and summarize the context before editing code",
-      "Post an execute update to this Overlord ticket after a meaningful implementation step",
-      "Deliver this Overlord ticket with artifacts and change rationales"
+      "Create an Overlord ticket with the objective 'Implement feature X' and summarize the context before editing code",
+      "Execute Overlord ticket [ticket-id]",
+      "Find all Overlord tickets with the status 'next-up' and prioritize the most important one"
     ],
     "brandColor": "#1E6B5C",
     "composerIcon": "./assets/icon.png",
