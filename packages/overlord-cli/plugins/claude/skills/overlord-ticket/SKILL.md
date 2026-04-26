@@ -145,3 +145,5 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - Use `write-context` for facts a future agent session should know.
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
+
+<!-- version: 0.1.0 -->

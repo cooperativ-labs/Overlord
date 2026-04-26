@@ -128,3 +128,5 @@ ovld protocol spawn --agent codex --objective "Implement feature X" --priority m
 - Prefer the installed `ovld` CLI and the plugin's MCP tools instead of ad hoc repo scripts.
 - Do not create or rely on a local Codex `AGENTS.md` bundle for Overlord.
 - When the ticket was launched by Overlord, the ticket prompt remains authoritative for the specific task objective and ticket-level constraints.
+
+<!-- version: 0.2.0 -->

@@ -133,3 +133,5 @@ The CLI also exposes the two-step variants `artifact-prepare-upload` and `artifa
 - Include at least one progress update before delivering.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
+
+<!-- version: 0.1.0 -->

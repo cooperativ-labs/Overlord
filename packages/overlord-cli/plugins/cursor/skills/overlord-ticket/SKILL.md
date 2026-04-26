@@ -33,3 +33,5 @@ Use this skill whenever Cursor needs to work with Overlord, whether the session 
 - Use `ovld protocol` commands, the plugin commands, and the MCP tool instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
 - Include at least one progress update before delivering.
+
+<!-- version: 0.1.0 -->
