@@ -3,6 +3,7 @@
  * Centralised here to prevent drift between views.
  */
 
+import type { SidebarProject } from '@/lib/actions/project-types';
 import type {
   BoardBootstrap,
   BoardScope,
@@ -86,6 +87,63 @@ export function buildBoardBootstrap(input: {
     scope: input.scope,
     tickets: input.tickets.map(toBoardTicket),
     statuses: input.statuses.map(toBoardStatus)
+  };
+}
+
+export type OptimisticTicketProject = {
+  project_id: string | null;
+  project_name: string | null;
+  project_color: string | null;
+  project_everhour_project_id: string | null;
+  organization_id: number | null;
+};
+
+/**
+ * Resolves the project metadata to display on an optimistic ticket created
+ * inline (no project chooser). Prefers an explicit URL projectId, then the
+ * user's default project, then a sibling ticket. Without this, optimistic
+ * tickets on /u inherited the first sibling's project info while the server
+ * actually saved them under the user's default project.
+ */
+export function resolveOptimisticTicketProject(input: {
+  projectId?: string;
+  defaultProject?: SidebarProject | null;
+  referenceTicket?: Pick<
+    BoardTicket,
+    'project_id' | 'project_name' | 'project_color' | 'project_everhour_project_id' | 'organization_id'
+  > | null;
+}): OptimisticTicketProject {
+  const { projectId, defaultProject, referenceTicket } = input;
+
+  if (projectId) {
+    const matchesReference = referenceTicket?.project_id === projectId;
+    return {
+      project_id: projectId,
+      project_name: matchesReference ? (referenceTicket?.project_name ?? null) : null,
+      project_color: matchesReference ? (referenceTicket?.project_color ?? null) : null,
+      project_everhour_project_id: matchesReference
+        ? (referenceTicket?.project_everhour_project_id ?? null)
+        : null,
+      organization_id: referenceTicket?.organization_id ?? null
+    };
+  }
+
+  if (defaultProject) {
+    return {
+      project_id: defaultProject.id,
+      project_name: defaultProject.name,
+      project_color: defaultProject.color,
+      project_everhour_project_id: defaultProject.everhourProjectId ?? null,
+      organization_id: defaultProject.organizationId
+    };
+  }
+
+  return {
+    project_id: null,
+    project_name: 'Personal',
+    project_color: null,
+    project_everhour_project_id: null,
+    organization_id: referenceTicket?.organization_id ?? null
   };
 }
 

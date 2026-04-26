@@ -16,6 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
+import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { loadMoreTicketsAction, markTicketsReadAction } from '@/lib/actions/tickets';
@@ -105,6 +106,7 @@ import {
   buildBoardScope,
   formatStatusLabel,
   getPathTicketId,
+  resolveOptimisticTicketProject,
   toBoardTicket,
   toViewTicket
 } from './ticket-view-helpers';
@@ -237,6 +239,7 @@ export default function KanbanBoard({
   const queryClient = useQueryClient();
   const [, startTransition] = useTransition();
   const projectSettings = useProjectSettings();
+  const { defaultProject } = useDefaultProject();
   const boardScope = useMemo(
     () => buildBoardScope({ organizationId, projectId }),
     [organizationId, projectId]
@@ -1191,18 +1194,23 @@ export default function KanbanBoard({
     const referenceTicket =
       previous.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? previous[0];
 
+    const optimisticProject = resolveOptimisticTicketProject({
+      projectId,
+      defaultProject,
+      referenceTicket
+    });
+    const effectiveProjectId = optimisticProject.project_id ?? undefined;
+
     const optimisticTicket: Ticket = {
       id: clientTicketId,
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
-      organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
-      project_id: projectId ?? referenceTicket?.project_id ?? null,
-      project_name: referenceTicket?.project_name ?? (projectId ? null : 'Personal'),
-      project_color: referenceTicket?.project_color ?? null,
-      project_everhour_project_id:
-        (projectId ?? referenceTicket?.project_id)
-          ? (referenceTicket?.project_everhour_project_id ?? null)
-          : null,
+      organization_id:
+        organizationId ?? optimisticProject.organization_id ?? referenceTicket?.organization_id ?? 0,
+      project_id: optimisticProject.project_id,
+      project_name: optimisticProject.project_name,
+      project_color: optimisticProject.project_color,
+      project_everhour_project_id: optimisticProject.project_everhour_project_id,
       everhour_task_id: null,
       agent_session_state: null,
       status,
@@ -1222,7 +1230,7 @@ export default function KanbanBoard({
         status,
         objective: trimmedObjective,
         organizationId,
-        projectId,
+        projectId: effectiveProjectId,
         placement: position
       });
     } catch {
@@ -1257,18 +1265,23 @@ export default function KanbanBoard({
     const referenceTicket =
       previous.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? previous[0];
 
+    const optimisticProject = resolveOptimisticTicketProject({
+      projectId,
+      defaultProject,
+      referenceTicket
+    });
+    const effectiveProjectId = optimisticProject.project_id ?? undefined;
+
     const optimisticTicket: Ticket = {
       id: clientTicketId,
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
-      organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
-      project_id: projectId ?? referenceTicket?.project_id ?? null,
-      project_name: referenceTicket?.project_name ?? (projectId ? null : 'Personal'),
-      project_color: referenceTicket?.project_color ?? null,
-      project_everhour_project_id:
-        (projectId ?? referenceTicket?.project_id)
-          ? (referenceTicket?.project_everhour_project_id ?? null)
-          : null,
+      organization_id:
+        organizationId ?? optimisticProject.organization_id ?? referenceTicket?.organization_id ?? 0,
+      project_id: optimisticProject.project_id,
+      project_name: optimisticProject.project_name,
+      project_color: optimisticProject.project_color,
+      project_everhour_project_id: optimisticProject.project_everhour_project_id,
       everhour_task_id: null,
       agent_session_state: null,
       status,
@@ -1288,7 +1301,7 @@ export default function KanbanBoard({
         status,
         objective: trimmedObjective,
         organizationId,
-        projectId,
+        projectId: effectiveProjectId,
         placement: position
       });
       router.push(

@@ -28,6 +28,7 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
+import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { Button } from '@/components/ui/button';
 import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
@@ -44,6 +45,7 @@ import type { Ticket } from './KanbanCard';
 import {
   buildBoardBootstrap,
   buildBoardScope,
+  resolveOptimisticTicketProject,
   toBoardTicket,
   toViewTicket
 } from './ticket-view-helpers';
@@ -157,6 +159,7 @@ export default function CalendarView({
   const createTicketMutation = useCreateTicketMutation();
   const updateDueDateMutation = useUpdateTicketDueDateMutation();
   const updateStatusMutation = useUpdateTicketStatusMutation();
+  const { defaultProject } = useDefaultProject();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -265,18 +268,26 @@ export default function CalendarView({
       const referenceTicket =
         tickets.find(t => (projectId ? t.project_id === projectId : true)) ?? tickets[0];
 
+      const optimisticProject = resolveOptimisticTicketProject({
+        projectId,
+        defaultProject,
+        referenceTicket
+      });
+      const effectiveProjectId = optimisticProject.project_id ?? undefined;
+
       const optimisticTicket: Ticket = {
         id: clientTicketId,
         title: deriveTitleFromObjective(trimmed),
         objective: trimmed,
-        organization_id: organizationId ?? referenceTicket?.organization_id ?? 0,
-        project_id: projectId ?? referenceTicket?.project_id ?? null,
-        project_name: referenceTicket?.project_name ?? (projectId ? null : 'Personal'),
-        project_color: referenceTicket?.project_color ?? null,
-        project_everhour_project_id:
-          (projectId ?? referenceTicket?.project_id)
-            ? (referenceTicket?.project_everhour_project_id ?? null)
-            : null,
+        organization_id:
+          organizationId ??
+          optimisticProject.organization_id ??
+          referenceTicket?.organization_id ??
+          0,
+        project_id: optimisticProject.project_id,
+        project_name: optimisticProject.project_name,
+        project_color: optimisticProject.project_color,
+        project_everhour_project_id: optimisticProject.project_everhour_project_id,
         everhour_task_id: null,
         agent_session_state: null,
         status: 'draft',
@@ -298,7 +309,7 @@ export default function CalendarView({
           status: optimisticTicket.status,
           objective: trimmed,
           organizationId,
-          projectId,
+          projectId: effectiveProjectId,
           placement: 'top'
         });
         await updateDueDateMutation.mutateAsync({ ticketId: clientTicketId, dueDate: dueDatetime });
@@ -306,7 +317,14 @@ export default function CalendarView({
         setCreatingOnDateKey(dateKey);
       }
     },
-    [createTicketMutation, organizationId, projectId, tickets, updateDueDateMutation]
+    [
+      createTicketMutation,
+      defaultProject,
+      organizationId,
+      projectId,
+      tickets,
+      updateDueDateMutation
+    ]
   );
 
   return (
