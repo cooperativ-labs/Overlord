@@ -57,7 +57,7 @@ export function ProjectWorkingDirectoryRequiredModal({
     setSelectFolderState('loading');
     setError(null);
 
-    let chosenPath: string | null = null;
+    let chosenPath: string | null;
 
     try {
       chosenPath = await api.terminal.chooseDirectory();

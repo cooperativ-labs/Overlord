@@ -453,8 +453,8 @@ ${settingsJson}
 
 **Step 2** — Available MCP tools:
 - \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
-- \`artifact_prepare_upload\` / \`artifact_finalize_upload\` — upload and associate storage artifacts
-- \`artifact_get_download_url\` — signed read URL for storage artifacts (CLI: \`artifact-download-url\`)
+- \`prepare_artifact_upload\` / \`finalize_artifact_upload\` — upload and associate storage artifacts
+- \`get_artifact_download_url\` — signed read URL for storage artifacts (CLI: \`artifact-download-url\`)
 - \`update\` — post progress updates
 - \`record_change_rationales\` — persist structured change rationales to the \`file_changes\` table
 - \`ask\` — ask a blocking question
@@ -513,12 +513,12 @@ ${generateAskPayloadExample(ticketId)}
 
 For persisting findings across sessions.
 
-### 5 — artifact_* (optional)
+### 5 — artifact tools (optional)
 
 Upload/download storage artifacts:
-- \`artifact_prepare_upload\` — begin upload
-- \`artifact_finalize_upload\` — commit upload
-- \`artifact_get_download_url\` — get signed URL
+- \`prepare_artifact_upload\` — begin upload
+- \`finalize_artifact_upload\` — commit upload
+- \`get_artifact_download_url\` — get signed URL
 
 ### 6 — create_ticket (optional)
 

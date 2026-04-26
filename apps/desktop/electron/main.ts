@@ -133,13 +133,6 @@ async function openUrlInDefaultBrowser(url: string): Promise<boolean> {
   }
 }
 
-function isElectronBearerAuthEnabled(): boolean {
-  const explicitValue =
-    process.env.OVLD_ELECTRON_BEARER_AUTH ?? process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH;
-
-  return explicitValue !== '0';
-}
-
 function loadLocalEnvForPackagedRuns() {
   if (isDev) return;
 
@@ -366,14 +359,12 @@ app.whenReady().then(async () => {
   writeLocalRuntime(connectorUrl, localSecret);
 
   installRendererResponseHeaders(session.defaultSession, getRendererCsp(windowUrl), platformOrigin);
-  if (isElectronBearerAuthEnabled()) {
-    installAuthHeaderInjector({
-      session: session.defaultSession,
-      platformOrigin,
-      supabaseOrigin: getSupabaseOrigin(),
-      refreshController
-    });
-  }
+  installAuthHeaderInjector({
+    session: session.defaultSession,
+    platformOrigin,
+    supabaseOrigin: getSupabaseOrigin(),
+    refreshController
+  });
 
   // Register IPC handlers
   registerTerminalIpc();

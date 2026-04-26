@@ -339,6 +339,50 @@ Checklist:
 
 ---
 
+## Protocol surfaces (parity matrix)
+
+The Overlord protocol is exposed across three call surfaces. Keep them aligned —
+when one surface changes, check the others against this table.
+
+| Operation | API route | CLI subcommand | MCP tool |
+|---|---|---|---|
+| auth-status | — | `ovld protocol auth-status` | — (CLI/human-only) |
+| discover-project | `POST /api/protocol/discover-project` | `discover-project` | `discover_project` |
+| attach | `POST /api/protocol/attach` | `attach` | `attach` |
+| connect | `POST /api/protocol/connect` | `connect` | — |
+| load-context | `POST /api/protocol/load-context` | `load-context` | — |
+| search-tickets | `POST /api/protocol/search-tickets` | `search-tickets` | `search_tickets` |
+| create (follow-up) | `POST /api/protocol/create-ticket` | `create` (with session flags) | `create_ticket` |
+| create (standalone) | `POST /api/protocol/tickets` | `create` (no session flags) | — |
+| spawn | `POST /api/protocol/spawn` | `spawn` | — |
+| update | `POST /api/protocol/update` | `update` | `update` |
+| record-change-rationales | `POST /api/protocol/record-change-rationales` | `record-change-rationales` | `record_change_rationales` |
+| ask | `POST /api/protocol/ask` | `ask` | `ask` |
+| permission-request | `POST /api/protocol/permission-request` | `permission-request` (hook-only) | — |
+| read-context | `POST /api/protocol/read-context` | `read-context` | `read_context` |
+| write-context | `POST /api/protocol/write-context` | `write-context` | `write_context` |
+| deliver | `POST /api/protocol/deliver` | `deliver` | `deliver` |
+| artifact prepare | `POST /api/protocol/artifacts/prepare-upload` | `artifact-prepare-upload` | `prepare_artifact_upload` |
+| artifact finalize | `POST /api/protocol/artifacts/finalize-upload` | `artifact-finalize-upload` | `finalize_artifact_upload` |
+| artifact upload (composite) | — (client-side) | `artifact-upload-file` | `upload_artifact_file` |
+| artifact download URL | `POST /api/protocol/artifacts/get-download-url` | `artifact-download-url` | `get_artifact_download_url` |
+| context fetch | `GET/POST /api/protocol/context/[ticketId]` | — | — (UI-private) |
+| projects (list) | `GET /api/protocol/projects` | — | — (UI-private) |
+
+Notes:
+- `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
+- `deliver` requires `artifacts` on every surface — empty array is allowed but the field must be present.
+- `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
+- MCP artifact tools follow `<verb>_<noun>` naming. CLI artifact subcommands keep the `artifact-*` shape for terminal ergonomics.
+- `GET /context/[ticketId]` and `GET /projects` are intentionally UI-only (Overlord desktop/web). They are marked `// UI-private — not exposed via CLI/MCP by design` in code so future drift audits don't re-flag them.
+
+Source-of-truth files:
+- API routes: [apps/web/app/api/protocol/](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/api/protocol)
+- CLI dispatcher: [protocol.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/protocol.mjs)
+- MCP tool definitions: [tools.ts](/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts)
+- Local Codex MCP shim: [overlord-mcp.mjs](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs)
+- Plugin skill docs: [plugins/claude/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/claude/skills/overlord-ticket/SKILL.md), [plugins/cursor/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/cursor/skills/overlord-ticket/SKILL.md), [plugins/overlord/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/skills/overlord-ticket/SKILL.md)
+
 ## Shared surfaces
 
 ### Context route and prompt builder

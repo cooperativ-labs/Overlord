@@ -7,14 +7,12 @@ jest.mock('@supabase/ssr', () => ({
 }));
 
 describe('isElectronBearerAuthEnabled', () => {
-  const originalFlag = process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH;
   const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const originalSupabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const originalWindow = globalThis.window;
   const createBrowserClientMock = jest.mocked(createBrowserClient);
 
   beforeEach(() => {
-    delete process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH;
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://project.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'publishable-key';
     Object.defineProperty(globalThis, 'window', {
@@ -36,11 +34,6 @@ describe('isElectronBearerAuthEnabled', () => {
   });
 
   afterEach(() => {
-    if (originalFlag === undefined) {
-      delete process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH;
-    } else {
-      process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH = originalFlag;
-    }
     if (originalSupabaseUrl === undefined) {
       delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     } else {
@@ -58,17 +51,11 @@ describe('isElectronBearerAuthEnabled', () => {
     });
   });
 
-  it('defaults to enabled in Electron when no override is set', () => {
+  it('is true in the Electron renderer', () => {
     expect(isElectronBearerAuthEnabled()).toBe(true);
   });
 
-  it('allows the rollout to be rolled back explicitly with 0', () => {
-    process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH = '0';
-
-    expect(isElectronBearerAuthEnabled()).toBe(false);
-  });
-
-  it('stays disabled outside Electron', () => {
+  it('is false outside Electron', () => {
     window.electronAPI = undefined as typeof window.electronAPI;
 
     expect(isElectronBearerAuthEnabled()).toBe(false);
@@ -90,23 +77,5 @@ describe('isElectronBearerAuthEnabled', () => {
     const accessToken = await options?.accessToken?.();
     expect(accessToken).toBe('desktop-access-token');
     expect(window.electronAPI?.auth?.getAccessToken).toHaveBeenCalledTimes(1);
-  });
-
-  it('falls back to the cookie client only when the rollback flag is explicitly set', () => {
-    process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH = '0';
-
-    createClient();
-
-    expect(createBrowserClientMock).toHaveBeenCalledWith(
-      'https://project.supabase.co',
-      'publishable-key',
-      expect.objectContaining({
-        cookieOptions: expect.any(Object),
-        auth: expect.objectContaining({
-          autoRefreshToken: false
-        })
-      })
-    );
-    expect(createBrowserClientMock.mock.calls[0]?.[2]).not.toHaveProperty('accessToken');
   });
 });

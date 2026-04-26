@@ -2,7 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
-## [5.1.0] - 2026-04-25:15:58
+## [5.3.0] - 2026-04-26:09:30
+
+### Added
+- Add ticket search across keyword, status, project, creator, and update-window filters in the CLI, protocol, and web docs.
+
+### Fixed
+- None.
+
+### Changed
+- Rename the protocol listing flow to `search-tickets` and route the CLI, MCP permissions, and agent docs through the new endpoint.
+- Standardize artifact tool names across the MCP server, plugin wrappers, and prompt guidance.
+- Move protocol project and context routes behind explicit UI-only commentary so their launcher-only role is clear.
+
+### Security
+- Remove the Electron bearer-auth rollback path and make desktop Supabase auth always use the main-process bearer token flow.
+
+### Removed
+- Remove the legacy `list-tickets` protocol route and the old `change-rationales` endpoint in favor of the consolidated protocol surfaces.
+- Remove the Electron bearer-auth rollback flag environment variables.
+
+### Test
+- Update Supabase browser client coverage for the bearer-only Electron behavior.
+
+### Documentation
+- Refresh the CLI reference and integrations docs to reflect the new search filters and route layout.
 
 ## [5.2.0] - 2026-04-25:16:44
 
@@ -18,8 +42,11 @@ All notable changes to this project will be documented in this file.
 ### Security
 - None.
 
+### Removed
+- `OVLD_ELECTRON_BEARER_AUTH` / `NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH` env rollback switches for desktop Supabase auth; Electron always uses the bearer-token path.
+
 ### Test
-- None.
+- Align Supabase browser client unit tests with bearer-only Electron behavior.
 
 ## [5.1.0] - 2026-04-25:15:58
 

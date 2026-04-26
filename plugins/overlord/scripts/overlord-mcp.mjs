@@ -288,7 +288,7 @@ const tools = [
     subcommand: 'deliver'
   },
   {
-    name: 'artifact_prepare_upload',
+    name: 'prepare_artifact_upload',
     description: 'Prepare an Overlord artifact upload and return a signed upload URL.',
     inputSchema: {
       type: 'object',
@@ -317,7 +317,7 @@ const tools = [
     subcommand: 'artifact-prepare-upload'
   },
   {
-    name: 'artifact_finalize_upload',
+    name: 'finalize_artifact_upload',
     description: 'Finalize an artifact after uploading bytes to the signed storage URL.',
     inputSchema: {
       type: 'object',
@@ -346,7 +346,7 @@ const tools = [
     subcommand: 'artifact-finalize-upload'
   },
   {
-    name: 'artifact_download_url',
+    name: 'get_artifact_download_url',
     description: 'Create a signed download URL for an uploaded Overlord artifact.',
     inputSchema: {
       type: 'object',
@@ -369,7 +369,7 @@ const tools = [
     subcommand: 'artifact-download-url'
   },
   {
-    name: 'artifact_upload_file',
+    name: 'upload_artifact_file',
     description: 'Prepare, upload, and finalize a local file as an Overlord artifact in one step.',
     inputSchema: {
       type: 'object',

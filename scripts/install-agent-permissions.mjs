@@ -33,7 +33,7 @@ const PROTOCOL_ENDPOINTS = [
   "write-context",
   "deliver",
   "create-ticket",
-  "list-tickets",
+  "search-tickets",
 ];
 
 const CODEX_TARGET_RULES = path.join(os.homedir(), ".codex", "rules", "default.rules");

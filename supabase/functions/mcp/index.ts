@@ -214,11 +214,11 @@ Deno.serve(async (req: Request) => {
         result = await handleAttach(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket_draft') {
         result = await handleCreateTicketDraft(supabase, toolArgs, requestContext);
-      } else if (toolName === 'artifact_prepare_upload') {
+      } else if (toolName === 'prepare_artifact_upload') {
         result = await handleArtifactPrepareUpload(supabase, toolArgs, requestContext);
-      } else if (toolName === 'artifact_finalize_upload') {
+      } else if (toolName === 'finalize_artifact_upload') {
         result = await handleArtifactFinalizeUpload(supabase, toolArgs, requestContext);
-      } else if (toolName === 'artifact_get_download_url') {
+      } else if (toolName === 'get_artifact_download_url') {
         result = await handleArtifactGetDownloadUrl(supabase, toolArgs, requestContext);
       } else if (toolName === 'save_ticket_draft') {
         result = await handleSaveTicketDraft(supabase, toolArgs, requestContext);

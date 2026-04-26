@@ -3,16 +3,11 @@ import { createBrowserClient } from '@supabase/ssr';
 import { getSupabaseCookieOptions, getSupabasePublishableKey, getSupabaseUrl } from '@/lib/env';
 
 /**
- * Returns true when Electron bearer auth is active in the renderer.
- * Default-on after rollout. Set NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH=0
- * for the one-release rollback path before the flag is removed.
+ * Returns true when the renderer is the Electron desktop app, which always
+ * uses main-process OAuth bearer tokens for Supabase (no cookie session).
  */
 export function isElectronBearerAuthEnabled(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    Boolean(window.electronAPI?.isElectron) &&
-    process.env.NEXT_PUBLIC_OVLD_ELECTRON_BEARER_AUTH !== '0'
-  );
+  return typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
 }
 
 /**

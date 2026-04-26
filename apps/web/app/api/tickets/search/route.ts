@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
-import { searchTicketsByTitle } from '@/lib/helpers/ticket-search';
+import { searchTickets } from '@/lib/helpers/ticket-search';
 import {
   createClientForRequest,
   getRequestDefaultProjectId,
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     organizations
   });
 
-  const { data, error } = await searchTicketsByTitle(supabase, {
+  const { data, error } = await searchTickets(supabase, {
     limit: 6,
     organizationId,
     query: rawQuery,

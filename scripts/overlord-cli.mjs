@@ -41,7 +41,7 @@ async function main() {
   }
 
   if (command === 'list') {
-    const result = await request('/api/protocol/list-tickets', {});
+    const result = await request('/api/protocol/search-tickets', {});
     console.log(JSON.stringify(result, null, 2));
     return;
   }

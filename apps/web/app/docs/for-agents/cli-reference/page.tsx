@@ -102,6 +102,31 @@ Read ticket details without creating a session.
 ovld protocol load-context --ticket-id <id>
 \`\`\`
 
+## search-tickets
+
+Find tickets by free-text query, status, project, creator, or update window.
+Omit \`--query\` for list mode (most recently updated first).
+
+\`\`\`bash
+ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
+ovld protocol search-tickets --status next-up --project-id <uuid>
+\`\`\`
+
+Optional:
+
+\`\`\`text
+--query <text>             Free-text search across the ticket search vector + title fallback
+--status <csv>             Comma-separated statuses, e.g. "draft,next-up,execute"
+--include-completed <bool> Include completed tickets (default: false)
+--limit <n>                Max results 1..50 (default: 8)
+--project-id <uuid>
+--created-by <uuid>
+--updated-after <iso>      Updated_at >= ISO timestamp
+--updated-before <iso>     Updated_at <= ISO timestamp
+\`\`\`
+
+Returns JSON \`{ tickets, count }\`.
+
 ---
 
 ## create

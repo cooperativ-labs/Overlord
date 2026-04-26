@@ -73,8 +73,8 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
 2. Default to `create` for new tickets. Only use `ovld protocol spawn --agent codex --objective "..."` when the user explicitly asks to create and execute immediately.
    `spawn` creates the ticket in `execute` status and attaches immediately.
 3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket-id>`.
-4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1.
-5. If the user wants to find existing tickets by keyword or workflow state, use the `search_tickets` tool.
+4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1. Use `ovld protocol connect --ticket-id <ticket-id>` instead when you only need a session key without the full ticket payload.
+5. If the user wants to find existing tickets by keyword, status, project, creator, or update window, run `ovld protocol search-tickets --query "..." --status next-up,execute --limit 10`. The MCP `search_tickets` tool exposes the same filters.
 6. If you need to understand project routing before spawning, use `ovld protocol discover-project`.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 
@@ -123,6 +123,13 @@ ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
 ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 ```
+
+## Defaults And Notes
+
+- API requires `agentIdentifier` and `connectionMethod` on attach/connect/spawn. The CLI defaults them to `codex`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
+- `permission-request` is invoked by the local Codex plugin's permission rules; agents do not normally call it directly.
+- `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the `file_changes` table; the dedicated route is `POST /api/protocol/record-change-rationales`.
+- Artifact MCP tools use `<verb>_<noun>` names — `prepare_artifact_upload`, `finalize_artifact_upload`, `get_artifact_download_url`, `upload_artifact_file`. CLI commands keep the `artifact-*` shape (`artifact-prepare-upload`, etc.).
 
 ## Rules
 

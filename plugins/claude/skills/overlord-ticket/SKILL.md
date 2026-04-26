@@ -78,7 +78,7 @@ Use this mode when the conversation starts normally and the user asks Claude to 
    `spawn` creates the ticket in `execute` status and attaches immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket-id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket-id>`.
-5. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or ask the user for the ticket ID if staying strictly inside chat is the better fit.
+5. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or run `ovld protocol search-tickets --query "..." --status next-up,execute` and ask the user to confirm.
 6. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 7. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
 
@@ -135,6 +135,13 @@ ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
 ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 ```
+
+## Defaults And Notes
+
+- API requires `agentIdentifier` and `connectionMethod` on attach/connect/spawn. The CLI defaults them to `claude-code`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
+- `permission-request` is invoked by the Claude Code permission hook installed by the bundle. Agents do not normally call it directly.
+- `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the same `file_changes` table. The dedicated CLI route is `POST /api/protocol/record-change-rationales`.
+- Artifact tools follow the `<verb>_<noun>` MCP naming: `prepare_artifact_upload`, `finalize_artifact_upload`, `get_artifact_download_url`, `upload_artifact_file`. The CLI keeps the noun-first command names (`artifact-prepare-upload`, etc.) for terminal ergonomics.
 
 ## Rules
 

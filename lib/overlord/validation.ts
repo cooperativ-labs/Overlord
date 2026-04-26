@@ -24,16 +24,15 @@ export const createTicketSchema = z.object({
   executionTarget: ticketExecutionTargetSchema.default('agent')
 });
 
-export const listTicketsSchema = z.object({
-  includeCompleted: z.boolean().optional().default(true),
-  statuses: z.array(ticketStatusSchema).optional()
-});
-
 export const searchTicketsSchema = z.object({
   query: z.string().trim().max(120).optional().default(''),
   includeCompleted: z.boolean().optional().default(false),
-  limit: z.number().int().min(1).max(20).optional().default(8),
-  statuses: z.array(z.string().trim().max(60)).optional()
+  limit: z.number().int().min(1).max(50).optional().default(8),
+  statuses: z.array(z.string().trim().max(60)).optional(),
+  projectId: z.string().uuid().optional(),
+  createdBy: z.string().uuid().optional(),
+  updatedAfter: z.string().datetime({ offset: true }).optional(),
+  updatedBefore: z.string().datetime({ offset: true }).optional()
 });
 
 export const attachSchema = z.object({

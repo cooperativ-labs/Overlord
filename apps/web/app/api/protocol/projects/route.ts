@@ -1,3 +1,5 @@
+// UI-private — not exposed via CLI/MCP by design. Powers the Overlord
+// desktop/web project picker; agents resolve projects via discover-project.
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';

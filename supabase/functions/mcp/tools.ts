@@ -224,7 +224,7 @@ export const TOOLS = [
     }
   },
   {
-    name: 'artifact_prepare_upload',
+    name: 'prepare_artifact_upload',
     annotations: {
       title: 'Prepare Artifact Upload',
       readOnlyHint: false,
@@ -250,7 +250,7 @@ export const TOOLS = [
     }
   },
   {
-    name: 'artifact_finalize_upload',
+    name: 'finalize_artifact_upload',
     annotations: {
       title: 'Finalize Artifact Upload',
       readOnlyHint: false,
@@ -265,7 +265,7 @@ export const TOOLS = [
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: { type: 'string', description: 'Ticket UUID.' },
-        storagePath: { type: 'string', description: 'Path returned from artifact_prepare_upload.' },
+        storagePath: { type: 'string', description: 'Path returned from prepare_artifact_upload.' },
         label: { type: 'string', description: 'Artifact label shown in UI.' },
         artifactType: { type: 'string', description: 'Artifact type (default: document).' },
         contentType: { type: 'string', description: 'MIME type.' },
@@ -276,7 +276,7 @@ export const TOOLS = [
     }
   },
   {
-    name: 'artifact_get_download_url',
+    name: 'get_artifact_download_url',
     annotations: {
       title: 'Get Artifact Download URL',
       readOnlyHint: true,
@@ -440,7 +440,7 @@ export const TOOLS = [
           description: 'Artifact types: next_steps, test_results, migration, decision, note, url.'
         }
       },
-      required: ['sessionKey', 'ticketId', 'summary']
+      required: ['sessionKey', 'ticketId', 'summary', 'artifacts']
     }
   },
   {

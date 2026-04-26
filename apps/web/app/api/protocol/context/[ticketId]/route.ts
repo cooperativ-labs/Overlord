@@ -1,3 +1,6 @@
+// UI-private — not exposed via CLI/MCP by design. GET returns the rendered
+// ticket prompt and POST returns prebuilt agent launch commands. Both are
+// consumed by the Overlord desktop/web launcher rather than autonomous agents.
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';

@@ -30,25 +30,48 @@ export function normalizeTicketSearchQuery(value: string) {
   };
 }
 
-export async function searchTicketsByTitle(
-  supabase: SupabaseClient<Database>,
-  {
-    includeCompleted = true,
-    organizationId,
-    limit = 8,
-    query,
-    statuses,
-    select = 'id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)'
-  }: {
-    includeCompleted?: boolean;
-    organizationId?: number;
-    limit?: number;
-    query: string;
-    statuses?: string[];
-    select?: string;
+type SearchTicketsOptions = {
+  includeCompleted?: boolean;
+  organizationId?: number;
+  limit?: number;
+  query?: string;
+  statuses?: string[];
+  projectId?: string;
+  createdBy?: string;
+  updatedAfter?: string;
+  updatedBefore?: string;
+  select?: string;
+};
+
+function applySharedFilters<T extends { eq: any; in: any; neq: any; gte: any; lte: any }>(
+  q: T,
+  opts: SearchTicketsOptions
+): T {
+  let next = q;
+  if (opts.organizationId) next = next.eq('organization_id', opts.organizationId);
+  if (opts.statuses?.length) {
+    next = next.in('status', opts.statuses);
+  } else if (!opts.includeCompleted) {
+    next = next.neq('status', 'complete');
   }
+  if (opts.projectId) next = next.eq('project_id', opts.projectId);
+  if (opts.createdBy) next = next.eq('created_by', opts.createdBy);
+  if (opts.updatedAfter) next = next.gte('updated_at', opts.updatedAfter);
+  if (opts.updatedBefore) next = next.lte('updated_at', opts.updatedBefore);
+  return next;
+}
+
+export async function searchTickets(
+  supabase: SupabaseClient<Database>,
+  options: SearchTicketsOptions
 ) {
-  const normalizedLimit = Math.min(Math.max(limit, 1), 20);
+  const {
+    limit = 8,
+    query = '',
+    select = 'id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)'
+  } = options;
+
+  const normalizedLimit = Math.min(Math.max(limit, 1), 50);
   const { sanitized, textSearchQuery } = normalizeTicketSearchQuery(query);
 
   let baseQuery = supabase
@@ -57,14 +80,7 @@ export async function searchTicketsByTitle(
     .order('updated_at', { ascending: false })
     .limit(normalizedLimit);
 
-  if (organizationId) {
-    baseQuery = baseQuery.eq('organization_id', organizationId);
-  }
-  if (statuses?.length) {
-    baseQuery = baseQuery.in('status', statuses);
-  } else if (!includeCompleted) {
-    baseQuery = baseQuery.neq('status', 'complete');
-  }
+  baseQuery = applySharedFilters(baseQuery, options);
 
   if (!sanitized || !textSearchQuery) {
     const { data, error } = await baseQuery;
@@ -92,14 +108,7 @@ export async function searchTicketsByTitle(
     .order('updated_at', { ascending: false })
     .limit(normalizedLimit);
 
-  if (organizationId) {
-    fallbackQuery = fallbackQuery.eq('organization_id', organizationId);
-  }
-  if (statuses?.length) {
-    fallbackQuery = fallbackQuery.in('status', statuses);
-  } else if (!includeCompleted) {
-    fallbackQuery = fallbackQuery.neq('status', 'complete');
-  }
+  fallbackQuery = applySharedFilters(fallbackQuery, options);
 
   const fallbackResult = await fallbackQuery;
   return {

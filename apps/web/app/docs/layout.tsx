@@ -138,6 +138,20 @@ const data = {
       ]
     },
     {
+      title: 'Integrations',
+      url: '/docs/integrations',
+      items: [
+        {
+          title: 'Overview',
+          url: '/docs/integrations'
+        },
+        {
+          title: 'Everhour',
+          url: '/docs/integrations/everhour'
+        }
+      ]
+    },
+    {
       title: 'Security',
       url: '/docs/security',
       items: [

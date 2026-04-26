@@ -86,6 +86,21 @@ ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
 
 Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
+## Finding And Connecting To Tickets
+
+If the user references a ticket but does not give an ID, search by keyword/status:
+
+\`\`\`bash
+ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
+\`\`\`
+
+Use \`connect\` instead of \`attach\` when you only need a session key without the full ticket payload, and \`load-context\` to inspect a ticket without creating a session at all:
+
+\`\`\`bash
+ovld protocol connect --ticket-id $TICKET_ID
+ovld protocol load-context --ticket-id $TICKET_ID
+\`\`\`
+
 ## Project Discovery & Ticket Creation
 
 When creating tickets from within a repository:
@@ -117,6 +132,15 @@ ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
 ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 \`\`\`
+
+The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\` for callers that need a signed URL directly. Prefer \`artifact-upload-file\` for one-shot uploads.
+
+## Defaults & Notes
+
+- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
+- \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
+- \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
+- Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
 
 ## Rules
 
@@ -177,6 +201,41 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
+## Finding And Connecting To Tickets
+
+If the user references a ticket but does not give an ID, search by keyword/status:
+
+\`\`\`bash
+ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
+\`\`\`
+
+If you need a session key but not the full prompt payload, use \`connect\` instead of \`attach\`:
+
+\`\`\`bash
+ovld protocol connect --ticket-id $TICKET_ID
+\`\`\`
+
+\`load-context\` reads ticket details without creating a session at all:
+
+\`\`\`bash
+ovld protocol load-context --ticket-id $TICKET_ID
+\`\`\`
+
+## Finding And Connecting To Tickets
+
+If the user references a ticket but does not give an ID, search by keyword/status:
+
+\`\`\`bash
+ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
+\`\`\`
+
+Use \`connect\` instead of \`attach\` when you only need a session key without the full ticket payload, and \`load-context\` to inspect a ticket without creating a session at all:
+
+\`\`\`bash
+ovld protocol connect --ticket-id $TICKET_ID
+ovld protocol load-context --ticket-id $TICKET_ID
+\`\`\`
+
 ## Project Discovery & Ticket Creation
 
 When creating tickets from within a repository:
@@ -208,6 +267,15 @@ ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
 ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 \`\`\`
+
+The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\` for callers that need a signed URL directly. Prefer \`artifact-upload-file\` for one-shot uploads.
+
+## Defaults & Notes
+
+- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
+- \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
+- \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
+- Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
 
 ## Rules
 
@@ -279,6 +347,21 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
+## Finding And Connecting To Tickets
+
+If the user references a ticket but does not give an ID, search by keyword/status:
+
+\`\`\`bash
+ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
+\`\`\`
+
+Use \`connect\` instead of \`attach\` when you only need a session key without the full ticket payload, and \`load-context\` to inspect a ticket without creating a session at all:
+
+\`\`\`bash
+ovld protocol connect --ticket-id $TICKET_ID
+ovld protocol load-context --ticket-id $TICKET_ID
+\`\`\`
+
 ## Project Discovery & Ticket Creation
 
 When creating tickets from within a repository:
@@ -310,6 +393,15 @@ ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --
 ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
 ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
 \`\`\`
+
+The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\` for callers that need a signed URL directly. Prefer \`artifact-upload-file\` for one-shot uploads.
+
+## Defaults & Notes
+
+- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
+- \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
+- \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
+- Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
 
 ## Rules
 

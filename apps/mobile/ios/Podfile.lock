@@ -32,6 +32,8 @@ PODS:
     - ExpoModulesCore
   - ExpoClipboard (55.0.13):
     - ExpoModulesCore
+  - ExpoDocumentPicker (55.0.13):
+    - ExpoModulesCore
   - ExpoDomWebView (55.0.3):
     - ExpoModulesCore
   - ExpoFileSystem (55.0.12):
@@ -39,6 +41,8 @@ PODS:
   - ExpoFont (55.0.4):
     - ExpoModulesCore
   - ExpoHead (5.1.11):
+    - ExpoModulesCore
+  - ExpoImagePicker (55.0.19):
     - ExpoModulesCore
   - ExpoKeepAwake (55.0.4):
     - ExpoModulesCore
@@ -2134,10 +2138,12 @@ DEPENDENCIES:
   - Expo (from `../node_modules/expo`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoClipboard (from `../node_modules/expo-clipboard/ios`)
+  - ExpoDocumentPicker (from `../node_modules/expo-document-picker/ios`)
   - "ExpoDomWebView (from `../node_modules/@expo/dom-webview/ios`)"
   - ExpoFileSystem (from `../node_modules/expo-file-system/ios`)
   - ExpoFont (from `../node_modules/expo-font/ios`)
   - ExpoHead (from `../node_modules/expo-router/ios`)
+  - ExpoImagePicker (from `../node_modules/expo-image-picker/ios`)
   - ExpoKeepAwake (from `../node_modules/expo-keep-awake/ios`)
   - ExpoLinking (from `../node_modules/expo-linking/ios`)
   - "ExpoLogBox (from `../node_modules/@expo/log-box`)"
@@ -2241,6 +2247,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-asset/ios"
   ExpoClipboard:
     :path: "../node_modules/expo-clipboard/ios"
+  ExpoDocumentPicker:
+    :path: "../node_modules/expo-document-picker/ios"
   ExpoDomWebView:
     :path: "../node_modules/@expo/dom-webview/ios"
   ExpoFileSystem:
@@ -2249,6 +2257,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-font/ios"
   ExpoHead:
     :path: "../node_modules/expo-router/ios"
+  ExpoImagePicker:
+    :path: "../node_modules/expo-image-picker/ios"
   ExpoKeepAwake:
     :path: "../node_modules/expo-keep-awake/ios"
   ExpoLinking:
@@ -2429,10 +2439,12 @@ SPEC CHECKSUMS:
   Expo: 55d24f07827a295a2860cbba79709fc0536adc96
   ExpoAsset: 4efd0227e808dfa84d286aa3663ded641ef73479
   ExpoClipboard: 5d1b0cd2686406f21e616f2d9b3431259dee2e6a
+  ExpoDocumentPicker: be59b82799ae30811e3f37a7521d6622baa63a19
   ExpoDomWebView: f101fb3db4b6eec4163fca51f7507189b7e48661
   ExpoFileSystem: 4ed8ccc90671813c861f212fba3668fe133b7e68
   ExpoFont: 1aa465cf9f8ac6b670405becba8b15473581b2dd
   ExpoHead: cfc12096c9a68cbe25de93a8bfc4781c7689467e
+  ExpoImagePicker: 6d8e97db8aa1fcdd357c0ed1e7365cf30100a0fe
   ExpoKeepAwake: 7f3b28c361c37389b18841bb52a58003b39fcb33
   ExpoLinking: 1f0d112b2777e73eef2bb580b13283fc8c85ff08
   ExpoLogBox: 393a66b37ef3005c2890eb8b4468329db20bee51

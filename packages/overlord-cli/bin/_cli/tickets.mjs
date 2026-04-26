@@ -67,7 +67,7 @@ export async function ticketsList(args) {
   };
 
   const data = await apiPost(
-    `${platformUrl}/api/protocol/list-tickets`,
+    `${platformUrl}/api/protocol/search-tickets`,
     bearerToken,
     localSecret,
     organizationId,

@@ -472,10 +472,12 @@ export default function TicketDetailScreen() {
       const blob = await response.blob();
       const buffer = await blob.arrayBuffer();
 
-      const { error: uploadError } = await supabase.storage.from('artifacts').upload(storagePath, buffer, {
-        contentType: options.mimeType,
-        upsert: false
-      });
+      const { error: uploadError } = await supabase.storage
+        .from('artifacts')
+        .upload(storagePath, buffer, {
+          contentType: options.mimeType,
+          upsert: false
+        });
 
       if (uploadError) {
         throw new Error(uploadError.message);
@@ -544,7 +546,10 @@ export default function TicketDetailScreen() {
   async function handleSelectImage() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Photo library permission needed', 'Enable photo library access to select images.');
+      Alert.alert(
+        'Photo library permission needed',
+        'Enable photo library access to select images.'
+      );
       return;
     }
 
@@ -1387,7 +1392,9 @@ export default function TicketDetailScreen() {
                   onPress={() => void handleOpenDocument(document)}
                 >
                   <Ionicons
-                    name={document.fileType.startsWith('image/') ? 'image-outline' : 'document-outline'}
+                    name={
+                      document.fileType.startsWith('image/') ? 'image-outline' : 'document-outline'
+                    }
                     size={15}
                     color={colors.foreground}
                   />
@@ -1422,9 +1429,7 @@ export default function TicketDetailScreen() {
           {ticket.context.trim() === '' &&
             ticket.constraints.trim() === '' &&
             !ticket.acceptance_criteria &&
-            documents.length === 0 && (
-              <Text style={styles.docEmpty}>No documents attached.</Text>
-            )}
+            documents.length === 0 && <Text style={styles.docEmpty}>No documents attached.</Text>}
         </CollapsibleSection>
 
         <CollapsibleSection

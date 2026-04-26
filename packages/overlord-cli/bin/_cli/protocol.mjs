@@ -601,7 +601,7 @@ async function protocolRecordChangeRationales(args) {
     bearerToken,
     localSecret,
     organizationId,
-    '/api/protocol/change-rationales',
+    '/api/protocol/record-change-rationales',
     body,
     timeoutMs
   );
@@ -1203,6 +1203,47 @@ async function protocolCreateTicket(args) {
 }
 
 // ---------------------------------------------------------------------------
+// search-tickets (find tickets by query/status/project/created_by/dates)
+// ---------------------------------------------------------------------------
+
+async function protocolSearchTickets(args) {
+  const flags = parseFlags(args);
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const statuses = flags.status
+    ? String(flags.status)
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+    : undefined;
+
+  const body = {
+    ...(flags.query ? { query: String(flags.query) } : {}),
+    ...(statuses?.length ? { statuses } : {}),
+    ...(flags['include-completed'] !== undefined
+      ? { includeCompleted: flags['include-completed'] !== false && flags['include-completed'] !== 'false' }
+      : {}),
+    ...(flags.limit ? { limit: parseInt(String(flags.limit), 10) } : {}),
+    ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
+    ...(flags['created-by'] ? { createdBy: String(flags['created-by']) } : {}),
+    ...(flags['updated-after'] ? { updatedAfter: String(flags['updated-after']) } : {}),
+    ...(flags['updated-before'] ? { updatedBefore: String(flags['updated-before']) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/search-tickets',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // auth-status (agent-friendly auth diagnostics)
 // ---------------------------------------------------------------------------
 
@@ -1263,6 +1304,7 @@ Subcommands:
   attach                    Start a ticket session and return full working context
   connect                   Start a lightweight session without full context
   load-context              Read ticket context without creating a session
+  search-tickets            Find tickets by keyword, status, project, creator, or update date
   create                    Create a draft ticket without attaching (follow-up or standalone)
   spawn                     Create a follow-up ticket and attach to it immediately
   update                    Post progress, activity events, and optional change rationales
@@ -1343,6 +1385,22 @@ load-context:
     Read ticket details without creating a session
   Required:
     --ticket-id <id>
+
+search-tickets:
+  Purpose:
+    Find tickets in your organization by keyword, status, project, creator, or update window.
+    Omit --query to list mode (most recently updated first).
+  Optional:
+    --query <text>             Free-text search across the ticket search vector + title fallback
+    --status <csv>             Comma-separated statuses, e.g. "draft,next-up,execute"
+    --include-completed <bool> Include completed tickets (default: false)
+    --limit <n>                Max results 1..50 (default: 8)
+    --project-id <uuid>        Restrict to a single project
+    --created-by <uuid>        Restrict to tickets created by this user
+    --updated-after <iso>      Updated_at >= ISO timestamp
+    --updated-before <iso>     Updated_at <= ISO timestamp
+  Returns:
+    JSON with { tickets, count }.
 
 update:
   Purpose:
@@ -1541,6 +1599,7 @@ Examples:
   ovld protocol attach --ticket-id abc-123 --external-session-id null
   ovld protocol connect --ticket-id abc-123
   ovld protocol load-context --ticket-id abc-123
+  ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
   ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
   ovld protocol create --agent codex --session-key <key> --ticket-id <id> --objective "Capture follow-up work"
   ovld protocol spawn --agent codex --objective "Implement user auth" --priority high
@@ -1568,6 +1627,7 @@ Examples:
   if (subcommand === 'attach') { await protocolAttach(args); return; }
   if (subcommand === 'connect') { await protocolConnect(args); return; }
   if (subcommand === 'load-context') { await protocolLoadContext(args); return; }
+  if (subcommand === 'search-tickets') { await protocolSearchTickets(args); return; }
   if (subcommand === 'create' || subcommand === 'create-ticket') { await protocolCreateTicket(args); return; }
   if (subcommand === 'spawn') { await protocolSpawn(args); return; }
   if (subcommand === 'artifact-prepare-upload') { await protocolArtifactPrepareUpload(args); return; }
