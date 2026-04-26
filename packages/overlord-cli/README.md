@@ -12,13 +12,21 @@ Install it globally so the `ovld` and `overlord` commands are available on your 
 
 ```bash
 npm install -g overlord-cli
+
+#After installing, run 
+ovld setup all #to configure every supported connector (`ovld setup` alone is interactive)
+
+#for individual connectors, run `ovld setup <connector>`.
+ovld setup cursor
+ovld setup claude
+ovld setup codex
+ovld setup all
 ```
 
-
-After installing, run `ovld setup [agent|all]` for the agent you use (`ovld setup` alone is interactive), for example `ovld setup cursor`, `ovld setup claude`, `ovld setup codex`, or `ovld setup all` for every supported connector.
-
-Run `ovld update` any time you want to refresh the global npm install to the latest release.
-
+```bash
+# To update the CLI to the latest release, run:
+ovld update
+```
 ## Usage
 
 ```bash
@@ -26,16 +34,19 @@ ovld help
 overlord help
 ```
 
-The CLI exposes the same command set under both names.
-`ovld auth login` opens a browser when possible and also prints a verification URL/code so login can be completed from another machine over SSH.
-Use `ovld auth status`, `ovld auth repair` (shared Desktop/CLI credentials), and `ovld auth logout` for the other auth flows.
+### Auth
+```bash
+# Login to Overlord
+ovld auth login #opens a browser when possible and also prints a verification URL/code so login can be completed from another machine over SSH.
+ovld auth status # show current login status (use --verbose for redacted diagnostics)
+ovld auth repair # mirror and chmod shared Desktop/CLI credentials when possible
+ovld auth logout # remove stored credentials
+```
 
 Desktop-installed wrappers default `OVERLORD_URL` to `https://www.ovld.ai` unless you override it explicitly.
 For local dev against the web app on port 3000, export the override before running auth or protocol commands:
-
 ```bash
 export OVERLORD_URL=http://localhost:3000
-ovld auth login
 ```
 
 Common commands:
@@ -66,7 +77,9 @@ ovld doctor
 - Node.js 20 or newer
 - Access to an Overlord instance when using authenticated commands
 
-## Commands
+## Commands for Humans
+
+Find full CLI docs here: https://www.ovld.ai/docs/surfaces/cli
 
 Top-level commands (see `ovld help`):
 
@@ -76,13 +89,37 @@ Top-level commands (see `ovld help`):
 - `auth` - `login`, `status`, `repair` (shared Desktop/CLI credentials), or `logout`
 - `tickets` - `create` or `list` (optional `--status`)
 - `ticket` - `context <ticketId>` to print context for one ticket
-- `protocol` - agent workflow / ticket lifecycle; see `ovld protocol help`. Subcommands include `auth-status`, `discover-project`, `attach`, `connect`, `load-context`, `search-tickets`, `create`, `spawn`, `update`, `record-change-rationales`, `ask`, `permission-request`, `read-context`, `write-context`, `deliver`, and artifact helpers (`artifact-prepare-upload`, `artifact-finalize-upload`, `artifact-download-url`, `artifact-upload-file`)
 - `connect`, `restart`, `context` - launch or resume an agent session, or print ticket context (`context` requires `TICKET_ID`)
 - `run`, `resume` - legacy aliases for `connect` and `restart`
 - `setup` - install the Overlord connector for an agent; `ovld setup [agent|all]` (interactive with no args). `ovld setup claude` also performs the one-time v3.25.0 to v4 Claude plugin migration
 - `update` - install the latest CLI release from npm
 - `doctor` - validate installed connectors and check for CLI updates
 - `version` - print the installed CLI version
+
+## Commands for agents
+Agents can find docs here: https://www.ovld.ai/docs/for-agents
+
+`ovld protocol <subcommand>` is the surface agents and hooks use for ticket lifecycle work. Run `ovld protocol help` for flags, env fallbacks, and examples.
+
+- `auth-status` - return machine-readable auth status for agent runtimes
+- `discover-project` - resolve a project from the current (or given) working directory
+- `attach` - start a ticket session and return full working context
+- `connect` - start a lightweight session without full context
+- `load-context` - read ticket context without creating a session
+- `search-tickets` - find tickets by keyword, status, project, creator, or update date
+- `create` - create a draft ticket without attaching (standalone or follow-up)
+- `spawn` - create a follow-up ticket and attach to it immediately
+- `update` - post progress, activity events, and optional change rationales
+- `record-change-rationales` - persist structured change rationales without a normal progress update
+- `ask` - post a blocking question and move the ticket to review
+- `permission-request` - notify Overlord that the agent is requesting tool permission
+- `read-context` - read shared persistent context for this ticket
+- `write-context` - write shared persistent context for future sessions
+- `deliver` - finish work, send artifacts, and move the ticket to review
+- `artifact-prepare-upload` - get a signed upload URL for a ticket artifact
+- `artifact-finalize-upload` - finalize an uploaded artifact row after storage upload
+- `artifact-download-url` - get a signed download URL for an existing artifact
+- `artifact-upload-file` - prepare, upload, and finalize a local file in one command
 
 ## License
 
