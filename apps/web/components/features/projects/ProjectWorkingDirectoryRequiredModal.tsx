@@ -129,7 +129,7 @@ export function ProjectWorkingDirectoryRequiredModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogTitle>Select a project folder</DialogTitle>
         <DialogDescription className="space-y-2">
           <span className="block">
@@ -145,10 +145,11 @@ export function ProjectWorkingDirectoryRequiredModal({
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+
           <LoadingButton
             buttonState={skipState}
-            variant="ghost"
-            className="text-muted-foreground"
+            variant="outline"
+
             errorText="Try again"
             loadingText="Saving…"
             setButtonState={setSkipState}
@@ -156,26 +157,24 @@ export function ProjectWorkingDirectoryRequiredModal({
             text="Don't use a directory"
             onClick={handleSkipDirectory}
           />
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Not now
-            </Button>
-            <LoadingButton
-              buttonState={selectFolderState}
-              className="gap-1.5"
-              errorText="Try again"
-              loadingText="Opening picker..."
-              setButtonState={setSelectFolderState}
-              successText="Folder linked"
-              text={
-                <span className="inline-flex items-center gap-1.5">
-                  <Folder className="h-4 w-4" />
-                  Select Folder
-                </span>
-              }
-              onClick={handleSelectFolder}
-            />
-          </div>
+
+
+          <LoadingButton
+            buttonState={selectFolderState}
+            className="gap-1.5"
+            errorText="Try again"
+            loadingText="Opening picker..."
+            setButtonState={setSelectFolderState}
+            successText="Folder linked"
+            text={
+              <span className="inline-flex items-center gap-1.5">
+                <Folder className="h-4 w-4" />
+                Select Folder
+              </span>
+            }
+            onClick={handleSelectFolder}
+          />
+
         </DialogFooter>
       </DialogContent>
     </Dialog>

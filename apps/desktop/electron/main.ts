@@ -134,31 +134,35 @@ async function openUrlInDefaultBrowser(url: string): Promise<boolean> {
 }
 
 function loadLocalEnvForPackagedRuns() {
-  if (isDev) return;
+  const envFilesToLoad: string[] = [];
 
-  // 1. Apply baked-in production vars first (lowest precedence — anything
-  //    already in process.env or loaded by a file below will win).
-  for (const [key, value] of Object.entries(PROD_ENV)) {
-    if (!process.env[key]) {
-      process.env[key] = value;
+  if (isDev) {
+    // In dev mode, load from apps/desktop/.env.local
+    // __dirname is apps/desktop/dist-electron, so go up one level
+    envFilesToLoad.push(path.join(__dirname, '..', '.env.local'));
+  } else {
+    // In packaged mode, apply baked-in production vars first (lowest precedence)
+    for (const [key, value] of Object.entries(PROD_ENV)) {
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
     }
+
+    // Allow per-machine overrides via a .env file in the userData directory
+    // (~/Library/Application Support/Overlord/ on macOS).
+    const userDataDir = app.getPath('userData');
+    envFilesToLoad.push(path.join(userDataDir, '.env.local'));
+    envFilesToLoad.push(path.join(userDataDir, '.env'));
   }
 
-  // 2. Allow per-machine overrides via a .env file in the userData directory
-  //    (~/Library/Application Support/Overlord/ on macOS).
-  //    This lets operators override individual keys without rebuilding.
-  const userDataDir = app.getPath('userData');
-  const envFiles = ['.env.local', '.env'];
-
-  for (const envFile of envFiles) {
-    const envPath = path.join(userDataDir, envFile);
+  for (const envPath of envFilesToLoad) {
     if (!fs.existsSync(envPath)) continue;
 
     const result = loadDotenv({ path: envPath, override: false });
     if (result.error) {
-      console.error(`[env] Failed to load ${envFile}:`, result.error);
+      console.error(`[env] Failed to load ${envPath}:`, result.error);
     } else {
-      console.warn(`[env] Loaded ${envFile} from ${envPath}`);
+      console.warn(`[env] Loaded env from ${envPath}`);
     }
   }
 }

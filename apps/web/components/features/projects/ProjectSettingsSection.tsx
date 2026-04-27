@@ -189,19 +189,26 @@ export function ProjectSettingsSection({
               </Button>
             ) : null}
           </div>
-          {isElectron ? (
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 animate-[shimmer_6s_ease-in-out_infinite] bg-linear-to-r from-bg-muted/40 via-sky-500/20 to-bg-muted/40">
-              <ProjectExecutionWorkspaceSelector
-                localDirectoryLabel={localDirectoryLabel}
-                sshDirectoryLabel={sshDirectoryLabel}
-                sshTitle={sshTitle}
-              />
+          {isElectron && (
 
-              <div className="flex items-center rounded-lg border bg-muted/40 p-1">
+            <ProjectExecutionWorkspaceSelector
+              localDirectoryLabel={localDirectoryLabel}
+              sshDirectoryLabel={sshDirectoryLabel}
+              sshTitle={sshTitle}
+            />
+          )}
+
+          {isElectron && (
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 ">
+              <div className="relative flex items-center overflow-hidden rounded-lg border bg-muted/80 p-1">
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0bg-muted/40"
+                />
                 <button
                   type="button"
                   className={cn(
-                    'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    'relative z-10 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                     !isCurrentChangesView
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -215,7 +222,7 @@ export function ProjectSettingsSection({
                 <button
                   type="button"
                   className={cn(
-                    'relative overflow-hidden rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                    'relative z-10 overflow-hidden rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                     isCurrentChangesView
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -232,7 +239,7 @@ export function ProjectSettingsSection({
                 </button>
               </div>
             </div>
-          ) : null}
+          )}
         </div>
       </div>
 
