@@ -26,6 +26,8 @@ type CurrentChangesPageProps = {
   initialFilePath?: string | null;
 };
 
+export type DiffViewMode = 'inline' | 'side-by-side';
+
 export function CurrentChangesPage({
   projectId,
   projectName,
@@ -35,6 +37,7 @@ export function CurrentChangesPage({
   const { api, isElectron } = useElectron();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
+  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('inline');
   const hasLocalDirectory = !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
   const canInspectChanges = hasLocalDirectory;
   const branchesQuery = useGitBranchesQuery({
@@ -215,6 +218,8 @@ export function CurrentChangesPage({
               isLoading={diffState.isLoading}
               projectId={projectId}
               selectedFilePath={selectedFile.path}
+              viewMode={diffViewMode}
+              onViewModeChange={setDiffViewMode}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">

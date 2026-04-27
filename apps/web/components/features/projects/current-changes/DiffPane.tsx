@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Info, Loader2 } from 'lucide-react';
+import { Bot, ChevronDown, Columns2, Info, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -8,6 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
+
+import type { DiffViewMode } from '../CurrentChangesPage';
 
 import { buildHunkMatches, formatStatus, lineNumber } from './helpers';
 import { HunkPopoverContent } from './HunkPopoverContent';
@@ -20,6 +22,8 @@ type DiffPaneProps = {
   isLoading: boolean;
   projectId: string;
   selectedFilePath: string | null;
+  viewMode: DiffViewMode;
+  onViewModeChange: (mode: DiffViewMode) => void;
 };
 
 function formatAgentName(agent: string | null | undefined) {
@@ -37,7 +41,9 @@ export function DiffPane({
   file,
   isLoading,
   projectId,
-  selectedFilePath
+  selectedFilePath,
+  viewMode,
+  onViewModeChange
 }: DiffPaneProps) {
   const [openPopoverKey, setOpenPopoverKey] = useState<string | null>(null);
   const [rationaleOpen, setRationaleOpen] = useState(true);
@@ -58,6 +64,7 @@ export function DiffPane({
   const hasRationale = Boolean(file.primaryFileChange || file.primaryTicket);
   const linesAdded = file.file.linesAdded;
   const linesRemoved = file.file.linesRemoved;
+  const showSideBySide = viewMode === 'side-by-side';
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -71,6 +78,35 @@ export function DiffPane({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-3 text-[11px]">
+          <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+            <button
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1 rounded px-2 py-1 transition-colors',
+                viewMode === 'inline'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              onClick={() => onViewModeChange('inline')}
+              aria-pressed={viewMode === 'inline'}
+            >
+              Inline
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1 rounded px-2 py-1 transition-colors',
+                viewMode === 'side-by-side'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              onClick={() => onViewModeChange('side-by-side')}
+              aria-pressed={viewMode === 'side-by-side'}
+            >
+              <Columns2 className="h-3.5 w-3.5" />
+              Side-by-side
+            </button>
+          </div>
           <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-muted-foreground">
             {formatStatus(file.file.status)}
           </span>
@@ -235,60 +271,148 @@ export function DiffPane({
                     ) : null}
                   </div>
                   <div className="font-mono text-xs">
-                    {hunk.lines.map(line => {
-                      const isChanged = line.kind !== 'context';
-                      const popoverKey = `${hunk.id}:${line.key}`;
-                      const row = (
-                        <div
-                          className={cn(
-                            'grid grid-cols-[44px_44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5 text-left',
-                            line.kind === 'add' && 'bg-emerald-500/10',
-                            line.kind === 'del' && 'bg-rose-500/10',
-                            isChanged && 'hover:bg-muted/60'
-                          )}
-                        >
-                          <span className="select-none text-right text-[10px] text-muted-foreground">
-                            {lineNumber(line.oldLineNumber)}
-                          </span>
-                          <span className="select-none text-right text-[10px] text-muted-foreground">
-                            {lineNumber(line.newLineNumber)}
-                          </span>
-                          <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">
-                            {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
-                            {line.content}
-                          </span>
+                    {showSideBySide ? (
+                      <div className="grid grid-cols-2">
+                        <div className="border-r bg-muted/20">
+                          <p className="border-b bg-muted/40 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Old
+                          </p>
+                          {hunk.lines.map(line => {
+                            const isChanged = line.kind !== 'add';
+                            return (
+                              <div
+                                key={`${line.key}-old`}
+                                className={cn(
+                                  'grid grid-cols-[44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5',
+                                  line.kind === 'del' && 'bg-rose-500/10',
+                                  line.kind === 'context' && 'text-muted-foreground',
+                                  isChanged && 'hover:bg-muted/60'
+                                )}
+                              >
+                                <span className="select-none text-right text-[10px] text-muted-foreground">
+                                  {lineNumber(line.oldLineNumber)}
+                                </span>
+                                <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">
+                                  {line.kind === 'add' ? '' : line.kind === 'del' ? '-' : ' '}
+                                  {line.kind === 'add' ? '' : line.content}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
+                        <div>
+                          <p className="border-b bg-muted/40 px-3 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            New
+                          </p>
+                          {hunk.lines.map(line => {
+                            const isChanged = line.kind !== 'del';
+                            const popoverKey = `${hunk.id}:${line.key}`;
+                            const row = (
+                              <div
+                                className={cn(
+                                  'grid grid-cols-[44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5 text-left',
+                                  line.kind === 'add' && 'bg-emerald-500/10',
+                                  line.kind === 'context' && 'text-muted-foreground',
+                                  isChanged && 'hover:bg-muted/60'
+                                )}
+                              >
+                                <span className="select-none text-right text-[10px] text-muted-foreground">
+                                  {lineNumber(line.newLineNumber)}
+                                </span>
+                                <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">
+                                  {line.kind === 'del' ? '' : line.kind === 'add' ? '+' : ' '}
+                                  {line.kind === 'del' ? '' : line.content}
+                                </span>
+                              </div>
+                            );
 
-                      if (!isChanged) {
-                        return <div key={line.key}>{row}</div>;
-                      }
+                            if (!isChanged) {
+                              return <div key={line.key}>{row}</div>;
+                            }
 
-                      return (
-                        <Popover
-                          key={line.key}
-                          open={openPopoverKey === popoverKey}
-                          onOpenChange={open => setOpenPopoverKey(open ? popoverKey : null)}
-                        >
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className="w-full"
-                              onClick={() => setOpenPopoverKey(popoverKey)}
-                            >
-                              {row}
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" className="w-[420px]">
-                            <HunkPopoverContent
-                              fileTickets={file.tickets}
-                              matches={matches}
-                              projectId={projectId}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      );
-                    })}
+                            return (
+                              <Popover
+                                key={line.key}
+                                open={openPopoverKey === popoverKey}
+                                onOpenChange={open => setOpenPopoverKey(open ? popoverKey : null)}
+                              >
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="w-full"
+                                    onClick={() => setOpenPopoverKey(popoverKey)}
+                                  >
+                                    {row}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent align="start" className="w-[420px]">
+                                  <HunkPopoverContent
+                                    fileTickets={file.tickets}
+                                    matches={matches}
+                                    projectId={projectId}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      hunk.lines.map(line => {
+                        const isChanged = line.kind !== 'context';
+                        const popoverKey = `${hunk.id}:${line.key}`;
+                        const row = (
+                          <div
+                            className={cn(
+                              'grid grid-cols-[44px_44px_minmax(0,1fr)] items-start gap-2 px-3 py-0.5 text-left',
+                              line.kind === 'add' && 'bg-emerald-500/10',
+                              line.kind === 'del' && 'bg-rose-500/10',
+                              isChanged && 'hover:bg-muted/60'
+                            )}
+                          >
+                            <span className="select-none text-right text-[10px] text-muted-foreground">
+                              {lineNumber(line.oldLineNumber)}
+                            </span>
+                            <span className="select-none text-right text-[10px] text-muted-foreground">
+                              {lineNumber(line.newLineNumber)}
+                            </span>
+                            <span className="min-w-0 whitespace-pre-wrap break-all text-foreground">
+                              {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
+                              {line.content}
+                            </span>
+                          </div>
+                        );
+
+                        if (!isChanged) {
+                          return <div key={line.key}>{row}</div>;
+                        }
+
+                        return (
+                          <Popover
+                            key={line.key}
+                            open={openPopoverKey === popoverKey}
+                            onOpenChange={open => setOpenPopoverKey(open ? popoverKey : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="w-full"
+                                onClick={() => setOpenPopoverKey(popoverKey)}
+                              >
+                                {row}
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="start" className="w-[420px]">
+                              <HunkPopoverContent
+                                fileTickets={file.tickets}
+                                matches={matches}
+                                projectId={projectId}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               );
