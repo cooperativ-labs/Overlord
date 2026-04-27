@@ -184,7 +184,7 @@ export function AppSidebar({
   // const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
   const isAdminActive = pathname === '/admin' || pathname.startsWith('/admin/');
   const isFeedActive = pathname === '/feed' || pathname.startsWith('/feed/');
-  const isMyTasksActive = pathname === '/u' || pathname.startsWith('/u/');
+  const isMyTicketsActive = pathname === '/u' || pathname.startsWith('/u/');
 
   function isProjectActive(project: SidebarProject) {
     const segments = pathname.split('/').filter(Boolean);
@@ -243,7 +243,7 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={isMyTasksActive} tooltip="My Tasks">
+                <SidebarMenuButton asChild isActive={isMyTicketsActive} tooltip="My Tickets">
                   <Link
                     href="/u"
                     onClick={event => {
@@ -254,7 +254,7 @@ export function AppSidebar({
                     }}
                   >
                     <ListChecks />
-                    <span>My Tasks</span>
+                    <span>My Tickets</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
