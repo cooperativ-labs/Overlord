@@ -127,6 +127,15 @@ ovld protocol discover-project
 
 You can override with `--project-id` or `--working-directory` if needed.
 
+### Choosing `--execution-target`
+
+Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
+
+- **`agent`** — any task an AI agent can complete in a computer environment: coding, internet research, document editing, data analysis, automated testing, etc.
+- **`human`** — any task requiring human presence or judgment: setting credentials or tokens in a third-party UI (e.g. Vercel, AWS), sending physical mail, making a product or business decision, physical-world actions.
+
+When in doubt, ask yourself: *can this be done entirely inside a terminal or browser by an AI without human intervention?* If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
+
 ## Context And Artifacts
 
 ```bash
@@ -153,4 +162,4 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.1.0 -->
+<!-- version: 0.2.2 -->

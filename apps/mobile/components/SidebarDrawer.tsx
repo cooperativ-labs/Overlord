@@ -16,7 +16,7 @@ interface SidebarDrawerProps {
 export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { projects } = useSelectedProject();
+  const { projects, selectProject } = useSelectedProject();
 
   const userLabel = useMemo(() => {
     if (!user) return 'Not signed in';
@@ -29,6 +29,12 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   function navigate(path: string) {
     onClose();
     router.push(path as never);
+  }
+
+  function switchProject(projectId: string) {
+    selectProject(projectId);
+    onClose();
+    router.replace('/(tabs)/tickets' as never);
   }
 
   return (
@@ -90,7 +96,7 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
                 <Pressable
                   key={project.id}
                   style={({ pressed }) => [styles.projectRow, pressed && styles.pressed]}
-                  onPress={() => navigate(`/(tabs)/tickets?projectId=${project.id}`)}
+                  onPress={() => switchProject(project.id)}
                 >
                   <View
                     style={[

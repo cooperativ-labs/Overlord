@@ -207,8 +207,55 @@ function buildLaunchScriptContent(
         .join('\n')
     : '';
 
-  const innerParts = [cwd ? `cd ${shellQuote(cwd)}` : null, envLines || null, command].filter(
-    (x): x is string => Boolean(x)
+  // If a cwd is set, guard the `cd` so that a missing/inaccessible directory
+  // surfaces a troubleshooting message in the terminal instead of silently
+  // continuing in the wrong directory and letting the agent fail with no
+  // explanation.
+  const cdGuard = cwd
+    ? [
+        `if ! cd ${shellQuote(cwd)} 2>/dev/null; then`,
+        `  printf '\\n\\033[1;31mOverlord: Cannot open working directory:\\033[0m %s\\n\\n' ${shellQuote(cwd)}`,
+        `  printf 'This usually means:\\n'`,
+        `  printf '  • The directory does not exist or was moved/renamed\\n'`,
+        `  printf '  • The Overlord app or your terminal is not yet permitted\\n'`,
+        `  printf '    to access this folder\\n'`,
+        `  printf '  • The project working directory in Overlord is out of date\\n\\n'`,
+        `  printf 'Try one of:\\n'`,
+        `  printf '  1. Update the project working directory in Overlord settings\\n'`,
+        `  printf '  2. Open System Settings → Privacy & Security → Files and Folders\\n'`,
+        `  printf '     and grant your terminal app access to the parent folder\\n'`,
+        `  printf '  3. Re-clone or restore the missing directory\\n\\n'`,
+        `  printf 'Press Enter to close this window... '`,
+        `  read _ovld_dismiss`,
+        `  exit 1`,
+        `fi`
+      ].join('\n')
+    : null;
+
+  // Detect a fast-failing agent (exits non-zero within 3 seconds) and print a
+  // troubleshooting guide before the terminal closes. Common causes: agent CLI
+  // missing from PATH, untrusted/unsupported project directory, or an expired
+  // Overlord session.
+  const guardedCommand = [
+    '_ovld_started=$(date +%s)',
+    `${command}`,
+    '_ovld_exit=$?',
+    '_ovld_elapsed=$(( $(date +%s) - _ovld_started ))',
+    'if [ "$_ovld_exit" -ne 0 ] && [ "$_ovld_elapsed" -lt 3 ]; then',
+    `  printf '\\n\\033[1;31mOverlord: Agent exited immediately (status %d after %ds).\\033[0m\\n\\n' "$_ovld_exit" "$_ovld_elapsed"`,
+    `  printf 'Troubleshooting:\\n'`,
+    `  printf '  • Confirm the agent CLI is installed and on your PATH\\n'`,
+    `  printf '  • Confirm the working directory is correct and trusted by the agent\\n'`,
+    `  printf '  • Re-authenticate with Overlord if your session expired\\n'`,
+    `  printf '  • Re-run agent setup from Overlord → Settings → Agents\\n\\n'`,
+    `  printf 'Press Enter to close this window... '`,
+    '  read _ovld_dismiss',
+    'fi',
+    'exit $_ovld_exit'
+  ].join('\n');
+
+  const innerParts = [cdGuard, envLines || null, guardedCommand].filter((x): x is string =>
+    Boolean(x)
   );
   const innerScript = innerParts.join('\n');
 

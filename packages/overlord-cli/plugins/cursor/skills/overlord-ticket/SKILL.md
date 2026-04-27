@@ -27,11 +27,21 @@ Use this skill whenever Cursor needs to work with Overlord, whether the session 
 6. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 7. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
 
+## Choosing `--execution-target` When Creating Tickets
+
+Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
+
+- **`agent`** — any task an AI agent can complete in a computer environment: coding, internet research, document editing, data analysis, automated testing, etc.
+- **`human`** — any task requiring human presence or judgment: setting credentials or tokens in a third-party UI (e.g. Vercel, AWS), sending physical mail, making a product or business decision, physical-world actions.
+
+When in doubt, ask yourself: *can this be done entirely inside a terminal or browser by an AI without human intervention?* If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
+
 ## Rules
 
 - Always attach first and always deliver last once you are on a ticket.
 - Use `ovld protocol` commands, the plugin commands, and the MCP tool instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
 - Include at least one progress update before delivering.
+- When creating follow-up tickets, always set `--execution-target` explicitly using the `agent`/`human` rule above.
 
-<!-- version: 0.1.0 -->
+<!-- version: 0.2.2 -->

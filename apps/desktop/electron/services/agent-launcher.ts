@@ -359,6 +359,19 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const apiWorkingDirectory = response.headers.get('X-Working-Directory');
   const resolvedCwd = input.cwd || apiWorkingDirectory || undefined;
 
+  // Pre-flight check: if a local cwd is configured but missing, surface a clear
+  // error to the renderer instead of opening a terminal where `cd` silently
+  // fails and the agent appears to do nothing. Skipped for remote SSH launches
+  // (the path lives on the remote host).
+  if (!isRemote && resolvedCwd) {
+    const cwdProblem = describeLocalCwdProblem(resolvedCwd);
+    if (cwdProblem) {
+      throw new Error(
+        `Working directory ${resolvedCwd} ${cwdProblem}. Open the project's settings to update its directory, or grant Overlord access in System Settings → Privacy & Security → Files and Folders.`
+      );
+    }
+  }
+
   const contextMarkdown = await response.text();
 
   const tag = `overlord-${input.ticketId.slice(-8)}-${Date.now()}`;
@@ -559,6 +572,33 @@ function writePermissionRequestHookFiles(tag: string): {
   fs.writeFileSync(settingsFile, JSON.stringify(mergedSettings, null, 2), 'utf-8');
 
   return { hookScript, settingsFile };
+}
+
+/**
+ * Returns a short human-readable explanation of why a local working directory
+ * can't be used, or `null` if the directory is fine. Used to translate the
+ * silent `cd` failures users were seeing into actionable error messages.
+ */
+function describeLocalCwdProblem(cwd: string): string | null {
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(cwd);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return 'does not exist';
+    if (code === 'EACCES' || code === 'EPERM') {
+      return 'is not accessible (permission denied)';
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return `cannot be opened (${message})`;
+  }
+  if (!stat.isDirectory()) return 'is not a directory';
+  try {
+    fs.accessSync(cwd, fs.constants.R_OK | fs.constants.X_OK);
+  } catch {
+    return 'is not readable (permission denied)';
+  }
+  return null;
 }
 
 function shellQuote(value: string): string {

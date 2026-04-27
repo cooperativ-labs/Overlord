@@ -460,7 +460,7 @@ ${settingsJson}
 - \`ask\` — ask a blocking question
 - \`read_context\` / \`write_context\` — persist findings across sessions
 - \`deliver\` — deliver completed work
-- \`create_ticket\` — create a follow-up ticket for human work`;
+- \`create_ticket\` — create a follow-up ticket; set \`executionTarget\` to \`"agent"\` for computer-executable work or \`"human"\` for tasks requiring human presence/judgment`;
 }
 
 function buildMcpCloudProtocolSection({
@@ -522,7 +522,7 @@ Upload/download storage artifacts:
 
 ### 6 — create_ticket (optional)
 
-Create follow-up ticket for human work.
+Create a follow-up ticket. Set \`executionTarget\` to \`"agent"\` for tasks an AI can complete in a computer environment (coding, research, document editing) or \`"human"\` for tasks requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product decision).
 
 ### 7 — deliver (always last)
 
@@ -564,6 +564,9 @@ function buildLocalCoreRules(launchMode: PromptLaunchMode): string {
 - Use \`write-context\` for facts a future agent session should know.
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
+- **When creating follow-up tickets, set \`execution_target\` based on who should do the work:**
+  - \`agent\` — any task an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
+  - \`human\` — any task requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product or business decision, physical-world actions)
 ${buildAskModeRules(launchMode)}`;
 }
 
@@ -580,6 +583,9 @@ function buildMcpCoreRules(launchMode: PromptLaunchMode): string {
 - If blocked, create a follow-up ticket.
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
+- **When creating follow-up tickets via \`create_ticket\`, set \`executionTarget\` based on who should do the work:**
+  - \`"agent"\` — tasks an AI agent can complete in a computer environment (coding, research, document editing, data analysis, etc.)
+  - \`"human"\` — tasks requiring human presence or judgment (setting credentials in a third-party UI, sending a letter, making a product decision, physical-world actions)
 ${askModeRules}`;
 }
 

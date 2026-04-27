@@ -40,8 +40,8 @@ export default function PrivacyPage() {
           <h3 className="font-medium mt-4">Usage Data</h3>
           <p>
             We automatically collect information about how you use the Service, including pages
-            visited, features used, tickets created, agent sessions initiated, and time spent on
-            the platform.
+            visited, features used, tickets created, agent sessions initiated, and time spent on the
+            platform.
           </p>
 
           <h3 className="font-medium mt-4">Content You Submit</h3>
@@ -52,8 +52,8 @@ export default function PrivacyPage() {
 
           <h3 className="font-medium mt-4">Device and Technical Information</h3>
           <p>
-            We collect IP addresses, browser type, operating system, device identifiers, and
-            similar technical information when you access the Service.
+            We collect IP addresses, browser type, operating system, device identifiers, and similar
+            technical information when you access the Service.
           </p>
 
           <h3 className="font-medium mt-4">Integration Data</h3>
@@ -72,12 +72,8 @@ export default function PrivacyPage() {
             <li>Authenticate users and manage accounts;</li>
             <li>Process transactions and send related information;</li>
             <li>Respond to comments, questions, and support requests;</li>
-            <li>
-              Send technical notices, updates, security alerts, and administrative messages;
-            </li>
-            <li>
-              Monitor and analyze usage patterns to improve the Service and user experience;
-            </li>
+            <li>Send technical notices, updates, security alerts, and administrative messages;</li>
+            <li>Monitor and analyze usage patterns to improve the Service and user experience;</li>
             <li>Detect and prevent fraud, abuse, and security incidents;</li>
             <li>Comply with legal obligations.</li>
           </ul>
@@ -109,8 +105,8 @@ export default function PrivacyPage() {
           <h3 className="font-medium mt-4">Legal Requirements</h3>
           <p>
             We may disclose your information if required by law, regulation, legal process, or
-            governmental request, or to protect the rights, property, or safety of Cooperativ,
-            our users, or the public.
+            governmental request, or to protect the rights, property, or safety of Cooperativ, our
+            users, or the public.
           </p>
 
           <h3 className="font-medium mt-4">With Your Consent</h3>
@@ -122,8 +118,8 @@ export default function PrivacyPage() {
           <p>
             We retain your personal information for as long as your account is active or as needed
             to provide the Service. If you delete your account, we will delete or anonymize your
-            personal information within 90 days, except where we are required to retain it for
-            legal or legitimate business purposes.
+            personal information within 90 days, except where we are required to retain it for legal
+            or legitimate business purposes.
           </p>
         </section>
 
@@ -161,8 +157,7 @@ export default function PrivacyPage() {
           <p>Depending on your location, you may have the following rights:</p>
           <ul className="list-disc space-y-1 pl-6">
             <li>
-              <strong>Access:</strong> Request a copy of the personal information we hold about
-              you;
+              <strong>Access:</strong> Request a copy of the personal information we hold about you;
             </li>
             <li>
               <strong>Correction:</strong> Request correction of inaccurate or incomplete
@@ -214,9 +209,9 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold">12. Changes to This Policy</h2>
           <p>
             We may update this Privacy Policy from time to time. We will notify you of material
-            changes by posting the updated policy on the Service or by email at least 30 days
-            before the changes take effect. Your continued use of the Service after the effective
-            date constitutes your acceptance of the updated policy.
+            changes by posting the updated policy on the Service or by email at least 30 days before
+            the changes take effect. Your continued use of the Service after the effective date
+            constitutes your acceptance of the updated policy.
           </p>
         </section>
 

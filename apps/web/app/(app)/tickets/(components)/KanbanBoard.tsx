@@ -1206,7 +1206,10 @@ export default function KanbanBoard({
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
       organization_id:
-        organizationId ?? optimisticProject.organization_id ?? referenceTicket?.organization_id ?? 0,
+        organizationId ??
+        optimisticProject.organization_id ??
+        referenceTicket?.organization_id ??
+        0,
       project_id: optimisticProject.project_id,
       project_name: optimisticProject.project_name,
       project_color: optimisticProject.project_color,
@@ -1277,7 +1280,10 @@ export default function KanbanBoard({
       title: deriveTitleFromObjective(trimmedObjective),
       objective: trimmedObjective,
       organization_id:
-        organizationId ?? optimisticProject.organization_id ?? referenceTicket?.organization_id ?? 0,
+        organizationId ??
+        optimisticProject.organization_id ??
+        referenceTicket?.organization_id ??
+        0,
       project_id: optimisticProject.project_id,
       project_name: optimisticProject.project_name,
       project_color: optimisticProject.project_color,

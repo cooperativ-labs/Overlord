@@ -16,8 +16,19 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import {
@@ -113,6 +124,8 @@ type ServiceStatusEntry = {
   existingManagedFiles: string[];
   missingManagedFiles: string[];
 };
+
+const CONNECTOR_UPDATE_WARNING_KEY = 'overlord_connector_update_warning_dismissed';
 
 const AGENTS = ['claude', 'cursor', 'codex', 'opencode'] as const;
 
@@ -370,6 +383,41 @@ export function CliPage({ open }: { open: boolean }) {
   const [serviceStatuses, setServiceStatuses] = useState<ServiceStatusEntry[]>([]);
   const [installAllBundlesButtonState, setInstallAllBundlesButtonState] =
     useState<ButtonLoadingState>('default');
+
+  const [showUpdateWarning, setShowUpdateWarning] = useState(false);
+  const [dontShowWarningAgain, setDontShowWarningAgain] = useState(false);
+  const [pendingUpdateAction, setPendingUpdateAction] = useState<(() => Promise<void>) | null>(
+    null
+  );
+
+  function withUpdateWarning(action: () => Promise<void>): () => Promise<void> {
+    return async () => {
+      const dismissed = window.localStorage.getItem(CONNECTOR_UPDATE_WARNING_KEY) === 'true';
+      if (dismissed) {
+        await action();
+        return;
+      }
+      setDontShowWarningAgain(false);
+      setPendingUpdateAction(() => action);
+      setShowUpdateWarning(true);
+    };
+  }
+
+  async function handleWarningConfirm() {
+    if (dontShowWarningAgain) {
+      window.localStorage.setItem(CONNECTOR_UPDATE_WARNING_KEY, 'true');
+    }
+    setShowUpdateWarning(false);
+    if (pendingUpdateAction) {
+      await pendingUpdateAction();
+      setPendingUpdateAction(null);
+    }
+  }
+
+  function handleWarningCancel() {
+    setShowUpdateWarning(false);
+    setPendingUpdateAction(null);
+  }
 
   const loadBundleStatuses = useCallback(async () => {
     if (!isElectron || !window.electronAPI?.agentBundle) return;
@@ -1079,28 +1127,34 @@ export function CliPage({ open }: { open: boolean }) {
                                 size="sm"
                                 variant="outline"
                                 reset={true}
-                                onClick={() =>
-                                  void (option.kind === 'bundle'
-                                    ? bundleStatus?.status === 'installed'
-                                      ? handleUninstallBundle(bundleStatus.agent, option.key)
-                                      : bundleStatus?.status === 'partial' ||
-                                          bundleStatus?.status === 'error'
-                                        ? handleRepairBundle(bundleStatus.agent, option.key)
-                                        : handleInstallBundle(option.bundleAgent, option.key)
-                                    : option.kind === 'service'
-                                      ? serviceStatus?.status === 'installed'
-                                        ? handleUninstallService(option.key)
-                                        : serviceStatus?.status === 'partial' ||
-                                            serviceStatus?.status === 'error'
-                                          ? handleRepairService(option.key)
-                                          : handleInstallService(option.key)
-                                      : !slashStatus || slashStatus.status === 'not_installed'
-                                        ? handleInstallSlashCommands(option.slashAgent, option.key)
-                                        : handleUninstallSlashCommands(
-                                            option.slashAgent,
-                                            option.key
-                                          ))
-                                }
+                                onClick={() => {
+                                  const isRemove = actionMeta.label === 'Remove';
+                                  const baseAction = () =>
+                                    option.kind === 'bundle'
+                                      ? bundleStatus?.status === 'installed'
+                                        ? handleUninstallBundle(bundleStatus.agent, option.key)
+                                        : bundleStatus?.status === 'partial' ||
+                                            bundleStatus?.status === 'error'
+                                          ? handleRepairBundle(bundleStatus.agent, option.key)
+                                          : handleInstallBundle(option.bundleAgent, option.key)
+                                      : option.kind === 'service'
+                                        ? serviceStatus?.status === 'installed'
+                                          ? handleUninstallService(option.key)
+                                          : serviceStatus?.status === 'partial' ||
+                                              serviceStatus?.status === 'error'
+                                            ? handleRepairService(option.key)
+                                            : handleInstallService(option.key)
+                                        : !slashStatus || slashStatus.status === 'not_installed'
+                                          ? handleInstallSlashCommands(
+                                              option.slashAgent,
+                                              option.key
+                                            )
+                                          : handleUninstallSlashCommands(
+                                              option.slashAgent,
+                                              option.key
+                                            );
+                                  void (isRemove ? baseAction() : withUpdateWarning(baseAction)());
+                                }}
                                 disabled={!canRunAction || activePluginActionKey !== null}
                               />
                             ) : null}
@@ -1214,6 +1268,35 @@ export function CliPage({ open }: { open: boolean }) {
           for more detail.
         </p>
       </div>
+
+      <AlertDialog open={showUpdateWarning} onOpenChange={setShowUpdateWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restart may be required</AlertDialogTitle>
+            <AlertDialogDescription>
+              If you are using a desktop application for this agent, you may need to restart the app
+              for this change to take effect. For the Codex app, you may need to uninstall and
+              reinstall the plugin in the Plugins section.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center gap-2 py-2">
+            <Checkbox
+              id="dont-show-warning"
+              checked={dontShowWarningAgain}
+              onCheckedChange={checked => setDontShowWarningAgain(checked === true)}
+            />
+            <label htmlFor="dont-show-warning" className="text-sm cursor-pointer">
+              Don&apos;t show this again
+            </label>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleWarningCancel}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleWarningConfirm()}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {isElectron && api?.cli ? (
         <>

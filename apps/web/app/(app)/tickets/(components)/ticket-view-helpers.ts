@@ -110,7 +110,11 @@ export function resolveOptimisticTicketProject(input: {
   defaultProject?: SidebarProject | null;
   referenceTicket?: Pick<
     BoardTicket,
-    'project_id' | 'project_name' | 'project_color' | 'project_everhour_project_id' | 'organization_id'
+    | 'project_id'
+    | 'project_name'
+    | 'project_color'
+    | 'project_everhour_project_id'
+    | 'organization_id'
   > | null;
 }): OptimisticTicketProject {
   const { projectId, defaultProject, referenceTicket } = input;

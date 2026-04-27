@@ -62,6 +62,8 @@ export default function BlankTicketCard({
     async (currentValue: string) => {
       if (isCreating) return;
       const trimmed = currentValue.trim();
+      onClose();
+      setValue('');
       if (trimmed) {
         setIsCreating(true);
         try {
@@ -70,8 +72,6 @@ export default function BlankTicketCard({
           setIsCreating(false);
         }
       }
-      onClose();
-      setValue('');
     },
     [isCreating, onCreateTicket, status, position, onClose]
   );

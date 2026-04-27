@@ -76,13 +76,16 @@ function formatAgentLabel(agent: AssignedAgent | null): string | null {
 
 export default function TicketsScreen() {
   const router = useRouter();
-  const { projects } = useSelectedProject();
+  const { projects, selectedProjectId, selectProject } = useSelectedProject();
   const { projectId: projectIdParam } = useLocalSearchParams<{ projectId?: string }>();
-  const [filterProjectId, setFilterProjectId] = useState<string | null>(projectIdParam ?? null);
 
+  // Seed context from deep-link param on first mount only.
   useEffect(() => {
-    setFilterProjectId(projectIdParam ?? null);
-  }, [projectIdParam]);
+    if (projectIdParam) selectProject(projectIdParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filterProjectId = selectedProjectId;
   const [tickets, setTickets] = useState<TicketWithProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -332,7 +335,7 @@ export default function TicketsScreen() {
           <Pressable
             style={styles.menuItem}
             onPress={() => {
-              setFilterProjectId(null);
+              selectProject(null);
               setProjectMenuOpen(false);
             }}
           >
@@ -346,7 +349,7 @@ export default function TicketsScreen() {
               key={project.id}
               style={styles.menuItem}
               onPress={() => {
-                setFilterProjectId(project.id);
+                selectProject(project.id);
                 setProjectMenuOpen(false);
               }}
             >

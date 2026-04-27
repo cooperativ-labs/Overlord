@@ -23,8 +23,8 @@ export default function TermsPage() {
           </p>
           <p>
             These Terms constitute a legally binding agreement between you and Cooperativ. If you
-            are using the Service on behalf of an organization, you represent that you have authority
-            to bind that organization to these Terms.
+            are using the Service on behalf of an organization, you represent that you have
+            authority to bind that organization to these Terms.
           </p>
         </section>
 
@@ -110,10 +110,10 @@ export default function TermsPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">8. Subscription and Payment</h2>
           <p>
-            Access to certain features may require a paid subscription. Subscription fees are
-            billed in advance on a monthly or annual basis and are non-refundable except as
-            required by applicable law. We reserve the right to change our pricing with 30 days
-            notice. Failure to pay may result in suspension or termination of your access.
+            Access to certain features may require a paid subscription. Subscription fees are billed
+            in advance on a monthly or annual basis and are non-refundable except as required by
+            applicable law. We reserve the right to change our pricing with 30 days notice. Failure
+            to pay may result in suspension or termination of your access.
           </p>
         </section>
 
@@ -121,25 +121,24 @@ export default function TermsPage() {
           <h2 className="text-lg font-semibold">9. Disclaimers</h2>
           <p>
             THE SERVICE IS PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE&rdquo; WITHOUT
-            WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. COOPERATIV DOES NOT WARRANT THAT THE
-            SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF VIRUSES. YOUR USE OF THE SERVICE
-            IS AT YOUR OWN RISK.
+            WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. COOPERATIV DOES NOT WARRANT THAT THE SERVICE
+            WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF VIRUSES. YOUR USE OF THE SERVICE IS AT
+            YOUR OWN RISK.
           </p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">10. Limitation of Liability</h2>
           <p>
-            TO THE MAXIMUM EXTENT PERMITTED BY LAW, COOPERATIV SHALL NOT BE LIABLE FOR ANY
-            INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF
-            PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA,
-            USE, GOODWILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM YOUR USE OF OR INABILITY TO
-            USE THE SERVICE.
+            TO THE MAXIMUM EXTENT PERMITTED BY LAW, COOPERATIV SHALL NOT BE LIABLE FOR ANY INDIRECT,
+            INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR
+            REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL,
+            OR OTHER INTANGIBLE LOSSES, RESULTING FROM YOUR USE OF OR INABILITY TO USE THE SERVICE.
           </p>
           <p>
-            IN NO EVENT SHALL COOPERATIV&apos;S TOTAL LIABILITY TO YOU EXCEED THE GREATER OF (A)
-            THE AMOUNTS YOU PAID TO COOPERATIV IN THE 12 MONTHS PRIOR TO THE CLAIM OR (B) ONE
-            HUNDRED DOLLARS ($100).
+            IN NO EVENT SHALL COOPERATIV&apos;S TOTAL LIABILITY TO YOU EXCEED THE GREATER OF (A) THE
+            AMOUNTS YOU PAID TO COOPERATIV IN THE 12 MONTHS PRIOR TO THE CLAIM OR (B) ONE HUNDRED
+            DOLLARS ($100).
           </p>
         </section>
 
@@ -175,8 +174,8 @@ export default function TermsPage() {
           <h2 className="text-lg font-semibold">14. Governing Law</h2>
           <p>
             These Terms are governed by the laws of the United States and the State of Delaware,
-            without regard to its conflict of law provisions. Any disputes arising under these
-            Terms shall be resolved in the state or federal courts located in Delaware.
+            without regard to its conflict of law provisions. Any disputes arising under these Terms
+            shall be resolved in the state or federal courts located in Delaware.
           </p>
         </section>
 

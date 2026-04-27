@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.4.0] - 2026-04-27:08:27
+
+### Added
+- Add execution-target guidance to ticket creation prompts and connector docs so agents can distinguish computer-executable work from tasks that need a human.
+
+### Fixed
+- Surface clear troubleshooting when a local agent launch cannot open its working directory or exits immediately, instead of failing silently in the terminal.
+
+### Changed
+- Warn before installing, updating, repairing, or removing agent connectors in the desktop settings so users know when a restart or plugin reinstall may be required.
+
+### Security
+- None.
+
 ## [5.3.0] - 2026-04-26:09:30
 
 ### Added
