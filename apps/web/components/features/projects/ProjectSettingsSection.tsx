@@ -190,7 +190,7 @@ export function ProjectSettingsSection({
             ) : null}
           </div>
           {isElectron ? (
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 animate-[shimmer_6s_ease-in-out_infinite] bg-linear-to-r from-bg-muted/40 via-sky-500/20 to-bg-muted/40">
               <ProjectExecutionWorkspaceSelector
                 localDirectoryLabel={localDirectoryLabel}
                 sshDirectoryLabel={sshDirectoryLabel}
@@ -226,7 +226,7 @@ export function ProjectSettingsSection({
                   title={currentChangesToggleTitle}
                 >
                   {!isCurrentChangesView && !currentChangesToggleDisabled ? (
-                    <span className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_6s_ease-in-out_infinite] bg-linear-to-r from-transparent via-sky-500/20 to-transparent" />
+                    <span className="pointer-events-none absolute inset-0 -translate-x-full " />
                   ) : null}
                   <span className="relative z-10">Current Changes</span>
                 </button>
