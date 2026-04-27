@@ -389,8 +389,17 @@ export function CliPage({ open }: { open: boolean }) {
   const [pendingUpdateAction, setPendingUpdateAction] = useState<(() => Promise<void>) | null>(
     null
   );
+  const [pendingUpdateWarningTitle, setPendingUpdateWarningTitle] =
+    useState('Restart may be required');
+  const [pendingUpdateWarningDescription, setPendingUpdateWarningDescription] = useState(
+    'Some desktop apps need a refresh before the change is visible. Terminal-only setups do not.'
+  );
 
-  function withUpdateWarning(action: () => Promise<void>): () => Promise<void> {
+  function withUpdateWarning(
+    title: string,
+    description: string,
+    action: () => Promise<void>
+  ): () => Promise<void> {
     return async () => {
       const dismissed = window.localStorage.getItem(CONNECTOR_UPDATE_WARNING_KEY) === 'true';
       if (dismissed) {
@@ -398,6 +407,8 @@ export function CliPage({ open }: { open: boolean }) {
         return;
       }
       setDontShowWarningAgain(false);
+      setPendingUpdateWarningTitle(title);
+      setPendingUpdateWarningDescription(description);
       setPendingUpdateAction(() => action);
       setShowUpdateWarning(true);
     };
@@ -412,6 +423,32 @@ export function CliPage({ open }: { open: boolean }) {
       await pendingUpdateAction();
       setPendingUpdateAction(null);
     }
+  }
+
+  function getUpdateWarningCopy(option: AgentPluginInstallOption): {
+    title: string;
+    description: string;
+  } {
+    if (option.agentKey === 'claude') {
+      return {
+        title: 'Restart Claude Desktop',
+        description:
+          'If you are using Claude Desktop, restart the app so the updated plugin loads. Terminal sessions do not need a restart.'
+      };
+    }
+
+    if (option.agentKey === 'codex') {
+      return {
+        title: 'Refresh the Codex plugin',
+        description:
+          'In the Codex app, click Remove from Codex and then Add to Codex so the updated plugin loads. Terminal sessions do not need this step.'
+      };
+    }
+
+    return {
+      title: 'Restart may be required',
+      description: `If you are using ${option.label} in a desktop app, you may need to restart or refresh it so the update takes effect. Terminal sessions do not need a restart.`
+    };
   }
 
   function handleWarningCancel() {
@@ -1153,7 +1190,16 @@ export function CliPage({ open }: { open: boolean }) {
                                               option.slashAgent,
                                               option.key
                                             );
-                                  void (isRemove ? baseAction() : withUpdateWarning(baseAction)());
+                                  if (isRemove || option.kind === 'slash') {
+                                    void baseAction();
+                                    return;
+                                  }
+                                  const warningCopy = getUpdateWarningCopy(option);
+                                  void withUpdateWarning(
+                                    warningCopy.title,
+                                    warningCopy.description,
+                                    baseAction
+                                  )();
                                 }}
                                 disabled={!canRunAction || activePluginActionKey !== null}
                               />
@@ -1272,12 +1318,8 @@ export function CliPage({ open }: { open: boolean }) {
       <AlertDialog open={showUpdateWarning} onOpenChange={setShowUpdateWarning}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Restart may be required</AlertDialogTitle>
-            <AlertDialogDescription>
-              If you are using a desktop application for this agent, you may need to restart the app
-              for this change to take effect. For the Codex app, you may need to uninstall and
-              reinstall the plugin in the Plugins section.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{pendingUpdateWarningTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{pendingUpdateWarningDescription}</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex items-center gap-2 py-2">
             <Checkbox
