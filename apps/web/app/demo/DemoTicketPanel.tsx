@@ -72,7 +72,7 @@ export function DemoTicketPanel({ ticket, onClose, onDiscuss, onRun }: DemoTicke
   }, [ticket.id]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden border-l bg-background">
+    <div className="flex h-full flex-col overflow-hidden border-l bg-card">
       {/* Header with agent controls */}
       <div className="flex items-center justify-end gap-2 border-b px-4 py-2">
         <div className="flex items-center gap-1.5">

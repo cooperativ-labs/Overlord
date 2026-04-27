@@ -222,7 +222,6 @@ export function AgentModelChooser({
               {currentModels.map(model => (
                 <ModelChoice
                   key={model.id}
-                  badge={model.is_recommended ? 'Recommended' : undefined}
                   disabled={disabled}
                   isSelected={effectiveSelection.model === model.model_id}
                   label={model.display_name}
@@ -308,13 +307,11 @@ export function AgentModelChooser({
 }
 
 function ModelChoice({
-  badge,
   disabled,
   isSelected,
   label,
   onPress
 }: {
-  badge?: string;
   disabled: boolean;
   isSelected: boolean;
   label: string;
@@ -333,21 +330,14 @@ function ModelChoice({
     >
       <Text style={[styles.listItemText, isSelected && styles.listItemTextSelected]}>{label}</Text>
       <View style={styles.listItemMeta}>
-        {badge ? <Text style={styles.listItemBadge}>{badge}</Text> : null}
-        {isSelected ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
+        {isSelected ? <Ionicons name="checkmark" size={16} color={colors.primary} /> : null}
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14
-  },
+  container: {},
   helperText: {
     color: colors.secondaryForeground,
     fontSize: 13,
@@ -358,14 +348,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
     backgroundColor: colors.secondary,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginBottom: 12
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8
   },
   selectorButtonPressed: {
     opacity: 0.85
@@ -386,36 +376,36 @@ const styles = StyleSheet.create({
   },
   selectorButtonTitle: {
     color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '700'
+    fontSize: 13,
+    fontWeight: '600'
   },
   selectorPanel: {
     gap: 4
   },
   groupLabel: {
     color: colors.mutedForeground,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 10
+    marginBottom: 6
   },
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16
+    gap: 6,
+    marginBottom: 10
   },
   choiceChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     backgroundColor: colors.secondary,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 9
+    paddingHorizontal: 10,
+    paddingVertical: 6
   },
   choiceChipSelected: {
     borderColor: colors.primary,
@@ -429,7 +419,7 @@ const styles = StyleSheet.create({
   },
   choiceChipText: {
     color: colors.secondaryForeground,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600'
   },
   choiceChipTextSelected: {
@@ -447,19 +437,19 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   list: {
-    marginBottom: 16
+    marginBottom: 10
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.secondary,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginBottom: 8
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 4
   },
   listItemSelected: {
     borderColor: colors.primary,
@@ -473,9 +463,9 @@ const styles = StyleSheet.create({
   },
   listItemText: {
     color: colors.secondaryForeground,
-    fontSize: 14,
+    fontSize: 13,
     flexShrink: 1,
-    paddingRight: 12
+    paddingRight: 8
   },
   listItemTextSelected: {
     color: colors.foreground,
@@ -486,12 +476,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexShrink: 0
-  },
-  listItemBadge: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase'
   },
   emptyText: {
     color: colors.mutedForeground,

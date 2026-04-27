@@ -519,7 +519,7 @@ export default function ServerDetailScreen() {
       {server.status === 'connected' ? (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Workspace</Text>
-          <Link href={`/(tabs)/servers/${serverId}/workspace`} asChild>
+          <Link href={`/(tabs)/account/servers/${serverId}/workspace`} asChild>
             <Pressable
               style={({ pressed }) => [styles.workspaceButton, pressed && { opacity: 0.7 }]}
             >

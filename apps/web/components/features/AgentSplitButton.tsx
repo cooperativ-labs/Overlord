@@ -1,7 +1,6 @@
 'use client';
 
 import { Bot, Check, ChevronDown, Copy, Loader2 } from 'lucide-react';
-import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,9 +17,7 @@ import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger';
 import {
-  AGENT_SELECTOR_VALUES,
   type AgentSelectorValue,
-  getAgentTypeByValue,
   isAgentIdentifierMatch,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
@@ -51,7 +48,6 @@ type AgentSplitButtonProps = {
   hasProjectWorkingDirectory?: boolean;
   agentSessionState?: SessionState | null;
   size?: AgentSplitButtonSize;
-  allowedAgents?: readonly AgentSelectorValue[];
 };
 
 const sizeStyles: Record<
@@ -101,6 +97,11 @@ const sizeStyles: Record<
 
 const submitTicketObjectiveActionWithRetry = withElectronActionRetry(submitTicketObjectiveAction);
 
+const COPY_OPTIONS: { value: 'copy-local' | 'copy-cloud'; label: string }[] = [
+  { value: 'copy-local', label: 'Copy Local' },
+  { value: 'copy-cloud', label: 'Copy Cloud' }
+];
+
 export function AgentSplitButton({
   selectedAgent,
   onSelectAgent,
@@ -115,8 +116,7 @@ export function AgentSplitButton({
   assignedSelection,
   hasProjectWorkingDirectory,
   agentSessionState,
-  size = 'default',
-  allowedAgents
+  size = 'default'
 }: AgentSplitButtonProps) {
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -152,9 +152,6 @@ export function AgentSplitButton({
   const isDisabled =
     (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
-  const visibleAgents = allowedAgents
-    ? AGENT_SELECTOR_VALUES.filter(v => allowedAgents.includes(v))
-    : AGENT_SELECTOR_VALUES;
 
   const appliedStoredDefaultRef = useRef(false);
 
@@ -286,16 +283,6 @@ export function AgentSplitButton({
     </Tooltip>
   );
 
-  const activeDropdownAgent =
-    activeAgentIdentifier !== null
-      ? (AGENT_SELECTOR_VALUES.find(
-          agentValue =>
-            agentValue !== 'copy-local' &&
-            agentValue !== 'copy-cloud' &&
-            isAgentIdentifierMatch(agentValue, activeAgentIdentifier)
-        ) ?? null)
-      : null;
-
   return (
     <div
       className={cn(
@@ -320,43 +307,22 @@ export function AgentSplitButton({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[170px]">
-          {visibleAgents.map(agentValue => {
-            const isCopyValue = agentValue === 'copy-local' || agentValue === 'copy-cloud';
-            const agent = isCopyValue ? null : getAgentTypeByValue(agentValue);
-            const agentIsActive = activeDropdownAgent === agentValue;
-            const label = agent
-              ? agent.label
-              : agentValue === 'copy-local'
-                ? 'Copy Local'
-                : 'Copy Cloud';
-
-            return (
-              <DropdownMenuItem
-                key={agentValue}
-                className="gap-2 text-xs"
-                onClick={() => {
-                  onSelectAgent(agentValue);
-                  void handleLaunch(agentValue);
-                }}
-              >
-                {agent ? (
-                  <Image
-                    src={agent.icon}
-                    alt={`${agent.label} icon`}
-                    width={14}
-                    height={14}
-                    className="h-3.5 w-3.5"
-                  />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-                <span className={cn(agentIsActive && 'text-emerald-600')}>{label}</span>
-                {agentValue === selectedAgent && (
-                  <Check className="ml-auto h-3 w-3 text-muted-foreground" />
-                )}
-              </DropdownMenuItem>
-            );
-          })}
+          {COPY_OPTIONS.map(({ value, label }) => (
+            <DropdownMenuItem
+              key={value}
+              className="gap-2 text-xs"
+              onClick={() => {
+                onSelectAgent(value);
+                void handleLaunch(value);
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span>{label}</span>
+              {value === selectedAgent && (
+                <Check className="ml-auto h-3 w-3 text-muted-foreground" />
+              )}
+            </DropdownMenuItem>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 
 import { colors } from '@/lib/colors';
 
-export default function ServersLayout() {
+export default function AccountServersLayout() {
   return (
     <Stack
       screenOptions={{

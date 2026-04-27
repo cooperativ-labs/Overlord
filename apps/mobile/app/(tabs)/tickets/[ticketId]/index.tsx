@@ -19,11 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AgentModelChooser } from '@/components/AgentModelChooser';
-import {
-  createAssignedAgent,
-  formatAssignedAgentLabel,
-  selectionFromAssignedAgent
-} from '@/lib/agent-models';
+import { AGENT_OPTIONS, createAssignedAgent, selectionFromAssignedAgent } from '@/lib/agent-models';
 import { colors } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import {
@@ -1031,7 +1027,6 @@ export default function TicketDetailScreen() {
     );
   }
 
-  const agentLabel = formatAssignedAgentLabel(ticket.assigned_agent);
   const normalizedObjectiveDraft = objectiveDraft.trim();
   const normalizedSavedDraft = (draftObjective?.objective ?? '').trim();
   const objectiveActionLabel = draftObjective
@@ -1061,505 +1056,704 @@ export default function TicketDetailScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
+      <TicketDetailTopBar
+        savingAssignedAgent={savingAssignedAgent}
+        assignedSelection={assignedSelection}
+        onOpenAgentModal={() => setShowAgentModal(true)}
+        onOpenPromptMenu={handleOpenPromptMenu}
+        onOpenOverflow={() => setOverflowOpen(true)}
+        onClose={() => router.back()}
+      />
+      <TicketDetailContent
+        ticket={ticket}
+        ticketId={ticketId}
+        dueLabel={dueLabel}
+        currentProject={currentProject}
+        projects={projects}
+        selectedProjectId={selectedProjectId}
+        showProjectPicker={showProjectPicker}
+        savingProject={savingProject}
+        onToggleProjectPicker={() => setShowProjectPicker(prev => !prev)}
+        onChangeProject={handleProjectChange}
+        objectiveDraft={objectiveDraft}
+        setObjectiveDraft={setObjectiveDraft}
+        executedObjectives={executedObjectives}
+        expandedObjectiveIds={expandedObjectiveIds}
+        toggleObjectiveExpanded={toggleObjectiveExpanded}
+        canSaveObjective={canSaveObjective}
+        objectiveActionLabel={objectiveActionLabel}
+        savingObjective={savingObjective}
+        onSaveObjective={handleSaveObjective}
+        promptForServerLaunch={promptForServerLaunch}
+        isSSHSupported={isSSHSupported}
+        loadingServers={loadingServers}
+        launchingServerId={launchingServerId}
+        resolvedAssignedSelection={resolvedAssignedSelection}
+        allServers={allServers}
+        availableServers={availableServers}
+        documents={documents}
+        uploadingDocument={uploadingDocument}
+        showDocuments={showDocuments}
+        onToggleDocuments={() => setShowDocuments(open => !open)}
+        onTakePhoto={handleTakePhoto}
+        onSelectImage={handleSelectImage}
+        onSelectFile={handleSelectFile}
+        onOpenDocument={handleOpenDocument}
+        ticketContext={ticket.context}
+        ticketConstraints={ticket.constraints}
+        ticketAcceptanceCriteria={ticket.acceptance_criteria}
+        showAcceptanceCriteria={showAcceptanceCriteria}
+        onToggleAcceptanceCriteria={() => setShowAcceptanceCriteria(open => !open)}
+        acceptanceCriteriaDraft={acceptanceCriteriaDraft}
+        setAcceptanceCriteriaDraft={setAcceptanceCriteriaDraft}
+        canSaveAcceptanceCriteria={canSaveAcceptanceCriteria}
+        savingAcceptanceCriteria={savingAcceptanceCriteria}
+        onSaveAcceptanceCriteria={handleSaveAcceptanceCriteria}
+        showCliQuickstart={showCliQuickstart}
+        onToggleCliQuickstart={() => setShowCliQuickstart(open => !open)}
+        onCopyCliCommand={handleCopyCliCommand}
+        filteredEvents={filteredEvents}
+        activityFilter={activityFilter}
+        onToggleActivityFilter={() =>
+          setActivityFilter(current => (current === 'completed' ? 'all' : 'completed'))
+        }
+      />
+      <TicketDetailModals
+        showPromptMenu={showPromptMenu}
+        copyingPromptContext={copyingPromptContext}
+        onClosePromptMenu={() => {
+          if (!copyingPromptContext) setShowPromptMenu(false);
+        }}
+        onCopyPrompt={handleCopyPrompt}
+        showAgentModal={showAgentModal}
+        assignedSelection={assignedSelection}
+        savingAssignedAgent={savingAssignedAgent}
+        onAssignedAgentChange={handleAssignedAgentChange}
+        onResolvedSelectionChange={setResolvedAssignedSelection}
+        onCloseAgentModal={() => setShowAgentModal(false)}
+        overflowOpen={overflowOpen}
+        onCloseOverflow={() => setOverflowOpen(false)}
+        onCopyTicketId={handleCopyTicketId}
+        onReload={loadData}
+      />
+    </SafeAreaView>
+  );
+}
 
-      {/* Top action bar */}
-      <View style={styles.topBar}>
+function TicketDetailTopBar({
+  savingAssignedAgent,
+  assignedSelection,
+  onOpenAgentModal,
+  onOpenPromptMenu,
+  onOpenOverflow,
+  onClose
+}: {
+  savingAssignedAgent: boolean;
+  assignedSelection: AgentModelSelection | null;
+  onOpenAgentModal: () => void;
+  onOpenPromptMenu: () => void;
+  onOpenOverflow: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <View style={styles.topBar}>
+      <Pressable
+        hitSlop={8}
+        style={styles.topIconButton}
+        onPress={onOpenOverflow}
+        accessibilityLabel="More actions"
+      >
+        <Ionicons name="ellipsis-vertical" size={18} color={colors.foreground} />
+      </Pressable>
+      <View style={styles.topBarActions}>
         <Pressable
           hitSlop={8}
-          style={styles.topIconButton}
-          onPress={() => setOverflowOpen(true)}
-          accessibilityLabel="More actions"
+          style={styles.topPillButton}
+          onPress={onOpenAgentModal}
+          disabled={savingAssignedAgent}
         >
-          <Ionicons name="ellipsis-vertical" size={18} color={colors.foreground} />
-        </Pressable>
-        <View style={styles.topBarActions}>
-          <Pressable
-            hitSlop={8}
-            style={styles.topPillButton}
-            onPress={() => setShowAgentModal(true)}
-            disabled={savingAssignedAgent}
-          >
-            <Ionicons
-              name={
-                ticket.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
-              }
-              size={13}
-              color={colors.foreground}
-            />
-            <Text style={styles.topPillText} numberOfLines={1}>
-              {agentLabel ?? 'Agent'}
-            </Text>
-            {savingAssignedAgent ? (
-              <ActivityIndicator size="small" color={colors.mutedForeground} />
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-            )}
-          </Pressable>
-          <Pressable hitSlop={8} style={styles.topPillButton} onPress={handleOpenPromptMenu}>
-            <Ionicons name="copy-outline" size={13} color={colors.foreground} />
-            <Text style={styles.topPillText}>Copy prompt</Text>
+          <Ionicons
+            name={
+              (AGENT_OPTIONS.find(opt => opt.value === assignedSelection?.agent)?.icon ??
+                'hardware-chip-outline') as keyof typeof Ionicons.glyphMap
+            }
+            size={13}
+            color={colors.foreground}
+          />
+          <Text style={styles.topPillText} numberOfLines={1}>
+            Agent
+          </Text>
+          {savingAssignedAgent ? (
+            <ActivityIndicator size="small" color={colors.mutedForeground} />
+          ) : (
             <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-          </Pressable>
+          )}
+        </Pressable>
+        <Pressable hitSlop={8} style={styles.topPillButton} onPress={onOpenPromptMenu}>
+          <Ionicons name="copy-outline" size={13} color={colors.foreground} />
+          <Text style={styles.topPillText}>Copy prompt</Text>
+          <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
+        </Pressable>
+      </View>
+      <Pressable
+        hitSlop={8}
+        style={styles.topIconButton}
+        onPress={onClose}
+        accessibilityLabel="Close"
+      >
+        <Ionicons name="close" size={18} color={colors.foreground} />
+      </Pressable>
+    </View>
+  );
+}
+
+function TicketDetailContent({
+  ticket,
+  ticketId,
+  dueLabel,
+  currentProject,
+  projects,
+  selectedProjectId,
+  showProjectPicker,
+  savingProject,
+  onToggleProjectPicker,
+  onChangeProject,
+  objectiveDraft,
+  setObjectiveDraft,
+  executedObjectives,
+  expandedObjectiveIds,
+  toggleObjectiveExpanded,
+  canSaveObjective,
+  objectiveActionLabel,
+  savingObjective,
+  onSaveObjective,
+  promptForServerLaunch,
+  isSSHSupported,
+  loadingServers,
+  launchingServerId,
+  resolvedAssignedSelection,
+  allServers,
+  availableServers,
+  documents,
+  uploadingDocument,
+  showDocuments,
+  onToggleDocuments,
+  onTakePhoto,
+  onSelectImage,
+  onSelectFile,
+  onOpenDocument,
+  ticketContext,
+  ticketConstraints,
+  ticketAcceptanceCriteria,
+  showAcceptanceCriteria,
+  onToggleAcceptanceCriteria,
+  acceptanceCriteriaDraft,
+  setAcceptanceCriteriaDraft,
+  canSaveAcceptanceCriteria,
+  savingAcceptanceCriteria,
+  onSaveAcceptanceCriteria,
+  showCliQuickstart,
+  onToggleCliQuickstart,
+  onCopyCliCommand,
+  filteredEvents,
+  activityFilter,
+  onToggleActivityFilter
+}: {
+  ticket: TicketDetail;
+  ticketId: string;
+  dueLabel: string | null;
+  currentProject: Project | null;
+  projects: Project[];
+  selectedProjectId: string | null;
+  showProjectPicker: boolean;
+  savingProject: boolean;
+  onToggleProjectPicker: () => void;
+  onChangeProject: (nextProjectId: string) => Promise<void>;
+  objectiveDraft: string;
+  setObjectiveDraft: (value: string) => void;
+  executedObjectives: Objective[];
+  expandedObjectiveIds: string[];
+  toggleObjectiveExpanded: (objectiveId: string) => void;
+  canSaveObjective: boolean;
+  objectiveActionLabel: string;
+  savingObjective: boolean;
+  onSaveObjective: () => void;
+  promptForServerLaunch: () => void;
+  isSSHSupported: boolean;
+  loadingServers: boolean;
+  launchingServerId: string | null;
+  resolvedAssignedSelection: AgentModelSelection | null;
+  allServers: Server[];
+  availableServers: Server[];
+  documents: TicketDocument[];
+  uploadingDocument: boolean;
+  showDocuments: boolean;
+  onToggleDocuments: () => void;
+  onTakePhoto: () => void;
+  onSelectImage: () => void;
+  onSelectFile: () => void;
+  onOpenDocument: (document: TicketDocument) => void;
+  ticketContext: string;
+  ticketConstraints: string;
+  ticketAcceptanceCriteria: string | null;
+  showAcceptanceCriteria: boolean;
+  onToggleAcceptanceCriteria: () => void;
+  acceptanceCriteriaDraft: string;
+  setAcceptanceCriteriaDraft: (value: string) => void;
+  canSaveAcceptanceCriteria: boolean;
+  savingAcceptanceCriteria: boolean;
+  onSaveAcceptanceCriteria: () => void;
+  showCliQuickstart: boolean;
+  onToggleCliQuickstart: () => void;
+  onCopyCliCommand: () => void;
+  filteredEvents: TicketEvent[];
+  activityFilter: 'all' | 'completed';
+  onToggleActivityFilter: () => void;
+}) {
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.tracker}>
+        <View style={styles.trackerTextWrap}>
+          <View style={styles.trackerHeaderRow}>
+            <Text style={styles.trackerLabel}>TIME TRACKING</Text>
+            <Ionicons name="information-circle-outline" size={13} color={colors.mutedForeground} />
+          </View>
+          <Text style={styles.trackerSub}>Track time on this ticket.</Text>
         </View>
         <Pressable
           hitSlop={8}
-          style={styles.topIconButton}
-          onPress={() => router.back()}
-          accessibilityLabel="Close"
+          style={styles.trackerButton}
+          onPress={() => Alert.alert('Time tracking', 'Time tracking starts soon.')}
         >
-          <Ionicons name="close" size={18} color={colors.foreground} />
+          <Ionicons name="play" size={12} color={colors.foreground} />
+          <Text style={styles.trackerButtonText}>Start</Text>
         </Pressable>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* Time Tracking */}
-        <View style={styles.tracker}>
-          <View style={styles.trackerTextWrap}>
-            <View style={styles.trackerHeaderRow}>
-              <Text style={styles.trackerLabel}>TIME TRACKING</Text>
-              <Ionicons
-                name="information-circle-outline"
-                size={13}
-                color={colors.mutedForeground}
-              />
-            </View>
-            <Text style={styles.trackerSub}>Track time on this ticket.</Text>
-          </View>
-          <Pressable
-            hitSlop={8}
-            style={styles.trackerButton}
-            onPress={() => Alert.alert('Time tracking', 'Time tracking starts soon.')}
-          >
-            <Ionicons name="play" size={12} color={colors.foreground} />
-            <Text style={styles.trackerButtonText}>Start</Text>
-          </Pressable>
-        </View>
+      <View style={styles.titleBlock}>
+        <Text style={styles.sequence}>#{ticket.ticket_sequence}</Text>
+        <Text style={styles.titleText}>{ticket.title || 'Untitled'}</Text>
+      </View>
 
-        {/* Title + sequence */}
-        <View style={styles.titleBlock}>
-          <Text style={styles.sequence}>#{ticket.ticket_sequence}</Text>
-          <Text style={styles.titleText}>{ticket.title || 'Untitled'}</Text>
-        </View>
-
-        {/* Pill selectors: project · status */}
-        <View style={styles.pillRow}>
-          <Pressable
-            style={({ pressed }) => [styles.selectPill, pressed && styles.pressed]}
-            onPress={() => setShowProjectPicker(prev => !prev)}
-            disabled={savingProject}
-          >
-            {currentProject && (
-              <View
-                style={[
-                  styles.pillDot,
-                  { backgroundColor: currentProject.color || colors.primary }
-                ]}
-              />
-            )}
-            <Text style={styles.selectPillText} numberOfLines={1}>
-              {currentProject?.name ?? 'No project'}
-            </Text>
-            {savingProject ? (
-              <ActivityIndicator size="small" color={colors.mutedForeground} />
-            ) : (
-              <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-            )}
-          </Pressable>
-
-          <View style={styles.selectPill}>
-            <View style={[styles.pillDot, { backgroundColor: statusPillColor(ticket.status) }]} />
-            <Text style={styles.selectPillText}>{ticket.status}</Text>
-            <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-          </View>
-        </View>
-
-        {showProjectPicker && (
-          <View style={styles.projectPickerList}>
-            {projects.map(project => {
-              const isSelected = project.id === selectedProjectId;
-              return (
-                <Pressable
-                  key={project.id}
-                  style={[styles.projectPickerItem, isSelected && styles.projectPickerItemSelected]}
-                  onPress={() => handleProjectChange(project.id)}
-                >
-                  <Text
-                    style={[
-                      styles.projectPickerItemText,
-                      isSelected && styles.projectPickerItemTextSelected
-                    ]}
-                  >
-                    {project.name}
-                  </Text>
-                  {isSelected && <Ionicons name="checkmark" size={16} color={colors.primary} />}
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Schedule buttons */}
-        <View style={styles.scheduleRow}>
-          <Pressable
-            style={({ pressed }) => [styles.scheduleButton, pressed && styles.pressed]}
-            onPress={() =>
-              Alert.alert('Due date', dueLabel ? `Due ${dueLabel}` : 'Due date picker coming soon.')
-            }
-          >
-            <Ionicons name="calendar-outline" size={13} color={colors.foreground} />
-            <Text style={styles.scheduleText}>{dueLabel ? `Due ${dueLabel}` : 'Set due date'}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.scheduleButton, pressed && styles.pressed]}
-            onPress={() => Alert.alert('Schedule', 'Scheduling coming soon.')}
-          >
-            <Ionicons name="time-outline" size={13} color={colors.foreground} />
-            <Text style={styles.scheduleText}>Add schedule</Text>
-          </Pressable>
-        </View>
-
-        {/* Objectives list */}
-        {executedObjectives.length > 0 && (
-          <View style={styles.objectivesBlock}>
-            {executedObjectives.map(obj => {
-              const expanded = expandedObjectiveIds.includes(obj.id);
-              return (
-                <View key={obj.id} style={styles.objectiveRow}>
-                  <Pressable
-                    onPress={() => toggleObjectiveExpanded(obj.id)}
-                    style={({ pressed }) => [styles.objectiveRowHeader, pressed && styles.pressed]}
-                  >
-                    <View style={styles.objectiveStatusIcon}>
-                      <Ionicons
-                        name={obj.state === 'complete' ? 'checkmark-circle' : 'radio-button-on'}
-                        size={16}
-                        color={objectiveStateColors[obj.state] ?? colors.mutedForeground}
-                      />
-                    </View>
-                    <Text
-                      style={styles.objectiveTitleText}
-                      numberOfLines={expanded ? undefined : 1}
-                    >
-                      {obj.title ?? obj.objective}
-                    </Text>
-                    <Pressable hitSlop={6} onPress={() => toggleObjectiveExpanded(obj.id)}>
-                      <Ionicons
-                        name="ellipsis-horizontal"
-                        size={16}
-                        color={colors.mutedForeground}
-                      />
-                    </Pressable>
-                  </Pressable>
-                  {expanded && obj.title && obj.objective && (
-                    <Text style={styles.objectiveBody}>{obj.objective}</Text>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Draft objective editor */}
-        <View style={styles.draftBlock}>
-          <TextInput
-            style={styles.draftInput}
-            value={objectiveDraft}
-            onChangeText={setObjectiveDraft}
-            placeholder="Click to add an objective..."
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            textAlignVertical="top"
-          />
-          {canSaveObjective && (
-            <Pressable
-              onPress={handleSaveObjective}
-              style={({ pressed }) => [styles.saveObjective, pressed && styles.pressed]}
-            >
-              {savingObjective ? (
-                <ActivityIndicator size="small" color={colors.primaryForeground} />
-              ) : (
-                <Text style={styles.saveObjectiveText}>{objectiveActionLabel}</Text>
-              )}
-            </Pressable>
-          )}
-        </View>
-
-        {/* Run on server (kept functional, styled as section) */}
-        <View style={styles.runSection}>
-          <Pressable
-            onPress={promptForServerLaunch}
-            disabled={
-              savingAssignedAgent ||
-              loadingServers ||
-              launchingServerId !== null ||
-              !isSSHSupported ||
-              !resolvedAssignedSelection
-            }
-            style={({ pressed }) => [
-              styles.launchServerButton,
-              (savingAssignedAgent ||
-                loadingServers ||
-                launchingServerId !== null ||
-                !isSSHSupported ||
-                !resolvedAssignedSelection) &&
-                styles.launchServerButtonDisabled,
-              pressed && styles.pressed
-            ]}
-          >
-            {loadingServers || launchingServerId !== null ? (
-              <ActivityIndicator size="small" color={colors.primaryForeground} />
-            ) : (
-              <Ionicons name="terminal-outline" size={14} color={colors.primaryForeground} />
-            )}
-            <Text style={styles.launchServerButtonText}>
-              {launchingServerId !== null
-                ? 'Starting Remote Session…'
-                : loadingServers
-                  ? 'Loading Servers…'
-                  : 'Run on Server'}
-            </Text>
-          </Pressable>
-          {!isSSHSupported && (
-            <Text style={styles.runHint}>
-              Remote SSH launch is currently available on iOS only.
-            </Text>
-          )}
-          {isSSHSupported && availableServers.length === 0 && (
-            <Text style={styles.runHint}>
-              {allServers.length > 0
-                ? 'No connected SSH servers on this device.'
-                : 'Add a server from the Servers tab to launch remotely.'}
-            </Text>
-          )}
-        </View>
-
-        {/* Collapsible sections */}
-        <CollapsibleSection
-          label="DOCUMENTS"
-          open={showDocuments}
-          onToggle={() => setShowDocuments(open => !open)}
+      <View style={styles.pillRow}>
+        <Pressable
+          style={({ pressed }) => [styles.selectPill, pressed && styles.pressed]}
+          onPress={onToggleProjectPicker}
+          disabled={savingProject}
         >
-          <View style={styles.documentActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.documentActionButton,
-                uploadingDocument && styles.documentActionButtonDisabled,
-                pressed && styles.pressed
-              ]}
-              onPress={() => void handleTakePhoto()}
-              disabled={uploadingDocument}
-            >
-              <Ionicons name="camera-outline" size={14} color={colors.foreground} />
-              <Text style={styles.documentActionText}>Take image</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.documentActionButton,
-                uploadingDocument && styles.documentActionButtonDisabled,
-                pressed && styles.pressed
-              ]}
-              onPress={() => void handleSelectImage()}
-              disabled={uploadingDocument}
-            >
-              <Ionicons name="images-outline" size={14} color={colors.foreground} />
-              <Text style={styles.documentActionText}>Select image</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.documentActionButton,
-                uploadingDocument && styles.documentActionButtonDisabled,
-                pressed && styles.pressed
-              ]}
-              onPress={() => void handleSelectFile()}
-              disabled={uploadingDocument}
-            >
-              <Ionicons name="document-attach-outline" size={14} color={colors.foreground} />
-              <Text style={styles.documentActionText}>Select file</Text>
-            </Pressable>
-          </View>
-          {uploadingDocument && (
-            <View style={styles.documentUploadingRow}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.documentUploadingText}>Uploading document...</Text>
-            </View>
+          {currentProject && (
+            <View
+              style={[styles.pillDot, { backgroundColor: currentProject.color || colors.primary }]}
+            />
           )}
-          {documents.length > 0 && (
-            <View style={styles.documentList}>
-              {documents.map(document => (
-                <Pressable
-                  key={document.id}
-                  style={({ pressed }) => [styles.documentRow, pressed && styles.pressed]}
-                  onPress={() => void handleOpenDocument(document)}
-                >
-                  <Ionicons
-                    name={
-                      document.fileType.startsWith('image/') ? 'image-outline' : 'document-outline'
-                    }
-                    size={15}
-                    color={colors.foreground}
-                  />
-                  <Text style={styles.documentName} numberOfLines={1}>
-                    {document.label}
-                  </Text>
-                  <Text style={styles.documentMeta}>
-                    {new Date(document.createdAt).toLocaleDateString()}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-          {ticket.context.trim() !== '' && (
-            <View style={styles.docBlock}>
-              <Text style={styles.docLabel}>Context</Text>
-              <Text style={styles.docBody}>{ticket.context}</Text>
-            </View>
-          )}
-          {ticket.constraints.trim() !== '' && (
-            <View style={styles.docBlock}>
-              <Text style={styles.docLabel}>Constraints</Text>
-              <Text style={styles.docBody}>{ticket.constraints}</Text>
-            </View>
-          )}
-          {ticket.acceptance_criteria && (
-            <View style={styles.docBlock}>
-              <Text style={styles.docLabel}>Acceptance Criteria</Text>
-              <Text style={styles.docBody}>{ticket.acceptance_criteria}</Text>
-            </View>
-          )}
-          {ticket.context.trim() === '' &&
-            ticket.constraints.trim() === '' &&
-            !ticket.acceptance_criteria &&
-            documents.length === 0 && <Text style={styles.docEmpty}>No documents attached.</Text>}
-        </CollapsibleSection>
-
-        <CollapsibleSection
-          label="ACCEPTANCE CRITERIA"
-          open={showAcceptanceCriteria}
-          onToggle={() => setShowAcceptanceCriteria(open => !open)}
-        >
-          <TextInput
-            style={styles.criteriaInput}
-            value={acceptanceCriteriaDraft}
-            onChangeText={setAcceptanceCriteriaDraft}
-            placeholder="Define completion criteria for this ticket..."
-            placeholderTextColor={colors.mutedForeground}
-            multiline
-            textAlignVertical="top"
-          />
-          {canSaveAcceptanceCriteria && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.saveCriteriaButton,
-                savingAcceptanceCriteria && styles.documentActionButtonDisabled,
-                pressed && styles.pressed
-              ]}
-              onPress={() => void handleSaveAcceptanceCriteria()}
-              disabled={savingAcceptanceCriteria}
-            >
-              {savingAcceptanceCriteria ? (
-                <ActivityIndicator size="small" color={colors.primaryForeground} />
-              ) : (
-                <Text style={styles.saveCriteriaButtonText}>Save acceptance criteria</Text>
-              )}
-            </Pressable>
-          )}
-        </CollapsibleSection>
-
-        <CollapsibleSection
-          label="CLI QUICKSTART"
-          open={showCliQuickstart}
-          onToggle={() => setShowCliQuickstart(open => !open)}
-        >
-          <Pressable
-            style={({ pressed }) => [styles.cliCopy, pressed && styles.pressed]}
-            onPress={handleCopyCliCommand}
-          >
-            <Text style={styles.cliText} selectable>
-              ovld protocol attach --ticket-id {ticket.id}
-            </Text>
-            <Ionicons name="copy-outline" size={14} color={colors.mutedForeground} />
-          </Pressable>
-          <Text style={styles.cliHint}>
-            Paste in a terminal already authenticated with Overlord to attach this session.
+          <Text style={styles.selectPillText} numberOfLines={1}>
+            {currentProject?.name ?? 'No project'}
           </Text>
-        </CollapsibleSection>
-
-        {/* Activity */}
-        <View style={styles.activityHeader}>
-          <Text style={styles.sectionLabel}>ACTIVITY</Text>
-          <Pressable
-            style={({ pressed }) => [styles.activityFilter, pressed && styles.pressed]}
-            onPress={() =>
-              setActivityFilter(current => (current === 'completed' ? 'all' : 'completed'))
-            }
-          >
-            <Text style={styles.activityFilterText}>
-              {activityFilter === 'completed' ? 'Completed' : 'All'}
-            </Text>
+          {savingProject ? (
+            <ActivityIndicator size="small" color={colors.mutedForeground} />
+          ) : (
             <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-          </Pressable>
+          )}
+        </Pressable>
+
+        <View style={styles.selectPill}>
+          <View style={[styles.pillDot, { backgroundColor: statusPillColor(ticket.status) }]} />
+          <Text style={styles.selectPillText}>{ticket.status}</Text>
+          <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
         </View>
-        {filteredEvents.length === 0 ? (
-          <Text style={styles.noActivity}>No activity yet</Text>
-        ) : (
-          filteredEvents.map(event => {
-            const icon = eventIcons[event.event_type] ?? {
-              name: 'ellipse',
-              color: colors.primary
-            };
+      </View>
+
+      {showProjectPicker && (
+        <View style={styles.projectPickerList}>
+          {projects.map(project => {
+            const isSelected = project.id === selectedProjectId;
             return (
-              <View
-                key={event.id}
-                style={[styles.eventRow, event.is_blocking && styles.eventBlocking]}
+              <Pressable
+                key={project.id}
+                style={[styles.projectPickerItem, isSelected && styles.projectPickerItemSelected]}
+                onPress={() => onChangeProject(project.id)}
               >
-                <View style={styles.eventIconBadge}>
-                  <Ionicons
-                    name={icon.name as keyof typeof Ionicons.glyphMap}
-                    size={12}
-                    color={icon.color}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <View style={styles.eventHeader}>
-                    <Text style={styles.eventType}>{event.event_type.replace(/_/g, ' ')}</Text>
-                    {event.phase && <Text style={styles.eventPhase}>{event.phase}</Text>}
-                    <Text style={styles.eventTime}>
-                      {new Date(event.created_at).toLocaleString(undefined, {
-                        month: 'numeric',
-                        day: 'numeric',
-                        year: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit'
-                      })}
-                    </Text>
+                <Text
+                  style={[
+                    styles.projectPickerItemText,
+                    isSelected && styles.projectPickerItemTextSelected
+                  ]}
+                >
+                  {project.name}
+                </Text>
+                {isSelected && <Ionicons name="checkmark" size={16} color={colors.primary} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      <View style={styles.scheduleRow}>
+        <Pressable
+          style={({ pressed }) => [styles.scheduleButton, pressed && styles.pressed]}
+          onPress={() =>
+            Alert.alert('Due date', dueLabel ? `Due ${dueLabel}` : 'Due date picker coming soon.')
+          }
+        >
+          <Ionicons name="calendar-outline" size={13} color={colors.foreground} />
+          <Text style={styles.scheduleText}>{dueLabel ? `Due ${dueLabel}` : 'Set due date'}</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.scheduleButton, pressed && styles.pressed]}
+          onPress={() => Alert.alert('Schedule', 'Scheduling coming soon.')}
+        >
+          <Ionicons name="time-outline" size={13} color={colors.foreground} />
+          <Text style={styles.scheduleText}>Add schedule</Text>
+        </Pressable>
+      </View>
+
+      {executedObjectives.length > 0 && (
+        <View style={styles.objectivesBlock}>
+          {executedObjectives.map(obj => {
+            const expanded = expandedObjectiveIds.includes(obj.id);
+            return (
+              <View key={obj.id} style={styles.objectiveRow}>
+                <Pressable
+                  onPress={() => toggleObjectiveExpanded(obj.id)}
+                  style={({ pressed }) => [styles.objectiveRowHeader, pressed && styles.pressed]}
+                >
+                  <View style={styles.objectiveStatusIcon}>
+                    <Ionicons
+                      name={obj.state === 'complete' ? 'checkmark-circle' : 'radio-button-on'}
+                      size={16}
+                      color={objectiveStateColors[obj.state] ?? colors.mutedForeground}
+                    />
                   </View>
-                  {event.summary && (
-                    <Text style={styles.eventSummary} numberOfLines={4}>
-                      {event.summary}
-                    </Text>
-                  )}
-                </View>
+                  <Text style={styles.objectiveTitleText} numberOfLines={expanded ? undefined : 1}>
+                    {obj.title ?? obj.objective}
+                  </Text>
+                  <Pressable hitSlop={6} onPress={() => toggleObjectiveExpanded(obj.id)}>
+                    <Ionicons name="ellipsis-horizontal" size={16} color={colors.mutedForeground} />
+                  </Pressable>
+                </Pressable>
+                {expanded && obj.title && obj.objective && (
+                  <Text style={styles.objectiveBody}>{obj.objective}</Text>
+                )}
               </View>
             );
-          })
-        )}
-      </ScrollView>
+          })}
+        </View>
+      )}
 
-      {/* Prompt menu popover */}
+      <View style={styles.draftBlock}>
+        <TextInput
+          style={styles.draftInput}
+          value={objectiveDraft}
+          onChangeText={setObjectiveDraft}
+          placeholder="Click to add an objective..."
+          placeholderTextColor={colors.mutedForeground}
+          multiline
+          textAlignVertical="top"
+        />
+        {canSaveObjective && (
+          <Pressable
+            onPress={onSaveObjective}
+            style={({ pressed }) => [styles.saveObjective, pressed && styles.pressed]}
+          >
+            {savingObjective ? (
+              <ActivityIndicator size="small" color={colors.primaryForeground} />
+            ) : (
+              <Text style={styles.saveObjectiveText}>{objectiveActionLabel}</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
+
+      <View style={styles.runSection}>
+        <Pressable
+          onPress={promptForServerLaunch}
+          disabled={
+            loadingServers ||
+            launchingServerId !== null ||
+            !isSSHSupported ||
+            !resolvedAssignedSelection
+          }
+          style={({ pressed }) => [
+            styles.launchServerButton,
+            (loadingServers ||
+              launchingServerId !== null ||
+              !isSSHSupported ||
+              !resolvedAssignedSelection) &&
+              styles.launchServerButtonDisabled,
+            pressed && styles.pressed
+          ]}
+        >
+          {loadingServers || launchingServerId !== null ? (
+            <ActivityIndicator size="small" color={colors.primaryForeground} />
+          ) : (
+            <Ionicons name="terminal-outline" size={14} color={colors.primaryForeground} />
+          )}
+          <Text style={styles.launchServerButtonText}>
+            {launchingServerId !== null
+              ? 'Starting Remote Session…'
+              : loadingServers
+                ? 'Loading Servers…'
+                : 'Run on Server'}
+          </Text>
+        </Pressable>
+        {!isSSHSupported && (
+          <Text style={styles.runHint}>Remote SSH launch is currently available on iOS only.</Text>
+        )}
+        {isSSHSupported && availableServers.length === 0 && (
+          <Text style={styles.runHint}>
+            {allServers.length > 0
+              ? 'No connected SSH servers on this device.'
+              : 'Add a server from the Servers tab to launch remotely.'}
+          </Text>
+        )}
+      </View>
+
+      <CollapsibleSection label="DOCUMENTS" open={showDocuments} onToggle={onToggleDocuments}>
+        <View style={styles.documentActions}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.documentActionButton,
+              uploadingDocument && styles.documentActionButtonDisabled,
+              pressed && styles.pressed
+            ]}
+            onPress={() => onTakePhoto()}
+            disabled={uploadingDocument}
+          >
+            <Ionicons name="camera-outline" size={14} color={colors.foreground} />
+            <Text style={styles.documentActionText}>Take image</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.documentActionButton,
+              uploadingDocument && styles.documentActionButtonDisabled,
+              pressed && styles.pressed
+            ]}
+            onPress={() => onSelectImage()}
+            disabled={uploadingDocument}
+          >
+            <Ionicons name="images-outline" size={14} color={colors.foreground} />
+            <Text style={styles.documentActionText}>Select image</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.documentActionButton,
+              uploadingDocument && styles.documentActionButtonDisabled,
+              pressed && styles.pressed
+            ]}
+            onPress={() => onSelectFile()}
+            disabled={uploadingDocument}
+          >
+            <Ionicons name="document-attach-outline" size={14} color={colors.foreground} />
+            <Text style={styles.documentActionText}>Select file</Text>
+          </Pressable>
+        </View>
+        {uploadingDocument && (
+          <View style={styles.documentUploadingRow}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.documentUploadingText}>Uploading document...</Text>
+          </View>
+        )}
+        {documents.length > 0 && (
+          <View style={styles.documentList}>
+            {documents.map(document => (
+              <Pressable
+                key={document.id}
+                style={({ pressed }) => [styles.documentRow, pressed && styles.pressed]}
+                onPress={() => onOpenDocument(document)}
+              >
+                <Ionicons
+                  name={
+                    document.fileType.startsWith('image/') ? 'image-outline' : 'document-outline'
+                  }
+                  size={15}
+                  color={colors.foreground}
+                />
+                <Text style={styles.documentName} numberOfLines={1}>
+                  {document.label}
+                </Text>
+                <Text style={styles.documentMeta}>
+                  {new Date(document.createdAt).toLocaleDateString()}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {ticketContext.trim() !== '' && (
+          <View style={styles.docBlock}>
+            <Text style={styles.docLabel}>Context</Text>
+            <Text style={styles.docBody}>{ticketContext}</Text>
+          </View>
+        )}
+        {ticketConstraints.trim() !== '' && (
+          <View style={styles.docBlock}>
+            <Text style={styles.docLabel}>Constraints</Text>
+            <Text style={styles.docBody}>{ticketConstraints}</Text>
+          </View>
+        )}
+        {ticketAcceptanceCriteria && (
+          <View style={styles.docBlock}>
+            <Text style={styles.docLabel}>Acceptance Criteria</Text>
+            <Text style={styles.docBody}>{ticketAcceptanceCriteria}</Text>
+          </View>
+        )}
+        {ticketContext.trim() === '' &&
+          ticketConstraints.trim() === '' &&
+          !ticketAcceptanceCriteria &&
+          documents.length === 0 && <Text style={styles.docEmpty}>No documents attached.</Text>}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        label="ACCEPTANCE CRITERIA"
+        open={showAcceptanceCriteria}
+        onToggle={onToggleAcceptanceCriteria}
+      >
+        <TextInput
+          style={styles.criteriaInput}
+          value={acceptanceCriteriaDraft}
+          onChangeText={setAcceptanceCriteriaDraft}
+          placeholder="Define completion criteria for this ticket..."
+          placeholderTextColor={colors.mutedForeground}
+          multiline
+          textAlignVertical="top"
+        />
+        {canSaveAcceptanceCriteria && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.saveCriteriaButton,
+              savingAcceptanceCriteria && styles.documentActionButtonDisabled,
+              pressed && styles.pressed
+            ]}
+            onPress={() => onSaveAcceptanceCriteria()}
+            disabled={savingAcceptanceCriteria}
+          >
+            {savingAcceptanceCriteria ? (
+              <ActivityIndicator size="small" color={colors.primaryForeground} />
+            ) : (
+              <Text style={styles.saveCriteriaButtonText}>Save acceptance criteria</Text>
+            )}
+          </Pressable>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        label="CLI QUICKSTART"
+        open={showCliQuickstart}
+        onToggle={onToggleCliQuickstart}
+      >
+        <Pressable
+          style={({ pressed }) => [styles.cliCopy, pressed && styles.pressed]}
+          onPress={onCopyCliCommand}
+        >
+          <Text style={styles.cliText} selectable>
+            ovld protocol attach --ticket-id {ticketId}
+          </Text>
+          <Ionicons name="copy-outline" size={14} color={colors.mutedForeground} />
+        </Pressable>
+        <Text style={styles.cliHint}>
+          Paste in a terminal already authenticated with Overlord to attach this session.
+        </Text>
+      </CollapsibleSection>
+
+      <View style={styles.activityHeader}>
+        <Text style={styles.sectionLabel}>ACTIVITY</Text>
+        <Pressable
+          style={({ pressed }) => [styles.activityFilter, pressed && styles.pressed]}
+          onPress={onToggleActivityFilter}
+        >
+          <Text style={styles.activityFilterText}>
+            {activityFilter === 'completed' ? 'Completed' : 'All'}
+          </Text>
+          <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
+        </Pressable>
+      </View>
+      {filteredEvents.length === 0 ? (
+        <Text style={styles.noActivity}>No activity yet</Text>
+      ) : (
+        filteredEvents.map(event => {
+          const icon = eventIcons[event.event_type] ?? {
+            name: 'ellipse',
+            color: colors.primary
+          };
+          return (
+            <View
+              key={event.id}
+              style={[styles.eventRow, event.is_blocking && styles.eventBlocking]}
+            >
+              <View style={styles.eventIconBadge}>
+                <Ionicons
+                  name={icon.name as keyof typeof Ionicons.glyphMap}
+                  size={12}
+                  color={icon.color}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.eventHeader}>
+                  <Text style={styles.eventType}>{event.event_type.replace(/_/g, ' ')}</Text>
+                  {event.phase && <Text style={styles.eventPhase}>{event.phase}</Text>}
+                  <Text style={styles.eventTime}>
+                    {new Date(event.created_at).toLocaleString(undefined, {
+                      month: 'numeric',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit'
+                    })}
+                  </Text>
+                </View>
+                {event.summary && (
+                  <Text style={styles.eventSummary} numberOfLines={4}>
+                    {event.summary}
+                  </Text>
+                )}
+              </View>
+            </View>
+          );
+        })
+      )}
+    </ScrollView>
+  );
+}
+
+function TicketDetailModals({
+  showPromptMenu,
+  copyingPromptContext,
+  onClosePromptMenu,
+  onCopyPrompt,
+  showAgentModal,
+  assignedSelection,
+  savingAssignedAgent,
+  onAssignedAgentChange,
+  onResolvedSelectionChange,
+  onCloseAgentModal,
+  overflowOpen,
+  onCloseOverflow,
+  onCopyTicketId,
+  onReload
+}: {
+  showPromptMenu: boolean;
+  copyingPromptContext: 'cli' | 'web' | null;
+  onClosePromptMenu: () => void;
+  onCopyPrompt: (context: 'cli' | 'web') => Promise<void>;
+  showAgentModal: boolean;
+  assignedSelection: AgentModelSelection | null;
+  savingAssignedAgent: boolean;
+  onAssignedAgentChange: (nextSelection: AgentModelSelection) => Promise<void>;
+  onResolvedSelectionChange: (value: AgentModelSelection | null) => void;
+  onCloseAgentModal: () => void;
+  overflowOpen: boolean;
+  onCloseOverflow: () => void;
+  onCopyTicketId: () => Promise<void>;
+  onReload: () => Promise<void>;
+}) {
+  return (
+    <>
       <Modal
         visible={showPromptMenu}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          if (!copyingPromptContext) setShowPromptMenu(false);
-        }}
+        onRequestClose={onClosePromptMenu}
       >
-        <Pressable
-          style={styles.promptMenuBackdrop}
-          onPress={() => {
-            if (!copyingPromptContext) setShowPromptMenu(false);
-          }}
-        >
+        <Pressable style={styles.promptMenuBackdrop} onPress={onClosePromptMenu}>
           <Pressable style={styles.promptMenuCard} onPress={() => undefined}>
             <Text style={styles.modalTitle}>Copy prompt</Text>
             <PromptOption
@@ -1568,7 +1762,7 @@ export default function TicketDetailScreen() {
               icon="terminal-outline"
               loading={copyingPromptContext === 'cli'}
               disabled={copyingPromptContext !== null}
-              onPress={() => void handleCopyPrompt('cli')}
+              onPress={() => void onCopyPrompt('cli')}
             />
             <PromptOption
               label="Cloud prompt"
@@ -1576,32 +1770,31 @@ export default function TicketDetailScreen() {
               icon="cloud-outline"
               loading={copyingPromptContext === 'web'}
               disabled={copyingPromptContext !== null}
-              onPress={() => void handleCopyPrompt('web')}
+              onPress={() => void onCopyPrompt('web')}
             />
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Agent chooser modal */}
       <Modal
         visible={showAgentModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowAgentModal(false)}
+        onRequestClose={onCloseAgentModal}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setShowAgentModal(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={onCloseAgentModal}>
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <Text style={styles.modalTitle}>Assigned Agent</Text>
             <AgentModelChooser
               value={assignedSelection}
-              onChange={handleAssignedAgentChange}
-              onResolvedSelectionChange={setResolvedAssignedSelection}
+              onChange={onAssignedAgentChange}
+              onResolvedSelectionChange={onResolvedSelectionChange}
               helperText="Choose the agent and model."
               disabled={savingAssignedAgent}
             />
             <Pressable
               style={({ pressed }) => [styles.modalDone, pressed && styles.pressed]}
-              onPress={() => setShowAgentModal(false)}
+              onPress={onCloseAgentModal}
             >
               <Text style={styles.modalDoneText}>Done</Text>
             </Pressable>
@@ -1609,40 +1802,35 @@ export default function TicketDetailScreen() {
         </Pressable>
       </Modal>
 
-      {/* Overflow modal */}
       <Modal
         visible={overflowOpen}
         transparent
         animationType="fade"
-        onRequestClose={() => setOverflowOpen(false)}
+        onRequestClose={onCloseOverflow}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setOverflowOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={onCloseOverflow}>
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <OverflowAction
               icon="copy-outline"
               label="Copy ticket ID"
               onPress={() => {
-                setOverflowOpen(false);
-                void handleCopyTicketId();
+                onCloseOverflow();
+                void onCopyTicketId();
               }}
             />
             <OverflowAction
               icon="refresh-outline"
               label="Reload"
               onPress={() => {
-                setOverflowOpen(false);
-                void loadData();
+                onCloseOverflow();
+                void onReload();
               }}
             />
-            <OverflowAction
-              icon="close-outline"
-              label="Close"
-              onPress={() => setOverflowOpen(false)}
-            />
+            <OverflowAction icon="close-outline" label="Close" onPress={onCloseOverflow} />
           </Pressable>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 }
 

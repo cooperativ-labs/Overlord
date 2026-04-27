@@ -4265,6 +4265,7 @@ __metadata:
     expo-constants: "npm:~55.0.9"
     expo-document-picker: "npm:^55.0.13"
     expo-font: "npm:~55.0.4"
+    expo-glass-effect: "npm:~55.0.10"
     expo-image-picker: "npm:^55.0.19"
     expo-linking: "npm:~55.0.4"
     expo-notifications: "npm:~55.0.6"
@@ -13051,6 +13052,17 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10c0/6584feec71a153324cf8c60d1093092976f709b7dcf122f01bbe101bafa594cd38eddde831235ea1bf34cf01b8001fc0dd8a8faa24c03805aea5c2735a681217
+  languageName: node
+  linkType: hard
+
+"expo-glass-effect@npm:~55.0.10":
+  version: 55.0.10
+  resolution: "expo-glass-effect@npm:55.0.10"
+  peerDependencies:
+    expo: "*"
+    react: "*"
+    react-native: "*"
+  checksum: 10c0/df4f19445e1d4e4b1e1cb043ecfcfa0c831fd405e0c7d581d5e09f7d807b8ae671ca2cdc98118089cde8d9f490ab357462983a37ad554361f0ca10c4f9b4ab8b
   languageName: node
   linkType: hard
 

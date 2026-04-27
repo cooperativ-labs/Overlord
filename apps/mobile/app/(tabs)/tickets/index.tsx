@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -6,6 +7,7 @@ import {
   Alert,
   AppState,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -69,6 +71,15 @@ type TicketWithProject = TicketListItem & {
 
 const ALL_PROJECTS_LABEL = 'My Tickets';
 
+const glassAvailable = Platform.OS === 'ios' && isLiquidGlassAvailable();
+
+function getContrastColor(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#000000' : '#ffffff';
+}
+
 function formatAgentLabel(agent: AssignedAgent | null): string | null {
   if (!agent?.agent) return null;
   return agent.agent;
@@ -103,26 +114,37 @@ export default function TicketsScreen() {
 
   const fetchTickets = useCallback(async () => {
     const supabase = getSupabase();
-    let query = supabase
-      .from('tickets')
-      .select(
-        'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, updated_at, project_id'
-      )
-      .order('updated_at', { ascending: false })
-      .limit(100);
 
-    if (filterProjectId) {
-      query = query.eq('project_id', filterProjectId);
-    }
+    const runQuery = () => {
+      let q = supabase
+        .from('tickets')
+        .select(
+          'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, updated_at, project_id'
+        )
+        .order('updated_at', { ascending: false })
+        .limit(100);
+      if (filterProjectId) q = q.eq('project_id', filterProjectId);
+      return q;
+    };
 
-    const { data, error } = await query;
-
-    if (!error && data) {
-      setTickets(data as TicketWithProject[]);
-      return;
-    }
-    if (error) {
-      Alert.alert('Unable to load tickets', error.message);
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const { data, error } = await runQuery();
+      if (!error && data) {
+        setTickets(data as TicketWithProject[]);
+        return;
+      }
+      if (error) {
+        const isNetworkError =
+          error.message?.includes('Network request failed') ||
+          error.message?.includes('Failed to fetch');
+        if (isNetworkError && attempt < MAX_ATTEMPTS - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt));
+          continue;
+        }
+        Alert.alert('Unable to load tickets', error.message);
+        return;
+      }
     }
   }, [filterProjectId]);
 
@@ -232,51 +254,169 @@ export default function TicketsScreen() {
   );
   const projectColor = filterProject?.color || colors.primary;
   const projectName = filterProject?.name ?? ALL_PROJECTS_LABEL;
+  const buttonIconColor = getContrastColor(projectColor);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
+      <TicketsScreenHeader
+        search={search}
+        onSearchChange={setSearch}
+        onOpenDrawer={() => setDrawerOpen(true)}
+        onCreateTicket={handleCreateTicket}
+        projectColor={projectColor}
+        buttonIconColor={buttonIconColor}
+      />
+      <TicketsScreenFilters
+        projectName={projectName}
+        projectColor={projectColor}
+        projectMenuOpen={projectMenuOpen}
+        sortMenuOpen={sortMenuOpen}
+        statusMenuOpen={statusMenuOpen}
+        sortMode={sortMode}
+        statusFilter={statusFilter}
+        projects={projects}
+        filterProjectId={filterProjectId}
+        onToggleProjectMenu={() => {
+          setSortMenuOpen(false);
+          setStatusMenuOpen(false);
+          setProjectMenuOpen(open => !open);
+        }}
+        onToggleSortMenu={() => {
+          setProjectMenuOpen(false);
+          setStatusMenuOpen(false);
+          setSortMenuOpen(open => !open);
+        }}
+        onToggleStatusMenu={() => {
+          setProjectMenuOpen(false);
+          setSortMenuOpen(false);
+          setStatusMenuOpen(open => !open);
+        }}
+        onSelectProject={projectId => selectProject(projectId)}
+        onSelectSort={mode => setSortMode(mode)}
+        onSelectStatus={filter => setStatusFilter(filter)}
+      />
+      <TicketsResults
+        loading={loading}
+        refreshing={refreshing}
+        tickets={displayTickets}
+        search={search}
+        statusFilter={statusFilter}
+        filterProject={filterProject}
+        projects={projects}
+        projectColor={projectColor}
+        onRefresh={onRefresh}
+        onTicketPress={ticketId => router.push(`/(tabs)/tickets/${ticketId}`)}
+      />
+      <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
+    </SafeAreaView>
+  );
+}
 
-      {/* Top toolbar */}
-      <View style={styles.topBar}>
-        <Pressable
-          hitSlop={10}
-          style={styles.iconButton}
-          onPress={() => setDrawerOpen(true)}
-          accessibilityLabel="Open navigation"
-        >
-          <Ionicons name="menu-outline" size={20} color={colors.foreground} />
-        </Pressable>
-        <Pressable
-          hitSlop={10}
-          style={styles.iconButton}
-          onPress={() => router.back()}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={18} color={colors.foreground} />
-        </Pressable>
-        <View style={styles.searchWrap}>
+function TicketsScreenHeader({
+  search,
+  onSearchChange,
+  onOpenDrawer,
+  onCreateTicket,
+  projectColor,
+  buttonIconColor
+}: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  onOpenDrawer: () => void;
+  onCreateTicket: () => void;
+  projectColor: string;
+  buttonIconColor: string;
+}) {
+  return (
+    <View style={styles.topBar}>
+      <Pressable
+        hitSlop={10}
+        style={styles.ghostButton}
+        onPress={onOpenDrawer}
+        accessibilityLabel="Open navigation"
+      >
+        <Ionicons name="menu-outline" size={22} color={colors.foreground} />
+      </Pressable>
+      {glassAvailable ? (
+        <GlassView style={styles.searchWrap} glassEffectStyle="regular">
           <Ionicons name="search" size={14} color={colors.mutedForeground} />
           <TextInput
             value={search}
-            onChangeText={setSearch}
+            onChangeText={onSearchChange}
+            placeholder="Search ticket"
+            placeholderTextColor={colors.mutedForeground}
+            style={styles.searchInput}
+          />
+        </GlassView>
+      ) : (
+        <View style={[styles.searchWrap, styles.searchWrapFallback]}>
+          <Ionicons name="search" size={14} color={colors.mutedForeground} />
+          <TextInput
+            value={search}
+            onChangeText={onSearchChange}
             placeholder="Search ticket"
             placeholderTextColor={colors.mutedForeground}
             style={styles.searchInput}
           />
         </View>
-        <Pressable
-          hitSlop={10}
-          style={styles.createButton}
-          onPress={handleCreateTicket}
-          accessibilityLabel="Create ticket"
-        >
-          <Ionicons name="add" size={16} color={colors.foreground} />
-          <Ionicons name="ticket-outline" size={14} color={colors.foreground} />
-        </Pressable>
-      </View>
+      )}
+      <Pressable hitSlop={10} onPress={onCreateTicket} accessibilityLabel="Create ticket">
+        {glassAvailable ? (
+          <GlassView
+            style={styles.createButton}
+            glassEffectStyle="regular"
+            tintColor={projectColor}
+          >
+            <Ionicons name="add" size={16} color={buttonIconColor} />
+            <Ionicons name="ticket-outline" size={14} color={buttonIconColor} />
+          </GlassView>
+        ) : (
+          <View style={[styles.createButton, { backgroundColor: projectColor }]}>
+            <Ionicons name="add" size={16} color={buttonIconColor} />
+            <Ionicons name="ticket-outline" size={14} color={buttonIconColor} />
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
+}
 
-      {/* Project header */}
+function TicketsScreenFilters({
+  projectName,
+  projectColor,
+  projectMenuOpen,
+  sortMenuOpen,
+  statusMenuOpen,
+  sortMode,
+  statusFilter,
+  projects,
+  filterProjectId,
+  onToggleProjectMenu,
+  onToggleSortMenu,
+  onToggleStatusMenu,
+  onSelectProject,
+  onSelectSort,
+  onSelectStatus
+}: {
+  projectName: string;
+  projectColor: string;
+  projectMenuOpen: boolean;
+  sortMenuOpen: boolean;
+  statusMenuOpen: boolean;
+  sortMode: SortMode;
+  statusFilter: StatusFilter;
+  projects: { id: string; name: string; color: string }[];
+  filterProjectId: string | null;
+  onToggleProjectMenu: () => void;
+  onToggleSortMenu: () => void;
+  onToggleStatusMenu: () => void;
+  onSelectProject: (projectId: string | null) => void;
+  onSelectSort: (mode: SortMode) => void;
+  onSelectStatus: (filter: StatusFilter) => void;
+}) {
+  return (
+    <>
       <View style={styles.projectHeader}>
         <View style={[styles.projectSquare, { backgroundColor: projectColor }]} />
         <Text style={styles.projectHeaderName} numberOfLines={1}>
@@ -285,60 +425,15 @@ export default function TicketsScreen() {
         <Pressable
           hitSlop={8}
           style={styles.projectFilterButton}
-          onPress={() => {
-            setSortMenuOpen(false);
-            setStatusMenuOpen(false);
-            setProjectMenuOpen(open => !open);
-          }}
+          onPress={onToggleProjectMenu}
           accessibilityLabel="Filter by project"
         >
           <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
         </Pressable>
       </View>
-
-      {/* Filter chips */}
-      <View style={styles.filterRow}>
-        <FilterChip
-          icon="folder-open-outline"
-          label={projectName}
-          onPress={() => {
-            setSortMenuOpen(false);
-            setStatusMenuOpen(false);
-            setProjectMenuOpen(open => !open);
-          }}
-          active={projectMenuOpen}
-        />
-        <FilterChip
-          icon="swap-vertical-outline"
-          label={sortLabels[sortMode]}
-          onPress={() => {
-            setProjectMenuOpen(false);
-            setStatusMenuOpen(false);
-            setSortMenuOpen(open => !open);
-          }}
-          active={sortMenuOpen}
-        />
-        <FilterChip
-          icon="funnel-outline"
-          label={statusFilterLabels[statusFilter]}
-          onPress={() => {
-            setProjectMenuOpen(false);
-            setSortMenuOpen(false);
-            setStatusMenuOpen(open => !open);
-          }}
-          active={statusMenuOpen}
-        />
-      </View>
-
       {projectMenuOpen && (
         <View style={styles.menu}>
-          <Pressable
-            style={styles.menuItem}
-            onPress={() => {
-              selectProject(null);
-              setProjectMenuOpen(false);
-            }}
-          >
+          <Pressable style={styles.menuItem} onPress={() => onSelectProject(null)}>
             <Text style={styles.menuItemText}>{ALL_PROJECTS_LABEL}</Text>
             {filterProjectId === null && (
               <Ionicons name="checkmark" size={14} color={colors.primary} />
@@ -348,10 +443,7 @@ export default function TicketsScreen() {
             <Pressable
               key={project.id}
               style={styles.menuItem}
-              onPress={() => {
-                selectProject(project.id);
-                setProjectMenuOpen(false);
-              }}
+              onPress={() => onSelectProject(project.id)}
             >
               <View style={styles.projectMenuLabel}>
                 <View style={[styles.projectMenuDot, { backgroundColor: project.color }]} />
@@ -364,18 +456,27 @@ export default function TicketsScreen() {
           ))}
         </View>
       )}
+      <View style={styles.filterRow}>
+        <FilterChip
+          icon="swap-vertical-outline"
+          label={sortLabels[sortMode]}
+          onPress={onToggleSortMenu}
+          active={sortMenuOpen}
+        />
+        <FilterChip
+          icon="funnel-outline"
+          label={statusFilterLabels[statusFilter]}
+          onPress={onToggleStatusMenu}
+          active={statusMenuOpen}
+        />
+      </View>
+
+
 
       {sortMenuOpen && (
         <View style={styles.menu}>
           {(Object.keys(sortLabels) as SortMode[]).map(mode => (
-            <Pressable
-              key={mode}
-              style={styles.menuItem}
-              onPress={() => {
-                setSortMode(mode);
-                setSortMenuOpen(false);
-              }}
-            >
+            <Pressable key={mode} style={styles.menuItem} onPress={() => onSelectSort(mode)}>
               <Text style={styles.menuItemText}>{sortLabels[mode]}</Text>
               {sortMode === mode && <Ionicons name="checkmark" size={14} color={colors.primary} />}
             </Pressable>
@@ -386,14 +487,7 @@ export default function TicketsScreen() {
       {statusMenuOpen && (
         <View style={styles.menu}>
           {(Object.keys(statusFilterLabels) as StatusFilter[]).map(filter => (
-            <Pressable
-              key={filter}
-              style={styles.menuItem}
-              onPress={() => {
-                setStatusFilter(filter);
-                setStatusMenuOpen(false);
-              }}
-            >
+            <Pressable key={filter} style={styles.menuItem} onPress={() => onSelectStatus(filter)}>
               <Text style={styles.menuItemText}>{statusFilterLabels[filter]}</Text>
               {statusFilter === filter && (
                 <Ionicons name="checkmark" size={14} color={colors.primary} />
@@ -402,110 +496,151 @@ export default function TicketsScreen() {
           ))}
         </View>
       )}
+    </>
+  );
+}
 
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={displayTickets}
-          keyExtractor={item => item.id}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-          renderItem={({ item }) => {
-            const agentLabel = formatAgentLabel(item.assigned_agent);
-            const projectForTicket =
-              projects.find(p => p.id === item.project_id)?.color || projectColor;
-            const projectLabel = projects.find(p => p.id === item.project_id)?.name ?? 'Personal';
-            return (
-              <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                onPress={() => router.push(`/(tabs)/tickets/${item.id}`)}
-              >
-                <View style={styles.cardRow}>
-                  <View style={[styles.ticketSquare, { backgroundColor: projectForTicket }]} />
-                  <View style={styles.ticketTitleWrap}>
-                    <Text style={styles.ticketTitle} numberOfLines={1}>
-                      {item.title || 'Untitled'}
-                    </Text>
-                    {filterProjectId === null && (
-                      <Text style={styles.ticketProjectName} numberOfLines={1}>
-                        {projectLabel}
-                      </Text>
-                    )}
-                  </View>
-                  {item.has_unread && <View style={styles.unreadDot} />}
-                </View>
-                <View style={styles.actionRow}>
-                  <Pressable
-                    hitSlop={8}
-                    style={styles.playButton}
-                    onPress={() => router.push(`/(tabs)/tickets/${item.id}`)}
-                  >
-                    <Ionicons name="play-outline" size={12} color={colors.foreground} />
-                  </Pressable>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        borderColor: statusColors[item.status] ?? colors.border
-                      }
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        { color: statusColors[item.status] ?? colors.mutedForeground }
-                      ]}
-                    >
-                      {statusLabel[item.status] ?? item.status}
-                    </Text>
-                  </View>
-                  {agentLabel && (
-                    <View style={styles.agentBadge}>
-                      <Ionicons
-                        name={
-                          item.execution_target === 'agent'
-                            ? 'hardware-chip-outline'
-                            : 'person-outline'
-                        }
-                        size={11}
-                        color={colors.success}
-                      />
-                      <Text style={styles.agentBadgeText}>
-                        {item.execution_target === 'agent' ? 'Agent' : 'Human'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="ticket-outline" size={48} color={colors.mutedForeground} />
-              <Text style={styles.emptyText}>No tickets</Text>
-              <Text style={styles.emptySub}>
-                {search.trim() || statusFilter !== 'all'
-                  ? 'Try clearing filters.'
-                  : filterProject
-                    ? `No tickets in ${filterProject.name}.`
-                    : 'No tickets across your projects yet.'}
-              </Text>
-            </View>
-          }
-          contentContainerStyle={displayTickets.length === 0 ? styles.emptyContainer : styles.list}
+function TicketsResults({
+  loading,
+  refreshing,
+  tickets,
+  search,
+  statusFilter,
+  filterProject,
+  projects,
+  projectColor,
+  onRefresh,
+  onTicketPress
+}: {
+  loading: boolean;
+  refreshing: boolean;
+  tickets: TicketWithProject[];
+  search: string;
+  statusFilter: StatusFilter;
+  filterProject: { name: string } | null;
+  projects: { id: string; name: string; color: string }[];
+  projectColor: string;
+  onRefresh: () => Promise<void>;
+  onTicketPress: (ticketId: string) => void;
+}) {
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={tickets}
+      keyExtractor={item => item.id}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
+      renderItem={({ item }) => (
+        <TicketCard
+          ticket={item}
+          projectColor={projectColor}
+          projects={projects}
+          onPress={() => onTicketPress(item.id)}
         />
       )}
+      ListEmptyComponent={
+        <TicketsEmptyState
+          search={search}
+          statusFilter={statusFilter}
+          filterProject={filterProject}
+        />
+      }
+      contentContainerStyle={tickets.length === 0 ? styles.emptyContainer : styles.list}
+    />
+  );
+}
 
-      <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
-    </SafeAreaView>
+function TicketCard({
+  ticket,
+  projectColor,
+  projects,
+  onPress
+}: {
+  ticket: TicketWithProject;
+  projectColor: string;
+  projects: { id: string; name: string; color: string }[];
+  onPress: () => void;
+}) {
+  const agentLabel = formatAgentLabel(ticket.assigned_agent);
+  const ticketProject = projects.find(p => p.id === ticket.project_id) ?? null;
+  const ticketProjectColor = ticketProject?.color || projectColor;
+  const projectLabel = ticketProject?.name ?? 'Personal';
+
+  return (
+    <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={onPress}>
+      <View style={styles.cardTitleRow}>
+        <Text style={styles.ticketTitle} numberOfLines={2}>
+          {ticket.title || 'Untitled'}
+        </Text>
+        {ticket.has_unread && <View style={styles.unreadDot} />}
+      </View>
+      <View style={styles.cardMeta}>
+        <View style={styles.cardProjectInfo}>
+          <View style={[styles.projectDot, { backgroundColor: ticketProjectColor }]} />
+          <Text style={styles.ticketProjectName} numberOfLines={1}>
+            {projectLabel}
+          </Text>
+        </View>
+        <View style={styles.cardRightMeta}>
+          {agentLabel && (
+            <Ionicons
+              name={
+                ticket.execution_target === 'agent' ? 'hardware-chip-outline' : 'person-outline'
+              }
+              size={11}
+              color={colors.mutedForeground}
+            />
+          )}
+          <View
+            style={[
+              styles.statusBadge,
+              { borderColor: statusColors[ticket.status] ?? colors.border }
+            ]}
+          >
+            <Text
+              style={[
+                styles.statusText,
+                { color: statusColors[ticket.status] ?? colors.mutedForeground }
+              ]}
+            >
+              {statusLabel[ticket.status] ?? ticket.status}
+            </Text>
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function TicketsEmptyState({
+  search,
+  statusFilter,
+  filterProject
+}: {
+  search: string;
+  statusFilter: StatusFilter;
+  filterProject: { name: string } | null;
+}) {
+  return (
+    <View style={styles.empty}>
+      <Ionicons name="ticket-outline" size={48} color={colors.mutedForeground} />
+      <Text style={styles.emptyText}>No tickets</Text>
+      <Text style={styles.emptySub}>
+        {search.trim() || statusFilter !== 'all'
+          ? 'Try clearing filters.'
+          : filterProject
+            ? `No tickets in ${filterProject.name}.`
+            : 'No tickets across your projects yet.'}
+      </Text>
+    </View>
   );
 }
 
@@ -549,13 +684,9 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10
   },
-  iconButton: {
+  ghostButton: {
     width: 34,
     height: 34,
-    borderRadius: 8,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -564,12 +695,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 10,
     paddingHorizontal: 10,
-    height: 34
+    height: 36,
+    overflow: 'hidden'
+  },
+  searchWrapFallback: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
   },
   searchInput: {
     flex: 1,
@@ -578,16 +712,14 @@ const styles = StyleSheet.create({
     padding: 0
   },
   createButton: {
-    height: 34,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 2
+    gap: 2,
+    overflow: 'hidden'
   },
   projectHeader: {
     flexDirection: 'row',
@@ -687,53 +819,60 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border
   },
-  cardRow: {
+  cardTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10
-  },
-  ticketTitleWrap: {
-    flex: 1,
-    gap: 3
-  },
-  ticketSquare: {
-    width: 10,
-    height: 10,
-    borderRadius: 2
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 6
   },
   ticketTitle: {
+    flex: 1,
     color: colors.foreground,
     fontSize: 15,
-    fontWeight: '600'
+    fontWeight: '600',
+    lineHeight: 20
   },
-  ticketProjectName: {
-    color: colors.mutedForeground,
-    fontSize: 12
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8
   },
-  unreadDot: {
+  cardProjectInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+    minWidth: 0
+  },
+  projectDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.destructive
+    flexShrink: 0
   },
-  actionRow: {
+  ticketProjectName: {
+    color: colors.mutedForeground,
+    fontSize: 12,
+    flexShrink: 1
+  },
+  cardRightMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-    marginLeft: 20
+    gap: 6,
+    flexShrink: 0
   },
-  playButton: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center'
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.destructive,
+    marginTop: 2,
+    flexShrink: 0
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'transparent'
@@ -742,22 +881,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'capitalize'
-  },
-  agentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.4)',
-    backgroundColor: 'rgba(34, 197, 94, 0.08)'
-  },
-  agentBadgeText: {
-    color: colors.success,
-    fontSize: 11,
-    fontWeight: '600'
   },
   emptyContainer: {
     flex: 1,

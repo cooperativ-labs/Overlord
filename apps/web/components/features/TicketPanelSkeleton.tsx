@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export function TicketPanelSkeleton() {
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col bg-card">
       <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-16" />
@@ -21,7 +21,7 @@ export function TicketPanelSkeleton() {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/50">
-        <section className="bg-background pt-5">
+        <section className="bg-card pt-5">
           <div className="px-5">
             <div className="mb-4">
               <Skeleton className="h-8 w-3/4" />

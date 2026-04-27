@@ -43,7 +43,7 @@ export default function ServersScreen() {
     return (
       <Pressable
         style={({ pressed }) => [styles.serverCard, pressed && { opacity: 0.7 }]}
-        onPress={() => router.push(`/(tabs)/servers/${item.id}`)}
+        onPress={() => router.push(`/(tabs)/account/servers/${item.id}`)}
       >
         <View style={styles.serverIcon}>
           <Ionicons name="server" size={24} color={colors.primary} />
@@ -80,7 +80,7 @@ export default function ServersScreen() {
           title: 'Servers',
           headerRight: () => (
             <Pressable
-              onPress={() => router.push('/(tabs)/servers/add')}
+              onPress={() => router.push('/(tabs)/account/servers/add')}
               style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
               <Ionicons name="add" size={28} color={colors.primary} />
@@ -98,7 +98,7 @@ export default function ServersScreen() {
           </Text>
           <Pressable
             style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
-            onPress={() => router.push('/(tabs)/servers/add')}
+            onPress={() => router.push('/(tabs)/account/servers/add')}
           >
             <Ionicons name="add" size={20} color={colors.primaryForeground} />
             <Text style={styles.addButtonText}>Add Server</Text>

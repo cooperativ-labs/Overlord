@@ -188,8 +188,8 @@ export function AgentModelSelector({
   return (
     <div className={cn('flex gap-3', inline ? 'flex-col' : 'flex-row')}>
       {/* Agent column */}
-      <div className={cn('flex flex-col gap-1', inline ? 'w-full' : 'min-w-[120px]')}>
-        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[110px]')}>
+        <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Agent
         </p>
         {AGENT_SELECTOR_VALUES.map(agentValue => {
@@ -201,7 +201,7 @@ export function AgentModelSelector({
               type="button"
               onClick={() => handleAgentChange(agentValue)}
               className={cn(
-                'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
                 isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
               )}
             >
@@ -209,8 +209,8 @@ export function AgentModelSelector({
                 <Image
                   src={agent.icon}
                   alt={agent.label}
-                  width={14}
-                  height={14}
+                  width={12}
+                  height={12}
                   className={cn(agent.invertDark ? 'dark:invert' : '')}
                 />
               </span>
@@ -222,15 +222,15 @@ export function AgentModelSelector({
       </div>
 
       {/* Model column */}
-      <div className={cn('flex flex-col gap-1', inline ? 'w-full' : 'min-w-[180px]')}>
-        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[160px]')}>
+        <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Model
         </p>
         <button
           type="button"
           onClick={() => handleModelChange(null)}
           className={cn(
-            'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+            'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
             value.model === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
           )}
         >
@@ -242,7 +242,7 @@ export function AgentModelSelector({
             type="button"
             onClick={() => handleModelChange('auto')}
             className={cn(
-              'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
               value.model === 'auto' ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
             )}
           >
@@ -251,7 +251,7 @@ export function AgentModelSelector({
           </button>
         ) : null}
         {currentModels.length > 0 ? (
-          <div className="max-h-[200px] overflow-y-auto">
+          <div className="max-h-[220px] overflow-y-auto">
             {currentModels.map(m => {
               const isSelected = value.model === m.model_id;
               return (
@@ -260,16 +260,11 @@ export function AgentModelSelector({
                   type="button"
                   onClick={() => handleModelChange(m.model_id)}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                    'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
                     isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
                   )}
                 >
                   <span className="truncate">{m.display_name}</span>
-                  {m.is_recommended && (
-                    <span className="shrink-0 rounded bg-primary/10 px-1 py-0.5 text-[9px] text-primary">
-                      rec
-                    </span>
-                  )}
                   {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
                 </button>
               );
@@ -284,15 +279,15 @@ export function AgentModelSelector({
 
       {/* Thinking column — only shown when a model with thinking options is selected */}
       {thinkingEnabled && thinkingOptions.length > 0 && (
-        <div className={cn('flex flex-col gap-1', inline ? 'w-full' : 'min-w-[100px]')}>
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div className={cn('flex flex-col gap-0.5', inline ? 'w-full' : 'min-w-[90px]')}>
+          <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Thinking
           </p>
           <button
             type="button"
             onClick={() => handleThinkingChange(null)}
             className={cn(
-              'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+              'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
               value.thinking === null ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
             )}
           >
@@ -307,7 +302,7 @@ export function AgentModelSelector({
                 type="button"
                 onClick={() => handleThinkingChange(option)}
                 className={cn(
-                  'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs capitalize transition-colors',
+                  'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs capitalize transition-colors',
                   isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
                 )}
               >

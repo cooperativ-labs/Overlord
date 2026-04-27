@@ -1,15 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
+import { StyleProp, TouchableOpacity, ViewStyle } from 'react-native';
 
-import { useAuth } from '@/lib/auth-context';
 import { colors } from '@/lib/colors';
 
-const ADMIN_EMAIL = 'jake@cooperativ.io';
+function NewTicketTabButton({
+  children,
+  style
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const router = useRouter();
+  return (
+    <TouchableOpacity
+      style={style}
+      onPress={() => router.push('/(tabs)/tickets/create')}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel="New ticket"
+    >
+      {children}
+    </TouchableOpacity>
+  );
+}
 
 export default function TabLayout() {
-  const { user } = useAuth();
-  const isAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
-
   return (
     <Tabs
       screenOptions={{
@@ -43,19 +59,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="servers"
-        options={{
-          title: 'Servers',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="server-outline" size={size} color={color} />
-          )
-        }}
-      />
-      <Tabs.Screen
-        name="account/index"
+        name="account"
         options={{
           title: 'Account',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person-outline" size={size} color={color} />
           )
@@ -64,10 +71,10 @@ export default function TabLayout() {
       <Tabs.Screen
         name="admin/index"
         options={{
-          title: 'Admin',
-          href: isAdmin ? undefined : null,
+          title: 'New Ticket',
+          tabBarButton: props => <NewTicketTabButton {...props} />,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="shield-checkmark-outline" size={size} color={color} />
+            <Ionicons name="add-circle-outline" size={size} color={color} />
           )
         }}
       />

@@ -280,7 +280,7 @@ export async function TicketPanelContent({
       initialSession={agentSession ?? null}
       initialSharedState={state ?? []}
     >
-      <div className="flex h-full flex-col bg-background">
+      <div className="flex h-full flex-col bg-card">
         <TicketPanelHeader
           ticketId={ticketId}
           ticketIdentifier={ticketIdentifier}
@@ -308,7 +308,7 @@ export async function TicketPanelContent({
         />
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/50 pb-10 ">
-          <section className="bg-background py-5">
+          <section className="bg-card py-5">
             <div className="px-5">
               {ticket.delegate ? (
                 <div className="mb-3 flex items-center gap-1.5 text-xs text-orange-500/90">
