@@ -7,7 +7,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/lib/auth-context';
-import { colors } from '@/lib/colors';
+import {
+  ThemeProvider,
+  useThemeColors,
+  useThemedStyles,
+  useThemePreference,
+  type ThemeColors
+} from '@/lib/colors';
 import { NotificationsProvider } from '@/lib/notifications';
 import { SelectedProjectProvider } from '@/lib/selected-project-context';
 import { ServerConnectionsProvider } from '@/lib/server-connections-context';
@@ -35,13 +41,27 @@ Sentry.init({
 SplashScreen.preventAutoHideAsync();
 
 export default Sentry.wrap(function RootLayout() {
+  return (
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <ThemeProvider>
+        <RootLayoutContent />
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+});
+
+function RootLayoutContent() {
   useEffect(() => {
     SplashScreen.hideAsync();
   }, []);
 
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const { resolvedTheme } = useThemePreference();
+
   if (!isSupabaseConfigured()) {
     return (
-      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <>
         <View style={styles.container}>
           <View style={styles.card}>
             <Text style={styles.title}>Mobile app configuration required</Text>
@@ -54,31 +74,30 @@ export default Sentry.wrap(function RootLayout() {
             </Text>
           </View>
         </View>
-        <StatusBar style="light" />
-      </SafeAreaProvider>
+        <StatusBar style={resolvedTheme === 'light' ? 'dark' : 'light'} />
+      </>
     );
   }
 
   return (
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <AuthProvider>
-        <NotificationsProvider>
-          <ServerConnectionsProvider>
-            <SelectedProjectProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="(auth)" />
-              </Stack>
-              <StatusBar style="light" />
-            </SelectedProjectProvider>
-          </ServerConnectionsProvider>
-        </NotificationsProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <AuthProvider>
+      <NotificationsProvider>
+        <ServerConnectionsProvider>
+          <SelectedProjectProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="(auth)" />
+            </Stack>
+            <StatusBar style={resolvedTheme === 'light' ? 'dark' : 'light'} />
+          </SelectedProjectProvider>
+        </ServerConnectionsProvider>
+      </NotificationsProvider>
+    </AuthProvider>
   );
-});
+}
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -116,4 +135,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20
   }
-});
+  });

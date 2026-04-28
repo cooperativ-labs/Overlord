@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { supabaseRuntimeInfo } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +99,8 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -152,4 +155,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center'
   }
-});
+  });

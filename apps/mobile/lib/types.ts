@@ -136,6 +136,7 @@ export interface TicketEvent {
   phase: string | null;
   is_blocking: boolean;
   created_at: string;
+  created_by: string | null;
 }
 
 /** Supported remote connection transports. */

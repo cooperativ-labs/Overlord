@@ -1,83 +1,65 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs, useRouter } from 'expo-router';
-import { StyleProp, TouchableOpacity, ViewStyle } from 'react-native';
+import { Redirect } from 'expo-router';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { ActivityIndicator, View } from 'react-native';
 
-import { colors } from '@/lib/colors';
-
-function NewTicketTabButton({
-  children,
-  style
-}: {
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const router = useRouter();
-  return (
-    <TouchableOpacity
-      style={style}
-      onPress={() => router.push('/(tabs)/tickets/create')}
-      activeOpacity={0.7}
-      accessibilityRole="button"
-      accessibilityLabel="New ticket"
-    >
-      {children}
-    </TouchableOpacity>
-  );
-}
+import { useAuth } from '@/lib/auth-context';
+import { useThemeColors } from '@/lib/colors';
 
 export default function TabLayout() {
+  const { session, loading } = useAuth();
+  const colors = useThemeColors();
+
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: colors.background
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!session) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.background },
-        headerTintColor: colors.foreground,
-        tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground
+    <NativeTabs
+      disableTransparentOnScrollEdge
+      tintColor={colors.primary}
+      labelStyle={{
+        default: { color: colors.mutedForeground },
+        selected: { color: colors.primary }
+      }}
+      iconColor={{
+        default: colors.mutedForeground,
+        selected: colors.primary
       }}
     >
-      <Tabs.Screen
-        name="feed/index"
-        options={{
-          title: 'Feed',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="newspaper-outline" size={size} color={color} />
-          )
-        }}
-      />
-      <Tabs.Screen
-        name="tickets"
-        options={{
-          title: 'Tickets',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="ticket-outline" size={size} color={color} />
-          )
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: 'Account',
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          )
-        }}
-      />
-      <Tabs.Screen
-        name="admin/index"
-        options={{
-          title: 'New Ticket',
-          tabBarButton: props => <NewTicketTabButton {...props} />,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle-outline" size={size} color={color} />
-          )
-        }}
-      />
-    </Tabs>
+      <NativeTabs.Trigger name="feed">
+        <NativeTabs.Trigger.Icon
+          src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="newspaper-outline" />}
+        />
+        <NativeTabs.Trigger.Label>Feed</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="tickets">
+        <NativeTabs.Trigger.Icon
+          src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="ticket-outline" />}
+        />
+        <NativeTabs.Trigger.Label>Tickets</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="account">
+        <NativeTabs.Trigger.Icon
+          src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-outline" />}
+        />
+        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

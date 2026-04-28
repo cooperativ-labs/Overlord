@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import type { ExecutingFeedTicket } from '@/lib/types';
 
 const AGENT_LABELS: Record<string, string> = {
@@ -26,6 +26,8 @@ type Props = {
 
 export function ExecutingTicketsSection({ tickets }: Props) {
   const router = useRouter();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
 
   if (tickets.length === 0) return null;
 
@@ -71,7 +73,8 @@ export function ExecutingTicketsSection({ tickets }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -128,4 +131,4 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     fontSize: 12
   }
-});
+  });

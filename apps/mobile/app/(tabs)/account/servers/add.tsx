@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import { saveServerDeviceCredential } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
@@ -62,6 +62,8 @@ export default function AddServerScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { refresh } = useServerConnections();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
 
   const [label, setLabel] = useState('');
   const [host, setHost] = useState('');
@@ -707,6 +709,9 @@ function TransportButton({
   label: string;
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -728,7 +733,8 @@ function TransportButton({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -911,4 +917,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18
   }
-});
+  });

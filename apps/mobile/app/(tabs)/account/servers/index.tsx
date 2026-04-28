@@ -11,20 +11,25 @@ import {
   View
 } from 'react-native';
 
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import type { Server, ServerStatus } from '@/lib/types';
 
-const statusConfig: Record<ServerStatus, { label: string; color: string }> = {
-  pending: { label: 'Pending', color: colors.mutedForeground },
-  connected: { label: 'Connected', color: colors.success },
-  error: { label: 'Error', color: colors.destructive }
-};
+function getStatusConfig(colors: ThemeColors): Record<ServerStatus, { label: string; color: string }> {
+  return {
+    pending: { label: 'Pending', color: colors.mutedForeground },
+    connected: { label: 'Connected', color: colors.success },
+    error: { label: 'Error', color: colors.destructive }
+  };
+}
 
 export default function ServersScreen() {
   const router = useRouter();
   const { servers, loading, refresh } = useServerConnections();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [refreshing, setRefreshing] = useState(false);
+  const statusConfig = getStatusConfig(colors);
 
   useFocusEffect(
     useCallback(() => {
@@ -123,7 +128,8 @@ export default function ServersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -216,4 +222,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600'
   }
-});
+  });

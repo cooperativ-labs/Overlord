@@ -1,12 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { getSupabase } from './supabase';
-
-export interface ProjectSummary {
-  id: string;
-  name: string;
-  color: string;
-}
+import { useAuth } from './auth-context';
+import { loadProjectSummaries, type ProjectSummary } from './projects';
 
 interface SelectedProjectContextValue {
   projects: ProjectSummary[];
@@ -20,29 +15,37 @@ interface SelectedProjectContextValue {
 const SelectedProjectContext = createContext<SelectedProjectContextValue | undefined>(undefined);
 
 export function SelectedProjectProvider({ children }: { children: React.ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, name, color')
-      .order('name', { ascending: true });
+    if (!user) {
+      setProjects([]);
+      setSelectedProjectId(null);
+      setLoading(false);
+      return;
+    }
 
-    if (!error && data) {
-      setProjects(data as ProjectSummary[]);
+    setLoading(true);
+
+    try {
+      const data = await loadProjectSummaries();
+      setProjects(data);
       setSelectedProjectId(current => {
         if (current && data.some(project => project.id === current)) return current;
         return null;
       });
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    void refresh().finally(() => setLoading(false));
-  }, [refresh]);
+    if (authLoading) return;
+    void refresh();
+  }, [authLoading, refresh]);
 
   const selectedProject = useMemo(
     () => projects.find(project => project.id === selectedProjectId) ?? null,

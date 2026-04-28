@@ -3,11 +3,26 @@ import { useRouter } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
-import { colors } from '@/lib/colors';
+import {
+  useThemeColors,
+  useThemedStyles,
+  useThemePreference,
+  type ThemeColors,
+  type ThemePreference
+} from '@/lib/colors';
+
+const APPEARANCE_OPTIONS: { value: ThemePreference; label: string; description: string }[] = [
+  { value: 'system', label: 'System', description: 'Match the device appearance automatically.' },
+  { value: 'light', label: 'Light', description: 'Use the light theme across the app.' },
+  { value: 'dark', label: 'Dark', description: 'Use the dark theme across the app.' }
+];
 
 export default function AccountScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const { preference, resolvedTheme, setPreference } = useThemePreference();
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -15,7 +30,15 @@ export default function AccountScreen() {
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: signOut
+        onPress: () =>
+          void signOut()
+            .then(() => router.replace('/(tabs)/feed'))
+            .catch(error => {
+              Alert.alert(
+                'Unable to sign out',
+                error instanceof Error ? error.message : 'An unexpected error occurred.'
+              );
+            })
       }
     ]);
   };
@@ -52,6 +75,49 @@ export default function AccountScreen() {
       </View>
 
       <View style={styles.menuSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+          <Text style={styles.sectionDescription}>Current mode: {resolvedTheme}</Text>
+        </View>
+        {APPEARANCE_OPTIONS.map((option, index) => {
+          const selected = preference === option.value;
+
+          return (
+            <Pressable
+              key={option.value}
+              style={[
+                styles.menuItem,
+                selected && styles.optionActive,
+                index === APPEARANCE_OPTIONS.length - 1 && styles.menuItemLast
+              ]}
+              onPress={() => void setPreference(option.value)}
+            >
+              <Ionicons
+                name={
+                  option.value === 'system'
+                    ? 'phone-portrait-outline'
+                    : option.value === 'light'
+                      ? 'sunny-outline'
+                      : 'moon-outline'
+                }
+                size={20}
+                color={selected ? colors.primary : colors.foreground}
+              />
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuText}>{option.label}</Text>
+                <Text style={styles.menuDescription}>{option.description}</Text>
+              </View>
+              {selected ? (
+                <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.menuSection}>
         <Pressable style={[styles.menuItem, styles.menuItemLast]} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={20} color={colors.destructive} />
           <View style={styles.menuItemContent}>
@@ -63,7 +129,8 @@ export default function AccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -112,6 +179,9 @@ const styles = StyleSheet.create({
   menuItemLast: {
     borderBottomWidth: 0
   },
+  optionActive: {
+    backgroundColor: `${colors.primary}12`
+  },
   menuItemContent: {
     flex: 1
   },
@@ -126,5 +196,23 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     fontSize: 13,
     marginTop: 2
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border
+  },
+  sectionTitle: {
+    color: colors.foreground,
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  sectionDescription: {
+    color: colors.mutedForeground,
+    fontSize: 13,
+    marginTop: 2,
+    textTransform: 'capitalize'
   }
-});
+  });

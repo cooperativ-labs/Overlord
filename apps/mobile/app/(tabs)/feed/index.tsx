@@ -13,41 +13,79 @@ import {
 } from 'react-native';
 
 import { ExecutingTicketsSection } from '@/components/ExecutingTicketsSection';
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { loadFeedPosts } from '@/lib/feed-posts';
 import { useExecutingFeedTickets } from '@/lib/hooks/use-executing-feed-tickets';
 import { useFeedRealtime } from '@/lib/hooks/use-feed-realtime';
-import { useSelectedProject } from '@/lib/selected-project-context';
+import { loadProjectSummaries, type ProjectSummary } from '@/lib/projects';
 import type { FeedPost } from '@/lib/types';
 
-const impactConfig: Record<string, { label: string; color: string; backgroundColor: string }> = {
-  minor: {
-    label: 'Minor',
-    color: colors.mutedForeground,
-    backgroundColor: colors.muted
-  },
-  notable: {
-    label: 'Notable',
-    color: '#60a5fa',
-    backgroundColor: 'rgba(59, 130, 246, 0.16)'
-  },
-  significant: {
-    label: 'Significant',
-    color: '#fbbf24',
-    backgroundColor: 'rgba(245, 158, 11, 0.16)'
-  }
-};
+function getImpactConfig(
+  colors: ThemeColors
+): Record<string, { label: string; color: string; backgroundColor: string }> {
+  return {
+    minor: {
+      label: 'Minor',
+      color: colors.mutedForeground,
+      backgroundColor: colors.muted
+    },
+    notable: {
+      label: 'Notable',
+      color: '#60a5fa',
+      backgroundColor: 'rgba(59, 130, 246, 0.16)'
+    },
+    significant: {
+      label: 'Significant',
+      color: '#fbbf24',
+      backgroundColor: 'rgba(245, 158, 11, 0.16)'
+    }
+  };
+}
 
 export default function FeedScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedPostIds, setExpandedPostIds] = useState<Set<string>>(new Set());
   const [selectedProjectId, setSelectedProjectId] = useState<string | 'all'>('all');
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
 
-  const { projects, loading: loadingProjects } = useSelectedProject();
   const executingTickets = useExecutingFeedTickets();
   const { newPosts, markKnown } = useFeedRealtime();
+  const impactConfig = getImpactConfig(colors);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setLoadingProjects(true);
+
+    void loadProjectSummaries()
+      .then(data => {
+        if (!cancelled) {
+          setProjects(data);
+        }
+      })
+      .catch(error => {
+        if (!cancelled) {
+          Alert.alert(
+            'Unable to load projects',
+            error instanceof Error ? error.message : 'Unknown error'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingProjects(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     try {
@@ -363,7 +401,8 @@ export default function FeedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -690,4 +729,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8
   }
-});
+  });

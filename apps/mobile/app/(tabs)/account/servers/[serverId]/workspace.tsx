@@ -14,7 +14,7 @@ import {
   View
 } from 'react-native';
 
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import type { GitStatusFile, GitStatusResult, MobileHelperConfig } from '@/lib/workspace';
 import {
@@ -24,14 +24,16 @@ import {
   saveHelperConfig
 } from '@/lib/workspace';
 
-const statusStyle: Record<string, { label: string; color: string }> = {
-  modified: { label: 'M', color: colors.primary },
-  added: { label: 'A', color: colors.success },
-  deleted: { label: 'D', color: colors.destructive },
-  renamed: { label: 'R', color: '#f59e0b' },
-  untracked: { label: '?', color: colors.mutedForeground },
-  copied: { label: 'C', color: '#8b5cf6' }
-};
+function getStatusStyle(colors: ThemeColors): Record<string, { label: string; color: string }> {
+  return {
+    modified: { label: 'M', color: colors.primary },
+    added: { label: 'A', color: colors.success },
+    deleted: { label: 'D', color: colors.destructive },
+    renamed: { label: 'R', color: '#f59e0b' },
+    untracked: { label: '?', color: colors.mutedForeground },
+    copied: { label: 'C', color: '#8b5cf6' }
+  };
+}
 
 type HealthState =
   | { phase: 'idle' }
@@ -42,6 +44,9 @@ type HealthState =
 export default function WorkspaceScreen() {
   const { serverId } = useLocalSearchParams<{ serverId: string }>();
   const { getServerById } = useServerConnections();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const statusStyle = getStatusStyle(colors);
   const server = getServerById(serverId);
 
   const [config, setConfig] = useState<MobileHelperConfig | null>(null);
@@ -369,6 +374,9 @@ export default function WorkspaceScreen() {
 }
 
 function HealthBadge({ state }: { state: HealthState }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   if (state.phase === 'checking') {
     return <ActivityIndicator color={colors.primary} />;
   }
@@ -399,6 +407,9 @@ function HealthBadge({ state }: { state: HealthState }) {
 }
 
 function StatusRow({ file }: { file: GitStatusFile }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const statusStyle = getStatusStyle(colors);
   const style = statusStyle[file.status] ?? {
     label: file.stagedStatus || file.unstagedStatus || '·',
     color: colors.mutedForeground
@@ -433,6 +444,8 @@ function DetailRow({
   value: string;
   mono?: boolean;
 }) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -447,7 +460,8 @@ function DetailRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16 },
   centered: {
@@ -550,4 +564,4 @@ const styles = StyleSheet.create({
   statusMeta: { color: colors.mutedForeground, fontSize: 11, marginTop: 2 },
   healthBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 }
-});
+  });

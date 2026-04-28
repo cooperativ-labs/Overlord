@@ -145,11 +145,9 @@ export function ProjectWorkingDirectoryRequiredModal({
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
         <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
-
           <LoadingButton
             buttonState={skipState}
             variant="outline"
-
             errorText="Try again"
             loadingText="Saving…"
             setButtonState={setSkipState}
@@ -157,7 +155,6 @@ export function ProjectWorkingDirectoryRequiredModal({
             text="Don't use a directory"
             onClick={handleSkipDirectory}
           />
-
 
           <LoadingButton
             buttonState={selectFolderState}
@@ -174,7 +171,6 @@ export function ProjectWorkingDirectoryRequiredModal({
             }
             onClick={handleSelectFolder}
           />
-
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -13,7 +13,7 @@ import {
   View
 } from 'react-native';
 
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import {
   deleteServerDeviceCredential,
@@ -26,16 +26,23 @@ import { deleteKey, generateKey, installPublicKey, verifyConnection } from '@/mo
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
-const statusConfig: Record<ServerStatus, { label: string; color: string; icon: IoniconName }> = {
-  pending: { label: 'Pending Verification', color: colors.mutedForeground, icon: 'time-outline' },
-  connected: { label: 'Connected', color: colors.success, icon: 'checkmark-circle-outline' },
-  error: { label: 'Verification Error', color: colors.destructive, icon: 'alert-circle-outline' }
-};
+function getStatusConfig(
+  colors: ThemeColors
+): Record<ServerStatus, { label: string; color: string; icon: IoniconName }> {
+  return {
+    pending: { label: 'Pending Verification', color: colors.mutedForeground, icon: 'time-outline' },
+    connected: { label: 'Connected', color: colors.success, icon: 'checkmark-circle-outline' },
+    error: { label: 'Verification Error', color: colors.destructive, icon: 'alert-circle-outline' }
+  };
+}
 
 export default function ServerDetailScreen() {
   const { serverId } = useLocalSearchParams<{ serverId: string }>();
   const router = useRouter();
   const { getServerById, loading: loadingServers, refresh } = useServerConnections();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const statusConfig = getStatusConfig(colors);
 
   const [credential, setCredential] = useState<DeviceServerCredential | null>(null);
   const [loadingCredential, setLoadingCredential] = useState(true);
@@ -565,6 +572,8 @@ function DetailRow({
   value: string;
   mono?: boolean;
 }) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -575,7 +584,8 @@ function DetailRow({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -761,4 +771,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 16
   }
-});
+  });

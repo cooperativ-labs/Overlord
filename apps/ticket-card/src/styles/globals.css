@@ -1,4 +1,0 @@
-@import "sunpeak/chatgpt/globals.css";
-
-@source "../**/*.{ts,tsx}";
-@source "../../../node_modules/sunpeak";

@@ -1,14 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
+import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,9 +21,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const glassAvailable = Platform.OS === 'ios' && isLiquidGlassAvailable();
+
+import { AgentBrandIcon } from '@/components/AgentBrandIcon';
 import { AgentModelChooser } from '@/components/AgentModelChooser';
 import { AGENT_OPTIONS, createAssignedAgent, selectionFromAssignedAgent } from '@/lib/agent-models';
-import { colors } from '@/lib/colors';
+import { useAuth } from '@/lib/auth-context';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
 import {
   launchTicketOnServer,
@@ -58,31 +65,52 @@ type TicketDocument = {
   createdAt: string;
 };
 
-const eventIcons: Record<string, { name: string; color: string }> = {
-  system: { name: 'settings-outline', color: colors.mutedForeground },
-  question: { name: 'help-circle-outline', color: '#f59e0b' },
-  answer: { name: 'chatbubble-outline', color: colors.primary },
-  update: { name: 'create-outline', color: colors.primary },
-  context_write: { name: 'push-outline', color: colors.mutedForeground },
-  context_read: { name: 'download-outline', color: colors.mutedForeground },
-  artifact: { name: 'attach-outline', color: '#8b5cf6' },
-  deliver: { name: 'checkmark-circle-outline', color: colors.success },
-  status_change: { name: 'swap-horizontal-outline', color: colors.primary },
-  alert: { name: 'warning-outline', color: colors.destructive },
-  user_follow_up: { name: 'person-outline', color: '#f59e0b' },
-  ticket_reopened: { name: 'refresh-outline', color: '#f59e0b' }
+function getEventIcons(colors: ThemeColors): Record<string, { name: string; color: string }> {
+  return {
+    system: { name: 'settings-outline', color: colors.mutedForeground },
+    question: { name: 'help-circle-outline', color: '#f59e0b' },
+    answer: { name: 'chatbubble-outline', color: colors.primary },
+    update: { name: 'create-outline', color: colors.primary },
+    context_write: { name: 'push-outline', color: colors.mutedForeground },
+    context_read: { name: 'download-outline', color: colors.mutedForeground },
+    artifact: { name: 'attach-outline', color: '#8b5cf6' },
+    deliver: { name: 'checkmark-circle-outline', color: colors.success },
+    status_change: { name: 'swap-horizontal-outline', color: colors.primary },
+    alert: { name: 'warning-outline', color: colors.destructive },
+    user_follow_up: { name: 'person-outline', color: '#f59e0b' },
+    ticket_reopened: { name: 'refresh-outline', color: '#f59e0b' }
+  };
+}
+
+const eventLabels: Record<string, string> = {
+  update: 'Update',
+  question: 'Question',
+  answer: 'Answer',
+  deliver: 'Delivered',
+  artifact: 'Artifact',
+  status_change: 'Status Changed',
+  alert: 'Notification',
+  user_follow_up: 'Follow-up',
+  context_write: 'Context Written',
+  context_read: 'Context Read',
+  ticket_reopened: 'Reopened'
 };
 
-const objectiveStateColors: Record<string, string> = {
-  draft: colors.mutedForeground,
-  executing: colors.primary,
-  blocked: colors.destructive,
-  complete: colors.success
-};
+function getObjectiveStateColors(colors: ThemeColors): Record<string, string> {
+  return {
+    draft: colors.mutedForeground,
+    executing: colors.primary,
+    blocked: colors.destructive,
+    complete: colors.success
+  };
+}
 
 export default function TicketDetailScreen() {
   const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
-  const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id;
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const {
     servers: allServers,
     connectedSSHServers: availableServers,
@@ -107,54 +135,128 @@ export default function TicketDetailScreen() {
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [showAgentModal, setShowAgentModal] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [headerSheetOpen, setHeaderSheetOpen] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
   const [showAcceptanceCriteria, setShowAcceptanceCriteria] = useState(true);
   const [documents, setDocuments] = useState<TicketDocument[]>([]);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [showCliQuickstart, setShowCliQuickstart] = useState(false);
   const [activityFilter, setActivityFilter] = useState<'all' | 'completed'>('all');
-  const [showPromptMenu, setShowPromptMenu] = useState(false);
   const [copyingPromptContext, setCopyingPromptContext] = useState<'cli' | 'web' | null>(null);
   const [acceptanceCriteriaDraft, setAcceptanceCriteriaDraft] = useState('');
   const [savingAcceptanceCriteria, setSavingAcceptanceCriteria] = useState(false);
+  const [hasEverhourApiKey, setHasEverhourApiKey] = useState(false);
+  const [eventProfiles, setEventProfiles] = useState<
+    Record<string, { name: string; image_url: string }>
+  >({});
+  const loadSequenceRef = useRef(0);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (options?: { reset?: boolean }) => {
+    const reset = options?.reset ?? false;
+    const loadSequence = loadSequenceRef.current + 1;
+    loadSequenceRef.current = loadSequence;
+
+    if (reset) {
+      setLoading(true);
+      setTicket(null);
+      setObjectives([]);
+      setEvents([]);
+      setProjects([]);
+      setSelectedProjectId(null);
+      setDocuments([]);
+      setEventProfiles({});
+    }
+
     const supabase = getSupabase();
-    const [ticketRes, objectivesRes, eventsRes, projectsRes, documentsRes] = await Promise.all([
-      supabase
-        .from('tickets')
-        .select(
-          'id, organization_id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
-        )
-        .eq('id', ticketId)
-        .single(),
-      supabase
-        .from('objectives')
-        .select('id, objective, title, state, agent_identifier, model_identifier, created_at')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('ticket_events')
-        .select('id, event_type, summary, phase, is_blocking, created_at')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: false })
-        .limit(30),
-      supabase.from('projects').select('id, name, color').order('name', { ascending: true }),
-      supabase
-        .from('artifacts')
-        .select('id, label, storage_path, metadata, created_at')
-        .eq('ticket_id', ticketId)
-        .not('storage_path', 'is', null)
-        .order('created_at', { ascending: false })
-    ]);
+    const [ticketRes, objectivesRes, eventsRes, projectsRes, documentsRes, everhourRes] =
+      await Promise.all([
+        supabase
+          .from('tickets')
+          .select(
+            'id, organization_id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
+          )
+          .eq('id', ticketId)
+          .single(),
+        supabase
+          .from('objectives')
+          .select('id, objective, title, state, agent_identifier, model_identifier, created_at')
+          .eq('ticket_id', ticketId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('id, event_type, summary, phase, is_blocking, created_at, created_by')
+          .eq('ticket_id', ticketId)
+          .order('created_at', { ascending: false })
+          .limit(30),
+        supabase.from('projects').select('id, name, color').order('name', { ascending: true }),
+        supabase
+          .from('artifacts')
+          .select('id, label, storage_path, metadata, created_at')
+          .eq('ticket_id', ticketId)
+          .not('storage_path', 'is', null)
+          .order('created_at', { ascending: false }),
+        userId
+          ? supabase
+              .from('user_integrations')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('provider', 'everhour')
+              .limit(1)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null })
+      ]);
+
+    if (loadSequenceRef.current !== loadSequence) {
+      return;
+    }
 
     if (ticketRes.data) {
       setTicket(ticketRes.data as unknown as TicketDetail);
       setSelectedProjectId((ticketRes.data as unknown as TicketDetail).project_id ?? null);
+    } else if (ticketRes.error) {
+      setTicket(null);
+      setSelectedProjectId(null);
     }
-    if (objectivesRes.data) setObjectives(objectivesRes.data);
-    if (eventsRes.data) setEvents(eventsRes.data as TicketEvent[]);
-    if (projectsRes.data) setProjects(projectsRes.data);
+    if (objectivesRes.data) {
+      setObjectives(objectivesRes.data);
+    } else if (reset) {
+      setObjectives([]);
+    }
+    if (eventsRes.data) {
+      const loadedEvents = eventsRes.data as TicketEvent[];
+      setEvents(loadedEvents);
+      const userIds = [
+        ...new Set(
+          loadedEvents
+            .filter(e => e.event_type === 'user_follow_up' && e.created_by)
+            .map(e => e.created_by as string)
+        )
+      ];
+      if (userIds.length > 0) {
+        const profilesRes = await supabase
+          .from('profiles')
+          .select('id, name, image_url')
+          .in('id', userIds);
+        if (loadSequenceRef.current !== loadSequence) {
+          return;
+        }
+        if (profilesRes.data) {
+          const map: Record<string, { name: string; image_url: string }> = {};
+          for (const p of profilesRes.data) map[p.id] = { name: p.name, image_url: p.image_url };
+          setEventProfiles(map);
+        }
+      } else {
+        setEventProfiles({});
+      }
+    } else if (reset) {
+      setEvents([]);
+      setEventProfiles({});
+    }
+    if (projectsRes.data) {
+      setProjects(projectsRes.data);
+    } else if (reset) {
+      setProjects([]);
+    }
     if (documentsRes.data) {
       setDocuments(
         documentsRes.data.map(document => {
@@ -169,16 +271,22 @@ export default function TicketDetailScreen() {
           };
         })
       );
+    } else if (reset) {
+      setDocuments([]);
     }
+    setHasEverhourApiKey(Boolean(everhourRes.data));
     if (ticketRes.error) {
       Alert.alert('Unable to load ticket', ticketRes.error.message);
     } else if (eventsRes.error) {
       Alert.alert('Unable to load activity', eventsRes.error.message);
     }
-  }, [ticketId]);
+    if (reset && loadSequenceRef.current === loadSequence) {
+      setLoading(false);
+    }
+  }, [ticketId, userId]);
 
   useEffect(() => {
-    loadData().finally(() => setLoading(false));
+    void loadData({ reset: true });
   }, [loadData]);
 
   // Realtime updates for ticket detail
@@ -221,9 +329,7 @@ export default function TicketDetailScreen() {
         }
 
         await Clipboard.setStringAsync(prompt);
-        setShowPromptMenu(false);
       } catch (error) {
-        setShowPromptMenu(false);
         Alert.alert(
           'Unable to copy prompt',
           error instanceof Error ? error.message : 'An unexpected error occurred.'
@@ -234,10 +340,6 @@ export default function TicketDetailScreen() {
     },
     [ticket]
   );
-
-  const handleOpenPromptMenu = useCallback(() => {
-    setShowPromptMenu(true);
-  }, []);
 
   const handleCopyCliCommand = useCallback(async () => {
     if (!ticket) return;
@@ -1053,16 +1155,61 @@ export default function TicketDetailScreen() {
   const currentProject = projects.find(p => p.id === selectedProjectId) ?? null;
   const dueLabel = ticket.due_datetime ? new Date(ticket.due_datetime).toLocaleDateString() : null;
 
+  const ticketSequenceLabel = ticket.ticket_sequence ? `OVL-${ticket.ticket_sequence}` : null;
+  const ticketHeaderSubtitle = [ticketSequenceLabel, ticket.status]
+    .filter((value): value is string => Boolean(value))
+    .join(' • ');
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <TicketDetailTopBar
-        savingAssignedAgent={savingAssignedAgent}
+    <SafeAreaView style={styles.container} edges={[]}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          headerBackTitle: 'Back',
+          headerTitleAlign: 'center',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.foreground,
+          headerShadowVisible: false,
+          headerTitle: () => (
+            <TicketHeaderTitle
+              title={ticket.title || 'Ticket'}
+              subtitle={ticketHeaderSubtitle}
+              assignedSelection={assignedSelection}
+              savingAssignedAgent={savingAssignedAgent}
+              onPress={() => setHeaderSheetOpen(true)}
+            />
+          ),
+          headerRight: () => <TicketHeaderRight onPress={() => setOverflowOpen(true)} />
+        }}
+      />
+      <TicketHeaderSheet
+        visible={headerSheetOpen}
+        onClose={() => setHeaderSheetOpen(false)}
+        title={ticket.title || 'Ticket'}
+        subtitle={ticketHeaderSubtitle}
         assignedSelection={assignedSelection}
-        onOpenAgentModal={() => setShowAgentModal(true)}
-        onOpenPromptMenu={handleOpenPromptMenu}
-        onOpenOverflow={() => setOverflowOpen(true)}
-        onClose={() => router.back()}
+        savingAssignedAgent={savingAssignedAgent}
+        copyingPromptContext={copyingPromptContext}
+        onOpenAgentModal={() => {
+          setHeaderSheetOpen(false);
+          setShowAgentModal(true);
+        }}
+        onOpenOverflow={() => {
+          setHeaderSheetOpen(false);
+          setOverflowOpen(true);
+        }}
+        onCopyPrompt={context => {
+          setHeaderSheetOpen(false);
+          void handleCopyPrompt(context);
+        }}
+        onCopyTicketId={() => {
+          setHeaderSheetOpen(false);
+          void handleCopyTicketId();
+        }}
+        onReload={() => {
+          setHeaderSheetOpen(false);
+          void loadData();
+        }}
       />
       <TicketDetailContent
         ticket={ticket}
@@ -1099,6 +1246,7 @@ export default function TicketDetailScreen() {
         onSelectImage={handleSelectImage}
         onSelectFile={handleSelectFile}
         onOpenDocument={handleOpenDocument}
+        hasEverhourApiKey={hasEverhourApiKey}
         ticketContext={ticket.context}
         ticketConstraints={ticket.constraints}
         ticketAcceptanceCriteria={ticket.acceptance_criteria}
@@ -1113,18 +1261,13 @@ export default function TicketDetailScreen() {
         onToggleCliQuickstart={() => setShowCliQuickstart(open => !open)}
         onCopyCliCommand={handleCopyCliCommand}
         filteredEvents={filteredEvents}
+        eventProfiles={eventProfiles}
         activityFilter={activityFilter}
         onToggleActivityFilter={() =>
           setActivityFilter(current => (current === 'completed' ? 'all' : 'completed'))
         }
       />
       <TicketDetailModals
-        showPromptMenu={showPromptMenu}
-        copyingPromptContext={copyingPromptContext}
-        onClosePromptMenu={() => {
-          if (!copyingPromptContext) setShowPromptMenu(false);
-        }}
-        onCopyPrompt={handleCopyPrompt}
         showAgentModal={showAgentModal}
         assignedSelection={assignedSelection}
         savingAssignedAgent={savingAssignedAgent}
@@ -1140,70 +1283,283 @@ export default function TicketDetailScreen() {
   );
 }
 
-function TicketDetailTopBar({
-  savingAssignedAgent,
+function TicketHeaderTitle({
+  title,
+  subtitle,
   assignedSelection,
-  onOpenAgentModal,
-  onOpenPromptMenu,
-  onOpenOverflow,
-  onClose
+  savingAssignedAgent,
+  onPress
 }: {
-  savingAssignedAgent: boolean;
+  title: string;
+  subtitle: string;
   assignedSelection: AgentModelSelection | null;
-  onOpenAgentModal: () => void;
-  onOpenPromptMenu: () => void;
-  onOpenOverflow: () => void;
-  onClose: () => void;
+  savingAssignedAgent: boolean;
+  onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const PillContainer = glassAvailable ? GlassView : View;
+  const pillStyle = glassAvailable
+    ? styles.headerTitlePill
+    : [styles.headerTitlePill, styles.headerTitlePillFallback];
+
   return (
-    <View style={styles.topBar}>
-      <Pressable
-        hitSlop={8}
-        style={styles.topIconButton}
-        onPress={onOpenOverflow}
-        accessibilityLabel="More actions"
+    <Pressable
+      hitSlop={6}
+      onPress={onPress}
+      accessibilityLabel="Open ticket actions"
+      accessibilityRole="button"
+    >
+      <PillContainer
+        style={pillStyle}
+        {...(glassAvailable ? { glassEffectStyle: 'regular' as const, isInteractive: true } : {})}
       >
-        <Ionicons name="ellipsis-vertical" size={18} color={colors.foreground} />
-      </Pressable>
-      <View style={styles.topBarActions}>
-        <Pressable
-          hitSlop={8}
-          style={styles.topPillButton}
-          onPress={onOpenAgentModal}
-          disabled={savingAssignedAgent}
-        >
-          <Ionicons
-            name={
-              (AGENT_OPTIONS.find(opt => opt.value === assignedSelection?.agent)?.icon ??
-                'hardware-chip-outline') as keyof typeof Ionicons.glyphMap
-            }
-            size={13}
-            color={colors.foreground}
-          />
-          <Text style={styles.topPillText} numberOfLines={1}>
-            Agent
+        {assignedSelection?.agent ? (
+          <AgentBrandIcon agent={assignedSelection.agent} size={14} />
+        ) : (
+          <Ionicons name="hardware-chip-outline" size={14} color={colors.foreground} />
+        )}
+        <View style={styles.headerTitleTextWrap}>
+          <Text style={styles.headerTitleText} numberOfLines={1}>
+            {title}
           </Text>
-          {savingAssignedAgent ? (
-            <ActivityIndicator size="small" color={colors.mutedForeground} />
-          ) : (
-            <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-          )}
-        </Pressable>
-        <Pressable hitSlop={8} style={styles.topPillButton} onPress={onOpenPromptMenu}>
-          <Ionicons name="copy-outline" size={13} color={colors.foreground} />
-          <Text style={styles.topPillText}>Copy prompt</Text>
+          {subtitle ? (
+            <Text style={styles.headerSubtitleText} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {savingAssignedAgent ? (
+          <ActivityIndicator size="small" color={colors.mutedForeground} />
+        ) : (
           <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
-        </Pressable>
-      </View>
-      <Pressable
-        hitSlop={8}
-        style={styles.topIconButton}
-        onPress={onClose}
-        accessibilityLabel="Close"
+        )}
+      </PillContainer>
+    </Pressable>
+  );
+}
+
+function TicketHeaderRight({ onPress }: { onPress: () => void }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const IconContainer = glassAvailable ? GlassView : View;
+  const iconStyle = glassAvailable
+    ? styles.headerIconButton
+    : [styles.headerIconButton, styles.headerIconButtonFallback];
+
+  return (
+    <Pressable
+      hitSlop={10}
+      onPress={onPress}
+      accessibilityLabel="More actions"
+      accessibilityRole="button"
+      style={styles.headerIconPressable}
+    >
+      <IconContainer
+        style={iconStyle}
+        {...(glassAvailable ? { glassEffectStyle: 'regular' as const } : {})}
       >
-        <Ionicons name="close" size={18} color={colors.foreground} />
+        <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
+      </IconContainer>
+    </Pressable>
+  );
+}
+
+function TicketHeaderSheet({
+  visible,
+  onClose,
+  title,
+  subtitle,
+  assignedSelection,
+  savingAssignedAgent,
+  copyingPromptContext,
+  onOpenAgentModal,
+  onOpenOverflow,
+  onCopyPrompt,
+  onCopyTicketId,
+  onReload
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle: string;
+  assignedSelection: AgentModelSelection | null;
+  savingAssignedAgent: boolean;
+  copyingPromptContext: 'cli' | 'web' | null;
+  onOpenAgentModal: () => void;
+  onOpenOverflow: () => void;
+  onCopyPrompt: (context: 'cli' | 'web') => void;
+  onCopyTicketId: () => void;
+  onReload: () => void;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const SheetContainer = glassAvailable ? GlassView : View;
+  const sheetStyle = glassAvailable
+    ? styles.headerSheet
+    : [styles.headerSheet, styles.headerSheetFallback];
+
+  const agentLabel =
+    AGENT_OPTIONS.find(option => option.value === assignedSelection?.agent)?.label ??
+    'Choose agent';
+  const modelLabel = assignedSelection?.model ?? 'Default model';
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.headerSheetBackdrop} onPress={onClose}>
+        <Pressable onPress={() => undefined} style={styles.headerSheetWrap}>
+          <SheetContainer
+            style={sheetStyle}
+            {...(glassAvailable ? { glassEffectStyle: 'regular' as const } : {})}
+          >
+            <View style={styles.headerSheetTopRow}>
+              <Pressable
+                hitSlop={10}
+                onPress={onClose}
+                accessibilityLabel="Close header"
+                style={styles.headerSheetCircle}
+              >
+                <Ionicons name="close" size={18} color={colors.foreground} />
+              </Pressable>
+              <View style={styles.headerSheetTitleWrap}>
+                <Text style={styles.headerSheetTitle} numberOfLines={1}>
+                  {title}
+                </Text>
+                {subtitle ? (
+                  <Text style={styles.headerSheetSubtitle} numberOfLines={1}>
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                hitSlop={10}
+                onPress={onOpenOverflow}
+                accessibilityLabel="More actions"
+                style={styles.headerSheetCircle}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
+              </Pressable>
+            </View>
+
+            <View style={styles.headerSheetChipRow}>
+              <HeaderSheetChip
+                icon="copy-outline"
+                label="Copy CLI"
+                onPress={() => onCopyPrompt('cli')}
+                loading={copyingPromptContext === 'cli'}
+                disabled={copyingPromptContext !== null}
+              />
+              <HeaderSheetChip
+                icon="cloud-outline"
+                label="Copy Web"
+                onPress={() => onCopyPrompt('web')}
+                loading={copyingPromptContext === 'web'}
+                disabled={copyingPromptContext !== null}
+              />
+              <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.headerSheetFeaturedRow, pressed && styles.pressed]}
+              onPress={onOpenAgentModal}
+              disabled={savingAssignedAgent}
+              accessibilityLabel="Change assigned agent"
+            >
+              <View style={styles.headerSheetFeaturedIcon}>
+                {assignedSelection?.agent ? (
+                  <AgentBrandIcon agent={assignedSelection.agent} size={20} />
+                ) : (
+                  <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
+                <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
+                  {modelLabel}
+                </Text>
+              </View>
+              {savingAssignedAgent ? (
+                <ActivityIndicator size="small" color={colors.mutedForeground} />
+              ) : (
+                <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+              )}
+            </Pressable>
+
+            <HeaderSheetRow icon="copy-outline" label="Copy ticket ID" onPress={onCopyTicketId} />
+            <HeaderSheetRow
+              icon="ellipsis-horizontal-circle-outline"
+              label="More actions"
+              onPress={onOpenOverflow}
+            />
+          </SheetContainer>
+        </Pressable>
       </Pressable>
-    </View>
+    </Modal>
+  );
+}
+
+function HeaderSheetChip({
+  icon,
+  label,
+  onPress,
+  loading,
+  disabled
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.headerSheetChip,
+        disabled && !loading && styles.headerSheetChipDisabled,
+        pressed && !disabled && styles.pressed
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.foreground} />
+      ) : (
+        <Ionicons name={icon} size={16} color={colors.foreground} />
+      )}
+      <Text style={styles.headerSheetChipLabel} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function HeaderSheetRow({
+  icon,
+  label,
+  trailing,
+  onPress
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  trailing?: string;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.headerSheetRow, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <Ionicons name={icon} size={18} color={colors.foreground} />
+      <Text style={styles.headerSheetRowLabel}>{label}</Text>
+      {trailing ? <Text style={styles.headerSheetRowTrailing}>{trailing}</Text> : null}
+      <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+    </Pressable>
   );
 }
 
@@ -1242,6 +1598,7 @@ function TicketDetailContent({
   onSelectImage,
   onSelectFile,
   onOpenDocument,
+  hasEverhourApiKey,
   ticketContext,
   ticketConstraints,
   ticketAcceptanceCriteria,
@@ -1256,6 +1613,7 @@ function TicketDetailContent({
   onToggleCliQuickstart,
   onCopyCliCommand,
   filteredEvents,
+  eventProfiles,
   activityFilter,
   onToggleActivityFilter
 }: {
@@ -1293,6 +1651,7 @@ function TicketDetailContent({
   onSelectImage: () => void;
   onSelectFile: () => void;
   onOpenDocument: (document: TicketDocument) => void;
+  hasEverhourApiKey: boolean;
   ticketContext: string;
   ticketConstraints: string;
   ticketAcceptanceCriteria: string | null;
@@ -1307,28 +1666,39 @@ function TicketDetailContent({
   onToggleCliQuickstart: () => void;
   onCopyCliCommand: () => void;
   filteredEvents: TicketEvent[];
+  eventProfiles: Record<string, { name: string; image_url: string }>;
   activityFilter: 'all' | 'completed';
   onToggleActivityFilter: () => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const objectiveStateColors = getObjectiveStateColors(colors);
+  const eventIcons = getEventIcons(colors);
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-      <View style={styles.tracker}>
-        <View style={styles.trackerTextWrap}>
-          <View style={styles.trackerHeaderRow}>
-            <Text style={styles.trackerLabel}>TIME TRACKING</Text>
-            <Ionicons name="information-circle-outline" size={13} color={colors.mutedForeground} />
+      {hasEverhourApiKey && (
+        <View style={styles.tracker}>
+          <View style={styles.trackerTextWrap}>
+            <View style={styles.trackerHeaderRow}>
+              <Text style={styles.trackerLabel}>TIME TRACKING</Text>
+              <Ionicons
+                name="information-circle-outline"
+                size={13}
+                color={colors.mutedForeground}
+              />
+            </View>
+            <Text style={styles.trackerSub}>Track time on this ticket.</Text>
           </View>
-          <Text style={styles.trackerSub}>Track time on this ticket.</Text>
+          <Pressable
+            hitSlop={8}
+            style={styles.trackerButton}
+            onPress={() => Alert.alert('Time tracking', 'Time tracking starts soon.')}
+          >
+            <Ionicons name="play" size={12} color={colors.foreground} />
+            <Text style={styles.trackerButtonText}>Start</Text>
+          </Pressable>
         </View>
-        <Pressable
-          hitSlop={8}
-          style={styles.trackerButton}
-          onPress={() => Alert.alert('Time tracking', 'Time tracking starts soon.')}
-        >
-          <Ionicons name="play" size={12} color={colors.foreground} />
-          <Text style={styles.trackerButtonText}>Start</Text>
-        </Pressable>
-      </View>
+      )}
 
       <View style={styles.titleBlock}>
         <Text style={styles.sequence}>#{ticket.ticket_sequence}</Text>
@@ -1357,7 +1727,9 @@ function TicketDetailContent({
         </Pressable>
 
         <View style={styles.selectPill}>
-          <View style={[styles.pillDot, { backgroundColor: statusPillColor(ticket.status) }]} />
+          <View
+            style={[styles.pillDot, { backgroundColor: statusPillColor(ticket.status, colors) }]}
+          />
           <Text style={styles.selectPillText}>{ticket.status}</Text>
           <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
         </View>
@@ -1670,25 +2042,47 @@ function TicketDetailContent({
         <Text style={styles.noActivity}>No activity yet</Text>
       ) : (
         filteredEvents.map(event => {
+          const isFollowUp = event.event_type === 'user_follow_up';
+          const profile = isFollowUp && event.created_by ? eventProfiles[event.created_by] : null;
           const icon = eventIcons[event.event_type] ?? {
             name: 'ellipse',
             color: colors.primary
           };
+          const label = eventLabels[event.event_type] ?? event.event_type.replace(/_/g, ' ');
           return (
             <View
               key={event.id}
               style={[styles.eventRow, event.is_blocking && styles.eventBlocking]}
             >
-              <View style={styles.eventIconBadge}>
-                <Ionicons
-                  name={icon.name as keyof typeof Ionicons.glyphMap}
-                  size={12}
-                  color={icon.color}
-                />
-              </View>
+              {isFollowUp ? (
+                <View style={styles.eventAvatarBadge}>
+                  {profile?.image_url ? (
+                    <Image source={{ uri: profile.image_url }} style={styles.eventAvatarImage} />
+                  ) : (
+                    <Text style={styles.eventAvatarInitials}>
+                      {(profile?.name ?? 'U').slice(0, 2).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.eventIconBadge}>
+                  <Ionicons
+                    name={icon.name as keyof typeof Ionicons.glyphMap}
+                    size={12}
+                    color={icon.color}
+                  />
+                </View>
+              )}
               <View style={{ flex: 1, minWidth: 0 }}>
                 <View style={styles.eventHeader}>
-                  <Text style={styles.eventType}>{event.event_type.replace(/_/g, ' ')}</Text>
+                  <Text
+                    style={[
+                      styles.eventType,
+                      isFollowUp && { color: '#f59e0b', fontWeight: '600' }
+                    ]}
+                  >
+                    {isFollowUp && profile?.name ? profile.name : label}
+                  </Text>
                   {event.phase && <Text style={styles.eventPhase}>{event.phase}</Text>}
                   <Text style={styles.eventTime}>
                     {new Date(event.created_at).toLocaleString(undefined, {
@@ -1715,10 +2109,6 @@ function TicketDetailContent({
 }
 
 function TicketDetailModals({
-  showPromptMenu,
-  copyingPromptContext,
-  onClosePromptMenu,
-  onCopyPrompt,
   showAgentModal,
   assignedSelection,
   savingAssignedAgent,
@@ -1730,10 +2120,6 @@ function TicketDetailModals({
   onCopyTicketId,
   onReload
 }: {
-  showPromptMenu: boolean;
-  copyingPromptContext: 'cli' | 'web' | null;
-  onClosePromptMenu: () => void;
-  onCopyPrompt: (context: 'cli' | 'web') => Promise<void>;
   showAgentModal: boolean;
   assignedSelection: AgentModelSelection | null;
   savingAssignedAgent: boolean;
@@ -1745,37 +2131,9 @@ function TicketDetailModals({
   onCopyTicketId: () => Promise<void>;
   onReload: () => Promise<void>;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <>
-      <Modal
-        visible={showPromptMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={onClosePromptMenu}
-      >
-        <Pressable style={styles.promptMenuBackdrop} onPress={onClosePromptMenu}>
-          <Pressable style={styles.promptMenuCard} onPress={() => undefined}>
-            <Text style={styles.modalTitle}>Copy prompt</Text>
-            <PromptOption
-              label="Local prompt"
-              description="For Claude Code CLI"
-              icon="terminal-outline"
-              loading={copyingPromptContext === 'cli'}
-              disabled={copyingPromptContext !== null}
-              onPress={() => void onCopyPrompt('cli')}
-            />
-            <PromptOption
-              label="Cloud prompt"
-              description="For Claude.ai or web"
-              icon="cloud-outline"
-              loading={copyingPromptContext === 'web'}
-              disabled={copyingPromptContext !== null}
-              onPress={() => void onCopyPrompt('web')}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       <Modal
         visible={showAgentModal}
         transparent
@@ -1845,6 +2203,8 @@ function CollapsibleSection({
   onToggle: () => void;
   children: React.ReactNode;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.collapsible}>
       <Pressable
@@ -1872,6 +2232,8 @@ function OverflowAction({
   label: string;
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable
       style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
@@ -1883,48 +2245,7 @@ function OverflowAction({
   );
 }
 
-function PromptOption({
-  label,
-  description,
-  icon,
-  loading,
-  disabled,
-  onPress
-}: {
-  label: string;
-  description: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  loading: boolean;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.promptOptionRow,
-        disabled && !loading && styles.promptOptionDisabled,
-        pressed && !disabled && styles.pressed
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <View style={styles.promptOptionIcon}>
-        <Ionicons name={icon} size={18} color={colors.foreground} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.promptOptionLabel}>{label}</Text>
-        <Text style={styles.promptOptionDesc}>{description}</Text>
-      </View>
-      {loading ? (
-        <ActivityIndicator size="small" color={colors.primary} />
-      ) : (
-        <Ionicons name="copy-outline" size={16} color={colors.mutedForeground} />
-      )}
-    </Pressable>
-  );
-}
-
-function statusPillColor(status: string): string {
+function statusPillColor(status: string, colors: ThemeColors): string {
   const map: Record<string, string> = {
     draft: colors.mutedForeground,
     'next-up': colors.primary,
@@ -1938,7 +2259,8 @@ function statusPillColor(status: string): string {
   return map[status] ?? colors.mutedForeground;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: {
     flex: 1,
@@ -1949,46 +2271,135 @@ const styles = StyleSheet.create({
   errorText: { color: colors.mutedForeground, fontSize: 16 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 40 },
-  topBar: {
+  headerTitlePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 10
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    maxWidth: 240,
+    overflow: 'hidden'
   },
-  topBarActions: {
+  headerTitlePillFallback: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  headerTitleTextWrap: { flexShrink: 1, minWidth: 0 },
+  headerTitleText: { color: colors.foreground, fontSize: 14, fontWeight: '600' },
+  headerSubtitleText: {
+    color: colors.mutedForeground,
+    fontSize: 11,
+    marginTop: 1,
+    textTransform: 'capitalize'
+  },
+  headerIconPressable: { marginRight: 4 },
+  headerIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden'
+  },
+  headerIconButtonFallback: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  headerSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 12,
+    paddingTop: Platform.OS === 'ios' ? 56 : 24
+  },
+  headerSheetWrap: {
+    width: '100%'
+  },
+  headerSheet: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 12,
+    gap: 10,
+    overflow: 'hidden'
+  },
+  headerSheetFallback: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  headerSheetTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 6
+  },
+  headerSheetCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)'
+  },
+  headerSheetTitleWrap: { flex: 1, alignItems: 'center', paddingHorizontal: 6 },
+  headerSheetTitle: { color: colors.foreground, fontSize: 15, fontWeight: '700' },
+  headerSheetSubtitle: {
+    color: colors.mutedForeground,
+    fontSize: 12,
+    marginTop: 2,
+    textTransform: 'capitalize'
+  },
+  headerSheetChipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 4
+  },
+  headerSheetChip: {
     flex: 1,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 8,
-    minWidth: 0
+    justifyContent: 'center',
+    gap: 6,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 10
   },
-  topIconButton: {
+  headerSheetChipDisabled: { opacity: 0.45 },
+  headerSheetChipLabel: { color: colors.foreground, fontSize: 13, fontWeight: '600' },
+  headerSheetFeaturedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    marginTop: 4
+  },
+  headerSheetFeaturedIcon: {
     width: 32,
     height: 32,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border
+    backgroundColor: 'rgba(255,255,255,0.08)'
   },
-  topPillButton: {
+  headerSheetFeaturedLabel: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
+  headerSheetFeaturedMeta: { color: colors.mutedForeground, fontSize: 12, marginTop: 2 },
+  headerSheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 12,
     paddingHorizontal: 10,
-    height: 32,
-    maxWidth: 170,
-    borderRadius: 8,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minWidth: 0
+    paddingVertical: 14,
+    borderRadius: 10
   },
-  topPillText: { color: colors.foreground, fontSize: 12, fontWeight: '500' },
+  headerSheetRowLabel: { flex: 1, color: colors.foreground, fontSize: 15 },
+  headerSheetRowTrailing: { color: colors.mutedForeground, fontSize: 13 },
   tracker: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2289,13 +2700,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 2
   },
+  eventAvatarBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#f59e0b22',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    overflow: 'hidden'
+  },
+  eventAvatarImage: {
+    width: 22,
+    height: 22,
+    borderRadius: 11
+  },
+  eventAvatarInitials: {
+    color: '#f59e0b',
+    fontSize: 8,
+    fontWeight: '700'
+  },
   eventBlocking: { backgroundColor: 'rgba(239, 68, 68, 0.06)' },
   eventHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   eventType: {
     color: colors.foreground,
     fontSize: 12,
     fontWeight: '600',
-    textTransform: 'capitalize',
     backgroundColor: colors.muted,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -2338,42 +2768,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6
   },
   overflowText: { color: colors.foreground, fontSize: 14 },
-  pressed: { opacity: 0.82 },
-  promptMenuBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 72,
-    paddingHorizontal: 24
-  },
-  promptMenuCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 4
-  },
-  promptOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 10
-  },
-  promptOptionDisabled: { opacity: 0.4 },
-  promptOptionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  promptOptionLabel: { color: colors.foreground, fontSize: 15, fontWeight: '600' },
-  promptOptionDesc: { color: colors.mutedForeground, fontSize: 12, marginTop: 1 }
-});
+  pressed: { opacity: 0.82 }
+  });

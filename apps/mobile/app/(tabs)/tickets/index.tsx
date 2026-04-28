@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { addDays, format, isToday, parseISO, startOfDay, subDays } from 'date-fns';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,24 +19,27 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SidebarDrawer } from '@/components/SidebarDrawer';
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import type { AssignedAgent, TicketListItem } from '@/lib/types';
 
 type SortMode = 'updated' | 'created' | 'priority';
 type StatusFilter = 'all' | 'open' | 'draft' | 'next-up' | 'execute' | 'review' | 'complete';
+type ViewMode = 'list' | 'calendar';
 
-const statusColors: Record<string, string> = {
-  draft: colors.mutedForeground,
-  'next-up': colors.primary,
-  execute: colors.success,
-  review: '#f59e0b',
-  complete: colors.success,
-  blocked: colors.destructive,
-  cancelled: colors.mutedForeground,
-  icebox: colors.mutedForeground
-};
+function getStatusColors(colors: ThemeColors): Record<string, string> {
+  return {
+    draft: colors.mutedForeground,
+    'next-up': colors.primary,
+    execute: colors.success,
+    review: '#f59e0b',
+    complete: colors.success,
+    blocked: colors.destructive,
+    cancelled: colors.mutedForeground,
+    icebox: colors.mutedForeground
+  };
+}
 
 const statusLabel: Record<string, string> = {
   draft: 'Draft',
@@ -65,13 +69,22 @@ const statusFilterLabels: Record<StatusFilter, string> = {
 };
 
 type TicketWithProject = TicketListItem & {
+  created_at: string;
   project_id: string | null;
   has_unread?: boolean;
 };
 
 const ALL_PROJECTS_LABEL = 'My Tickets';
+const CALENDAR_PAST_DAYS = 5;
+const CALENDAR_FUTURE_DAYS = 24;
+const CALENDAR_PAGE_SIZE = 21;
 
 const glassAvailable = Platform.OS === 'ios' && isLiquidGlassAvailable();
+
+function buildCalendarDays(from: Date, pastDays: number, futureDays: number): Date[] {
+  const start = subDays(startOfDay(from), pastDays);
+  return Array.from({ length: pastDays + futureDays + 1 }, (_, index) => addDays(start, index));
+}
 
 function getContrastColor(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -89,6 +102,9 @@ export default function TicketsScreen() {
   const router = useRouter();
   const { projects, selectedProjectId, selectProject } = useSelectedProject();
   const { projectId: projectIdParam } = useLocalSearchParams<{ projectId?: string }>();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const statusColors = getStatusColors(colors);
 
   // Seed context from deep-link param on first mount only.
   useEffect(() => {
@@ -107,10 +123,24 @@ export default function TicketsScreen() {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
-  const handleCreateTicket = useCallback(() => {
-    router.push('/(tabs)/tickets/create');
-  }, [router]);
+  useEffect(() => {
+    if (!filterProjectId) setViewMode('list');
+  }, [filterProjectId]);
+
+  const handleCreateTicket = useCallback(
+    (dueDate?: string) => {
+      router.push({
+        pathname: '/(tabs)/tickets/create',
+        params: {
+          ...(filterProjectId ? { projectId: filterProjectId } : {}),
+          ...(dueDate ? { dueDate } : {})
+        }
+      });
+    },
+    [filterProjectId, router]
+  );
 
   const fetchTickets = useCallback(async () => {
     const supabase = getSupabase();
@@ -119,7 +149,7 @@ export default function TicketsScreen() {
       let q = supabase
         .from('tickets')
         .select(
-          'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, updated_at, project_id'
+          'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, created_at, updated_at, project_id'
         )
         .order('updated_at', { ascending: false })
         .limit(100);
@@ -239,8 +269,9 @@ export default function TicketsScreen() {
         return (priorityWeight[a.priority] ?? 99) - (priorityWeight[b.priority] ?? 99);
       });
     } else if (sortMode === 'created') {
-      // We don't select created_at here; fallback to updated_at ordering (server already returns it).
-      // tickets already ordered by updated_at desc; leave as is
+      result.sort((a, b) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
     } else {
       // updated already default
     }
@@ -270,6 +301,8 @@ export default function TicketsScreen() {
       <TicketsScreenFilters
         projectName={projectName}
         projectColor={projectColor}
+        showViewToggle={filterProjectId !== null}
+        viewMode={viewMode}
         projectMenuOpen={projectMenuOpen}
         sortMenuOpen={sortMenuOpen}
         statusMenuOpen={statusMenuOpen}
@@ -292,6 +325,7 @@ export default function TicketsScreen() {
           setSortMenuOpen(false);
           setStatusMenuOpen(open => !open);
         }}
+        onSelectView={setViewMode}
         onSelectProject={projectId => selectProject(projectId)}
         onSelectSort={mode => setSortMode(mode)}
         onSelectStatus={filter => setStatusFilter(filter)}
@@ -302,10 +336,12 @@ export default function TicketsScreen() {
         tickets={displayTickets}
         search={search}
         statusFilter={statusFilter}
+        viewMode={viewMode}
         filterProject={filterProject}
         projects={projects}
         projectColor={projectColor}
         onRefresh={onRefresh}
+        onCreateTicket={handleCreateTicket}
         onTicketPress={ticketId => router.push(`/(tabs)/tickets/${ticketId}`)}
       />
       <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
@@ -328,6 +364,9 @@ function TicketsScreenHeader({
   projectColor: string;
   buttonIconColor: string;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.topBar}>
       <Pressable
@@ -385,6 +424,8 @@ function TicketsScreenHeader({
 function TicketsScreenFilters({
   projectName,
   projectColor,
+  showViewToggle,
+  viewMode,
   projectMenuOpen,
   sortMenuOpen,
   statusMenuOpen,
@@ -395,12 +436,15 @@ function TicketsScreenFilters({
   onToggleProjectMenu,
   onToggleSortMenu,
   onToggleStatusMenu,
+  onSelectView,
   onSelectProject,
   onSelectSort,
   onSelectStatus
 }: {
   projectName: string;
   projectColor: string;
+  showViewToggle: boolean;
+  viewMode: ViewMode;
   projectMenuOpen: boolean;
   sortMenuOpen: boolean;
   statusMenuOpen: boolean;
@@ -411,10 +455,14 @@ function TicketsScreenFilters({
   onToggleProjectMenu: () => void;
   onToggleSortMenu: () => void;
   onToggleStatusMenu: () => void;
+  onSelectView: (mode: ViewMode) => void;
   onSelectProject: (projectId: string | null) => void;
   onSelectSort: (mode: SortMode) => void;
   onSelectStatus: (filter: StatusFilter) => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <>
       <View style={styles.projectHeader}>
@@ -431,6 +479,7 @@ function TicketsScreenFilters({
           <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
         </Pressable>
       </View>
+      {showViewToggle && <ViewModeToggle value={viewMode} onChange={onSelectView} />}
       {projectMenuOpen && (
         <View style={styles.menu}>
           <Pressable style={styles.menuItem} onPress={() => onSelectProject(null)}>
@@ -471,8 +520,6 @@ function TicketsScreenFilters({
         />
       </View>
 
-
-
       {sortMenuOpen && (
         <View style={styles.menu}>
           {(Object.keys(sortLabels) as SortMode[]).map(mode => (
@@ -506,10 +553,12 @@ function TicketsResults({
   tickets,
   search,
   statusFilter,
+  viewMode,
   filterProject,
   projects,
   projectColor,
   onRefresh,
+  onCreateTicket,
   onTicketPress
 }: {
   loading: boolean;
@@ -517,17 +566,37 @@ function TicketsResults({
   tickets: TicketWithProject[];
   search: string;
   statusFilter: StatusFilter;
-  filterProject: { name: string } | null;
+  viewMode: ViewMode;
+  filterProject: { id: string; name: string; color: string } | null;
   projects: { id: string; name: string; color: string }[];
   projectColor: string;
   onRefresh: () => Promise<void>;
+  onCreateTicket: (dueDate?: string) => void;
   onTicketPress: (ticketId: string) => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   if (loading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
+    );
+  }
+
+  if (viewMode === 'calendar' && filterProject) {
+    return (
+      <TicketsCalendarResults
+        tickets={tickets}
+        refreshing={refreshing}
+        project={filterProject}
+        projects={projects}
+        projectColor={projectColor}
+        onRefresh={onRefresh}
+        onCreateTicket={onCreateTicket}
+        onTicketPress={onTicketPress}
+      />
     );
   }
 
@@ -558,6 +627,260 @@ function TicketsResults({
   );
 }
 
+function TicketsCalendarResults({
+  tickets,
+  refreshing,
+  project,
+  projects,
+  projectColor,
+  onRefresh,
+  onCreateTicket,
+  onTicketPress
+}: {
+  tickets: TicketWithProject[];
+  refreshing: boolean;
+  project: { id: string; name: string; color: string };
+  projects: { id: string; name: string; color: string }[];
+  projectColor: string;
+  onRefresh: () => Promise<void>;
+  onCreateTicket: (dueDate?: string) => void;
+  onTicketPress: (ticketId: string) => void;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
+  const [visibleDays, setVisibleDays] = useState(() =>
+    buildCalendarDays(new Date(), CALENDAR_PAST_DAYS, CALENDAR_FUTURE_DAYS)
+  );
+
+  useEffect(() => {
+    setVisibleDays(buildCalendarDays(new Date(), CALENDAR_PAST_DAYS, CALENDAR_FUTURE_DAYS));
+  }, [project.id]);
+
+  const unscheduledTickets = useMemo(
+    () => tickets.filter(ticket => !ticket.due_datetime),
+    [tickets]
+  );
+
+  const ticketsByDate = useMemo(() => {
+    const grouped = new Map<string, TicketWithProject[]>();
+    for (const ticket of tickets) {
+      if (!ticket.due_datetime) continue;
+      const dateKey = format(parseISO(ticket.due_datetime), 'yyyy-MM-dd');
+      const existing = grouped.get(dateKey) ?? [];
+      existing.push(ticket);
+      grouped.set(dateKey, existing);
+    }
+    return grouped;
+  }, [tickets]);
+
+  const loadMoreDays = useCallback(() => {
+    setVisibleDays(current => {
+      const lastDay = current[current.length - 1];
+      if (!lastDay) return current;
+      const nextStart = addDays(lastDay, 1);
+      return [...current, ...buildCalendarDays(nextStart, 0, CALENDAR_PAGE_SIZE - 1)];
+    });
+  }, []);
+
+  return (
+    <FlatList
+      data={visibleDays}
+      keyExtractor={item => format(item, 'yyyy-MM-dd')}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
+      renderItem={({ item }) => {
+        const dateKey = format(item, 'yyyy-MM-dd');
+        const dayTickets = ticketsByDate.get(dateKey) ?? [];
+        return (
+          <CalendarDaySection
+            day={item}
+            dateKey={dateKey}
+            tickets={dayTickets}
+            project={project}
+            projects={projects}
+            projectColor={projectColor}
+            onCreateTicket={onCreateTicket}
+            onTicketPress={onTicketPress}
+          />
+        );
+      }}
+      ListHeaderComponent={
+        <CalendarListHeader
+          projectName={project.name}
+          unscheduledTickets={unscheduledTickets}
+          projects={projects}
+          projectColor={projectColor}
+          onTicketPress={onTicketPress}
+        />
+      }
+      onEndReached={loadMoreDays}
+      onEndReachedThreshold={0.6}
+      contentContainerStyle={styles.calendarList}
+    />
+  );
+}
+
+function CalendarListHeader({
+  projectName,
+  unscheduledTickets,
+  projects,
+  projectColor,
+  onTicketPress
+}: {
+  projectName: string;
+  unscheduledTickets: TicketWithProject[];
+  projects: { id: string; name: string; color: string }[];
+  projectColor: string;
+  onTicketPress: (ticketId: string) => void;
+}) {
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <View style={styles.calendarHeader}>
+      <Text style={styles.calendarTitle}>Scheduled days</Text>
+      <Text style={styles.calendarSub}>
+        Add tickets directly onto the calendar for {projectName}.
+      </Text>
+      {unscheduledTickets.length > 0 && (
+        <View style={styles.unscheduledCard}>
+          <Text style={styles.unscheduledTitle}>No due date</Text>
+          <Text style={styles.unscheduledSub}>
+            {unscheduledTickets.length} ticket{unscheduledTickets.length === 1 ? '' : 's'} still
+            need a day.
+          </Text>
+          <View style={styles.unscheduledList}>
+            {unscheduledTickets.map(ticket => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                projectColor={projectColor}
+                projects={projects}
+                onPress={() => onTicketPress(ticket.id)}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function CalendarDaySection({
+  day,
+  dateKey,
+  tickets,
+  project,
+  projects,
+  projectColor,
+  onCreateTicket,
+  onTicketPress
+}: {
+  day: Date;
+  dateKey: string;
+  tickets: TicketWithProject[];
+  project: { id: string; name: string; color: string };
+  projects: { id: string; name: string; color: string }[];
+  projectColor: string;
+  onCreateTicket: (dueDate?: string) => void;
+  onTicketPress: (ticketId: string) => void;
+}) {
+  const styles = useThemedStyles(createStyles);
+
+  const today = isToday(day);
+
+  return (
+    <View style={[styles.calendarDayCard, today && styles.calendarDayCardToday]}>
+      <View style={styles.calendarDayHeader}>
+        <View style={styles.calendarDayHeading}>
+          <Text style={styles.calendarDayWeekday}>{format(day, 'EEEE')}</Text>
+          <View style={styles.calendarDayMeta}>
+            <Text style={styles.calendarDayLabel}>{format(day, 'MMM d')}</Text>
+            {today && <Text style={styles.calendarTodayBadge}>Today</Text>}
+          </View>
+        </View>
+        <Pressable
+          style={({ pressed }) => [
+            styles.calendarAddButton,
+            { borderColor: project.color || projectColor },
+            pressed && styles.pressed
+          ]}
+          onPress={() => onCreateTicket(dateKey)}
+          accessibilityLabel={`Create ticket for ${format(day, 'MMMM d')}`}
+        >
+          <Ionicons name="add" size={16} color={project.color || projectColor} />
+        </Pressable>
+      </View>
+      {tickets.length > 0 ? (
+        <View style={styles.calendarTickets}>
+          {tickets.map(ticket => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              projectColor={projectColor}
+              projects={projects}
+              onPress={() => onTicketPress(ticket.id)}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.calendarEmptyText}>No tickets scheduled for this day.</Text>
+      )}
+    </View>
+  );
+}
+
+function ViewModeToggle({
+  value,
+  onChange
+}: {
+  value: ViewMode;
+  onChange: (mode: ViewMode) => void;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
+  return (
+    <View style={styles.viewToggle}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.viewToggleButton,
+          value === 'list' && styles.viewToggleButtonActive,
+          pressed && styles.pressed
+        ]}
+        onPress={() => onChange('list')}
+      >
+        <Ionicons
+          name="list-outline"
+          size={14}
+          color={value === 'list' ? colors.foreground : colors.mutedForeground}
+        />
+        <Text style={[styles.viewToggleText, value === 'list' && styles.viewToggleTextActive]}>
+          List
+        </Text>
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [
+          styles.viewToggleButton,
+          value === 'calendar' && styles.viewToggleButtonActive,
+          pressed && styles.pressed
+        ]}
+        onPress={() => onChange('calendar')}
+      >
+        <Ionicons
+          name="calendar-outline"
+          size={14}
+          color={value === 'calendar' ? colors.foreground : colors.mutedForeground}
+        />
+        <Text style={[styles.viewToggleText, value === 'calendar' && styles.viewToggleTextActive]}>
+          Calendar
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function TicketCard({
   ticket,
   projectColor,
@@ -569,10 +892,14 @@ function TicketCard({
   projects: { id: string; name: string; color: string }[];
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const statusColors = getStatusColors(colors);
   const agentLabel = formatAgentLabel(ticket.assigned_agent);
   const ticketProject = projects.find(p => p.id === ticket.project_id) ?? null;
   const ticketProjectColor = ticketProject?.color || projectColor;
   const projectLabel = ticketProject?.name ?? 'Personal';
+  const dueLabel = ticket.due_datetime ? format(parseISO(ticket.due_datetime), 'MMM d') : null;
 
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={onPress}>
@@ -582,6 +909,12 @@ function TicketCard({
         </Text>
         {ticket.has_unread && <View style={styles.unreadDot} />}
       </View>
+      {dueLabel && (
+        <View style={styles.cardDueRow}>
+          <Ionicons name="calendar-outline" size={11} color={colors.mutedForeground} />
+          <Text style={styles.cardDueText}>{dueLabel}</Text>
+        </View>
+      )}
       <View style={styles.cardMeta}>
         <View style={styles.cardProjectInfo}>
           <View style={[styles.projectDot, { backgroundColor: ticketProjectColor }]} />
@@ -629,6 +962,9 @@ function TicketsEmptyState({
   statusFilter: StatusFilter;
   filterProject: { name: string } | null;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.empty}>
       <Ionicons name="ticket-outline" size={48} color={colors.mutedForeground} />
@@ -655,6 +991,9 @@ function FilterChip({
   onPress: () => void;
   active: boolean;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <Pressable
       style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.pressed]}
@@ -666,7 +1005,8 @@ function FilterChip({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -747,6 +1087,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  viewToggle: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10
+  },
+  viewToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  viewToggleButtonActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.primary
+  },
+  viewToggleText: {
+    color: colors.mutedForeground,
+    fontSize: 13,
+    fontWeight: '600'
+  },
+  viewToggleTextActive: {
+    color: colors.foreground
+  },
   filterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -809,6 +1178,101 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 8
   },
+  calendarList: {
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+    gap: 10
+  },
+  calendarHeader: {
+    gap: 10,
+    paddingBottom: 6
+  },
+  calendarTitle: {
+    color: colors.foreground,
+    fontSize: 18,
+    fontWeight: '700'
+  },
+  calendarSub: {
+    color: colors.mutedForeground,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  unscheduledCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    gap: 8
+  },
+  unscheduledTitle: {
+    color: colors.foreground,
+    fontSize: 14,
+    fontWeight: '700'
+  },
+  unscheduledSub: {
+    color: colors.mutedForeground,
+    fontSize: 12
+  },
+  unscheduledList: {
+    gap: 8
+  },
+  calendarDayCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    gap: 10
+  },
+  calendarDayCardToday: {
+    borderColor: colors.primary
+  },
+  calendarDayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12
+  },
+  calendarDayHeading: {
+    flex: 1,
+    gap: 4
+  },
+  calendarDayWeekday: {
+    color: colors.foreground,
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  calendarDayMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  calendarDayLabel: {
+    color: colors.mutedForeground,
+    fontSize: 13
+  },
+  calendarTodayBadge: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  calendarAddButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background
+  },
+  calendarTickets: {
+    gap: 8
+  },
+  calendarEmptyText: {
+    color: colors.mutedForeground,
+    fontSize: 13
+  },
   pressed: {
     opacity: 0.8
   },
@@ -831,6 +1295,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     lineHeight: 20
+  },
+  cardDueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8
+  },
+  cardDueText: {
+    color: colors.mutedForeground,
+    fontSize: 12
   },
   cardMeta: {
     flexDirection: 'row',
@@ -903,4 +1377,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 6
   }
-});
+  });

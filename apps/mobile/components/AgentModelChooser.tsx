@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AgentBrandIcon } from '@/components/AgentBrandIcon';
 import {
   AGENT_OPTIONS,
   DEFAULT_AGENT_MODEL_SELECTION,
@@ -10,7 +11,7 @@ import {
   normalizeUserAgentConfigs,
   resolveAgentModelSelection
 } from '@/lib/agent-models';
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { getSupabase } from '@/lib/supabase';
 import type { AgentModelRecord, AgentModelSelection, LaunchAgentType } from '@/lib/types';
 
@@ -29,6 +30,8 @@ export function AgentModelChooser({
   onResolvedSelectionChange,
   value
 }: AgentModelChooserProps) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [models, setModels] = useState<AgentModelRecord[]>([]);
   const [resolvedSelection, setResolvedSelection] = useState<AgentModelSelection>(
     DEFAULT_AGENT_MODEL_SELECTION
@@ -149,14 +152,11 @@ export function AgentModelChooser({
         ]}
       >
         <View style={styles.selectorButtonLeft}>
-          <Ionicons
-            name={
-              (selectedAgentOption?.icon ??
-                'hardware-chip-outline') as keyof typeof Ionicons.glyphMap
-            }
-            size={16}
-            color={colors.foreground}
-          />
+          {selectedAgentOption ? (
+            <AgentBrandIcon agent={selectedAgentOption.value} size={16} />
+          ) : (
+            <Ionicons name="hardware-chip-outline" size={16} color={colors.foreground} />
+          )}
           <View style={styles.selectorButtonTextWrap}>
             <Text style={styles.selectorButtonTitle}>{selectedAgentOption?.label ?? 'Agent'}</Text>
           </View>
@@ -186,11 +186,7 @@ export function AgentModelChooser({
                     pressed && !disabled && styles.choiceChipPressed
                   ]}
                 >
-                  <Ionicons
-                    name={option.icon as keyof typeof Ionicons.glyphMap}
-                    size={14}
-                    color={selected ? colors.foreground : colors.secondaryForeground}
-                  />
+                  <AgentBrandIcon agent={option.value} size={14} />
                   <Text style={[styles.choiceChipText, selected && styles.choiceChipTextSelected]}>
                     {option.label}
                   </Text>
@@ -317,6 +313,9 @@ function ModelChoice({
   label: string;
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <Pressable
       disabled={disabled}
@@ -336,7 +335,8 @@ function ModelChoice({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {},
   helperText: {
     color: colors.secondaryForeground,
@@ -482,4 +482,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20
   }
-});
+  });

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import {
   DEFAULT_SERVER_TERMINAL_CUSTOM_COMMAND,
   DEFAULT_SERVER_TERMINAL_PREFERENCE,
@@ -12,6 +12,8 @@ import {
 } from '@/lib/server-terminal-preferences';
 
 export default function AccountSecurityScreen() {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const [serverTerminalPreference, setServerTerminalPreference] =
     useState<ServerTerminalPreference>(DEFAULT_SERVER_TERMINAL_PREFERENCE);
   const [savingServerTerminalPreference, setSavingServerTerminalPreference] = useState(false);
@@ -167,7 +169,8 @@ export default function AccountSecurityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -299,4 +302,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600'
   }
-});
+  });

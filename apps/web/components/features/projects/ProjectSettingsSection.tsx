@@ -190,7 +190,6 @@ export function ProjectSettingsSection({
             ) : null}
           </div>
           {isElectron && (
-
             <ProjectExecutionWorkspaceSelector
               localDirectoryLabel={localDirectoryLabel}
               sshDirectoryLabel={sshDirectoryLabel}
@@ -201,10 +200,7 @@ export function ProjectSettingsSection({
           {isElectron && (
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2 ">
               <div className="relative flex items-center overflow-hidden rounded-lg border bg-muted/80 p-1">
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0bg-muted/40"
-                />
+                <span aria-hidden className="pointer-events-none absolute inset-0bg-muted/40" />
                 <button
                   type="button"
                   className={cn(

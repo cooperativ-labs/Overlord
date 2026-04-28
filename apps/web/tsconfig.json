@@ -38,7 +38,6 @@
   "exclude": [
     "node_modules",
     "../desktop/**",
-    "../ticket-card/**",
     "public/sw.js",
     "public/swe-worker*.js"
   ]

@@ -2,10 +2,11 @@ import { Redirect } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
-import { colors } from '@/lib/colors';
+import { useThemeColors } from '@/lib/colors';
 
 export default function Index() {
   const { session, loading } = useAuth();
+  const colors = useThemeColors();
 
   if (loading) {
     return (
@@ -26,5 +27,5 @@ export default function Index() {
     return <Redirect href="/(tabs)/feed" />;
   }
 
-  return <Redirect href="/(auth)/login" />;
+  return <Redirect href="/(tabs)/feed" />;
 }

@@ -12,7 +12,6 @@ export default [
     ignores: [
       '**/.next/**',
       'apps/desktop/dist-electron/**',
-      'apps/ticket-card/dist/**',
       'node_modules/**',
       'dist/**',
       'build/**',
@@ -30,7 +29,6 @@ export default [
           'apps/web/tsconfig.json',
           'apps/remote-agent/tsconfig.json',
           'apps/desktop/tsconfig.json',
-          'apps/ticket-card/tsconfig.json',
           'scripts/tsconfig.json',
           'supabase/functions/tsconfig.json'
         ],

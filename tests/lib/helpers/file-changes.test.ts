@@ -73,13 +73,13 @@ describe('file change helpers', () => {
   it('extracts file path from line with description text (no delimiter)', () => {
     expect(
       parseFileChanges(
-        'Added docs/sunpeak-mcp-gap-analysis.md with a comparison of the current MCP implementation versus Sunpeak recommendations'
+        'Added docs/mcp-gap-analysis.md with a comparison of the current MCP implementation versus app recommendations'
       )
     ).toEqual([
       {
         label: null,
-        note: 'with a comparison of the current MCP implementation versus Sunpeak recommendations',
-        path: 'docs/sunpeak-mcp-gap-analysis.md'
+        note: 'with a comparison of the current MCP implementation versus app recommendations',
+        path: 'docs/mcp-gap-analysis.md'
       }
     ]);
   });

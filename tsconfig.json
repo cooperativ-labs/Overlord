@@ -51,8 +51,6 @@
   "exclude": [
     "node_modules",
     "apps/desktop/dist-electron",
-    "apps/ticket-card/dist",
-    "apps/ticket-card/node_modules",
     "apps/web/.next",
     "seed.config.ts",
     "public/sw.js",

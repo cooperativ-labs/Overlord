@@ -29,13 +29,12 @@ export const LAUNCH_AGENT_VALUES: readonly LaunchAgentType[] = [
 export const AGENT_OPTIONS: ReadonlyArray<{
   value: LaunchAgentType;
   label: string;
-  icon: string;
 }> = [
-  { value: 'claude', label: 'Claude Code', icon: 'flash-outline' },
-  { value: 'codex', label: 'Codex', icon: 'code-slash-outline' },
-  { value: 'cursor', label: 'Cursor', icon: 'navigate-outline' },
-  { value: 'gemini', label: 'Gemini', icon: 'diamond-outline' },
-  { value: 'opencode', label: 'OpenCode', icon: 'terminal-outline' }
+  { value: 'claude', label: 'Claude Code' },
+  { value: 'codex', label: 'Codex' },
+  { value: 'cursor', label: 'Cursor' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'opencode', label: 'OpenCode' }
 ];
 
 export function createAssignedAgent(selection: AgentModelSelection): AssignedAgent {

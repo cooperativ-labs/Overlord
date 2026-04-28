@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
+import { format, parseISO } from 'date-fns';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,9 +17,10 @@ import {
 
 import { AgentModelChooser } from '@/components/AgentModelChooser';
 import { createAssignedAgent } from '@/lib/agent-models';
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
-import type { AgentModelSelection, TicketPriority } from '@/lib/types';
+import type { AgentModelSelection, TicketExecutionTarget, TicketPriority } from '@/lib/types';
 
 type Project = {
   id: string;
@@ -33,24 +35,50 @@ const priorities: { value: TicketPriority; label: string }[] = [
   { value: 'urgent', label: 'Urgent' }
 ];
 
-const priorityColors: Record<TicketPriority, string> = {
-  low: colors.mutedForeground,
-  medium: colors.primary,
-  high: '#f59e0b',
-  urgent: colors.destructive
-};
+function getPriorityColors(colors: ThemeColors): Record<TicketPriority, string> {
+  return {
+    low: colors.mutedForeground,
+    medium: colors.primary,
+    high: '#f59e0b',
+    urgent: colors.destructive
+  };
+}
+
+const executionTargets: { value: TicketExecutionTarget; label: string; icon: string }[] = [
+  { value: 'agent', label: 'Agent', icon: 'hardware-chip-outline' },
+  { value: 'human', label: 'Human', icon: 'person-outline' }
+];
 
 export default function CreateTicketScreen() {
   const router = useRouter();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+  const { projectId: projectIdParam, dueDate: dueDateParam } = useLocalSearchParams<{
+    projectId?: string;
+    dueDate?: string;
+  }>();
+  const { selectedProjectId: contextSelectedProjectId } = useSelectedProject();
+  const [title, setTitle] = useState('');
   const [objective, setObjective] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
+  const [context, setContext] = useState('');
+  const [constraints, setConstraints] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('medium');
+  const [executionTarget, setExecutionTarget] = useState<TicketExecutionTarget>('agent');
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [assignedSelection, setAssignedSelection] = useState<AgentModelSelection | null>(null);
+  const priorityColors = getPriorityColors(colors);
+  const dueDateKey =
+    typeof dueDateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDateParam)
+      ? dueDateParam
+      : null;
+  const dueDateLabel = dueDateKey
+    ? format(parseISO(`${dueDateKey}T12:00:00.000Z`), 'EEEE, MMM d')
+    : null;
 
   useEffect(() => {
     async function loadProjects() {
@@ -68,7 +96,13 @@ export default function CreateTicketScreen() {
 
         if (data && data.length > 0) {
           setProjects(data);
-          setSelectedProjectId(data[0].id);
+          const preferredId =
+            (projectIdParam && data.some(p => p.id === projectIdParam) && projectIdParam) ||
+            (contextSelectedProjectId &&
+              data.some(p => p.id === contextSelectedProjectId) &&
+              contextSelectedProjectId) ||
+            data[0].id;
+          setSelectedProjectId(preferredId);
         }
       } finally {
         setLoadingProjects(false);
@@ -76,7 +110,7 @@ export default function CreateTicketScreen() {
     }
 
     loadProjects();
-  }, []);
+  }, [projectIdParam, contextSelectedProjectId]);
 
   async function handleSubmit() {
     const trimmedObjective = objective.trim();
@@ -90,21 +124,28 @@ export default function CreateTicketScreen() {
     try {
       const supabase = getSupabase();
 
-      // Generate a simple title from the objective
-      const title =
+      const trimmedTitle = title.trim();
+      const fallbackTitle =
         trimmedObjective.length > 80 ? trimmedObjective.substring(0, 77) + '...' : trimmedObjective;
+      const finalTitle = trimmedTitle.length > 0 ? trimmedTitle : fallbackTitle;
+      const trimmedContext = context.trim();
+      const trimmedConstraints = constraints.trim();
+      const dueDatetime = dueDateKey ? `${dueDateKey}T12:00:00.000Z` : null;
 
-      // Insert the ticket
       const { data: ticket, error: ticketError } = await supabase
         .from('tickets')
         .insert({
-          title,
+          title: finalTitle,
           status: 'next-up',
           priority,
+          execution_target: executionTarget,
           organization_id: selectedProject.organization_id,
           project_id: selectedProjectId,
+          due_datetime: dueDatetime,
           acceptance_criteria:
             acceptanceCriteria.trim().length > 0 ? acceptanceCriteria.trim() : null,
+          context: trimmedContext.length > 0 ? trimmedContext : null,
+          constraints: trimmedConstraints.length > 0 ? trimmedConstraints : null,
           assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null
         })
         .select('id, organization_id')
@@ -180,7 +221,17 @@ export default function CreateTicketScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Objective */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Title</Text>
+          <TextInput
+            style={styles.titleInput}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Optional — generated from objective if empty"
+            placeholderTextColor={colors.mutedForeground}
+          />
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.label}>What needs to be done?</Text>
           <TextInput
@@ -207,6 +258,42 @@ export default function CreateTicketScreen() {
             textAlignVertical="top"
           />
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Context</Text>
+          <TextInput
+            style={styles.criteriaInput}
+            value={context}
+            onChangeText={setContext}
+            placeholder="Background, links, references..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Constraints</Text>
+          <TextInput
+            style={styles.criteriaInput}
+            value={constraints}
+            onChangeText={setConstraints}
+            placeholder="What the agent must avoid or honor..."
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+
+        {dueDateLabel && (
+          <View style={styles.section}>
+            <Text style={styles.label}>Due date</Text>
+            <View style={styles.dueDateCard}>
+              <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+              <Text style={styles.dueDateText}>{dueDateLabel}</Text>
+            </View>
+          </View>
+        )}
 
         {/* Project Selector */}
         <View style={styles.section}>
@@ -295,6 +382,37 @@ export default function CreateTicketScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.label}>Execution target</Text>
+          <View style={styles.priorityRow}>
+            {executionTargets.map(target => {
+              const isSelected = target.value === executionTarget;
+              return (
+                <Pressable
+                  key={target.value}
+                  style={[
+                    styles.priorityChip,
+                    isSelected && {
+                      backgroundColor: colors.primary + '20',
+                      borderColor: colors.primary
+                    }
+                  ]}
+                  onPress={() => setExecutionTarget(target.value)}
+                >
+                  <Ionicons
+                    name={target.icon as keyof typeof Ionicons.glyphMap}
+                    size={14}
+                    color={isSelected ? colors.primary : colors.mutedForeground}
+                  />
+                  <Text style={[styles.priorityText, isSelected && { color: colors.foreground }]}>
+                    {target.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.label}>Assigned Agent</Text>
           <AgentModelChooser
             value={assignedSelection}
@@ -309,7 +427,8 @@ export default function CreateTicketScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background
@@ -323,6 +442,22 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24
   },
+  dueDateCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  dueDateText: {
+    color: colors.foreground,
+    fontSize: 15,
+    fontWeight: '600'
+  },
   label: {
     color: colors.mutedForeground,
     fontSize: 13,
@@ -330,6 +465,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 10
+  },
+  titleInput: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: colors.foreground,
+    fontSize: 16
   },
   objectiveInput: {
     backgroundColor: colors.card,
@@ -436,4 +581,4 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600'
   }
-});
+  });

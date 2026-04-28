@@ -5,7 +5,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/lib/auth-context';
-import { colors } from '@/lib/colors';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
 
 interface SidebarDrawerProps {
@@ -17,6 +17,8 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const { projects, selectProject } = useSelectedProject();
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
 
   const userLabel = useMemo(() => {
     if (!user) return 'Not signed in';
@@ -77,8 +79,8 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
               onPress={() => navigate('/(tabs)/tickets')}
             />
             <DrawerItem
-              icon="shield-outline"
-              label="Admin"
+              icon="person-outline"
+              label="Account"
               onPress={() => navigate('/(tabs)/account')}
             />
 
@@ -167,6 +169,9 @@ function DrawerItem({
   label: string;
   onPress: () => void;
 }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
   return (
     <Pressable
       style={({ pressed }) => [styles.navRow, pressed && styles.pressed]}
@@ -180,7 +185,8 @@ function DrawerItem({
 
 const DRAWER_WIDTH = 288;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     flexDirection: 'row',
@@ -347,4 +353,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 1
   }
-});
+  });

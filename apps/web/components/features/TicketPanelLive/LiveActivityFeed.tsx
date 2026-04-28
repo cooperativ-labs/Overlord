@@ -1,18 +1,61 @@
 'use client';
 
-import { MessageSquare } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  ArrowRightLeft,
+  CheckCircle2,
+  Eye,
+  HelpCircle,
+  type LucideIcon,
+  Package,
+  Paperclip,
+  PenLine,
+  RotateCcw
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import {
-  getEventDisplayLabel,
-  getEventDisplaySummary,
-  isUserFollowUpEvent
-} from '@/lib/overlord/conversation';
+import { getEventDisplaySummary, isUserFollowUpEvent } from '@/lib/overlord/conversation';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
 type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
+type Profile = Pick<Database['public']['Tables']['profiles']['Row'], 'id' | 'name' | 'image_url'>;
+
+const EVENT_ICONS: Partial<Record<Database['public']['Enums']['ticket_event_type'], LucideIcon>> = {
+  update: Activity,
+  question: HelpCircle,
+  answer: CheckCircle2,
+  deliver: Package,
+  artifact: Paperclip,
+  status_change: ArrowRightLeft,
+  alert: AlertCircle,
+  context_write: PenLine,
+  context_read: Eye,
+  ticket_reopened: RotateCcw
+};
+
+const EVENT_LABELS: Partial<Record<Database['public']['Enums']['ticket_event_type'], string>> = {
+  update: 'Update',
+  question: 'Question',
+  answer: 'Answer',
+  deliver: 'Delivered',
+  artifact: 'Artifact',
+  status_change: 'Status Changed',
+  alert: 'Notification',
+  user_follow_up: 'Follow-up',
+  context_write: 'Context Written',
+  context_read: 'Context Read',
+  ticket_reopened: 'Reopened'
+};
+
+function getDisplayLabel(event: TicketEvent): string {
+  return EVENT_LABELS[event.event_type] ?? event.event_type;
+}
 
 export function LiveActivityFeed({
   editorScheme,
@@ -24,6 +67,30 @@ export function LiveActivityFeed({
   workspaceRoot?: string | null;
 }) {
   const visibleEvents = events.filter(event => event.event_type !== 'system');
+  const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+
+  useEffect(() => {
+    const userIds = [
+      ...new Set(
+        events.filter(e => isUserFollowUpEvent(e) && e.created_by).map(e => e.created_by as string)
+      )
+    ];
+    if (userIds.length === 0) return;
+
+    const supabase = createClient();
+    void supabase
+      .from('profiles')
+      .select('id, name, image_url')
+      .in('id', userIds)
+      .then(({ data }) => {
+        if (!data) return;
+        setProfiles(prev => {
+          const next = { ...prev };
+          for (const p of data) next[p.id] = p;
+          return next;
+        });
+      });
+  }, [events]);
 
   if (!visibleEvents.length) {
     return <p className="text-sm italic text-muted-foreground">No events yet.</p>;
@@ -34,25 +101,36 @@ export function LiveActivityFeed({
       {visibleEvents.map(event => {
         const isUserFollowUp = isUserFollowUpEvent(event);
         const summary = getEventDisplaySummary(event);
+        const profile = isUserFollowUp && event.created_by ? profiles[event.created_by] : null;
+        const Icon = EVENT_ICONS[event.event_type];
 
         return (
           <article className="flex gap-3" key={event.id}>
-            <div
-              className={cn(
-                'mt-1.5 h-2 w-2 shrink-0 rounded-full',
-                isUserFollowUp ? 'bg-sky-500/80' : 'bg-muted-foreground/30'
+            <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center">
+              {isUserFollowUp ? (
+                <Avatar className="h-5 w-5">
+                  {profile?.image_url ? (
+                    <AvatarImage src={profile.image_url} alt={profile.name ?? ''} />
+                  ) : null}
+                  <AvatarFallback className="text-[9px]">
+                    {(profile?.name ?? 'U').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              ) : Icon ? (
+                <Icon className="h-3.5 w-3.5 text-muted-foreground/60" />
+              ) : (
+                <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
               )}
-            />
+            </div>
             <div className="grid min-w-0 gap-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1.5 text-xs font-medium',
-                    isUserFollowUp && 'text-sky-700 dark:text-sky-400'
+                    'text-xs font-medium',
+                    isUserFollowUp ? 'text-sky-700 dark:text-sky-400' : 'text-foreground/80'
                   )}
                 >
-                  {isUserFollowUp ? <MessageSquare className="h-3.5 w-3.5" /> : null}
-                  {getEventDisplayLabel(event)}
+                  {isUserFollowUp && profile?.name ? profile.name : getDisplayLabel(event)}
                 </span>
                 {event.phase ? (
                   <Badge className="h-5 rounded-full px-2 text-xs" variant="secondary">
