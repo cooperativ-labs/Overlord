@@ -1,5 +1,12 @@
 slug: agent-connector-update
 name: agent-connector-update
-description: Use when changing how Overlord integrates with any agent connector (Claude Code, Codex, Cursor, Gemini CLI, OpenCode). Enforces parity across all five agents, the four protocol surfaces (API/CLI/MCP/plugin docs), and keeps CONNECTOR_SURFACES.md and the drift-review skill in sync.
+description: Use when changing how Overlord integrates with any agent connector
+  (Claude Code, Codex, Cursor, Gemini CLI, OpenCode) — adding/removing protocol
+  operations, changing launch commands, modifying bundle/plugin install
+  behavior, updating slash commands, or altering permission/hook wiring.
+  Enforces parity across all agents, the four protocol surfaces
+  (API/CLI/MCP/plugin docs), and keeps the connector surfaces and drift-review
+  documentation in sync.
 tags: []
 compat: []
+sha256: f8c93dd9864f61621ecdb6a3636c7eab79f5ed32d52292d6030ad64b19c1ed9c

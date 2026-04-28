@@ -1,0 +1,8 @@
+slug: expo-native-tabs
+name: expo-native-tabs
+description: Guide for using Expo Router native tabs with platform-native system
+  tab bars. Apply when implementing or modifying native tab layouts, tab items,
+  or platform-specific tab bar behavior.
+tags: []
+compat: []
+sha256: ea0c28d81580f1eb3ff83b8e7beac5b6e97fc1b8a29f2f30008fbf122d09a392
