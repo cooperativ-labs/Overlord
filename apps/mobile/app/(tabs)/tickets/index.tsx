@@ -22,6 +22,7 @@ import { SidebarDrawer } from '@/components/SidebarDrawer';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
+import { isTransientNetworkError } from '@/lib/transient-network-error';
 import type { AssignedAgent, TicketListItem } from '@/lib/types';
 
 type SortMode = 'updated' | 'created' | 'priority';
@@ -142,7 +143,7 @@ export default function TicketsScreen() {
     [filterProjectId, router]
   );
 
-  const fetchTickets = useCallback(async () => {
+  const fetchTickets = useCallback(async (options?: { suppressTransientNetworkAlert?: boolean }) => {
     const supabase = getSupabase();
 
     const runQuery = () => {
@@ -157,7 +158,7 @@ export default function TicketsScreen() {
       return q;
     };
 
-    const MAX_ATTEMPTS = 3;
+    const MAX_ATTEMPTS = options?.suppressTransientNetworkAlert ? 4 : 3;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const { data, error } = await runQuery();
       if (!error && data) {
@@ -165,13 +166,15 @@ export default function TicketsScreen() {
         return;
       }
       if (error) {
-        const isNetworkError =
-          error.message?.includes('Network request failed') ||
-          error.message?.includes('Failed to fetch');
+        const isNetworkError = isTransientNetworkError(error);
         if (isNetworkError && attempt < MAX_ATTEMPTS - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt));
+          const delayMs = options?.suppressTransientNetworkAlert
+            ? 750 * 2 ** attempt
+            : 500 * 2 ** attempt;
+          await new Promise(resolve => setTimeout(resolve, delayMs));
           continue;
         }
+        if (isNetworkError && options?.suppressTransientNetworkAlert) return;
         Alert.alert('Unable to load tickets', error.message);
         return;
       }
@@ -186,6 +189,7 @@ export default function TicketsScreen() {
   useEffect(() => {
     const supabase = getSupabase();
     let pollId: ReturnType<typeof setInterval> | null = null;
+    let foregroundRefreshId: ReturnType<typeof setTimeout> | null = null;
 
     const stopPolling = () => {
       if (pollId) {
@@ -197,7 +201,7 @@ export default function TicketsScreen() {
     const startPolling = () => {
       if (pollId) return;
       pollId = setInterval(() => {
-        void fetchTickets();
+        void fetchTickets({ suppressTransientNetworkAlert: true });
       }, 60_000);
     };
 
@@ -206,25 +210,29 @@ export default function TicketsScreen() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tickets' },
-        () => void fetchTickets()
+        () => void fetchTickets({ suppressTransientNetworkAlert: true })
       )
       .subscribe(status => {
         if (status === 'SUBSCRIBED') {
           stopPolling();
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           startPolling();
-          void fetchTickets();
+          void fetchTickets({ suppressTransientNetworkAlert: true });
         }
       });
 
     const appStateSubscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
-        void fetchTickets();
+        if (foregroundRefreshId) clearTimeout(foregroundRefreshId);
+        foregroundRefreshId = setTimeout(() => {
+          void fetchTickets({ suppressTransientNetworkAlert: true });
+        }, 1_500);
       }
     });
 
     return () => {
       stopPolling();
+      if (foregroundRefreshId) clearTimeout(foregroundRefreshId);
       appStateSubscription.remove();
       void supabase.removeChannel(channel);
     };

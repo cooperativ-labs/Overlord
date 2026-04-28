@@ -11,6 +11,7 @@ import {
   Text,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ExecutingTicketsSection } from '@/components/ExecutingTicketsSection';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
@@ -139,14 +140,14 @@ export default function FeedScreen() {
 
   if (loadingPosts || loadingProjects) {
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered} edges={['top']}>
         <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <FlatList
         data={filteredPosts}
         keyExtractor={item => item.id}
@@ -409,7 +410,7 @@ export default function FeedScreen() {
         }
         contentContainerStyle={filteredPosts.length === 0 ? styles.emptyContainer : styles.list}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
