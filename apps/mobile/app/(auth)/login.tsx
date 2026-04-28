@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { supabaseRuntimeInfo } from '@/lib/supabase';
 
 export default function LoginScreen() {
@@ -101,58 +101,58 @@ export default function LoginScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.foreground,
-    textAlign: 'center',
-    marginBottom: 8
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.mutedForeground,
-    textAlign: 'center',
-    marginBottom: 32
-  },
-  input: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: colors.foreground,
-    marginBottom: 12
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8
-  },
-  buttonDisabled: {
-    opacity: 0.7
-  },
-  buttonText: {
-    color: colors.primaryForeground,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  debugInfo: {
-    marginTop: 16,
-    color: colors.mutedForeground,
-    fontSize: 12,
-    textAlign: 'center'
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    inner: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 24
+    },
+    title: {
+      fontSize: 32,
+      fontWeight: '700',
+      color: colors.foreground,
+      textAlign: 'center',
+      marginBottom: 8
+    },
+    subtitle: {
+      fontSize: 16,
+      color: colors.mutedForeground,
+      textAlign: 'center',
+      marginBottom: 32
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 16,
+      color: colors.foreground,
+      marginBottom: 12
+    },
+    button: {
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 8
+    },
+    buttonDisabled: {
+      opacity: 0.7
+    },
+    buttonText: {
+      color: colors.primaryForeground,
+      fontSize: 16,
+      fontWeight: '600'
+    },
+    debugInfo: {
+      marginTop: 16,
+      color: colors.mutedForeground,
+      fontSize: 12,
+      textAlign: 'center'
+    }
   });

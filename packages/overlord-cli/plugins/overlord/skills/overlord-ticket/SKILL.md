@@ -136,6 +136,7 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 - Always attach first and always deliver last once you are working a ticket.
 - Prefer the installed `ovld` CLI and the plugin's MCP tools instead of ad hoc repo scripts.
 - Do not create or rely on a local Codex `AGENTS.md` bundle for Overlord.
+- If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
 - When the ticket was launched by Overlord, the ticket prompt remains authoritative for the specific task objective and ticket-level constraints.
 
-<!-- version: 0.2.2 -->
+<!-- version: 0.2.3 -->

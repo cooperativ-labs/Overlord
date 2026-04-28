@@ -41,7 +41,8 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 - Always attach first and always deliver last once you are on a ticket.
 - Use `ovld protocol` commands, the plugin commands, and the MCP tool instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
+- If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
 - Include at least one progress update before delivering.
 - When creating follow-up tickets, always set `--execution-target` explicitly using the `agent`/`human` rule above.
 
-<!-- version: 0.2.2 -->
+<!-- version: 0.2.3 -->

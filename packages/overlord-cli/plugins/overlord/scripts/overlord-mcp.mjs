@@ -610,10 +610,10 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.1.0'
+        version: '0.1.1'
       },
       instructions:
-        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Most operations expect a session key from attach or connect.'
+        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Most operations expect a session key from attach or connect. If the CLI reports that OVERLORD_URL is unreachable, request permission escalation or network access before retrying.'
     });
     return;
   }

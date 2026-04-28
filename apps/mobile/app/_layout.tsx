@@ -8,11 +8,11 @@ import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-c
 
 import { AuthProvider } from '@/lib/auth-context';
 import {
+  type ThemeColors,
   ThemeProvider,
   useThemeColors,
   useThemedStyles,
-  useThemePreference,
-  type ThemeColors
+  useThemePreference
 } from '@/lib/colors';
 import { NotificationsProvider } from '@/lib/notifications';
 import { SelectedProjectProvider } from '@/lib/selected-project-context';
@@ -98,41 +98,41 @@ function RootLayoutContent() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: colors.background
-  },
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 12
-  },
-  title: {
-    color: colors.foreground,
-    fontSize: 22,
-    fontWeight: '700'
-  },
-  body: {
-    color: colors.secondaryForeground,
-    fontSize: 15,
-    lineHeight: 22
-  },
-  code: {
-    color: colors.destructive,
-    fontSize: 14,
-    lineHeight: 20
-  },
-  hint: {
-    color: colors.mutedForeground,
-    fontSize: 14,
-    lineHeight: 20
-  }
+    container: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+      backgroundColor: colors.background
+    },
+    card: {
+      width: '100%',
+      maxWidth: 420,
+      padding: 20,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 12
+    },
+    title: {
+      color: colors.foreground,
+      fontSize: 22,
+      fontWeight: '700'
+    },
+    body: {
+      color: colors.secondaryForeground,
+      fontSize: 15,
+      lineHeight: 22
+    },
+    code: {
+      color: colors.destructive,
+      fontSize: 14,
+      lineHeight: 20
+    },
+    hint: {
+      color: colors.mutedForeground,
+      fontSize: 14,
+      lineHeight: 20
+    }
   });

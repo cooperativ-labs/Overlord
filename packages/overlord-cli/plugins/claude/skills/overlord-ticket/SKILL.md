@@ -152,7 +152,8 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - Use `write-context` for facts a future agent session should know.
+- If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.2.2 -->
+<!-- version: 0.2.3 -->

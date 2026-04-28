@@ -17,7 +17,7 @@ import {
 
 import { AgentModelChooser } from '@/components/AgentModelChooser';
 import { createAssignedAgent } from '@/lib/agent-models';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import type { AgentModelSelection, TicketExecutionTarget, TicketPriority } from '@/lib/types';
@@ -144,8 +144,8 @@ export default function CreateTicketScreen() {
           due_datetime: dueDatetime,
           acceptance_criteria:
             acceptanceCriteria.trim().length > 0 ? acceptanceCriteria.trim() : null,
-          context: trimmedContext.length > 0 ? trimmedContext : null,
-          constraints: trimmedConstraints.length > 0 ? trimmedConstraints : null,
+          context: trimmedContext,
+          constraints: trimmedConstraints,
           assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null
         })
         .select('id, organization_id')
@@ -429,156 +429,156 @@ export default function CreateTicketScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  scrollView: {
-    flex: 1
-  },
-  scrollContent: {
-    padding: 16
-  },
-  section: {
-    marginBottom: 24
-  },
-  dueDateCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  dueDateText: {
-    color: colors.foreground,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  label: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10
-  },
-  titleInput: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: colors.foreground,
-    fontSize: 16
-  },
-  objectiveInput: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    color: colors.foreground,
-    fontSize: 16,
-    lineHeight: 24,
-    minHeight: 140
-  },
-  criteriaInput: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    color: colors.foreground,
-    fontSize: 15,
-    lineHeight: 22,
-    minHeight: 110
-  },
-  selector: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between'
-  },
-  selectorText: {
-    color: colors.foreground,
-    fontSize: 16
-  },
-  pickerList: {
-    marginTop: 8,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden'
-  },
-  pickerItem: {
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border
-  },
-  pickerItemSelected: {
-    backgroundColor: colors.secondary
-  },
-  pickerItemText: {
-    color: colors.secondaryForeground,
-    fontSize: 16
-  },
-  pickerItemTextSelected: {
-    color: colors.foreground,
-    fontWeight: '600'
-  },
-  priorityRow: {
-    flexDirection: 'row',
-    gap: 8
-  },
-  priorityChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 12,
-    paddingHorizontal: 8
-  },
-  priorityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  priorityText: {
-    color: colors.secondaryForeground,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 16
-  },
-  loadingText: {
-    color: colors.mutedForeground,
-    fontSize: 14
-  },
-  submitButton: {
-    color: colors.primary,
-    fontSize: 17,
-    fontWeight: '600'
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    scrollView: {
+      flex: 1
+    },
+    scrollContent: {
+      padding: 16
+    },
+    section: {
+      marginBottom: 24
+    },
+    dueDateCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    dueDateText: {
+      color: colors.foreground,
+      fontSize: 15,
+      fontWeight: '600'
+    },
+    label: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 10
+    },
+    titleInput: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      color: colors.foreground,
+      fontSize: 16
+    },
+    objectiveInput: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      color: colors.foreground,
+      fontSize: 16,
+      lineHeight: 24,
+      minHeight: 140
+    },
+    criteriaInput: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      color: colors.foreground,
+      fontSize: 15,
+      lineHeight: 22,
+      minHeight: 110
+    },
+    selector: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between'
+    },
+    selectorText: {
+      color: colors.foreground,
+      fontSize: 16
+    },
+    pickerList: {
+      marginTop: 8,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden'
+    },
+    pickerItem: {
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    pickerItemSelected: {
+      backgroundColor: colors.secondary
+    },
+    pickerItemText: {
+      color: colors.secondaryForeground,
+      fontSize: 16
+    },
+    pickerItemTextSelected: {
+      color: colors.foreground,
+      fontWeight: '600'
+    },
+    priorityRow: {
+      flexDirection: 'row',
+      gap: 8
+    },
+    priorityChip: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.card,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      paddingHorizontal: 8
+    },
+    priorityDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4
+    },
+    priorityText: {
+      color: colors.secondaryForeground,
+      fontSize: 13,
+      fontWeight: '600'
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      padding: 16
+    },
+    loadingText: {
+      color: colors.mutedForeground,
+      fontSize: 14
+    },
+    submitButton: {
+      color: colors.primary,
+      fontSize: 17,
+      fontWeight: '600'
+    }
   });

@@ -16,3 +16,4 @@ Rules:
 - Use `load-context`, not `attach`.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.
+- If `ovld` reports `OVERLORD_URL` is unreachable, stop and request permission escalation or network access before retrying.

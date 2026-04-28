@@ -5,7 +5,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/lib/auth-context';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
 
 interface SidebarDrawerProps {
@@ -187,170 +187,170 @@ const DRAWER_WIDTH = 288;
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.5)'
-  },
-  drawer: {
-    width: DRAWER_WIDTH,
-    backgroundColor: colors.background,
-    borderRightWidth: 1,
-    borderRightColor: colors.border
-  },
-  scrim: {
-    flex: 1
-  },
-  scroll: {
-    flex: 1
-  },
-  scrollContent: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 12
-  },
-  workspaceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16
-  },
-  workspaceIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  workspaceTextWrap: {
-    flex: 1,
-    minWidth: 0
-  },
-  workspaceName: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  workspaceSub: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    marginTop: 1
-  },
-  groupLabel: {
-    color: colors.mutedForeground,
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    paddingHorizontal: 8,
-    marginTop: 4,
-    marginBottom: 6
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 18,
-    paddingRight: 8,
-    marginBottom: 6
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8
-  },
-  navLabel: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '500'
-  },
-  projectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderRadius: 8
-  },
-  projectRowSelected: {
-    backgroundColor: colors.secondary
-  },
-  projectDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5
-  },
-  projectName: {
-    flex: 1,
-    color: colors.secondaryForeground,
-    fontSize: 14
-  },
-  projectNameSelected: {
-    color: colors.foreground,
-    fontWeight: '600'
-  },
-  projectMore: {
-    paddingHorizontal: 4,
-    paddingVertical: 4
-  },
-  pressed: {
-    opacity: 0.7
-  },
-  emptyHint: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  footerNav: {
-    marginTop: 24,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 8
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  avatarText: {
-    color: colors.foreground,
-    fontSize: 13,
-    fontWeight: '700'
-  },
-  userTextWrap: {
-    flex: 1,
-    minWidth: 0
-  },
-  userName: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  userEmail: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    marginTop: 1
-  }
+    backdrop: {
+      flex: 1,
+      flexDirection: 'row',
+      backgroundColor: 'rgba(0,0,0,0.5)'
+    },
+    drawer: {
+      width: DRAWER_WIDTH,
+      backgroundColor: colors.background,
+      borderRightWidth: 1,
+      borderRightColor: colors.border
+    },
+    scrim: {
+      flex: 1
+    },
+    scroll: {
+      flex: 1
+    },
+    scrollContent: {
+      paddingHorizontal: 10,
+      paddingTop: 8,
+      paddingBottom: 12
+    },
+    workspaceCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 16
+    },
+    workspaceIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    workspaceTextWrap: {
+      flex: 1,
+      minWidth: 0
+    },
+    workspaceName: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    workspaceSub: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      marginTop: 1
+    },
+    groupLabel: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      paddingHorizontal: 8,
+      marginTop: 4,
+      marginBottom: 6
+    },
+    groupHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 18,
+      paddingRight: 8,
+      marginBottom: 6
+    },
+    navRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      borderRadius: 8
+    },
+    navLabel: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '500'
+    },
+    projectRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+      borderRadius: 8
+    },
+    projectRowSelected: {
+      backgroundColor: colors.secondary
+    },
+    projectDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5
+    },
+    projectName: {
+      flex: 1,
+      color: colors.secondaryForeground,
+      fontSize: 14
+    },
+    projectNameSelected: {
+      color: colors.foreground,
+      fontWeight: '600'
+    },
+    projectMore: {
+      paddingHorizontal: 4,
+      paddingVertical: 4
+    },
+    pressed: {
+      opacity: 0.7
+    },
+    emptyHint: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      paddingHorizontal: 10,
+      paddingVertical: 6
+    },
+    footerNav: {
+      marginTop: 24,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 8
+    },
+    userRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border
+    },
+    avatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.secondary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    avatarText: {
+      color: colors.foreground,
+      fontSize: 13,
+      fontWeight: '700'
+    },
+    userTextWrap: {
+      flex: 1,
+      minWidth: 0
+    },
+    userName: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    userEmail: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      marginTop: 1
+    }
   });

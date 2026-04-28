@@ -14,7 +14,7 @@ import {
   View
 } from 'react-native';
 
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import type { GitStatusFile, GitStatusResult, MobileHelperConfig } from '@/lib/workspace';
 import {
@@ -462,106 +462,106 @@ function DetailRow({
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16 },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  section: { marginBottom: 24 },
-  sectionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10
-  },
-  sectionTitle: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 12
-  },
-  helperText: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18
-  },
-  input: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.foreground,
-    fontSize: 15
-  },
-  primaryButton: {
-    marginTop: 4,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8
-  },
-  primaryButtonText: { color: colors.primaryForeground, fontSize: 15, fontWeight: '600' },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10
-  },
-  secondaryButtonText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
-  linkButton: { alignItems: 'center', paddingVertical: 6 },
-  linkText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10
-  },
-  deleteText: { color: colors.destructive, fontSize: 14, fontWeight: '500' },
-  disabledButton: { opacity: 0.5 },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12
-  },
-  detailLabel: { color: colors.mutedForeground, fontSize: 14 },
-  detailValue: { color: colors.foreground, fontSize: 14, fontWeight: '500' },
-  monoText: { fontFamily: 'Menlo', fontSize: 12 },
-  mutedText: { color: colors.mutedForeground, fontSize: 14 },
-  errorBody: { color: colors.destructive, fontSize: 13, lineHeight: 18 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 10 },
-  statusRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  statusChip: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  statusChipText: { fontSize: 12, fontWeight: '700' },
-  statusPath: { color: colors.foreground, fontSize: 13, fontFamily: 'Menlo' },
-  statusMeta: { color: colors.mutedForeground, fontSize: 11, marginTop: 2 },
-  healthBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 }
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { padding: 16 },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    section: { marginBottom: 24 },
+    sectionRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10
+    },
+    sectionTitle: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      gap: 12
+    },
+    helperText: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18
+    },
+    input: {
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: colors.foreground,
+      fontSize: 15
+    },
+    primaryButton: {
+      marginTop: 4,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8
+    },
+    primaryButtonText: { color: colors.primaryForeground, fontSize: 15, fontWeight: '600' },
+    secondaryButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10
+    },
+    secondaryButtonText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
+    linkButton: { alignItems: 'center', paddingVertical: 6 },
+    linkText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
+    deleteButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10
+    },
+    deleteText: { color: colors.destructive, fontSize: 14, fontWeight: '500' },
+    disabledButton: { opacity: 0.5 },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 12
+    },
+    detailLabel: { color: colors.mutedForeground, fontSize: 14 },
+    detailValue: { color: colors.foreground, fontSize: 14, fontWeight: '500' },
+    monoText: { fontFamily: 'Menlo', fontSize: 12 },
+    mutedText: { color: colors.mutedForeground, fontSize: 14 },
+    errorBody: { color: colors.destructive, fontSize: 13, lineHeight: 18 },
+    divider: { height: 1, backgroundColor: colors.border, marginVertical: 10 },
+    statusRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+    statusChip: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      borderWidth: 1,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    statusChipText: { fontSize: 12, fontWeight: '700' },
+    statusPath: { color: colors.foreground, fontSize: 13, fontFamily: 'Menlo' },
+    statusMeta: { color: colors.mutedForeground, fontSize: 11, marginTop: 2 },
+    healthBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    statusDot: { width: 8, height: 8, borderRadius: 4 }
   });

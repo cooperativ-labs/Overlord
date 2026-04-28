@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SidebarDrawer } from '@/components/SidebarDrawer';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import type { AssignedAgent, TicketListItem } from '@/lib/types';
@@ -1007,374 +1007,374 @@ function FilterChip({
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 10
-  },
-  ghostButton: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  searchWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 36,
-    overflow: 'hidden'
-  },
-  searchWrapFallback: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.foreground,
-    fontSize: 13,
-    padding: 0
-  },
-  createButton: {
-    height: 36,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 2,
-    overflow: 'hidden'
-  },
-  projectHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 10
-  },
-  projectSquare: {
-    width: 14,
-    height: 14,
-    borderRadius: 3
-  },
-  projectHeaderName: {
-    flex: 1,
-    color: colors.foreground,
-    fontSize: 17,
-    fontWeight: '700'
-  },
-  projectFilterButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  viewToggle: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 10
-  },
-  viewToggleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  viewToggleButtonActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.primary
-  },
-  viewToggleText: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  viewToggleTextActive: {
-    color: colors.foreground
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 10
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  chipActive: {
-    borderColor: colors.primary
-  },
-  chipText: {
-    color: colors.foreground,
-    fontSize: 13
-  },
-  menu: {
-    marginHorizontal: 16,
-    marginBottom: 6,
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden'
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border
-  },
-  menuItemText: {
-    color: colors.foreground,
-    fontSize: 14
-  },
-  projectMenuLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  projectMenuDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  list: {
-    paddingHorizontal: 12,
-    paddingBottom: 16,
-    gap: 8
-  },
-  calendarList: {
-    paddingHorizontal: 12,
-    paddingBottom: 24,
-    gap: 10
-  },
-  calendarHeader: {
-    gap: 10,
-    paddingBottom: 6
-  },
-  calendarTitle: {
-    color: colors.foreground,
-    fontSize: 18,
-    fontWeight: '700'
-  },
-  calendarSub: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18
-  },
-  unscheduledCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    gap: 8
-  },
-  unscheduledTitle: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '700'
-  },
-  unscheduledSub: {
-    color: colors.mutedForeground,
-    fontSize: 12
-  },
-  unscheduledList: {
-    gap: 8
-  },
-  calendarDayCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    gap: 10
-  },
-  calendarDayCardToday: {
-    borderColor: colors.primary
-  },
-  calendarDayHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12
-  },
-  calendarDayHeading: {
-    flex: 1,
-    gap: 4
-  },
-  calendarDayWeekday: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  calendarDayMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  calendarDayLabel: {
-    color: colors.mutedForeground,
-    fontSize: 13
-  },
-  calendarTodayBadge: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '700'
-  },
-  calendarAddButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background
-  },
-  calendarTickets: {
-    gap: 8
-  },
-  calendarEmptyText: {
-    color: colors.mutedForeground,
-    fontSize: 13
-  },
-  pressed: {
-    opacity: 0.8
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 6
-  },
-  ticketTitle: {
-    flex: 1,
-    color: colors.foreground,
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20
-  },
-  cardDueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8
-  },
-  cardDueText: {
-    color: colors.mutedForeground,
-    fontSize: 12
-  },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8
-  },
-  cardProjectInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    flex: 1,
-    minWidth: 0
-  },
-  projectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    flexShrink: 0
-  },
-  ticketProjectName: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    flexShrink: 1
-  },
-  cardRightMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0
-  },
-  unreadDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.destructive,
-    marginTop: 2,
-    flexShrink: 0
-  },
-  statusBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 999,
-    borderWidth: 1,
-    backgroundColor: 'transparent'
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize'
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: 32
-  },
-  emptyText: {
-    color: colors.foreground,
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16
-  },
-  emptySub: {
-    color: colors.mutedForeground,
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 6
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    centered: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 10,
+      paddingTop: 8,
+      paddingBottom: 10
+    },
+    ghostButton: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    searchWrap: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      height: 36,
+      overflow: 'hidden'
+    },
+    searchWrapFallback: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    searchInput: {
+      flex: 1,
+      color: colors.foreground,
+      fontSize: 13,
+      padding: 0
+    },
+    createButton: {
+      height: 36,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 2,
+      overflow: 'hidden'
+    },
+    projectHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingTop: 6,
+      paddingBottom: 10
+    },
+    projectSquare: {
+      width: 14,
+      height: 14,
+      borderRadius: 3
+    },
+    projectHeaderName: {
+      flex: 1,
+      color: colors.foreground,
+      fontSize: 17,
+      fontWeight: '700'
+    },
+    projectFilterButton: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    viewToggle: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingBottom: 10
+    },
+    viewToggleButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    viewToggleButtonActive: {
+      backgroundColor: colors.secondary,
+      borderColor: colors.primary
+    },
+    viewToggleText: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      fontWeight: '600'
+    },
+    viewToggleTextActive: {
+      color: colors.foreground
+    },
+    filterRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingBottom: 10
+    },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    chipActive: {
+      borderColor: colors.primary
+    },
+    chipText: {
+      color: colors.foreground,
+      fontSize: 13
+    },
+    menu: {
+      marginHorizontal: 16,
+      marginBottom: 6,
+      backgroundColor: colors.card,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden'
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border
+    },
+    menuItemText: {
+      color: colors.foreground,
+      fontSize: 14
+    },
+    projectMenuLabel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    projectMenuDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4
+    },
+    list: {
+      paddingHorizontal: 12,
+      paddingBottom: 16,
+      gap: 8
+    },
+    calendarList: {
+      paddingHorizontal: 12,
+      paddingBottom: 24,
+      gap: 10
+    },
+    calendarHeader: {
+      gap: 10,
+      paddingBottom: 6
+    },
+    calendarTitle: {
+      color: colors.foreground,
+      fontSize: 18,
+      fontWeight: '700'
+    },
+    calendarSub: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18
+    },
+    unscheduledCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      gap: 8
+    },
+    unscheduledTitle: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '700'
+    },
+    unscheduledSub: {
+      color: colors.mutedForeground,
+      fontSize: 12
+    },
+    unscheduledList: {
+      gap: 8
+    },
+    calendarDayCard: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      gap: 10
+    },
+    calendarDayCardToday: {
+      borderColor: colors.primary
+    },
+    calendarDayHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12
+    },
+    calendarDayHeading: {
+      flex: 1,
+      gap: 4
+    },
+    calendarDayWeekday: {
+      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: '700'
+    },
+    calendarDayMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    calendarDayLabel: {
+      color: colors.mutedForeground,
+      fontSize: 13
+    },
+    calendarTodayBadge: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: '700'
+    },
+    calendarAddButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background
+    },
+    calendarTickets: {
+      gap: 8
+    },
+    calendarEmptyText: {
+      color: colors.mutedForeground,
+      fontSize: 13
+    },
+    pressed: {
+      opacity: 0.8
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    cardTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginBottom: 6
+    },
+    ticketTitle: {
+      flex: 1,
+      color: colors.foreground,
+      fontSize: 15,
+      fontWeight: '600',
+      lineHeight: 20
+    },
+    cardDueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginBottom: 8
+    },
+    cardDueText: {
+      color: colors.mutedForeground,
+      fontSize: 12
+    },
+    cardMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    cardProjectInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      flex: 1,
+      minWidth: 0
+    },
+    projectDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      flexShrink: 0
+    },
+    ticketProjectName: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      flexShrink: 1
+    },
+    cardRightMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexShrink: 0
+    },
+    unreadDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.destructive,
+      marginTop: 2,
+      flexShrink: 0
+    },
+    statusBadge: {
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 999,
+      borderWidth: 1,
+      backgroundColor: 'transparent'
+    },
+    statusText: {
+      fontSize: 11,
+      fontWeight: '600',
+      textTransform: 'capitalize'
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    empty: {
+      alignItems: 'center',
+      paddingHorizontal: 32
+    },
+    emptyText: {
+      color: colors.foreground,
+      fontSize: 18,
+      fontWeight: '600',
+      marginTop: 16
+    },
+    emptySub: {
+      color: colors.mutedForeground,
+      fontSize: 14,
+      textAlign: 'center',
+      marginTop: 6
+    }
   });

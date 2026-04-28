@@ -1,18 +1,18 @@
 import * as SecureStore from 'expo-secure-store';
 import {
-  createElement,
   createContext,
+  createElement,
+  type PropsWithChildren,
   useContext,
   useEffect,
   useMemo,
-  useState,
-  type PropsWithChildren
+  useState
 } from 'react';
 import {
-  StyleSheet,
-  useColorScheme,
   type ImageStyle,
+  StyleSheet,
   type TextStyle,
+  useColorScheme,
   type ViewStyle
 } from 'react-native';
 
@@ -31,7 +31,8 @@ export const lightColors = {
   mutedForeground: '#71717a',
   border: '#d4d4d8',
   destructive: '#dc2626',
-  success: '#16a34a'
+  success: '#16a34a',
+  isDark: false as const
 } as const;
 
 export const darkColors = {
@@ -47,7 +48,8 @@ export const darkColors = {
   mutedForeground: '#71717a',
   border: '#27272a',
   destructive: '#ef4444',
-  success: '#22c55e'
+  success: '#22c55e',
+  isDark: true as const
 } as const;
 
 export type ThemePreference = 'system' | 'light' | 'dark';
@@ -66,6 +68,7 @@ export type ThemeColors = {
   border: string;
   destructive: string;
   success: string;
+  isDark: boolean;
 };
 
 type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle };

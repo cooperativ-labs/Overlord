@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import type { ExecutingFeedTicket } from '@/lib/types';
 
 const AGENT_LABELS: Record<string, string> = {
@@ -75,60 +75,60 @@ export function ExecutingTicketsSection({ tickets }: Props) {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 4
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12
-  },
-  headerText: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)'
-  },
-  projectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6
-  },
-  projectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  projectName: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    flex: 1
-  },
-  ticketTitle: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 20,
-    marginBottom: 6
-  },
-  agentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4
-  },
-  agentText: {
-    color: colors.mutedForeground,
-    fontSize: 12
-  }
+    container: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 4
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 12
+    },
+    headerText: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(16, 185, 129, 0.2)'
+    },
+    projectRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 6
+    },
+    projectDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4
+    },
+    projectName: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      flex: 1
+    },
+    ticketTitle: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '600',
+      lineHeight: 20,
+      marginBottom: 6
+    },
+    agentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    agentText: {
+      color: colors.mutedForeground,
+      fontSize: 12
+    }
   });

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 
 import { ExecutingTicketsSection } from '@/components/ExecutingTicketsSection';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { loadFeedPosts } from '@/lib/feed-posts';
 import { useExecutingFeedTickets } from '@/lib/hooks/use-executing-feed-tickets';
 import { useFeedRealtime } from '@/lib/hooks/use-feed-realtime';
@@ -31,12 +31,12 @@ function getImpactConfig(
     },
     notable: {
       label: 'Notable',
-      color: '#60a5fa',
+      color: colors.isDark ? '#60a5fa' : '#1d4ed8',
       backgroundColor: 'rgba(59, 130, 246, 0.16)'
     },
     significant: {
       label: 'Significant',
-      color: '#fbbf24',
+      color: colors.isDark ? '#fbbf24' : '#b45309',
       backgroundColor: 'rgba(245, 158, 11, 0.16)'
     }
   };
@@ -295,7 +295,11 @@ export default function FeedScreen() {
               {isExpanded && humanActions.length > 0 && (
                 <View style={styles.calloutBlue}>
                   <View style={styles.calloutHeader}>
-                    <Ionicons name="checkmark-circle-outline" size={16} color="#60a5fa" />
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={16}
+                      color={colors.isDark ? '#60a5fa' : '#1d4ed8'}
+                    />
                     <Text style={styles.calloutBlueTitle}>Action required</Text>
                   </View>
                   {humanActions.map((action, index) => (
@@ -312,7 +316,11 @@ export default function FeedScreen() {
                   {tradeoffs.map((tradeoff, index) => (
                     <View key={`${item.id}-tradeoff-${index}`} style={styles.calloutAmber}>
                       <View style={styles.calloutHeader}>
-                        <Ionicons name="warning-outline" size={16} color="#fbbf24" />
+                        <Ionicons
+                          name="warning-outline"
+                          size={16}
+                          color={colors.isDark ? '#fbbf24' : '#b45309'}
+                        />
                         <Text style={styles.calloutAmberTitle}>{tradeoff.decision}</Text>
                       </View>
                       {tradeoff.alternatives_considered ? (
@@ -331,7 +339,11 @@ export default function FeedScreen() {
               {isExpanded && ticketsCreated.length > 0 && (
                 <View style={styles.calloutViolet}>
                   <View style={styles.calloutHeader}>
-                    <Ionicons name="git-branch-outline" size={16} color="#c084fc" />
+                    <Ionicons
+                      name="git-branch-outline"
+                      size={16}
+                      color={colors.isDark ? '#c084fc' : '#7c3aed'}
+                    />
                     <Text style={styles.calloutVioletTitle}>Tickets created</Text>
                   </View>
                   {ticketsCreated.map(ticket => (
@@ -403,330 +415,330 @@ export default function FeedScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background
-  },
-  list: {
-    paddingBottom: 16
-  },
-  headerStack: {
-    gap: 2
-  },
-  filterSection: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 6,
-    gap: 10
-  },
-  filterHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  filterLabel: {
-    color: colors.foreground,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  filterSummary: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    flex: 1
-  },
-  filterChipRow: {
-    gap: 8,
-    paddingRight: 16
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.card,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  filterChipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary
-  },
-  filterChipText: {
-    color: colors.secondaryForeground,
-    fontSize: 13,
-    fontWeight: '500'
-  },
-  filterChipTextSelected: {
-    color: colors.primaryForeground
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  badge: {
-    backgroundColor: colors.secondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6
-  },
-  badgeText: {
-    color: colors.secondaryForeground,
-    fontSize: 12,
-    fontWeight: '500'
-  },
-  impactDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3
-  },
-  impactBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4
-  },
-  impactText: {
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  timestamp: {
-    color: colors.mutedForeground,
-    fontSize: 12
-  },
-  projectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8
-  },
-  projectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  projectText: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    flex: 1
-  },
-  title: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4
-  },
-  body: {
-    color: colors.secondaryForeground,
-    fontSize: 14,
-    lineHeight: 20
-  },
-  humanActionsPreview: {
-    marginTop: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
-    borderColor: 'rgba(59, 130, 246, 0.24)',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    gap: 6
-  },
-  humanActionsPreviewText: {
-    color: '#bfdbfe',
-    fontSize: 13,
-    flex: 1,
-    lineHeight: 18
-  },
-  humanActionsMore: {
-    color: '#93c5fd',
-    fontSize: 12,
-    marginLeft: 12
-  },
-  sectionStack: {
-    gap: 10,
-    marginTop: 12
-  },
-  calloutBlue: {
-    marginTop: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
-    borderColor: 'rgba(59, 130, 246, 0.24)',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    gap: 6
-  },
-  calloutAmber: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderColor: 'rgba(245, 158, 11, 0.24)',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    gap: 6
-  },
-  calloutViolet: {
-    marginTop: 12,
-    backgroundColor: 'rgba(168, 85, 247, 0.12)',
-    borderColor: 'rgba(168, 85, 247, 0.24)',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    gap: 6
-  },
-  calloutHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  calloutBlueTitle: {
-    color: '#bfdbfe',
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  calloutBlueText: {
-    color: '#bfdbfe',
-    fontSize: 13,
-    flex: 1,
-    lineHeight: 18
-  },
-  calloutAmberTitle: {
-    color: '#fde68a',
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1
-  },
-  calloutAmberText: {
-    color: '#fde68a',
-    fontSize: 13,
-    lineHeight: 18
-  },
-  calloutVioletTitle: {
-    color: '#e9d5ff',
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  calloutVioletText: {
-    color: '#e9d5ff',
-    fontSize: 13,
-    flex: 1,
-    lineHeight: 18
-  },
-  listRow: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'flex-start'
-  },
-  listBullet: {
-    color: colors.mutedForeground,
-    marginTop: 1
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 10
-  },
-  tag: {
-    backgroundColor: colors.muted,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4
-  },
-  tagText: {
-    color: colors.mutedForeground,
-    fontSize: 11,
-    fontWeight: '500'
-  },
-  moreText: {
-    color: colors.mutedForeground,
-    fontSize: 11,
-    alignSelf: 'center'
-  },
-  filesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4
-  },
-  filesBlock: {
-    marginTop: 8,
-    gap: 8
-  },
-  filesSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4
-  },
-  filesText: {
-    color: colors.mutedForeground,
-    fontSize: 12
-  },
-  fileChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6
-  },
-  fileChip: {
-    maxWidth: '100%',
-    backgroundColor: colors.muted,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  fileChipText: {
-    color: colors.secondaryForeground,
-    fontSize: 12
-  },
-  pressed: {
-    opacity: 0.7
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  empty: {
-    alignItems: 'center',
-    paddingHorizontal: 32
-  },
-  emptyText: {
-    color: colors.foreground,
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16
-  },
-  emptySubtext: {
-    color: colors.mutedForeground,
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    centered: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background
+    },
+    list: {
+      paddingBottom: 16
+    },
+    headerStack: {
+      gap: 2
+    },
+    filterSection: {
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 6,
+      gap: 10
+    },
+    filterHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6
+    },
+    filterLabel: {
+      color: colors.foreground,
+      fontSize: 13,
+      fontWeight: '600'
+    },
+    filterSummary: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      flex: 1
+    },
+    filterChipRow: {
+      gap: 8,
+      paddingRight: 16
+    },
+    filterChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.card,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    filterChipSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary
+    },
+    filterChipText: {
+      color: colors.secondaryForeground,
+      fontSize: 13,
+      fontWeight: '500'
+    },
+    filterChipTextSelected: {
+      color: colors.primaryForeground
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      marginHorizontal: 16,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8
+    },
+    headerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexShrink: 1
+    },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    badge: {
+      backgroundColor: colors.secondary,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6
+    },
+    badgeText: {
+      color: colors.secondaryForeground,
+      fontSize: 12,
+      fontWeight: '500'
+    },
+    impactDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3
+    },
+    impactBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4
+    },
+    impactText: {
+      fontSize: 12,
+      fontWeight: '600'
+    },
+    timestamp: {
+      color: colors.mutedForeground,
+      fontSize: 12
+    },
+    projectRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8
+    },
+    projectDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4
+    },
+    projectText: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      flex: 1
+    },
+    title: {
+      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 4
+    },
+    body: {
+      color: colors.secondaryForeground,
+      fontSize: 14,
+      lineHeight: 20
+    },
+    humanActionsPreview: {
+      marginTop: 12,
+      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+      borderColor: colors.isDark ? 'rgba(59, 130, 246, 0.24)' : 'rgba(59, 130, 246, 0.35)',
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 12,
+      gap: 6
+    },
+    humanActionsPreviewText: {
+      color: colors.isDark ? '#bfdbfe' : '#1e40af',
+      fontSize: 13,
+      flex: 1,
+      lineHeight: 18
+    },
+    humanActionsMore: {
+      color: colors.isDark ? '#93c5fd' : '#1d4ed8',
+      fontSize: 12,
+      marginLeft: 12
+    },
+    sectionStack: {
+      gap: 10,
+      marginTop: 12
+    },
+    calloutBlue: {
+      marginTop: 12,
+      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+      borderColor: colors.isDark ? 'rgba(59, 130, 246, 0.24)' : 'rgba(59, 130, 246, 0.35)',
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 12,
+      gap: 6
+    },
+    calloutAmber: {
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+      borderColor: colors.isDark ? 'rgba(245, 158, 11, 0.24)' : 'rgba(245, 158, 11, 0.40)',
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 12,
+      gap: 6
+    },
+    calloutViolet: {
+      marginTop: 12,
+      backgroundColor: 'rgba(168, 85, 247, 0.12)',
+      borderColor: colors.isDark ? 'rgba(168, 85, 247, 0.24)' : 'rgba(168, 85, 247, 0.35)',
+      borderWidth: 1,
+      borderRadius: 10,
+      padding: 12,
+      gap: 6
+    },
+    calloutHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    calloutBlueTitle: {
+      color: colors.isDark ? '#bfdbfe' : '#1e40af',
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    calloutBlueText: {
+      color: colors.isDark ? '#bfdbfe' : '#1e40af',
+      fontSize: 13,
+      flex: 1,
+      lineHeight: 18
+    },
+    calloutAmberTitle: {
+      color: colors.isDark ? '#fde68a' : '#78350f',
+      fontSize: 14,
+      fontWeight: '600',
+      flex: 1
+    },
+    calloutAmberText: {
+      color: colors.isDark ? '#fde68a' : '#78350f',
+      fontSize: 13,
+      lineHeight: 18
+    },
+    calloutVioletTitle: {
+      color: colors.isDark ? '#e9d5ff' : '#581c87',
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    calloutVioletText: {
+      color: colors.isDark ? '#e9d5ff' : '#581c87',
+      fontSize: 13,
+      flex: 1,
+      lineHeight: 18
+    },
+    listRow: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'flex-start'
+    },
+    listBullet: {
+      color: colors.mutedForeground,
+      marginTop: 1
+    },
+    tagsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 10
+    },
+    tag: {
+      backgroundColor: colors.muted,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 4
+    },
+    tagText: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      fontWeight: '500'
+    },
+    moreText: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      alignSelf: 'center'
+    },
+    filesRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    filesBlock: {
+      marginTop: 8,
+      gap: 8
+    },
+    filesSummaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4
+    },
+    filesText: {
+      color: colors.mutedForeground,
+      fontSize: 12
+    },
+    fileChipsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6
+    },
+    fileChip: {
+      maxWidth: '100%',
+      backgroundColor: colors.muted,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6
+    },
+    fileChipText: {
+      color: colors.secondaryForeground,
+      fontSize: 12
+    },
+    pressed: {
+      opacity: 0.7
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    empty: {
+      alignItems: 'center',
+      paddingHorizontal: 32
+    },
+    emptyText: {
+      color: colors.foreground,
+      fontSize: 18,
+      fontWeight: '600',
+      marginTop: 16
+    },
+    emptySubtext: {
+      color: colors.mutedForeground,
+      fontSize: 14,
+      textAlign: 'center',
+      marginTop: 8
+    }
   });

@@ -27,6 +27,7 @@
       "package": "com.cooperativ.overlord"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       [
         "expo-image-picker",

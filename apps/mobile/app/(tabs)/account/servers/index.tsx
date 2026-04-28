@@ -11,11 +11,13 @@ import {
   View
 } from 'react-native';
 
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import type { Server, ServerStatus } from '@/lib/types';
 
-function getStatusConfig(colors: ThemeColors): Record<ServerStatus, { label: string; color: string }> {
+function getStatusConfig(
+  colors: ThemeColors
+): Record<ServerStatus, { label: string; color: string }> {
   return {
     pending: { label: 'Pending', color: colors.mutedForeground },
     connected: { label: 'Connected', color: colors.success },
@@ -130,96 +132,96 @@ export default function ServersScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  list: {
-    padding: 16,
-    gap: 12
-  },
-  serverCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
-  },
-  serverIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  serverInfo: {
-    flex: 1
-  },
-  serverLabel: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  serverHost: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    marginTop: 2
-  },
-  serverStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '500'
-  },
-  empty: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32
-  },
-  emptyText: {
-    color: colors.foreground,
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16
-  },
-  emptySubtext: {
-    color: colors.mutedForeground,
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 24
-  },
-  addButton: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10
-  },
-  addButtonText: {
-    color: colors.primaryForeground,
-    fontSize: 16,
-    fontWeight: '600'
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    list: {
+      padding: 16,
+      gap: 12
+    },
+    serverCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12
+    },
+    serverIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 10,
+      backgroundColor: colors.secondary,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    serverInfo: {
+      flex: 1
+    },
+    serverLabel: {
+      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: '600'
+    },
+    serverHost: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      marginTop: 2
+    },
+    serverStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4
+    },
+    statusText: {
+      fontSize: 12,
+      fontWeight: '500'
+    },
+    empty: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 32
+    },
+    emptyText: {
+      color: colors.foreground,
+      fontSize: 18,
+      fontWeight: '600',
+      marginTop: 16
+    },
+    emptySubtext: {
+      color: colors.mutedForeground,
+      fontSize: 14,
+      textAlign: 'center',
+      marginTop: 8,
+      marginBottom: 24
+    },
+    addButton: {
+      backgroundColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 10
+    },
+    addButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 16,
+      fontWeight: '600'
+    }
   });

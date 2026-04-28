@@ -14,3 +14,4 @@ Otherwise, treat `$ARGUMENTS` as the objective text and run:
 If no objective was provided, ask the user for one and stop.
 
 After the command succeeds, report the new `TICKET_ID`.
+- If `ovld` reports `OVERLORD_URL` is unreachable, stop and request permission escalation or network access before retrying.

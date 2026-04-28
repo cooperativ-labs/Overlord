@@ -11,7 +11,7 @@ import {
   normalizeUserAgentConfigs,
   resolveAgentModelSelection
 } from '@/lib/agent-models';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { getSupabase } from '@/lib/supabase';
 import type { AgentModelRecord, AgentModelSelection, LaunchAgentType } from '@/lib/types';
 
@@ -337,149 +337,149 @@ function ModelChoice({
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {},
-  helperText: {
-    color: colors.secondaryForeground,
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 12
-  },
-  selectorButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    backgroundColor: colors.secondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 8
-  },
-  selectorButtonPressed: {
-    opacity: 0.85
-  },
-  selectorButtonDisabled: {
-    opacity: 0.55
-  },
-  selectorButtonLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flexShrink: 1,
-    minWidth: 0
-  },
-  selectorButtonTextWrap: {
-    flexShrink: 1,
-    minWidth: 0
-  },
-  selectorButtonTitle: {
-    color: colors.foreground,
-    fontSize: 13,
-    fontWeight: '600'
-  },
-  selectorPanel: {
-    gap: 4
-  },
-  groupLabel: {
-    color: colors.mutedForeground,
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6
-  },
-  chipWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 10
-  },
-  choiceChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.secondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6
-  },
-  choiceChipSelected: {
-    borderColor: colors.primary,
-    backgroundColor: `${colors.primary}20`
-  },
-  choiceChipPressed: {
-    opacity: 0.8
-  },
-  choiceChipDisabled: {
-    opacity: 0.55
-  },
-  choiceChipText: {
-    color: colors.secondaryForeground,
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  choiceChipTextSelected: {
-    color: colors.foreground
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    marginBottom: 16
-  },
-  loadingText: {
-    color: colors.mutedForeground,
-    fontSize: 14
-  },
-  list: {
-    marginBottom: 10
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.secondary,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 4
-  },
-  listItemSelected: {
-    borderColor: colors.primary,
-    backgroundColor: `${colors.primary}18`
-  },
-  listItemPressed: {
-    opacity: 0.85
-  },
-  listItemDisabled: {
-    opacity: 0.55
-  },
-  listItemText: {
-    color: colors.secondaryForeground,
-    fontSize: 13,
-    flexShrink: 1,
-    paddingRight: 8
-  },
-  listItemTextSelected: {
-    color: colors.foreground,
-    fontWeight: '600'
-  },
-  listItemMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 0
-  },
-  emptyText: {
-    color: colors.mutedForeground,
-    fontSize: 14,
-    lineHeight: 20
-  }
+    container: {},
+    helperText: {
+      color: colors.secondaryForeground,
+      fontSize: 13,
+      lineHeight: 18,
+      marginBottom: 12
+    },
+    selectorButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      marginBottom: 8
+    },
+    selectorButtonPressed: {
+      opacity: 0.85
+    },
+    selectorButtonDisabled: {
+      opacity: 0.55
+    },
+    selectorButtonLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flexShrink: 1,
+      minWidth: 0
+    },
+    selectorButtonTextWrap: {
+      flexShrink: 1,
+      minWidth: 0
+    },
+    selectorButtonTitle: {
+      color: colors.foreground,
+      fontSize: 13,
+      fontWeight: '600'
+    },
+    selectorPanel: {
+      gap: 4
+    },
+    groupLabel: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 6
+    },
+    chipWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginBottom: 10
+    },
+    choiceChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6
+    },
+    choiceChipSelected: {
+      borderColor: colors.primary,
+      backgroundColor: `${colors.primary}20`
+    },
+    choiceChipPressed: {
+      opacity: 0.8
+    },
+    choiceChipDisabled: {
+      opacity: 0.55
+    },
+    choiceChipText: {
+      color: colors.secondaryForeground,
+      fontSize: 12,
+      fontWeight: '600'
+    },
+    choiceChipTextSelected: {
+      color: colors.foreground
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 10,
+      marginBottom: 16
+    },
+    loadingText: {
+      color: colors.mutedForeground,
+      fontSize: 14
+    },
+    list: {
+      marginBottom: 10
+    },
+    listItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.secondary,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      marginBottom: 4
+    },
+    listItemSelected: {
+      borderColor: colors.primary,
+      backgroundColor: `${colors.primary}18`
+    },
+    listItemPressed: {
+      opacity: 0.85
+    },
+    listItemDisabled: {
+      opacity: 0.55
+    },
+    listItemText: {
+      color: colors.secondaryForeground,
+      fontSize: 13,
+      flexShrink: 1,
+      paddingRight: 8
+    },
+    listItemTextSelected: {
+      color: colors.foreground,
+      fontWeight: '600'
+    },
+    listItemMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexShrink: 0
+    },
+    emptyText: {
+      color: colors.mutedForeground,
+      fontSize: 14,
+      lineHeight: 20
+    }
   });

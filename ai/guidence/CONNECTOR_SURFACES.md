@@ -46,6 +46,8 @@ Checklist:
 - Skill file is the canonical workflow instructions for bundle mode
 - Hook script calls `$OVERLORD_URL/api/protocol/permission-request` when Claude awaits tool permission
 - Settings merge preserves user's existing hooks and permissions (no clobber)
+- Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
+- Slash command docs also tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Manifest entry written to `~/.ovld/bundle-manifest.json`
 
 ### 2. Slash commands
@@ -117,6 +119,7 @@ Checklist:
 - Plugin install manages `~/.codex/rules/default.rules`
 - Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
 - Plugin install removes any legacy Codex bundle manifest entry from `~/.ovld/bundle-manifest.json`
+- Skill text and MCP shim tell Codex to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 
 ### 2. Local launch path
 
@@ -231,6 +234,8 @@ Checklist:
 Checklist:
 - Onboarding advertises `ovld setup cursor` as the connector setup command
 - Connector features list includes: local Cursor plugin install and permission rules for ovld protocol & curl
+- Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
+- Slash command docs also tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 
 ---
 
@@ -336,6 +341,7 @@ Checklist:
 Checklist:
 - Onboarding advertises `ovld setup opencode` as the connector setup command
 - Connector features list includes: AGENTS.md workflow instructions, slash commands, opencode.json config merge
+- Workflow instructions tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 
 ---
 

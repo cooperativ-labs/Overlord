@@ -136,13 +136,17 @@ async function apiPost(
 
     let hint = 'Check your network and Overlord server settings.';
     if (causeCode === 'ECONNREFUSED') {
-      hint = 'Connection refused. Verify Overlord is running and OVERLORD_URL points to the correct port.';
+      hint =
+        'Connection refused. Verify Overlord is running and OVERLORD_URL points to the correct port. If this environment is sandboxed or network-restricted, request permission escalation before retrying.';
     } else if (causeCode === 'ENOTFOUND') {
-      hint = 'Host not found. Verify OVERLORD_URL uses a valid hostname.';
+      hint =
+        'Host not found. Verify OVERLORD_URL uses a valid hostname. If this environment is sandboxed or network-restricted, request permission escalation before retrying.';
     } else if (causeCode === 'ETIMEDOUT') {
-      hint = 'Connection timed out. Verify server availability and local firewall/VPN settings.';
+      hint =
+        'Connection timed out. Verify server availability and local firewall/VPN settings. If this environment is sandboxed or network-restricted, request permission escalation before retrying.';
     } else if (requestUrl.includes('localhost') || requestUrl.includes('127.0.0.1')) {
-      hint = 'Local server unreachable. Start Overlord (usually http://localhost:3000) or update OVERLORD_URL.';
+      hint =
+        'Local server unreachable. Start Overlord (usually http://localhost:3000) or update OVERLORD_URL. If this environment is sandboxed or network-restricted, request permission escalation before retrying.';
     }
 
     throw new Error(

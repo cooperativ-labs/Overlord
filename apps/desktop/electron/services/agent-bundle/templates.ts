@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.9.0';
+export const BUNDLE_VERSION = '1.9.1';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -148,6 +148,7 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 
 - The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
+- If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
 - Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
 
@@ -292,6 +293,7 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 
 - The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
+- If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
 - Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
 
@@ -427,6 +429,7 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 
 - The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
+- If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
 - Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
 

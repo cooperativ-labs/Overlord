@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import { saveServerDeviceCredential } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';
@@ -735,186 +735,186 @@ function TransportButton({
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  scrollView: {
-    flex: 1
-  },
-  scrollContent: {
-    padding: 16
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16
-  },
-  savingText: {
-    color: colors.mutedForeground,
-    fontSize: 16
-  },
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: colors.primary + '15',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
-    padding: 14,
-    marginBottom: 24
-  },
-  infoBannerText: {
-    flex: 1,
-    color: colors.primary,
-    fontSize: 13,
-    lineHeight: 18
-  },
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.success + '15',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.success + '30',
-    padding: 14,
-    marginBottom: 24
-  },
-  successBannerText: {
-    color: colors.success,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  section: {
-    marginBottom: 24
-  },
-  label: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10
-  },
-  helperText: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 10
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    gap: 12
-  },
-  transportButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingVertical: 14,
-    paddingHorizontal: 12
-  },
-  transportButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary
-  },
-  transportButtonText: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  input: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    color: colors.foreground,
-    fontSize: 16
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10
-  },
-  primaryButtonText: {
-    color: colors.primaryForeground,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  secondaryButton: {
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingVertical: 15,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    color: colors.foreground,
-    fontSize: 15,
-    fontWeight: '500'
-  },
-  disabledButton: {
-    opacity: 0.5
-  },
-  fingerprintBox: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14
-  },
-  fingerprintText: {
-    color: colors.foreground,
-    fontFamily: 'Menlo',
-    fontSize: 12
-  },
-  publicKeyBox: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14
-  },
-  publicKeyText: {
-    color: colors.foreground,
-    fontFamily: 'Menlo',
-    fontSize: 11,
-    lineHeight: 16
-  },
-  copyKeyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8
-  },
-  copyKeyLabel: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '500'
-  },
-  manualHint: {
-    marginTop: 12,
-    textAlign: 'center',
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    scrollView: {
+      flex: 1
+    },
+    scrollContent: {
+      padding: 16
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 16
+    },
+    savingText: {
+      color: colors.mutedForeground,
+      fontSize: 16
+    },
+    infoBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      backgroundColor: colors.primary + '15',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.primary + '30',
+      padding: 14,
+      marginBottom: 24
+    },
+    infoBannerText: {
+      flex: 1,
+      color: colors.primary,
+      fontSize: 13,
+      lineHeight: 18
+    },
+    successBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.success + '15',
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.success + '30',
+      padding: 14,
+      marginBottom: 24
+    },
+    successBannerText: {
+      color: colors.success,
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    section: {
+      marginBottom: 24
+    },
+    label: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 10
+    },
+    helperText: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18,
+      marginBottom: 10
+    },
+    segmentedControl: {
+      flexDirection: 'row',
+      gap: 12
+    },
+    transportButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      paddingVertical: 14,
+      paddingHorizontal: 12
+    },
+    transportButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary
+    },
+    transportButtonText: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      color: colors.foreground,
+      fontSize: 16
+    },
+    primaryButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10
+    },
+    primaryButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 16,
+      fontWeight: '600'
+    },
+    secondaryButton: {
+      marginTop: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      paddingVertical: 15,
+      alignItems: 'center'
+    },
+    secondaryButtonText: {
+      color: colors.foreground,
+      fontSize: 15,
+      fontWeight: '500'
+    },
+    disabledButton: {
+      opacity: 0.5
+    },
+    fingerprintBox: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14
+    },
+    fingerprintText: {
+      color: colors.foreground,
+      fontFamily: 'Menlo',
+      fontSize: 12
+    },
+    publicKeyBox: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14
+    },
+    publicKeyText: {
+      color: colors.foreground,
+      fontFamily: 'Menlo',
+      fontSize: 11,
+      lineHeight: 16
+    },
+    copyKeyButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8
+    },
+    copyKeyLabel: {
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: '500'
+    },
+    manualHint: {
+      marginTop: 12,
+      textAlign: 'center',
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18
+    }
   });

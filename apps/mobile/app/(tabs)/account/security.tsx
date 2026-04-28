@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import {
   DEFAULT_SERVER_TERMINAL_CUSTOM_COMMAND,
   DEFAULT_SERVER_TERMINAL_PREFERENCE,
@@ -171,135 +171,135 @@ export default function AccountSecurityScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  content: {
-    paddingTop: 24,
-    paddingBottom: 24
-  },
-  securitySection: {
-    marginTop: 16,
-    marginHorizontal: 16,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16
-  },
-  securityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border
-  },
-  sectionLabel: {
-    color: colors.foreground,
-    fontSize: 17,
-    fontWeight: '600'
-  },
-  settingsHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 14
-  },
-  settingsHeaderText: {
-    flex: 1
-  },
-  settingsTitle: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  settingsSubtitle: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 2
-  },
-  optionGroup: {
-    gap: 10
-  },
-  optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12
-  },
-  optionItemActive: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)'
-  },
-  optionItemPressed: {
-    opacity: 0.82
-  },
-  optionTextWrap: {
-    flex: 1
-  },
-  optionTitle: {
-    color: colors.foreground,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  optionDescription: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 2
-  },
-  commandSection: {
-    marginTop: 14
-  },
-  commandLabel: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 8
-  },
-  commandInput: {
-    minHeight: 96,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    color: colors.foreground,
-    padding: 12,
-    fontSize: 14,
-    lineHeight: 20
-  },
-  commandHelp: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 8
-  },
-  savePreferenceButton: {
-    marginTop: 14,
-    minHeight: 42,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16
-  },
-  savePreferenceButtonDisabled: {
-    opacity: 0.45
-  },
-  savePreferenceButtonPressed: {
-    opacity: 0.82
-  },
-  savePreferenceButtonText: {
-    color: colors.primaryForeground,
-    fontSize: 15,
-    fontWeight: '600'
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    content: {
+      paddingTop: 24,
+      paddingBottom: 24
+    },
+    securitySection: {
+      marginTop: 16,
+      marginHorizontal: 16,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16
+    },
+    securityHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 16,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    sectionLabel: {
+      color: colors.foreground,
+      fontSize: 17,
+      fontWeight: '600'
+    },
+    settingsHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      marginBottom: 14
+    },
+    settingsHeaderText: {
+      flex: 1
+    },
+    settingsTitle: {
+      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: '600'
+    },
+    settingsSubtitle: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 2
+    },
+    optionGroup: {
+      gap: 10
+    },
+    optionItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12
+    },
+    optionItemActive: {
+      borderColor: colors.primary,
+      backgroundColor: 'rgba(59, 130, 246, 0.1)'
+    },
+    optionItemPressed: {
+      opacity: 0.82
+    },
+    optionTextWrap: {
+      flex: 1
+    },
+    optionTitle: {
+      color: colors.foreground,
+      fontSize: 15,
+      fontWeight: '600'
+    },
+    optionDescription: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 2
+    },
+    commandSection: {
+      marginTop: 14
+    },
+    commandLabel: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      marginBottom: 8
+    },
+    commandInput: {
+      minHeight: 96,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      color: colors.foreground,
+      padding: 12,
+      fontSize: 14,
+      lineHeight: 20
+    },
+    commandHelp: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 8
+    },
+    savePreferenceButton: {
+      marginTop: 14,
+      minHeight: 42,
+      borderRadius: 10,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 16
+    },
+    savePreferenceButtonDisabled: {
+      opacity: 0.45
+    },
+    savePreferenceButtonPressed: {
+      opacity: 0.82
+    },
+    savePreferenceButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 15,
+      fontWeight: '600'
+    }
   });

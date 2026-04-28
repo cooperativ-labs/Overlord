@@ -4,11 +4,11 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { useAuth } from '@/lib/auth-context';
 import {
+  type ThemeColors,
+  type ThemePreference,
   useThemeColors,
   useThemedStyles,
-  useThemePreference,
-  type ThemeColors,
-  type ThemePreference
+  useThemePreference
 } from '@/lib/colors';
 
 const APPEARANCE_OPTIONS: { value: ThemePreference; label: string; description: string }[] = [
@@ -131,88 +131,88 @@ export default function AccountScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  content: {
-    paddingTop: 24
-  },
-  profileSection: {
-    alignItems: 'center',
-    paddingVertical: 24
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  email: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '500'
-  },
-  menuSection: {
-    marginTop: 16,
-    marginHorizontal: 16,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden'
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 12
-  },
-  menuItemLast: {
-    borderBottomWidth: 0
-  },
-  optionActive: {
-    backgroundColor: `${colors.primary}12`
-  },
-  menuItemContent: {
-    flex: 1
-  },
-  menuCopy: {
-    flex: 1
-  },
-  menuText: {
-    color: colors.foreground,
-    fontSize: 16
-  },
-  menuDescription: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    marginTop: 2
-  },
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border
-  },
-  sectionTitle: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  sectionDescription: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    marginTop: 2,
-    textTransform: 'capitalize'
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    content: {
+      paddingTop: 24
+    },
+    profileSection: {
+      alignItems: 'center',
+      paddingVertical: 24
+    },
+    avatar: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.card,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    email: {
+      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: '500'
+    },
+    menuSection: {
+      marginTop: 16,
+      marginHorizontal: 16,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden'
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      gap: 12
+    },
+    menuItemLast: {
+      borderBottomWidth: 0
+    },
+    optionActive: {
+      backgroundColor: `${colors.primary}12`
+    },
+    menuItemContent: {
+      flex: 1
+    },
+    menuCopy: {
+      flex: 1
+    },
+    menuText: {
+      color: colors.foreground,
+      fontSize: 16
+    },
+    menuDescription: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      marginTop: 2
+    },
+    sectionHeader: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    sectionTitle: {
+      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: '600'
+    },
+    sectionDescription: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      marginTop: 2,
+      textTransform: 'capitalize'
+    }
   });

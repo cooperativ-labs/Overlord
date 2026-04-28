@@ -13,7 +13,7 @@ import {
   View
 } from 'react-native';
 
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useServerConnections } from '@/lib/server-connections-context';
 import {
   deleteServerDeviceCredential,
@@ -586,189 +586,189 @@ function DetailRow({
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background
-  },
-  content: {
-    padding: 16
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  errorText: {
-    color: colors.mutedForeground,
-    fontSize: 16
-  },
-  statusBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 24
-  },
-  statusLabel: {
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  section: {
-    marginBottom: 24
-  },
-  sectionTitle: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 12
-  },
-  errorCard: {
-    borderColor: colors.destructive + '40'
-  },
-  errorBody: {
-    color: colors.destructive,
-    fontSize: 14,
-    lineHeight: 20
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  detailLabel: {
-    color: colors.mutedForeground,
-    fontSize: 14
-  },
-  detailValue: {
-    color: colors.foreground,
-    fontSize: 14,
-    fontWeight: '500',
-    flexShrink: 1,
-    textAlign: 'right'
-  },
-  monoText: {
-    fontFamily: 'Menlo',
-    fontSize: 12
-  },
-  copyKeyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 4
-  },
-  copyKeyText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '500'
-  },
-  noKeyText: {
-    color: colors.mutedForeground,
-    fontSize: 14,
-    lineHeight: 20
-  },
-  noKeyHint: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18
-  },
-  generateKeyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16
-  },
-  generateKeyButtonText: {
-    color: colors.primaryForeground,
-    fontSize: 14,
-    fontWeight: '600'
-  },
-  helperText: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18
-  },
-  input: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    color: colors.foreground,
-    fontSize: 16
-  },
-  primaryButton: {
-    marginTop: 4,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10
-  },
-  primaryButtonText: {
-    color: colors.primaryForeground,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  disabledButton: {
-    opacity: 0.5
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.destructive + '40',
-    paddingVertical: 15
-  },
-  deleteText: {
-    color: colors.destructive,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  workspaceButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14
-  },
-  workspaceButtonTitle: {
-    color: colors.foreground,
-    fontSize: 15,
-    fontWeight: '600'
-  },
-  workspaceButtonHint: {
-    color: colors.mutedForeground,
-    fontSize: 12,
-    marginTop: 2,
-    lineHeight: 16
-  }
+    container: {
+      flex: 1,
+      backgroundColor: colors.background
+    },
+    content: {
+      padding: 16
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center'
+    },
+    errorText: {
+      color: colors.mutedForeground,
+      fontSize: 16
+    },
+    statusBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      padding: 14,
+      marginBottom: 24
+    },
+    statusLabel: {
+      fontSize: 15,
+      fontWeight: '600'
+    },
+    section: {
+      marginBottom: 24
+    },
+    sectionTitle: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 10
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      gap: 12
+    },
+    errorCard: {
+      borderColor: colors.destructive + '40'
+    },
+    errorBody: {
+      color: colors.destructive,
+      fontSize: 14,
+      lineHeight: 20
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    },
+    detailLabel: {
+      color: colors.mutedForeground,
+      fontSize: 14
+    },
+    detailValue: {
+      color: colors.foreground,
+      fontSize: 14,
+      fontWeight: '500',
+      flexShrink: 1,
+      textAlign: 'right'
+    },
+    monoText: {
+      fontFamily: 'Menlo',
+      fontSize: 12
+    },
+    copyKeyButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingTop: 4
+    },
+    copyKeyText: {
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: '500'
+    },
+    noKeyText: {
+      color: colors.mutedForeground,
+      fontSize: 14,
+      lineHeight: 20
+    },
+    noKeyHint: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18
+    },
+    generateKeyButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.primary,
+      borderRadius: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 16
+    },
+    generateKeyButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 14,
+      fontWeight: '600'
+    },
+    helperText: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      lineHeight: 18
+    },
+    input: {
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      color: colors.foreground,
+      fontSize: 16
+    },
+    primaryButton: {
+      marginTop: 4,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10
+    },
+    primaryButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 16,
+      fontWeight: '600'
+    },
+    disabledButton: {
+      opacity: 0.5
+    },
+    deleteButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.destructive + '40',
+      paddingVertical: 15
+    },
+    deleteText: {
+      color: colors.destructive,
+      fontSize: 15,
+      fontWeight: '600'
+    },
+    workspaceButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14
+    },
+    workspaceButtonTitle: {
+      color: colors.foreground,
+      fontSize: 15,
+      fontWeight: '600'
+    },
+    workspaceButtonHint: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      marginTop: 2,
+      lineHeight: 16
+    }
   });

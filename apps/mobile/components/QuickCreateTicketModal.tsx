@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
 import { AGENT_OPTIONS, createAssignedAgent } from '@/lib/agent-models';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '@/lib/colors';
+import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import type { AgentModelSelection, LaunchAgentType } from '@/lib/types';
@@ -214,9 +214,7 @@ export function QuickCreateTicketModal({ visible, onClose }: Props) {
                         <Ionicons name="folder-outline" size={14} color={colors.foreground} />
                       )}
                       <Text style={styles.chipText} numberOfLines={1}>
-                        {loadingProjects
-                          ? 'Loading…'
-                          : (selectedProject?.name ?? 'Select project')}
+                        {loadingProjects ? 'Loading…' : (selectedProject?.name ?? 'Select project')}
                       </Text>
                       <Ionicons
                         name={showProjectMenu ? 'chevron-up' : 'chevron-down'}
@@ -327,157 +325,157 @@ export function QuickCreateTicketModal({ visible, onClose }: Props) {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end'
-  },
-  avoider: {
-    width: '100%'
-  },
-  cardWrap: {
-    paddingHorizontal: 10,
-    paddingBottom: 10
-  },
-  card: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12
-  },
-  cardSize: {
-    flexShrink: 1
-  },
-  cardFallback: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border
-  },
-  handleBar: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.mutedForeground,
-    opacity: 0.4,
-    marginBottom: 6
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8
-  },
-  headerTitle: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: '700'
-  },
-  scroll: {
-    flex: 1
-  },
-  scrollContent: {
-    flexGrow: 1,
-    gap: 10,
-    paddingBottom: 4
-  },
-  objectiveInput: {
-    backgroundColor: glassAvailable ? 'rgba(255,255,255,0.08)' : colors.background,
-    borderRadius: 14,
-    borderWidth: glassAvailable ? 0 : 1,
-    borderColor: colors.border,
-    padding: 14,
-    color: colors.foreground,
-    fontSize: 17,
-    lineHeight: 24,
-    minHeight: 220
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap'
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: glassAvailable ? 'rgba(255,255,255,0.10)' : colors.background,
-    borderWidth: glassAvailable ? 0 : 1,
-    borderColor: colors.border,
-    maxWidth: '100%'
-  },
-  chipText: {
-    color: colors.foreground,
-    fontSize: 13,
-    fontWeight: '500',
-    maxWidth: 160
-  },
-  projectDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5
-  },
-  menu: {
-    backgroundColor: glassAvailable ? 'rgba(255,255,255,0.06)' : colors.background,
-    borderRadius: 12,
-    borderWidth: glassAvailable ? 0 : 1,
-    borderColor: colors.border,
-    overflow: 'hidden'
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8
-  },
-  menuItemText: {
-    color: colors.foreground,
-    fontSize: 14
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 10
-  },
-  cancelButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12
-  },
-  cancelText: {
-    color: colors.mutedForeground,
-    fontSize: 15,
-    fontWeight: '500'
-  },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: colors.primary
-  },
-  submitButtonDisabled: {
-    opacity: 0.4
-  },
-  submitText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600'
-  }
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      justifyContent: 'flex-end'
+    },
+    avoider: {
+      width: '100%'
+    },
+    cardWrap: {
+      paddingHorizontal: 10,
+      paddingBottom: 10
+    },
+    card: {
+      borderRadius: 24,
+      overflow: 'hidden',
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 12
+    },
+    cardSize: {
+      flexShrink: 1
+    },
+    cardFallback: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    handleBar: {
+      alignSelf: 'center',
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.mutedForeground,
+      opacity: 0.4,
+      marginBottom: 6
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8
+    },
+    headerTitle: {
+      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: '700'
+    },
+    scroll: {
+      flex: 1
+    },
+    scrollContent: {
+      flexGrow: 1,
+      gap: 10,
+      paddingBottom: 4
+    },
+    objectiveInput: {
+      backgroundColor: glassAvailable ? 'rgba(255,255,255,0.08)' : colors.background,
+      borderRadius: 14,
+      borderWidth: glassAvailable ? 0 : 1,
+      borderColor: colors.border,
+      padding: 14,
+      color: colors.foreground,
+      fontSize: 17,
+      lineHeight: 24,
+      minHeight: 220
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 8,
+      flexWrap: 'wrap'
+    },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: glassAvailable ? 'rgba(255,255,255,0.10)' : colors.background,
+      borderWidth: glassAvailable ? 0 : 1,
+      borderColor: colors.border,
+      maxWidth: '100%'
+    },
+    chipText: {
+      color: colors.foreground,
+      fontSize: 13,
+      fontWeight: '500',
+      maxWidth: 160
+    },
+    projectDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5
+    },
+    menu: {
+      backgroundColor: glassAvailable ? 'rgba(255,255,255,0.06)' : colors.background,
+      borderRadius: 12,
+      borderWidth: glassAvailable ? 0 : 1,
+      borderColor: colors.border,
+      overflow: 'hidden'
+    },
+    menuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border
+    },
+    menuItemLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
+    menuItemText: {
+      color: colors.foreground,
+      fontSize: 14
+    },
+    footer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: 8,
+      marginTop: 10
+    },
+    cancelButton: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 12
+    },
+    cancelText: {
+      color: colors.mutedForeground,
+      fontSize: 15,
+      fontWeight: '500'
+    },
+    submitButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.primary
+    },
+    submitButtonDisabled: {
+      opacity: 0.4
+    },
+    submitText: {
+      color: '#fff',
+      fontSize: 15,
+      fontWeight: '600'
+    }
   });

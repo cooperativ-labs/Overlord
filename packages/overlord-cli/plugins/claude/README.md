@@ -7,6 +7,7 @@ Claude Code plugin that exposes the Overlord local ticket workflow to any Claude
 - `skills/overlord-ticket/SKILL.md` — durable attach → update → ask → deliver workflow.
 - `commands/{connect,load,create,spawn}.md` — slash commands for session routing and ticket creation.
 - `hooks/hooks.json` + `scripts/permission-hook.sh` — PermissionRequest notifier that calls `ovld protocol permission-request`.
+- If `ovld` reports `OVERLORD_URL` is unreachable, the workflow tells agents to request permission escalation or network access before retrying.
 - `userConfig` for `overlord_url`. Current installs should authenticate with `ovld auth login` or Overlord Desktop; env vars remain optional overrides for remote shells, CI, and explicit OAuth token injection.
 
 ## Requirements

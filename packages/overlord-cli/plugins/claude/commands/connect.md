@@ -16,3 +16,4 @@ Rules:
 - Use `connect`, not `attach`.
 - Do not load extra ticket context unless the user explicitly asks for it.
 - After the command succeeds, report the returned `SESSION_KEY` and confirm that future updates should use that ticket.
+- If `ovld` reports `OVERLORD_URL` is unreachable, stop and request permission escalation or network access before retrying.
