@@ -269,7 +269,7 @@ export default async function HomePage() {
           <div className="flex items-center gap-4">
             <div className="flex size-11 items-center justify-center rounded-full overflow-hidden">
               <Image
-                src="/images/258.png"
+                src="/images/256.png"
                 alt="Overlord logo"
                 width={45}
                 height={50}
