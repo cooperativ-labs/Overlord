@@ -143,43 +143,46 @@ export default function TicketsScreen() {
     [filterProjectId, router]
   );
 
-  const fetchTickets = useCallback(async (options?: { suppressTransientNetworkAlert?: boolean }) => {
-    const supabase = getSupabase();
+  const fetchTickets = useCallback(
+    async (options?: { suppressTransientNetworkAlert?: boolean }) => {
+      const supabase = getSupabase();
 
-    const runQuery = () => {
-      let q = supabase
-        .from('tickets')
-        .select(
-          'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, created_at, updated_at, project_id'
-        )
-        .order('updated_at', { ascending: false })
-        .limit(100);
-      if (filterProjectId) q = q.eq('project_id', filterProjectId);
-      return q;
-    };
+      const runQuery = () => {
+        let q = supabase
+          .from('tickets')
+          .select(
+            'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, created_at, updated_at, project_id'
+          )
+          .order('updated_at', { ascending: false })
+          .limit(100);
+        if (filterProjectId) q = q.eq('project_id', filterProjectId);
+        return q;
+      };
 
-    const MAX_ATTEMPTS = options?.suppressTransientNetworkAlert ? 4 : 3;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const { data, error } = await runQuery();
-      if (!error && data) {
-        setTickets(data as TicketWithProject[]);
-        return;
-      }
-      if (error) {
-        const isNetworkError = isTransientNetworkError(error);
-        if (isNetworkError && attempt < MAX_ATTEMPTS - 1) {
-          const delayMs = options?.suppressTransientNetworkAlert
-            ? 750 * 2 ** attempt
-            : 500 * 2 ** attempt;
-          await new Promise(resolve => setTimeout(resolve, delayMs));
-          continue;
+      const MAX_ATTEMPTS = options?.suppressTransientNetworkAlert ? 4 : 3;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const { data, error } = await runQuery();
+        if (!error && data) {
+          setTickets(data as TicketWithProject[]);
+          return;
         }
-        if (isNetworkError && options?.suppressTransientNetworkAlert) return;
-        Alert.alert('Unable to load tickets', error.message);
-        return;
+        if (error) {
+          const isNetworkError = isTransientNetworkError(error);
+          if (isNetworkError && attempt < MAX_ATTEMPTS - 1) {
+            const delayMs = options?.suppressTransientNetworkAlert
+              ? 750 * 2 ** attempt
+              : 500 * 2 ** attempt;
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue;
+          }
+          if (isNetworkError && options?.suppressTransientNetworkAlert) return;
+          Alert.alert('Unable to load tickets', error.message);
+          return;
+        }
       }
-    }
-  }, [filterProjectId]);
+    },
+    [filterProjectId]
+  );
 
   useEffect(() => {
     setLoading(true);

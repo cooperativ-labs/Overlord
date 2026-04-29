@@ -16,6 +16,7 @@ import { getSupabase } from '@/lib/supabase';
 import type { AgentModelRecord, AgentModelSelection, LaunchAgentType } from '@/lib/types';
 
 type AgentModelChooserProps = {
+  alwaysExpanded?: boolean;
   disabled?: boolean;
   helperText?: string;
   onChange: (selection: AgentModelSelection) => void;
@@ -24,6 +25,7 @@ type AgentModelChooserProps = {
 };
 
 export function AgentModelChooser({
+  alwaysExpanded = false,
   disabled = false,
   helperText,
   onChange,
@@ -37,7 +39,7 @@ export function AgentModelChooser({
     DEFAULT_AGENT_MODEL_SELECTION
   );
   const [loading, setLoading] = useState(true);
-  const [showSelector, setShowSelector] = useState(false);
+  const [showSelector, setShowSelector] = useState(alwaysExpanded);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,31 +144,35 @@ export function AgentModelChooser({
     <View style={styles.container}>
       {helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
 
-      <Pressable
-        disabled={disabled}
-        onPress={() => setShowSelector(current => !current)}
-        style={({ pressed }) => [
-          styles.selectorButton,
-          disabled && styles.selectorButtonDisabled,
-          pressed && !disabled && styles.selectorButtonPressed
-        ]}
-      >
-        <View style={styles.selectorButtonLeft}>
-          {selectedAgentOption ? (
-            <AgentBrandIcon agent={selectedAgentOption.value} size={16} />
-          ) : (
-            <Ionicons name="hardware-chip-outline" size={16} color={colors.foreground} />
-          )}
-          <View style={styles.selectorButtonTextWrap}>
-            <Text style={styles.selectorButtonTitle}>{selectedAgentOption?.label ?? 'Agent'}</Text>
+      {!alwaysExpanded ? (
+        <Pressable
+          disabled={disabled}
+          onPress={() => setShowSelector(current => !current)}
+          style={({ pressed }) => [
+            styles.selectorButton,
+            disabled && styles.selectorButtonDisabled,
+            pressed && !disabled && styles.selectorButtonPressed
+          ]}
+        >
+          <View style={styles.selectorButtonLeft}>
+            {selectedAgentOption ? (
+              <AgentBrandIcon agent={selectedAgentOption.value} size={16} />
+            ) : (
+              <Ionicons name="hardware-chip-outline" size={16} color={colors.foreground} />
+            )}
+            <View style={styles.selectorButtonTextWrap}>
+              <Text style={styles.selectorButtonTitle}>
+                {selectedAgentOption?.label ?? 'Agent'}
+              </Text>
+            </View>
           </View>
-        </View>
-        <Ionicons
-          name={showSelector ? 'chevron-up' : 'chevron-down'}
-          size={18}
-          color={colors.mutedForeground}
-        />
-      </Pressable>
+          <Ionicons
+            name={showSelector ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={colors.mutedForeground}
+          />
+        </Pressable>
+      ) : null}
 
       {showSelector ? (
         <View style={styles.selectorPanel}>

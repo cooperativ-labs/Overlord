@@ -63,9 +63,16 @@ export const createStyles = (colors: ThemeColors) =>
     headerSheet: {
       width: '100%',
       borderRadius: 24,
-      padding: 12,
-      gap: 10,
       overflow: 'hidden'
+    },
+    headerSheetContent: {
+      padding: 12,
+      gap: 10
+    },
+    headerSheetPickerSection: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
+      paddingTop: 12
     },
     headerSheetFallback: {
       backgroundColor: colors.card,

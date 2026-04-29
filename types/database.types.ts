@@ -666,6 +666,7 @@ export type Database = {
           image_url: string;
           name: string;
           onboarding: Json;
+          preferences: Json;
           updated_at: string;
         };
         Insert: {
@@ -679,6 +680,7 @@ export type Database = {
           image_url?: string;
           name?: string;
           onboarding?: Json;
+          preferences?: Json;
           updated_at?: string;
         };
         Update: {
@@ -692,6 +694,7 @@ export type Database = {
           image_url?: string;
           name?: string;
           onboarding?: Json;
+          preferences?: Json;
           updated_at?: string;
         };
         Relationships: [

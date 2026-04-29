@@ -5,6 +5,23 @@ import { cookies } from 'next/headers';
 import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 import { createClientForRequest } from '@/supabase/utils/server';
 
+export async function createOrganizationAction(input: { name: string }): Promise<{
+  organizationId: number;
+}> {
+  const supabase = await createClientForRequest();
+  const trimmedName = input.name.trim();
+
+  const { data, error } = await supabase.rpc('create_organization_for_current_user', {
+    target_name: trimmedName
+  });
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to create organization.');
+  }
+
+  return { organizationId: data as number };
+}
+
 export type UserOrganization = {
   id: number;
   name: string;

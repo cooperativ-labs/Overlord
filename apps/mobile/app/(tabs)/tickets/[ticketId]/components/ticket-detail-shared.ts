@@ -1,6 +1,5 @@
-import { Platform } from 'react-native';
-
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
+import { Platform } from 'react-native';
 
 import type { ThemeColors } from '@/lib/colors';
 
@@ -21,7 +20,9 @@ export type TicketDocument = {
 
 export const glassAvailable = Platform.OS === 'ios' && isLiquidGlassAvailable();
 
-export function getEventIcons(colors: ThemeColors): Record<string, { name: string; color: string }> {
+export function getEventIcons(
+  colors: ThemeColors
+): Record<string, { name: string; color: string }> {
   return {
     system: { name: 'settings-outline', color: colors.mutedForeground },
     question: { name: 'help-circle-outline', color: '#f59e0b' },

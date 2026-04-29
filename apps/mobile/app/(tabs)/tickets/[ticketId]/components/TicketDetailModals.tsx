@@ -1,30 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, Text } from 'react-native';
 
-import { AgentModelChooser } from '@/components/AgentModelChooser';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
-import type { AgentModelSelection } from '@/lib/types';
 
 import { createStyles } from './ticket-detail-styles';
 
 export function TicketDetailModals({
-  showAgentModal,
-  assignedSelection,
-  savingAssignedAgent,
-  onAssignedAgentChange,
-  onResolvedSelectionChange,
-  onCloseAgentModal,
   overflowOpen,
   onCloseOverflow,
   onCopyTicketId,
   onReload
 }: {
-  showAgentModal: boolean;
-  assignedSelection: AgentModelSelection | null;
-  savingAssignedAgent: boolean;
-  onAssignedAgentChange: (nextSelection: AgentModelSelection) => Promise<void>;
-  onResolvedSelectionChange: (value: AgentModelSelection | null) => void;
-  onCloseAgentModal: () => void;
   overflowOpen: boolean;
   onCloseOverflow: () => void;
   onCopyTicketId: () => Promise<void>;
@@ -33,32 +19,6 @@ export function TicketDetailModals({
   const styles = useThemedStyles(createStyles);
   return (
     <>
-      <Modal
-        visible={showAgentModal}
-        transparent
-        animationType="fade"
-        onRequestClose={onCloseAgentModal}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={onCloseAgentModal}>
-          <Pressable style={styles.modalCard} onPress={() => undefined}>
-            <Text style={styles.modalTitle}>Assigned Agent</Text>
-            <AgentModelChooser
-              value={assignedSelection}
-              onChange={onAssignedAgentChange}
-              onResolvedSelectionChange={onResolvedSelectionChange}
-              helperText="Choose the agent and model."
-              disabled={savingAssignedAgent}
-            />
-            <Pressable
-              style={({ pressed }) => [styles.modalDone, pressed && styles.pressed]}
-              onPress={onCloseAgentModal}
-            >
-              <Text style={styles.modalDoneText}>Done</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       <Modal
         visible={overflowOpen}
         transparent

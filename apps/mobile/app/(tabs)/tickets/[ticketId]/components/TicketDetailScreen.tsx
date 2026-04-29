@@ -35,11 +35,12 @@ import type {
   TicketEvent
 } from '@/lib/types';
 import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from '@/modules/ssh';
+
+import { type Project, type TicketDocument } from './ticket-detail-shared';
+import { createStyles } from './ticket-detail-styles';
 import { TicketDetailContent } from './TicketDetailContent';
 import { TicketHeaderRight, TicketHeaderSheet, TicketHeaderTitle } from './TicketDetailHeader';
 import { TicketDetailModals } from './TicketDetailModals';
-import { type Project, type TicketDocument } from './ticket-detail-shared';
-import { createStyles } from './ticket-detail-styles';
 
 export default function TicketDetailScreen() {
   const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
@@ -69,7 +70,6 @@ export default function TicketDetailScreen() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [savingProject, setSavingProject] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
-  const [showAgentModal, setShowAgentModal] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [headerSheetOpen, setHeaderSheetOpen] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
@@ -135,12 +135,12 @@ export default function TicketDetailScreen() {
             .order('created_at', { ascending: false }),
           userId
             ? supabase
-              .from('user_integrations')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('provider', 'everhour')
-              .limit(1)
-              .maybeSingle()
+                .from('user_integrations')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('provider', 'everhour')
+                .limit(1)
+                .maybeSingle()
             : Promise.resolve({ data: null, error: null })
         ]);
 
@@ -418,9 +418,9 @@ export default function TicketDetailScreen() {
     setTicket(current =>
       current
         ? {
-          ...current,
-          assigned_agent: nextAssignedAgent
-        }
+            ...current,
+            assigned_agent: nextAssignedAgent
+          }
         : current
     );
     setSavingAssignedAgent(true);
@@ -449,9 +449,9 @@ export default function TicketDetailScreen() {
       setTicket(current =>
         current
           ? {
-            ...current,
-            assigned_agent: previousAssignedAgent
-          }
+              ...current,
+              assigned_agent: previousAssignedAgent
+            }
           : current
       );
       Alert.alert(
@@ -827,19 +827,19 @@ export default function TicketDetailScreen() {
       // 6. Launch — use key if pubkey auth works, otherwise use password
       const result = keyAuthWorks
         ? await launchTicketOnServer({
-          ticketId: ticket.id,
-          ticketSequence: ticket.ticket_sequence,
-          agent: resolvedAssignedSelection.agent,
-          server,
-          keyTag: tag
-        })
+            ticketId: ticket.id,
+            ticketSequence: ticket.ticket_sequence,
+            agent: resolvedAssignedSelection.agent,
+            server,
+            keyTag: tag
+          })
         : await launchTicketOnServerWithPassword({
-          ticketId: ticket.id,
-          ticketSequence: ticket.ticket_sequence,
-          agent: resolvedAssignedSelection.agent,
-          server,
-          password
-        });
+            ticketId: ticket.id,
+            ticketSequence: ticket.ticket_sequence,
+            agent: resolvedAssignedSelection.agent,
+            server,
+            password
+          });
 
       Alert.alert(
         'Remote Session Started',
@@ -1035,9 +1035,9 @@ export default function TicketDetailScreen() {
       Alert.alert(
         'No Connected Servers',
         `Found ${freshAllServers.length} server(s) but none are connected. ` +
-        (freshAllServers.length > 0
-          ? freshAllServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')
-          : 'Add and verify a server on this device.')
+          (freshAllServers.length > 0
+            ? freshAllServers.map(s => `${s.label}: ${s.status}/${s.transport}`).join(', ')
+            : 'Add and verify a server on this device.')
       );
       return;
     }
@@ -1134,10 +1134,8 @@ export default function TicketDetailScreen() {
         assignedSelection={assignedSelection}
         savingAssignedAgent={savingAssignedAgent}
         copyingPromptContext={copyingPromptContext}
-        onOpenAgentModal={() => {
-          setHeaderSheetOpen(false);
-          setShowAgentModal(true);
-        }}
+        onAssignedAgentChange={handleAssignedAgentChange}
+        onResolvedSelectionChange={setResolvedAssignedSelection}
         onOpenOverflow={() => {
           setHeaderSheetOpen(false);
           setOverflowOpen(true);
@@ -1216,12 +1214,6 @@ export default function TicketDetailScreen() {
         }
       />
       <TicketDetailModals
-        showAgentModal={showAgentModal}
-        assignedSelection={assignedSelection}
-        savingAssignedAgent={savingAssignedAgent}
-        onAssignedAgentChange={handleAssignedAgentChange}
-        onResolvedSelectionChange={setResolvedAssignedSelection}
-        onCloseAgentModal={() => setShowAgentModal(false)}
         overflowOpen={overflowOpen}
         onCloseOverflow={() => setOverflowOpen(false)}
         onCopyTicketId={handleCopyTicketId}

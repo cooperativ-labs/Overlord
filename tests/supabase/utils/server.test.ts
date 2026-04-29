@@ -59,7 +59,7 @@ describe('request preference resolution', () => {
     expect(resolveRequestSidebarOpen({ isElectron: true, cookieSidebarState: 'false' })).toBe(true);
   });
 
-  it('accepts cookie ticket views on web and drops them on Electron', () => {
+  it('validates cookie ticket views on web; Electron reads from DB so resolveRequestTicketViewPreference returns null for it', () => {
     expect(
       resolveRequestTicketViewPreference({
         isElectron: false,
@@ -72,6 +72,8 @@ describe('request preference resolution', () => {
         cookieViewPreference: 'invalid'
       })
     ).toBeNull();
+    // Electron bypasses this resolver entirely — getRawViewPreference() queries
+    // profiles.preferences instead, so the resolver still returns null here.
     expect(
       resolveRequestTicketViewPreference({
         isElectron: true,

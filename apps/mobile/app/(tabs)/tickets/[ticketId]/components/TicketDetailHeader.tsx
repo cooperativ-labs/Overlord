@@ -1,8 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { GlassView } from 'expo-glass-effect';
-import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  View
+} from 'react-native';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
+import { AgentModelChooser } from '@/components/AgentModelChooser';
 import { AGENT_OPTIONS } from '@/lib/agent-models';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import type { AgentModelSelection } from '@/lib/types';
@@ -100,7 +110,8 @@ export function TicketHeaderSheet({
   assignedSelection,
   savingAssignedAgent,
   copyingPromptContext,
-  onOpenAgentModal,
+  onAssignedAgentChange,
+  onResolvedSelectionChange,
   onOpenOverflow,
   onCopyCliCommand,
   onCopyPrompt,
@@ -114,7 +125,8 @@ export function TicketHeaderSheet({
   assignedSelection: AgentModelSelection | null;
   savingAssignedAgent: boolean;
   copyingPromptContext: 'cli' | 'web' | null;
-  onOpenAgentModal: () => void;
+  onAssignedAgentChange: (selection: AgentModelSelection) => void;
+  onResolvedSelectionChange: (selection: AgentModelSelection) => void;
   onOpenOverflow: () => void;
   onCopyCliCommand: () => void;
   onCopyPrompt: (context: 'cli' | 'web') => void;
@@ -123,6 +135,12 @@ export function TicketHeaderSheet({
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+
+  useEffect(() => {
+    if (!visible) setShowModelPicker(false);
+  }, [visible]);
+
   const SheetContainer = glassAvailable ? GlassView : View;
   const sheetStyle = glassAvailable
     ? styles.headerSheet
@@ -133,92 +151,120 @@ export function TicketHeaderSheet({
     'Choose agent';
   const modelLabel = assignedSelection?.model ?? 'Default model';
 
+  const maxSheetHeight = Dimensions.get('window').height * 0.82;
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.headerSheetBackdrop} onPress={onClose}>
-        <Pressable onPress={() => undefined} style={styles.headerSheetWrap}>
+        <Pressable
+          onPress={() => undefined}
+          style={[styles.headerSheetWrap, { maxHeight: maxSheetHeight }]}
+        >
           <SheetContainer
             style={sheetStyle}
             {...(glassAvailable ? { glassEffectStyle: 'regular' as const } : {})}
           >
-            <View style={styles.headerSheetTopRow}>
-              <Pressable
-                hitSlop={10}
-                onPress={onClose}
-                accessibilityLabel="Close header"
-                style={styles.headerSheetCircle}
-              >
-                <Ionicons name="close" size={18} color={colors.foreground} />
-              </Pressable>
-              <View style={styles.headerSheetTitleWrap}>
-                <Text style={styles.headerSheetTitle} numberOfLines={1}>
-                  {title}
-                </Text>
-                {subtitle ? (
-                  <Text style={styles.headerSheetSubtitle} numberOfLines={1}>
-                    {subtitle}
-                  </Text>
-                ) : null}
-              </View>
-              <Pressable
-                hitSlop={10}
-                onPress={onOpenOverflow}
-                accessibilityLabel="More actions"
-                style={styles.headerSheetCircle}
-              >
-                <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
-              </Pressable>
-            </View>
-
-            <View style={styles.headerSheetChipRow}>
-              <HeaderSheetChip
-                icon="copy-outline"
-                label="Copy CLI"
-                onPress={onCopyCliCommand}
-                disabled={copyingPromptContext !== null}
-              />
-              <HeaderSheetChip
-                icon="cloud-outline"
-                label="Copy Web"
-                onPress={() => onCopyPrompt('web')}
-                loading={copyingPromptContext === 'web'}
-                disabled={copyingPromptContext !== null}
-              />
-              <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [styles.headerSheetFeaturedRow, pressed && styles.pressed]}
-              onPress={onOpenAgentModal}
-              disabled={savingAssignedAgent}
-              accessibilityLabel="Change assigned agent"
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.headerSheetContent}
+              keyboardShouldPersistTaps="handled"
             >
-              <View style={styles.headerSheetFeaturedIcon}>
-                {assignedSelection?.agent ? (
-                  <AgentBrandIcon agent={assignedSelection.agent} size={20} />
-                ) : (
-                  <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
-                )}
+              <View style={styles.headerSheetTopRow}>
+                <Pressable
+                  hitSlop={10}
+                  onPress={onClose}
+                  accessibilityLabel="Close header"
+                  style={styles.headerSheetCircle}
+                >
+                  <Ionicons name="close" size={18} color={colors.foreground} />
+                </Pressable>
+                <View style={styles.headerSheetTitleWrap}>
+                  <Text style={styles.headerSheetTitle} numberOfLines={1}>
+                    {title}
+                  </Text>
+                  {subtitle ? (
+                    <Text style={styles.headerSheetSubtitle} numberOfLines={1}>
+                      {subtitle}
+                    </Text>
+                  ) : null}
+                </View>
+                <Pressable
+                  hitSlop={10}
+                  onPress={onOpenOverflow}
+                  accessibilityLabel="More actions"
+                  style={styles.headerSheetCircle}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
+                </Pressable>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
-                <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
-                  {modelLabel}
-                </Text>
-              </View>
-              {savingAssignedAgent ? (
-                <ActivityIndicator size="small" color={colors.mutedForeground} />
-              ) : (
-                <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-              )}
-            </Pressable>
 
-            <HeaderSheetRow icon="copy-outline" label="Copy ticket ID" onPress={onCopyTicketId} />
-            <HeaderSheetRow
-              icon="ellipsis-horizontal-circle-outline"
-              label="More actions"
-              onPress={onOpenOverflow}
-            />
+              <View style={styles.headerSheetChipRow}>
+                <HeaderSheetChip
+                  icon="copy-outline"
+                  label="Copy CLI"
+                  onPress={onCopyCliCommand}
+                  disabled={copyingPromptContext !== null}
+                />
+                <HeaderSheetChip
+                  icon="cloud-outline"
+                  label="Copy Web"
+                  onPress={() => onCopyPrompt('web')}
+                  loading={copyingPromptContext === 'web'}
+                  disabled={copyingPromptContext !== null}
+                />
+                <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [styles.headerSheetFeaturedRow, pressed && styles.pressed]}
+                onPress={() => setShowModelPicker(open => !open)}
+                disabled={savingAssignedAgent}
+                accessibilityLabel="Change assigned agent"
+              >
+                <View style={styles.headerSheetFeaturedIcon}>
+                  {assignedSelection?.agent ? (
+                    <AgentBrandIcon agent={assignedSelection.agent} size={20} />
+                  ) : (
+                    <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
+                  <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
+                    {modelLabel}
+                  </Text>
+                </View>
+                {savingAssignedAgent ? (
+                  <ActivityIndicator size="small" color={colors.mutedForeground} />
+                ) : (
+                  <Ionicons
+                    name={showModelPicker ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={colors.mutedForeground}
+                  />
+                )}
+              </Pressable>
+
+              {showModelPicker ? (
+                <View style={styles.headerSheetPickerSection}>
+                  <AgentModelChooser
+                    alwaysExpanded
+                    value={assignedSelection}
+                    onChange={onAssignedAgentChange}
+                    onResolvedSelectionChange={onResolvedSelectionChange}
+                    disabled={savingAssignedAgent}
+                  />
+                </View>
+              ) : null}
+
+              <HeaderSheetRow icon="copy-outline" label="Copy ticket ID" onPress={onCopyTicketId} />
+              <HeaderSheetRow
+                icon="ellipsis-horizontal-circle-outline"
+                label="More actions"
+                onPress={onOpenOverflow}
+              />
+            </ScrollView>
           </SheetContainer>
         </Pressable>
       </Pressable>
