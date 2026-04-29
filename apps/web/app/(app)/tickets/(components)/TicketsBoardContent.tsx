@@ -117,7 +117,11 @@ export default async function TicketsBoardContent({
   const projectPreferences = projectId ? await getProjectUserPreferencesAction(projectId) : null;
 
   const preferredView = projectPreferences?.preferred_view ?? savedView;
-  const view = isMobile ? 'list' : (preferredView ?? 'board');
+  const view = isMobile
+    ? preferredView === 'calendar'
+      ? 'calendar'
+      : 'list'
+    : (preferredView ?? 'board');
   const initialHiddenColumns = projectPreferences?.hidden_columns ?? [];
   const initialListFilters = projectPreferences?.list_filters ?? null;
   const supabase = await createClientForRequest();
@@ -412,7 +416,7 @@ export default async function TicketsBoardContent({
               )?.name ?? statuses.find(status => status.status_type === 'complete')?.name
             }
             initialView={view}
-            showViewToggle={!isMobile}
+            showViewToggle
             projectId={projectId}
             organizationId={organizationId}
             ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
@@ -438,7 +442,7 @@ export default async function TicketsBoardContent({
             showOrganizationName={showOrganizationName}
             ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
             initialView={view}
-            showViewToggle={!isMobile}
+            showViewToggle
             organizationId={organizationId}
             projectId={projectId}
             initialListFilters={initialListFilters}

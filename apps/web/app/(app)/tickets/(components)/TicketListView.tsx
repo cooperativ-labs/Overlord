@@ -304,110 +304,113 @@ export default function TicketListView({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {showViewToggle || hasTickets ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {showViewToggle ? (
-            <TicketsViewControls initialView={initialView} projectId={projectId} />
-          ) : null}
-
-          {hasTickets ? (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <ArrowUpDown className="h-3.5 w-3.5" />
-                    {SORT_LABELS[sortKey]}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-44">
-                  <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
-                    <DropdownMenuItem key={key} onClick={() => setSortKey(key)} className="gap-2">
-                      {SORT_LABELS[key]}
-                      {sortKey === key && <Check className="ml-auto h-4 w-4" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <Filter className="h-3.5 w-3.5" />
-                    {statusFilterLabel}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-44">
-                  <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSelectedStatuses(uniqueStatuses);
-                      saveListFilters(uniqueStatuses, filterProject);
-                    }}
-                    className="gap-2"
-                  >
-                    All statuses
-                    {areAllStatusesSelected && <Check className="ml-auto h-4 w-4" />}
-                  </DropdownMenuItem>
-                  {uniqueStatuses.map(status => (
-                    <DropdownMenuItem
-                      key={status}
-                      onClick={() => toggleStatus(status)}
-                      className="gap-2"
-                    >
-                      {formatStatusLabel(status)}
-                      {selectedStatusesSet.has(status) && <Check className="ml-auto h-4 w-4" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {projectOptions.length > 1 && (
+        <div className="flex w-full flex-wrap items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {hasTickets ? (
+              <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-1.5">
-                      {filterProject
-                        ? (projectOptions.find(p => p.id === filterProject)?.name ?? 'Project')
-                        : 'All projects'}
+                      <ArrowUpDown className="h-3.5 w-3.5" />
+                      {SORT_LABELS[sortKey]}
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48">
-                    <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
+                  <DropdownMenuContent align="start" className="w-44">
+                    <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setFilterProject(null);
-                        saveListFilters(selectedStatuses, null);
-                      }}
-                      className="gap-2"
-                    >
-                      All projects
-                      {filterProject === null && <Check className="ml-auto h-4 w-4" />}
-                    </DropdownMenuItem>
-                    {projectOptions.map(p => (
-                      <DropdownMenuItem
-                        key={p.id}
-                        onClick={() => {
-                          setFilterProject(p.id);
-                          saveListFilters(selectedStatuses, p.id);
-                        }}
-                        className="gap-2"
-                      >
-                        {p.color && (
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-[2px] border"
-                            style={{ backgroundColor: p.color, borderColor: p.color }}
-                          />
-                        )}
-                        <span className="truncate">{p.name}</span>
-                        {filterProject === p.id && <Check className="ml-auto h-4 w-4" />}
+                    {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+                      <DropdownMenuItem key={key} onClick={() => setSortKey(key)} className="gap-2">
+                        {SORT_LABELS[key]}
+                        {sortKey === key && <Check className="ml-auto h-4 w-4" />}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              )}
-            </>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <Filter className="h-3.5 w-3.5" />
+                      {statusFilterLabel}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-44">
+                    <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSelectedStatuses(uniqueStatuses);
+                        saveListFilters(uniqueStatuses, filterProject);
+                      }}
+                      className="gap-2"
+                    >
+                      All statuses
+                      {areAllStatusesSelected && <Check className="ml-auto h-4 w-4" />}
+                    </DropdownMenuItem>
+                    {uniqueStatuses.map(status => (
+                      <DropdownMenuItem
+                        key={status}
+                        onClick={() => toggleStatus(status)}
+                        className="gap-2"
+                      >
+                        {formatStatusLabel(status)}
+                        {selectedStatusesSet.has(status) && <Check className="ml-auto h-4 w-4" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {projectOptions.length > 1 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-1.5">
+                        {filterProject
+                          ? (projectOptions.find(p => p.id === filterProject)?.name ?? 'Project')
+                          : 'All projects'}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setFilterProject(null);
+                          saveListFilters(selectedStatuses, null);
+                        }}
+                        className="gap-2"
+                      >
+                        All projects
+                        {filterProject === null && <Check className="ml-auto h-4 w-4" />}
+                      </DropdownMenuItem>
+                      {projectOptions.map(p => (
+                        <DropdownMenuItem
+                          key={p.id}
+                          onClick={() => {
+                            setFilterProject(p.id);
+                            saveListFilters(selectedStatuses, p.id);
+                          }}
+                          className="gap-2"
+                        >
+                          {p.color && (
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-[2px] border"
+                              style={{ backgroundColor: p.color, borderColor: p.color }}
+                            />
+                          )}
+                          <span className="truncate">{p.name}</span>
+                          {filterProject === p.id && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </>
+            ) : null}
+          </div>
+          {showViewToggle ? (
+            <div className="ml-auto flex items-center">
+              <TicketsViewControls initialView={initialView} projectId={projectId} />
+            </div>
           ) : null}
         </div>
       ) : null}

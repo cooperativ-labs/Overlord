@@ -124,10 +124,14 @@ export default function TicketsScreen() {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   useEffect(() => {
-    if (!filterProjectId) setViewMode('list');
+    if (!filterProjectId) {
+      setViewMode('list');
+      setViewMenuOpen(false);
+    }
   }, [filterProjectId]);
 
   const handleCreateTicket = useCallback(
@@ -312,8 +316,9 @@ export default function TicketsScreen() {
       <TicketsScreenFilters
         projectName={projectName}
         projectColor={projectColor}
-        showViewToggle={filterProjectId !== null}
         viewMode={viewMode}
+        viewMenuOpen={viewMenuOpen}
+        showViewMenu={filterProjectId !== null}
         projectMenuOpen={projectMenuOpen}
         sortMenuOpen={sortMenuOpen}
         statusMenuOpen={statusMenuOpen}
@@ -324,19 +329,31 @@ export default function TicketsScreen() {
         onToggleProjectMenu={() => {
           setSortMenuOpen(false);
           setStatusMenuOpen(false);
+          setViewMenuOpen(false);
           setProjectMenuOpen(open => !open);
         }}
         onToggleSortMenu={() => {
           setProjectMenuOpen(false);
           setStatusMenuOpen(false);
+          setViewMenuOpen(false);
           setSortMenuOpen(open => !open);
         }}
         onToggleStatusMenu={() => {
           setProjectMenuOpen(false);
           setSortMenuOpen(false);
+          setViewMenuOpen(false);
           setStatusMenuOpen(open => !open);
         }}
-        onSelectView={setViewMode}
+        onToggleViewMenu={() => {
+          setProjectMenuOpen(false);
+          setSortMenuOpen(false);
+          setStatusMenuOpen(false);
+          setViewMenuOpen(open => !open);
+        }}
+        onSelectView={mode => {
+          setViewMode(mode);
+          setViewMenuOpen(false);
+        }}
         onSelectProject={projectId => selectProject(projectId)}
         onSelectSort={mode => setSortMode(mode)}
         onSelectStatus={filter => setStatusFilter(filter)}
@@ -435,8 +452,9 @@ function TicketsScreenHeader({
 function TicketsScreenFilters({
   projectName,
   projectColor,
-  showViewToggle,
   viewMode,
+  viewMenuOpen,
+  showViewMenu,
   projectMenuOpen,
   sortMenuOpen,
   statusMenuOpen,
@@ -447,6 +465,7 @@ function TicketsScreenFilters({
   onToggleProjectMenu,
   onToggleSortMenu,
   onToggleStatusMenu,
+  onToggleViewMenu,
   onSelectView,
   onSelectProject,
   onSelectSort,
@@ -454,8 +473,9 @@ function TicketsScreenFilters({
 }: {
   projectName: string;
   projectColor: string;
-  showViewToggle: boolean;
   viewMode: ViewMode;
+  viewMenuOpen: boolean;
+  showViewMenu: boolean;
   projectMenuOpen: boolean;
   sortMenuOpen: boolean;
   statusMenuOpen: boolean;
@@ -466,6 +486,7 @@ function TicketsScreenFilters({
   onToggleProjectMenu: () => void;
   onToggleSortMenu: () => void;
   onToggleStatusMenu: () => void;
+  onToggleViewMenu: () => void;
   onSelectView: (mode: ViewMode) => void;
   onSelectProject: (projectId: string | null) => void;
   onSelectSort: (mode: SortMode) => void;
@@ -490,7 +511,6 @@ function TicketsScreenFilters({
           <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
         </Pressable>
       </View>
-      {showViewToggle && <ViewModeToggle value={viewMode} onChange={onSelectView} />}
       {projectMenuOpen && (
         <View style={styles.menu}>
           <Pressable style={styles.menuItem} onPress={() => onSelectProject(null)}>
@@ -517,18 +537,30 @@ function TicketsScreenFilters({
         </View>
       )}
       <View style={styles.filterRow}>
-        <FilterChip
-          icon="swap-vertical-outline"
-          label={sortLabels[sortMode]}
-          onPress={onToggleSortMenu}
-          active={sortMenuOpen}
-        />
-        <FilterChip
-          icon="funnel-outline"
-          label={statusFilterLabels[statusFilter]}
-          onPress={onToggleStatusMenu}
-          active={statusMenuOpen}
-        />
+        <View style={styles.filterChips}>
+          <FilterChip
+            icon="swap-vertical-outline"
+            label={sortLabels[sortMode]}
+            onPress={onToggleSortMenu}
+            active={sortMenuOpen}
+          />
+          <FilterChip
+            icon="funnel-outline"
+            label={statusFilterLabels[statusFilter]}
+            onPress={onToggleStatusMenu}
+            active={statusMenuOpen}
+          />
+        </View>
+        {showViewMenu && (
+          <View style={styles.viewMenuWrap}>
+            <ViewModeMenuButton
+              value={viewMode}
+              open={viewMenuOpen}
+              onPress={onToggleViewMenu}
+              onSelect={onSelectView}
+            />
+          </View>
+        )}
       </View>
 
       {sortMenuOpen && (
@@ -842,52 +874,74 @@ function CalendarDaySection({
   );
 }
 
-function ViewModeToggle({
+function ViewModeMenuButton({
   value,
-  onChange
+  open,
+  onPress,
+  onSelect
 }: {
   value: ViewMode;
-  onChange: (mode: ViewMode) => void;
+  open: boolean;
+  onPress: () => void;
+  onSelect: (mode: ViewMode) => void;
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
 
   return (
-    <View style={styles.viewToggle}>
+    <View style={styles.viewMenuWrap}>
       <Pressable
         style={({ pressed }) => [
-          styles.viewToggleButton,
-          value === 'list' && styles.viewToggleButtonActive,
+          styles.viewMenuButton,
+          open && styles.viewMenuButtonActive,
           pressed && styles.pressed
         ]}
-        onPress={() => onChange('list')}
+        onPress={onPress}
+        accessibilityLabel="Change ticket view"
       >
         <Ionicons
-          name="list-outline"
-          size={14}
-          color={value === 'list' ? colors.foreground : colors.mutedForeground}
+          name={value === 'calendar' ? 'calendar-outline' : 'list-outline'}
+          size={16}
+          color={colors.foreground}
         />
-        <Text style={[styles.viewToggleText, value === 'list' && styles.viewToggleTextActive]}>
-          List
-        </Text>
+        <Ionicons name="chevron-down" size={12} color={colors.mutedForeground} />
       </Pressable>
-      <Pressable
-        style={({ pressed }) => [
-          styles.viewToggleButton,
-          value === 'calendar' && styles.viewToggleButtonActive,
-          pressed && styles.pressed
-        ]}
-        onPress={() => onChange('calendar')}
-      >
-        <Ionicons
-          name="calendar-outline"
-          size={14}
-          color={value === 'calendar' ? colors.foreground : colors.mutedForeground}
-        />
-        <Text style={[styles.viewToggleText, value === 'calendar' && styles.viewToggleTextActive]}>
-          Calendar
-        </Text>
-      </Pressable>
+      {open && (
+        <View style={[styles.menu, styles.viewMenu]}>
+          <Pressable style={styles.viewMenuItem} onPress={() => onSelect('list')}>
+            <View style={styles.menuItemLeft}>
+              <Ionicons
+                name="list-outline"
+                size={15}
+                color={value === 'list' ? colors.primary : colors.mutedForeground}
+              />
+              <Text
+                style={[styles.menuItemText, value === 'list' && styles.menuItemTextActive]}
+              >
+                List
+              </Text>
+            </View>
+            {value === 'list' && <Ionicons name="checkmark" size={14} color={colors.primary} />}
+          </Pressable>
+          <Pressable style={styles.viewMenuItem} onPress={() => onSelect('calendar')}>
+            <View style={styles.menuItemLeft}>
+              <Ionicons
+                name="calendar-outline"
+                size={15}
+                color={value === 'calendar' ? colors.primary : colors.mutedForeground}
+              />
+              <Text
+                style={[styles.menuItemText, value === 'calendar' && styles.menuItemTextActive]}
+              >
+                Calendar
+              </Text>
+            </View>
+            {value === 'calendar' && (
+              <Ionicons name="checkmark" size={14} color={colors.primary} />
+            )}
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -1098,41 +1152,23 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center'
     },
-    viewToggle: {
+    filterRow: {
       flexDirection: 'row',
-      gap: 8,
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
       paddingHorizontal: 16,
       paddingBottom: 10
     },
-    viewToggleButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 999,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border
-    },
-    viewToggleButtonActive: {
-      backgroundColor: colors.secondary,
-      borderColor: colors.primary
-    },
-    viewToggleText: {
-      color: colors.mutedForeground,
-      fontSize: 13,
-      fontWeight: '600'
-    },
-    viewToggleTextActive: {
-      color: colors.foreground
-    },
-    filterRow: {
+    filterChips: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 10,
-      paddingHorizontal: 16,
-      paddingBottom: 10
+      flex: 1,
+      paddingRight: 10
+    },
+    viewMenuWrap: {
+      position: 'relative',
+      flexShrink: 0
     },
     chip: {
       flexDirection: 'row',
@@ -1152,6 +1188,22 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.foreground,
       fontSize: 13
     },
+    viewMenuButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 1,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row'
+    },
+    viewMenuButtonActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.secondary
+    },
     menu: {
       marginHorizontal: 16,
       marginBottom: 6,
@@ -1170,9 +1222,17 @@ const createStyles = (colors: ThemeColors) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border
     },
+    menuItemLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+    },
     menuItemText: {
       color: colors.foreground,
       fontSize: 14
+    },
+    menuItemTextActive: {
+      fontWeight: '600'
     },
     projectMenuLabel: {
       flexDirection: 'row',
@@ -1193,6 +1253,25 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingBottom: 24,
       gap: 10
+    },
+    viewMenu: {
+      position: 'absolute',
+      right: 0,
+      top: 44,
+      minWidth: 160,
+      marginHorizontal: 0,
+      marginBottom: 0,
+      zIndex: 20,
+      elevation: 20
+    },
+    viewMenuItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border
     },
     calendarHeader: {
       gap: 10,
