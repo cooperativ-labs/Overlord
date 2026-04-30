@@ -1,78 +1,67 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
-import { getFeedRetentionDaysAction, updateFeedRetentionDaysAction } from '@/lib/actions/feed';
+import { updateOrganizationFeedRetentionDaysAction } from '@/lib/actions/organizations';
 
-export function FeedSettingsPage({ open }: { open: boolean }) {
-  const [retentionDays, setRetentionDays] = useState(30);
-  const [savedRetentionDays, setSavedRetentionDays] = useState(30);
-  const [loading, setLoading] = useState(false);
+type FeedPageProps = {
+  open: boolean;
+  organizationId: number;
+  initialRetentionDays: number;
+};
+
+export function FeedPage({ open, organizationId, initialRetentionDays }: FeedPageProps) {
+  const [retentionDays, setRetentionDays] = useState(initialRetentionDays);
+  const [savedRetentionDays, setSavedRetentionDays] = useState(initialRetentionDays);
   const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
-  const saveInFlightRef = useRef(false);
-
-  const loadSettings = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const days = await getFeedRetentionDaysAction();
-      setRetentionDays(days);
-      setSavedRetentionDays(days);
-    } catch (err) {
-      console.error('Failed to load feed settings:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load feed settings.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setRetentionDays(initialRetentionDays);
+      setSavedRetentionDays(initialRetentionDays);
       setSaveState('default');
       setError(null);
-      return;
     }
-    void loadSettings();
-  }, [open, loadSettings]);
+  }, [open, initialRetentionDays]);
 
   async function handleSave() {
-    if (loading || saveInFlightRef.current || retentionDays === savedRetentionDays) return;
-    saveInFlightRef.current = true;
+    if (inFlightRef.current || retentionDays === savedRetentionDays) return;
+    inFlightRef.current = true;
     setSaveState('loading');
     setError(null);
     try {
-      const saved = await updateFeedRetentionDaysAction(retentionDays);
+      const saved = await updateOrganizationFeedRetentionDaysAction(organizationId, retentionDays);
       setRetentionDays(saved);
       setSavedRetentionDays(saved);
       setSaveState('success');
     } catch (err) {
-      console.error('Failed to save feed settings:', err);
       setSaveState('error');
       setError(err instanceof Error ? err.message : 'Failed to save feed settings.');
     } finally {
-      saveInFlightRef.current = false;
+      inFlightRef.current = false;
     }
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <div>
-        <h3 className="text-sm font-medium mb-1">Feed</h3>
+        <h3 className="text-sm font-medium">Feed</h3>
         <p className="text-xs text-muted-foreground">
-          Configure how the activity feed works for your organization.
+          Configure how the activity feed works for this organization.
         </p>
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="feed-retention-days">Post retention (days)</Label>
+        <Label htmlFor="org-feed-retention-days">Post retention (days)</Label>
         <div className="flex items-center gap-3">
           <Input
-            id="feed-retention-days"
+            id="org-feed-retention-days"
             type="number"
             min={1}
             max={365}
@@ -80,7 +69,6 @@ export function FeedSettingsPage({ open }: { open: boolean }) {
             value={retentionDays}
             onChange={e => setRetentionDays(Number(e.target.value) || 30)}
             onBlur={handleSave}
-            disabled={loading}
           />
           <span className="text-xs text-muted-foreground">days</span>
         </div>
@@ -89,7 +77,7 @@ export function FeedSettingsPage({ open }: { open: boolean }) {
         </p>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       <div>
         <LoadingButton

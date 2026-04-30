@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -44,6 +45,7 @@ function getImpactConfig(
 }
 
 export default function FeedScreen() {
+  const router = useRouter();
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -120,6 +122,16 @@ export default function FeedScreen() {
       return next;
     });
   };
+
+  const openTicket = useCallback(
+    (ticketId: string) => {
+      router.push({
+        pathname: '/(tabs)/tickets/[ticketId]',
+        params: { ticketId, returnTo: '/(tabs)/feed' }
+      });
+    },
+    [router]
+  );
 
   // Merge realtime posts with fetched posts
   const allPosts = useMemo(() => {
@@ -272,6 +284,18 @@ export default function FeedScreen() {
                   {item.project_name}
                 </Text>
               </View>
+              <Pressable
+                style={({ pressed }) => [styles.ticketLinkRow, pressed && styles.pressed]}
+                onPress={() => openTicket(item.ticket_id)}
+                accessibilityRole="link"
+                accessibilityLabel={`Open ticket ${item.ticket_sequence ? `#${item.ticket_sequence} ` : ''}${item.ticket_title ?? 'Untitled ticket'}`}
+              >
+                <Text style={styles.ticketLinkText} numberOfLines={2}>
+                  {item.ticket_sequence ? `#${item.ticket_sequence} ` : ''}
+                  {item.ticket_title ?? 'Untitled ticket'}
+                </Text>
+                <Ionicons name="open-outline" size={14} color={colors.primary} />
+              </Pressable>
               <Text style={styles.title} numberOfLines={isExpanded ? undefined : 2}>
                 {item.title}
               </Text>
@@ -548,6 +572,19 @@ const createStyles = (colors: ThemeColors) =>
       width: 8,
       height: 8,
       borderRadius: 4
+    },
+    ticketLinkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8
+    },
+    ticketLinkText: {
+      flex: 1,
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: '700',
+      lineHeight: 20
     },
     projectText: {
       color: colors.mutedForeground,

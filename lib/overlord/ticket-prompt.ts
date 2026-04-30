@@ -539,7 +539,7 @@ ${buildMcpCoreRules(launchMode)}
 function buildLocalLaunchNote(context?: PromptContext): string {
   return context === 'electron'
     ? '> **Launched from Overlord desktop.** This terminal already has the needed Overlord environment. Use `ovld protocol ...` commands for all ticket lifecycle work.'
-    : '> **Running locally.** `ovld protocol` uses `OVERLORD_URL` plus shared OAuth credentials. If auth looks stale, try `ovld auth repair` first, then `ovld auth login --organization-id <id>` (use the organization ID from the ticket context) or Overlord Desktop if needed.';
+    : '> **Running locally.** `ovld protocol` uses `OVERLORD_URL` plus shared OAuth credentials. If auth looks stale or a protocol call returns 401, first run `ovld auth repair` yourself. If repair does not fix it, try `ovld auth login --organization-id <id>` (use the organization ID from the ticket context) or Overlord Desktop if needed.';
 }
 
 function buildLocalEventTypeHelp(launchMode: PromptLaunchMode): string {

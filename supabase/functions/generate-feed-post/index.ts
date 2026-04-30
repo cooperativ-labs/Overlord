@@ -333,7 +333,7 @@ Respond with a single JSON object:
 
 IMPORTANT INSTRUCTIONS:
 - Keep the body under 300 words. Use bullet points, not paragraphs.
-- Surface tradeoffs prominently — they are the most valuable part. If there are no tradeoffs, return an empty array.
+- Surface tradeoffs prominently — they are the most valuable part. Be clear about which direction was chosen and which was not. If there are no tradeoffs, return an empty array.
 - Follow any PROJECT-USER FEED INSTRUCTIONS when they are provided, unless they conflict with the required JSON shape or the source facts.
 - "human_actions" is ONLY for proactive tasks the human must perform — things like creating accounts, setting API keys, running migrations, adding env variables, deploying functions, or configuring external services. Do NOT include: testing the code, verifying behavior, reviewing files, checking that things work, or any other validation/QA tasks. Those are implied and clutter the feed. If there are no proactive tasks, return an empty array.
 - "tickets_created" should list any tickets that were spawned/created during this session. Return an empty array if none.

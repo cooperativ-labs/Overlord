@@ -106,5 +106,5 @@ curl "$OVERLORD_URL/api/auth/config"
 ## Operational notes
 
 - OAuth tokens are organization-scoped at request time via `x-organization-id`. The server verifies membership in the `members` table.
-- Invalid or expired sessions should be repaired with `ovld auth repair` first, then refreshed by signing in again with Desktop or `ovld auth login` if needed.
+- If a protocol/MCP call fails because the session is invalid or expired, the agent should run `ovld auth repair` itself first. If repair does not fix it, then refresh by signing in again with Desktop or `ovld auth login` if needed.
 - The auth method recorded on protocol context is always `oauth_jwt`.

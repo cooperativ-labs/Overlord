@@ -12,6 +12,7 @@ import { buildEnrichedCurrentChangeFiles } from '@/components/features/projects/
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {
   useCurrentChangeFileChanges,
+  useCurrentChangesRealtime,
   useGitBranchesQuery,
   useGitDiffQuery,
   useGitStatusQuery
@@ -56,6 +57,10 @@ export function CurrentChangesPage({
   const fileChangesQuery = useCurrentChangeFileChanges({
     projectId,
     files: statusResponse?.files ?? []
+  });
+  useCurrentChangesRealtime({
+    enabled: isElectron && canInspectChanges,
+    projectId
   });
   const fileChanges = useMemo(() => fileChangesQuery.data ?? [], [fileChangesQuery.data]);
   const selectedStatusFile = statusResponse?.files.find(file => file.path === selectedPath) ?? null;

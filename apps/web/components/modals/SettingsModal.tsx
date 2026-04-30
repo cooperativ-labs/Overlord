@@ -7,7 +7,6 @@ import {
   Keyboard,
   Link2,
   Monitor,
-  Newspaper,
   Palette,
   Shield,
   Terminal,
@@ -49,7 +48,6 @@ import { AgentsAndMcpPage } from './settings/AgentsAndMcpPage';
 import { ApplicationPage } from './settings/ApplicationPage';
 import { CliPage } from './settings/CliPage';
 import { CustomizationPage } from './settings/CustomizationPage';
-import { FeedSettingsPage } from './settings/FeedSettingsPage';
 import { HotkeysPage } from './settings/HotkeysPage';
 import { IntegrationsPage } from './settings/IntegrationsPage';
 import { LinkedAccountsPage } from './settings/LinkedAccountsPage';
@@ -76,7 +74,6 @@ const workflowNavItems: NavItem[] = [
 ];
 
 const appNavItems: NavItem[] = [
-  { name: 'Feed', icon: Newspaper },
   { name: 'Application', icon: Palette },
   { name: 'Hotkeys', icon: Keyboard },
   { name: 'Integrations', icon: Link2 },
@@ -215,7 +212,6 @@ export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalP
               {activeNav === 'MCP & Cloud Agents' && <AgentsAndMcpPage open={open} />}
               {activeNav === 'Customization' && <CustomizationPage open={open} />}
               {activeNav === 'CLI & Local Agents' && <CliPage open={open} />}
-              {activeNav === 'Feed' && <FeedSettingsPage open={open} />}
               {activeNav === 'Application' && <ApplicationPage />}
               {activeNav === 'Hotkeys' && <HotkeysPage />}
               {activeNav === 'Profile' && <UserProfilePage open={open} />}

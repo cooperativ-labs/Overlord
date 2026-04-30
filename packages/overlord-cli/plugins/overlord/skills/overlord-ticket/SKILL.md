@@ -138,5 +138,6 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 - Do not create or rely on a local Codex `AGENTS.md` bundle for Overlord.
 - If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
 - When the ticket was launched by Overlord, the ticket prompt remains authoritative for the specific task objective and ticket-level constraints.
+- If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 
-<!-- version: 0.2.3 -->
+<!-- version: 0.2.4 -->

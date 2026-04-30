@@ -25,6 +25,10 @@ async function withTempHome(callback) {
 
   try {
     process.env.HOME = tempHome;
+    delete process.env.OVERLORD_ACCESS_TOKEN;
+    delete process.env.OVERLORD_ORGANIZATION_ID;
+    delete process.env.OVERLORD_URL;
+    delete process.env.OVERLORD_CONNECTOR_URL;
     return await callback(tempHome);
   } finally {
     if (previousHome === undefined) delete process.env.HOME;
@@ -63,6 +67,11 @@ function buildOAuthCredentials(overrides = {}) {
   };
 }
 
+function buildJwtWithExpiry(exp) {
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({ exp })}.`;
+}
+
 test(`${MODULE_PATH} resolveAuth prefers explicit OAuth env overrides`, async () => {
   await withTempHome(async () => {
     process.env.OVERLORD_URL = 'https://www.ovld.ai';
@@ -76,6 +85,30 @@ test(`${MODULE_PATH} resolveAuth prefers explicit OAuth env overrides`, async ()
     assert.equal(result.bearerToken, 'env-access-token');
     assert.equal(result.organizationId, 42);
     assert.equal(result.authMode, 'oauth_env');
+  });
+});
+
+test(`${MODULE_PATH} resolveAuth falls back to stored credentials when env OAuth token is expired`, async () => {
+  await withTempHome(async tempHome => {
+    const ovldDir = path.join(tempHome, '.ovld');
+    writeJson(path.join(ovldDir, 'credentials.cli.json'), buildOAuthCredentials());
+
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = buildJwtWithExpiry(946684800);
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    const { resolveAuth, getAuthStatus } = await importFresh(MODULE_PATH);
+    const result = await resolveAuth();
+
+    assert.equal(result.platformUrl, 'https://www.ovld.ai');
+    assert.equal(result.bearerToken, 'stored-access-token');
+    assert.equal(result.organizationId, 7);
+    assert.equal(result.authMode, 'oauth');
+
+    const status = await getAuthStatus();
+    assert.equal(status.isLoggedIn, true);
+    assert.equal(status.tokenSource, 'credentials.cli.json');
+    assert.equal(status.authMode, 'oauth');
   });
 });
 

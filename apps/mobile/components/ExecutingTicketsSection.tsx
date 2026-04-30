@@ -45,7 +45,7 @@ export function ExecutingTicketsSection({ tickets }: Props) {
           onPress={() =>
             router.push({
               pathname: '/(tabs)/tickets/[ticketId]',
-              params: { ticketId: ticket.id }
+              params: { ticketId: ticket.id, returnTo: '/(tabs)/feed' }
             })
           }
           accessibilityRole="button"

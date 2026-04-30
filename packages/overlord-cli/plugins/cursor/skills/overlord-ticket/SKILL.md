@@ -42,7 +42,8 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 - Use `ovld protocol` commands, the plugin commands, and the MCP tool instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
 - If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
+- If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - Include at least one progress update before delivering.
 - When creating follow-up tickets, always set `--execution-target` explicitly using the `agent`/`human` rule above.
 
-<!-- version: 0.2.3 -->
+<!-- version: 0.2.4 -->

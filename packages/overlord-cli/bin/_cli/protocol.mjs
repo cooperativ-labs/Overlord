@@ -163,8 +163,9 @@ async function apiPost(
     throw new Error(
       `Authentication failed (401): ${data.error ?? 'Invalid or missing token.'}\n` +
       `IMPORTANT: Stop all work immediately. Your Overlord auth session is invalid, expired, or missing required scope.\n` +
-      `The user should try \`ovld auth repair\` first, then sign in again with Overlord Desktop or \`ovld auth login\` if needed.\n` +
-      `Ask the user if they would like to proceed without submitting updates to Overlord.`
+      `First run \`ovld auth repair\` yourself.\n` +
+      `If repair does not fix it, ask the user to sign in again with Overlord Desktop or \`ovld auth login\` if needed.\n` +
+      `Then ask whether they would like to proceed without submitting updates to Overlord.`
     );
   }
 

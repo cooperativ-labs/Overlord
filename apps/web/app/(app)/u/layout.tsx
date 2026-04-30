@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 
+import { OrganizationEmptyProjectsState } from '@/components/features/projects/OrganizationEmptyProjectsState';
 import { TicketsBoardLoadingSkeleton } from '@/components/features/TicketsBoardLoadingSkeleton';
 import { UserTicketsSettingsPanel } from '@/components/features/UserTicketsSettingsPanel';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
@@ -45,10 +46,24 @@ export default async function UserLayout({ children }: LayoutProps) {
     redirect('/onboarding');
   }
 
+  // When a specific org is selected but it has no projects (other orgs may
+  // still have some), show an in-board empty state with a create-project CTA
+  // rather than rendering an empty board.
+  const selectedOrg =
+    selectedOrgId !== null ? organizations.find(org => org.id === selectedOrgId) : null;
+  const selectedOrgHasNoProjects =
+    selectedOrgId !== null && !projects.some(project => project.organizationId === selectedOrgId);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
       <ErrorBoundary>
         <UserTicketsSettingsPanel selectedOrgId={selectedOrgId ?? undefined} />
+        {selectedOrgHasNoProjects && selectedOrg ? (
+          <OrganizationEmptyProjectsState
+            organizationId={selectedOrg.id}
+            organizationName={selectedOrg.name}
+          />
+        ) : null}
         <Suspense fallback={<TicketsBoardLoadingSkeleton variant="user" />}>
           <TicketsBoardContent
             organizationId={selectedOrgId ?? undefined}

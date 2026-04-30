@@ -141,8 +141,8 @@ export async function resolveProtocolAuth(
   const providedToken = extractBearerToken(request);
   const reauthInstructions =
     'Stop all work immediately. The current Overlord auth session is missing, invalid, or expired. ' +
-    'Tell the user to try `ovld auth repair` first, then sign in again with Overlord Desktop or `ovld auth login` if needed. ' +
-    'Ask the user if they would like to proceed without submitting updates to Overlord.';
+    'First run `ovld auth repair` yourself. If repair does not fix it, ask the user to sign in again with Overlord Desktop or `ovld auth login` if needed. ' +
+    'Then ask whether they would like to proceed without submitting updates to Overlord.';
 
   if (!providedToken) {
     return {

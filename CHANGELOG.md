@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.7.0] - 2026-04-30:13:51
+
+### Added
+- Add an organization settings experience with dedicated General, Members, Feed, and Danger Zone pages, plus an empty-projects state for organizations without projects.
+
+### Fixed
+- None.
+
+### Changed
+- Refresh web and mobile ticket/feed surfaces, including ticket detail interactions, board content, quick-run/new-ticket flows, and sidebar/team-switcher behavior.
+- Rework organization and feed action handling in shared actions and Supabase feed generation paths to align with the new settings and feed UX.
+- Update protocol auth and ticket prompt guidance across CLI, MCP, and connector skill surfaces to keep agent workflows aligned with current auth behavior.
+
+### Security
+- Harden protocol and credential auth paths across web and CLI integrations.
+
+### Removed
+- Remove legacy `DiscussTicketButton` and retire the old modal `FeedSettingsPage` in favor of organization-scoped settings surfaces.
+
+### Test
+- Expand CLI credential test coverage for the updated auth and protocol behavior.
+
+### Documentation
+- Refresh connector-surface and MCP auth integration docs to match the updated auth and organization settings workflows.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.7.0`.
+
 ## [5.6.0] - 2026-04-30:08:17
 
 ### Added

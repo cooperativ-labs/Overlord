@@ -553,13 +553,16 @@ export async function resolveAuth() {
         'OVERLORD_ACCESS_TOKEN requires OVERLORD_ORGANIZATION_ID so protocol requests stay scoped.'
       );
     }
-    return {
-      platformUrl,
-      bearerToken: envAccessToken,
-      localSecret,
-      organizationId: envOrganizationId,
-      authMode: 'oauth_env'
-    };
+
+    if (isEnvAccessTokenUsable(envAccessToken)) {
+      return {
+        platformUrl,
+        bearerToken: envAccessToken,
+        localSecret,
+        organizationId: envOrganizationId,
+        authMode: 'oauth_env'
+      };
+    }
   }
 
   if (!creds) {
@@ -636,8 +639,9 @@ export async function getAuthStatus() {
     };
   }
 
+  const envAccessToken = normalizeAccessToken(process.env.OVERLORD_ACCESS_TOKEN);
   let tokenSource = 'fallback';
-  if (normalizeAccessToken(process.env.OVERLORD_ACCESS_TOKEN)) {
+  if (envAccessToken && isEnvAccessTokenUsable(envAccessToken)) {
     tokenSource = 'OVERLORD_ACCESS_TOKEN';
   } else if (creds?.refresh_token) {
     tokenSource = getCredentialFileSource();
@@ -688,6 +692,11 @@ export function repairCredentials() {
 function normalizeAccessToken(value) {
   if (typeof value !== 'string') return '';
   return value.trim();
+}
+
+function isEnvAccessTokenUsable(accessToken) {
+  const expiresAt = decodeJwtExpiry(accessToken);
+  return expiresAt === null || expiresAt * 1000 - Date.now() > 60_000;
 }
 
 function normalizePlatformUrl(value) {

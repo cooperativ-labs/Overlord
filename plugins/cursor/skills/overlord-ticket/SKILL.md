@@ -142,7 +142,8 @@ The CLI also exposes the two-step variants `artifact-prepare-upload` and `artifa
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
 - Include at least one progress update before delivering.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
+- If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.1 -->
+<!-- version: 0.4.2 -->

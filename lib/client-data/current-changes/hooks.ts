@@ -1,6 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 
 import { getRationalePaths } from '@/components/features/projects/current-changes/helpers';
 import type {
@@ -13,6 +14,7 @@ import type {
 } from '@/components/features/projects/current-changes/types';
 import { fetchWithElectronRetry } from '@/lib/electron-auth/fetch-retry';
 import { parseUnifiedDiff } from '@/lib/git/unified-diff';
+import { createClient } from '@/supabase/utils/client';
 
 type ElectronFilesystemApi = {
   getGitBranches?: (input: { directory: string }) => Promise<unknown>;
@@ -61,6 +63,7 @@ export function useGitBranchesQuery(input: {
     },
     enabled: input.isElectron && input.canInspectChanges && Boolean(input.api?.getGitBranches),
     staleTime: 30_000,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false
   });
 }
@@ -79,6 +82,7 @@ export function useGitStatusQuery(input: {
     },
     enabled: input.isElectron && input.canInspectChanges && Boolean(input.api?.getGitStatus),
     staleTime: 30_000,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false
   });
 }
@@ -113,6 +117,7 @@ export function useCurrentChangeFileChanges(input: { projectId: string; files: G
     enabled: input.files.length > 0,
     initialData: [],
     staleTime: 30_000,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false
   });
 }
@@ -150,6 +155,37 @@ export function useGitDiffQuery(input: {
       Boolean(input.api?.getGitDiff) &&
       Boolean(input.file),
     staleTime: 15_000,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false
   });
+}
+
+export function useCurrentChangesRealtime(input: { enabled: boolean; projectId: string }) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!input.enabled) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`current-changes:${input.projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'file_changes'
+        },
+        () => {
+          queryClient.invalidateQueries({
+            queryKey: currentChangesQueryKeys.all
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [input.enabled, input.projectId, queryClient]);
 }

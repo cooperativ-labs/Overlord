@@ -1,10 +1,11 @@
 'use client';
 
-import { Check, ChevronsUpDown, Globe, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Globe, Plus, Settings } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import * as React from 'react';
 
 import { CreateOrganizationModal } from '@/components/features/organizations/CreateOrganizationModal';
+import { OrganizationSettingsModal } from '@/components/modals/OrganizationSettingsModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,9 +37,16 @@ export function TeamSwitcher({
   const { isMobile } = useSidebar();
   const router = useRouter();
   const [createModalOpen, setCreateModalOpen] = React.useState(false);
+  const [settingsOrgId, setSettingsOrgId] = React.useState<number | null>(null);
 
   const activeOrg = selectedOrgId ? organizations.find(o => o.id === selectedOrgId) : null;
   const activeLabel = activeOrg?.name ?? 'All Teams';
+
+  function openOrgSettings(orgId: number, event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSettingsOrgId(orgId);
+  }
 
   async function handleSelect(orgId: number | null) {
     await setSelectedOrgActionWithRetry(orgId);
@@ -95,15 +103,24 @@ export function TeamSwitcher({
                     <DropdownMenuItem
                       key={org.id}
                       onClick={() => handleSelect(org.id)}
-                      className="gap-2 p-2"
+                      className="group gap-2 p-2"
                     >
                       <div className="flex size-6 items-center justify-center rounded-md border">
                         <span className="text-xs font-semibold">
                           {org.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      {org.name}
-                      {selectedOrgId === org.id && <Check className="ml-auto h-4 w-4" />}
+                      <span className="flex-1 truncate">{org.name}</span>
+                      {selectedOrgId === org.id && <Check className="h-4 w-4" />}
+                      <button
+                        type="button"
+                        aria-label={`Settings for ${org.name}`}
+                        title="Workspace settings"
+                        className="ml-1 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+                        onClick={event => openOrgSettings(org.id, event)}
+                      >
+                        <Settings className="size-3.5" />
+                      </button>
                     </DropdownMenuItem>
                   ))}
                 </>
@@ -124,6 +141,14 @@ export function TeamSwitcher({
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
         onCreated={organizationId => void handleOrganizationCreated(organizationId)}
+      />
+
+      <OrganizationSettingsModal
+        open={settingsOrgId !== null}
+        onOpenChange={open => {
+          if (!open) setSettingsOrgId(null);
+        }}
+        organizationId={settingsOrgId}
       />
     </>
   );

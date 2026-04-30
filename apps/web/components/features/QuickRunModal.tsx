@@ -119,9 +119,20 @@ export function QuickRunModal({
       const selectedProject = isPersonalTicket
         ? null
         : (projects.find(p => p.id === selectedProjectId) ?? null);
-      const resolvedOrganizationId =
-        organizationId ?? selectedProject?.organization_id ?? projects[0]?.organization_id ?? 0;
-      if (!resolvedOrganizationId) throw new Error('Organization not found');
+      // Project tickets adopt the project's org. Personal tickets need an
+      // explicit org from the calling route/scope; in All-orgs mode there is
+      // no canonical default, so creation must surface a clear error rather
+      // than silently picking projects[0].
+      const resolvedOrganizationId = isPersonalTicket
+        ? organizationId
+        : selectedProject?.organization_id;
+      if (!resolvedOrganizationId) {
+        throw new Error(
+          isPersonalTicket
+            ? 'Select a workspace before creating a personal ticket.'
+            : 'Project organization not found.'
+        );
+      }
       const trimmedObjective = objective.trim();
       const clientTicketId = crypto.randomUUID();
 

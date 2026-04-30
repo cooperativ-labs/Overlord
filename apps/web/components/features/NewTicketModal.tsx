@@ -119,9 +119,20 @@ export function NewTicketModal({
       const selectedProject = isPersonalTicket
         ? null
         : (projects.find(p => p.id === selectedProjectId) ?? null);
-      const resolvedOrganizationId =
-        organizationId ?? selectedProject?.organization_id ?? projects[0]?.organization_id ?? 0;
-      if (!resolvedOrganizationId) throw new Error('Organization not found');
+      // For project tickets the org is always the project's org. For personal
+      // tickets we require an explicit org from the route/scope: in All-orgs
+      // mode there is no canonical default, so creation must not silently
+      // fall back to projects[0]'s org.
+      const resolvedOrganizationId = isPersonalTicket
+        ? organizationId
+        : selectedProject?.organization_id;
+      if (!resolvedOrganizationId) {
+        throw new Error(
+          isPersonalTicket
+            ? 'Select a workspace before creating a personal ticket.'
+            : 'Project organization not found.'
+        );
+      }
       const trimmedObjective = objective.trim();
       const clientTicketId = crypto.randomUUID();
 

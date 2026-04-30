@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -16,9 +16,10 @@ interface SidebarDrawerProps {
 export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { projects, selectProject } = useSelectedProject();
+  const { projects, selectedProject, selectProject } = useSelectedProject();
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
+  const [teamChooserOpen, setTeamChooserOpen] = useState(false);
 
   const userLabel = useMemo(() => {
     if (!user) return 'Not signed in';
@@ -27,13 +28,21 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   }, [user]);
 
   const userEmail = user?.email ?? '';
+  const workspaceName = selectedProject?.name ?? 'All Teams';
+  const workspaceSubLabel = selectedProject ? 'Switch team' : 'All workspaces';
+
+  useEffect(() => {
+    if (!visible) {
+      setTeamChooserOpen(false);
+    }
+  }, [visible]);
 
   function navigate(path: string) {
     onClose();
     router.push(path as never);
   }
 
-  function switchProject(projectId: string) {
+  function switchProject(projectId: string | null) {
     selectProject(projectId);
     onClose();
     router.replace('/(tabs)/tickets' as never);
@@ -55,16 +64,74 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
             showsVerticalScrollIndicator={false}
           >
             {/* Workspace switcher */}
-            <Pressable style={styles.workspaceCard} onPress={onClose}>
-              <View style={styles.workspaceIcon}>
-                <Ionicons name="globe-outline" size={20} color={colors.primaryForeground} />
-              </View>
-              <View style={styles.workspaceTextWrap}>
-                <Text style={styles.workspaceName}>All Teams</Text>
-                <Text style={styles.workspaceSub}>All workspaces</Text>
-              </View>
-              <Ionicons name="chevron-expand-outline" size={16} color={colors.mutedForeground} />
-            </Pressable>
+            <View style={styles.workspaceSwitcher}>
+              <Pressable
+                style={({ pressed }) => [styles.workspaceCard, pressed && styles.pressed]}
+                onPress={() => setTeamChooserOpen(open => !open)}
+              >
+                <View style={styles.workspaceIcon}>
+                  <Ionicons name="globe-outline" size={20} color={colors.primaryForeground} />
+                </View>
+                <View style={styles.workspaceTextWrap}>
+                  <Text style={styles.workspaceName} numberOfLines={1}>
+                    {workspaceName}
+                  </Text>
+                  <Text style={styles.workspaceSub}>{workspaceSubLabel}</Text>
+                </View>
+                <Ionicons
+                  name={teamChooserOpen ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.mutedForeground}
+                />
+              </Pressable>
+
+              {teamChooserOpen ? (
+                <View style={styles.workspaceMenu}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.projectRow,
+                      !selectedProject && styles.projectRowSelected,
+                      pressed && styles.pressed
+                    ]}
+                    onPress={() => switchProject(null)}
+                  >
+                    <View style={[styles.projectDot, { backgroundColor: colors.primary }]} />
+                    <Text
+                      style={[styles.projectName, !selectedProject && styles.projectNameSelected]}
+                    >
+                      All Teams
+                    </Text>
+                  </Pressable>
+                  {projects.map(project => {
+                    const isSelected = selectedProject?.id === project.id;
+                    return (
+                      <Pressable
+                        key={project.id}
+                        style={({ pressed }) => [
+                          styles.projectRow,
+                          isSelected && styles.projectRowSelected,
+                          pressed && styles.pressed
+                        ]}
+                        onPress={() => switchProject(project.id)}
+                      >
+                        <View
+                          style={[
+                            styles.projectDot,
+                            { backgroundColor: project.color || colors.primary }
+                          ]}
+                        />
+                        <Text
+                          style={[styles.projectName, isSelected && styles.projectNameSelected]}
+                          numberOfLines={1}
+                        >
+                          {project.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
 
             {/* Workspace nav */}
             <Text style={styles.groupLabel}>Workspace</Text>
@@ -209,6 +276,9 @@ const createStyles = (colors: ThemeColors) =>
       paddingTop: 8,
       paddingBottom: 12
     },
+    workspaceSwitcher: {
+      marginBottom: 16
+    },
     workspaceCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -217,8 +287,15 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: 10,
       backgroundColor: colors.card,
       borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 16
+      borderColor: colors.border
+    },
+    workspaceMenu: {
+      marginTop: 8,
+      padding: 6,
+      borderRadius: 10,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border
     },
     workspaceIcon: {
       width: 32,

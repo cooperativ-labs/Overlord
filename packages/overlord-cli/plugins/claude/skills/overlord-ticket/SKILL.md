@@ -153,8 +153,9 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - Use `write-context` for facts a future agent session should know.
 - If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
+- If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.2.4 -->
+<!-- version: 0.2.5 -->

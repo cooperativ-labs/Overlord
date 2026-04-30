@@ -1,9 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -43,7 +44,8 @@ import { TicketHeaderRight, TicketHeaderSheet, TicketHeaderTitle } from './Ticke
 import { TicketDetailModals } from './TicketDetailModals';
 
 export default function TicketDetailScreen() {
-  const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
+  const { ticketId, returnTo } = useLocalSearchParams<{ ticketId: string; returnTo?: string }>();
+  const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id;
   const colors = useThemeColors();
@@ -1109,11 +1111,37 @@ export default function TicketDetailScreen() {
   const ticketHeaderSubtitle = [ticketSequenceLabel, ticket.status]
     .filter((value): value is string => Boolean(value))
     .join(' • ');
+  const returnToPath = typeof returnTo === 'string' ? returnTo : null;
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
       <Stack.Screen
         options={{
+          headerLeft: returnToPath
+            ? ({ tintColor }) => (
+                <Pressable
+                  hitSlop={10}
+                  onPress={() => router.replace(returnToPath)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to feed"
+                  style={styles.headerIconPressable}
+                >
+                  <View
+                    style={[
+                      styles.headerIconButton,
+                      styles.headerIconButtonFallback,
+                      { marginRight: 0 }
+                    ]}
+                  >
+                    <Ionicons
+                      name="chevron-back"
+                      size={18}
+                      color={tintColor ?? colors.foreground}
+                    />
+                  </View>
+                </Pressable>
+              )
+            : undefined,
           headerTitle: () => (
             <TicketHeaderTitle
               title={ticket.title || 'Ticket'}

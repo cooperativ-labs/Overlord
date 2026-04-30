@@ -11,7 +11,6 @@ import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { useTerminal } from './terminal/TerminalProvider';
 import { AgentModelChooserButton } from './AgentModelChooserButton';
 import { CopyTicketPromptButton } from './CopyTicketPromptButton';
-import { DiscussTicketButton } from './DiscussTicketButton';
 import { AgentSplitButtonLive } from './TicketLiveProvider';
 import { type WebAgentMode, WebAgentModeButton } from './WebAgentModeButton';
 
@@ -55,7 +54,6 @@ export function TicketHeaderAction({
     return (
       <div className="flex items-center gap-2">
         <WebAgentModeButton mode={webMode} onModeChange={setWebMode} />
-        <DiscussTicketButton ticketId={ticketId} agentFlags={agentFlags} webMode={webMode} />
         <CopyTicketPromptButton
           ticketId={ticketId}
           context={webMode === 'local' ? 'cli' : 'web'}
@@ -68,16 +66,6 @@ export function TicketHeaderAction({
   return (
     <div className="flex items-center gap-2">
       <AgentModelChooserButton ticketId={ticketId} initialSelection={assignedAgent} />
-      <DiscussTicketButton
-        ticketId={ticketId}
-        projectId={projectId}
-        agentIdentifier={agentIdentifier}
-        assignedAgent={assignedAgent}
-        agentFlags={agentFlags}
-        workingDirectory={workingDirectory}
-        sshCommand={sshCommand}
-        remoteWorkingDirectory={remoteWorkingDirectory}
-      />
       <AgentSplitButtonLive
         defaultAgent={
           agentIdentifier || assignedAgent
