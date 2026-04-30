@@ -37,7 +37,7 @@ export function resolveRequestScope(
 export function injectBearerHeaders(options: {
   requestUrl: string;
   requestHeaders: RequestHeaders;
-  accessToken: string;
+  accessToken?: string | null;
   platformOrigin: string;
   supabaseOrigin: string;
 }): NormalizedRequestHeaders {
@@ -51,9 +51,11 @@ export function injectBearerHeaders(options: {
     return nextHeaders;
   }
 
-  delete nextHeaders.Authorization;
-  delete nextHeaders.authorization;
-  nextHeaders.Authorization = `Bearer ${options.accessToken}`;
+  if (options.accessToken) {
+    delete nextHeaders.Authorization;
+    delete nextHeaders.authorization;
+    nextHeaders.Authorization = `Bearer ${options.accessToken}`;
+  }
 
   if (scope === 'platform') {
     delete nextHeaders[ELECTRON_CLIENT_HEADER];
@@ -111,20 +113,24 @@ export function installAuthHeaderInjector(options: {
   options.session.webRequest.onBeforeSendHeaders(
     { urls: requestPatterns },
     async (details, callback) => {
+      let accessToken: string | null = null;
+
       try {
-        const accessToken = await options.refreshController.getValidAccessToken();
-        callback({
-          requestHeaders: injectBearerHeaders({
-            requestUrl: details.url,
-            requestHeaders: details.requestHeaders,
-            accessToken,
-            platformOrigin: options.platformOrigin,
-            supabaseOrigin: options.supabaseOrigin
-          })
-        });
+        accessToken = await options.refreshController.getValidAccessToken();
       } catch {
-        callback({ requestHeaders: normalizeRequestHeaders(details.requestHeaders) });
+        // Logged-out Electron navigations still need the desktop marker so the
+        // platform can route them to /electron-login instead of the web login.
       }
+
+      callback({
+        requestHeaders: injectBearerHeaders({
+          requestUrl: details.url,
+          requestHeaders: details.requestHeaders,
+          accessToken,
+          platformOrigin: options.platformOrigin,
+          supabaseOrigin: options.supabaseOrigin
+        })
+      });
     }
   );
 }

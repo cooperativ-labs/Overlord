@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.6.0] - 2026-04-30:08:17
+
+### Added
+- Document non-interactive organization selection for `ovld auth login --organization-id <id>` across Overlord ticket skills and CLI auth help output.
+
+### Fixed
+- Keep Electron request marking active when desktop sessions are logged out so platform routes can still identify desktop requests without injecting invalid bearer headers.
+
+### Changed
+- Update ticket prompt guidance and connector-surface documentation to require `--organization-id` for non-TTY auth login flows with multiple organizations.
+- Keep demo CLI command formatting in settings aligned with the current protocol prompt invocation examples.
+
+### Security
+- Avoid forcing an empty or stale `Authorization` header when no desktop access token is available for request injection.
+
+### Test
+- Add header injector coverage for logged-out desktop requests to verify Electron client tagging remains while bearer auth is omitted.
+
+### Documentation
+- Refresh agent connector and skill docs to align auth repair/login instructions with the organization-aware login flow.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.6.0`.
+
 ## [5.5.0] - 2026-04-30:07:41
 
 ### Added

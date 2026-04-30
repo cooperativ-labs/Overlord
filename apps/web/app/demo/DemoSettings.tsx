@@ -703,7 +703,8 @@ function DemoCliSettings() {
           </li>
           <li className="break-words">
             <code className="break-all rounded bg-muted px-1">
-              ovld protocol prompt --agent codex --objective &quot;...&quot; --execution-target agent
+              ovld protocol prompt --agent codex --objective &quot;...&quot; --execution-target
+              agent
             </code>{' '}
             — create and attach to a ticket in one call
           </li>

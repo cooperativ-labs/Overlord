@@ -47,7 +47,7 @@ Checklist:
 - Hook script calls `$OVERLORD_URL/api/protocol/permission-request` when Claude awaits tool permission
 - Settings merge preserves user's existing hooks and permissions (no clobber)
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
-- Skill text tells the agent to try `ovld auth repair` before `ovld auth login` when shared credentials look stale
+- Skill text tells the agent to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
 - Slash command docs also tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Manifest entry written to `~/.ovld/bundle-manifest.json`
 
@@ -145,7 +145,7 @@ Checklist:
 - Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
 - Prompt text explicitly includes the Codex ticket workflow instructions
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
-- Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale
+- Prompt text tells Codex to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
 
 ### 3. Cloud / headless Codex setup

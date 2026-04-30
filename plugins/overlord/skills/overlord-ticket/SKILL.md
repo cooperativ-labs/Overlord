@@ -147,5 +147,6 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - Prefer the installed `ovld protocol` CLI and the plugin's MCP tools instead of ad hoc repo scripts.
 - Do not create or rely on a local Codex `AGENTS.md` bundle for Overlord.
 - When the ticket was launched by Overlord, the ticket prompt remains authoritative for the specific task objective and ticket-level constraints.
+- If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 
-<!-- version: 0.4.0 -->
+<!-- version: 0.4.1 -->

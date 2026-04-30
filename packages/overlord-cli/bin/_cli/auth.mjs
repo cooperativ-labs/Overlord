@@ -660,6 +660,9 @@ export async function runAuthCommand(subcommand, args = []) {
 
 Subcommands:
   login    Authorize the CLI via browser (works locally or over SSH)
+             --organization-id <id>   Pre-select organization non-interactively
+                                      (required when stdin is not a TTY and
+                                      multiple organizations are available)
   status   Show current login status (use --verbose for redacted diagnostics)
   repair   Mirror and chmod shared Desktop/CLI credentials when possible
   logout   Remove stored credentials

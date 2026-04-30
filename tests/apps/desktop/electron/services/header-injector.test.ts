@@ -70,6 +70,33 @@ describe('header injector helpers', () => {
     ).toEqual({ Accept: 'text/html' });
   });
 
+  it('marks logged-out platform requests as Electron without injecting bearer auth', () => {
+    expect(
+      injectBearerHeaders({
+        requestUrl: 'https://app.example.com/u',
+        requestHeaders: { Accept: 'text/html' },
+        accessToken: null,
+        platformOrigin,
+        supabaseOrigin
+      })
+    ).toEqual({
+      Accept: 'text/html',
+      'X-Overlord-Client': 'desktop'
+    });
+
+    expect(
+      injectBearerHeaders({
+        requestUrl: 'https://project.supabase.co/rest/v1/tickets',
+        requestHeaders: { Accept: 'application/json' },
+        accessToken: null,
+        platformOrigin,
+        supabaseOrigin
+      })
+    ).toEqual({
+      Accept: 'application/json'
+    });
+  });
+
   it('preserves existing response headers while replacing the CSP header', () => {
     expect(
       composeRendererResponseHeaders(
