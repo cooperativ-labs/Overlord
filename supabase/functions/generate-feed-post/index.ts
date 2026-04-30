@@ -10,6 +10,13 @@
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
+import {
+  CandidateAction,
+  deriveCandidateActions,
+  formatCandidatesForPrompt,
+  RepoOperationsProfile
+} from './operations-rules.ts';
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
@@ -33,7 +40,8 @@ Priorities:
 - Emphasize tradeoffs, risks, and reviewer-relevant context.
 - Keep content concise and useful for humans scanning many updates. Use bullet points instead of long paragraphs.
 - Return only valid JSON that matches the requested shape.
-- Include human follow-up items ONLY for proactive tasks the human must do — e.g. creating an account, setting an API key, running a migration, deploying a function, adding an env variable, or configuring a service. Do NOT include instructions to manually test, verify, review code, or check that things work — those are implied.`;
+- Include human follow-up items ONLY for proactive tasks the human must do — e.g. creating an account, setting an API key, running a migration, deploying a function, adding an env variable, or configuring a service. Do NOT include instructions to manually test, verify, review code, or check that things work — those are implied.
+- When the prompt includes a CANDIDATE FOLLOW-UP ACTIONS block, treat those as deterministically-derived seeds for human_actions: include the relevant ones (rephrasing freely), drop any that are clearly not applicable to the actual changes, and only add new actions if the candidate list is missing something the human must proactively do.`;
 
 type FeedPostPayload = {
   title: string;
@@ -67,6 +75,7 @@ type FeedPostContext = {
     delegate: string | null;
   }>;
   existingPost?: { title: string; body: string } | null;
+  candidateActions?: CandidateAction[];
 };
 
 function sanitizeStringArray(value: unknown, limit: number): string[] {
@@ -297,6 +306,11 @@ function buildPrompt(context: FeedPostContext): string {
     )
     .join('\n');
 
+  const candidatesSection =
+    context.candidateActions && context.candidateActions.length > 0
+      ? `\n${formatCandidatesForPrompt(context.candidateActions)}\n`
+      : '';
+
   const appendSection = context.existingPost
     ? `\nPREVIOUS POST (merge new information into this, updating where needed):\nTitle: ${context.existingPost.title}\n${context.existingPost.body}\n`
     : '';
@@ -309,6 +323,7 @@ TICKET: ${context.ticketTitle ?? 'Untitled'} — ${context.ticketObjective ?? 'N
 ${context.acceptanceCriteria ? `ACCEPTANCE CRITERIA: ${context.acceptanceCriteria}` : ''}
 ${context.constraints ? `CONSTRAINTS: ${context.constraints}` : ''}
 ${feedInstructionsSection}
+${candidatesSection}
 ${appendSection}
 CHRONOLOGICAL EVENTS (${context.events.length} total):
 ${eventLines || '(no events)'}
@@ -535,6 +550,25 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Load the project's compact repo operations profile and derive deterministic
+    // follow-up action candidates from the changed paths. The profile is small
+    // (≤ ~4 KB) and only the resulting candidate lines (~1.5 KB worst case) flow
+    // into the prompt — the raw file tree never does.
+    let candidateActions: CandidateAction[] = [];
+    try {
+      const { data: projectRow } = await supabase
+        .from('projects')
+        .select('operations_profile')
+        .eq('id', ticket.project_id)
+        .maybeSingle();
+
+      const profile = (projectRow?.operations_profile ?? null) as RepoOperationsProfile | null;
+      const changedPaths = (rationales ?? []).map(r => r.file_path).filter(Boolean);
+      candidateActions = deriveCandidateActions(profile, changedPaths);
+    } catch (err) {
+      console.warn('[generate-feed-post] candidate derivation failed:', err);
+    }
+
     // Build the synthesis context once so Gemini and the fallback share the same inputs.
     const feedContext: FeedPostContext = {
       projectName: project?.name ?? 'Unknown Project',
@@ -546,7 +580,8 @@ Deno.serve(async (req: Request) => {
       events: filteredEvents,
       rationales: rationales ?? [],
       spawnedTickets,
-      existingPost: existingPost ? { title: existingPost.title, body: existingPost.body } : null
+      existingPost: existingPost ? { title: existingPost.title, body: existingPost.body } : null,
+      candidateActions
     };
 
     const prompt = buildPrompt(feedContext);

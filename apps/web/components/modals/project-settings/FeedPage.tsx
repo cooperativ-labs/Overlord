@@ -11,7 +11,9 @@ import {
   getProjectUserPreferencesAction,
   upsertProjectUserPreferencesAction
 } from '@/lib/actions/project-user-preferences';
+import { rebuildOperationsProfileAction } from '@/lib/actions/repo-profile';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import type { RepoOperationsProfile } from '@/lib/repo-profile/types';
 
 const getProjectUserPreferencesActionWithRetry = withElectronActionRetry(
   getProjectUserPreferencesAction
@@ -78,6 +80,13 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
   const [feedInstructionsSaveState, setFeedInstructionsSaveState] =
     useState<ButtonLoadingState>('default');
   const saveInFlightRef = useRef(false);
+
+  const [profileBuildState, setProfileBuildState] = useState<ButtonLoadingState>('default');
+  const [profileJson, setProfileJson] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileMeta, setProfileMeta] = useState<{ rebuilt: boolean; fingerprint: string } | null>(
+    null
+  );
 
   useEffect(() => {
     if (!open) {
@@ -151,6 +160,26 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
     event.currentTarget.blur();
   }
 
+  async function handleRebuildProfile() {
+    setProfileBuildState('loading');
+    setProfileError(null);
+    try {
+      const result = await rebuildOperationsProfileAction(projectId, { force: true });
+      if (!result.ok) {
+        setProfileBuildState('error');
+        setProfileError(result.error);
+        return;
+      }
+      const profile: RepoOperationsProfile = result.profile;
+      setProfileJson(JSON.stringify(profile, null, 2));
+      setProfileMeta({ rebuilt: result.rebuilt, fingerprint: result.fingerprint });
+      setProfileBuildState('success');
+    } catch (error) {
+      setProfileBuildState('error');
+      setProfileError(error instanceof Error ? error.message : 'Failed to build profile.');
+    }
+  }
+
   return (
     <div className="grid gap-3">
       <div className="grid gap-1">
@@ -216,6 +245,48 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
         ) : (
           <p className="text-xs text-muted-foreground">Changes save when this field loses focus.</p>
         )}
+      </div>
+
+      <div className="grid gap-2 rounded-md border p-3">
+        <div className="grid gap-1">
+          <Label>Repo operations profile</Label>
+          <p className="text-xs text-muted-foreground">
+            A compact deterministic snapshot of this project&apos;s deployable surfaces, migration
+            system, codegen steps, tests, and workspace boundaries. The feed generator uses it to
+            seed accurate follow-up actions (run migrations, regenerate types, redeploy edge
+            functions, etc.) without leaking the raw file tree into the prompt.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <LoadingButton
+            buttonState={profileBuildState}
+            setButtonState={setProfileBuildState}
+            text={profileJson ? 'Rebuild profile' : 'Build profile'}
+            loadingText="Building..."
+            successText={profileMeta?.rebuilt === false ? 'Up to date' : 'Built'}
+            errorText="Retry"
+            reset
+            size="sm"
+            variant="outline"
+            onClick={handleRebuildProfile}
+          />
+          {profileMeta ? (
+            <p className="font-mono text-[10px] text-muted-foreground">
+              fingerprint: {profileMeta.fingerprint.slice(0, 12)}…
+              {profileMeta.rebuilt ? ' (rewrote)' : ' (unchanged)'}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Reads the linked working directory; safe to run anytime.
+            </p>
+          )}
+        </div>
+        {profileError ? <p className="text-xs text-destructive">{profileError}</p> : null}
+        {profileJson ? (
+          <pre className="max-h-80 overflow-auto rounded bg-muted p-2 text-[11px] leading-snug">
+            {profileJson}
+          </pre>
+        ) : null}
       </div>
     </div>
   );
