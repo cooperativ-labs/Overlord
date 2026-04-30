@@ -779,6 +779,9 @@ export type Database = {
           everhour_project_id: string | null;
           id: string;
           name: string;
+          operations_profile: Json | null;
+          operations_profile_fingerprint: string | null;
+          operations_profile_generated_at: string | null;
           organization_id: number;
           slack_default_status: string | null;
           updated_at: string;
@@ -789,6 +792,9 @@ export type Database = {
           everhour_project_id?: string | null;
           id?: string;
           name: string;
+          operations_profile?: Json | null;
+          operations_profile_fingerprint?: string | null;
+          operations_profile_generated_at?: string | null;
           organization_id: number;
           slack_default_status?: string | null;
           updated_at?: string;
@@ -799,6 +805,9 @@ export type Database = {
           everhour_project_id?: string | null;
           id?: string;
           name?: string;
+          operations_profile?: Json | null;
+          operations_profile_fingerprint?: string | null;
+          operations_profile_generated_at?: string | null;
           organization_id?: number;
           slack_default_status?: string | null;
           updated_at?: string;

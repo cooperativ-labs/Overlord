@@ -68,7 +68,10 @@ function findScript(scripts: Record<string, string> | undefined, names: string[]
   return null;
 }
 
-function detectManager(rootFiles: Set<string>, workspaceFiles: Set<string>): WorkspaceManager | null {
+function detectManager(
+  rootFiles: Set<string>,
+  workspaceFiles: Set<string>
+): WorkspaceManager | null {
   for (const lock of LOCKFILES) {
     if (workspaceFiles.has(lock.name)) return lock.manager;
   }
@@ -102,7 +105,11 @@ function detectDeployableKind(
       return { kind: 'nextjs-app', deployTarget: target };
     }
   }
-  if (hasDep('expo') || workspaceFiles.has('app.json') || [...workspaceFiles].some(f => EXPO_CONFIG_RE.test(f))) {
+  if (
+    hasDep('expo') ||
+    workspaceFiles.has('app.json') ||
+    [...workspaceFiles].some(f => EXPO_CONFIG_RE.test(f))
+  ) {
     const target: DeployTarget | undefined = workspaceFiles.has('eas.json') ? 'eas' : undefined;
     return { kind: 'expo-app', deployTarget: target };
   }
@@ -307,7 +314,11 @@ export async function buildRepoOperationsProfile(rootDirectory: string): Promise
   // Root package.json drives workspaces + scripts.
   const rootPkg = await readJsonIfExists<PackageJson>(path.join(rootDirectory, MANIFEST_NAME));
   fingerprintTokens.push(`root:pkg:${JSON.stringify(rootPkg?.workspaces ?? null)}`);
-  fingerprintTokens.push(`root:scripts:${Object.keys(rootPkg?.scripts ?? {}).sort().join(',')}`);
+  fingerprintTokens.push(
+    `root:scripts:${Object.keys(rootPkg?.scripts ?? {})
+      .sort()
+      .join(',')}`
+  );
 
   const workspacePaths = collectWorkspacePaths(rootPkg, allFiles);
 
@@ -333,7 +344,11 @@ export async function buildRepoOperationsProfile(rootDirectory: string): Promise
     if (!allFiles.includes(manifestPath)) continue;
 
     const lockfileName = LOCKFILES.find(l => workspaceFiles.has(l.name))?.name ?? null;
-    const lockfilePath = lockfileName ? (wsPath ? `${wsPath}/${lockfileName}` : lockfileName) : null;
+    const lockfilePath = lockfileName
+      ? wsPath
+        ? `${wsPath}/${lockfileName}`
+        : lockfileName
+      : null;
 
     const manager = detectManager(rootFiles, workspaceFiles);
     const wsName = pkg?.name ?? (wsPath || path.basename(rootDirectory));
@@ -351,10 +366,14 @@ export async function buildRepoOperationsProfile(rootDirectory: string): Promise
       scriptsByWorkspace[wsPath || '.'] = pkg.scripts;
     }
 
-    fingerprintTokens.push(`ws:${wsPath}:deps:${Object.keys({
-      ...(pkg?.dependencies ?? {}),
-      ...(pkg?.devDependencies ?? {})
-    }).sort().join(',')}`);
+    fingerprintTokens.push(
+      `ws:${wsPath}:deps:${Object.keys({
+        ...(pkg?.dependencies ?? {}),
+        ...(pkg?.devDependencies ?? {})
+      })
+        .sort()
+        .join(',')}`
+    );
 
     const detected = detectDeployableKind(wsPath, pkg ?? null, workspaceFiles, allFiles);
     if (detected) {
@@ -411,9 +430,14 @@ export async function buildRepoOperationsProfile(rootDirectory: string): Promise
   for (const ws of workspaces) {
     const dir = ws.path ? path.join(rootDirectory, ws.path) : rootDirectory;
     const exists = await Promise.all(
-      ['vercel.json', 'wrangler.toml', 'eas.json', 'app.json', 'next.config.js', 'next.config.ts'].map(
-        async name => [name, await fileExists(path.join(dir, name))] as const
-      )
+      [
+        'vercel.json',
+        'wrangler.toml',
+        'eas.json',
+        'app.json',
+        'next.config.js',
+        'next.config.ts'
+      ].map(async name => [name, await fileExists(path.join(dir, name))] as const)
     );
     for (const [name, present] of exists) {
       if (present) fingerprintTokens.push(`cfg:${ws.path}:${name}`);

@@ -11,7 +11,12 @@ const baseProfile: RepoOperationsProfile = {
   deployables: [
     { kind: 'nextjs-app', path: 'apps/web', name: '@overlord/web', deploy_target: 'vercel' },
     { kind: 'expo-app', path: 'apps/mobile', name: '@overlord/mobile', deploy_target: 'eas' },
-    { kind: 'edge-function', path: 'supabase/functions/generate-feed-post', name: 'generate-feed-post', deploy_target: 'supabase' }
+    {
+      kind: 'edge-function',
+      path: 'supabase/functions/generate-feed-post',
+      name: 'generate-feed-post',
+      deploy_target: 'supabase'
+    }
   ],
   migrations: {
     system: 'supabase',
@@ -52,9 +57,9 @@ describe('deriveCandidateActions', () => {
   });
 
   it('fires migration + regenerate-types when a migration changes', () => {
-    const ids = deriveCandidateActions(baseProfile, [
-      'supabase/migrations/20260430_x.sql'
-    ]).map(a => a.id);
+    const ids = deriveCandidateActions(baseProfile, ['supabase/migrations/20260430_x.sql']).map(
+      a => a.id
+    );
     expect(ids).toEqual(
       expect.arrayContaining(['supabase.run-migrations', 'supabase.regenerate-types'])
     );

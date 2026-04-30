@@ -130,7 +130,9 @@ const rules: Rule[] = [
       const m = ctx.profile.migrations;
       if (!m?.migrations_dir || !m.types_output) return null;
       if (changesUnder(ctx, m.migrations_dir).length === 0) return null;
-      const cmd = m.generate_command ? `\`yarn ${m.generate_command}\`` : 'the type-generation script';
+      const cmd = m.generate_command
+        ? `\`yarn ${m.generate_command}\``
+        : 'the type-generation script';
       return {
         id: 'supabase.regenerate-types',
         text: `Run ${cmd} to regenerate \`${m.types_output}\``,
@@ -241,7 +243,10 @@ const rules: Rule[] = [
       return {
         id: 'pkg.lockfile-conflict',
         text: 'Lockfile changed without a manifest change — verify this was intentional',
-        reason: hits.map(m => m.lockfile).filter(Boolean).join(', '),
+        reason: hits
+          .map(m => m.lockfile)
+          .filter(Boolean)
+          .join(', '),
         confidence: 'medium',
         category: 'install'
       };
@@ -265,9 +270,7 @@ const rules: Rule[] = [
     id: 'codegen.regenerate',
     evaluate: ctx => {
       for (const step of ctx.profile.codegen) {
-        const matched = ctx.changedPaths.some(p =>
-          step.triggers.some(t => matchesTrigger(p, t))
-        );
+        const matched = ctx.changedPaths.some(p => step.triggers.some(t => matchesTrigger(p, t)));
         if (matched) {
           const cmd = step.command ? `\`yarn ${step.command}\`` : 'the codegen script';
           return {

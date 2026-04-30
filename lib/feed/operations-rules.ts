@@ -81,7 +81,9 @@ const rules: Rule[] = [
       if (!m?.migrations_dir || !m.types_output) return null;
       const migrated = changesUnder(ctx, m.migrations_dir);
       if (migrated.length === 0) return null;
-      const cmd = m.generate_command ? `\`yarn ${m.generate_command}\`` : 'the type-generation script';
+      const cmd = m.generate_command
+        ? `\`yarn ${m.generate_command}\``
+        : 'the type-generation script';
       return {
         id: 'supabase.regenerate-types',
         text: `Run ${cmd} to regenerate \`${m.types_output}\``,
@@ -195,7 +197,10 @@ const rules: Rule[] = [
       return {
         id: 'pkg.lockfile-conflict',
         text: 'Lockfile changed without a manifest change — verify this was intentional',
-        reason: lockHits.map(m => m.lockfile).filter(Boolean).join(', '),
+        reason: lockHits
+          .map(m => m.lockfile)
+          .filter(Boolean)
+          .join(', '),
         confidence: 'medium',
         category: 'install'
       };
