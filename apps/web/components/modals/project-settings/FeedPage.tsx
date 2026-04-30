@@ -14,6 +14,7 @@ import {
 import { rebuildOperationsProfileAction } from '@/lib/actions/repo-profile';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { RepoOperationsProfile } from '@/lib/repo-profile/types';
+import { useElectron } from '@/components/features/terminal/useElectron';
 
 const getProjectUserPreferencesActionWithRetry = withElectronActionRetry(
   getProjectUserPreferencesAction
@@ -73,6 +74,7 @@ type FeedPageProps = {
 };
 
 export function FeedPage({ open, projectId }: FeedPageProps) {
+  const { isElectron } = useElectron();
   const [feedInstructions, setFeedInstructions] = useState('');
   const [savedFeedInstructions, setSavedFeedInstructions] = useState('');
   const [feedInstructionsLoading, setFeedInstructionsLoading] = useState(false);
@@ -161,6 +163,7 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
   }
 
   async function handleRebuildProfile() {
+    if (!isElectron) return;
     setProfileBuildState('loading');
     setProfileError(null);
     try {
@@ -259,7 +262,7 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
         </div>
         <div className="flex items-center gap-2">
           <LoadingButton
-            buttonState={profileBuildState}
+            buttonState={isElectron ? profileBuildState : 'disabled'}
             setButtonState={setProfileBuildState}
             text={profileJson ? 'Rebuild profile' : 'Build profile'}
             loadingText="Building..."
@@ -270,7 +273,11 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
             variant="outline"
             onClick={handleRebuildProfile}
           />
-          {profileMeta ? (
+          {!isElectron ? (
+            <p className="text-xs text-muted-foreground">
+              Requires the Overlord desktop app.
+            </p>
+          ) : profileMeta ? (
             <p className="font-mono text-[10px] text-muted-foreground">
               fingerprint: {profileMeta.fingerprint.slice(0, 12)}…
               {profileMeta.rebuilt ? ' (rewrote)' : ' (unchanged)'}

@@ -2,6 +2,7 @@
 
 import fs from 'node:fs/promises';
 
+import { getServerActionRequestDiagnostics } from '@/lib/diagnostics/server-action';
 import { resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { buildRepoOperationsProfile } from '@/lib/repo-profile/build-profile';
 import type { RepoOperationsProfile } from '@/lib/repo-profile/types';
@@ -15,6 +16,14 @@ export async function rebuildOperationsProfileAction(
   projectId: string,
   options: { force?: boolean } = {}
 ): Promise<RebuildResult> {
+  const diagnostics = await getServerActionRequestDiagnostics();
+  if (!diagnostics.isElectron) {
+    return {
+      ok: false,
+      error: 'Building the operations profile requires the Overlord desktop app.'
+    };
+  }
+
   const supabase = await createClientForRequest();
   const {
     data: { user }
