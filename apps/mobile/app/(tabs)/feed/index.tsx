@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -158,8 +158,26 @@ export default function FeedScreen() {
     );
   }
 
+  function Header() {
+    return (
+      <View
+        style={[
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            marginTop: 58,
+            paddingHorizontal: 16
+          }
+        ]}
+      >
+        <Ionicons name="newspaper-outline" size={14} color={colors.mutedForeground} />
+        <Text style={{ color: colors.foreground, fontSize: 24, fontWeight: '600' }}>Feed</Text>
+      </View>
+    );
+  }
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <FlatList
         data={filteredPosts}
         keyExtractor={item => item.id}
@@ -172,16 +190,9 @@ export default function FeedScreen() {
         }
         ListHeaderComponent={
           <View style={styles.headerStack}>
+            <Header />
             <View style={styles.filterSection}>
-              <View style={styles.filterHeaderRow}>
-                <Ionicons name="funnel-outline" size={14} color={colors.mutedForeground} />
-                <Text style={styles.filterLabel}>Project</Text>
-                {selectedProjectId !== 'all' && selectedProject ? (
-                  <Text style={styles.filterSummary} numberOfLines={1}>
-                    {selectedProject.name}
-                  </Text>
-                ) : null}
-              </View>
+              <View style={styles.filterHeaderRow}></View>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -458,7 +469,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     filterSection: {
       paddingHorizontal: 16,
-      paddingTop: 10,
+      paddingTop: 5,
       paddingBottom: 6,
       gap: 10
     },

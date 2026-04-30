@@ -303,7 +303,15 @@ export default function TicketsScreen() {
   const buttonIconColor = getContrastColor(projectColor);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={[]}>
+      <Stack.Header blurEffect="systemMaterial" style={{ backgroundColor: '#fff' }} />
+      <Stack.SearchBar placeholder="Search ticket" onChangeText={() => {}} />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.SearchBarSlot />
+
+        <Stack.Toolbar.Button icon="square.and.pencil" />
+      </Stack.Toolbar>
+
       <Stack.Screen options={{ headerShown: false }} />
       <TicketsScreenHeader
         search={search}

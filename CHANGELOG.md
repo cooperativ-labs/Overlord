@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.8.0] - 2026-04-30:21:16
+
+### Added
+- Mobile Feed uses a transparent native stack header and an in-screen “Feed” title row for clearer hierarchy above filters.
+- Mobile Tickets adopts native stack chrome: system material blur on the header, a search bar slot, and a toolbar compose control next to the existing stack screen.
+
+### Fixed
+- None.
+
+### Changed
+- Rely on full-screen safe area handling on Feed and Tickets so content lines up with transparent headers and native stack overlays.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.8.0`.
+
 ## [5.7.0] - 2026-04-30:13:51
 
 ### Added
