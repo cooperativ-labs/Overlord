@@ -2,13 +2,18 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies, headers } from 'next/headers';
 
 import {
+  type ActiveOrgPreference,
+  readActiveOrgPreferenceFromCookie,
+  readActiveOrgPreferenceFromProfile,
+  SELECTED_ORG_COOKIE
+} from '@/lib/active-organization-preference';
+import {
   ELECTRON_CLIENT_HEADER,
   ELECTRON_CLIENT_VALUE,
   ELECTRON_UA_SUBSTRING
 } from '@/lib/auth/electron-detect';
 import { DEFAULT_PROJECT_COOKIE } from '@/lib/default-project';
 import { getSupabaseCookieOptions, getSupabasePublishableKey, getSupabaseUrl } from '@/lib/env';
-import { SELECTED_ORG_COOKIE } from '@/lib/selected-org';
 
 type RequestCookieLike = {
   value: string;
@@ -40,12 +45,6 @@ function normalizeOptionalString(value: string | null | undefined): string | nul
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function parsePositiveInteger(value: string | null | undefined): number | undefined {
-  if (typeof value !== 'string') return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
 export function isElectronRequestFromHeaderStore(headerStore: HeaderStoreLike): boolean {
   const clientHeader = headerStore.get(ELECTRON_CLIENT_HEADER);
   if (clientHeader) {
@@ -69,21 +68,40 @@ export function resolveRequestDefaultProjectId(options: {
   return profileDefaultProjectId ?? normalizeOptionalString(options.cookieDefaultProjectId);
 }
 
+/**
+ * Resolves the active organization scope from the canonical user preference,
+ * with the cookie acting as an SSR fast-path mirror on web only.
+ *
+ * Returns:
+ *   - a positive integer org id when a specific org is selected
+ *   - null when "All organizations" is the active scope (explicit, or bootstrap
+ *     with no organizations available)
+ *
+ * Resolution order:
+ *   - Web: cookie (if set) → profile preference (if set) → first org
+ *   - Electron: profile preference (if set) → first org
+ *
+ * The default-project-org fallback that previously applied on Electron is
+ * intentionally removed; both platforms now resolve the same canonical
+ * preference.
+ */
 export function resolveRequestSelectedOrganizationId(options: {
   isElectron: boolean;
-  cookieSelectedOrganizationId?: string | null;
-  defaultProjectOrganizationId?: number | null;
+  cookiePreference: ActiveOrgPreference;
+  profilePreference: ActiveOrgPreference;
   organizations?: Array<{ id: number }>;
-}): number | undefined {
-  const cookieSelectedOrganizationId = parsePositiveInteger(options.cookieSelectedOrganizationId);
-  if (!options.isElectron) {
-    return cookieSelectedOrganizationId;
-  }
+}): number | null {
+  const primary = options.isElectron
+    ? options.profilePreference
+    : options.cookiePreference.kind !== 'unset'
+      ? options.cookiePreference
+      : options.profilePreference;
 
-  return (
-    options.defaultProjectOrganizationId ??
-    options.organizations?.find(organization => Number.isFinite(organization.id))?.id
-  );
+  if (primary.kind === 'all') return null;
+  if (primary.kind === 'org') return primary.organizationId;
+
+  const firstOrg = options.organizations?.find(organization => Number.isFinite(organization.id));
+  return firstOrg?.id ?? null;
 }
 
 export function resolveRequestSidebarOpen(options: {
@@ -149,10 +167,10 @@ export async function getRequestDefaultProjectId(
 
 export async function getRequestSelectedOrganizationId(
   options: {
-    defaultProjectOrganizationId?: number | null;
     organizations?: Array<{ id: number }>;
+    profilePreferences?: unknown;
   } = {}
-): Promise<number | undefined> {
+): Promise<number | null> {
   const [isElectron, cookieStore] = await Promise.all([
     isElectronRequestFromHeaders(),
     readRequestCookies()
@@ -160,8 +178,10 @@ export async function getRequestSelectedOrganizationId(
 
   return resolveRequestSelectedOrganizationId({
     isElectron,
-    cookieSelectedOrganizationId: cookieStore?.get(SELECTED_ORG_COOKIE)?.value ?? null,
-    defaultProjectOrganizationId: options.defaultProjectOrganizationId,
+    cookiePreference: readActiveOrgPreferenceFromCookie(
+      cookieStore?.get(SELECTED_ORG_COOKIE)?.value ?? null
+    ),
+    profilePreference: readActiveOrgPreferenceFromProfile(options.profilePreferences ?? null),
     organizations: options.organizations
   });
 }

@@ -1,10 +1,43 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { useAuth } from '@/lib/auth-context';
 import { useThemeColors } from '@/lib/colors';
+
+function AddTicketAccessory() {
+  const colors = useThemeColors();
+  const router = useRouter();
+  const placement = NativeTabs.BottomAccessory.usePlacement();
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: placement === 'inline' ? 'flex-end' : 'center',
+        paddingRight: placement === 'inline' ? 16 : 0,
+        paddingVertical: placement === 'inline' ? 0 : 12
+      }}
+    >
+      <Pressable
+        onPress={() => router.push('/(tabs)/tickets/create')}
+        style={({ pressed }) => ({
+          opacity: pressed ? 0.6 : 1,
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: colors.primary,
+          justifyContent: 'center',
+          alignItems: 'center'
+        })}
+      >
+        <Text style={{ color: '#fff', fontSize: 22, lineHeight: 24, fontWeight: '300' }}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export default function TabLayout() {
   const { session, loading } = useAuth();
@@ -32,6 +65,7 @@ export default function TabLayout() {
   return (
     <NativeTabs
       disableTransparentOnScrollEdge
+      minimizeBehavior="onScrollDown"
       tintColor={colors.primary}
       labelStyle={{
         default: { color: colors.mutedForeground },
@@ -42,6 +76,9 @@ export default function TabLayout() {
         selected: colors.primary
       }}
     >
+      <NativeTabs.BottomAccessory>
+        <AddTicketAccessory />
+      </NativeTabs.BottomAccessory>
       <NativeTabs.Trigger name="feed">
         <NativeTabs.Trigger.Icon
           src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="newspaper-outline" />}

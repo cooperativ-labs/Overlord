@@ -13,10 +13,13 @@ export async function fetchProfileSettings(
   custom_agent_instructions: string | null;
   default_project_id: string | null;
   editor_scheme: string | null;
+  preferences: unknown;
 } | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('ai_title_generation, custom_agent_instructions, default_project_id, editor_scheme')
+    .select(
+      'ai_title_generation, custom_agent_instructions, default_project_id, editor_scheme, preferences'
+    )
     .eq('id', userId)
     .maybeSingle();
 

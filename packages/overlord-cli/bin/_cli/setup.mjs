@@ -114,7 +114,7 @@ Record only meaningful behavioral changes — skip formatting-only noise. Prefer
 
 When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent claude-code\` by default for draft ticket creation.
-- Use \`ovld protocol spawn --agent claude-code\` only when the user explicitly asks to create and execute immediately.
+- Use \`ovld protocol prompt --agent claude-code\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
 
 \`\`\`bash
@@ -122,7 +122,7 @@ ovld protocol create --agent claude-code --objective "Capture follow-up work fro
 \`\`\`
 
 \`\`\`bash
-ovld protocol spawn --agent claude-code --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent claude-code --objective "Implement feature X" --priority medium
 \`\`\`
 
 ## Context & Artifacts
@@ -193,7 +193,7 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
 
 When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent opencode\` by default for draft ticket creation.
-- Use \`ovld protocol spawn --agent opencode\` only when the user explicitly asks to create and execute immediately.
+- Use \`ovld protocol prompt --agent opencode\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
 
 \`\`\`bash
@@ -201,7 +201,7 @@ ovld protocol create --agent opencode --objective "Capture follow-up work from t
 \`\`\`
 
 \`\`\`bash
-ovld protocol spawn --agent opencode --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent opencode --objective "Implement feature X" --priority medium
 \`\`\`
 
 ## Context & Artifacts
@@ -266,7 +266,7 @@ For larger delivery JSON, prefer \`--payload-file -\` with stdin so no scratch f
 Rules:
 - Always attach first and deliver last.
 - Use \`ovld protocol\` commands instead of ad hoc repo scripts for ticket lifecycle work.
-- Prefer \`ovld protocol create --agent cursor\` for draft ticket creation; use \`spawn --agent cursor\` only for create-and-execute requests.
+- Prefer \`ovld protocol create --agent cursor\` for draft ticket creation; use \`prompt --agent cursor\` only for create-and-execute requests.
 - If the user sends a new message during an active ticket session, publish a \`user_follow_up\` event before doing anything else.
 `;
 
@@ -399,14 +399,14 @@ disable-model-invocation: true
 Run \`ovld protocol create --agent claude-code\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol create --agent claude-code --objective "<objective>"\`.`
       },
       {
-        path: path.join(base, 'spawn.md'),
+        path: path.join(base, 'prompt.md'),
         content: `---
 description: Create a new Overlord ticket from the current conversation
 argument-hint: <objective or raw flags>
 disable-model-invocation: true
 ---
 
-Run \`ovld protocol spawn --agent claude-code\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol spawn --agent claude-code --objective "<objective>"\`.`
+Run \`ovld protocol prompt --agent claude-code\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol prompt --agent claude-code --objective "<objective>"\`.`
       }
     ];
   }
@@ -430,9 +430,9 @@ Run \`ovld protocol spawn --agent claude-code\` with \`$ARGUMENTS\`. If no flags
           'Create a draft Overlord ticket.\n\nRun `ovld protocol create --agent cursor --objective "<objective>"` using the text after `/create` unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol create --agent cursor`.\n'
       },
       {
-        path: path.join(base, 'spawn.md'),
+        path: path.join(base, 'prompt.md'),
         content:
-          'Create a new Overlord ticket.\n\nRun `ovld protocol spawn --agent cursor --objective "<objective>"` using the text after `/spawn` unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol spawn --agent cursor`.\n'
+          'Create a new Overlord ticket.\n\nRun `ovld protocol prompt --agent cursor --objective "<objective>"` using the text after `/prompt` unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol prompt --agent cursor`.\n'
       }
     ];
   }
@@ -456,9 +456,9 @@ Run \`ovld protocol spawn --agent claude-code\` with \`$ARGUMENTS\`. If no flags
           'description = "Create a draft Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol create --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol create --agent gemini`.\n"""\n'
       },
       {
-        path: path.join(base, 'spawn.toml'),
+        path: path.join(base, 'prompt.toml'),
         content:
-          'description = "Create a new Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol spawn --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol spawn --agent gemini`.\n"""\n'
+          'description = "Create a new Overlord ticket from the current conversation."\nprompt = """\nRun `ovld protocol prompt --agent gemini --objective "<objective>"` using `{{args}}` as the objective unless raw flags were provided. If raw flags were provided, pass them after `ovld protocol prompt --agent gemini`.\n"""\n'
       }
     ];
   }
@@ -493,13 +493,13 @@ agent: build
 Run \`ovld protocol create --agent opencode\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol create --agent opencode --objective "<objective>"\`.`
     },
     {
-      path: path.join(base, 'spawn.md'),
+      path: path.join(base, 'prompt.md'),
       content: `---
 description: Create a new Overlord ticket from the current conversation
 agent: build
 ---
 
-Run \`ovld protocol spawn --agent opencode\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol spawn --agent opencode --objective "<objective>"\`.`
+Run \`ovld protocol prompt --agent opencode\` with \`$ARGUMENTS\`. If no flags are present, treat the arguments as the objective and call \`ovld protocol prompt --agent opencode --objective "<objective>"\`.`
     }
   ];
 }

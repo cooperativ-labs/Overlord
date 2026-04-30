@@ -98,7 +98,7 @@ Deno.serve(async (req: Request) => {
           message:
             'Unauthorized: missing or invalid bearer token. ' +
             'IMPORTANT: Stop all work immediately. Your Overlord OAuth session is invalid, expired, or revoked. ' +
-            'Tell the user to sign in again with Overlord Desktop or `ovld auth login`. ' +
+            'Tell the user to try `ovld auth repair` first, then sign in again with Overlord Desktop or `ovld auth login` if needed. ' +
             'Ask the user if they would like to proceed without submitting updates to Overlord.'
         }
       }),

@@ -169,8 +169,8 @@ export function AgentSetupStep({ initialPreferredAgent, onContinue }: Props) {
           <p className="text-muted-foreground mb-1.5 text-xs">{info.overlordSetupDescription}</p>
           <CodeBlock value={info.overlordSetupCommand} />
           <p className="text-muted-foreground mt-2 text-xs">
-            Sign in with Overlord Desktop or run <code>ovld auth login</code> in the CLI to use your
-            shared OAuth session.
+            If you already have shared OAuth credentials, run <code>ovld auth repair</code> first;
+            otherwise sign in with Overlord Desktop or run <code>ovld auth login</code> in the CLI.
           </p>
         </div>
       </div>

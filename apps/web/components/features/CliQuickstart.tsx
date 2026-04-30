@@ -169,7 +169,7 @@ export function CliQuickstart({
                 })}
               </div>
               <div className="grid gap-2.5">
-                {hasExecutedObjectives ? (
+                {externalSessionId ? (
                   <>
                     <CommandRow
                       label="Restart session"

@@ -7,6 +7,7 @@ import {
   createProject,
   deleteProjectAction,
   disconnectProjectFromEverhourAction,
+  moveProjectToOrganizationAction,
   updateProjectColorAction,
   updateProjectNameAction,
   updateProjectSshConfigAction,
@@ -97,6 +98,7 @@ function emptySshFields() {
 }
 
 const createProjectWithRetry = withElectronActionRetry(createProject);
+const moveProjectToOrganizationWithRetry = withElectronActionRetry(moveProjectToOrganizationAction);
 const updateProjectColorWithRetry = withElectronActionRetry(updateProjectColorAction);
 const updateProjectNameWithRetry = withElectronActionRetry(updateProjectNameAction);
 const updateProjectWorkingDirectoryWithRetry = withElectronActionRetry(
@@ -301,6 +303,23 @@ export function useDeleteProjectMutation() {
     onMutate: input => {
       const snapshot = snapshotProjectState(queryClient);
       removeProjectFromCache(queryClient, input.projectId);
+      return snapshot;
+    },
+    onError: (_error, _input, snapshot) => {
+      if (snapshot) restoreProjectState(queryClient, snapshot);
+    }
+  });
+}
+
+export function useMoveProjectToOrganizationMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: moveProjectToOrganizationWithRetry,
+    onMutate: input => {
+      const snapshot = snapshotProjectState(queryClient);
+      patchProjectCache(queryClient, input.projectId, {
+        organizationId: input.targetOrganizationId
+      });
       return snapshot;
     },
     onError: (_error, _input, snapshot) => {

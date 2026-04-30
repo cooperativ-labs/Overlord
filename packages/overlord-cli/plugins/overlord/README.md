@@ -14,7 +14,7 @@ personal marketplace entry at `~/.agents/plugins/marketplace.json`.
 ## Requirements
 
 - Install the Overlord CLI so `ovld` is available on `PATH`.
-- Authenticate with `ovld auth login` or Overlord Desktop. `OVERLORD_URL` can be used to point the CLI at a non-default host.
+- If a shared session already exists but looks stale, authenticate with `ovld auth repair` first. If repair does not help, use `ovld auth login` or Overlord Desktop. `OVERLORD_URL` can be used to point the CLI at a non-default host.
 - Optionally set `OVLD_BIN` if the CLI lives at a non-standard path.
 - If `ovld` reports `OVERLORD_URL` is unreachable, the bundled workflow tells Codex to request permission escalation or network access before retrying.
 

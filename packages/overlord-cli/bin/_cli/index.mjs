@@ -37,7 +37,6 @@ Usage:
   ${primaryCommand} protocol <subcommand>      Agent workflow commands
   ${primaryCommand} connect <agent>            Launch an agent on a ticket
   ${primaryCommand} restart <agent>            Resume an agent session
-  ${primaryCommand} context                    Print ticket context (requires TICKET_ID)
   ${primaryCommand} setup [agent|all]          Install Overlord agent connector (interactive if no args)
   ${primaryCommand} update                    Install the latest CLI version from npm
   ${primaryCommand} doctor                     Validate installed agent connectors and check for CLI updates
@@ -46,7 +45,7 @@ Usage:
 
 Agents:
   Use ${primaryCommand} protocol help for ticket lifecycle commands.
-  Key protocol commands: auth-status, discover-project, create, spawn, attach, connect, load-context.
+  Key protocol commands: auth-status, discover-project, create, prompt, attach, connect, load-context.
 
 Auth:
   ${primaryCommand} auth login               Authorize CLI via browser
@@ -157,8 +156,7 @@ export async function runCli({ primaryCommand }) {
     command === 'connect' ||
     command === 'restart' ||
     command === 'run' ||
-    command === 'resume' ||
-    command === 'context'
+    command === 'resume'
   ) {
     await runLauncherCommand(command, rest);
     return;

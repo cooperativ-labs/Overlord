@@ -99,8 +99,8 @@ const tools = [
     subcommand: 'load-context'
   },
   {
-    name: 'spawn_ticket',
-    description: 'Create a follow-up ticket and attach to it immediately.',
+    name: 'prompt_ticket',
+    description: 'Create a ticket and attach to it immediately.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -135,7 +135,7 @@ const tools = [
       agent: args.agent,
       method: args.method
     }),
-    subcommand: 'spawn'
+    subcommand: 'prompt'
   },
   {
     name: 'post_update',

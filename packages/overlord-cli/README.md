@@ -36,10 +36,12 @@ overlord help
 
 ### Auth
 ```bash
-# Login to Overlord
+# Repair shared credentials first when a session already exists
+ovld auth repair # mirror and chmod shared Desktop/CLI credentials when possible
+
+# Login to Overlord if repair does not restore access
 ovld auth login #opens a browser when possible and also prints a verification URL/code so login can be completed from another machine over SSH.
 ovld auth status # show current login status (use --verbose for redacted diagnostics)
-ovld auth repair # mirror and chmod shared Desktop/CLI credentials when possible
 ovld auth logout # remove stored credentials
 ```
 
@@ -89,7 +91,7 @@ Top-level commands (see `ovld help`):
 - `auth` - `login`, `status`, `repair` (shared Desktop/CLI credentials), or `logout`
 - `tickets` - `create` or `list` (optional `--status`)
 - `ticket` - `context <ticketId>` to print context for one ticket
-- `connect`, `restart`, `context` - launch or resume an agent session, or print ticket context (`context` requires `TICKET_ID`)
+- `connect`, `restart` - launch or resume an agent session
 - `run`, `resume` - legacy aliases for `connect` and `restart`
 - `setup` - install the Overlord connector for an agent; `ovld setup [agent|all]` (interactive with no args). `ovld setup claude` also performs the one-time v3.25.0 to v4 Claude plugin migration
 - `update` - install the latest CLI release from npm
@@ -108,7 +110,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `load-context` - read ticket context without creating a session
 - `search-tickets` - find tickets by keyword, status, project, creator, or update date
 - `create` - create a draft ticket without attaching (standalone or follow-up)
-- `spawn` - create a follow-up ticket and attach to it immediately
+- `prompt` - create a ticket and attach to it immediately (`spawn` is a backward-compatible alias)
 - `update` - post progress, activity events, and optional change rationales
 - `record-change-rationales` - persist structured change rationales without a normal progress update
 - `ask` - post a blocking question and move the ticket to review

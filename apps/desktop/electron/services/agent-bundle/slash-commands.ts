@@ -43,7 +43,7 @@ function claudeCommandFiles(): ManagedFile[] {
     {
       path: path.join(base, 'connect.md'),
       content: `---
-description: Connect this session to another Overlord ticket by ticket ID
+description: Connect this session to another Overlord ticket (requires: ticket-id)
 argument-hint: <ticket-id>
 disable-model-invocation: true
 ---
@@ -64,7 +64,7 @@ Rules:
     {
       path: path.join(base, 'load.md'),
       content: `---
-description: Load Overlord ticket context without creating a new session
+description: Load Overlord ticket context (requires: ticket-id)
 argument-hint: <ticket-id>
 disable-model-invocation: true
 ---
@@ -81,6 +81,26 @@ Rules:
 - Use \`load-context\`, not \`attach\`.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+    },
+    {
+      path: path.join(base, 'attach.md'),
+      content: `---
+description: Attach this session to an Overlord ticket (requires: ticket-id)
+argument-hint: <ticket-id>
+disable-model-invocation: true
+---
+
+Attach this session to an Overlord ticket.
+
+Treat \`$ARGUMENTS\` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol attach --ticket-id <ticketId>\`
+
+Rules:
+- Use \`attach\` to establish a persistent session with a ticket.
+- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
     },
     {
       path: path.join(base, 'create.md'),
@@ -102,7 +122,7 @@ If no objective was provided, ask the user for one and stop.
 After the command succeeds, report the new \`TICKET_ID\`.`
     },
     {
-      path: path.join(base, 'spawn.md'),
+      path: path.join(base, 'prompt.md'),
       content: `---
 description: Create a new Overlord ticket from the current conversation
 argument-hint: <objective or raw flags>
@@ -112,9 +132,9 @@ disable-model-invocation: true
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn --agent claude-code\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol prompt --agent claude-code\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
-\`ovld protocol spawn --agent claude-code --objective "<objective>"\`
+\`ovld protocol prompt --agent claude-code --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 
@@ -128,7 +148,7 @@ function cursorCommandFiles(): ManagedFile[] {
   return [
     {
       path: path.join(base, 'connect.md'),
-      content: `Connect this session to another Overlord ticket.
+      content: `Connect this session to another Overlord ticket (requires: ticket-id).
 
 The text after \`/connect\` is the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
@@ -143,7 +163,7 @@ Rules:
     },
     {
       path: path.join(base, 'load.md'),
-      content: `Load Overlord ticket context without creating a new session.
+      content: `Load Overlord ticket context (requires: ticket-id).
 
 The text after \`/load\` is the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
@@ -155,6 +175,20 @@ Rules:
 - Use \`load-context\`, not \`attach\`.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+    },
+    {
+      path: path.join(base, 'attach.md'),
+      content: `Attach this session to an Overlord ticket (requires: ticket-id).
+
+The text after \`/attach\` is the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol attach --ticket-id <ticketId>\`
+
+Rules:
+- Use \`attach\` to establish a persistent session with a ticket.
+- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
     },
     {
       path: path.join(base, 'create.md'),
@@ -173,16 +207,16 @@ If no objective was provided, ask the user for one and stop.
 After the command succeeds, report the new \`TICKET_ID\`.`
     },
     {
-      path: path.join(base, 'spawn.md'),
+      path: path.join(base, 'prompt.md'),
       content: `Create a new Overlord ticket from the user's request.
 
-The text after \`/spawn\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
+The text after \`/prompt\` is the objective unless it already includes raw flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`.
 
 If raw flags are present, run:
-\`ovld protocol spawn --agent cursor <raw arguments>\`
+\`ovld protocol prompt --agent cursor <raw arguments>\`
 
 Otherwise, run:
-\`ovld protocol spawn --agent cursor --objective "<objective>"\`
+\`ovld protocol prompt --agent cursor --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 
@@ -197,7 +231,7 @@ function geminiCommandFiles(): ManagedFile[] {
     {
       path: path.join(base, 'connect.toml'),
       content:
-        `description = "Connect this session to another Overlord ticket by ticket ID."
+        `description = "Connect this session to another Overlord ticket (requires: ticket-id)."
 prompt = """
 Connect this session to another Overlord ticket.
 
@@ -226,7 +260,7 @@ Rules:
     {
       path: path.join(base, 'load.toml'),
       content:
-        `description = "Load Overlord ticket context without creating a new session."
+        `description = "Load Overlord ticket context (requires: ticket-id)."
 prompt = """
 Load Overlord ticket context without attaching to the ticket.
 
@@ -248,6 +282,32 @@ Rules:
         `.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.
+"""`
+    },
+    {
+      path: path.join(base, 'attach.toml'),
+      content:
+        `description = "Attach this session to an Overlord ticket (requires: ticket-id)."
+prompt = """
+Attach this session to an Overlord ticket.
+
+Treat ` +
+        '`{{args}}`' +
+        ` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+` +
+        '`ovld protocol attach --ticket-id <ticketId>`' +
+        `
+
+Rules:
+- Use ` +
+        '`attach`' +
+        ` to establish a persistent session with a ticket.
+- After the command succeeds, report the returned ` +
+        '`SESSION_KEY`' +
+        ` and confirm that future updates should use that ticket.
 """`
     },
     {
@@ -286,7 +346,7 @@ After the command succeeds, report the new ` +
 """`
     },
     {
-      path: path.join(base, 'spawn.toml'),
+      path: path.join(base, 'prompt.toml'),
       content:
         `description = "Create a new Overlord ticket from the current conversation."
 prompt = """
@@ -304,13 +364,13 @@ If it already contains flags such as ` +
         `, or ` +
         '`--execution-target`' +
         `, pass those flags through after ` +
-        '`ovld protocol spawn --agent gemini`' +
+        '`ovld protocol prompt --agent gemini`' +
         `.
 Otherwise, treat ` +
         '`{{args}}`' +
         ` as the objective text and run:
 ` +
-        '`ovld protocol spawn --agent gemini --objective "<objective>"`' +
+        '`ovld protocol prompt --agent gemini --objective "<objective>"`' +
         `
 
 If no objective was provided, ask the user for one and stop.
@@ -331,7 +391,7 @@ function openCodeCommandFiles(): ManagedFile[] {
     {
       path: path.join(base, 'connect.md'),
       content: `---
-description: Connect this session to another Overlord ticket by ticket ID
+description: Connect this session to another Overlord ticket (requires: ticket-id)
 agent: build
 ---
 
@@ -351,7 +411,7 @@ Rules:
     {
       path: path.join(base, 'load.md'),
       content: `---
-description: Load Overlord ticket context without creating a new session
+description: Load Overlord ticket context (requires: ticket-id)
 agent: build
 ---
 
@@ -367,6 +427,25 @@ Rules:
 - Use \`load-context\`, not \`attach\`.
 - Do not create or switch sessions.
 - Summarize the returned ticket details, history, artifacts, and shared context for the user.`
+    },
+    {
+      path: path.join(base, 'attach.md'),
+      content: `---
+description: Attach this session to an Overlord ticket (requires: ticket-id)
+agent: build
+---
+
+Attach this session to an Overlord ticket.
+
+Treat \`$ARGUMENTS\` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol attach --ticket-id <ticketId>\`
+
+Rules:
+- Use \`attach\` to establish a persistent session with a ticket.
+- After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
     },
     {
       path: path.join(base, 'create.md'),
@@ -387,7 +466,7 @@ If no objective was provided, ask the user for one and stop.
 After the command succeeds, report the new \`TICKET_ID\`.`
     },
     {
-      path: path.join(base, 'spawn.md'),
+      path: path.join(base, 'prompt.md'),
       content: `---
 description: Create a new Overlord ticket from the current conversation
 agent: build
@@ -396,9 +475,9 @@ agent: build
 Create a new Overlord ticket from the user's request.
 
 Use \`$ARGUMENTS\` as the input.
-If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol spawn --agent opencode\`.
+If it already contains flags such as \`--title\`, \`--priority\`, \`--project-id\`, or \`--execution-target\`, pass those flags through after \`ovld protocol prompt --agent opencode\`.
 Otherwise, treat \`$ARGUMENTS\` as the objective text and run:
-\`ovld protocol spawn --agent opencode --objective "<objective>"\`
+\`ovld protocol prompt --agent opencode --objective "<objective>"\`
 
 If no objective was provided, ask the user for one and stop.
 
@@ -532,3 +611,5 @@ export function uninstallSlashCommands(agent: SlashCommandAgent): SlashCommandUn
     };
   }
 }
+
+// version: 2.0.0

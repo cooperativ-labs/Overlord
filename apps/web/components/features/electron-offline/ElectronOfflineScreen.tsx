@@ -146,43 +146,50 @@ export function ElectronOfflineScreen({ onRetry }: Props) {
   }
 
   return (
-    <div className="flex h-full w-full max-w-[1500px] flex-col overflow-y-auto px-4 py-6 sm:px-6">
-      {/* Header with offline indicator and retry */}
-      <div className="mb-6 flex items-center gap-4 text-center justify-between bg-amber-600/20 p-3 rounded-lg">
-        <div className="flex items-center gap-3">
-          <div className="rounded-full bg-muted p-3">
-            <WifiOff className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+    <div className="flex h-full w-full flex-col">
+      {/* Header banner - full width with mt-4 */}
+      <div className="mt-4 w-full bg-amber-600/20">
+        <div className="flex items-center gap-4 text-center justify-between px-4 py-3 sm:px-6 md:mx-auto md:max-w-[1500px]">
+          <div className="flex items-center gap-3">
+            <div className="rounded-full bg-muted p-3">
+              <WifiOff className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            </div>
+            <div className="text-left">
+              <h1 className="text-lg font-semibold tracking-tight">No Internet Connection</h1>
+              <p className="text-sm text-muted-foreground">
+                Overlord will reconnect automatically when the network is available.
+              </p>
+            </div>
           </div>
-          <div className="text-left">
-            <h1 className="text-lg font-semibold tracking-tight">No Internet Connection</h1>
-            <p className="text-sm text-muted-foreground">
-              Overlord will reconnect automatically when the network is available.
-            </p>
+
+          <div className="flex flex-col items-center gap-2">
+            <Button onClick={handleRetry} disabled={isRetrying} variant="outline" size="sm">
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
+              {isRetrying ? 'Checking...' : 'Try Again'}
+            </Button>
+
+            {retryFailed && <p className="text-xs text-muted-foreground">Still no connection.</p>}
           </div>
-        </div>
-
-        <div className="flex flex-col items-center gap-2">
-          <Button onClick={handleRetry} disabled={isRetrying} variant="outline" size="sm">
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`} />
-            {isRetrying ? 'Checking...' : 'Try Again'}
-          </Button>
-
-          {retryFailed && <p className="text-xs text-muted-foreground">Still no connection.</p>}
         </div>
       </div>
 
-      {/* Main content: Two-column layout on desktop, stacked on mobile */}
-      {/* Mobile: Ticket section first, then feed */}
-      {/* Desktop: Feed on left, tickets on right */}
-      <div className="flex flex-1 flex-col gap-6 md:flex-row md:gap-12">
-        {/* Ticket section - shows first on mobile (order-1), second on desktop (md:order-2) */}
-        <div className="order-1 w-full md:order-2 md:w-1/2 lg:w-2/5">
-          <TicketSection />
-        </div>
+      {/* Centered content container */}
+      <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto w-full max-w-[1500px]">
+          {/* Main content: Two-column layout on desktop, stacked on mobile */}
+          {/* Mobile: Ticket section first, then feed */}
+          {/* Desktop: Feed on left, tickets on right */}
+          <div className="flex flex-1 flex-col gap-6 md:flex-row md:gap-12">
+            {/* Ticket section - shows first on mobile (order-1), second on desktop (md:order-2) */}
+            <div className="order-1 w-full md:order-2 md:w-1/2 lg:w-2/5">
+              <TicketSection />
+            </div>
 
-        {/* Feed section - shows second on mobile (order-2), first on desktop (md:order-1) */}
-        <div className="order-2 w-full md:order-1 md:w-1/2 lg:w-3/5">
-          <FeedSection cachedPosts={cachedPosts} />
+            {/* Feed section - shows second on mobile (order-2), first on desktop (md:order-1) */}
+            <div className="order-2 w-full md:order-1 md:w-1/2 lg:w-3/5">
+              <FeedSection cachedPosts={cachedPosts} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

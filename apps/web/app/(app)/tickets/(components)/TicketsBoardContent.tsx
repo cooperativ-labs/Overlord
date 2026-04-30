@@ -1,23 +1,14 @@
 import { headers } from 'next/headers';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
-import type {
-  BoardDataset,
-  BoardScope,
-  BoardStatus,
-  BoardTicket
-} from '@/lib/client-data/tickets/board-types';
-import BoardHydrationBoundary from '@/lib/client-data/tickets/BoardHydrationBoundary';
+import type { BoardScope, BoardStatus } from '@/lib/client-data/tickets/board-types';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
-import CalendarView from './CalendarView';
-import KanbanBoard from './KanbanBoard';
-import TicketListView from './TicketListView';
+import TicketsBoardClient from './TicketsBoardClient';
 
 function getOrganizationName(
   organization: { name: string } | Array<{ name: string }> | null | undefined
@@ -117,7 +108,8 @@ export default async function TicketsBoardContent({
   const projectPreferences = projectId ? await getProjectUserPreferencesAction(projectId) : null;
 
   const preferredView = projectPreferences?.preferred_view ?? savedView;
-  const view = isMobile
+  // This is the initial view the client will show. Mobile can only show list or calendar.
+  const initialView = isMobile
     ? preferredView === 'calendar'
       ? 'calendar'
       : 'list'
@@ -144,46 +136,28 @@ export default async function TicketsBoardContent({
   const ticketSelectFields =
     'id,title,due_datetime,execution_target,status,priority,assigned_agent,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
-  const ticketQueriesPromise =
-    view === 'calendar'
-      ? (async () => {
-          let query = supabase
-            .from('tickets')
-            .select(ticketSelectFields)
-            .not('due_datetime', 'is', null)
-            .order('due_datetime', { ascending: true })
-            .limit(500);
+  // Always fetch board/list data (per-status). Calendar data is fetched
+  // client-side on demand via TanStack Query prefetch in TicketsBoardClient.
+  const ticketQueriesPromise = Promise.all(
+    allStatuses.map(async status => {
+      let query = supabase
+        .from('tickets')
+        .select(ticketSelectFields)
+        .eq('status', status.name)
+        .order('updated_at', { ascending: false })
+        .limit(INITIAL_TICKETS_PER_STATUS);
 
-          if (organizationId !== undefined) {
-            query = query.eq('organization_id', organizationId);
-          }
-          if (projectId !== undefined) {
-            query = query.eq('project_id', projectId);
-          }
+      if (organizationId !== undefined) {
+        query = query.eq('organization_id', organizationId);
+      }
 
-          const result = await query;
-          return [result];
-        })()
-      : Promise.all(
-          allStatuses.map(async status => {
-            let query = supabase
-              .from('tickets')
-              .select(ticketSelectFields)
-              .eq('status', status.name)
-              .order('updated_at', { ascending: false })
-              .limit(INITIAL_TICKETS_PER_STATUS);
+      if (projectId !== undefined) {
+        query = query.eq('project_id', projectId);
+      }
 
-            if (organizationId !== undefined) {
-              query = query.eq('organization_id', organizationId);
-            }
-
-            if (projectId !== undefined) {
-              query = query.eq('project_id', projectId);
-            }
-
-            return query;
-          })
-        );
+      return query;
+    })
+  );
 
   const [ticketResults, everhourIntegrationResult] = await Promise.all([
     ticketQueriesPromise,
@@ -279,7 +253,6 @@ export default async function TicketsBoardContent({
     const p = getRelationItem(project);
     const session = latestSessionByTicket.get(ticket.id);
     const isAttached = session?.session_state === 'attached';
-    // Prefer the executing objective's agent_identifier; fall back to session's
     const runningAgent =
       objectiveAgentByTicket.get(ticket.id) ?? (isAttached ? session.agent_identifier : null);
     return {
@@ -306,8 +279,10 @@ export default async function TicketsBoardContent({
   let objectiveFileMentionPaths: string[] = [];
   let kanbanWorkingDirectory: string | null = null;
 
+  // Only resolve file mentions when the board view will be shown — it's a
+  // board-specific feature and the listing can take up to 3 seconds.
   const effectiveMentionProjectId = projectId ?? mentionProjectId;
-  if (effectiveMentionProjectId && view === 'board') {
+  if (effectiveMentionProjectId && initialView === 'board') {
     const {
       data: { user: currentUser }
     } = await supabase.auth.getUser();
@@ -322,7 +297,6 @@ export default async function TicketsBoardContent({
       : { data: null };
 
     if (isElectronRequest) {
-      // In Electron, pass the raw configured path so the client can fetch files locally via IPC
       kanbanWorkingDirectory = projectUserForMentions?.local_working_directory ?? null;
     } else {
       const resolvedProjectDirectory = resolveLinkedDirectory(
@@ -345,110 +319,39 @@ export default async function TicketsBoardContent({
     }
   }
 
-  const showBoard = view === 'board' && statuses.length > 0;
-  const showCalendar = view === 'calendar';
-  const boardDataset: BoardDataset = showCalendar ? 'calendar' : view === 'list' ? 'list' : 'board';
-
   const boardScope: BoardScope = projectId
     ? { kind: 'project', projectId, organizationId }
     : { kind: 'user', organizationId };
-  const boardBootstrapTickets: BoardTicket[] = tickets.map(ticket => ({
-    id: ticket.id,
-    title: ticket.title,
-    objective: ticket.objective ?? null,
-    organization_id: ticket.organization_id,
-    project_id: ticket.project_id,
-    project_name: ticket.project_name,
-    project_color: ticket.project_color,
-    project_everhour_project_id: ticket.project_everhour_project_id,
-    everhour_task_id: ticket.everhour_task_id,
-    agent_session_state: ticket.agent_session_state,
-    running_agent: ticket.running_agent,
-    latest_objective_agent: ticket.latest_objective_agent,
-    status: ticket.status,
-    priority: ticket.priority,
-    execution_target: ticket.execution_target,
-    assigned_agent: ticket.assigned_agent,
-    board_position: ticket.board_position,
-    organization_name: ticket.organization_name,
-    waiting_for_response_at: ticket.waiting_for_response_at,
-    is_read: ticket.is_read,
-    objectives_executed_count: ticket.objectives_executed_count,
-    updated_at: ticket.updated_at,
-    schedule_id: ticket.schedule_id,
-    due_datetime: ticket.due_datetime
-  }));
+
   const boardBootstrapStatuses: BoardStatus[] = statuses.map(status => ({
     name: status.name,
     position: status.position,
     status_type: status.status_type
   }));
 
-  return (
-    <div className="flex flex-1 min-h-0 flex-col gap-4">
-      <BoardHydrationBoundary
-        scope={boardScope}
-        bootstrap={{
-          scope: boardScope,
-          tickets: boardBootstrapTickets,
-          statuses: boardBootstrapStatuses
-        }}
-        statuses={boardBootstrapStatuses}
-        dataset={boardDataset}
-        organizationId={organizationId}
-      />
-      {loadError ? (
-        <Alert variant="destructive" className="mx-4 md:mx-6">
-          <AlertDescription>Failed to load tickets: {loadError.message}</AlertDescription>
-        </Alert>
-      ) : null}
+  const completeStatusName =
+    statuses.find(
+      status =>
+        status.status_type === 'complete' && status.name.trim().toLowerCase() !== 'cancelled'
+    )?.name ?? statuses.find(status => status.status_type === 'complete')?.name;
 
-      {showCalendar ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
-          <CalendarView
-            tickets={tickets}
-            statuses={statuses}
-            completeStatusName={
-              statuses.find(
-                status =>
-                  status.status_type === 'complete' &&
-                  status.name.trim().toLowerCase() !== 'cancelled'
-              )?.name ?? statuses.find(status => status.status_type === 'complete')?.name
-            }
-            initialView={view}
-            showViewToggle
-            projectId={projectId}
-            organizationId={organizationId}
-            ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
-          />
-        </div>
-      ) : showBoard ? (
-        <KanbanBoard
-          tickets={tickets}
-          statuses={statuses}
-          showOrganizationName={showOrganizationName}
-          organizationId={organizationId}
-          projectId={projectId}
-          fileMentionPaths={objectiveFileMentionPaths}
-          workingDirectory={kanbanWorkingDirectory}
-          initialView={view}
-          initialHiddenColumns={initialHiddenColumns}
-        />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
-          <TicketListView
-            tickets={tickets}
-            statuses={statuses}
-            showOrganizationName={showOrganizationName}
-            ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
-            initialView={view}
-            showViewToggle
-            organizationId={organizationId}
-            projectId={projectId}
-            initialListFilters={initialListFilters}
-          />
-        </div>
-      )}
-    </div>
+  return (
+    <TicketsBoardClient
+      initialView={initialView}
+      organizationId={organizationId}
+      projectId={projectId}
+      showOrganizationName={showOrganizationName}
+      tickets={tickets as Parameters<typeof TicketsBoardClient>[0]['tickets']}
+      statuses={statuses}
+      boardScope={boardScope}
+      boardBootstrapStatuses={boardBootstrapStatuses}
+      loadError={loadError}
+      fileMentionPaths={objectiveFileMentionPaths}
+      workingDirectory={kanbanWorkingDirectory}
+      initialHiddenColumns={initialHiddenColumns}
+      initialListFilters={initialListFilters}
+      ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
+      completeStatusName={completeStatusName}
+    />
   );
 }

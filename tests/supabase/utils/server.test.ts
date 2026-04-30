@@ -24,32 +24,92 @@ describe('request preference resolution', () => {
     ).toBeNull();
   });
 
-  it('derives Electron selected organization from stable fallbacks instead of cookies', () => {
-    expect(
-      resolveRequestSelectedOrganizationId({
-        isElectron: false,
-        cookieSelectedOrganizationId: '42',
-        defaultProjectOrganizationId: 7,
-        organizations: [{ id: 9 }]
-      })
-    ).toBe(42);
+  describe('selected organization preference', () => {
+    it('prefers cookie over profile preference on web', () => {
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: false,
+          cookiePreference: { kind: 'org', organizationId: 42 },
+          profilePreference: { kind: 'org', organizationId: 7 },
+          organizations: [{ id: 9 }]
+        })
+      ).toBe(42);
+    });
 
-    expect(
-      resolveRequestSelectedOrganizationId({
-        isElectron: true,
-        cookieSelectedOrganizationId: '42',
-        defaultProjectOrganizationId: 7,
-        organizations: [{ id: 9 }]
-      })
-    ).toBe(7);
+    it('falls back to profile preference on web when cookie is unset', () => {
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: false,
+          cookiePreference: { kind: 'unset' },
+          profilePreference: { kind: 'org', organizationId: 7 },
+          organizations: [{ id: 9 }]
+        })
+      ).toBe(7);
+    });
 
-    expect(
-      resolveRequestSelectedOrganizationId({
-        isElectron: true,
-        cookieSelectedOrganizationId: null,
-        organizations: [{ id: 9 }, { id: 10 }]
-      })
-    ).toBe(9);
+    it('ignores cookie on Electron and reads profile preference', () => {
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: true,
+          cookiePreference: { kind: 'org', organizationId: 42 },
+          profilePreference: { kind: 'org', organizationId: 7 },
+          organizations: [{ id: 9 }]
+        })
+      ).toBe(7);
+    });
+
+    it('returns null when profile preference is explicit "all" (Electron)', () => {
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: true,
+          cookiePreference: { kind: 'unset' },
+          profilePreference: { kind: 'all' },
+          organizations: [{ id: 9 }]
+        })
+      ).toBeNull();
+    });
+
+    it('returns null when cookie is explicit "all" (web)', () => {
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: false,
+          cookiePreference: { kind: 'all' },
+          profilePreference: { kind: 'org', organizationId: 7 },
+          organizations: [{ id: 9 }]
+        })
+      ).toBeNull();
+    });
+
+    it('bootstraps to first organization when nothing is set', () => {
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: true,
+          cookiePreference: { kind: 'unset' },
+          profilePreference: { kind: 'unset' },
+          organizations: [{ id: 9 }, { id: 10 }]
+        })
+      ).toBe(9);
+
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: false,
+          cookiePreference: { kind: 'unset' },
+          profilePreference: { kind: 'unset' },
+          organizations: [{ id: 9 }]
+        })
+      ).toBe(9);
+    });
+
+    it('returns null when nothing is set and the user has no organizations', () => {
+      expect(
+        resolveRequestSelectedOrganizationId({
+          isElectron: false,
+          cookiePreference: { kind: 'unset' },
+          profilePreference: { kind: 'unset' },
+          organizations: []
+        })
+      ).toBeNull();
+    });
   });
 
   it('forces the desktop sidebar open state to a deterministic default', () => {

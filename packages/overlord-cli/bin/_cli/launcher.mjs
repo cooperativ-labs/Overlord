@@ -220,27 +220,6 @@ async function runAgent(agent, mode = 'run') {
   }
 }
 
-async function printContext() {
-  const ticketId = process.env.TICKET_ID;
-  if (!ticketId) {
-    console.error('Missing required environment variable: TICKET_ID\n');
-    console.error('Usage: TICKET_ID=<id> ovld context');
-    console.error('       ovld ticket context <id>  (recommended)');
-    process.exit(1);
-  }
-
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
-  const context = await fetchContext(
-    platformUrl,
-    bearerToken,
-    localSecret,
-    organizationId,
-    ticketId,
-    'claude'
-  );
-  process.stdout.write(context);
-}
-
 export async function runLauncherCommand(command, args) {
   const normalizedCommand = command === 'connect' ? 'run' : command === 'restart' ? 'resume' : command;
   const { positionals, flags } = parseLauncherArgs(args);
@@ -262,11 +241,6 @@ export async function runLauncherCommand(command, args) {
 
   if (normalizedCommand === 'resume') {
     await runAgent(positionals[0], 'resume');
-    return;
-  }
-
-  if (normalizedCommand === 'context') {
-    await printContext();
     return;
   }
 

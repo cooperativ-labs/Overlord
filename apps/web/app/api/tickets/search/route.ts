@@ -2,11 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { searchTickets } from '@/lib/helpers/ticket-search';
-import {
-  createClientForRequest,
-  getRequestDefaultProjectId,
-  getRequestSelectedOrganizationId
-} from '@/supabase/utils/server';
+import { createClientForRequest, getRequestSelectedOrganizationId } from '@/supabase/utils/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -27,18 +23,6 @@ export async function GET(request: Request) {
     supabase.from('members').select('organizations!inner(id)').eq('user_id', user.id),
     fetchProfileSettings(supabase, user.id)
   ]);
-  const defaultProjectId = await getRequestDefaultProjectId({
-    profileDefaultProjectId: profileSettings?.default_project_id ?? null
-  });
-  let defaultProjectOrganizationId: number | null = null;
-  if (defaultProjectId) {
-    const { data: defaultProject } = await supabase
-      .from('projects')
-      .select('organization_id')
-      .eq('id', defaultProjectId)
-      .maybeSingle();
-    defaultProjectOrganizationId = defaultProject?.organization_id ?? null;
-  }
 
   const organizations = (memberRows ?? []).flatMap(row => {
     const organization = row.organizations;
@@ -46,13 +30,13 @@ export async function GET(request: Request) {
     return Array.isArray(organization) ? organization : [organization];
   });
   const organizationId = await getRequestSelectedOrganizationId({
-    defaultProjectOrganizationId,
-    organizations
+    organizations,
+    profilePreferences: profileSettings?.preferences
   });
 
   const { data, error } = await searchTickets(supabase, {
     limit: 6,
-    organizationId,
+    organizationId: organizationId ?? undefined,
     query: rawQuery,
     select: 'id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)'
   });

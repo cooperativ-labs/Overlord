@@ -327,6 +327,28 @@ export async function updateProjectSshConfigAction(
   revalidateProjectPaths(input.projectId);
 }
 
+export async function moveProjectToOrganizationAction(input: {
+  projectId: string;
+  targetOrganizationId: number;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ organization_id: input.targetOrganizationId })
+    .eq('id', input.projectId)
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Failed to move project.');
+  }
+
+  revalidatePath('/projects');
+  revalidatePath('/u');
+  revalidateProjectPaths(input.projectId);
+}
+
 export async function createProject(input: {
   organizationId: number;
   name: string;

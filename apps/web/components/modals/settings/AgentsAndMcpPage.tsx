@@ -64,7 +64,7 @@ const MCP_AGENT_CONFIGS: Record<string, McpAgentConfig> = {
       'Add this MCP server block to ~/.codex/config.toml. Codex should authenticate with Overlord through the OAuth flow or shared OAuth credentials.',
     installSteps: [
       'Add the Codex MCP block below to ~/.codex/config.toml.',
-      'Run ovld auth login if this machine does not already have a shared Overlord OAuth session.',
+      'Run ovld auth repair first if this machine already has shared Overlord OAuth credentials; otherwise run ovld auth login.',
       'Restart Codex and complete the OAuth flow if prompted.'
     ],
     getConfig: mcpUrl => `[mcp_servers.overlord]\nurl = "${mcpUrl}"`
@@ -132,6 +132,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
       `[mcp_servers.overlord]`,
       `url = "${mcpUrl}"`,
       'EOF',
+      'ovld auth repair',
       'ovld auth login'
     ].join('\n');
 
@@ -220,7 +221,8 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
               <p className="text-xs text-muted-foreground">
                 Use the notes below for environments that need network allowlists or CLI
                 bootstrapping. Agents authenticate through OAuth; local CLI users should sign in
-                with Overlord Desktop or <code>ovld auth login</code>.
+                with Overlord Desktop, or try <code>ovld auth repair</code> first if a shared
+                session already exists before running <code>ovld auth login</code>.
               </p>
               <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
                 <li>Create or update the environment that launches your agent runtime.</li>
@@ -275,6 +277,7 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
                   '[mcp_servers.overlord]',
                   `url = "${mcpUrl}"`,
                   'EOF',
+                  'ovld auth repair',
                   'ovld auth login'
                 ].join('\n')}
               </pre>

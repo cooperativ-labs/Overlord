@@ -583,7 +583,13 @@ export async function authLogin(args = []) {
 async function printVerboseAuthStatus() {
   const status = await getAuthStatus();
   if (!status.isLoggedIn) {
-    console.log('Not logged in. Run: ovld auth login');
+    const hasStoredAuth =
+      status.credentialsFileExists || status.legacyCredentialsFileExists || status.electronCredentialsFileExists;
+    console.log(
+      hasStoredAuth
+        ? 'Not logged in. Run: ovld auth repair, then ovld auth login if needed.'
+        : 'Not logged in. Run: ovld auth login'
+    );
   } else {
     console.log('Logged in');
   }
@@ -612,15 +618,24 @@ export async function authStatus(args = []) {
     return;
   }
 
-  const creds = loadCredentials();
-  if (!creds) {
-    console.log('Not logged in. Run: ovld auth login');
+  const status = await getAuthStatus();
+  if (!status.isLoggedIn) {
+    const hasStoredAuth =
+      status.credentialsFileExists || status.legacyCredentialsFileExists || status.electronCredentialsFileExists;
+    console.log(
+      hasStoredAuth
+        ? 'Not logged in. Run: ovld auth repair, then ovld auth login if needed.'
+        : 'Not logged in. Run: ovld auth login'
+    );
     return;
   }
   console.log('Logged in');
-  console.log(`  Platform URL: ${creds.platform_url}`);
-  if (creds.user_email) {
-    console.log(`  Email: ${creds.user_email}`);
+  const creds = loadCredentials();
+  if (creds) {
+    console.log(`  Platform URL: ${creds.platform_url}`);
+    if (creds.user_email) {
+      console.log(`  Email: ${creds.user_email}`);
+    }
   }
 }
 

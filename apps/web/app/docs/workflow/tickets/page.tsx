@@ -29,7 +29,7 @@ A ticket can include:
 Tickets can be created from:
 
 - the web or desktop app, including the new-ticket modal on the Kanban board
-- the CLI with \`ovld protocol create\` for a draft or \`ovld protocol spawn\` to start execution immediately
+- the CLI with \`ovld protocol create\` for a draft or \`ovld protocol prompt\` to start execution immediately
 - an agent session, as a follow-up captured from the work in progress
 
 ## Lifecycle statuses

@@ -1,8 +1,6 @@
 'use client';
 
 import { CalendarDays, LayoutGrid, List } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useOptimistic, useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -16,7 +14,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { setViewPreferenceAction } from '@/lib/actions/view-preference';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
-import { refreshElectronRoute } from '@/lib/electron-auth/route-refresh';
+
+import { useTicketView } from './TicketViewContext';
 
 const upsertProjectUserPreferencesActionWithRetry = withElectronActionRetry(
   upsertProjectUserPreferencesAction
@@ -24,33 +23,29 @@ const upsertProjectUserPreferencesActionWithRetry = withElectronActionRetry(
 const setViewPreferenceActionWithRetry = withElectronActionRetry(setViewPreferenceAction);
 
 export default function TicketsViewToggle({
-  initialView,
+  initialView: _initialView,
   projectId
 }: {
   initialView: string;
   projectId?: string;
 }) {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
-  const [optimisticView, setOptimisticView] = useOptimistic(initialView);
+  const { activeView, setActiveView } = useTicketView();
 
   function onValueChange(nextView: string) {
-    startTransition(async () => {
-      setOptimisticView(nextView);
-      if (projectId) {
-        await upsertProjectUserPreferencesActionWithRetry(projectId, {
-          preferred_view: nextView
-        });
-      } else {
-        await setViewPreferenceActionWithRetry(nextView);
-      }
-      await refreshElectronRoute(router);
-    });
+    // Update client view state immediately — no route refresh needed.
+    setActiveView(nextView);
+
+    // Persist preference in the background without blocking the UI swap.
+    if (projectId) {
+      upsertProjectUserPreferencesActionWithRetry(projectId, { preferred_view: nextView });
+    } else {
+      setViewPreferenceActionWithRetry(nextView);
+    }
   }
 
   return (
     <>
-      <Tabs value={optimisticView} onValueChange={onValueChange} className="hidden md:flex">
+      <Tabs value={activeView} onValueChange={onValueChange} className="hidden md:flex">
         <TabsList>
           <TabsTrigger value="board" title="Board view">
             <LayoutGrid className="size-4" />
@@ -73,10 +68,10 @@ export default function TicketsViewToggle({
             variant="outline"
             size="icon"
             className="h-8 w-8 md:hidden"
-            aria-label={`Current view: ${optimisticView === 'calendar' ? 'Calendar' : 'List'}`}
-            title={`Current view: ${optimisticView === 'calendar' ? 'Calendar' : 'List'}`}
+            aria-label={`Current view: ${activeView === 'calendar' ? 'Calendar' : 'List'}`}
+            title={`Current view: ${activeView === 'calendar' ? 'Calendar' : 'List'}`}
           >
-            {optimisticView === 'calendar' ? (
+            {activeView === 'calendar' ? (
               <CalendarDays className="h-4 w-4" />
             ) : (
               <List className="h-4 w-4" />
@@ -85,7 +80,7 @@ export default function TicketsViewToggle({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuRadioGroup
-            value={optimisticView === 'calendar' ? 'calendar' : 'list'}
+            value={activeView === 'calendar' ? 'calendar' : 'list'}
             onValueChange={nextView => onValueChange(nextView)}
           >
             <DropdownMenuRadioItem value="list" className="gap-2">

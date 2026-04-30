@@ -1,8 +1,6 @@
-Deprecated — use `/prompt` instead.
-
 Create a new Overlord ticket.
 
-Use the text after `/spawn` as the objective unless raw flags are present.
+Use the text after `/prompt` as the objective unless raw flags are present.
 
 Run:
 `ovld protocol prompt --agent cursor --objective "<objective>"`

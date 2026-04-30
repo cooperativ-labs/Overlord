@@ -47,6 +47,7 @@ Checklist:
 - Hook script calls `$OVERLORD_URL/api/protocol/permission-request` when Claude awaits tool permission
 - Settings merge preserves user's existing hooks and permissions (no clobber)
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
+- Skill text tells the agent to try `ovld auth repair` before `ovld auth login` when shared credentials look stale
 - Slash command docs also tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Manifest entry written to `~/.ovld/bundle-manifest.json`
 
@@ -56,9 +57,11 @@ Checklist:
   [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
 
 Managed files (Markdown format):
-- `~/.claude/commands/connect.md`
-- `~/.claude/commands/load.md`
-- `~/.claude/commands/spawn.md`
+- `~/.claude/commands/connect.md` — requires `--ticket-id`
+- `~/.claude/commands/load.md` — requires `--ticket-id`
+- `~/.claude/commands/attach.md` — requires `--ticket-id`
+- `~/.claude/commands/create.md`
+- `~/.claude/commands/prompt.md`
 
 ### 3. Local launch path
 
@@ -142,6 +145,7 @@ Checklist:
 - Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
 - Prompt text explicitly includes the Codex ticket workflow instructions
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
+- Prompt text tells Codex to try `ovld auth repair` before `ovld auth login` when shared credentials look stale
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
 
 ### 3. Cloud / headless Codex setup
@@ -204,9 +208,11 @@ Checklist:
 Managed files:
 - `~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json`
 - `~/.cursor/plugins/local/overlord/rules/overlord-local.mdc`
-- `~/.cursor/plugins/local/overlord/commands/connect.md`
-- `~/.cursor/plugins/local/overlord/commands/load.md`
-- `~/.cursor/plugins/local/overlord/commands/spawn.md`
+- `~/.cursor/plugins/local/overlord/commands/connect.md` — requires `--ticket-id`
+- `~/.cursor/plugins/local/overlord/commands/load.md` — requires `--ticket-id`
+- `~/.cursor/plugins/local/overlord/commands/attach.md` — requires `--ticket-id`
+- `~/.cursor/plugins/local/overlord/commands/create.md`
+- `~/.cursor/plugins/local/overlord/commands/prompt.md`
 - `~/.cursor/settings.json` permission allow rules for `ovld protocol` and `curl -sS -X POST`
 
 ### 2. Local launch path
@@ -249,9 +255,11 @@ Checklist:
   [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup gemini`
 
 Managed files (**TOML format**, not Markdown):
-- `~/.gemini/commands/connect.toml`
-- `~/.gemini/commands/load.toml`
-- `~/.gemini/commands/spawn.toml`
+- `~/.gemini/commands/connect.toml` — requires `--ticket-id`
+- `~/.gemini/commands/load.toml` — requires `--ticket-id`
+- `~/.gemini/commands/attach.toml` — requires `--ticket-id`
+- `~/.gemini/commands/create.toml`
+- `~/.gemini/commands/prompt.toml`
 
 Note: Gemini uses `{{args}}` for argument interpolation (vs `$ARGUMENTS` for Claude/Cursor/OpenCode).
 
@@ -310,9 +318,11 @@ Checklist:
   [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
 
 Managed files (Markdown with `agent: build` frontmatter):
-- `~/.config/opencode/commands/connect.md`
-- `~/.config/opencode/commands/load.md`
-- `~/.config/opencode/commands/spawn.md`
+- `~/.config/opencode/commands/connect.md` — requires `--ticket-id`
+- `~/.config/opencode/commands/load.md` — requires `--ticket-id`
+- `~/.config/opencode/commands/attach.md` — requires `--ticket-id`
+- `~/.config/opencode/commands/create.md`
+- `~/.config/opencode/commands/prompt.md`
 
 ### 3. Local launch path
 
@@ -360,7 +370,7 @@ when one surface changes, check the others against this table.
 | search-tickets | `POST /api/protocol/search-tickets` | `search-tickets` | `search_tickets` |
 | create (follow-up) | `POST /api/protocol/create-ticket` | `create` (with session flags) | `create_ticket` |
 | create (standalone) | `POST /api/protocol/tickets` | `create` (no session flags) | — |
-| spawn | `POST /api/protocol/spawn` | `spawn` | — |
+| prompt | `POST /api/protocol/prompt` | `prompt` | — |
 | update | `POST /api/protocol/update` | `update` | `update` |
 | record-change-rationales | `POST /api/protocol/record-change-rationales` | `record-change-rationales` | `record_change_rationales` |
 | ask | `POST /api/protocol/ask` | `ask` | `ask` |
@@ -379,6 +389,7 @@ Notes:
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - `deliver` requires `artifacts` on every surface — empty array is allowed but the field must be present.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
+- `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP artifact tools follow `<verb>_<noun>` naming. CLI artifact subcommands keep the `artifact-*` shape for terminal ergonomics.
 - `GET /context/[ticketId]` and `GET /projects` are intentionally UI-only (Overlord desktop/web). They are marked `// UI-private — not exposed via CLI/MCP by design` in code so future drift audits don't re-flag them.
 

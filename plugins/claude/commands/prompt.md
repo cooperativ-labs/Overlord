@@ -1,10 +1,8 @@
 ---
-description: (Deprecated — use /prompt instead) Create a new Overlord ticket
+description: Create a new Overlord ticket from the current conversation
 argument-hint: <objective or raw flags>
 disable-model-invocation: true
 ---
-
-This command is deprecated. Use `/overlord:prompt` instead.
 
 Create a new Overlord ticket from the user's request.
 

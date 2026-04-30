@@ -69,7 +69,7 @@ ovld protocol create --agent claude-code \\
   --objective "Capture follow-up work from this repository"
 
 # Create a ticket and attach immediately to start execution
-ovld protocol spawn --agent claude-code \\
+ovld protocol prompt --agent claude-code \\
   --objective "Implement feature X" --priority medium
 
 # Interactive ticket search and agent launch

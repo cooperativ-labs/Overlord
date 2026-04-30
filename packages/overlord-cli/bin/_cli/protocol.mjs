@@ -163,7 +163,7 @@ async function apiPost(
     throw new Error(
       `Authentication failed (401): ${data.error ?? 'Invalid or missing token.'}\n` +
       `IMPORTANT: Stop all work immediately. Your Overlord auth session is invalid, expired, or missing required scope.\n` +
-      `The user should sign in again with Overlord Desktop or \`ovld auth login\`.\n` +
+      `The user should try \`ovld auth repair\` first, then sign in again with Overlord Desktop or \`ovld auth login\` if needed.\n` +
       `Ask the user if they would like to proceed without submitting updates to Overlord.`
     );
   }
@@ -1069,10 +1069,10 @@ async function protocolLoadContext(args) {
 }
 
 // ---------------------------------------------------------------------------
-// spawn (create ticket + connect in one call)
+// prompt (create ticket + connect in one call)
 // ---------------------------------------------------------------------------
 
-async function protocolSpawn(args) {
+async function protocolPrompt(args) {
   const flags = parseFlags(args);
   const objective = requireFlag(flags, 'objective', undefined);
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
@@ -1110,7 +1110,7 @@ async function protocolSpawn(args) {
     bearerToken,
     localSecret,
     organizationId,
-    '/api/protocol/spawn',
+    '/api/protocol/prompt',
     body,
     timeoutMs
   );
@@ -1287,11 +1287,11 @@ export async function runProtocolCommand(subcommand, args) {
     console.log(`ovld protocol <subcommand> [flags]
 
 Use this for ticket lifecycle work from an agent runtime: create a standalone
-draft with \`ovld protocol create\`, create-and-attach with \`ovld protocol spawn\`,
+draft with \`ovld protocol create\`, create-and-attach with \`ovld protocol prompt\`,
 or attach to an existing ticket with \`ovld protocol attach --ticket-id <id>\`.
 
 Project discovery:
-  When spawning or creating tickets, the CLI automatically resolves the correct
+  When prompting or creating tickets, the CLI automatically resolves the correct
   project by matching your current working directory against your configured
   "Local working directory" for that project (stored per user in Overlord).
   You can also discover the project explicitly:
@@ -1299,7 +1299,7 @@ Project discovery:
     ovld protocol discover-project
     ovld protocol discover-project --working-directory /path/to/repo
 
-  Use --project-id to override automatic resolution on spawn or ticket creation.
+  Use --project-id to override automatic resolution on prompt or ticket creation.
   Use --personal to create a private ticket without assigning any project.
 
 Subcommands:
@@ -1310,7 +1310,7 @@ Subcommands:
   load-context              Read ticket context without creating a session
   search-tickets            Find tickets by keyword, status, project, creator, or update date
   create                    Create a draft ticket without attaching (follow-up or standalone)
-  spawn                     Create a follow-up ticket and attach to it immediately
+  prompt                    Create a ticket and attach to it immediately
   update                    Post progress, activity events, and optional change rationales
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
@@ -1332,7 +1332,7 @@ Environment fallback:
 Common flags:
   --timeout <ms>              Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})
   --ticket-id <id>            Ticket id when the subcommand operates on an existing ticket
-  --session-key <key>         Session key returned by attach/connect/spawn
+  --session-key <key>         Session key returned by attach/connect/prompt
   --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
   --model <identifier>        Model identifier to snapshot on executing objectives
   --method <connectionMethod> Connection method sent to Overlord (default: cli)
@@ -1497,9 +1497,9 @@ deliver:
     Do not combine --payload-file with --artifacts-json/--artifacts-file or change-rationale flags.
     In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
 
-spawn:
+prompt:
   Purpose:
-    Create a follow-up ticket and attach to it in one call.
+    Create a ticket and attach to it in one call.
     When --project-id is omitted, automatically resolves the project from the
     current working directory (matching against the caller's project_user.local_working_directory).
   Required:
@@ -1598,7 +1598,7 @@ Examples:
   ovld protocol auth-status
   ovld protocol discover-project
   ovld protocol discover-project --working-directory /path/to/repo
-  ovld protocol spawn --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
+  ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
   ovld protocol attach --ticket-id abc-123
   ovld protocol attach --ticket-id abc-123 --external-session-id null
   ovld protocol connect --ticket-id abc-123
@@ -1606,7 +1606,7 @@ Examples:
   ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
   ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
   ovld protocol create --agent codex --session-key <key> --ticket-id <id> --objective "Capture follow-up work"
-  ovld protocol spawn --agent codex --objective "Implement user auth" --priority high
+  ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
   ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X" --phase execute
   ovld protocol update --session-key <key> --ticket-id <id> --summary-file ./update.txt --event-type user_follow_up
   ovld protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
@@ -1633,7 +1633,7 @@ Examples:
   if (subcommand === 'load-context') { await protocolLoadContext(args); return; }
   if (subcommand === 'search-tickets') { await protocolSearchTickets(args); return; }
   if (subcommand === 'create' || subcommand === 'create-ticket') { await protocolCreateTicket(args); return; }
-  if (subcommand === 'spawn') { await protocolSpawn(args); return; }
+  if (subcommand === 'prompt' || subcommand === 'spawn') { await protocolPrompt(args); return; }
   if (subcommand === 'artifact-prepare-upload') { await protocolArtifactPrepareUpload(args); return; }
   if (subcommand === 'artifact-finalize-upload') { await protocolArtifactFinalizeUpload(args); return; }
   if (subcommand === 'artifact-download-url') { await protocolArtifactGetDownloadUrl(args); return; }

@@ -26,7 +26,8 @@ Overlord uses Supabase OAuth access tokens for protocol and MCP authentication.
 
 ### CLI
 
-- Run `ovld auth login`.
+- If a shared session already exists but looks stale, run `ovld auth repair` first.
+- If repair does not restore access, run `ovld auth login`.
 - The CLI fetches OAuth config from `GET /api/auth/config` (returns `supabase_url`, `cli_client_id`, `cli_redirect_uri`).
 - The CLI stores:
   - `access_token`
@@ -105,5 +106,5 @@ curl "$OVERLORD_URL/api/auth/config"
 ## Operational notes
 
 - OAuth tokens are organization-scoped at request time via `x-organization-id`. The server verifies membership in the `members` table.
-- Invalid or expired sessions should be repaired by signing in again with Desktop or `ovld auth login`.
+- Invalid or expired sessions should be repaired with `ovld auth repair` first, then refreshed by signing in again with Desktop or `ovld auth login` if needed.
 - The auth method recorded on protocol context is always `oauth_jwt`.

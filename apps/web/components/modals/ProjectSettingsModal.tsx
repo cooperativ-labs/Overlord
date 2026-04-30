@@ -183,6 +183,7 @@ export function ProjectSettingsModal({
                 <GeneralPage
                   open={open}
                   projectId={projectId}
+                  organizationId={organizationId}
                   initialName={initialName}
                   initialColor={initialColor}
                 />

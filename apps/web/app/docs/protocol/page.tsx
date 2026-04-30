@@ -23,7 +23,7 @@ The protocol surface currently includes:
 - connect
 - load-context
 - create
-- spawn
+- prompt
 - update
 - record-change-rationales
 - ask
@@ -37,12 +37,12 @@ The protocol surface currently includes:
 
 They let an agent resolve the right project, bind to a ticket, report progress, persist file-level rationale, share reusable context, manage artifacts, ask for help, request tool permission, and return final work in a structured way.
 
-## create vs. spawn
+## create vs. prompt
 
 Both create tickets from an agent session, but they differ in intent:
 
 - \`create\` produces a draft ticket without attaching. This is the default path for capturing follow-up work from within an existing session.
-- \`spawn\` creates a ticket in \`execute\` status and immediately attaches the current session. Use it when the agent should start work on the new ticket right away.
+- \`prompt\` creates a ticket in \`execute\` status and immediately attaches the current session. Use it when the agent should start work on the new ticket right away.
 
 ## Related pages
 

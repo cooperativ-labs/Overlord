@@ -37,7 +37,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
     permissions: true,
     details: [
       'Overlord v4 Claude plugin loaded by Overlord launches',
-      'Plugin skill and slash commands (overlord:connect, overlord:load, overlord:spawn)',
+      'Plugin skill and slash commands (overlord:connect, overlord:load, overlord:prompt)',
       'Migration from v3.25.0 home-directory skill and hook files',
       'Permission rules for ovld protocol and curl'
     ]
@@ -70,7 +70,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
     slashCommands: true,
     permissions: true,
     details: [
-      'Slash commands (/connect, /load, /spawn)',
+      'Slash commands (/connect, /load, /prompt)',
       'TOML policy rules for ovld protocol & curl'
     ]
   },
@@ -81,7 +81,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
     permissions: true,
     details: [
       'AGENTS.md workflow instructions',
-      'Slash commands (/connect, /load, /spawn)',
+      'Slash commands (/connect, /load, /prompt)',
       'OpenCode config merge (instructions + bash permissions)'
     ]
   }

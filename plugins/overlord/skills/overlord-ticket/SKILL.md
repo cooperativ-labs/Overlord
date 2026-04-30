@@ -70,19 +70,19 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
 1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent codex --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new tickets. Only use `ovld protocol spawn --agent codex --objective "..."` when the user explicitly asks to create and execute immediately.
-   `spawn` creates the ticket in `execute` status and attaches immediately.
+2. Default to `create` for new tickets. Only use `ovld protocol prompt --agent codex --objective "..."` when the user explicitly asks to create and execute immediately.
+   `prompt` creates the ticket in `execute` status and attaches immediately.
 3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket-id>`.
 4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1. Use `ovld protocol connect --ticket-id <ticket-id>` instead when you only need a session key without the full ticket payload.
 5. If the user wants to find existing tickets by keyword, status, project, creator, or update window, run `ovld protocol search-tickets --query "..." --status next-up,execute --limit 10`. The MCP `search_tickets` tool exposes the same filters.
-6. If you need to understand project routing before spawning, use `ovld protocol discover-project`.
+6. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 
 ## Project Discovery And Ticket Creation
 
 When creating tickets from within a repository:
 - Prefer `create` by default for draft ticket creation.
-- Use `spawn` only when the user explicitly asks to start execution immediately.
+- Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands can resolve the project from the current working directory; use `--working-directory` to override.
 
 ```bash
@@ -90,7 +90,7 @@ ovld protocol create --agent codex --objective "Capture follow-up work from this
 ```
 
 ```bash
-ovld protocol spawn --agent codex --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent codex --objective "Implement feature X" --priority medium
 ```
 
 ### Choosing `--execution-target`
@@ -135,7 +135,7 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 
 ## Defaults And Notes
 
-- API requires `agentIdentifier` and `connectionMethod` on attach/connect/spawn. The CLI defaults them to `codex`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
+- API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `codex`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
 - `permission-request` is invoked by the local Codex plugin's permission rules; agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the `file_changes` table; the dedicated route is `POST /api/protocol/record-change-rationales`.
 - Artifact MCP tools use `<verb>_<noun>` names — `prepare_artifact_upload`, `finalize_artifact_upload`, `get_artifact_download_url`, `upload_artifact_file`. CLI commands keep the `artifact-*` shape (`artifact-prepare-upload`, etc.).
@@ -148,4 +148,4 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - Do not create or rely on a local Codex `AGENTS.md` bundle for Overlord.
 - When the ticket was launched by Overlord, the ticket prompt remains authoritative for the specific task objective and ticket-level constraints.
 
-<!-- version: 0.2.2 -->
+<!-- version: 0.4.0 -->

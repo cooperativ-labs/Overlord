@@ -60,7 +60,7 @@ export const createStyles = (colors: ThemeColors) =>
     headerSheetWrap: {
       width: '100%'
     },
-    headerSheet: {
+    headerSheetExpanded: {
       width: '100%',
       borderRadius: 24,
       overflow: 'hidden'

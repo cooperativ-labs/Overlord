@@ -66,13 +66,10 @@ export default async function RootLayout({
   const initialDefaultProjectId = await getRequestDefaultProjectId({
     profileDefaultProjectId: profileSettings?.default_project_id ?? null
   });
-  const defaultProjectOrganizationId =
-    projects.find(project => project.id === initialDefaultProjectId)?.organizationId ?? null;
-  const selectedOrgId =
-    (await getRequestSelectedOrganizationId({
-      defaultProjectOrganizationId,
-      organizations
-    })) ?? null;
+  const selectedOrgId = await getRequestSelectedOrganizationId({
+    organizations,
+    profilePreferences: profileSettings?.preferences
+  });
   const sidebarDefaultOpen = await getRequestSidebarOpen();
 
   let tutorialAutoOpen = false;

@@ -9,6 +9,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGithub: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -68,6 +69,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const signInWithGithub = async () => {
+    if (!isSupabaseConfigured()) {
+      throw new Error(supabaseConfigError ?? 'Supabase is not configured.');
+    }
+
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: {
+        scopes: 'user:email'
+      }
+    });
+    if (error) throw error;
+  };
+
   const signOut = async () => {
     if (!isSupabaseConfigured()) {
       throw new Error(supabaseConfigError ?? 'Supabase is not configured.');
@@ -85,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: session?.user ?? null,
         loading,
         signIn,
+        signInWithGithub,
         signOut
       }}
     >

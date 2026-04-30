@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.9.1';
+export const BUNDLE_VERSION = '1.10.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -105,7 +105,7 @@ ovld protocol load-context --ticket-id $TICKET_ID
 
 When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent claude-code\` by default for draft ticket creation.
-- Use \`ovld protocol spawn --agent claude-code\` only when the user explicitly asks to create and execute immediately.
+- Use \`ovld protocol prompt --agent claude-code\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
 
 \`\`\`bash
@@ -113,7 +113,7 @@ ovld protocol create --agent claude-code --objective "Capture follow-up work fro
 \`\`\`
 
 \`\`\`bash
-ovld protocol spawn --agent claude-code --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent claude-code --objective "Implement feature X" --priority medium
 \`\`\`
 
 To discover which project maps to the current directory:
@@ -146,7 +146,7 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 
 ## Defaults & Notes
 
-- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
+- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/prompt. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
 - If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
@@ -250,7 +250,7 @@ ovld protocol load-context --ticket-id $TICKET_ID
 
 When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent opencode\` by default for draft ticket creation.
-- Use \`ovld protocol spawn --agent opencode\` only when the user explicitly asks to create and execute immediately.
+- Use \`ovld protocol prompt --agent opencode\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
 
 \`\`\`bash
@@ -258,7 +258,7 @@ ovld protocol create --agent opencode --objective "Capture follow-up work from t
 \`\`\`
 
 \`\`\`bash
-ovld protocol spawn --agent opencode --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent opencode --objective "Implement feature X" --priority medium
 \`\`\`
 
 To discover which project maps to the current directory:
@@ -291,7 +291,7 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 
 ## Defaults & Notes
 
-- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
+- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/prompt. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
 - If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
@@ -386,7 +386,7 @@ ovld protocol load-context --ticket-id $TICKET_ID
 
 When creating tickets from within a repository:
 - Prefer \`ovld protocol create --agent cursor\` by default for draft ticket creation.
-- Use \`ovld protocol spawn --agent cursor\` only when the user explicitly asks to create and execute immediately.
+- Use \`ovld protocol prompt --agent cursor\` only when the user explicitly asks to create and execute immediately.
 - Both commands can resolve the project from the current working directory; use \`--working-directory\` to override.
 
 \`\`\`bash
@@ -394,7 +394,7 @@ ovld protocol create --agent cursor --objective "Capture follow-up work from thi
 \`\`\`
 
 \`\`\`bash
-ovld protocol spawn --agent cursor --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent cursor --objective "Implement feature X" --priority medium
 \`\`\`
 
 To discover which project maps to the current directory:
@@ -427,7 +427,7 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 
 ## Defaults & Notes
 
-- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/spawn. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
+- The Overlord API requires \`agentIdentifier\` and \`connectionMethod\` on attach/connect/prompt. The CLI defaults them based on the active agent (e.g. \`claude-code\`/\`cli\`); the MCP tool defaults to \`mcp\`. Override with \`--agent\` / \`--method\` when calling from a different runtime.
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
 - If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.

@@ -156,7 +156,7 @@ Supported artifact types: \`next_steps\`, \`test_results\`, \`migration\`, \`not
 ## Creating new tickets from an agent runtime
 
 Most agents are handed a ticket ID and attach immediately. When you need to create tickets
-yourself (for example to capture follow-up work), use \`create\` for drafts and \`spawn\` when
+yourself (for example to capture follow-up work), use \`create\` for drafts and \`prompt\` when
 you want to start execution immediately.
 
 \`\`\`bash
@@ -170,7 +170,7 @@ ovld protocol create --agent claude-code \\
   --objective "Write migration notes for the deprecated endpoint"
 
 # Create and attach in one call
-ovld protocol spawn --agent claude-code \\
+ovld protocol prompt --agent claude-code \\
   --objective "Implement feature X" --priority high
 \`\`\`
       `}

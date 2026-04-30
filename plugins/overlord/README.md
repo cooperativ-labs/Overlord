@@ -14,14 +14,14 @@ personal marketplace entry at `~/.agents/plugins/marketplace.json`.
 ## Requirements
 
 - Install the Overlord CLI so `ovld` is available on `PATH`.
-- Authenticate with `ovld auth login` or Overlord Desktop. Set `OVERLORD_URL` only when targeting a non-default host.
+- If a shared session already exists but looks stale, authenticate with `ovld auth repair` first. If repair does not help, use `ovld auth login` or Overlord Desktop. Set `OVERLORD_URL` only when targeting a non-default host.
 - Optionally set `OVLD_BIN` if the CLI lives at a non-standard path.
 
 ## Tool coverage
 
 - Project resolution: `discover_project`
 - Ticket search: `search_tickets` — keyword search + status/filter (direct API call)
-- Ticket session flow: `attach_ticket`, `connect_ticket`, `load_ticket_context`, `spawn_ticket`
+- Ticket session flow: `attach_ticket`, `connect_ticket`, `load_ticket_context`, `prompt_ticket`
 - Progress and review flow: `post_update`, `record_change_rationales`, `ask_blocking_question`, `deliver_ticket`
 - Shared context: `read_shared_context`, `write_shared_context`
 - Artifacts: `prepare_artifact_upload`, `finalize_artifact_upload`, `get_artifact_download_url`, `upload_artifact_file`

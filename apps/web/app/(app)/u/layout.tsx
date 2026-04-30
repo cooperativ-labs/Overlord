@@ -5,8 +5,10 @@ import { TicketsBoardLoadingSkeleton } from '@/components/features/TicketsBoardL
 import { UserTicketsSettingsPanel } from '@/components/features/UserTicketsSettingsPanel';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getUserOrganizations } from '@/lib/actions/organizations';
+import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
 import {
+  createClientForRequest,
   getRequestDefaultProjectId,
   getRequestSelectedOrganizationId,
   isElectronRequestFromHeaders
@@ -19,16 +21,22 @@ type LayoutProps = {
 };
 
 export default async function UserLayout({ children }: LayoutProps) {
-  const [organizations, projects] = await Promise.all([
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  const [organizations, projects, profileSettings] = await Promise.all([
     getUserOrganizations(),
-    getProjectsForCurrentUser()
+    getProjectsForCurrentUser(),
+    user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null)
   ]);
-  const defaultProjectId = await getRequestDefaultProjectId();
-  const defaultProjectOrganizationId =
-    projects.find(project => project.id === defaultProjectId)?.organizationId ?? null;
+  const defaultProjectId = await getRequestDefaultProjectId({
+    profileDefaultProjectId: profileSettings?.default_project_id ?? null
+  });
   const selectedOrgId = await getRequestSelectedOrganizationId({
-    defaultProjectOrganizationId,
-    organizations
+    organizations,
+    profilePreferences: profileSettings?.preferences
   });
 
   const isElectronRequest = await isElectronRequestFromHeaders();
@@ -40,10 +48,10 @@ export default async function UserLayout({ children }: LayoutProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
       <ErrorBoundary>
-        <UserTicketsSettingsPanel selectedOrgId={selectedOrgId} />
+        <UserTicketsSettingsPanel selectedOrgId={selectedOrgId ?? undefined} />
         <Suspense fallback={<TicketsBoardLoadingSkeleton variant="user" />}>
           <TicketsBoardContent
-            organizationId={selectedOrgId}
+            organizationId={selectedOrgId ?? undefined}
             showOrganizationName={!selectedOrgId}
             mentionProjectId={defaultProjectId ?? undefined}
           />

@@ -31,7 +31,7 @@ AGENT_IDENTIFIER=<name>  # falls back to --agent (default: claude-code)
 \`\`\`text
 --timeout <ms>              Request timeout in milliseconds (default: 30000)
 --ticket-id <id>            Ticket this call operates on
---session-key <key>         Session key returned by attach/connect/spawn
+--session-key <key>         Session key returned by attach/connect/prompt
 --agent <identifier>        Agent identifier (default: AGENT_IDENTIFIER or claude-code)
 --model <identifier>        Model identifier to snapshot on executing objectives
 --method <connectionMethod> Connection method (default: cli)
@@ -158,13 +158,13 @@ Optional:
 --delegate <model>
 \`\`\`
 
-## spawn
+## prompt
 
-Create a follow-up ticket and attach to it immediately. Use when you want execution to start
+Create a ticket and attach to it immediately. Use when you want execution to start
 right away.
 
 \`\`\`bash
-ovld protocol spawn --agent claude-code \\
+ovld protocol prompt --agent claude-code \\
   --objective "Implement user auth" --priority high
 \`\`\`
 

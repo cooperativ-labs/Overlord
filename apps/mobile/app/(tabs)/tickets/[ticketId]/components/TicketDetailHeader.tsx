@@ -10,6 +10,12 @@ import {
   Text,
   View
 } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming
+} from 'react-native-reanimated';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
 import { AgentModelChooser } from '@/components/AgentModelChooser';
@@ -19,6 +25,9 @@ import type { AgentModelSelection } from '@/lib/types';
 
 import { glassAvailable } from './ticket-detail-shared';
 import { createStyles } from './ticket-detail-styles';
+
+const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
+const HEADER_SHEET_EXPAND_DURATION_MS = 200;
 
 export function TicketHeaderTitle({
   title,
@@ -136,136 +145,276 @@ export function TicketHeaderSheet({
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const sheetMaxHeight = useSharedValue(0);
+  const sheetTranslateY = useSharedValue(-6);
 
   useEffect(() => {
     if (!visible) setShowModelPicker(false);
   }, [visible]);
 
-  const SheetContainer = glassAvailable ? GlassView : View;
-  const sheetStyle = glassAvailable
-    ? styles.headerSheet
-    : [styles.headerSheet, styles.headerSheetFallback];
+  useEffect(() => {
+    const windowHeight = Dimensions.get('window').height;
+    const maxHeight = windowHeight * 0.82;
+
+    if (!visible) {
+      sheetMaxHeight.value = 0;
+      sheetTranslateY.value = -6;
+      return;
+    }
+
+    sheetMaxHeight.value = withTiming(maxHeight, {
+      duration: HEADER_SHEET_EXPAND_DURATION_MS,
+      easing: Easing.out(Easing.cubic)
+    });
+    sheetTranslateY.value = withTiming(0, {
+      duration: HEADER_SHEET_EXPAND_DURATION_MS,
+      easing: Easing.out(Easing.cubic)
+    });
+  }, [sheetMaxHeight, sheetTranslateY, visible]);
+
+  const animatedSheetStyle = useAnimatedStyle(() => ({
+    maxHeight: sheetMaxHeight.value,
+    transform: [{ translateY: sheetTranslateY.value }]
+  }));
+
+  const sheetStyle = [
+    styles.headerSheetExpanded,
+    animatedSheetStyle,
+    !glassAvailable && styles.headerSheetFallback
+  ];
 
   const agentLabel =
     AGENT_OPTIONS.find(option => option.value === assignedSelection?.agent)?.label ??
     'Choose agent';
   const modelLabel = assignedSelection?.model ?? 'Default model';
 
-  const maxSheetHeight = Dimensions.get('window').height * 0.82;
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Pressable style={styles.headerSheetBackdrop} onPress={onClose}>
-        <Pressable
-          onPress={() => undefined}
-          style={[styles.headerSheetWrap, { maxHeight: maxSheetHeight }]}
-        >
-          <SheetContainer
-            style={sheetStyle}
-            {...(glassAvailable ? { glassEffectStyle: 'regular' as const } : {})}
-          >
-            <ScrollView
-              bounces={false}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.headerSheetContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.headerSheetTopRow}>
-                <Pressable
-                  hitSlop={10}
-                  onPress={onClose}
-                  accessibilityLabel="Close header"
-                  style={styles.headerSheetCircle}
-                >
-                  <Ionicons name="close" size={18} color={colors.foreground} />
-                </Pressable>
-                <View style={styles.headerSheetTitleWrap}>
-                  <Text style={styles.headerSheetTitle} numberOfLines={1}>
-                    {title}
-                  </Text>
-                  {subtitle ? (
-                    <Text style={styles.headerSheetSubtitle} numberOfLines={1}>
-                      {subtitle}
-                    </Text>
-                  ) : null}
-                </View>
-                <Pressable
-                  hitSlop={10}
-                  onPress={onOpenOverflow}
-                  accessibilityLabel="More actions"
-                  style={styles.headerSheetCircle}
-                >
-                  <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
-                </Pressable>
-              </View>
-
-              <View style={styles.headerSheetChipRow}>
-                <HeaderSheetChip
-                  icon="copy-outline"
-                  label="Copy CLI"
-                  onPress={onCopyCliCommand}
-                  disabled={copyingPromptContext !== null}
-                />
-                <HeaderSheetChip
-                  icon="cloud-outline"
-                  label="Copy Web"
-                  onPress={() => onCopyPrompt('web')}
-                  loading={copyingPromptContext === 'web'}
-                  disabled={copyingPromptContext !== null}
-                />
-                <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
-              </View>
-
-              <Pressable
-                style={({ pressed }) => [styles.headerSheetFeaturedRow, pressed && styles.pressed]}
-                onPress={() => setShowModelPicker(open => !open)}
-                disabled={savingAssignedAgent}
-                accessibilityLabel="Change assigned agent"
+        <Pressable onPress={() => undefined} style={styles.headerSheetWrap}>
+          {glassAvailable ? (
+            <AnimatedGlassView style={sheetStyle} glassEffectStyle="regular">
+              <ScrollView
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.headerSheetContent}
+                keyboardShouldPersistTaps="handled"
               >
-                <View style={styles.headerSheetFeaturedIcon}>
-                  {assignedSelection?.agent ? (
-                    <AgentBrandIcon agent={assignedSelection.agent} size={20} />
+                <View style={styles.headerSheetTopRow}>
+                  <Pressable
+                    hitSlop={10}
+                    onPress={onClose}
+                    accessibilityLabel="Close header"
+                    style={styles.headerSheetCircle}
+                  >
+                    <Ionicons name="close" size={18} color={colors.foreground} />
+                  </Pressable>
+                  <View style={styles.headerSheetTitleWrap}>
+                    <Text style={styles.headerSheetTitle} numberOfLines={1}>
+                      {title}
+                    </Text>
+                    {subtitle ? (
+                      <Text style={styles.headerSheetSubtitle} numberOfLines={1}>
+                        {subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    hitSlop={10}
+                    onPress={onOpenOverflow}
+                    accessibilityLabel="More actions"
+                    style={styles.headerSheetCircle}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.headerSheetChipRow}>
+                  <HeaderSheetChip
+                    icon="copy-outline"
+                    label="Copy CLI"
+                    onPress={onCopyCliCommand}
+                    disabled={copyingPromptContext !== null}
+                  />
+                  <HeaderSheetChip
+                    icon="cloud-outline"
+                    label="Copy Web"
+                    onPress={() => onCopyPrompt('web')}
+                    loading={copyingPromptContext === 'web'}
+                    disabled={copyingPromptContext !== null}
+                  />
+                  <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
+                </View>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.headerSheetFeaturedRow,
+                    pressed && styles.pressed
+                  ]}
+                  onPress={() => setShowModelPicker(open => !open)}
+                  disabled={savingAssignedAgent}
+                  accessibilityLabel="Change assigned agent"
+                >
+                  <View style={styles.headerSheetFeaturedIcon}>
+                    {assignedSelection?.agent ? (
+                      <AgentBrandIcon agent={assignedSelection.agent} size={20} />
+                    ) : (
+                      <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
+                    <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
+                      {modelLabel}
+                    </Text>
+                  </View>
+                  {savingAssignedAgent ? (
+                    <ActivityIndicator size="small" color={colors.mutedForeground} />
                   ) : (
-                    <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
+                    <Ionicons
+                      name={showModelPicker ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={colors.mutedForeground}
+                    />
                   )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
-                  <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
-                    {modelLabel}
-                  </Text>
-                </View>
-                {savingAssignedAgent ? (
-                  <ActivityIndicator size="small" color={colors.mutedForeground} />
-                ) : (
-                  <Ionicons
-                    name={showModelPicker ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={colors.mutedForeground}
-                  />
-                )}
-              </Pressable>
+                </Pressable>
 
-              {showModelPicker ? (
-                <View style={styles.headerSheetPickerSection}>
-                  <AgentModelChooser
-                    alwaysExpanded
-                    value={assignedSelection}
-                    onChange={onAssignedAgentChange}
-                    onResolvedSelectionChange={onResolvedSelectionChange}
-                    disabled={savingAssignedAgent}
-                  />
-                </View>
-              ) : null}
+                {showModelPicker ? (
+                  <View style={styles.headerSheetPickerSection}>
+                    <AgentModelChooser
+                      alwaysExpanded
+                      value={assignedSelection}
+                      onChange={onAssignedAgentChange}
+                      onResolvedSelectionChange={onResolvedSelectionChange}
+                      disabled={savingAssignedAgent}
+                    />
+                  </View>
+                ) : null}
 
-              <HeaderSheetRow icon="copy-outline" label="Copy ticket ID" onPress={onCopyTicketId} />
-              <HeaderSheetRow
-                icon="ellipsis-horizontal-circle-outline"
-                label="More actions"
-                onPress={onOpenOverflow}
-              />
-            </ScrollView>
-          </SheetContainer>
+                <HeaderSheetRow
+                  icon="copy-outline"
+                  label="Copy ticket ID"
+                  onPress={onCopyTicketId}
+                />
+                <HeaderSheetRow
+                  icon="ellipsis-horizontal-circle-outline"
+                  label="More actions"
+                  onPress={onOpenOverflow}
+                />
+              </ScrollView>
+            </AnimatedGlassView>
+          ) : (
+            <Animated.View style={sheetStyle}>
+              <ScrollView
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.headerSheetContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.headerSheetTopRow}>
+                  <Pressable
+                    hitSlop={10}
+                    onPress={onClose}
+                    accessibilityLabel="Close header"
+                    style={styles.headerSheetCircle}
+                  >
+                    <Ionicons name="close" size={18} color={colors.foreground} />
+                  </Pressable>
+                  <View style={styles.headerSheetTitleWrap}>
+                    <Text style={styles.headerSheetTitle} numberOfLines={1}>
+                      {title}
+                    </Text>
+                    {subtitle ? (
+                      <Text style={styles.headerSheetSubtitle} numberOfLines={1}>
+                        {subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    hitSlop={10}
+                    onPress={onOpenOverflow}
+                    accessibilityLabel="More actions"
+                    style={styles.headerSheetCircle}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.headerSheetChipRow}>
+                  <HeaderSheetChip
+                    icon="copy-outline"
+                    label="Copy CLI"
+                    onPress={onCopyCliCommand}
+                    disabled={copyingPromptContext !== null}
+                  />
+                  <HeaderSheetChip
+                    icon="cloud-outline"
+                    label="Copy Web"
+                    onPress={() => onCopyPrompt('web')}
+                    loading={copyingPromptContext === 'web'}
+                    disabled={copyingPromptContext !== null}
+                  />
+                  <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
+                </View>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.headerSheetFeaturedRow,
+                    pressed && styles.pressed
+                  ]}
+                  onPress={() => setShowModelPicker(open => !open)}
+                  disabled={savingAssignedAgent}
+                  accessibilityLabel="Change assigned agent"
+                >
+                  <View style={styles.headerSheetFeaturedIcon}>
+                    {assignedSelection?.agent ? (
+                      <AgentBrandIcon agent={assignedSelection.agent} size={20} />
+                    ) : (
+                      <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
+                    <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
+                      {modelLabel}
+                    </Text>
+                  </View>
+                  {savingAssignedAgent ? (
+                    <ActivityIndicator size="small" color={colors.mutedForeground} />
+                  ) : (
+                    <Ionicons
+                      name={showModelPicker ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={colors.mutedForeground}
+                    />
+                  )}
+                </Pressable>
+
+                {showModelPicker ? (
+                  <View style={styles.headerSheetPickerSection}>
+                    <AgentModelChooser
+                      alwaysExpanded
+                      value={assignedSelection}
+                      onChange={onAssignedAgentChange}
+                      onResolvedSelectionChange={onResolvedSelectionChange}
+                      disabled={savingAssignedAgent}
+                    />
+                  </View>
+                ) : null}
+
+                <HeaderSheetRow
+                  icon="copy-outline"
+                  label="Copy ticket ID"
+                  onPress={onCopyTicketId}
+                />
+                <HeaderSheetRow
+                  icon="ellipsis-horizontal-circle-outline"
+                  label="More actions"
+                  onPress={onOpenOverflow}
+                />
+              </ScrollView>
+            </Animated.View>
+          )}
         </Pressable>
       </Pressable>
     </Modal>

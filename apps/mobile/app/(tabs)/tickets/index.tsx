@@ -786,26 +786,6 @@ function CalendarListHeader({
       <Text style={styles.calendarSub}>
         Add tickets directly onto the calendar for {projectName}.
       </Text>
-      {unscheduledTickets.length > 0 && (
-        <View style={styles.unscheduledCard}>
-          <Text style={styles.unscheduledTitle}>No due date</Text>
-          <Text style={styles.unscheduledSub}>
-            {unscheduledTickets.length} ticket{unscheduledTickets.length === 1 ? '' : 's'} still
-            need a day.
-          </Text>
-          <View style={styles.unscheduledList}>
-            {unscheduledTickets.map(ticket => (
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-                projectColor={projectColor}
-                projects={projects}
-                onPress={() => onTicketPress(ticket.id)}
-              />
-            ))}
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -915,9 +895,7 @@ function ViewModeMenuButton({
                 size={15}
                 color={value === 'list' ? colors.primary : colors.mutedForeground}
               />
-              <Text
-                style={[styles.menuItemText, value === 'list' && styles.menuItemTextActive]}
-              >
+              <Text style={[styles.menuItemText, value === 'list' && styles.menuItemTextActive]}>
                 List
               </Text>
             </View>
@@ -936,9 +914,7 @@ function ViewModeMenuButton({
                 Calendar
               </Text>
             </View>
-            {value === 'calendar' && (
-              <Ionicons name="checkmark" size={14} color={colors.primary} />
-            )}
+            {value === 'calendar' && <Ionicons name="checkmark" size={14} color={colors.primary} />}
           </Pressable>
         </View>
       )}

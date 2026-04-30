@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.5.0] - 2026-04-30:07:41
+
+### Added
+- Improve ticket view selection on mobile and web with enhanced UI controls.
+- Enhance FeedScreen and TicketsScreen with SafeAreaView for better mobile layout and improved ticket fetching logic.
+- Add expo-glass-effect package and enhance TicketsScreen with glass morphism visual effects.
+- Enhance ProjectSettingsSection with shimmer effect for better visual feedback.
+- Add side-by-side diff view to Current Changes page for enhanced change visibility.
+- Customize plugin update warning messages with more contextual information.
+- Update dependencies and enhance permission handling across the application.
+
+### Fixed
+- Update image source in HomePage component for proper rendering.
+- Rename "My Tasks" to "My Tickets" in AppSidebar for consistent terminology.
+
+### Changed
+- Improve ticket detail components and enhance agent selection functionality.
+- Update SKILLS_INDEX and agent-connector-update documentation.
+
+### Security
+- None.
+
+### Refactor
+- Remove ticket-card references and clean up configuration files.
+
+### Chore
+- Update Sentry configuration and improve environment loading logic.
+
 ## [5.4.0] - 2026-04-27:08:27
 
 ### Added

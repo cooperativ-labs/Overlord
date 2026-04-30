@@ -302,15 +302,15 @@ function DemoCliSettings() {
           supportNote: 'Managed by the desktop app in your local ~/.claude configuration.',
           status: 'installed' as const,
           installFiles:
-            '~/.claude/skills/overlord-local/SKILL.md, ~/.claude/overlord-permission-hook.sh, ~/.claude/settings.json, ~/.claude/commands/connect.md, ~/.claude/commands/load.md, ~/.claude/commands/spawn.md'
+            '~/.claude/skills/overlord-local/SKILL.md, ~/.claude/overlord-permission-hook.sh, ~/.claude/settings.json, ~/.claude/commands/connect.md, ~/.claude/commands/load.md, ~/.claude/commands/prompt.md'
         },
         {
-          label: '/connect /load /spawn',
+          label: '/connect /load /prompt',
           description: 'Installs global slash commands for mid-session Overlord ticket operations.',
-          supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `~/.claude/commands/`.',
+          supportNote: 'Creates `/connect`, `/load`, and `/prompt` in `~/.claude/commands/`.',
           status: 'installed' as const,
           installFiles:
-            '~/.claude/commands/connect.md, ~/.claude/commands/load.md, ~/.claude/commands/spawn.md'
+            '~/.claude/commands/connect.md, ~/.claude/commands/load.md, ~/.claude/commands/prompt.md'
         }
       ]
     },
@@ -335,12 +335,12 @@ function DemoCliSettings() {
       label: 'Cursor',
       plugins: [
         {
-          label: '/connect /load /spawn',
+          label: '/connect /load /prompt',
           description: 'Installs global slash commands for mid-session Overlord ticket operations.',
-          supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `~/.cursor/commands/`.',
+          supportNote: 'Creates `/connect`, `/load`, and `/prompt` in `~/.cursor/commands/`.',
           status: 'not_installed' as const,
           installFiles:
-            '~/.cursor/commands/connect.md, ~/.cursor/commands/load.md, ~/.cursor/commands/spawn.md'
+            '~/.cursor/commands/connect.md, ~/.cursor/commands/load.md, ~/.cursor/commands/prompt.md'
         }
       ]
     },
@@ -349,13 +349,13 @@ function DemoCliSettings() {
       label: 'Gemini CLI',
       plugins: [
         {
-          label: '/connect /load /spawn',
+          label: '/connect /load /prompt',
           description: 'Installs global slash commands for mid-session Overlord ticket operations.',
           supportNote:
-            'Creates `/connect`, `/load`, and `/spawn` in `~/.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
+            'Creates `/connect`, `/load`, and `/prompt` in `~/.gemini/commands/`. Run `/commands reload` in Gemini CLI after installing.',
           status: 'not_installed' as const,
           installFiles:
-            '~/.gemini/commands/connect.toml, ~/.gemini/commands/load.toml, ~/.gemini/commands/spawn.toml'
+            '~/.gemini/commands/connect.toml, ~/.gemini/commands/load.toml, ~/.gemini/commands/prompt.toml'
         }
       ]
     },
@@ -370,16 +370,16 @@ function DemoCliSettings() {
           supportNote: 'Managed by the desktop app in your local ~/.config/opencode configuration.',
           status: 'not_installed' as const,
           installFiles:
-            '~/.config/opencode/AGENTS.md, ~/.config/opencode/opencode.json, ~/.config/opencode/commands/connect.md, ~/.config/opencode/commands/load.md, ~/.config/opencode/commands/spawn.md'
+            '~/.config/opencode/AGENTS.md, ~/.config/opencode/opencode.json, ~/.config/opencode/commands/connect.md, ~/.config/opencode/commands/load.md, ~/.config/opencode/commands/prompt.md'
         },
         {
-          label: '/connect /load /spawn',
+          label: '/connect /load /prompt',
           description: 'Installs global slash commands for mid-session Overlord ticket operations.',
           supportNote:
-            'Creates `/connect`, `/load`, and `/spawn` in `~/.config/opencode/commands/`.',
+            'Creates `/connect`, `/load`, and `/prompt` in `~/.config/opencode/commands/`.',
           status: 'not_installed' as const,
           installFiles:
-            '~/.config/opencode/commands/connect.md, ~/.config/opencode/commands/load.md, ~/.config/opencode/commands/spawn.md'
+            '~/.config/opencode/commands/connect.md, ~/.config/opencode/commands/load.md, ~/.config/opencode/commands/prompt.md'
         }
       ]
     }
@@ -574,7 +574,7 @@ function DemoCliSettings() {
             commands for agents that can handle{' '}
             <code className="rounded bg-muted px-1">/connect</code>,{' '}
             <code className="rounded bg-muted px-1">/load</code>, and{' '}
-            <code className="rounded bg-muted px-1">/spawn</code>.
+            <code className="rounded bg-muted px-1">/prompt</code>.
           </p>
         </div>
         <div className="space-y-2">
@@ -654,7 +654,7 @@ function DemoCliSettings() {
             <code className="break-all rounded bg-muted px-1">
               ovld protocol &lt;subcommand&gt;
             </code>{' '}
-            discover-project, attach, connect, load-context, spawn, update,
+            discover-project, attach, connect, load-context, prompt, update,
             record-change-rationales, ask, read-context, write-context, deliver,
             artifact-upload-file
           </li>
@@ -703,7 +703,7 @@ function DemoCliSettings() {
           </li>
           <li className="break-words">
             <code className="break-all rounded bg-muted px-1">
-              ovld protocol spawn --agent codex --objective &quot;...&quot; --execution-target agent
+              ovld protocol prompt --agent codex --objective &quot;...&quot; --execution-target agent
             </code>{' '}
             — create and attach to a ticket in one call
           </li>
