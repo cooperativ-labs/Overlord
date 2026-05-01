@@ -177,7 +177,15 @@ export function mergeServerTicketRow(
   const existing = state.ticketsById[row.id];
   if (!existing) {
     // Bootstrap/poll/realtime can introduce previously-unknown tickets.
-    return withTicket(state, row);
+    let next = withTicket(state, row);
+    if (row.waiting_for_response_at) {
+      next = mergeWaitingQuestion(next, {
+        ticket_id: row.id,
+        created_at: row.waiting_for_response_at,
+        is_blocking: true
+      });
+    }
+    return next;
   }
   if (source !== 'server-mutation' && isStaleUpdate(existing.updated_at, row.updated_at)) {
     return state;

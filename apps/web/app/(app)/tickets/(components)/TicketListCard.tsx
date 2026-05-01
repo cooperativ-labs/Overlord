@@ -48,7 +48,7 @@ export default function TicketListCard({
   showOrganizationName?: boolean;
   showProjectName?: boolean;
   onMarkUnread?: (ticketId: string) => void;
-  onDragStart?: (ticketId: string) => void;
+  onDragStart?: (ticketId: string, event: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd?: () => void;
 }) {
   const router = useRouter();
@@ -76,13 +76,14 @@ export default function TicketListCard({
           role="button"
           tabIndex={0}
           draggable={Boolean(onDragStart)}
-          onDragStart={() => onDragStart?.(ticket.id)}
+          onDragStart={event => onDragStart?.(ticket.id, event)}
           onDragEnd={() => onDragEnd?.()}
           onClick={() => router.push(ticketPath)}
           onKeyDown={e => {
             if (e.key === 'Enter' || e.key === ' ') router.push(ticketPath);
           }}
           aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
+          aria-grabbed={Boolean(onDragStart)}
           className={cn(
             'group relative flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors hover:bg-muted/40 hover:border-border',
             isAgentRunning && 'animate-pulse',

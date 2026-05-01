@@ -31,6 +31,8 @@ type TicketsBoardClientProps = {
   workingDirectory?: string | null;
   initialHiddenColumns?: string[];
   initialListFilters?: TicketListFilters | null;
+  initialCollapsedStatuses?: string[];
+  initialStatusOrder?: string[];
   ticketUrlBase: string;
   completeStatusName?: string;
 };
@@ -49,6 +51,8 @@ export default function TicketsBoardClient({
   workingDirectory = null,
   initialHiddenColumns = [],
   initialListFilters,
+  initialCollapsedStatuses,
+  initialStatusOrder,
   ticketUrlBase,
   completeStatusName
 }: TicketsBoardClientProps) {
@@ -162,6 +166,8 @@ export default function TicketsBoardClient({
               organizationId={organizationId}
               projectId={projectId}
               initialListFilters={initialListFilters}
+              initialCollapsedStatuses={initialCollapsedStatuses}
+              initialStatusOrder={initialStatusOrder}
             />
           </div>
         )}

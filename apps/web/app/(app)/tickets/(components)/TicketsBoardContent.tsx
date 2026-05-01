@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 
+import { getGlobalListViewPreferencesAction } from '@/lib/actions/global-list-view-preferences';
 import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
 import type { BoardScope, BoardStatus } from '@/lib/client-data/tickets/board-types';
@@ -115,7 +116,10 @@ export default async function TicketsBoardContent({
   const isMobile = /mobile|android|iphone/i.test(ua);
   const isElectronRequest = /electron/i.test(ua);
 
-  const projectPreferences = projectId ? await getProjectUserPreferencesAction(projectId) : null;
+  const [projectPreferences, globalListPrefs] = await Promise.all([
+    projectId ? getProjectUserPreferencesAction(projectId) : null,
+    !projectId ? getGlobalListViewPreferencesAction() : null
+  ]);
 
   const preferredView = projectPreferences?.preferred_view ?? savedView;
   // This is the initial view the client will show. Mobile can only show list or calendar.
@@ -126,6 +130,10 @@ export default async function TicketsBoardContent({
     : (preferredView ?? 'board');
   const initialHiddenColumns = projectPreferences?.hidden_columns ?? [];
   const initialListFilters = projectPreferences?.list_filters ?? null;
+  const initialCollapsedStatuses =
+    projectPreferences?.list_collapsed_statuses ?? globalListPrefs?.list_collapsed_statuses ?? [];
+  const initialStatusOrder =
+    projectPreferences?.list_status_order ?? globalListPrefs?.list_status_order ?? [];
   const supabase = await createClientForRequest();
   const {
     data: { user }
@@ -412,6 +420,8 @@ export default async function TicketsBoardContent({
       workingDirectory={kanbanWorkingDirectory}
       initialHiddenColumns={initialHiddenColumns}
       initialListFilters={initialListFilters}
+      initialCollapsedStatuses={initialCollapsedStatuses}
+      initialStatusOrder={initialStatusOrder}
       ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
       completeStatusName={completeStatusName}
     />

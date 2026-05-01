@@ -10,6 +10,7 @@ import type {
   BoardStatus,
   BoardTicket
 } from '@/lib/client-data/tickets/board-types';
+import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 
 import type { Ticket } from './KanbanCard';
 
@@ -160,5 +161,76 @@ export function toBoardStatus(status: {
     name: status.name,
     position: status.position,
     status_type: status.status_type
+  };
+}
+
+export function getTicketPositionInStatus(
+  tickets: Array<Pick<Ticket, 'status' | 'board_position'>>,
+  status: string,
+  position: 'top' | 'bottom'
+): number {
+  const statusTickets = tickets.filter(ticket => ticket.status === status);
+
+  if (statusTickets.length === 0) {
+    return 0;
+  }
+
+  if (position === 'bottom') {
+    return Math.max(...statusTickets.map(ticket => ticket.board_position)) + 1;
+  }
+
+  return Math.min(...statusTickets.map(ticket => ticket.board_position)) - 1;
+}
+
+export function buildOptimisticTicket(input: {
+  id: string;
+  objective: string;
+  status: string;
+  position: 'top' | 'bottom';
+  tickets: Ticket[];
+  organizationId?: number;
+  projectId?: string;
+  defaultProject?: SidebarProject | null;
+}): Ticket {
+  const { tickets, projectId } = input;
+  const referenceTicket =
+    tickets.find(ticket => (projectId ? ticket.project_id === projectId : true)) ?? tickets[0];
+  const optimisticProject = resolveOptimisticTicketProject({
+    projectId,
+    defaultProject: input.defaultProject,
+    referenceTicket
+  });
+
+  return {
+    id: input.id,
+    title: deriveTitleFromObjective(input.objective),
+    objective: input.objective,
+    organization_id:
+      input.organizationId ??
+      optimisticProject.organization_id ??
+      referenceTicket?.organization_id ??
+      0,
+    project_id: optimisticProject.project_id,
+    project_name: optimisticProject.project_name,
+    project_color: optimisticProject.project_color,
+    project_everhour_project_id: optimisticProject.project_everhour_project_id,
+    everhour_task_id: null,
+    agent_session_state: null,
+    running_agent: null,
+    latest_objective_agent: null,
+    has_executing_objective: false,
+    status: input.status,
+    priority: 'medium',
+    execution_target: 'agent',
+    assigned_agent: null,
+    board_position: getTicketPositionInStatus(tickets, input.status, input.position),
+    organization_name: referenceTicket?.organization_name ?? null,
+    waiting_for_response_at: null,
+    has_unopened_waiting_response: false,
+    is_read: true,
+    objectives_executed_count: 0,
+    delegate: null,
+    schedule_id: null,
+    due_datetime: null
   };
 }

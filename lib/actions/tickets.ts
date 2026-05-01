@@ -1618,7 +1618,7 @@ function mapBoardTicket(
     agent_session_state: null,
     running_agent: null,
     has_executing_objective: hasExecutingObjective,
-    waiting_for_response_at: null,
+    waiting_for_response_at: null as string | null,
     has_unopened_waiting_response: false,
     objectives_executed_count: 0
   };
@@ -1781,15 +1781,29 @@ export async function loadMoreTicketsAction({
   const ticketIds = tickets.map(ticket => ticket.id);
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
   const executingObjectiveByTicket = new Set<string>();
+  const waitingLatestByTicket = new Map<string, string>();
 
   if (ticketIds.length > 0) {
-    const { data: objectives, error: objectivesError } = await supabase
-      .from('objectives')
-      .select('ticket_id,agent_identifier,state')
-      .in('ticket_id', ticketIds)
-      .order('created_at', { ascending: false });
+    const [
+      { data: objectives, error: objectivesError },
+      { data: waitingQuestions, error: waitingQuestionsError }
+    ] = await Promise.all([
+      supabase
+        .from('objectives')
+        .select('ticket_id,agent_identifier,state')
+        .in('ticket_id', ticketIds)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('ticket_events')
+        .select('ticket_id,created_at')
+        .in('ticket_id', ticketIds)
+        .eq('event_type', 'question')
+        .eq('is_blocking', true)
+        .order('created_at', { ascending: false })
+    ]);
 
     if (objectivesError) throw new Error(objectivesError.message);
+    if (waitingQuestionsError) throw new Error(waitingQuestionsError.message);
 
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
@@ -1803,16 +1817,27 @@ export async function loadMoreTicketsAction({
         executingObjectiveByTicket.add(objective.ticket_id);
       }
     }
+
+    for (const question of (waitingQuestions ?? []) as Array<{
+      ticket_id: string;
+      created_at: string;
+    }>) {
+      if (!waitingLatestByTicket.has(question.ticket_id)) {
+        waitingLatestByTicket.set(question.ticket_id, question.created_at);
+      }
+    }
   }
 
   return {
-    tickets: tickets.map(ticket =>
-      mapBoardTicket(
+    tickets: tickets.map(ticket => {
+      const mapped = mapBoardTicket(
         ticket,
         latestObjectiveAgentByTicket.get(ticket.id) ?? null,
         executingObjectiveByTicket.has(ticket.id)
-      )
-    )
+      );
+      const waitingAt = waitingLatestByTicket.get(ticket.id);
+      return waitingAt ? { ...mapped, waiting_for_response_at: waitingAt } : mapped;
+    })
   };
 }
 

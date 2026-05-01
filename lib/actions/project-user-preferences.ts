@@ -14,13 +14,17 @@ export type ProjectUserPreferences = {
   hidden_columns: string[];
   preferred_view: string | null;
   list_filters: TicketListFilters;
+  list_collapsed_statuses: string[];
+  list_status_order: string[];
 };
 
 const DEFAULT_PREFERENCES: ProjectUserPreferences = {
   feed_post_instructions: null,
   hidden_columns: [],
   preferred_view: null,
-  list_filters: createDefaultTicketListFilters()
+  list_filters: createDefaultTicketListFilters(),
+  list_collapsed_statuses: [],
+  list_status_order: []
 };
 
 function normalizeOptionalString(value: unknown): string | null {
@@ -38,7 +42,9 @@ function parsePreferences(raw: unknown): ProjectUserPreferences {
     feed_post_instructions: normalizeOptionalString(obj.feed_post_instructions),
     hidden_columns: normalizeStringList(obj.hidden_columns),
     preferred_view: typeof obj.preferred_view === 'string' ? obj.preferred_view : null,
-    list_filters: parseTicketListFilters(obj.list_filters)
+    list_filters: parseTicketListFilters(obj.list_filters),
+    list_collapsed_statuses: normalizeStringList(obj.list_collapsed_statuses),
+    list_status_order: normalizeStringList(obj.list_status_order)
   };
 }
 
@@ -98,7 +104,15 @@ export async function upsertProjectUserPreferencesAction(
     list_filters:
       patch.list_filters !== undefined
         ? normalizeTicketListFilters(patch.list_filters)
-        : current.list_filters
+        : current.list_filters,
+    list_collapsed_statuses:
+      patch.list_collapsed_statuses !== undefined
+        ? normalizeStringList(patch.list_collapsed_statuses)
+        : current.list_collapsed_statuses,
+    list_status_order:
+      patch.list_status_order !== undefined
+        ? normalizeStringList(patch.list_status_order)
+        : current.list_status_order
   };
 
   const { error } = await supabase.from('project_user').upsert(
