@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot } from 'lucide-react';
+import { Bot, Code2, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
@@ -12,8 +12,6 @@ import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { capitalizeFirst } from '@/lib/options';
 import { cn } from '@/lib/utils';
 
-import { ExecutionTargetBadge } from './ExecutionTargetBadge';
-import type { Ticket } from './KanbanCard';
 import {
   ActiveAgentDisplay,
   AttentionIndicators,
@@ -21,6 +19,20 @@ import {
   ProjectColorDot,
   TicketPriorityContextMenu
 } from './TicketCardPrimitives';
+import type { Ticket } from './KanbanCard';
+
+const executionTargetConfig = {
+  agent: {
+    Icon: Bot,
+    className: 'text-emerald-600 dark:text-emerald-400',
+    title: 'Agent ticket'
+  },
+  human: {
+    Icon: UserRound,
+    className: 'text-amber-700 dark:text-amber-400',
+    title: 'Human ticket'
+  }
+} as const;
 
 export default function TicketListCard({
   ticket,
@@ -47,6 +59,9 @@ export default function TicketListCard({
     getAssignedAgentIdentifier(ticket.assigned_agent);
   const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
 
+  const { Icon: ExecutionIcon, className: executionIconClass, title: executionTitle } =
+    executionTargetConfig[ticket.execution_target];
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -59,63 +74,91 @@ export default function TicketListCard({
           }}
           aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
           className={cn(
-            'group relative flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/50 ',
-            isAgentRunning && 'animate-pulse border-emerald-500/40',
-            isSelected && 'border-gray-500/40 bg-gray-100/70 dark:bg-gray-950/25',
-            hasUnopenedReview && 'border-sky-500/40 bg-sky-50/60 dark:bg-sky-950/25'
+            'group relative flex cursor-pointer items-center gap-3 border-b px-3 py-2 text-left transition-colors hover:bg-muted/40',
+            'first:rounded-t-md last:rounded-b-md last:border-b-0',
+            isAgentRunning && 'animate-pulse bg-emerald-500/5',
+            isSelected && 'bg-gray-100/70 dark:bg-gray-950/25',
+            hasUnopenedReview && 'bg-sky-50/60 dark:bg-sky-950/25'
           )}
         >
-          {/* Shimmer for running agent */}
+          {/* Running agent shimmer */}
           {isAgentRunning && (
-            <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
+            <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/15 to-transparent" />
           )}
 
-          {/* Title + meta */}
-          <div className="min-w-0 flex-1 flex flex-col gap-1">
-            <span className="flex items-center gap-2 truncate text-sm font-medium">
-              <ProjectColorDot color={ticket.project_color} name={ticket.project_name} size="sm" />
+          {/* Left accent bar */}
+          <div
+            className={cn(
+              'absolute left-0 top-0 h-full w-0.5 rounded-l-md',
+              isAgentRunning && 'bg-emerald-500/60',
+              hasUnopenedReview && !isAgentRunning && 'bg-sky-500/60',
+              hasUnopenedWaitingResponse && !isAgentRunning && !hasUnopenedReview && 'bg-red-500/60'
+            )}
+          />
+
+          {/* Project color dot */}
+          <ProjectColorDot color={ticket.project_color} name={ticket.project_name} size="sm" />
+
+          {/* Title + delegate */}
+          <div className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium leading-snug">
               {getDisplayTitle(ticket)}
             </span>
-            <div className="mt-0.5 flex items-center gap-1.5 overflow-hidden">
-              <div>
-                {ticket.project_everhour_project_id ? (
-                  <span onClick={e => e.stopPropagation()}>
-                    <KanbanTimerButton
-                      initialTaskId={ticket.everhour_task_id ?? null}
-                      ticketId={ticket.id}
-                    />
-                  </span>
-                ) : null}
-              </div>
-              {(activeAgentIdentifier || executedObjectivesCount > 0) && (
-                <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-                  <ActiveAgentDisplay identifier={activeAgentIdentifier} />
-                  <ObjectivesExecutedBadge count={executedObjectivesCount} />
-                </div>
-              )}
-              <Badge variant="outline" className="py-0 text-[11px]">
-                {capitalizeFirst(ticket.status)}
-              </Badge>
-              <ExecutionTargetBadge executionTarget={ticket.execution_target} />
-              {ticket.schedule_id ? <ScheduleBadge /> : null}
-            </div>
             {ticket.delegate ? (
-              <div
-                className="mt-1 flex items-center gap-0.5 text-[10px] text-orange-600"
-                title={`Created by agent: ${ticket.delegate}`}
-              >
+              <span className="flex items-center gap-0.5 text-[10px] text-orange-600 mt-0.5">
                 <Bot className="h-2.5 w-2.5 shrink-0" />
                 <span className="truncate max-w-[140px]">Created by {ticket.delegate}</span>
-              </div>
+              </span>
             ) : null}
           </div>
 
-          {/* Attention indicators */}
-          <AttentionIndicators
-            hasUnopenedWaitingResponse={hasUnopenedWaitingResponse}
-            hasUnopenedReview={hasUnopenedReview}
-            className="shrink-0"
-          />
+          {/* Right metadata row */}
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Code area placeholder — future feature */}
+            <div
+              className="flex h-5 w-5 items-center justify-center rounded opacity-20"
+              title="Code area (coming soon)"
+            >
+              <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+
+            {/* Execution target icon only */}
+            <span title={executionTitle} className="flex shrink-0 items-center">
+              <ExecutionIcon className={cn('h-3.5 w-3.5', executionIconClass)} />
+            </span>
+
+            {/* Active agent + objectives count */}
+            {(activeAgentIdentifier || executedObjectivesCount > 0) && (
+              <div className="hidden items-center gap-1 sm:flex">
+                <ActiveAgentDisplay identifier={activeAgentIdentifier} />
+                <ObjectivesExecutedBadge count={executedObjectivesCount} />
+              </div>
+            )}
+
+            {/* Status badge */}
+            <Badge variant="outline" className="py-0 text-[11px]">
+              {capitalizeFirst(ticket.status)}
+            </Badge>
+
+            {/* Schedule badge */}
+            {ticket.schedule_id ? <ScheduleBadge /> : null}
+
+            {/* Timer button */}
+            {ticket.project_everhour_project_id ? (
+              <span onClick={e => e.stopPropagation()}>
+                <KanbanTimerButton
+                  initialTaskId={ticket.everhour_task_id ?? null}
+                  ticketId={ticket.id}
+                />
+              </span>
+            ) : null}
+
+            {/* Attention indicators */}
+            <AttentionIndicators
+              hasUnopenedWaitingResponse={hasUnopenedWaitingResponse}
+              hasUnopenedReview={hasUnopenedReview}
+            />
+          </div>
         </div>
       </ContextMenuTrigger>
       <TicketPriorityContextMenu

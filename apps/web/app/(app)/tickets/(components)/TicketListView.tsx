@@ -429,24 +429,26 @@ export default function TicketListView({
       ) : null}
 
       {hasTickets ? (
-        <div className="flex flex-col min-h-0 flex-1 h-full overflow-y-auto gap-2">
-          {sorted.map(ticket => {
-            const ticketPath = ticketUrlBase
-              ? `${ticketUrlBase}/${ticket.id}`
-              : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
-            const isSelected = pathname === ticketPath;
+        <div className="flex flex-col min-h-0 flex-1 overflow-y-auto">
+          <div className="rounded-md border">
+            {sorted.map(ticket => {
+              const ticketPath = ticketUrlBase
+                ? `${ticketUrlBase}/${ticket.id}`
+                : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
+              const isSelected = pathname === ticketPath;
 
-            return (
-              <TicketListCard
-                key={ticket.id}
-                ticket={ticket}
-                ticketPath={ticketPath}
-                isSelected={isSelected}
-                showOrganizationName={showOrganizationName}
-                onMarkUnread={handleMarkUnread}
-              />
-            );
-          })}
+              return (
+                <TicketListCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  ticketPath={ticketPath}
+                  isSelected={isSelected}
+                  showOrganizationName={showOrganizationName}
+                  onMarkUnread={handleMarkUnread}
+                />
+              );
+            })}
+          </div>
         </div>
       ) : (
         <Card>
