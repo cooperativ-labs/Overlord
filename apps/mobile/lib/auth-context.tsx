@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGithub: () => Promise<void>;
+  signInWithBitbucket: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -84,6 +85,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const signInWithBitbucket = async () => {
+    if (!isSupabaseConfigured()) {
+      throw new Error(supabaseConfigError ?? 'Supabase is not configured.');
+    }
+
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'bitbucket',
+      options: {
+        scopes: 'account email'
+      }
+    });
+    if (error) throw error;
+  };
+
   const signOut = async () => {
     if (!isSupabaseConfigured()) {
       throw new Error(supabaseConfigError ?? 'Supabase is not configured.');
@@ -102,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         signIn,
         signInWithGithub,
+        signInWithBitbucket,
         signOut
       }}
     >

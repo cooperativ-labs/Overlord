@@ -239,6 +239,26 @@ export async function linkGithubIdentityAction(): Promise<LinkIdentityResult> {
   return { url: data.url ?? undefined };
 }
 
+export async function linkBitbucketIdentityAction(): Promise<LinkIdentityResult> {
+  const supabase = await createClientForRequest();
+
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'bitbucket',
+    options: {
+      redirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent(
+        '/u?settings=Linked Accounts'
+      )}`,
+      scopes: 'account email'
+    }
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { url: data.url ?? undefined };
+}
+
 export async function disconnectIdentityAction(identityId: string): Promise<LinkIdentityResult> {
   const supabase = await createClientForRequest();
   const {

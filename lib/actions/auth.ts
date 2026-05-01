@@ -97,3 +97,24 @@ export async function signInWithGithub(next?: string): Promise<OAuthResult> {
 
   return { url: data.url ?? undefined };
 }
+
+export async function signInWithBitbucket(next?: string): Promise<OAuthResult> {
+  const supabase = await createClientForRequest();
+  const redirectTo =
+    `${getPlatformUrl()}/auth/callback` +
+    (next ? `?next=${encodeURIComponent(next)}` : '?next=%2Fu');
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'bitbucket',
+    options: {
+      redirectTo,
+      scopes: 'account email'
+    }
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { url: data.url ?? undefined };
+}

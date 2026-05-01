@@ -6,9 +6,8 @@
  * connection + HTTP helper rather than spawning a fresh ssh process per call.
  */
 
-import fs from 'node:fs/promises';
-
 import { ipcMain } from 'electron';
+import fs from 'node:fs/promises';
 import { z } from 'zod';
 
 import { resolveLinkedDirectory } from '../../../../lib/filesystem/project-file-tree';
@@ -321,8 +320,7 @@ export function registerFilesystemIpc(): void {
         return { ok: false, error: 'Linked working directory is missing or not a directory.' };
       }
     } catch (err) {
-      const isEnoent =
-        err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT';
+      const isEnoent = err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT';
       return {
         ok: false,
         error: isEnoent

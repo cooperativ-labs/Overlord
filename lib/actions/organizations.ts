@@ -100,10 +100,13 @@ export async function setSelectedOrgAction(orgId: number | null): Promise<void> 
   });
 }
 
+export type GitProvider = 'github' | 'bitbucket';
+
 export type OrganizationDetails = {
   id: number;
   name: string;
   feedRetentionDays: number;
+  gitProvider: GitProvider | null;
   role: OrganizationRole | null;
 };
 
@@ -127,7 +130,7 @@ export async function getOrganizationDetailsAction(
   const [orgResult, memberResult] = await Promise.all([
     supabase
       .from('organizations')
-      .select('id,name,feed_retention_days')
+      .select('id,name,feed_retention_days,git_provider')
       .eq('id', organizationId)
       .single(),
     supabase
@@ -146,6 +149,7 @@ export async function getOrganizationDetailsAction(
     id: orgResult.data.id,
     name: orgResult.data.name,
     feedRetentionDays: orgResult.data.feed_retention_days,
+    gitProvider: (orgResult.data.git_provider as GitProvider | null) ?? null,
     role: (memberResult.data?.role as OrganizationRole | undefined) ?? null
   };
 }
@@ -171,6 +175,24 @@ export async function updateOrganizationNameAction(
     throw new Error(error.message ?? 'Failed to update organization name.');
   }
   return data.name;
+}
+
+export async function updateOrganizationGitProviderAction(
+  organizationId: number,
+  gitProvider: GitProvider | null
+): Promise<GitProvider | null> {
+  const supabase = await createClientForRequest();
+  const { data, error } = await supabase
+    .from('organizations')
+    .update({ git_provider: gitProvider })
+    .eq('id', organizationId)
+    .select('git_provider')
+    .single();
+
+  if (error) {
+    throw new Error(error.message ?? 'Failed to update git provider.');
+  }
+  return (data.git_provider as GitProvider | null) ?? null;
 }
 
 export async function updateOrganizationFeedRetentionDaysAction(

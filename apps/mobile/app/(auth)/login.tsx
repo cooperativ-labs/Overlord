@@ -22,13 +22,14 @@ import { supabaseRuntimeInfo } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInWithGithub } = useAuth();
+  const { signIn, signInWithGithub, signInWithBitbucket } = useAuth();
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
+  const [bitbucketLoading, setBitbucketLoading] = useState(false);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -63,6 +64,21 @@ export default function LoginScreen() {
       Alert.alert('GitHub Sign In Failed', `${message}${debugContext}`);
     } finally {
       setGithubLoading(false);
+    }
+  };
+
+  const handleBitbucketSignIn = async () => {
+    setBitbucketLoading(true);
+    try {
+      await signInWithBitbucket();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      const debugContext = __DEV__
+        ? `\n\nSupabase host: ${supabaseRuntimeInfo.host}\nKey: ${supabaseRuntimeInfo.publishableKeyPrefix}...`
+        : '';
+      Alert.alert('Bitbucket Sign In Failed', `${message}${debugContext}`);
+    } finally {
+      setBitbucketLoading(false);
     }
   };
 
@@ -136,6 +152,25 @@ export default function LoginScreen() {
                 </Svg>
                 <Text style={[styles.githubButtonText, { color: colors.foreground }]}>
                   Continue with GitHub
+                </Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={[styles.githubButton, bitbucketLoading && styles.buttonDisabled]}
+            onPress={handleBitbucketSignIn}
+            disabled={bitbucketLoading}
+          >
+            {bitbucketLoading ? (
+              <ActivityIndicator color={colors.foreground} />
+            ) : (
+              <>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill={colors.foreground}>
+                  <Path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.892zM14.52 15.53H9.522L8.17 8.466h7.767z" />
+                </Svg>
+                <Text style={[styles.githubButtonText, { color: colors.foreground }]}>
+                  Continue with Bitbucket
                 </Text>
               </>
             )}

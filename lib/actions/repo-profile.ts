@@ -20,11 +20,7 @@ export async function getProjectProfileDataAction(projectId: string): Promise<Pr
   }
 
   const [projectResult, projectUserResult] = await Promise.all([
-    supabase
-      .from('projects')
-      .select('operations_profile_fingerprint')
-      .eq('id', projectId)
-      .single(),
+    supabase.from('projects').select('operations_profile_fingerprint').eq('id', projectId).single(),
     supabase
       .from('project_user')
       .select('local_working_directory')

@@ -634,6 +634,7 @@ export type Database = {
         Row: {
           created_at: string;
           feed_retention_days: number;
+          git_provider: string | null;
           id: number;
           name: string;
           updated_at: string;
@@ -641,6 +642,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           feed_retention_days?: number;
+          git_provider?: string | null;
           id?: number;
           name: string;
           updated_at?: string;
@@ -648,6 +650,7 @@ export type Database = {
         Update: {
           created_at?: string;
           feed_retention_days?: number;
+          git_provider?: string | null;
           id?: number;
           name?: string;
           updated_at?: string;

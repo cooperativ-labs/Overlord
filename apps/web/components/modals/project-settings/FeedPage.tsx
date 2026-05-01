@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 
+import { useElectron } from '@/components/features/terminal/useElectron';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
@@ -16,7 +17,6 @@ import {
   saveOperationsProfileAction
 } from '@/lib/actions/repo-profile';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
-import { useElectron } from '@/components/features/terminal/useElectron';
 
 const getProjectUserPreferencesActionWithRetry = withElectronActionRetry(
   getProjectUserPreferencesAction
@@ -302,9 +302,7 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
             onClick={handleRebuildProfile}
           />
           {!isElectron ? (
-            <p className="text-xs text-muted-foreground">
-              Requires the Overlord desktop app.
-            </p>
+            <p className="text-xs text-muted-foreground">Requires the Overlord desktop app.</p>
           ) : profileMeta ? (
             <p className="font-mono text-[10px] text-muted-foreground">
               fingerprint: {profileMeta.fingerprint.slice(0, 12)}…

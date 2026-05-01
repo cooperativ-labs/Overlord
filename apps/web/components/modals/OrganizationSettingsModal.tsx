@@ -169,6 +169,7 @@ export function OrganizationSettingsModal({
                       open={open}
                       organizationId={details.id}
                       initialName={details.name}
+                      initialGitProvider={details.gitProvider}
                       onNameChange={nextName =>
                         setDetails(prev => (prev ? { ...prev, name: nextName } : prev))
                       }

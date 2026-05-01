@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { LinkBitbucketIdentityButton } from '@/components/features/account/link-bitbucket-identity-button';
 import { LinkGithubIdentityButton } from '@/components/features/account/link-github-identity-button';
 import { SessionsList } from '@/components/features/account/sessions-list';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,9 @@ export function LinkedAccountsPage({ open }: LinkedAccountsPageProps) {
   }
 
   const hasGithubIdentity = profile.identities.some(identity => identity.provider === 'github');
+  const hasBitbucketIdentity = profile.identities.some(
+    identity => identity.provider === 'bitbucket'
+  );
 
   return (
     <div className="space-y-6">
@@ -70,21 +74,27 @@ export function LinkedAccountsPage({ open }: LinkedAccountsPageProps) {
             OAuth providers and login methods connected to your account.
           </p>
         </div>
-        <div className="rounded-lg border bg-muted/30 p-4">
-          <div className="mb-3">
+        <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
+          <div>
             <p className="text-sm font-medium">Connect another login method</p>
             <p className="text-sm text-muted-foreground">
-              Add GitHub so you can use both password and GitHub sign-in with this same account.
+              Link GitHub or Bitbucket so you can use multiple sign-in methods with this account.
             </p>
           </div>
 
-          {hasGithubIdentity ? (
-            <p className="text-sm text-muted-foreground">
-              GitHub is already connected to this account.
-            </p>
-          ) : (
-            <LinkGithubIdentityButton />
-          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            {hasGithubIdentity ? (
+              <p className="text-sm text-muted-foreground">GitHub is already connected.</p>
+            ) : (
+              <LinkGithubIdentityButton />
+            )}
+
+            {hasBitbucketIdentity ? (
+              <p className="text-sm text-muted-foreground">Bitbucket is already connected.</p>
+            ) : (
+              <LinkBitbucketIdentityButton />
+            )}
+          </div>
         </div>
       </div>
 
