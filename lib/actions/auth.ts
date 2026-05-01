@@ -43,10 +43,14 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
   const password = (formData.get('password') as string | null) ?? '';
   const rawName = (formData.get('name') as string | null) ?? '';
   const name = rawName.trim();
+  const inviteToken = ((formData.get('invite_token') as string | null) ?? '').trim();
 
   if (!name) {
     return { error: 'Name is required.' };
   }
+
+  // When an invite token is present, redirect through the invite accept page after email confirmation
+  const postConfirmPath = inviteToken ? `/invite/${inviteToken}` : '/onboarding';
 
   const { error } = await supabase.auth.signUp({
     email,
@@ -56,7 +60,7 @@ export async function signUp(formData: FormData): Promise<AuthResult> {
         name,
         full_name: name
       },
-      emailRedirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent('/onboarding')}`
+      emailRedirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent(postConfirmPath)}`
     }
   });
 
@@ -77,11 +81,11 @@ export async function signOut(): Promise<AuthResult> {
 
 export type OAuthResult = { error?: string; url?: string };
 
-export async function signInWithGithub(next?: string): Promise<OAuthResult> {
+export async function signInWithGithub(next?: string, inviteToken?: string): Promise<OAuthResult> {
   const supabase = await createClientForRequest();
+  const effectiveNext = inviteToken ? `/invite/${inviteToken}` : (next ?? '/u');
   const redirectTo =
-    `${getPlatformUrl()}/auth/callback` +
-    (next ? `?next=${encodeURIComponent(next)}` : '?next=%2Fu');
+    `${getPlatformUrl()}/auth/callback` + `?next=${encodeURIComponent(effectiveNext)}`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
@@ -98,11 +102,14 @@ export async function signInWithGithub(next?: string): Promise<OAuthResult> {
   return { url: data.url ?? undefined };
 }
 
-export async function signInWithBitbucket(next?: string): Promise<OAuthResult> {
+export async function signInWithBitbucket(
+  next?: string,
+  inviteToken?: string
+): Promise<OAuthResult> {
   const supabase = await createClientForRequest();
+  const effectiveNext = inviteToken ? `/invite/${inviteToken}` : (next ?? '/u');
   const redirectTo =
-    `${getPlatformUrl()}/auth/callback` +
-    (next ? `?next=${encodeURIComponent(next)}` : '?next=%2Fu');
+    `${getPlatformUrl()}/auth/callback` + `?next=${encodeURIComponent(effectiveNext)}`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'bitbucket',

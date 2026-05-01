@@ -630,6 +630,56 @@ export type Database = {
           }
         ];
       };
+      organization_invitations: {
+        Row: {
+          accepted_by: string | null;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          id: string;
+          invited_by: string;
+          organization_id: number;
+          role: Database['public']['Enums']['organization_role'];
+          status: string;
+          token: string;
+          updated_at: string;
+        };
+        Insert: {
+          accepted_by?: string | null;
+          created_at?: string;
+          email: string;
+          expires_at?: string;
+          id?: string;
+          invited_by: string;
+          organization_id: number;
+          role?: Database['public']['Enums']['organization_role'];
+          status?: string;
+          token?: string;
+          updated_at?: string;
+        };
+        Update: {
+          accepted_by?: string | null;
+          created_at?: string;
+          email?: string;
+          expires_at?: string;
+          id?: string;
+          invited_by?: string;
+          organization_id?: number;
+          role?: Database['public']['Enums']['organization_role'];
+          status?: string;
+          token?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'organization_invitations_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       organizations: {
         Row: {
           created_at: string;

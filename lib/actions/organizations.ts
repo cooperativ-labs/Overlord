@@ -7,10 +7,9 @@ import {
   mergeActiveOrgPreferenceIntoProfile,
   SELECTED_ORG_COOKIE
 } from '@/lib/active-organization-preference';
+import { ORGANIZATION_ROLE_ORDER, type OrganizationRole } from '@/lib/organization-roles';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
-
-export type OrganizationRole = Database['public']['Enums']['organization_role'];
 
 export async function createOrganizationAction(input: { name: string }): Promise<{
   organizationId: number;
@@ -265,6 +264,140 @@ export async function getOrganizationMembersAction(
       isCurrentUser: row.user_id === currentUserId
     };
   });
+}
+
+export async function updateMemberRoleAction(
+  organizationId: number,
+  userId: string,
+  role: OrganizationRole
+): Promise<{ error?: string }> {
+  const supabase = await createClientForRequest();
+  const currentUserId = await requireUserId();
+
+  // Check caller is ADMIN or MANAGER
+  const { data: callerMember } = await supabase
+    .from('members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', currentUserId)
+    .maybeSingle();
+
+  if (!callerMember) return { error: 'Unauthorized' };
+  const callerRole = callerMember.role as OrganizationRole;
+  if (callerRole !== 'ADMIN' && callerRole !== 'MANAGER') {
+    return { error: 'Only Admins and Managers can change member roles.' };
+  }
+
+  const callerLevel = ORGANIZATION_ROLE_ORDER.indexOf(callerRole);
+  const newRoleLevel = ORGANIZATION_ROLE_ORDER.indexOf(role);
+
+  // Ensure at least one ADMIN remains if demoting the last ADMIN
+  const { data: targetMember } = await supabase
+    .from('members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!targetMember) return { error: 'Member not found.' };
+
+  const targetLevel = ORGANIZATION_ROLE_ORDER.indexOf(targetMember.role as OrganizationRole);
+  if (callerLevel < 0 || newRoleLevel < 0 || targetLevel < 0) {
+    return { error: 'Invalid role.' };
+  }
+  if (newRoleLevel > callerLevel) {
+    return { error: 'You cannot assign a role higher than your own.' };
+  }
+  if (targetLevel > callerLevel) {
+    return { error: 'You cannot change the role of someone who outranks you.' };
+  }
+
+  if (targetMember.role === 'ADMIN' && role !== 'ADMIN') {
+    const { count } = await supabase
+      .from('members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('role', 'ADMIN');
+
+    if ((count ?? 0) <= 1) {
+      return { error: 'Cannot demote the last Admin. Promote another member to Admin first.' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('members')
+    .update({ role, updated_at: new Date().toISOString() })
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId);
+
+  if (error) return { error: error.message ?? 'Failed to update role.' };
+  return {};
+}
+
+export async function removeMemberAction(
+  organizationId: number,
+  userId: string
+): Promise<{ error?: string }> {
+  const supabase = await createClientForRequest();
+  const currentUserId = await requireUserId();
+
+  if (userId === currentUserId) {
+    return { error: 'Use "Leave organization" to remove yourself.' };
+  }
+
+  const { data: callerMember } = await supabase
+    .from('members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', currentUserId)
+    .maybeSingle();
+
+  if (!callerMember) return { error: 'Unauthorized' };
+  const callerRole = callerMember.role as OrganizationRole;
+  if (callerRole !== 'ADMIN' && callerRole !== 'MANAGER') {
+    return { error: 'Only Admins and Managers can remove members.' };
+  }
+
+  const callerLevel = ORGANIZATION_ROLE_ORDER.indexOf(callerRole);
+
+  // Prevent removing the last ADMIN
+  const { data: targetMember } = await supabase
+    .from('members')
+    .select('role')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!targetMember) return { error: 'Member not found.' };
+
+  const targetLevel = ORGANIZATION_ROLE_ORDER.indexOf(targetMember.role as OrganizationRole);
+  if (callerLevel < 0 || targetLevel < 0) {
+    return { error: 'Invalid role.' };
+  }
+  if (targetLevel > callerLevel) {
+    return { error: 'You cannot remove someone who outranks you.' };
+  }
+
+  if (targetMember.role === 'ADMIN') {
+    const { count } = await supabase
+      .from('members')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('role', 'ADMIN');
+
+    if ((count ?? 0) <= 1) {
+      return { error: 'Cannot remove the last Admin.' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('members')
+    .delete()
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId);
+
+  if (error) return { error: error.message ?? 'Failed to remove member.' };
+  return {};
 }
 
 export async function leaveOrganizationAction(organizationId: number): Promise<void> {

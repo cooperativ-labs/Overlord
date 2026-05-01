@@ -55,8 +55,12 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
   const router = useRouter();
   const { api, isElectron } = useElectron();
 
+  const isInvitedUser = !!initialState.invitedOrganizationId;
+
   // Determine starting step
   const getInitialStep = (): OnboardingStep => {
+    // Invited users skip org + project creation
+    if (isInvitedUser) return 'download-app';
     if (!initialState.hasOrganizations) return 'organization';
     if (!initialState.hasProjects) return 'download-app';
     return 'download-app';
@@ -64,12 +68,14 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
 
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(getInitialStep);
 
-  // Step labels for progress bar
-  const steps: { key: OnboardingStep; label: string }[] = [
-    { key: 'organization', label: 'Organization' },
-    { key: 'download-app', label: 'Desktop App' },
-    { key: 'project', label: 'Project' }
-  ];
+  // Step labels for progress bar — invited users only see Download App
+  const steps: { key: OnboardingStep; label: string }[] = isInvitedUser
+    ? [{ key: 'download-app', label: 'Desktop App' }]
+    : [
+        { key: 'organization', label: 'Organization' },
+        { key: 'download-app', label: 'Desktop App' },
+        { key: 'project', label: 'Project' }
+      ];
 
   const currentIndex = steps.findIndex(s => s.key === currentStep);
   const progressPercent = steps.length > 1 ? (currentIndex / (steps.length - 1)) * 100 : 100;
@@ -113,8 +119,13 @@ export function OnboardingWizard({ initialState }: OnboardingWizardProps) {
   }
 
   async function handleDownloadAppContinue() {
-    // User downloaded app or skipped — mark step complete and go to project creation
     await updateOnboardingProgressActionWithRetry({ completedStep: 3 });
+    if (isInvitedUser) {
+      // Invited users skip project creation and go straight to the app
+      await updateOnboardingProgressActionWithRetry({ completedStep: 4, skipped: true });
+      router.push('/u');
+      return;
+    }
     setCurrentStep('project');
   }
 

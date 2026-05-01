@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown, Folder, Loader2, Server } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -32,26 +32,9 @@ export function ProjectExecutionWorkspaceSelector({
   const [warningType, setWarningType] = useState<'local' | 'ssh'>('local');
   const [warningPath, setWarningPath] = useState('');
   const [warningError, setWarningError] = useState<string | null>(null);
-  const [tailscaleActive, setTailscaleActive] = useState(false);
 
   const sshConfig = projectSettings?.sshConnectionConfig ?? null;
   const projectId = projectSettings?.projectId ?? null;
-
-  useEffect(() => {
-    if (!api?.tailscale) return;
-    let cancelled = false;
-    void api.tailscale
-      .getStatus()
-      .then(status => {
-        if (!cancelled) setTailscaleActive(status.running && status.loggedIn);
-      })
-      .catch(() => {
-        if (!cancelled) setTailscaleActive(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api]);
 
   if (!projectSettings) return null;
 
@@ -114,7 +97,6 @@ export function ProjectExecutionWorkspaceSelector({
   }
 
   const sshWorkspaceAvailable = projectSettings.hasSshDirectory || Boolean(sshConfig);
-  const showSshAffordances = sshWorkspaceAvailable && Boolean(sshConfig);
 
   return (
     <>
@@ -210,18 +192,6 @@ export function ProjectExecutionWorkspaceSelector({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      {showSshAffordances && tailscaleActive ? (
-        <div className="mt-1 flex items-center gap-1.5 md:mt-0">
-          <span
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] text-muted-foreground"
-            title="Tailscale is running on this machine"
-          >
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Tailscale
-          </span>
-        </div>
-      ) : null}
 
       <WorkspaceConnectionWarningModal
         open={warningOpen}

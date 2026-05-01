@@ -13,6 +13,7 @@ export type OnboardingProgress = {
   preferredAgent?: AgentTypeValue;
   desktopSetupDone?: boolean;
   desktopCompletedStep?: number;
+  invitedOrganizationId?: number | null;
 };
 
 export type OnboardingState = {
@@ -25,6 +26,7 @@ export type OnboardingState = {
   preferredAgent?: AgentTypeValue;
   desktopSetupDone: boolean;
   desktopCompletedStep: number;
+  invitedOrganizationId: number | null;
 };
 
 function parseOnboardingProgress(raw: unknown): OnboardingProgress {
@@ -42,7 +44,9 @@ function parseOnboardingProgress(raw: unknown): OnboardingProgress {
     desktopSetupDone:
       typeof obj['desktop_setup_done'] === 'boolean' ? obj['desktop_setup_done'] : false,
     desktopCompletedStep:
-      typeof obj['desktop_completed_step'] === 'number' ? obj['desktop_completed_step'] : 0
+      typeof obj['desktop_completed_step'] === 'number' ? obj['desktop_completed_step'] : 0,
+    invitedOrganizationId:
+      typeof obj['invited_organization_id'] === 'number' ? obj['invited_organization_id'] : null
   };
 }
 
@@ -81,7 +85,8 @@ export async function getOnboardingState(): Promise<OnboardingState> {
       onboardingSkipped: progress.skipped,
       preferredAgent: progress.preferredAgent,
       desktopSetupDone: progress.desktopSetupDone ?? false,
-      desktopCompletedStep: progress.desktopCompletedStep ?? 0
+      desktopCompletedStep: progress.desktopCompletedStep ?? 0,
+      invitedOrganizationId: progress.invitedOrganizationId ?? null
     };
   }
 
@@ -98,7 +103,8 @@ export async function getOnboardingState(): Promise<OnboardingState> {
       onboardingSkipped: progress.skipped,
       preferredAgent: progress.preferredAgent,
       desktopSetupDone: progress.desktopSetupDone ?? false,
-      desktopCompletedStep: progress.desktopCompletedStep ?? 0
+      desktopCompletedStep: progress.desktopCompletedStep ?? 0,
+      invitedOrganizationId: progress.invitedOrganizationId ?? null
     };
   }
 
@@ -119,7 +125,8 @@ export async function getOnboardingState(): Promise<OnboardingState> {
     onboardingSkipped: progress.skipped,
     preferredAgent: progress.preferredAgent,
     desktopSetupDone: progress.desktopSetupDone ?? false,
-    desktopCompletedStep: progress.desktopCompletedStep ?? 0
+    desktopCompletedStep: progress.desktopCompletedStep ?? 0,
+    invitedOrganizationId: progress.invitedOrganizationId ?? null
   };
 }
 
@@ -163,7 +170,8 @@ export async function updateOnboardingProgressAction(update: {
     desktop_completed_step:
       update.desktopCompletedStep !== undefined
         ? Math.max(current.desktopCompletedStep ?? 0, update.desktopCompletedStep)
-        : (current.desktopCompletedStep ?? 0)
+        : (current.desktopCompletedStep ?? 0),
+    invited_organization_id: current.invitedOrganizationId ?? null
   };
 
   const { error } = await supabase.from('profiles').update({ onboarding: next }).eq('id', user.id);

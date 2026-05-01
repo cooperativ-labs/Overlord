@@ -21,15 +21,26 @@ type AuthFormProps = {
   error?: string;
   message?: string;
   next?: string;
+  inviteToken?: string;
+  inviteEmail?: string;
 };
 
 function withNext(path: string, next?: string): string {
   if (!next) return path;
   const params = new URLSearchParams({ next });
-  return `${path}?${params.toString()}`;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}${params.toString()}`;
 }
 
-export function AuthForm({ className, mode, error: initialError, message, next }: AuthFormProps) {
+export function AuthForm({
+  className,
+  mode,
+  error: initialError,
+  message,
+  next,
+  inviteToken,
+  inviteEmail
+}: AuthFormProps) {
   const router = useRouter();
   const [signInButtonState, setSignInButtonState] = React.useState<ButtonLoadingState>('default');
   const [signUpButtonState, setSignUpButtonState] = React.useState<ButtonLoadingState>('default');
@@ -100,7 +111,7 @@ export function AuthForm({ className, mode, error: initialError, message, next }
     setGithubButtonState('loading');
     setFormError(undefined);
     try {
-      const result = await signInWithGithub(next);
+      const result = await signInWithGithub(next, inviteToken);
       if (result.error) {
         setFormError(result.error);
         setGithubButtonState('error');
@@ -118,7 +129,7 @@ export function AuthForm({ className, mode, error: initialError, message, next }
     setBitbucketButtonState('loading');
     setFormError(undefined);
     try {
-      const result = await signInWithBitbucket(next);
+      const result = await signInWithBitbucket(next, inviteToken);
       if (result.error) {
         setFormError(result.error);
         setBitbucketButtonState('error');
@@ -193,6 +204,7 @@ export function AuthForm({ className, mode, error: initialError, message, next }
       ) : (
         <form method="post" onSubmit={handleSignUp}>
           {next ? <input type="hidden" name="next" value={next} /> : null}
+          {inviteToken ? <input type="hidden" name="invite_token" value={inviteToken} /> : null}
           <FieldGroup>
             <div className="flex flex-col items-center gap-2 text-center">
               <Link href="/" className="flex flex-col items-center gap-2 font-medium">
@@ -204,7 +216,13 @@ export function AuthForm({ className, mode, error: initialError, message, next }
               <h1 className="text-xl font-bold">Welcome to Overlord</h1>
               <FieldDescription>
                 Already have an account?{' '}
-                <Link href={withNext('/login', next)} className="underline underline-offset-4">
+                <Link
+                  href={withNext(
+                    inviteToken ? `/login?next=/invite/${inviteToken}` : '/login',
+                    next
+                  )}
+                  className="underline underline-offset-4"
+                >
                   Sign in
                 </Link>
               </FieldDescription>
@@ -221,6 +239,9 @@ export function AuthForm({ className, mode, error: initialError, message, next }
                 type="email"
                 placeholder="m@example.com"
                 required
+                defaultValue={inviteEmail ?? ''}
+                readOnly={!!inviteEmail}
+                className={inviteEmail ? 'bg-muted cursor-not-allowed' : ''}
               />
             </Field>
             <Field>

@@ -41,8 +41,9 @@ export default async function UserLayout({ children }: LayoutProps) {
   });
 
   const isElectronRequest = await isElectronRequestFromHeaders();
-  if (!isElectronRequest && (organizations.length === 0 || projects.length === 0)) {
-    // Web users without org/project data still need the onboarding flow.
+  // Only require an organization. Users may have zero projects (e.g. invited members who
+  // skipped project onboarding); `OrganizationEmptyProjectsState` below handles that case.
+  if (!isElectronRequest && organizations.length === 0) {
     redirect('/onboarding');
   }
 

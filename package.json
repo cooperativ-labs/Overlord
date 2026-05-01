@@ -28,7 +28,7 @@
     "mobile:ios:prod": "yarn workspace @overlord/mobile ios:prod",
     "mobile:android": "yarn workspace @overlord/mobile android",
     "mobile:clean": "yarn workspace @overlord/mobile clean",
-    "generate": "node scripts/generate-supabase-types.js local",
+    "generate": "supabase migration up &&node scripts/generate-supabase-types.js local && yarn fix",
     "new": "rm -rf node_modules && yarn cache clean && yarn install",
     "nuke": "yarn install && supabase db reset && supabase start && supabase status && yarn generate",
     "build": "yarn workspace @overlord/web build && yarn sentry:sourcemaps",
