@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.10.0] - 2026-05-01:06:46
+
+### Added
+- Desktop Electron IPC and preload API to rebuild the repo operations profile from a linked working directory, including TypeScript types for the profile payload returned to the renderer.
+
+### Fixed
+- Project Feed “rebuild operations profile” in the desktop app now scans the repo on the local machine and saves the result, instead of attempting filesystem work in a server action where the linked path is unavailable.
+
+### Changed
+- Split repo profile handling into actions that load project directory and fingerprint and an action that persists an operations profile after a desktop rebuild.
+
+### Security
+- None.
+
+### Refactor
+- Align `build-profile` imports with Electron main-process resolution and simplify server-side profile persistence error reporting.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.10.0`.
+
 ## [5.8.0] - 2026-04-30:21:16
 
 ### Added

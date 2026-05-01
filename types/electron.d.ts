@@ -1,5 +1,65 @@
 type SshAuthMethod = 'agent' | 'key' | 'tailscale';
 
+type RepoWorkspaceManager = 'yarn' | 'npm' | 'pnpm' | 'bun';
+type RepoDeployableKind =
+  | 'nextjs-app'
+  | 'expo-app'
+  | 'electron-app'
+  | 'edge-function'
+  | 'vercel-project'
+  | 'cloudflare-worker'
+  | 'static-site'
+  | 'cli'
+  | 'library';
+type RepoDeployTarget = 'vercel' | 'supabase' | 'eas' | 'testflight' | 'cloudflare';
+
+interface RepoOperationsProfile {
+  schema_version: 1;
+  workspaces: Array<{
+    path: string;
+    name: string;
+    manager: RepoWorkspaceManager | null;
+    has_lockfile: boolean;
+  }>;
+  deployables: Array<{
+    kind: RepoDeployableKind;
+    path: string;
+    name: string;
+    deploy_target?: RepoDeployTarget;
+  }>;
+  migrations: {
+    system: 'supabase' | 'prisma' | 'drizzle' | 'knex' | 'flyway' | null;
+    migrations_dir: string | null;
+    types_output: string | null;
+    seed_files: string[];
+    generate_command: string | null;
+    seed_sync_command: string | null;
+  } | null;
+  codegen: Array<{
+    name: string;
+    triggers: string[];
+    outputs: string[];
+    command: string | null;
+  }>;
+  tests: {
+    runner: 'jest' | 'vitest' | 'playwright' | 'cypress' | 'detox' | null;
+    config_files: string[];
+    test_dirs: string[];
+    script: string | null;
+  } | null;
+  manifests: Array<{ path: string; lockfile: string | null }>;
+  scripts_by_workspace: Record<string, Record<string, string>>;
+  signals: {
+    has_dockerfile: boolean;
+    has_docker_compose: boolean;
+    has_github_actions: boolean;
+    has_eas_json: boolean;
+    has_app_store_config: boolean;
+    has_env_example: boolean;
+    env_example_paths: string[];
+  };
+}
+
 interface SshConnectionConfig {
   host: string;
   port?: number;
@@ -185,6 +245,13 @@ interface ElectronAPI {
       truncated: boolean;
       error?: string;
     }>;
+    rebuildOperationsProfile: (options: {
+      directory: string;
+      currentFingerprint?: string | null;
+    }) => Promise<
+      | { ok: true; rebuilt: boolean; fingerprint: string; profile: RepoOperationsProfile }
+      | { ok: false; error: string }
+    >;
   };
   remoteHelper: {
     install: (payload: { projectId: string; ssh: SshConnectionConfig }) => Promise<{

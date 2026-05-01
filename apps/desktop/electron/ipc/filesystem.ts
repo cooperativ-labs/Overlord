@@ -6,9 +6,13 @@
  * connection + HTTP helper rather than spawning a fresh ssh process per call.
  */
 
+import fs from 'node:fs/promises';
+
 import { ipcMain } from 'electron';
 import { z } from 'zod';
 
+import { resolveLinkedDirectory } from '../../../../lib/filesystem/project-file-tree';
+import { buildRepoOperationsProfile } from '../../../../lib/repo-profile/build-profile';
 import { LocalWorkspaceClient } from '../../../../lib/workspace/local';
 import type {
   CreatePullRequestOptions,
@@ -291,6 +295,57 @@ export function registerFilesystemIpc(): void {
       return await client.createPullRequest(options);
     } catch (error) {
       return failure(error, { ok: false, branch: null, number: null, url: null });
+    }
+  });
+
+  ipcMain.handle('filesystem:rebuild-operations-profile', async (_event, rawPayload?: unknown) => {
+    const parsed = z
+      .object({
+        directory: z.string().min(1).max(4096),
+        currentFingerprint: z.string().max(512).nullable().optional()
+      })
+      .safeParse(rawPayload);
+    if (!parsed.success) {
+      return { ok: false, error: 'Invalid payload.' };
+    }
+    const { directory, currentFingerprint } = parsed.data;
+
+    const root = resolveLinkedDirectory(directory);
+    if (!root) {
+      return { ok: false, error: 'Could not resolve working directory path.' };
+    }
+
+    try {
+      const stat = await fs.stat(root);
+      if (!stat.isDirectory()) {
+        return { ok: false, error: 'Linked working directory is missing or not a directory.' };
+      }
+    } catch (err) {
+      const isEnoent =
+        err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT';
+      return {
+        ok: false,
+        error: isEnoent
+          ? 'Linked working directory does not exist.'
+          : err instanceof Error
+            ? err.message
+            : 'Failed to access working directory.'
+      };
+    }
+
+    try {
+      const { profile, fingerprint } = await buildRepoOperationsProfile(root);
+      return {
+        ok: true,
+        rebuilt: fingerprint !== (currentFingerprint ?? null),
+        fingerprint,
+        profile
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : 'Failed to build operations profile.'
+      };
     }
   });
 

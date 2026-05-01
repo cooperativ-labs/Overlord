@@ -11,9 +11,11 @@ import {
   getProjectUserPreferencesAction,
   upsertProjectUserPreferencesAction
 } from '@/lib/actions/project-user-preferences';
-import { rebuildOperationsProfileAction } from '@/lib/actions/repo-profile';
+import {
+  getProjectProfileDataAction,
+  saveOperationsProfileAction
+} from '@/lib/actions/repo-profile';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
-import type { RepoOperationsProfile } from '@/lib/repo-profile/types';
 import { useElectron } from '@/components/features/terminal/useElectron';
 
 const getProjectUserPreferencesActionWithRetry = withElectronActionRetry(
@@ -74,7 +76,7 @@ type FeedPageProps = {
 };
 
 export function FeedPage({ open, projectId }: FeedPageProps) {
-  const { isElectron } = useElectron();
+  const { isElectron, api } = useElectron();
   const [feedInstructions, setFeedInstructions] = useState('');
   const [savedFeedInstructions, setSavedFeedInstructions] = useState('');
   const [feedInstructionsLoading, setFeedInstructionsLoading] = useState(false);
@@ -163,18 +165,44 @@ export function FeedPage({ open, projectId }: FeedPageProps) {
   }
 
   async function handleRebuildProfile() {
-    if (!isElectron) return;
+    if (!isElectron || !api) return;
     setProfileBuildState('loading');
     setProfileError(null);
     try {
-      const result = await rebuildOperationsProfileAction(projectId, { force: true });
+      const data = await getProjectProfileDataAction(projectId);
+      if (!data.ok) {
+        setProfileBuildState('error');
+        setProfileError(data.error);
+        return;
+      }
+      if (!data.localDirectory) {
+        setProfileBuildState('error');
+        setProfileError('No linked working directory for this project.');
+        return;
+      }
+
+      const result = await api.filesystem.rebuildOperationsProfile({
+        directory: data.localDirectory,
+        currentFingerprint: data.currentFingerprint
+      });
       if (!result.ok) {
         setProfileBuildState('error');
         setProfileError(result.error);
         return;
       }
-      const profile: RepoOperationsProfile = result.profile;
-      setProfileJson(JSON.stringify(profile, null, 2));
+
+      const saveResult = await saveOperationsProfileAction(
+        projectId,
+        result.profile,
+        result.fingerprint
+      );
+      if (!saveResult.ok) {
+        setProfileBuildState('error');
+        setProfileError(saveResult.error ?? 'Failed to save profile.');
+        return;
+      }
+
+      setProfileJson(JSON.stringify(result.profile, null, 2));
       setProfileMeta({ rebuilt: result.rebuilt, fingerprint: result.fingerprint });
       setProfileBuildState('success');
     } catch (error) {

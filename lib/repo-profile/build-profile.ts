@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { listProjectFiles } from '@/lib/filesystem/project-file-tree';
+import { listProjectFiles } from '../filesystem/project-file-tree';
 
 import {
   CodegenStep,

@@ -88,7 +88,11 @@ const electronAPI = {
       }
     ) => ipcRenderer.invoke('filesystem:git-create-pull-request', options),
     readFile: (options: WorkspacePayload & { path: string; maxBytes?: number }) =>
-      ipcRenderer.invoke('filesystem:read-file', options)
+      ipcRenderer.invoke('filesystem:read-file', options),
+    rebuildOperationsProfile: (options: {
+      directory: string;
+      currentFingerprint?: string | null;
+    }) => ipcRenderer.invoke('filesystem:rebuild-operations-profile', options)
   },
   remoteHelper: {
     install: (payload: { projectId: string; ssh: SshConnectionConfig }) =>
