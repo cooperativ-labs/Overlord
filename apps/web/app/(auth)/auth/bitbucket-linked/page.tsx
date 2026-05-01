@@ -31,8 +31,8 @@ export default function BitbucketLinkedPage() {
           <div className="rounded-lg border bg-muted/30 p-4 text-foreground">
             <p className="font-medium">Next step</p>
             <p className="mt-1">
-              Go to organization settings and set <span className="font-medium">Bitbucket</span>{' '}
-              as your git provider.
+              Go to organization settings and set <span className="font-medium">Bitbucket</span> as
+              your git provider.
             </p>
           </div>
 

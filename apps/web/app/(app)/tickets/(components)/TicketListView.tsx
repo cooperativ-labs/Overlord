@@ -1,7 +1,19 @@
 'use client';
 
-import { ArrowUpDown, Check, Filter } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import {
+  ArrowUpDown,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
+  Circle,
+  Eye,
+  Filter,
+  NotebookPen,
+  Play,
+  Plus
+} from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +32,10 @@ import { markTicketUnreadAction } from '@/lib/actions/tickets';
 import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
+  useCreateBlankTicketMutation,
+  useUpdateTicketStatusMutation
+} from '@/lib/client-data/tickets/mutations';
+import {
   normalizeStringList,
   normalizeTicketListFilters,
   parseTicketListFilters,
@@ -34,6 +50,7 @@ import {
   type TicketOpenedTimestamps,
   type TicketRaisedWhileOpenMap
 } from '@/lib/helpers/ticket-waiting-response';
+import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
 import {
@@ -58,6 +75,8 @@ const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
 const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
 const PERSONAL_PROJECT_FILTER_ID = '__personal__';
+const SHOW_MORE_THRESHOLD = 4;
+const SCROLL_THRESHOLD = 12;
 
 function areStringListsEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
@@ -88,6 +107,41 @@ function sanitizeSelectedStatuses(current: string[], availableStatuses: string[]
   return next.length > 0 ? next : availableStatuses;
 }
 
+type StatusStyle = {
+  text: string;
+  bg: string;
+  rule: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+function getStatusStyle(statusType: string | undefined, statusName: string): StatusStyle {
+  if (statusType === 'execute')
+    return { text: 'text-blue-500', bg: 'bg-blue-500/15', rule: 'bg-blue-500/30', icon: Play };
+  if (statusType === 'complete')
+    return {
+      text: 'text-emerald-500',
+      bg: 'bg-emerald-500/15',
+      rule: 'bg-emerald-500/30',
+      icon: CheckCheck
+    };
+  if (statusType === 'review')
+    return { text: 'text-cyan-500', bg: 'bg-cyan-500/15', rule: 'bg-cyan-500/30', icon: Eye };
+  if (statusName === 'draft')
+    return {
+      text: 'text-muted-foreground',
+      bg: 'bg-muted',
+      rule: 'bg-border',
+      icon: NotebookPen
+    };
+  // next-up / other
+  return {
+    text: 'text-sky-600 dark:text-sky-400',
+    bg: 'bg-sky-500/15',
+    rule: 'bg-sky-500/30',
+    icon: Circle
+  };
+}
+
 export default function TicketListView({
   tickets: initialTickets,
   statuses,
@@ -110,6 +164,7 @@ export default function TicketListView({
   initialListFilters?: TicketListFilters | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [, startTransition] = useTransition();
   const boardScope = useMemo(
     () => buildBoardScope({ organizationId, projectId }),
@@ -124,6 +179,9 @@ export default function TicketListView({
     () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
     [boardQuery.data, initialTickets]
   );
+
+  const updateStatusMutation = useUpdateTicketStatusMutation();
+  const createBlankMutation = useCreateBlankTicketMutation();
 
   const [storedListFilters] = useState<TicketListFilters | null>(() =>
     projectId ? null : readStoredListFilters()
@@ -147,6 +205,10 @@ export default function TicketListView({
   const [waitingRaisedWhileOpen, setWaitingRaisedWhileOpen] = useState<TicketRaisedWhileOpenMap>(
     () => getWaitingRaisedWhileOpenMap()
   );
+
+  const [expandedStatuses, setExpandedStatuses] = useState<Record<string, boolean>>({});
+  const [draggedTicketId, setDraggedTicketId] = useState<string | null>(null);
+  const [dropTargetStatus, setDropTargetStatus] = useState<string | null>(null);
 
   const ticketIdsRef = useRef<Set<string>>(new Set());
   ticketIdsRef.current = new Set(tickets.map(t => t.id));
@@ -249,7 +311,8 @@ export default function TicketListView({
     });
   }
 
-  const sorted = useMemo(() => {
+  // Filter then sort flat — grouping happens at render time.
+  const filteredSortedTickets = useMemo(() => {
     let filtered = ticketsWithIndicators;
     if (!areAllStatusesSelected && selectedStatuses.length > 0) {
       filtered = filtered.filter(t => selectedStatusesSet.has(t.status));
@@ -282,6 +345,33 @@ export default function TicketListView({
     filterProject
   ]);
 
+  // Group tickets by status, in the configured status order.
+  const orderedStatuses = useMemo(() => {
+    const sortedDef = [...statuses].sort((a, b) => a.position - b.position);
+    const present = new Set(filteredSortedTickets.map(t => t.status));
+    const visible = sortedDef.filter(s => present.has(s.name) || selectedStatusesSet.has(s.name));
+    // Append any present statuses missing from the definition.
+    const seen = new Set(visible.map(s => s.name));
+    for (const t of filteredSortedTickets) {
+      if (!seen.has(t.status)) {
+        visible.push({ name: t.status, position: 999, status_type: undefined });
+        seen.add(t.status);
+      }
+    }
+    return visible;
+  }, [statuses, filteredSortedTickets, selectedStatusesSet]);
+
+  const groupedTickets = useMemo(() => {
+    const groups = new Map<string, typeof filteredSortedTickets>();
+    for (const status of orderedStatuses) groups.set(status.name, []);
+    for (const ticket of filteredSortedTickets) {
+      const list = groups.get(ticket.status);
+      if (list) list.push(ticket);
+      else groups.set(ticket.status, [ticket]);
+    }
+    return groups;
+  }, [orderedStatuses, filteredSortedTickets]);
+
   const hasTickets = tickets.length > 0;
 
   useEffect(() => {
@@ -300,6 +390,50 @@ export default function TicketListView({
     saveListFilters(selectedStatuses, null);
     setFilterProject(null);
   }, [filterProject, projectId, projectOptions, saveListFilters, selectedStatuses]);
+
+  function toggleExpand(statusName: string) {
+    setExpandedStatuses(prev => ({ ...prev, [statusName]: !prev[statusName] }));
+  }
+
+  function handleDragOverHeader(e: React.DragEvent, statusName: string) {
+    if (!draggedTicketId) return;
+    const draggedTicket = tickets.find(t => t.id === draggedTicketId);
+    if (!draggedTicket || draggedTicket.status === statusName) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropTargetStatus(statusName);
+  }
+
+  function handleDropOnHeader(e: React.DragEvent, statusName: string) {
+    e.preventDefault();
+    if (draggedTicketId) {
+      const draggedTicket = tickets.find(t => t.id === draggedTicketId);
+      if (draggedTicket && draggedTicket.status !== statusName) {
+        updateStatusMutation.mutate({
+          ticketId: draggedTicketId,
+          status: statusName,
+          placement: 'bottom'
+        });
+      }
+    }
+    setDraggedTicketId(null);
+    setDropTargetStatus(null);
+  }
+
+  function handleAddTicket(_statusName: string) {
+    createBlankMutation.mutate(
+      { organizationId, projectId: projectId ?? null },
+      {
+        onSuccess: result => {
+          const path = buildTicketPath({
+            projectId: result.projectId,
+            ticketId: result.id
+          });
+          router.push(path);
+        }
+      }
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -429,26 +563,147 @@ export default function TicketListView({
       ) : null}
 
       {hasTickets ? (
-        <div className="flex flex-col min-h-0 flex-1 overflow-y-auto">
-          <div className="rounded-md border">
-            {sorted.map(ticket => {
-              const ticketPath = ticketUrlBase
-                ? `${ticketUrlBase}/${ticket.id}`
-                : buildTicketPath({ projectId: ticket.project_id, ticketId: ticket.id });
-              const isSelected = pathname === ticketPath;
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          {orderedStatuses.map(status => {
+            const groupTickets = groupedTickets.get(status.name) ?? [];
+            const style = getStatusStyle(status.status_type, status.name);
+            const StatusIcon = style.icon;
+            const hasRunning = groupTickets.some(t => t.has_executing_objective === true);
+            const hasAttention = groupTickets.some(
+              t => t.is_read === false || t.has_unopened_waiting_response === true
+            );
+            const isExpanded = !!expandedStatuses[status.name];
+            const isDropTarget = dropTargetStatus === status.name;
+            const shouldScroll = isExpanded && groupTickets.length >= SCROLL_THRESHOLD;
+            const visibleTickets =
+              isExpanded || groupTickets.length <= SHOW_MORE_THRESHOLD
+                ? groupTickets
+                : groupTickets.slice(0, SHOW_MORE_THRESHOLD);
+            const hiddenCount = groupTickets.length - SHOW_MORE_THRESHOLD;
 
-              return (
-                <TicketListCard
-                  key={ticket.id}
-                  ticket={ticket}
-                  ticketPath={ticketPath}
-                  isSelected={isSelected}
-                  showOrganizationName={showOrganizationName}
-                  onMarkUnread={handleMarkUnread}
-                />
-              );
-            })}
-          </div>
+            return (
+              <div key={status.name} className="flex flex-col gap-1">
+                {/* Stage header */}
+                <div
+                  onDragOver={e => handleDragOverHeader(e, status.name)}
+                  onDragLeave={() => {
+                    if (dropTargetStatus === status.name) setDropTargetStatus(null);
+                  }}
+                  onDrop={e => handleDropOnHeader(e, status.name)}
+                  className={cn(
+                    'group/header flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors',
+                    isDropTarget && 'bg-accent outline outline-1 outline-dashed outline-blue-500/50'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded',
+                      style.bg,
+                      style.text
+                    )}
+                  >
+                    <StatusIcon className="h-3 w-3" />
+                  </div>
+                  <span
+                    className={cn('text-[11px] font-semibold uppercase tracking-wider', style.text)}
+                  >
+                    {formatStatusLabel(status.name)}
+                  </span>
+                  {hasRunning && (
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_4px_rgb(16,185,129)]"
+                      title="Agent running in this stage"
+                    />
+                  )}
+                  {hasAttention && (
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500"
+                      title="Tickets need attention"
+                    />
+                  )}
+                  {isDropTarget && (
+                    <span className="text-[10px] text-blue-500">
+                      Drop to move to {formatStatusLabel(status.name)}
+                    </span>
+                  )}
+                  <div className={cn('flex-1 h-px', style.rule)} />
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    {groupTickets.length}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-5 w-5 shrink-0"
+                    onClick={() => handleAddTicket(status.name)}
+                    aria-label={`Add ticket to ${formatStatusLabel(status.name)}`}
+                    title={`Add ticket to ${formatStatusLabel(status.name)}`}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+
+                {/* Cards body — indented under a left-border track */}
+                <div
+                  className={cn('ml-2 border-l border-border pl-2', shouldScroll && 'pr-1')}
+                  style={shouldScroll ? { maxHeight: 320, overflowY: 'auto' } : undefined}
+                >
+                  {groupTickets.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-border px-3 py-2 text-center text-[11px] text-muted-foreground">
+                      No tickets — drag one here or click + to add
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-0.5">
+                      {visibleTickets.map(ticket => {
+                        const ticketPath = ticketUrlBase
+                          ? `${ticketUrlBase}/${ticket.id}`
+                          : buildTicketPath({
+                              projectId: ticket.project_id,
+                              ticketId: ticket.id
+                            });
+                        const isSelected = pathname === ticketPath;
+                        return (
+                          <TicketListCard
+                            key={ticket.id}
+                            ticket={ticket}
+                            ticketPath={ticketPath}
+                            isSelected={isSelected}
+                            showOrganizationName={showOrganizationName}
+                            showProjectName={!projectId}
+                            onMarkUnread={handleMarkUnread}
+                            onDragStart={id => setDraggedTicketId(id)}
+                            onDragEnd={() => {
+                              setDraggedTicketId(null);
+                              setDropTargetStatus(null);
+                            }}
+                          />
+                        );
+                      })}
+                      {!isExpanded && hiddenCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(status.name)}
+                          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                          {hiddenCount} more
+                        </button>
+                      )}
+                      {isExpanded && groupTickets.length > SHOW_MORE_THRESHOLD && (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(status.name)}
+                          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                        >
+                          <ChevronUp className="h-3 w-3" />
+                          Show less
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <Card>
