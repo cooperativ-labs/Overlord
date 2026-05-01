@@ -246,7 +246,7 @@ export async function linkBitbucketIdentityAction(): Promise<LinkIdentityResult>
     provider: 'bitbucket',
     options: {
       redirectTo: `${getPlatformUrl()}/auth/callback?next=${encodeURIComponent(
-        '/u?settings=Linked Accounts'
+        '/auth/bitbucket-linked'
       )}`,
       scopes: 'account email'
     }
