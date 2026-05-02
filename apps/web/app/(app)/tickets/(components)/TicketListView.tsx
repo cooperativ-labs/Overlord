@@ -1,5 +1,7 @@
 'use client';
 
+import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { useQueryClient } from '@tanstack/react-query';
 import { CheckCheck, Circle, Eye, NotebookPen, Play } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
@@ -10,11 +12,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { upsertGlobalListViewPreferencesAction } from '@/lib/actions/global-list-view-preferences';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { useTicketTagsBatch } from '@/lib/client-data/tags/hooks';
-import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
+import {
+  parseUpdatedAtMsForSort,
+  selectAllTickets
+} from '@/lib/client-data/tickets/board-selectors';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
   useCreateTicketMutation,
   useMarkTicketReadMutation,
+  useReorderTicketsMutation,
   useUpdateTicketStatusMutation
 } from '@/lib/client-data/tickets/mutations';
 import {
@@ -192,7 +198,9 @@ export default function TicketListView({
 
   const updateStatusMutation = useUpdateTicketStatusMutation();
   const createTicketMutation = useCreateTicketMutation();
+  const reorderMutation = useReorderTicketsMutation();
   const { mutate: markTicketRead } = useMarkTicketReadMutation();
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const { defaultProject } = useDefaultProject();
 
   const visibleTicketIds = useMemo(() => tickets.map(t => t.id), [tickets]);
@@ -436,6 +444,19 @@ export default function TicketListView({
       if (list) list.push(ticket);
       else groups.set(ticket.status, [ticket]);
     }
+    // Sort within each group by board_position, matching KanbanBoard logic.
+    for (const [statusName, group] of groups) {
+      const statusDef = orderedStatuses.find(s => s.name === statusName);
+      if (statusDef?.status_type === 'complete') {
+        group.sort((a, b) => {
+          const diff = parseUpdatedAtMsForSort(b) - parseUpdatedAtMsForSort(a);
+          if (diff !== 0) return diff;
+          return a.board_position - b.board_position;
+        });
+      } else {
+        group.sort((a, b) => a.board_position - b.board_position);
+      }
+    }
     return groups;
   }, [orderedStatuses, filteredSortedTickets]);
 
@@ -657,6 +678,47 @@ export default function TicketListView({
     setDropTargetStatusForReorder(null);
   }
 
+  function handleDndDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const activeTicket = tickets.find(t => t.id === activeId);
+    const overTicket = tickets.find(t => t.id === overId);
+    if (!activeTicket || !overTicket) return;
+
+    const sourceStatus = activeTicket.status;
+    const targetStatus = overTicket.status;
+    const fullSource = groupedTickets.get(sourceStatus) ?? [];
+
+    if (sourceStatus === targetStatus) {
+      const oldIndex = fullSource.findIndex(t => t.id === activeId);
+      const newIndex = fullSource.findIndex(t => t.id === overId);
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+      const reordered = arrayMove(fullSource, oldIndex, newIndex);
+      reorderMutation.mutate({ status: sourceStatus, orderedIds: reordered.map(t => t.id) });
+      return;
+    }
+
+    const fullTarget = groupedTickets.get(targetStatus) ?? [];
+    const insertAt = fullTarget.findIndex(t => t.id === overId);
+    if (insertAt === -1) return;
+
+    const orderedIds = [
+      ...fullTarget.slice(0, insertAt).map(t => t.id),
+      activeId,
+      ...fullTarget.slice(insertAt).map(t => t.id)
+    ];
+
+    reorderMutation.mutate({
+      status: targetStatus,
+      orderedIds,
+      statusChange: { ticketId: activeId, newStatus: targetStatus }
+    });
+  }
+
   async function handleCreateTicket(
     status: string,
     objective: string,
@@ -751,67 +813,70 @@ export default function TicketListView({
         />
       ) : null}
       {hasTickets ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-          {orderedStatuses.map(status => {
-            const rawGroupTickets = groupedTickets.get(status.name) ?? [];
-            const groupTickets = tagsByTicketId
-              ? rawGroupTickets.map(t => ({ ...t, tags: tagsByTicketId[t.id] ?? [] }))
-              : rawGroupTickets;
-            const style = getStatusStyle(status.status_type, status.name);
-            const isExpanded = !!expandedStatuses[status.name];
-            const isCollapsed = collapsedStatuses.has(status.name);
-            const isDropTarget = !draggedStatusName && dropTargetStatus === status.name;
-            const isReorderTarget = draggedStatusName && dropTargetStatusForReorder === status.name;
+        <DndContext id="tickets-list-dnd" sensors={sensors} onDragEnd={handleDndDragEnd}>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+            {orderedStatuses.map(status => {
+              const rawGroupTickets = groupedTickets.get(status.name) ?? [];
+              const groupTickets = tagsByTicketId
+                ? rawGroupTickets.map(t => ({ ...t, tags: tagsByTicketId[t.id] ?? [] }))
+                : rawGroupTickets;
+              const style = getStatusStyle(status.status_type, status.name);
+              const isExpanded = !!expandedStatuses[status.name];
+              const isCollapsed = collapsedStatuses.has(status.name);
+              const isDropTarget = !draggedStatusName && dropTargetStatus === status.name;
+              const isReorderTarget =
+                draggedStatusName && dropTargetStatusForReorder === status.name;
 
-            return (
-              <TicketListStatusGroup
-                key={status.name}
-                status={status}
-                style={style}
-                tickets={groupTickets}
-                pathname={pathname}
-                ticketUrlBase={ticketUrlBase}
-                showOrganizationName={showOrganizationName}
-                projectId={projectId}
-                isExpanded={isExpanded}
-                isCollapsed={isCollapsed}
-                isDropTarget={isDropTarget}
-                isReorderTarget={Boolean(isReorderTarget)}
-                activeBlankStatus={activeBlankStatus}
-                onToggleCollapse={toggleCollapse}
-                onToggleExpand={toggleExpand}
-                onSetActiveBlankStatus={setActiveBlankStatus}
-                onTicketDragOverStatus={handleTicketDragOverStatus}
-                onTicketDragLeaveStatus={handleTicketDragLeaveStatus}
-                onTicketDropOnStatus={handleTicketDropOnStatus}
-                onStatusDragStart={handleStatusDragStart}
-                onStatusDragEnd={handleStatusDragEnd}
-                onStatusDragOver={handleStatusDragOver}
-                onStatusDrop={handleStatusDrop}
-                onClearStatusReorderTarget={() => setDropTargetStatusForReorder(null)}
-                onTicketDragStart={handleTicketDragStart}
-                onTicketDragEnd={handleTicketDragEnd}
-                onMarkUnread={handleMarkUnread}
-                onCreateTicket={handleCreateTicket}
-                onCreateAndOpenTicket={handleCreateAndOpenTicket}
-              />
-            );
-          })}
-          {orderedStatuses.length > 0 ? (
-            <div
-              className={cn('shrink-0', draggedStatusName && 'min-h-14')}
-              onDragOver={handleStatusDragOverEnd}
-              onDragLeave={handleStatusDragLeaveEnd}
-              onDrop={handleStatusDropEnd}
-            >
-              {draggedStatusName && dropTargetStatusForReorder === STATUS_REORDER_DROP_END ? (
-                <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-[11px] text-muted-foreground">
-                  Release to reorder here
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+              return (
+                <TicketListStatusGroup
+                  key={status.name}
+                  status={status}
+                  style={style}
+                  tickets={groupTickets}
+                  pathname={pathname}
+                  ticketUrlBase={ticketUrlBase}
+                  showOrganizationName={showOrganizationName}
+                  projectId={projectId}
+                  isExpanded={isExpanded}
+                  isCollapsed={isCollapsed}
+                  isDropTarget={isDropTarget}
+                  isReorderTarget={Boolean(isReorderTarget)}
+                  activeBlankStatus={activeBlankStatus}
+                  onToggleCollapse={toggleCollapse}
+                  onToggleExpand={toggleExpand}
+                  onSetActiveBlankStatus={setActiveBlankStatus}
+                  onTicketDragOverStatus={handleTicketDragOverStatus}
+                  onTicketDragLeaveStatus={handleTicketDragLeaveStatus}
+                  onTicketDropOnStatus={handleTicketDropOnStatus}
+                  onStatusDragStart={handleStatusDragStart}
+                  onStatusDragEnd={handleStatusDragEnd}
+                  onStatusDragOver={handleStatusDragOver}
+                  onStatusDrop={handleStatusDrop}
+                  onClearStatusReorderTarget={() => setDropTargetStatusForReorder(null)}
+                  onTicketDragStart={handleTicketDragStart}
+                  onTicketDragEnd={handleTicketDragEnd}
+                  onMarkUnread={handleMarkUnread}
+                  onCreateTicket={handleCreateTicket}
+                  onCreateAndOpenTicket={handleCreateAndOpenTicket}
+                />
+              );
+            })}
+            {orderedStatuses.length > 0 ? (
+              <div
+                className={cn('shrink-0', draggedStatusName && 'min-h-14')}
+                onDragOver={handleStatusDragOverEnd}
+                onDragLeave={handleStatusDragLeaveEnd}
+                onDrop={handleStatusDropEnd}
+              >
+                {draggedStatusName && dropTargetStatusForReorder === STATUS_REORDER_DROP_END ? (
+                  <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-[11px] text-muted-foreground">
+                    Release to reorder here
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </DndContext>
       ) : (
         <Card>
           <CardContent className="pt-6">No tickets yet. Create the first one.</CardContent>

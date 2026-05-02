@@ -2,6 +2,7 @@ import { OVERLORD_TAG_RULES, TAG_SCORE_WEIGHTS } from '../constants';
 import type { ExecutionEvidenceInput, TagEvidence } from '../types';
 
 import { extractExplicitPaths } from './description';
+import { collectPathRuleEvidence } from './path-rule-evidence';
 
 function normalizePath(value: string): string {
   return value.replace(/^\.?\//, '').replace(/\/+$/, '');
@@ -44,34 +45,14 @@ export function collectExecutionEvidence(input: ExecutionEvidenceInput | null | 
   ].join('\n');
   const loweredMetadataHaystack = metadataHaystack.toLowerCase();
 
-  for (const path of paths) {
-    for (const rule of OVERLORD_TAG_RULES) {
-      if (rule.exactPaths.includes(path)) {
-        evidence.push({
-          tagKey: rule.key,
-          source: 'execution-evidence',
-          kind: 'path_match',
-          weight: TAG_SCORE_WEIGHTS.explicitPathMatch,
-          signal: `changed path ${path}`,
-          metadata: { path }
-        });
-        continue;
-      }
-
-      const prefix = rule.pathPrefixes.find(
-        candidate => path === candidate || path.startsWith(`${candidate}/`)
-      );
-      if (!prefix) continue;
-      evidence.push({
-        tagKey: rule.key,
-        source: 'execution-evidence',
-        kind: 'path_prefix_match',
-        weight: TAG_SCORE_WEIGHTS.explicitPathMatch,
-        signal: `changed path under ${prefix}`,
-        metadata: { path, prefix }
-      });
-    }
-  }
+  evidence.push(
+    ...collectPathRuleEvidence({
+      paths,
+      source: 'execution-evidence',
+      exactPathSignal: ({ path }) => `changed path ${path}`,
+      prefixPathSignal: ({ prefix }) => `changed path under ${prefix}`
+    })
+  );
 
   for (const rule of OVERLORD_TAG_RULES) {
     for (const keyword of rule.keywords) {

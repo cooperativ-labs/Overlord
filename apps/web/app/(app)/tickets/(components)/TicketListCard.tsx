@@ -1,5 +1,7 @@
 'use client';
 
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Bot, GripVertical, Tag, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -49,6 +51,9 @@ export default function TicketListCard({
   onDragEnd?: () => void;
 }) {
   const router = useRouter();
+  const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: ticket.id });
+  const sortableStyle = { transform: CSS.Transform.toString(transform), transition };
 
   const isAgentRunning = ticket.has_executing_objective === true;
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
@@ -64,8 +69,7 @@ export default function TicketListCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
-          role="button"
-          tabIndex={0}
+          ref={setNodeRef}
           draggable={Boolean(onDragStart)}
           onDragStart={event => onDragStart?.(ticket.id, event)}
           onDragEnd={() => onDragEnd?.()}
@@ -74,10 +78,11 @@ export default function TicketListCard({
             if (e.key === 'Enter' || e.key === ' ') router.push(ticketPath);
           }}
           aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
-          aria-grabbed={Boolean(onDragStart)}
+          style={sortableStyle}
           className={cn(
             'group relative flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors hover:bg-muted/40 hover:border-border',
             isAgentRunning && 'animate-pulse',
+            isDragging && 'opacity-40',
             isSelected && 'bg-muted/50 border-border',
             hasUnopenedReview && 'bg-sky-50/40 dark:bg-sky-950/15'
           )}
@@ -87,8 +92,12 @@ export default function TicketListCard({
             <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] overflow-hidden rounded-md bg-linear-to-r from-transparent via-emerald-500/10 to-transparent" />
           )}
 
-          {/* Drag handle (appears on hover) */}
-          <span className="flex h-3.5 w-3 shrink-0 items-center justify-center text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100">
+          {/* Drag handle — activates dnd-kit within-group reorder */}
+          <span
+            ref={setActivatorNodeRef}
+            {...listeners}
+            className="flex h-3.5 w-3 shrink-0 cursor-grab items-center justify-center text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+          >
             <GripVertical className="h-3.5 w-3.5" />
           </span>
 

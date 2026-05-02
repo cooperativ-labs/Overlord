@@ -1,6 +1,8 @@
 import { OVERLORD_TAG_RULES, TAG_SCORE_WEIGHTS } from '../constants';
 import type { DescriptionSourceInput, TagEvidence } from '../types';
 
+import { collectPathRuleEvidence } from './path-rule-evidence';
+
 const PATH_TOKEN_RE =
   /(?:^|[\s`("'[])([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+(?:\.[A-Za-z0-9._-]+)?)/g;
 
@@ -48,35 +50,16 @@ export function collectDescriptionEvidence(input: DescriptionSourceInput): {
   const blobs = collectTextBlobs(input);
   const haystack = blobs.join('\n').toLowerCase();
 
+  evidence.push(
+    ...collectPathRuleEvidence({
+      paths: explicitPaths,
+      source: 'ticket-text',
+      exactPathSignal: ({ path }) => `explicit path ${path}`,
+      prefixPathSignal: ({ prefix }) => `explicit path under ${prefix}`
+    })
+  );
+
   for (const rule of OVERLORD_TAG_RULES) {
-    for (const path of explicitPaths) {
-      if (rule.exactPaths.includes(path)) {
-        evidence.push({
-          tagKey: rule.key,
-          source: 'ticket-text',
-          kind: 'path_match',
-          weight: TAG_SCORE_WEIGHTS.explicitPathMatch,
-          signal: `explicit path ${path}`,
-          metadata: { path }
-        });
-        continue;
-      }
-
-      const prefix = rule.pathPrefixes.find(
-        candidate => path === candidate || path.startsWith(`${candidate}/`)
-      );
-      if (prefix) {
-        evidence.push({
-          tagKey: rule.key,
-          source: 'ticket-text',
-          kind: 'path_prefix_match',
-          weight: TAG_SCORE_WEIGHTS.explicitPathMatch,
-          signal: `explicit path under ${prefix}`,
-          metadata: { path, prefix }
-        });
-      }
-    }
-
     for (const keyword of rule.keywords) {
       if (!haystack.includes(keyword.toLowerCase())) continue;
       evidence.push({

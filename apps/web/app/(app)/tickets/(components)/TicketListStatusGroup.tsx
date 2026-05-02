@@ -1,5 +1,6 @@
 'use client';
 
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -226,55 +227,60 @@ export function TicketListStatusGroup({
               </div>
             )
           ) : groupTickets.length === 0 ? null : (
-            <div className="flex flex-col gap-0.5">
-              {visibleTickets.map(ticket => {
-                const ticketPath = ticketUrlBase
-                  ? `${ticketUrlBase}/${ticket.id}`
-                  : buildTicketPath({
-                      projectId: ticket.project_id,
-                      ticketId: ticket.id
-                    });
-                const isSelected = pathname === ticketPath;
-                return (
-                  <TicketListCard
-                    key={ticket.id}
-                    ticket={ticket}
-                    ticketPath={ticketPath}
-                    isSelected={isSelected}
-                    showOrganizationName={showOrganizationName}
-                    showProjectName={!projectId}
-                    onMarkUnread={onMarkUnread}
-                    onDragStart={onTicketDragStart}
-                    onDragEnd={onTicketDragEnd}
-                  />
-                );
-              })}
-              {isDropTarget ? (
-                <div className="rounded-md border border-dashed border-border px-3 py-5 text-center text-[11px] text-muted-foreground">
-                  Release to drop here
-                </div>
-              ) : null}
-              {!isExpanded && hiddenCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => onToggleExpand(status.name)}
-                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                >
-                  <ChevronDown className="h-3 w-3" />
-                  {hiddenCount} more
-                </button>
-              ) : null}
-              {isExpanded && groupTickets.length > SHOW_MORE_THRESHOLD ? (
-                <button
-                  type="button"
-                  onClick={() => onToggleExpand(status.name)}
-                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                >
-                  <ChevronUp className="h-3 w-3" />
-                  Show less
-                </button>
-              ) : null}
-            </div>
+            <SortableContext
+              items={visibleTickets.map(t => t.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="flex flex-col gap-0.5">
+                {visibleTickets.map(ticket => {
+                  const ticketPath = ticketUrlBase
+                    ? `${ticketUrlBase}/${ticket.id}`
+                    : buildTicketPath({
+                        projectId: ticket.project_id,
+                        ticketId: ticket.id
+                      });
+                  const isSelected = pathname === ticketPath;
+                  return (
+                    <TicketListCard
+                      key={ticket.id}
+                      ticket={ticket}
+                      ticketPath={ticketPath}
+                      isSelected={isSelected}
+                      showOrganizationName={showOrganizationName}
+                      showProjectName={!projectId}
+                      onMarkUnread={onMarkUnread}
+                      onDragStart={onTicketDragStart}
+                      onDragEnd={onTicketDragEnd}
+                    />
+                  );
+                })}
+                {isDropTarget ? (
+                  <div className="rounded-md border border-dashed border-border px-3 py-5 text-center text-[11px] text-muted-foreground">
+                    Release to drop here
+                  </div>
+                ) : null}
+                {!isExpanded && hiddenCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleExpand(status.name)}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                  >
+                    <ChevronDown className="h-3 w-3" />
+                    {hiddenCount} more
+                  </button>
+                ) : null}
+                {isExpanded && groupTickets.length > SHOW_MORE_THRESHOLD ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleExpand(status.name)}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                  >
+                    <ChevronUp className="h-3 w-3" />
+                    Show less
+                  </button>
+                ) : null}
+              </div>
+            </SortableContext>
           )}
         </div>
       ) : null}

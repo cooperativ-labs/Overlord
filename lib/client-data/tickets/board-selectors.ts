@@ -45,7 +45,7 @@ export function selectColumnGroups(state: TicketBoardState): SortedColumns {
     const status = state.ticketStatusesByName[name];
     if (status?.status_type === 'complete') {
       bucket.sort((a, b) => {
-        const updatedDiff = parseUpdatedAtMs(b) - parseUpdatedAtMs(a);
+        const updatedDiff = parseUpdatedAtMsForSort(b) - parseUpdatedAtMsForSort(a);
         if (updatedDiff !== 0) return updatedDiff;
         return a.board_position - b.board_position;
       });
@@ -74,8 +74,9 @@ export function selectPendingMutations(state: TicketBoardState, ticketId: string
   return state.pendingMutationsByEntityId[ticketId] ?? [];
 }
 
-function parseUpdatedAtMs(ticket: BoardTicket): number {
-  if (!ticket.updated_at) return -1;
-  const parsed = Date.parse(ticket.updated_at);
-  return Number.isNaN(parsed) ? -1 : parsed;
+export function parseUpdatedAtMsForSort(ticket: { updated_at?: string | null }): number {
+  const raw = ticket.updated_at;
+  if (raw === null || raw === undefined || raw === '') return -1;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : -1;
 }
