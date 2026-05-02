@@ -1,7 +1,6 @@
 'use client';
 
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import Image from 'next/image';
 import { useTransition } from 'react';
 
 import {
@@ -10,11 +9,8 @@ import {
   ContextMenuSeparator
 } from '@/components/ui/context-menu';
 import { updateTicketPriorityAction } from '@/lib/actions/tickets';
-import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
-
-import type { Ticket } from './KanbanCard';
 
 /* ------------------------------------------------------------------ */
 /*  StatusDot                                                          */
@@ -74,33 +70,6 @@ export function AttentionIndicators({
 }
 
 /* ------------------------------------------------------------------ */
-/*  ActiveAgentDisplay                                                 */
-/* ------------------------------------------------------------------ */
-
-export function ActiveAgentDisplay({ identifier }: { identifier: string | null }) {
-  if (!identifier) return null;
-  const agentType = getAgentTypeByIdentifier(identifier);
-  return (
-    <div className="min-w-0">
-      {agentType ? (
-        <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-          <Image
-            src={agentType.icon}
-            alt={`${agentType.label} icon`}
-            width={12}
-            height={12}
-            className={cn('h-3 w-3 shrink-0', agentType.invertDark ? 'dark:invert' : '')}
-          />
-          <span className="truncate">{agentType.label}</span>
-        </p>
-      ) : (
-        <p className="text-[10px] text-muted-foreground/70 truncate">{identifier}</p>
-      )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  ProjectColorDot                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -130,24 +99,6 @@ export function ProjectColorDot({
       className={cn('block shrink-0 rounded-[2px] border border-muted-foreground/50', sizeClass)}
       title={name ?? 'Personal ticket'}
     />
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  ObjectivesExecutedBadge                                            */
-/* ------------------------------------------------------------------ */
-
-export function ObjectivesExecutedBadge({ count }: { count: number }) {
-  if (count <= 0) return null;
-
-  return (
-    <span
-      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-muted-foreground/30 bg-muted px-1 text-[10px] font-medium text-muted-foreground"
-      title={`${count} objective${count === 1 ? '' : 's'} executed`}
-      aria-label={`${count} objective${count === 1 ? '' : 's'} executed`}
-    >
-      {count}
-    </span>
   );
 }
 

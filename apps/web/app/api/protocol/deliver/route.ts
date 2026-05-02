@@ -7,6 +7,7 @@ import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { deliverSchema } from '@/lib/overlord/validation';
+import { syncTicketTagAssignments } from '@/lib/tagging-engine';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 import type { Database } from '@/types/database.types';
@@ -67,6 +68,19 @@ export async function POST(request: Request) {
         });
         // Non-fatal: continue with delivery even if rationale insertion fails
       }
+    }
+
+    try {
+      await syncTicketTagAssignments({
+        supabase: typedSupabase,
+        ticketId,
+        includeExecutionEvidence: true
+      });
+    } catch (taggingError) {
+      console.error('[protocol:deliver] tagging sync error:', taggingError);
+      Sentry.captureException(taggingError, {
+        extra: { ticketId, sessionId: resolved.session.id, eventId: event.id }
+      });
     }
 
     const artifactCount = artifacts.length;

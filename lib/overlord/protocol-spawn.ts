@@ -11,6 +11,7 @@ import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-tick
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { connectionMethods } from '@/lib/overlord/types';
+import { syncTicketTagAssignments } from '@/lib/tagging-engine';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import type { Database, Json } from '@/types/database.types';
 
@@ -133,6 +134,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
 
   // Create the objective and immediately mark it as executing for the spawned session.
   await upsertDraftObjective(supabase, ticket.id, objective, createdBy);
+  await syncTicketTagAssignments({ supabase, ticketId: ticket.id });
 
   // Create agent session
   const sessionKey = randomUUID();

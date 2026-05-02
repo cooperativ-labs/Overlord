@@ -7,6 +7,7 @@ import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveProjectByWorkingDirectory } from '@/lib/overlord/resolve-project';
 import { createStandaloneTicketSchema } from '@/lib/overlord/validation';
+import { syncTicketTagAssignments } from '@/lib/tagging-engine';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -139,6 +140,7 @@ export async function POST(request: Request) {
     }
 
     await upsertDraftObjective(supabase, ticket.id, objective, createdBy);
+    await syncTicketTagAssignments({ supabase, ticketId: ticket.id });
 
     return NextResponse.json({
       ok: true,

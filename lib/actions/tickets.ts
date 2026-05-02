@@ -37,6 +37,7 @@ import {
 import { createTicketSchema } from '@/lib/overlord/validation';
 import { generateDateFromSchedule } from '@/lib/schedulingEngine';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
+import { syncTicketTagAssignments } from '@/lib/tagging-engine';
 import { resolveNamedStatus, resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createClientForRequest, getRequestDefaultProjectId } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
@@ -256,6 +257,7 @@ async function createScheduledDuplicateIfNeeded(
   }
 
   await upsertDraftObjective(supabase, duplicateTicket.id, objective);
+  await syncTicketTagAssignments({ ticketId: duplicateTicket.id });
   await assignTicketToColumnEnd(
     supabase,
     duplicateTicket.id,
@@ -734,6 +736,7 @@ export async function createTicketInColumnAction(
 
   try {
     await upsertDraftObjective(supabase, data.id, trimmedObjective);
+    await syncTicketTagAssignments({ ticketId: data.id });
     if (position === 'bottom') {
       await assignTicketToColumnEnd(supabase, data.id, statusForInsert, data.organization_id);
     } else {
@@ -804,6 +807,7 @@ export async function createCalendarTicketAction(
   }
 
   await upsertDraftObjective(supabase, data.id, trimmedObjective);
+  await syncTicketTagAssignments({ ticketId: data.id });
 
   revalidateTicketBoards();
   revalidatePath(
@@ -844,6 +848,7 @@ export async function createBlankTicketAction(organizationId?: number, projectId
   }
 
   await upsertDraftObjective(supabase, data.id, '');
+  await syncTicketTagAssignments({ ticketId: data.id });
   await assignTicketToColumnEnd(supabase, data.id, insertPayload.status, data.organization_id);
 
   revalidateTicketBoards();
@@ -901,6 +906,7 @@ export async function createTicketAction(formData: FormData, organizationId?: nu
   }
 
   await upsertDraftObjective(supabase, data.id, parsed.data.description);
+  await syncTicketTagAssignments({ ticketId: data.id });
   await assignTicketToColumnEnd(supabase, data.id, insertPayload.status, data.organization_id);
 
   await supabase.from('ticket_events').insert({
@@ -950,6 +956,7 @@ export async function updateTicketAction(ticketId: string, formData: FormData) {
   }
 
   await upsertDraftObjective(supabase, ticketId, parsed.data.description);
+  await syncTicketTagAssignments({ ticketId });
   await supabase.from('ticket_events').insert({
     event_type: 'system',
     summary: 'Ticket updated by PM.',
@@ -1014,6 +1021,10 @@ export async function updateTicketFieldAction(
       throw new Error(result.error?.message ?? 'Failed to update ticket.');
     }
     data = result.data;
+  }
+
+  if (field !== 'available_tools') {
+    await syncTicketTagAssignments({ ticketId });
   }
 
   await supabase.from('ticket_events').insert({

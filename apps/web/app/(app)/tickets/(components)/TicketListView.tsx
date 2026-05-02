@@ -1,38 +1,15 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowUpDown,
-  Check,
-  CheckCheck,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Circle,
-  Eye,
-  Filter,
-  GripVertical,
-  NotebookPen,
-  Play,
-  Plus
-} from 'lucide-react';
+import { CheckCheck, Circle, Eye, NotebookPen, Play } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { upsertGlobalListViewPreferencesAction } from '@/lib/actions/global-list-view-preferences';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
+import { useTicketTagsBatch } from '@/lib/client-data/tags/hooks';
 import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
@@ -53,7 +30,6 @@ import {
 } from '@/lib/helpers/ticket-waiting-response';
 import { cn } from '@/lib/utils';
 
-import BlankTicketCard from './BlankTicketCard';
 import type { Ticket } from './KanbanCard';
 import {
   buildBoardBootstrap,
@@ -64,29 +40,43 @@ import {
   toBoardTicket,
   toViewTicket
 } from './ticket-view-helpers';
-import TicketListCard from './TicketListCard';
-import TicketsViewControls from './TicketsViewControls';
+import { TicketListStatusGroup } from './TicketListStatusGroup';
+import { TicketListToolbar } from './TicketListToolbar';
+import type {
+  SortKey,
+  TicketListProjectOption,
+  TicketListStatusStyle
+} from './TicketListView.types';
 import { useTicketBoardRealtime } from './useTicketBoardRealtime';
-
-const EMPTY_FILE_MENTION_PATHS: string[] = [];
-
-type SortKey = 'updated_at' | 'status' | 'priority';
-
-const SORT_LABELS: Record<SortKey, string> = {
-  updated_at: 'Last updated',
-  status: 'Status',
-  priority: 'Priority'
-};
 
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
 const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
 const PERSONAL_PROJECT_FILTER_ID = '__personal__';
-const SHOW_MORE_THRESHOLD = 4;
-const SCROLL_THRESHOLD = 12;
+/** Sentinel for "drop after last status" - not a real status name. */
+const STATUS_REORDER_DROP_END = '__overlord_status_reorder_end__';
 
 function areStringListsEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function buildStatusFilterOptions(availableStatuses: string[]): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  for (const status of DEFAULT_SELECTED_STATUSES) {
+    if (seen.has(status)) continue;
+    seen.add(status);
+    next.push(status);
+  }
+
+  for (const status of availableStatuses) {
+    if (seen.has(status)) continue;
+    seen.add(status);
+    next.push(status);
+  }
+
+  return next;
 }
 
 function readStoredListFilters(): TicketListFilters | null {
@@ -114,30 +104,37 @@ function sanitizeSelectedStatuses(current: string[], availableStatuses: string[]
   return next.length > 0 ? next : availableStatuses;
 }
 
-type StatusStyle = {
-  text: string;
-  bg: string;
-  rule: string;
-  icon: React.ComponentType<{ className?: string }>;
-};
-
-function getStatusStyle(statusType: string | undefined, statusName: string): StatusStyle {
+function getStatusStyle(statusType: string | undefined, statusName: string): TicketListStatusStyle {
   if (statusType === 'execute')
-    return { text: 'text-blue-500', bg: 'bg-blue-500/15', rule: 'bg-blue-500/30', icon: Play };
+    return {
+      text: 'text-blue-500',
+      bg: 'bg-blue-500/15',
+      rule: 'bg-blue-500/30',
+      rail: 'border-blue-500/30',
+      icon: Play
+    };
   if (statusType === 'complete')
     return {
       text: 'text-emerald-500',
       bg: 'bg-emerald-500/15',
       rule: 'bg-emerald-500/30',
+      rail: 'border-emerald-500/30',
       icon: CheckCheck
     };
   if (statusType === 'review')
-    return { text: 'text-cyan-500', bg: 'bg-cyan-500/15', rule: 'bg-cyan-500/30', icon: Eye };
+    return {
+      text: 'text-cyan-500',
+      bg: 'bg-cyan-500/15',
+      rule: 'bg-cyan-500/30',
+      rail: 'border-cyan-500/30',
+      icon: Eye
+    };
   if (statusName === 'draft')
     return {
       text: 'text-muted-foreground',
       bg: 'bg-muted',
       rule: 'bg-border',
+      rail: 'border-border',
       icon: NotebookPen
     };
   // next-up / other
@@ -145,6 +142,7 @@ function getStatusStyle(statusType: string | undefined, statusName: string): Sta
     text: 'text-sky-600 dark:text-sky-400',
     bg: 'bg-sky-500/15',
     rule: 'bg-sky-500/30',
+    rail: 'border-sky-500/30',
     icon: Circle
   };
 }
@@ -196,6 +194,9 @@ export default function TicketListView({
   const createTicketMutation = useCreateTicketMutation();
   const { mutate: markTicketRead } = useMarkTicketReadMutation();
   const { defaultProject } = useDefaultProject();
+
+  const visibleTicketIds = useMemo(() => tickets.map(t => t.id), [tickets]);
+  const { data: tagsByTicketId } = useTicketTagsBatch(projectId ? visibleTicketIds : []);
 
   const [storedListFilters] = useState<TicketListFilters | null>(() =>
     projectId ? null : readStoredListFilters()
@@ -279,9 +280,13 @@ export default function TicketListView({
     for (const t of tickets) seen.add(t.status);
     return [...seen].sort();
   }, [tickets]);
+  const statusFilterOptions = useMemo(
+    () => buildStatusFilterOptions(uniqueStatuses),
+    [uniqueStatuses]
+  );
 
   const projectOptions = useMemo(() => {
-    const seen = new Map<string, { id: string; name: string; color: string | null }>();
+    const seen = new Map<string, TicketListProjectOption>();
     for (const t of tickets) {
       const optionId = t.project_id ?? PERSONAL_PROJECT_FILTER_ID;
       if (!seen.has(optionId)) {
@@ -340,22 +345,27 @@ export default function TicketListView({
   );
 
   const selectedStatusesSet = useMemo(() => new Set(selectedStatuses), [selectedStatuses]);
-  const areAllStatusesSelected = uniqueStatuses.every(status => selectedStatusesSet.has(status));
+  const areAllStatusesSelected = statusFilterOptions.every(status =>
+    selectedStatusesSet.has(status)
+  );
   const statusFilterLabel = useMemo(() => {
     if (selectedStatuses.length === 0) return 'All statuses';
-    if (areAllStatusesSelected || uniqueStatuses.length === 0) return 'All statuses';
+    if (areAllStatusesSelected || statusFilterOptions.length === 0) return 'All statuses';
     if (selectedStatuses.length === 1) return formatStatusLabel(selectedStatuses[0] ?? '');
     if (selectedStatuses.length <= 2) return selectedStatuses.map(formatStatusLabel).join(', ');
     return `${selectedStatuses.length} statuses`;
-  }, [areAllStatusesSelected, uniqueStatuses.length, selectedStatuses]);
+  }, [areAllStatusesSelected, selectedStatuses, statusFilterOptions.length]);
 
   function toggleStatus(status: string) {
+    let next: string[] = [];
     setSelectedStatuses(current => {
-      const next = current.includes(status)
+      next = current.includes(status)
         ? current.filter(currentStatus => currentStatus !== status)
         : [...current, status];
-      saveListFilters(next, filterProject);
       return next;
+    });
+    queueMicrotask(() => {
+      saveListFilters(next, filterProject);
     });
   }
 
@@ -432,13 +442,20 @@ export default function TicketListView({
   const hasTickets = tickets.length > 0;
 
   useEffect(() => {
+    let next: string[] | undefined;
     setSelectedStatuses(current => {
-      const next = sanitizeSelectedStatuses(current, uniqueStatuses);
-      if (areStringListsEqual(current, next)) return current;
-      saveListFilters(next, filterProject);
-      return next;
+      const sanitized = sanitizeSelectedStatuses(current, statusFilterOptions);
+      if (areStringListsEqual(current, sanitized)) return current;
+      next = sanitized;
+      return sanitized;
     });
-  }, [filterProject, saveListFilters, uniqueStatuses]);
+    if (next) {
+      const toSave = next;
+      queueMicrotask(() => {
+        saveListFilters(toSave, filterProject);
+      });
+    }
+  }, [filterProject, saveListFilters, statusFilterOptions]);
 
   useEffect(() => {
     if (projectId) return;
@@ -453,6 +470,7 @@ export default function TicketListView({
   }
 
   function toggleCollapse(statusName: string) {
+    let nextCollapsed: string[] = [];
     setCollapsedStatuses(prev => {
       const next = new Set(prev);
       if (next.has(statusName)) {
@@ -460,8 +478,14 @@ export default function TicketListView({
       } else {
         next.add(statusName);
       }
-      saveStatusViewPreferences([...next], customStatusOrder ?? orderedStatuses.map(s => s.name));
+      nextCollapsed = [...next];
       return next;
+    });
+    queueMicrotask(() => {
+      saveStatusViewPreferences(
+        nextCollapsed,
+        customStatusOrder ?? orderedStatuses.map(s => s.name)
+      );
     });
   }
 
@@ -535,9 +559,42 @@ export default function TicketListView({
 
   function handleStatusDragOver(e: React.DragEvent, statusName: string) {
     if (!draggedStatusName || draggedStatusName === statusName) return;
+    const currentOrder = orderedStatuses.map(s => s.name);
+    const fromIndex = currentOrder.indexOf(draggedStatusName);
+    const toIndex = currentOrder.indexOf(statusName);
+    if (fromIndex === -1 || toIndex === -1) return;
+    // Dropping onto the status directly below is a no-op (insert-before matches current order).
+    if (fromIndex < toIndex && toIndex === fromIndex + 1) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+      setDropTargetStatusForReorder(null);
+      return;
+    }
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDropTargetStatusForReorder(statusName);
+  }
+
+  function handleStatusDragOverEnd(e: React.DragEvent) {
+    if (!draggedStatusName) return;
+    const currentOrder = orderedStatuses.map(s => s.name);
+    const fromIndex = currentOrder.indexOf(draggedStatusName);
+    if (fromIndex === -1 || fromIndex === currentOrder.length - 1) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+      setDropTargetStatusForReorder(null);
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropTargetStatusForReorder(STATUS_REORDER_DROP_END);
+  }
+
+  function handleStatusDragLeaveEnd(e: React.DragEvent<HTMLDivElement>) {
+    if (dropTargetStatusForReorder !== STATUS_REORDER_DROP_END) return;
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setDropTargetStatusForReorder(null);
+    }
   }
 
   function handleStatusDrop(e: React.DragEvent, targetStatusName: string) {
@@ -551,16 +608,46 @@ export default function TicketListView({
     const currentOrder = orderedStatuses.map(s => s.name);
     const fromIndex = currentOrder.indexOf(draggedStatusName);
     const toIndex = currentOrder.indexOf(targetStatusName);
-
-    if (fromIndex !== -1 && toIndex !== -1) {
-      const newOrder = [...currentOrder];
-      newOrder.splice(fromIndex, 1);
-      const insertAt = fromIndex < toIndex ? toIndex - 1 : toIndex;
-      newOrder.splice(insertAt, 0, draggedStatusName);
-      setCustomStatusOrder(newOrder);
-      saveStatusViewPreferences([...collapsedStatuses], newOrder);
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggedStatusName(null);
+      setDropTargetStatusForReorder(null);
+      return;
+    }
+    if (fromIndex < toIndex && toIndex === fromIndex + 1) {
+      setDraggedStatusName(null);
+      setDropTargetStatusForReorder(null);
+      return;
     }
 
+    const newOrder = [...currentOrder];
+    newOrder.splice(fromIndex, 1);
+    const insertAt = fromIndex < toIndex ? toIndex - 1 : toIndex;
+    newOrder.splice(insertAt, 0, draggedStatusName);
+    setCustomStatusOrder(newOrder);
+    saveStatusViewPreferences([...collapsedStatuses], newOrder);
+
+    setDraggedStatusName(null);
+    setDropTargetStatusForReorder(null);
+  }
+
+  function handleStatusDropEnd(e: React.DragEvent) {
+    e.preventDefault();
+    if (!draggedStatusName) {
+      setDropTargetStatusForReorder(null);
+      return;
+    }
+    const currentOrder = orderedStatuses.map(s => s.name);
+    const fromIndex = currentOrder.indexOf(draggedStatusName);
+    if (fromIndex === -1 || fromIndex === currentOrder.length - 1) {
+      setDraggedStatusName(null);
+      setDropTargetStatusForReorder(null);
+      return;
+    }
+    const newOrder = [...currentOrder];
+    newOrder.splice(fromIndex, 1);
+    newOrder.push(draggedStatusName);
+    setCustomStatusOrder(newOrder);
+    saveStatusViewPreferences([...collapsedStatuses], newOrder);
     setDraggedStatusName(null);
     setDropTargetStatusForReorder(null);
   }
@@ -639,326 +726,91 @@ export default function TicketListView({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {showViewToggle || hasTickets ? (
-        <div className="flex w-full flex-wrap items-start justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {showViewToggle ? (
-              <TicketsViewControls initialView={initialView} projectId={projectId} />
-            ) : null}
-            {hasTickets ? (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5">
-                      <ArrowUpDown className="h-3.5 w-3.5" />
-                      {SORT_LABELS[sortKey]}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-44">
-                    <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
-                      <DropdownMenuItem key={key} onClick={() => setSortKey(key)} className="gap-2">
-                        {SORT_LABELS[key]}
-                        {sortKey === key && <Check className="ml-auto h-4 w-4" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-1.5">
-                      <Filter className="h-3.5 w-3.5" />
-                      {statusFilterLabel}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-44">
-                    <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuCheckboxItem
-                      checked={areAllStatusesSelected}
-                      onCheckedChange={() => {
-                        setSelectedStatuses(uniqueStatuses);
-                        saveListFilters(uniqueStatuses, filterProject);
-                      }}
-                      onSelect={event => event.preventDefault()}
-                    >
-                      All statuses
-                    </DropdownMenuCheckboxItem>
-                    {uniqueStatuses.map(status => (
-                      <DropdownMenuCheckboxItem
-                        key={status}
-                        checked={selectedStatusesSet.has(status)}
-                        onCheckedChange={() => toggleStatus(status)}
-                        onSelect={event => event.preventDefault()}
-                      >
-                        {formatStatusLabel(status)}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {projectOptions.length > 1 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-1.5">
-                        {filterProject
-                          ? (projectOptions.find(p => p.id === filterProject)?.name ?? 'Project')
-                          : 'All projects'}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setFilterProject(null);
-                          saveListFilters(selectedStatuses, null);
-                        }}
-                        className="gap-2"
-                      >
-                        All projects
-                        {filterProject === null && <Check className="ml-auto h-4 w-4" />}
-                      </DropdownMenuItem>
-                      {projectOptions.map(p => (
-                        <DropdownMenuItem
-                          key={p.id}
-                          onClick={() => {
-                            setFilterProject(p.id);
-                            saveListFilters(selectedStatuses, p.id);
-                          }}
-                          className="gap-2"
-                        >
-                          {p.color && (
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-[2px] border"
-                              style={{ backgroundColor: p.color, borderColor: p.color }}
-                            />
-                          )}
-                          <span className="truncate">{p.name}</span>
-                          {filterProject === p.id && <Check className="ml-auto h-4 w-4" />}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </>
-            ) : null}
-          </div>
-        </div>
+        <TicketListToolbar
+          initialView={initialView}
+          projectId={projectId}
+          showViewToggle={showViewToggle}
+          hasTickets={hasTickets}
+          sortKey={sortKey}
+          statusFilterLabel={statusFilterLabel}
+          areAllStatusesSelected={areAllStatusesSelected}
+          statusFilterOptions={statusFilterOptions}
+          selectedStatusesSet={selectedStatusesSet}
+          projectOptions={projectOptions}
+          filterProject={filterProject}
+          onSortKeyChange={setSortKey}
+          onSelectAllStatuses={() => {
+            setSelectedStatuses(statusFilterOptions);
+            saveListFilters(statusFilterOptions, filterProject);
+          }}
+          onToggleStatus={toggleStatus}
+          onFilterProjectChange={nextFilterProject => {
+            setFilterProject(nextFilterProject);
+            saveListFilters(selectedStatuses, nextFilterProject);
+          }}
+        />
       ) : null}
       {hasTickets ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
           {orderedStatuses.map(status => {
-            const groupTickets = groupedTickets.get(status.name) ?? [];
+            const rawGroupTickets = groupedTickets.get(status.name) ?? [];
+            const groupTickets = tagsByTicketId
+              ? rawGroupTickets.map(t => ({ ...t, tags: tagsByTicketId[t.id] ?? [] }))
+              : rawGroupTickets;
             const style = getStatusStyle(status.status_type, status.name);
-            const StatusIcon = style.icon;
-            const hasRunning = groupTickets.some(t => t.has_executing_objective === true);
-            const hasAttention = groupTickets.some(
-              t => t.is_read === false || t.has_unopened_waiting_response === true
-            );
             const isExpanded = !!expandedStatuses[status.name];
             const isCollapsed = collapsedStatuses.has(status.name);
             const isDropTarget = !draggedStatusName && dropTargetStatus === status.name;
             const isReorderTarget = draggedStatusName && dropTargetStatusForReorder === status.name;
-            const shouldScroll = isExpanded && groupTickets.length >= SCROLL_THRESHOLD;
-            const visibleTickets =
-              isExpanded || groupTickets.length <= SHOW_MORE_THRESHOLD
-                ? groupTickets
-                : groupTickets.slice(0, SHOW_MORE_THRESHOLD);
-            const hiddenCount = groupTickets.length - SHOW_MORE_THRESHOLD;
 
             return (
-              <div
+              <TicketListStatusGroup
                 key={status.name}
-                className={cn(
-                  'flex flex-col gap-1',
-                  isDropTarget && 'rounded-md bg-accent/30',
-                  isReorderTarget &&
-                    'rounded-md outline outline-1 outline-dashed outline-blue-500/50'
-                )}
-                onDragOver={e => {
-                  handleTicketDragOverStatus(e, status.name);
-                  handleStatusDragOver(e, status.name);
-                }}
-                onDragLeave={e => {
-                  handleTicketDragLeaveStatus(e, status.name);
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    if (dropTargetStatusForReorder === status.name) {
-                      setDropTargetStatusForReorder(null);
-                    }
-                  }
-                }}
-                onDrop={e => {
-                  handleTicketDropOnStatus(e, status.name);
-                  handleStatusDrop(e, status.name);
-                }}
-              >
-                {/* Stage header */}
-                <div
-                  onDragOver={e => handleTicketDragOverStatus(e, status.name)}
-                  onDragLeave={e => handleTicketDragLeaveStatus(e, status.name)}
-                  onDrop={e => handleTicketDropOnStatus(e, status.name)}
-                  className={cn(
-                    'group/header flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors',
-                    isDropTarget && 'bg-accent outline outline-1 outline-dashed outline-blue-500/50'
-                  )}
-                >
-                  {/* Drag handle for reordering statuses */}
-                  <div
-                    draggable
-                    onDragStart={e => handleStatusDragStart(e, status.name)}
-                    onDragEnd={handleStatusDragEnd}
-                    className="cursor-grab touch-none opacity-0 transition-opacity group-hover/header:opacity-100 active:cursor-grabbing"
-                    title="Drag to reorder"
-                    aria-label={`Reorder ${formatStatusLabel(status.name)}`}
-                  >
-                    <GripVertical className="h-3 w-3 text-muted-foreground" />
-                  </div>
-
-                  <div
-                    className={cn(
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded',
-                      style.bg,
-                      style.text
-                    )}
-                  >
-                    <StatusIcon className="h-3 w-3" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleCollapse(status.name)}
-                    className={cn(
-                      'flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider transition-opacity hover:opacity-70',
-                      style.text
-                    )}
-                    title={
-                      isCollapsed
-                        ? `Expand ${formatStatusLabel(status.name)}`
-                        : `Collapse ${formatStatusLabel(status.name)}`
-                    }
-                  >
-                    {isCollapsed ? (
-                      <ChevronRight className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    )}
-                    {formatStatusLabel(status.name)}
-                  </button>
-                  {hasRunning && (
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_4px_rgb(16,185,129)]"
-                      title="Agent running in this stage"
-                    />
-                  )}
-                  {hasAttention && (
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500"
-                      title="Tickets need attention"
-                    />
-                  )}
-                  {isDropTarget && (
-                    <span className="text-[10px] text-blue-500">
-                      Drop to move to {formatStatusLabel(status.name)}
-                    </span>
-                  )}
-                  <div className={cn('h-px flex-1', style.rule)} />
-                  <span className="text-[10px] text-muted-foreground tabular-nums">
-                    {groupTickets.length}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-5 w-5 shrink-0"
-                    onClick={() => setActiveBlankStatus(status.name)}
-                    aria-label={`Add ticket to ${formatStatusLabel(status.name)}`}
-                    title={`Add ticket to ${formatStatusLabel(status.name)}`}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
-
-                {/* Cards body — hidden when collapsed */}
-                {!isCollapsed && (
-                  <div
-                    onDragOver={e => handleTicketDragOverStatus(e, status.name)}
-                    onDragLeave={e => handleTicketDragLeaveStatus(e, status.name)}
-                    onDrop={e => handleTicketDropOnStatus(e, status.name)}
-                    className={cn(
-                      'ml-2 border-l border-border pl-2',
-                      isDropTarget && 'rounded-r-md border-blue-500/50 bg-accent/40',
-                      shouldScroll && 'pr-1'
-                    )}
-                    style={shouldScroll ? { maxHeight: 320, overflowY: 'auto' } : undefined}
-                  >
-                    {activeBlankStatus === status.name && (
-                      <div className="mb-1">
-                        <BlankTicketCard
-                          inputId={`list-blank-card-${status.name}`}
-                          status={status.name}
-                          position="top"
-                          fileMentionPaths={EMPTY_FILE_MENTION_PATHS}
-                          onCreateTicket={handleCreateTicket}
-                          onCreateAndOpenTicket={handleCreateAndOpenTicket}
-                          onClose={() => setActiveBlankStatus(null)}
-                        />
-                      </div>
-                    )}
-                    {groupTickets.length === 0 && activeBlankStatus !== status.name ? (
-                      <div className="rounded-md border border-dashed border-border px-3 py-2 text-center text-[11px] text-muted-foreground">
-                        No tickets — drag one here or click + to add
-                      </div>
-                    ) : groupTickets.length === 0 ? null : (
-                      <div className="flex flex-col gap-0.5">
-                        {visibleTickets.map(ticket => {
-                          const ticketPath = ticketUrlBase
-                            ? `${ticketUrlBase}/${ticket.id}`
-                            : buildTicketPath({
-                                projectId: ticket.project_id,
-                                ticketId: ticket.id
-                              });
-                          const isSelected = pathname === ticketPath;
-                          return (
-                            <TicketListCard
-                              key={ticket.id}
-                              ticket={ticket}
-                              ticketPath={ticketPath}
-                              isSelected={isSelected}
-                              showOrganizationName={showOrganizationName}
-                              showProjectName={!projectId}
-                              onMarkUnread={handleMarkUnread}
-                              onDragStart={handleTicketDragStart}
-                              onDragEnd={handleTicketDragEnd}
-                            />
-                          );
-                        })}
-                        {!isExpanded && hiddenCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => toggleExpand(status.name)}
-                            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                          >
-                            <ChevronDown className="h-3 w-3" />
-                            {hiddenCount} more
-                          </button>
-                        )}
-                        {isExpanded && groupTickets.length > SHOW_MORE_THRESHOLD && (
-                          <button
-                            type="button"
-                            onClick={() => toggleExpand(status.name)}
-                            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                          >
-                            <ChevronUp className="h-3 w-3" />
-                            Show less
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                status={status}
+                style={style}
+                tickets={groupTickets}
+                pathname={pathname}
+                ticketUrlBase={ticketUrlBase}
+                showOrganizationName={showOrganizationName}
+                projectId={projectId}
+                isExpanded={isExpanded}
+                isCollapsed={isCollapsed}
+                isDropTarget={isDropTarget}
+                isReorderTarget={Boolean(isReorderTarget)}
+                activeBlankStatus={activeBlankStatus}
+                onToggleCollapse={toggleCollapse}
+                onToggleExpand={toggleExpand}
+                onSetActiveBlankStatus={setActiveBlankStatus}
+                onTicketDragOverStatus={handleTicketDragOverStatus}
+                onTicketDragLeaveStatus={handleTicketDragLeaveStatus}
+                onTicketDropOnStatus={handleTicketDropOnStatus}
+                onStatusDragStart={handleStatusDragStart}
+                onStatusDragEnd={handleStatusDragEnd}
+                onStatusDragOver={handleStatusDragOver}
+                onStatusDrop={handleStatusDrop}
+                onClearStatusReorderTarget={() => setDropTargetStatusForReorder(null)}
+                onTicketDragStart={handleTicketDragStart}
+                onTicketDragEnd={handleTicketDragEnd}
+                onMarkUnread={handleMarkUnread}
+                onCreateTicket={handleCreateTicket}
+                onCreateAndOpenTicket={handleCreateAndOpenTicket}
+              />
             );
           })}
+          {orderedStatuses.length > 0 ? (
+            <div
+              className={cn('shrink-0', draggedStatusName && 'min-h-14')}
+              onDragOver={handleStatusDragOverEnd}
+              onDragLeave={handleStatusDragLeaveEnd}
+              onDrop={handleStatusDropEnd}
+            >
+              {draggedStatusName && dropTargetStatusForReorder === STATUS_REORDER_DROP_END ? (
+                <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-[11px] text-muted-foreground">
+                  Release to reorder here
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : (
         <Card>

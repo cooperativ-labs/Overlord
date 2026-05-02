@@ -9,10 +9,7 @@ import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerBut
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import {
-  getAssignedAgentIdentifier,
-  type TicketAssignedAgent
-} from '@/lib/helpers/ticket-assigned-agent';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
@@ -20,14 +17,20 @@ import type { Database } from '@/types/database.types';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
 import {
-  ActiveAgentDisplay,
   AttentionIndicators,
-  ObjectivesExecutedBadge,
   ProjectColorDot,
   TicketPriorityContextMenu
 } from './TicketCardPrimitives';
 
 type SessionState = Database['public']['Enums']['session_state'];
+
+export type TicketTag = {
+  tagDefinitionId: string;
+  key: string;
+  label: string;
+  color: string | null;
+  sources: string[];
+};
 
 export type Ticket = {
   id: string;
@@ -57,6 +60,7 @@ export type Ticket = {
   delegate?: string | null;
   schedule_id?: number | null;
   due_datetime?: string | null;
+  tags?: TicketTag[];
 };
 
 export default function KanbanCard({
@@ -166,11 +170,6 @@ function KanbanCardBody({
   ticket: Ticket;
   showOrganizationName: boolean;
 }) {
-  const activeAgentIdentifier =
-    ticket.running_agent ??
-    ticket.latest_objective_agent ??
-    getAssignedAgentIdentifier(ticket.assigned_agent);
-
   return (
     <CardContent className="flex h-full flex-col p-0 pt-3  ">
       <div className="px-3">
@@ -192,7 +191,7 @@ function KanbanCardBody({
           <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
           {ticket.schedule_id ? <ScheduleBadge /> : null}
         </div>
-        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+        <div className="mt-auto flex items-center gap-2 pt-2">
           <div className="flex min-w-0 items-center">
             {ticket.project_everhour_project_id ? (
               <KanbanTimerButton
@@ -200,10 +199,6 @@ function KanbanCardBody({
                 ticketId={ticket.id}
               />
             ) : null}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <ActiveAgentDisplay identifier={activeAgentIdentifier} />
-            <ObjectivesExecutedBadge count={ticket.objectives_executed_count ?? 0} />
           </div>
         </div>
       </div>

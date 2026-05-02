@@ -1,6 +1,6 @@
 'use client';
 
-import { GitBranch, Link2, Newspaper, Settings, Trash2 } from 'lucide-react';
+import { GitBranch, Link2, Newspaper, Settings, Tag, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import {
@@ -36,6 +36,7 @@ import { DangerZonePage } from './project-settings/DangerZonePage';
 import { FeedPage } from './project-settings/FeedPage';
 import { GeneralPage } from './project-settings/GeneralPage';
 import { IntegrationsPage } from './project-settings/IntegrationsPage';
+import { TagsPage } from './project-settings/TagsPage';
 import { WorkflowPage } from './project-settings/WorkflowPage';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
@@ -48,6 +49,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { name: 'General', icon: Settings },
   { name: 'Workflow', icon: GitBranch },
+  { name: 'Tags', icon: Tag },
   { name: 'Feed', icon: Newspaper },
   { name: 'Integrations', icon: Link2 },
   { name: 'Danger zone', icon: Trash2 }
@@ -203,6 +205,7 @@ export function ProjectSettingsModal({
                   initialStatuses={initialStatuses}
                 />
               )}
+              {activeNav === 'Tags' && <TagsPage open={open} projectId={projectId} />}
               {activeNav === 'Feed' && <FeedPage open={open} projectId={projectId} />}
               {activeNav === 'Integrations' && (
                 <IntegrationsPage

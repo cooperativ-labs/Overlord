@@ -1,20 +1,17 @@
 'use client';
 
-import { Bot, GripVertical, UserRound } from 'lucide-react';
+import { Bot, GripVertical, Tag, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { ContextMenu, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { getAssignedAgentIdentifier } from '@/lib/helpers/ticket-assigned-agent';
 import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
 import {
-  ActiveAgentDisplay,
   AttentionIndicators,
-  ObjectivesExecutedBadge,
   ProjectColorDot,
   TicketPriorityContextMenu
 } from './TicketCardPrimitives';
@@ -57,12 +54,6 @@ export default function TicketListCard({
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
   const hasUnopenedReview = ticket.is_read === false;
 
-  const activeAgentIdentifier =
-    ticket.running_agent ??
-    ticket.latest_objective_agent ??
-    getAssignedAgentIdentifier(ticket.assigned_agent);
-  const executedObjectivesCount = ticket.objectives_executed_count ?? 0;
-
   const {
     Icon: ExecutionIcon,
     className: executionIconClass,
@@ -104,7 +95,7 @@ export default function TicketListCard({
           {/* Project color dot */}
           <ProjectColorDot color={ticket.project_color} name={ticket.project_name} size="sm" />
 
-          {/* Title + delegate */}
+          {/* Title + delegate + tags */}
           <div className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium leading-snug">
               {getDisplayTitle(ticket)}
@@ -114,6 +105,24 @@ export default function TicketListCard({
                 <Bot className="h-2.5 w-2.5 shrink-0" />
                 <span className="max-w-[140px] truncate">Created by {ticket.delegate}</span>
               </span>
+            ) : null}
+            {ticket.tags && ticket.tags.length > 0 ? (
+              <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                {ticket.tags.map(tag => (
+                  <span
+                    key={tag.tagDefinitionId}
+                    className="inline-flex items-center gap-0.5 rounded px-1 py-0 text-[10px] font-medium text-muted-foreground bg-muted"
+                    style={
+                      tag.color
+                        ? { backgroundColor: `${tag.color}22`, color: tag.color }
+                        : undefined
+                    }
+                  >
+                    <Tag className="h-2 w-2 shrink-0" />
+                    {tag.label}
+                  </span>
+                ))}
+              </div>
             ) : null}
           </div>
 
@@ -132,14 +141,6 @@ export default function TicketListCard({
                 className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_4px_rgb(16,185,129)]"
                 title="Agent running"
               />
-            )}
-
-            {/* Active agent + objectives count */}
-            {(activeAgentIdentifier || executedObjectivesCount > 0) && (
-              <div className="hidden items-center gap-1 sm:flex">
-                <ActiveAgentDisplay identifier={activeAgentIdentifier} />
-                <ObjectivesExecutedBadge count={executedObjectivesCount} />
-              </div>
             )}
 
             {/* Execution target icon */}

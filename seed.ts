@@ -120,7 +120,8 @@ async function main() {
     {
       id: orgId,
       name: 'Cooperativ',
-      feed_retention_days: 30
+      feed_retention_days: 30,
+      git_provider: null
     }
   ]);
 
@@ -157,15 +158,42 @@ async function main() {
       id: projectAlphaId,
       organization_id: orgId,
       name: 'Alpha',
-      color: '#6366f1'
+      color: '#6366f1',
+      operations_profile: null,
+      operations_profile_fingerprint: null,
+      operations_profile_generated_at: null
     },
     {
       id: projectBetaId,
       organization_id: orgId,
       name: 'Beta',
-      color: '#10b981'
+      color: '#10b981',
+      operations_profile: null,
+      operations_profile_fingerprint: null,
+      operations_profile_generated_at: null
     }
   ]);
+
+  const defaultProjectTags = [
+    { key: 'webapp', label: 'webapp' },
+    { key: 'desktop', label: 'desktop' },
+    { key: 'mobile-app', label: 'mobile app' },
+    { key: 'edge', label: 'edge' },
+    { key: 'database', label: 'database' }
+  ];
+
+  await seed.project_tag_definitions(
+    [projectAlphaId, projectBetaId].flatMap(projectId =>
+      defaultProjectTags.map(tag => ({
+        project_id: projectId,
+        key: tag.key,
+        label: tag.label,
+        description: null,
+        color: null,
+        is_active: true
+      }))
+    )
+  );
 
   // Tickets in draft plus one review card with completed objective history
   const ticketIds = [

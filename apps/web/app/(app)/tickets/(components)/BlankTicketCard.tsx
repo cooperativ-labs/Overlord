@@ -11,6 +11,8 @@ type BlankTicketCardProps = {
   inputId: string;
   status: string;
   position: 'top' | 'bottom';
+  expand?: boolean;
+  closeOnSubmit?: boolean;
   fileMentionPaths: string[];
   workingDirectory?: string | null;
   onCreateTicket: (
@@ -32,6 +34,8 @@ export default function BlankTicketCard({
   inputId,
   status,
   position,
+  expand = true,
+  closeOnSubmit = false,
   fileMentionPaths,
   workingDirectory = null,
   onCreateTicket,
@@ -105,14 +109,32 @@ export default function BlankTicketCard({
         } finally {
           setIsCreating(false);
         }
+        if (closeOnSubmit) {
+          onClose();
+        }
         onSubmitted?.();
       }
     },
-    [onClose, isCreating, onCreateTicket, onCreateAndOpenTicket, status, position, onSubmitted]
+    [
+      closeOnSubmit,
+      onClose,
+      isCreating,
+      onCreateTicket,
+      onCreateAndOpenTicket,
+      status,
+      position,
+      onSubmitted
+    ]
   );
 
   return (
-    <Card className="border-border/40 shadow-2xl overflow-visible scale-110">
+    <Card
+      className={
+        expand
+          ? 'border-border/40 overflow-visible scale-110 shadow-2xl'
+          : 'border-border/40 overflow-hidden shadow-sm'
+      }
+    >
       <CardContent className="relative p-2">
         <MentionableTextarea
           ref={inputRef}
@@ -129,8 +151,12 @@ export default function BlankTicketCard({
           onKeyDown={e => {
             void handleKeyDown(e);
           }}
-          className="min-h-[156px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0"
-          rows={7}
+          className={
+            expand
+              ? 'min-h-[156px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0'
+              : 'min-h-[78px] resize-none border-0 p-1 text-sm shadow-none focus-visible:ring-0'
+          }
+          rows={expand ? 7 : 4}
         />
         {onCreateAndOpenTicket && (
           <p className="mt-1 px-1 text-[11px] text-muted-foreground/50">⌘↵ to save &amp; open</p>

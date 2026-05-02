@@ -14,6 +14,7 @@ import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
+import { TicketTaggingDebug } from '@/components/features/TicketTaggingDebug';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
@@ -23,6 +24,7 @@ import {
   getProjectUserLocalSettingsByProjectId,
   getProjectUserSshSettingsByProjectId
 } from '@/lib/actions/projects';
+import { getTicketTagsAction } from '@/lib/actions/tags';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -30,9 +32,11 @@ import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
+import { getTicketTaggingInspector } from '@/lib/tagging-engine';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
+import { TicketTagEditor } from './TicketTagEditor';
 import { TicketToolsAndCriteria } from './TicketToolsAndCriteria';
 
 const fallbackStatuses = ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked'] as const;
@@ -270,6 +274,10 @@ export async function TicketPanelContent({
     }
   }
   const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
+  const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
+  const taggingInspector = ticket.project_id
+    ? await getTicketTaggingInspector({ supabase, ticketId }).catch(() => null)
+    : null;
 
   return (
     <TicketLiveProvider
@@ -383,6 +391,16 @@ export async function TicketPanelContent({
                   }
                 />
               </div>
+
+              {ticket.project_id ? (
+                <div className="mb-4">
+                  <TicketTagEditor
+                    ticketId={ticketId}
+                    projectId={ticket.project_id}
+                    initialTags={initialTags}
+                  />
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-col pb-5">
               {/* <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -406,6 +424,7 @@ export async function TicketPanelContent({
               availableTools={ticket.available_tools}
               acceptanceCriteria={ticket.acceptance_criteria}
             />
+            <TicketTaggingDebug inspector={taggingInspector} />
 
             <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
 

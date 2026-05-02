@@ -760,6 +760,50 @@ export type Database = {
           }
         ];
       };
+      project_tag_definitions: {
+        Row: {
+          color: string | null;
+          created_at: string;
+          description: string | null;
+          id: string;
+          is_active: boolean;
+          key: string;
+          label: string;
+          project_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          color?: string | null;
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          is_active?: boolean;
+          key: string;
+          label: string;
+          project_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          color?: string | null;
+          created_at?: string;
+          description?: string | null;
+          id?: string;
+          is_active?: boolean;
+          key?: string;
+          label?: string;
+          project_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'project_tag_definitions_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       project_user: {
         Row: {
           created_at: string | null;
@@ -1241,6 +1285,90 @@ export type Database = {
           }
         ];
       };
+      ticket_tag_assignments: {
+        Row: {
+          applied_at: string;
+          applied_by: string | null;
+          source: string;
+          tag_definition_id: string;
+          ticket_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          applied_at?: string;
+          applied_by?: string | null;
+          source: string;
+          tag_definition_id: string;
+          ticket_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          applied_at?: string;
+          applied_by?: string | null;
+          source?: string;
+          tag_definition_id?: string;
+          ticket_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ticket_tag_assignments_tag_definition_id_fkey';
+            columns: ['tag_definition_id'];
+            isOneToOne: false;
+            referencedRelation: 'project_tag_definitions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ticket_tag_assignments_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      ticket_tag_engine_suppressions: {
+        Row: {
+          created_at: string;
+          reason: string;
+          suppressed_by: string | null;
+          tag_definition_id: string;
+          ticket_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          reason?: string;
+          suppressed_by?: string | null;
+          tag_definition_id: string;
+          ticket_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          reason?: string;
+          suppressed_by?: string | null;
+          tag_definition_id?: string;
+          ticket_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ticket_tag_engine_suppressions_tag_definition_id_fkey';
+            columns: ['tag_definition_id'];
+            isOneToOne: false;
+            referencedRelation: 'project_tag_definitions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'ticket_tag_engine_suppressions_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       tickets: {
         Row: {
           acceptance_criteria: string | null;
@@ -1498,6 +1626,10 @@ export type Database = {
       };
       storage_org_id: { Args: { object_name: string }; Returns: number };
       storage_ticket_id: { Args: { object_name: string }; Returns: string };
+      ticket_tag_matches_ticket_project: {
+        Args: { p_tag_definition_id: string; p_ticket_id: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       connection_method:
