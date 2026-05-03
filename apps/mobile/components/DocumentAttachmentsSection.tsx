@@ -25,13 +25,15 @@ type Props<T extends DocumentItem> = {
   uploading?: boolean;
   onPickFile: (file: PickedFile) => void | Promise<void>;
   onOpenDocument?: (doc: T) => void;
+  onRemove?: (id: string) => void;
 };
 
 export function DocumentAttachmentsSection<T extends DocumentItem>({
   documents,
   uploading = false,
   onPickFile,
-  onOpenDocument
+  onOpenDocument,
+  onRemove
 }: Props<T>) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
@@ -163,6 +165,16 @@ export function DocumentAttachmentsSection<T extends DocumentItem>({
               ) : (
                 <Text style={styles.documentMeta}>Pending</Text>
               )}
+              {onRemove ? (
+                <Pressable
+                  onPress={() => onRemove(doc.id)}
+                  style={({ pressed }) => [styles.removeButton, pressed && styles.pressed]}
+                  accessibilityLabel={`Remove ${doc.label}`}
+                  hitSlop={8}
+                >
+                  <Ionicons name="close-circle" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              ) : null}
             </Pressable>
           ))}
         </View>
@@ -244,6 +256,9 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.mutedForeground,
       fontSize: 13,
       fontStyle: 'italic'
+    },
+    removeButton: {
+      padding: 2
     },
     pressed: {
       opacity: 0.75

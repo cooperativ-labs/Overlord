@@ -1,15 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
-import * as DocumentPicker from 'expo-document-picker';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
-import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -40,14 +37,6 @@ type ProjectRecord = {
   name: string;
   color: string;
   organization_id: number;
-};
-
-type PendingAttachment = {
-  id: string;
-  uri: string;
-  name: string;
-  mimeType: string;
-  isImage: boolean;
 };
 
 type CollapsibleSectionProps = {
@@ -120,9 +109,8 @@ export default function CreateTicketScreen() {
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [availableTools, setAvailableTools] = useState('');
   const [executionTarget] = useState<TicketExecutionTarget>('agent');
-  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
-  const [submitting, setSubmitting] = useState(false);
   const [pendingDocuments, setPendingDocuments] = useState<(PickedFile & DocumentItem)[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const dueDateKey =
     typeof dueDateParam === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDateParam)
@@ -188,76 +176,6 @@ export default function CreateTicketScreen() {
       closeProjectMenu();
       setShowAgentMenu(true);
     }
-  }
-
-  async function handlePickCamera() {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Camera access is needed to take photos.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.85
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const name = asset.fileName ?? `photo_${Date.now()}.jpg`;
-      setAttachments(prev => [
-        ...prev,
-        {
-          id: String(Date.now()),
-          uri: asset.uri,
-          name,
-          mimeType: asset.mimeType ?? 'image/jpeg',
-          isImage: true
-        }
-      ]);
-    }
-  }
-
-  async function handlePickPhotos() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Photo library access is needed to attach photos.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      allowsMultipleSelection: true,
-      quality: 0.85
-    });
-    if (!result.canceled) {
-      const newItems: PendingAttachment[] = result.assets.map(asset => ({
-        id: `${Date.now()}_${Math.random()}`,
-        uri: asset.uri,
-        name: asset.fileName ?? `photo_${Date.now()}.jpg`,
-        mimeType: asset.mimeType ?? 'image/jpeg',
-        isImage: true
-      }));
-      setAttachments(prev => [...prev, ...newItems]);
-    }
-  }
-
-  async function handlePickFiles() {
-    const result = await DocumentPicker.getDocumentAsync({
-      multiple: true,
-      copyToCacheDirectory: true
-    });
-    if (!result.canceled) {
-      const newItems: PendingAttachment[] = result.assets.map(asset => ({
-        id: `${Date.now()}_${Math.random()}`,
-        uri: asset.uri,
-        name: asset.name,
-        mimeType: asset.mimeType ?? 'application/octet-stream',
-        isImage: false
-      }));
-      setAttachments(prev => [...prev, ...newItems]);
-    }
-  }
-
-  function removeAttachment(id: string) {
-    setAttachments(prev => prev.filter(a => a.id !== id));
   }
 
   async function handleSubmit() {
@@ -554,6 +472,7 @@ export default function CreateTicketScreen() {
                     const id = `pending-${Date.now()}`;
                     setPendingDocuments(prev => [...prev, { ...file, id, label: file.fileName }]);
                   }}
+                  onRemove={id => setPendingDocuments(prev => prev.filter(d => d.id !== id))}
                 />
               </CollapsibleSection>
             </View>
