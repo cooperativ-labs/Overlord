@@ -6,6 +6,7 @@ import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
 import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
 import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { OfflineTicketProcessor } from '@/components/features/electron-offline/OfflineTicketProcessor';
+import { RepoProfileMaintenance } from '@/components/features/electron-offline/RepoProfileMaintenance';
 import { TutorialProvider } from '@/components/features/onboarding/TutorialWizardContext';
 import { TutorialWizardModal } from '@/components/features/onboarding/TutorialWizardModal';
 import { DefaultProjectProvider } from '@/components/features/projects/DefaultProjectContext';
@@ -137,6 +138,7 @@ export default async function RootLayout({
                       {user ? (
                         <div className="flex h-full w-full flex-col overflow-hidden [--sidebar-top-offset:2.75rem]">
                           <OfflineTicketProcessor />
+                          <RepoProfileMaintenance projects={projects} />
                           <AnnouncementBar />
                           <NavHeader projects={projects} />
                           <div className="flex min-h-0 flex-1 overflow-hidden">

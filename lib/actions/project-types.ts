@@ -8,6 +8,8 @@ export type SidebarProject = {
   color: string;
   organizationId: number;
   everhourProjectId?: string | null;
+  operationsProfileFingerprint?: string | null;
+  operationsProfileGeneratedAt?: string | null;
   localWorkingDirectory: string | null;
   /** @deprecated — retained for one release so legacy callers keep compiling. */
   sshCommand: string | null;

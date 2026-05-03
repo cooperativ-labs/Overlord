@@ -137,6 +137,8 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
       organizationId: project.organization_id,
       everhourProjectId:
         typeof project.everhour_project_id === 'string' ? project.everhour_project_id : null,
+      operationsProfileFingerprint: project.operations_profile_fingerprint ?? null,
+      operationsProfileGeneratedAt: project.operations_profile_generated_at ?? null,
       localWorkingDirectory: localSettings?.local_working_directory ?? null,
       remoteHelperInstalledAt: localSettings?.remote_helper_installed_at ?? null,
       remoteHelperVersion: localSettings?.remote_helper_version ?? null
