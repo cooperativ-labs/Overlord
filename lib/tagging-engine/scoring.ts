@@ -6,6 +6,10 @@ function compareEvidence(a: TagEvidence, b: TagEvidence): number {
   return a.signal.localeCompare(b.signal);
 }
 
+function isDirectEvidence(item: TagEvidence): boolean {
+  return item.source !== 'repo-profile';
+}
+
 export function scoreTagEvidence(
   evidence: TagEvidence[],
   options?: { threshold?: number; consideredPaths?: string[]; consideredCommands?: string[] }
@@ -22,12 +26,15 @@ export function scoreTagEvidence(
   const scores: TagScore[] = OVERLORD_DEFAULT_TAG_DEFINITIONS.map(definition => {
     const tagEvidence = (byKey.get(definition.key) ?? []).sort(compareEvidence);
     const total = tagEvidence.reduce((sum, item) => sum + item.weight, 0);
+    const directTotal = tagEvidence
+      .filter(isDirectEvidence)
+      .reduce((sum, item) => sum + item.weight, 0);
     return {
       tagKey: definition.key,
       label: definition.label,
       total,
       evidence: tagEvidence,
-      matched: total >= threshold
+      matched: directTotal >= threshold || (directTotal > 0 && total >= threshold)
     };
   }).sort((a, b) => {
     if (b.total !== a.total) return b.total - a.total;

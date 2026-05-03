@@ -33,36 +33,41 @@ export function collectRepoProfileEvidence(profile: RepoOperationsProfile | null
 
   for (const rule of OVERLORD_TAG_RULES) {
     for (const hint of rule.repoProfileHints) {
-      for (const workspace of profile.workspaces) {
-        if (!matchesPath(workspace.path, hint.workspacePath)) continue;
-        evidence.push({
-          tagKey: rule.key,
-          source: 'repo-profile',
-          kind: 'workspace_match',
-          weight: TAG_SCORE_WEIGHTS.workspaceMatch,
-          signal: `workspace ${workspace.path}`,
-          metadata: { workspacePath: workspace.path, workspaceName: workspace.name }
-        });
+      if (hint.workspacePath) {
+        for (const workspace of profile.workspaces) {
+          if (!matchesPath(workspace.path, hint.workspacePath)) continue;
+          evidence.push({
+            tagKey: rule.key,
+            source: 'repo-profile',
+            kind: 'workspace_match',
+            weight: TAG_SCORE_WEIGHTS.workspaceMatch,
+            signal: `workspace ${workspace.path}`,
+            metadata: { workspacePath: workspace.path, workspaceName: workspace.name }
+          });
+        }
       }
 
-      for (const deployable of profile.deployables) {
-        const pathMatches =
-          !hint.deployablePath || matchesPath(deployable.path, hint.deployablePath);
-        const kindMatches = !hint.deployableKind || deployable.kind === hint.deployableKind;
-        const targetMatches = !hint.deployTarget || deployable.deploy_target === hint.deployTarget;
-        if (!pathMatches || !kindMatches || !targetMatches) continue;
-        evidence.push({
-          tagKey: rule.key,
-          source: 'repo-profile',
-          kind: 'deployable_match',
-          weight: TAG_SCORE_WEIGHTS.workspaceMatch,
-          signal: `deployable ${deployable.kind} at ${deployable.path}`,
-          metadata: {
-            deployablePath: deployable.path,
-            deployableKind: deployable.kind,
-            deployTarget: deployable.deploy_target ?? null
-          }
-        });
+      if (hint.deployablePath || hint.deployableKind || hint.deployTarget) {
+        for (const deployable of profile.deployables) {
+          const pathMatches =
+            !hint.deployablePath || matchesPath(deployable.path, hint.deployablePath);
+          const kindMatches = !hint.deployableKind || deployable.kind === hint.deployableKind;
+          const targetMatches =
+            !hint.deployTarget || deployable.deploy_target === hint.deployTarget;
+          if (!pathMatches || !kindMatches || !targetMatches) continue;
+          evidence.push({
+            tagKey: rule.key,
+            source: 'repo-profile',
+            kind: 'deployable_match',
+            weight: TAG_SCORE_WEIGHTS.workspaceMatch,
+            signal: `deployable ${deployable.kind} at ${deployable.path}`,
+            metadata: {
+              deployablePath: deployable.path,
+              deployableKind: deployable.kind,
+              deployTarget: deployable.deploy_target ?? null
+            }
+          });
+        }
       }
 
       const migrations = profile.migrations;

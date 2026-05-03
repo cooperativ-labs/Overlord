@@ -88,9 +88,7 @@ describe('runTaggingEngine', () => {
     });
 
     expect(result.scores[0]?.tagKey).toBe('webapp');
-    expect(result.matchedTags.map(tag => tag.key)).toEqual(
-      expect.arrayContaining(['webapp', 'edge', 'database', 'desktop', 'mobile-app'])
-    );
+    expect(result.matchedTags.map(tag => tag.key)).toEqual(['webapp', 'edge']);
   });
 
   it('supports thresholded matching with structured debug output', () => {
@@ -137,6 +135,21 @@ describe('runTaggingEngine', () => {
       'yarn workspace @overlord/web test'
     ]);
     expect(result.debug.consideredPaths).toContain('apps/web/app/api/protocol/update/route.ts');
+  });
+
+  it('does not treat repo-wide capabilities as ticket-specific matches on their own', () => {
+    const result = runTaggingEngine({
+      description: {
+        title: 'Triage tagging behavior'
+      },
+      repoProfile: baseProfile
+    });
+
+    expect(result.matchedTags).toEqual([]);
+    expect(result.scores.find(score => score.tagKey === 'webapp')).toMatchObject({
+      matched: false,
+      total: 150
+    });
   });
 });
 

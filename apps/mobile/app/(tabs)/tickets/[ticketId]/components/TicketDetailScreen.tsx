@@ -1,7 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
@@ -569,69 +567,6 @@ export default function TicketDetailScreen() {
     } finally {
       setUploadingDocument(false);
     }
-  }
-
-  async function handleTakePhoto() {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Camera permission needed', 'Enable camera access to take a photo.');
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.85
-    });
-
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    await uploadDocument({
-      uri: asset.uri,
-      fileName: asset.fileName ?? `photo-${Date.now()}.jpg`,
-      mimeType: asset.mimeType ?? 'image/jpeg',
-      fileSize: asset.fileSize ?? 0
-    });
-  }
-
-  async function handleSelectImage() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Photo library permission needed',
-        'Enable photo library access to select images.'
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85
-    });
-
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    await uploadDocument({
-      uri: asset.uri,
-      fileName: asset.fileName ?? `image-${Date.now()}.jpg`,
-      mimeType: asset.mimeType ?? 'image/jpeg',
-      fileSize: asset.fileSize ?? 0
-    });
-  }
-
-  async function handleSelectFile() {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      multiple: false
-    });
-
-    if (result.canceled || !result.assets[0]) return;
-    const asset = result.assets[0];
-    await uploadDocument({
-      uri: asset.uri,
-      fileName: asset.name,
-      mimeType: asset.mimeType ?? 'application/octet-stream',
-      fileSize: asset.size ?? 0
-    });
   }
 
   async function handleOpenDocument(document: TicketDocument) {
@@ -1216,9 +1151,7 @@ export default function TicketDetailScreen() {
         uploadingDocument={uploadingDocument}
         showDocuments={showDocuments}
         onToggleDocuments={() => setShowDocuments(open => !open)}
-        onTakePhoto={handleTakePhoto}
-        onSelectImage={handleSelectImage}
-        onSelectFile={handleSelectFile}
+        onPickFile={uploadDocument}
         onOpenDocument={handleOpenDocument}
         hasEverhourApiKey={hasEverhourApiKey}
         ticketContext={ticket.context}

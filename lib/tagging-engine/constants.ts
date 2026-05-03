@@ -24,7 +24,7 @@ export const OVERLORD_TAG_RULES: TagRule[] = [
     label: 'webapp',
     pathPrefixes: ['apps/web'],
     exactPaths: [],
-    keywords: ['next.js', 'nextjs', 'app router', 'component', 'browser', 'vercel'],
+    keywords: ['next.js', 'nextjs', 'app router', 'vercel'],
     repoProfileHints: [
       { workspacePath: 'apps/web' },
       { deployablePath: 'apps/web', deployableKind: 'nextjs-app' },
@@ -47,7 +47,7 @@ export const OVERLORD_TAG_RULES: TagRule[] = [
     label: 'mobile app',
     pathPrefixes: ['apps/mobile'],
     exactPaths: [],
-    keywords: ['expo', 'react native', 'ios', 'android', 'device build'],
+    keywords: ['expo', 'react native', 'device build'],
     repoProfileHints: [
       { workspacePath: 'apps/mobile' },
       { deployablePath: 'apps/mobile', deployableKind: 'expo-app' }
@@ -72,7 +72,7 @@ export const OVERLORD_TAG_RULES: TagRule[] = [
     label: 'database',
     pathPrefixes: ['supabase/migrations'],
     exactPaths: ['seed.ts', 'supabase/seed.sql', 'types/database.types.ts'],
-    keywords: ['migration', 'schema', 'rls', 'sql', 'table', 'seed', 'types'],
+    keywords: ['migration', 'schema', 'rls', 'sql', 'seed'],
     repoProfileHints: [
       {
         migrationSystem: 'supabase',

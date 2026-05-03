@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/lib/auth-context';
@@ -42,11 +43,13 @@ SplashScreen.preventAutoHideAsync();
 
 export default Sentry.wrap(function RootLayout() {
   return (
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <ThemeProvider>
-        <RootLayoutContent />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={rootStyles.flex}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ThemeProvider>
+          <RootLayoutContent />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 });
 
@@ -95,6 +98,10 @@ function RootLayoutContent() {
     </AuthProvider>
   );
 }
+
+const rootStyles = StyleSheet.create({
+  flex: { flex: 1 }
+});
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({

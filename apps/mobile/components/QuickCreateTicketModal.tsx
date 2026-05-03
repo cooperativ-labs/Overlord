@@ -93,7 +93,32 @@ export function QuickCreateTicketModal({ visible, onClose }: Props) {
   const selectedAgent = AGENT_OPTIONS.find(o => o.value === agent) ?? AGENT_OPTIONS[0];
   const canSubmit = objective.trim().length > 0 && !!selectedProject && !submitting;
   const cardMaxHeight = Math.min(windowHeight - insets.top - 12, windowHeight * 0.9);
-  const cardMinHeight = Math.min(cardMaxHeight, Math.max(420, windowHeight * 0.68));
+
+  function closeProjectMenu() {
+    setShowProjectMenu(false);
+  }
+
+  function closeAgentMenu() {
+    setShowAgentMenu(false);
+  }
+
+  function toggleProjectMenu() {
+    if (showProjectMenu) {
+      closeProjectMenu();
+    } else {
+      closeAgentMenu();
+      setShowProjectMenu(true);
+    }
+  }
+
+  function toggleAgentMenu() {
+    if (showAgentMenu) {
+      closeAgentMenu();
+    } else {
+      closeProjectMenu();
+      setShowAgentMenu(true);
+    }
+  }
 
   async function handleSubmit() {
     const trimmed = objective.trim();
@@ -108,7 +133,7 @@ export function QuickCreateTicketModal({ visible, onClose }: Props) {
         .from('tickets')
         .insert({
           title,
-          status: 'next-up',
+          status: 'draft',
           priority: 'medium',
           organization_id: selectedProject.organization_id,
           project_id: selectedProject.id,
@@ -150,176 +175,195 @@ export function QuickCreateTicketModal({ visible, onClose }: Props) {
     : { style: [styles.card, styles.cardFallback] };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.avoider}
-          keyboardVerticalOffset={Math.max(insets.bottom, 10)}
-          pointerEvents="box-none"
-        >
-          <Pressable
-            style={[styles.cardWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}
-            onPress={() => {}}
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+        statusBarTranslucent
+      >
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.avoider}
+            keyboardVerticalOffset={Math.max(insets.bottom, 10)}
+            pointerEvents="box-none"
           >
-            <InnerSurface {...innerSurfaceProps}>
-              <View
-                style={[styles.cardSize, { maxHeight: cardMaxHeight, minHeight: cardMinHeight }]}
-              >
-                <View style={styles.handleBar} />
+            <Pressable
+              style={[styles.cardWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}
+              onPress={() => {}}
+            >
+              <InnerSurface {...innerSurfaceProps}>
+                <View style={[styles.cardSize, { maxHeight: cardMaxHeight }]}>
+                  <View style={styles.handleBar} />
 
-                <View style={styles.headerRow}>
-                  <Text style={styles.headerTitle}>New ticket</Text>
-                  <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close">
-                    <Ionicons name="close" size={22} color={colors.foreground} />
-                  </Pressable>
-                </View>
-
-                <ScrollView
-                  style={styles.scroll}
-                  keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={styles.scrollContent}
-                >
-                  <TextInput
-                    style={styles.objectiveInput}
-                    value={objective}
-                    onChangeText={setObjective}
-                    placeholder="What needs to be done?"
-                    placeholderTextColor={colors.mutedForeground}
-                    multiline
-                    autoFocus
-                    textAlignVertical="top"
-                  />
-
-                  <View style={styles.row}>
-                    <Pressable
-                      style={styles.chip}
-                      onPress={() => {
-                        setShowAgentMenu(false);
-                        setShowProjectMenu(v => !v);
-                      }}
-                      disabled={loadingProjects}
-                    >
-                      {selectedProject ? (
-                        <View
-                          style={[styles.projectDot, { backgroundColor: selectedProject.color }]}
-                        />
-                      ) : (
-                        <Ionicons name="folder-outline" size={14} color={colors.foreground} />
-                      )}
-                      <Text style={styles.chipText} numberOfLines={1}>
-                        {loadingProjects ? 'Loading…' : (selectedProject?.name ?? 'Select project')}
-                      </Text>
-                      <Ionicons
-                        name={showProjectMenu ? 'chevron-up' : 'chevron-down'}
-                        size={14}
-                        color={colors.mutedForeground}
-                      />
-                    </Pressable>
-
-                    <Pressable
-                      style={styles.chip}
-                      onPress={() => {
-                        setShowProjectMenu(false);
-                        setShowAgentMenu(v => !v);
-                      }}
-                    >
-                      <AgentBrandIcon agent={selectedAgent.value} size={14} />
-                      <Text style={styles.chipText}>{selectedAgent.label}</Text>
-                      <Ionicons
-                        name={showAgentMenu ? 'chevron-up' : 'chevron-down'}
-                        size={14}
-                        color={colors.mutedForeground}
-                      />
+                  <View style={styles.headerRow}>
+                    <Text style={styles.headerTitle}>New ticket</Text>
+                    <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Close">
+                      <Ionicons name="close" size={22} color={colors.foreground} />
                     </Pressable>
                   </View>
 
-                  {showProjectMenu && (
-                    <View style={styles.menu}>
-                      {projects.map(project => {
-                        const isSelected = project.id === projectId;
-                        return (
-                          <Pressable
-                            key={project.id}
-                            style={styles.menuItem}
-                            onPress={() => {
-                              setProjectId(project.id);
-                              setShowProjectMenu(false);
-                            }}
-                          >
-                            <View style={styles.menuItemLeft}>
-                              <View
-                                style={[styles.projectDot, { backgroundColor: project.color }]}
-                              />
-                              <Text style={styles.menuItemText}>{project.name}</Text>
-                            </View>
-                            {isSelected && (
-                              <Ionicons name="checkmark" size={16} color={colors.primary} />
-                            )}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  )}
-
-                  {showAgentMenu && (
-                    <View style={styles.menu}>
-                      {AGENT_OPTIONS.map(option => {
-                        const isSelected = option.value === agent;
-                        return (
-                          <Pressable
-                            key={option.value}
-                            style={styles.menuItem}
-                            onPress={() => {
-                              setAgent(option.value);
-                              setShowAgentMenu(false);
-                            }}
-                          >
-                            <View style={styles.menuItemLeft}>
-                              <AgentBrandIcon agent={option.value} size={16} />
-                              <Text style={styles.menuItemText}>{option.label}</Text>
-                            </View>
-                            {isSelected && (
-                              <Ionicons name="checkmark" size={16} color={colors.primary} />
-                            )}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  )}
-                </ScrollView>
-
-                <View style={styles.footer}>
-                  <Pressable onPress={onClose} style={styles.cancelButton} disabled={submitting}>
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={handleSubmit}
-                    disabled={!canSubmit}
-                    style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={styles.scrollContent}
+                    bounces={false}
                   >
-                    {submitting ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons name="arrow-up" size={16} color="#fff" />
-                        <Text style={styles.submitText}>Create</Text>
-                      </>
-                    )}
-                  </Pressable>
+                    <TextInput
+                      style={styles.objectiveInput}
+                      value={objective}
+                      onChangeText={setObjective}
+                      placeholder="What needs to be done?"
+                      placeholderTextColor={colors.mutedForeground}
+                      multiline
+                      autoFocus
+                      textAlignVertical="top"
+                    />
+
+                    <View style={styles.chooserStack}>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.dropdownButton,
+                          pressed && styles.dropdownButtonPressed
+                        ]}
+                        onPress={toggleProjectMenu}
+                        disabled={loadingProjects}
+                        accessibilityLabel="Choose project"
+                      >
+                        <View style={styles.dropdownButtonIcon}>
+                          {selectedProject ? (
+                            <View
+                              style={[
+                                styles.projectDotLarge,
+                                { backgroundColor: selectedProject.color }
+                              ]}
+                            />
+                          ) : (
+                            <Ionicons name="folder-outline" size={18} color={colors.foreground} />
+                          )}
+                        </View>
+                        <View style={styles.dropdownButtonTextWrap}>
+                          <Text style={styles.dropdownButtonLabel} numberOfLines={1}>
+                            {loadingProjects
+                              ? 'Loading projects…'
+                              : (selectedProject?.name ?? 'Select project')}
+                          </Text>
+                          <Text style={styles.dropdownButtonMeta}>Project</Text>
+                        </View>
+                        <Ionicons
+                          name={showProjectMenu ? 'chevron-up' : 'chevron-down'}
+                          size={16}
+                          color={colors.mutedForeground}
+                        />
+                      </Pressable>
+
+                      {showProjectMenu ? (
+                        <View style={styles.dropdownPanel}>
+                          {projects.map(project => {
+                            const isSelected = project.id === projectId;
+                            return (
+                              <Pressable
+                                key={project.id}
+                                style={styles.menuItem}
+                                onPress={() => {
+                                  setProjectId(project.id);
+                                  closeProjectMenu();
+                                }}
+                              >
+                                <View style={styles.menuItemLeft}>
+                                  <View
+                                    style={[styles.projectDot, { backgroundColor: project.color }]}
+                                  />
+                                  <Text style={styles.menuItemText}>{project.name}</Text>
+                                </View>
+                                {isSelected ? (
+                                  <Ionicons name="checkmark" size={16} color={colors.primary} />
+                                ) : null}
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.dropdownButton,
+                          pressed && styles.dropdownButtonPressed
+                        ]}
+                        onPress={toggleAgentMenu}
+                        accessibilityLabel="Choose agent"
+                      >
+                        <View style={styles.dropdownButtonIcon}>
+                          <AgentBrandIcon agent={selectedAgent.value} size={18} />
+                        </View>
+                        <View style={styles.dropdownButtonTextWrap}>
+                          <Text style={styles.dropdownButtonLabel} numberOfLines={1}>
+                            {selectedAgent.label}
+                          </Text>
+                          <Text style={styles.dropdownButtonMeta}>Assigned agent</Text>
+                        </View>
+                        <Ionicons
+                          name={showAgentMenu ? 'chevron-up' : 'chevron-down'}
+                          size={16}
+                          color={colors.mutedForeground}
+                        />
+                      </Pressable>
+
+                      {showAgentMenu ? (
+                        <View style={styles.dropdownPanel}>
+                          {AGENT_OPTIONS.map(option => {
+                            const isSelected = option.value === agent;
+                            return (
+                              <Pressable
+                                key={option.value}
+                                style={styles.menuItem}
+                                onPress={() => {
+                                  setAgent(option.value);
+                                  closeAgentMenu();
+                                }}
+                              >
+                                <View style={styles.menuItemLeft}>
+                                  <AgentBrandIcon agent={option.value} size={16} />
+                                  <Text style={styles.menuItemText}>{option.label}</Text>
+                                </View>
+                                {isSelected ? (
+                                  <Ionicons name="checkmark" size={16} color={colors.primary} />
+                                ) : null}
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
+                  </ScrollView>
+
+                  <View style={styles.footer}>
+                    <Pressable onPress={onClose} style={styles.cancelButton} disabled={submitting}>
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleSubmit}
+                      disabled={!canSubmit}
+                      style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+                    >
+                      {submitting ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <Ionicons name="arrow-up" size={16} color="#fff" />
+                          <Text style={styles.submitText}>Create</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-            </InnerSurface>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
-    </Modal>
+              </InnerSurface>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -372,11 +416,7 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 16,
       fontWeight: '700'
     },
-    scroll: {
-      flex: 1
-    },
     scrollContent: {
-      flexGrow: 1,
       gap: 10,
       paddingBottom: 4
     },
@@ -389,37 +429,56 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.foreground,
       fontSize: 17,
       lineHeight: 24,
-      minHeight: 220
+      minHeight: 160
     },
-    row: {
-      flexDirection: 'row',
-      gap: 8,
-      flexWrap: 'wrap'
+    chooserStack: {
+      gap: 10
     },
-    chip: {
+    dropdownButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 999,
-      backgroundColor: glassAvailable ? 'rgba(255,255,255,0.10)' : colors.background,
-      borderWidth: glassAvailable ? 0 : 1,
-      borderColor: colors.border,
-      maxWidth: '100%'
+      gap: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)'
     },
-    chipText: {
+    dropdownButtonPressed: {
+      opacity: 0.85
+    },
+    dropdownButtonIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+    },
+    dropdownButtonTextWrap: {
+      flex: 1,
+      minWidth: 0
+    },
+    dropdownButtonLabel: {
       color: colors.foreground,
-      fontSize: 13,
-      fontWeight: '500',
-      maxWidth: 160
+      fontSize: 15,
+      fontWeight: '600'
+    },
+    dropdownButtonMeta: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      marginTop: 2
     },
     projectDot: {
       width: 10,
       height: 10,
       borderRadius: 5
     },
-    menu: {
+    projectDotLarge: {
+      width: 12,
+      height: 12,
+      borderRadius: 6
+    },
+    dropdownPanel: {
       backgroundColor: glassAvailable ? 'rgba(255,255,255,0.06)' : colors.background,
       borderRadius: 12,
       borderWidth: glassAvailable ? 0 : 1,

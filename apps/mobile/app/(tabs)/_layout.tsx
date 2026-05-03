@@ -1,14 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
+import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { useAuth } from '@/lib/auth-context';
 import { useThemeColors } from '@/lib/colors';
 
-function AddTicketAccessory() {
+function AddTicketAccessory({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();
-  const router = useRouter();
   const placement = NativeTabs.BottomAccessory.usePlacement();
 
   return (
@@ -22,7 +23,7 @@ function AddTicketAccessory() {
       }}
     >
       <Pressable
-        onPress={() => router.push('/(tabs)/tickets/create')}
+        onPress={onPress}
         style={({ pressed }) => ({
           opacity: pressed ? 0.6 : 1,
           width: 36,
@@ -42,6 +43,7 @@ function AddTicketAccessory() {
 export default function TabLayout() {
   const { session, loading } = useAuth();
   const colors = useThemeColors();
+  const [quickCreateVisible, setQuickCreateVisible] = useState(false);
 
   if (loading) {
     return (
@@ -63,40 +65,46 @@ export default function TabLayout() {
   }
 
   return (
-    <NativeTabs
-      disableTransparentOnScrollEdge
-      minimizeBehavior="onScrollDown"
-      tintColor={colors.primary}
-      labelStyle={{
-        default: { color: colors.mutedForeground },
-        selected: { color: colors.primary }
-      }}
-      iconColor={{
-        default: colors.mutedForeground,
-        selected: colors.primary
-      }}
-    >
-      <NativeTabs.BottomAccessory>
-        <AddTicketAccessory />
-      </NativeTabs.BottomAccessory>
-      <NativeTabs.Trigger name="feed">
-        <NativeTabs.Trigger.Icon
-          src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="newspaper-outline" />}
-        />
-        <NativeTabs.Trigger.Label>Feed</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tickets">
-        <NativeTabs.Trigger.Icon
-          src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="ticket-outline" />}
-        />
-        <NativeTabs.Trigger.Label>Tickets</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="account">
-        <NativeTabs.Trigger.Icon
-          src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-outline" />}
-        />
-        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <>
+      <NativeTabs
+        disableTransparentOnScrollEdge
+        minimizeBehavior="onScrollDown"
+        tintColor={colors.primary}
+        labelStyle={{
+          default: { color: colors.mutedForeground },
+          selected: { color: colors.primary }
+        }}
+        iconColor={{
+          default: colors.mutedForeground,
+          selected: colors.primary
+        }}
+      >
+        <NativeTabs.BottomAccessory>
+          <AddTicketAccessory onPress={() => setQuickCreateVisible(true)} />
+        </NativeTabs.BottomAccessory>
+        <NativeTabs.Trigger name="feed">
+          <NativeTabs.Trigger.Icon
+            src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="newspaper-outline" />}
+          />
+          <NativeTabs.Trigger.Label>Feed</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="tickets">
+          <NativeTabs.Trigger.Icon
+            src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="ticket-outline" />}
+          />
+          <NativeTabs.Trigger.Label>Tickets</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="account">
+          <NativeTabs.Trigger.Icon
+            src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-outline" />}
+          />
+          <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+      </NativeTabs>
+      <QuickCreateTicketModal
+        visible={quickCreateVisible}
+        onClose={() => setQuickCreateVisible(false)}
+      />
+    </>
   );
 }

@@ -11,6 +11,8 @@ import {
   View
 } from 'react-native';
 
+import type { PickedFile } from '@/components/DocumentAttachmentsSection';
+import { DocumentAttachmentsSection } from '@/components/DocumentAttachmentsSection';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import type {
   AgentModelSelection,
@@ -61,9 +63,7 @@ export function TicketDetailContent({
   uploadingDocument,
   showDocuments,
   onToggleDocuments,
-  onTakePhoto,
-  onSelectImage,
-  onSelectFile,
+  onPickFile,
   onOpenDocument,
   hasEverhourApiKey,
   ticketContext,
@@ -114,9 +114,7 @@ export function TicketDetailContent({
   uploadingDocument: boolean;
   showDocuments: boolean;
   onToggleDocuments: () => void;
-  onTakePhoto: () => void;
-  onSelectImage: () => void;
-  onSelectFile: () => void;
+  onPickFile: (file: PickedFile) => void | Promise<void>;
   onOpenDocument: (document: TicketDocument) => void;
   hasEverhourApiKey: boolean;
   ticketContext: string;
@@ -348,75 +346,12 @@ export function TicketDetailContent({
       </View>
 
       <CollapsibleSection label="DOCUMENTS" open={showDocuments} onToggle={onToggleDocuments}>
-        <View style={styles.documentActions}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.documentActionButton,
-              uploadingDocument && styles.documentActionButtonDisabled,
-              pressed && styles.pressed
-            ]}
-            onPress={() => onTakePhoto()}
-            disabled={uploadingDocument}
-          >
-            <Ionicons name="camera-outline" size={14} color={colors.foreground} />
-            <Text style={styles.documentActionText}>Take image</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.documentActionButton,
-              uploadingDocument && styles.documentActionButtonDisabled,
-              pressed && styles.pressed
-            ]}
-            onPress={() => onSelectImage()}
-            disabled={uploadingDocument}
-          >
-            <Ionicons name="images-outline" size={14} color={colors.foreground} />
-            <Text style={styles.documentActionText}>Select image</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.documentActionButton,
-              uploadingDocument && styles.documentActionButtonDisabled,
-              pressed && styles.pressed
-            ]}
-            onPress={() => onSelectFile()}
-            disabled={uploadingDocument}
-          >
-            <Ionicons name="document-attach-outline" size={14} color={colors.foreground} />
-            <Text style={styles.documentActionText}>Select file</Text>
-          </Pressable>
-        </View>
-        {uploadingDocument && (
-          <View style={styles.documentUploadingRow}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.documentUploadingText}>Uploading document...</Text>
-          </View>
-        )}
-        {documents.length > 0 && (
-          <View style={styles.documentList}>
-            {documents.map(document => (
-              <Pressable
-                key={document.id}
-                style={({ pressed }) => [styles.documentRow, pressed && styles.pressed]}
-                onPress={() => onOpenDocument(document)}
-              >
-                <Ionicons
-                  name={
-                    document.fileType.startsWith('image/') ? 'image-outline' : 'document-outline'
-                  }
-                  size={15}
-                  color={colors.foreground}
-                />
-                <Text style={styles.documentName} numberOfLines={1}>
-                  {document.label}
-                </Text>
-                <Text style={styles.documentMeta}>
-                  {new Date(document.createdAt).toLocaleDateString()}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <DocumentAttachmentsSection
+          documents={documents}
+          uploading={uploadingDocument}
+          onPickFile={onPickFile}
+          onOpenDocument={onOpenDocument}
+        />
         {ticketContext.trim() !== '' && (
           <View style={styles.docBlock}>
             <Text style={styles.docLabel}>Context</Text>
