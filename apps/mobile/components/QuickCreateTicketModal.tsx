@@ -17,12 +17,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AgentModelChooser } from '@/components/AgentModelChooser';
 import {
   DocumentAttachmentsSection,
   type DocumentItem,
   type PickedFile
 } from '@/components/DocumentAttachmentsSection';
+import { ProjectAgentSelector } from '@/components/ProjectAgentSelector';
 import { createAssignedAgent, DEFAULT_AGENT_MODEL_SELECTION } from '@/lib/agent-models';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
@@ -103,12 +103,11 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [openSelectorPanel, setOpenSelectorPanel] = useState<'agent' | 'project' | null>(null);
   const [agentSelection, setAgentSelection] = useState<AgentModelSelection | null>(null);
   const [resolvedAgentSelection, setResolvedAgentSelection] = useState<AgentModelSelection>(
     DEFAULT_AGENT_MODEL_SELECTION
   );
-  const [showAgentMenu, setShowAgentMenu] = useState(false);
   const [objective, setObjective] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [availableTools, setAvailableTools] = useState('');
@@ -152,31 +151,13 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
       setAcceptanceCriteria('');
       setAvailableTools('');
       setPendingDocuments([]);
-      setShowProjectMenu(false);
-      setShowAgentMenu(false);
+      setOpenSelectorPanel(null);
     }
   }, [visible]);
 
   const selectedProject = projects.find(p => p.id === projectId) ?? null;
   const canSubmit = objective.trim().length > 0 && !!selectedProject && !submitting;
   const cardMaxHeight = Math.min(windowHeight - insets.top - 12, windowHeight * 0.9);
-
-  function closeProjectMenu() {
-    setShowProjectMenu(false);
-  }
-
-  function closeAgentMenu() {
-    setShowAgentMenu(false);
-  }
-
-  function toggleProjectMenu() {
-    if (showProjectMenu) {
-      closeProjectMenu();
-    } else {
-      closeAgentMenu();
-      setShowProjectMenu(true);
-    }
-  }
 
   async function handleSubmit() {
     const trimmed = objective.trim();
@@ -252,10 +233,10 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
   const InnerSurface = glassAvailable ? GlassView : View;
   const innerSurfaceProps = glassAvailable
     ? {
-      glassEffectStyle: 'regular' as const,
-      style: styles.card,
-      colorScheme: (colors.isDark ? 'dark' : 'light') as 'dark' | 'light'
-    }
+        glassEffectStyle: 'regular' as const,
+        style: styles.card,
+        colorScheme: (colors.isDark ? 'dark' : 'light') as 'dark' | 'light'
+      }
     : { style: [styles.card, styles.cardFallback] };
 
   return (
@@ -274,10 +255,7 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
             keyboardVerticalOffset={Math.min(insets.bottom, 10)}
             pointerEvents="box-none"
           >
-            <Pressable
-              style={[styles.cardWrap]}
-              onPress={() => { }}
-            >
+            <Pressable style={[styles.cardWrap]} onPress={() => {}}>
               <InnerSurface {...innerSurfaceProps}>
                 <View style={[styles.cardSize, { maxHeight: cardMaxHeight }]}>
                   <View style={styles.handleBar} />
@@ -305,83 +283,23 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
                       textAlignVertical="top"
                     />
 
-                    <View style={styles.chooserStack}>
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.dropdownButton,
-                          pressed && styles.dropdownButtonPressed
-                        ]}
-                        onPress={toggleProjectMenu}
-                        disabled={loadingProjects}
-                        accessibilityLabel="Choose project"
-                      >
-                        <View style={styles.dropdownButtonIcon}>
-                          {selectedProject ? (
-                            <View
-                              style={[
-                                styles.projectDotLarge,
-                                { backgroundColor: selectedProject.color }
-                              ]}
-                            />
-                          ) : (
-                            <Ionicons name="folder-outline" size={18} color={colors.foreground} />
-                          )}
-                        </View>
-                        <View style={styles.dropdownButtonTextWrap}>
-                          <Text style={styles.dropdownButtonLabel} numberOfLines={1}>
-                            {loadingProjects
-                              ? 'Loading projects…'
-                              : (selectedProject?.name ?? 'Select project')}
-                          </Text>
-                          <Text style={styles.dropdownButtonMeta}>Project</Text>
-                        </View>
-                        <Ionicons
-                          name={showProjectMenu ? 'chevron-up' : 'chevron-down'}
-                          size={16}
-                          color={colors.mutedForeground}
-                        />
-                      </Pressable>
-
-                      {showProjectMenu ? (
-                        <View style={styles.dropdownPanel}>
-                          {projects.map(project => {
-                            const isSelected = project.id === projectId;
-                            return (
-                              <Pressable
-                                key={project.id}
-                                style={styles.menuItem}
-                                onPress={() => {
-                                  setProjectId(project.id);
-                                  closeProjectMenu();
-                                }}
-                              >
-                                <View style={styles.menuItemLeft}>
-                                  <View
-                                    style={[styles.projectDot, { backgroundColor: project.color }]}
-                                  />
-                                  <Text style={styles.menuItemText}>{project.name}</Text>
-                                </View>
-                                {isSelected ? (
-                                  <Ionicons name="checkmark" size={16} color={colors.primary} />
-                                ) : null}
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      ) : null}
-
-                      <AgentModelChooser
-                        value={agentSelection}
-                        onChange={setAgentSelection}
-                        onResolvedSelectionChange={setResolvedAgentSelection}
-                        expanded={showAgentMenu}
-                        onExpandedChange={expanded => {
-                          if (expanded) closeProjectMenu();
-                          setShowAgentMenu(expanded);
-                        }}
-                        disabled={submitting}
-                      />
-                    </View>
+                    <ProjectAgentSelector
+                      openPanel={openSelectorPanel}
+                      onOpenPanelChange={setOpenSelectorPanel}
+                      project={{
+                        options: projects,
+                        value: projectId,
+                        loading: loadingProjects,
+                        disabled: submitting,
+                        onChange: setProjectId
+                      }}
+                      agent={{
+                        value: agentSelection,
+                        onChange: setAgentSelection,
+                        onResolvedSelectionChange: setResolvedAgentSelection,
+                        disabled: submitting
+                      }}
+                    />
 
                     <View style={styles.collapsibleStack}>
                       <CollapsibleSection
@@ -537,82 +455,6 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 17,
       lineHeight: 24,
       minHeight: 120
-    },
-    chooserStack: {
-      gap: 6
-    },
-    dropdownButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: 12,
-      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)'
-    },
-    dropdownButtonPressed: {
-      opacity: 0.85
-    },
-    dropdownButtonIcon: {
-      width: 28,
-      height: 28,
-      borderRadius: 7,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
-    },
-    dropdownButtonTextWrap: {
-      flex: 1,
-      minWidth: 0
-    },
-    dropdownButtonLabel: {
-      color: colors.foreground,
-      fontSize: 14,
-      fontWeight: '600'
-    },
-    dropdownButtonMeta: {
-      color: colors.mutedForeground,
-      fontSize: 11,
-      marginTop: 1
-    },
-    projectDot: {
-      width: 10,
-      height: 10,
-      borderRadius: 5
-    },
-    projectDotLarge: {
-      width: 12,
-      height: 12,
-      borderRadius: 6
-    },
-    dropdownPanel: {
-      backgroundColor: glassAvailable
-        ? colors.isDark
-          ? 'rgba(255,255,255,0.06)'
-          : 'rgba(0,0,0,0.04)'
-        : colors.secondary,
-      borderRadius: 12,
-      borderWidth: glassAvailable ? 0 : 1,
-      borderColor: colors.border,
-      overflow: 'hidden'
-    },
-    menuItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border
-    },
-    menuItemLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8
-    },
-    menuItemText: {
-      color: colors.foreground,
-      fontSize: 14
     },
     collapsibleStack: {
       gap: 1,

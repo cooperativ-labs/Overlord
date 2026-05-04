@@ -179,7 +179,7 @@ export const createTicketsScreenStyles = (colors: ThemeColors) =>
     },
     list: {
       paddingHorizontal: 12,
-      paddingBottom: 16
+      paddingBottom: 100
     },
     sectionHeader: {
       flexDirection: 'row',

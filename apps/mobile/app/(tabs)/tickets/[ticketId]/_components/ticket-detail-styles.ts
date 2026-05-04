@@ -54,7 +54,8 @@ export const createStyles = (colors: ThemeColors) =>
     },
     headerSheetBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: 'rgba(0,0,0,0.15)',
+
       paddingHorizontal: 12,
       paddingTop: Platform.OS === 'ios' ? 56 : 24
     },
@@ -64,7 +65,8 @@ export const createStyles = (colors: ThemeColors) =>
     headerSheetExpanded: {
       width: '100%',
       borderRadius: 24,
-      overflow: 'hidden'
+      overflow: 'hidden',
+      boxShadow: '0 0 10px 0 rgba(0,0,0,0.1)'
     },
     headerSheetContent: {
       padding: 12,

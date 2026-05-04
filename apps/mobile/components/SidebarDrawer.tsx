@@ -51,8 +51,9 @@ export function SidebarDrawer({ visible, onClose }: SidebarDrawerProps) {
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      // animationType=""
       transparent
+      presentationStyle="overFullScreen"
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -257,7 +258,7 @@ const createStyles = (colors: ThemeColors) =>
     backdrop: {
       flex: 1,
       flexDirection: 'row',
-      backgroundColor: 'rgba(0,0,0,0.5)'
+      backgroundColor: 'transparent'
     },
     drawer: {
       width: DRAWER_WIDTH,
@@ -266,7 +267,8 @@ const createStyles = (colors: ThemeColors) =>
       borderRightColor: colors.border
     },
     scrim: {
-      flex: 1
+      flex: 1,
+      width: '100%'
     },
     scroll: {
       flex: 1

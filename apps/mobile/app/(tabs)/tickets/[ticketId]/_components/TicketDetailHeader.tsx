@@ -17,8 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
-import { AgentModelChooser } from '@/components/AgentModelChooser';
-import { AGENT_OPTIONS } from '@/lib/agent-models';
+import { ProjectAgentSelector } from '@/components/ProjectAgentSelector';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import type { AgentModelSelection } from '@/lib/types';
@@ -139,12 +138,12 @@ export function TicketHeaderSheet({
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
-  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [openSelectorPanel, setOpenSelectorPanel] = useState<'agent' | 'project' | null>(null);
   const sheetMaxHeight = useSharedValue(0);
   const sheetTranslateY = useSharedValue(-6);
 
   useEffect(() => {
-    if (!visible) setShowModelPicker(false);
+    if (!visible) setOpenSelectorPanel(null);
   }, [visible]);
 
   useEffect(() => {
@@ -178,13 +177,8 @@ export function TicketHeaderSheet({
     !glassAvailable && styles.headerSheetFallback
   ];
 
-  const agentLabel =
-    AGENT_OPTIONS.find(option => option.value === assignedSelection?.agent)?.label ??
-    'Choose agent';
-  const modelLabel = assignedSelection?.model ?? 'Default model';
-
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.headerSheetBackdrop} onPress={onClose}>
         <Pressable onPress={() => undefined} style={styles.headerSheetWrap}>
           {glassAvailable ? (
@@ -241,50 +235,18 @@ export function TicketHeaderSheet({
                   <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
                 </View>
 
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.headerSheetFeaturedRow,
-                    pressed && styles.pressed
-                  ]}
-                  onPress={() => setShowModelPicker(open => !open)}
-                  disabled={savingAssignedAgent}
-                  accessibilityLabel="Change assigned agent"
-                >
-                  <View style={styles.headerSheetFeaturedIcon}>
-                    {assignedSelection?.agent ? (
-                      <AgentBrandIcon agent={assignedSelection.agent} size={20} />
-                    ) : (
-                      <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
-                    <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
-                      {modelLabel}
-                    </Text>
-                  </View>
-                  {savingAssignedAgent ? (
-                    <ActivityIndicator size="small" color={colors.mutedForeground} />
-                  ) : (
-                    <Ionicons
-                      name={showModelPicker ? 'chevron-up' : 'chevron-down'}
-                      size={16}
-                      color={colors.mutedForeground}
-                    />
-                  )}
-                </Pressable>
-
-                {showModelPicker ? (
-                  <View style={styles.headerSheetPickerSection}>
-                    <AgentModelChooser
-                      alwaysExpanded
-                      value={assignedSelection}
-                      onChange={onAssignedAgentChange}
-                      onResolvedSelectionChange={onResolvedSelectionChange}
-                      disabled={savingAssignedAgent}
-                    />
-                  </View>
-                ) : null}
+                <View style={styles.headerSheetPickerSection}>
+                  <ProjectAgentSelector
+                    openPanel={openSelectorPanel}
+                    onOpenPanelChange={setOpenSelectorPanel}
+                    agent={{
+                      value: assignedSelection,
+                      onChange: onAssignedAgentChange,
+                      onResolvedSelectionChange,
+                      disabled: savingAssignedAgent
+                    }}
+                  />
+                </View>
 
                 <HeaderSheetRow
                   icon="copy-outline"
@@ -352,50 +314,18 @@ export function TicketHeaderSheet({
                   <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
                 </View>
 
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.headerSheetFeaturedRow,
-                    pressed && styles.pressed
-                  ]}
-                  onPress={() => setShowModelPicker(open => !open)}
-                  disabled={savingAssignedAgent}
-                  accessibilityLabel="Change assigned agent"
-                >
-                  <View style={styles.headerSheetFeaturedIcon}>
-                    {assignedSelection?.agent ? (
-                      <AgentBrandIcon agent={assignedSelection.agent} size={20} />
-                    ) : (
-                      <Ionicons name="hardware-chip-outline" size={20} color={colors.foreground} />
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.headerSheetFeaturedLabel}>{agentLabel}</Text>
-                    <Text style={styles.headerSheetFeaturedMeta} numberOfLines={1}>
-                      {modelLabel}
-                    </Text>
-                  </View>
-                  {savingAssignedAgent ? (
-                    <ActivityIndicator size="small" color={colors.mutedForeground} />
-                  ) : (
-                    <Ionicons
-                      name={showModelPicker ? 'chevron-up' : 'chevron-down'}
-                      size={16}
-                      color={colors.mutedForeground}
-                    />
-                  )}
-                </Pressable>
-
-                {showModelPicker ? (
-                  <View style={styles.headerSheetPickerSection}>
-                    <AgentModelChooser
-                      alwaysExpanded
-                      value={assignedSelection}
-                      onChange={onAssignedAgentChange}
-                      onResolvedSelectionChange={onResolvedSelectionChange}
-                      disabled={savingAssignedAgent}
-                    />
-                  </View>
-                ) : null}
+                <View style={styles.headerSheetPickerSection}>
+                  <ProjectAgentSelector
+                    openPanel={openSelectorPanel}
+                    onOpenPanelChange={setOpenSelectorPanel}
+                    agent={{
+                      value: assignedSelection,
+                      onChange: onAssignedAgentChange,
+                      onResolvedSelectionChange,
+                      disabled: savingAssignedAgent
+                    }}
+                  />
+                </View>
 
                 <HeaderSheetRow
                   icon="copy-outline"

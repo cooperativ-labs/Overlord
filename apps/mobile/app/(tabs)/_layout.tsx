@@ -68,7 +68,7 @@ export default function TabLayout() {
     <>
       <NativeTabs
         disableTransparentOnScrollEdge
-        minimizeBehavior="onScrollDown"
+        // minimizeBehavior="onScrollDown"
         tintColor={colors.primary}
         labelStyle={{
           default: { color: colors.mutedForeground },
@@ -79,9 +79,9 @@ export default function TabLayout() {
           selected: colors.primary
         }}
       >
-        <NativeTabs.BottomAccessory>
+        {/* <NativeTabs.BottomAccessory>
           <AddTicketAccessory onPress={() => setQuickCreateVisible(true)} />
-        </NativeTabs.BottomAccessory>
+        </NativeTabs.BottomAccessory> */}
         <NativeTabs.Trigger name="feed">
           <NativeTabs.Trigger.Icon
             src={<NativeTabs.Trigger.VectorIcon family={Ionicons} name="newspaper-outline" />}
