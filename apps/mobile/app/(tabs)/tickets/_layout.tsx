@@ -8,6 +8,7 @@ export default function TicketsLayout() {
   const { session, loading } = useAuth();
   const colors = useThemeColors();
 
+
   if (loading) {
     return (
       <View

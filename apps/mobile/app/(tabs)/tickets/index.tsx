@@ -364,7 +364,7 @@ export default function TicketsScreen() {
   const buttonIconColor = getContrastColor(projectColor);
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <Stack.Screen
         options={{
           headerTransparent: false,
@@ -400,9 +400,6 @@ export default function TicketsScreen() {
           }
         }}
       >
-        {/* <Stack.Toolbar placement="bottom" >
-          <Stack.Toolbar.Spacer sharesBackground />
-        </Stack.Toolbar> */}
         <Stack.Toolbar placement="left">
           <Stack.Toolbar.View hidesSharedBackground>
             <Pressable

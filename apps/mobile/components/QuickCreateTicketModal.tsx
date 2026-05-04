@@ -271,11 +271,11 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.avoider}
-            // keyboardVerticalOffset={Math.max(insets.bottom, 10)}
+            keyboardVerticalOffset={Math.min(insets.bottom, 10)}
             pointerEvents="box-none"
           >
             <Pressable
-              style={[styles.cardWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}
+              style={[styles.cardWrap]}
               onPress={() => { }}
             >
               <InnerSurface {...innerSurfaceProps}>
