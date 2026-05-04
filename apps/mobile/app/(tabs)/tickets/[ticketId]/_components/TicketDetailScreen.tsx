@@ -37,6 +37,8 @@ import type {
 } from '@/lib/types';
 import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from '@/modules/ssh';
 
+import { formatStatusName, type TicketStatusDefinition } from '../../components/shared';
+
 import { type Project, type TicketDocument } from './ticket-detail-shared';
 import { createStyles } from './ticket-detail-styles';
 import { TicketDetailContent } from './TicketDetailContent';
@@ -72,11 +74,13 @@ export default function TicketDetailScreen() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [savingProject, setSavingProject] = useState(false);
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [statusDefinitions, setStatusDefinitions] = useState<TicketStatusDefinition[]>([]);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [headerSheetOpen, setHeaderSheetOpen] = useState(false);
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
-  const [showAcceptanceCriteria, setShowAcceptanceCriteria] = useState(true);
+  const [showAcceptanceCriteria, setShowAcceptanceCriteria] = useState(false);
   const [documents, setDocuments] = useState<TicketDocument[]>([]);
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [showCliQuickstart, setShowCliQuickstart] = useState(false);
@@ -84,10 +88,13 @@ export default function TicketDetailScreen() {
   const [copyingPromptContext, setCopyingPromptContext] = useState<'cli' | 'web' | null>(null);
   const [acceptanceCriteriaDraft, setAcceptanceCriteriaDraft] = useState('');
   const [savingAcceptanceCriteria, setSavingAcceptanceCriteria] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [editingTitle, setEditingTitle] = useState(false);
   const [hasEverhourApiKey, setHasEverhourApiKey] = useState(false);
   const [eventProfiles, setEventProfiles] = useState<
     Record<string, { name: string; image_url: string }>
   >({});
+  const savingTitleRef = useRef(false);
   const loadSequenceRef = useRef(0);
 
   const loadData = useCallback(
@@ -104,48 +111,62 @@ export default function TicketDetailScreen() {
         setEvents([]);
         setProjects([]);
         setSelectedProjectId(null);
+        setShowProjectPicker(false);
+        setShowStatusPicker(false);
+        setStatusDefinitions([]);
         setDocuments([]);
         setEventProfiles({});
       }
 
       const supabase = getSupabase();
-      const [ticketRes, objectivesRes, eventsRes, projectsRes, documentsRes, everhourRes] =
-        await Promise.all([
-          supabase
-            .from('tickets')
-            .select(
-              'id, organization_id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
-            )
-            .eq('id', ticketId)
-            .single(),
-          supabase
-            .from('objectives')
-            .select('id, objective, title, state, agent_identifier, model_identifier, created_at')
-            .eq('ticket_id', ticketId)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('ticket_events')
-            .select('id, event_type, summary, phase, is_blocking, created_at, created_by')
-            .eq('ticket_id', ticketId)
-            .order('created_at', { ascending: false })
-            .limit(30),
-          supabase.from('projects').select('id, name, color').order('name', { ascending: true }),
-          supabase
-            .from('artifacts')
-            .select('id, label, storage_path, metadata, created_at')
-            .eq('ticket_id', ticketId)
-            .not('storage_path', 'is', null)
-            .order('created_at', { ascending: false }),
-          userId
-            ? supabase
-                .from('user_integrations')
-                .select('id')
-                .eq('user_id', userId)
-                .eq('provider', 'everhour')
-                .limit(1)
-                .maybeSingle()
-            : Promise.resolve({ data: null, error: null })
-        ]);
+      const [
+        ticketRes,
+        objectivesRes,
+        eventsRes,
+        projectsRes,
+        statusDefinitionsRes,
+        documentsRes,
+        everhourRes
+      ] = await Promise.all([
+        supabase
+          .from('tickets')
+          .select(
+            'id, organization_id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
+          )
+          .eq('id', ticketId)
+          .single(),
+        supabase
+          .from('objectives')
+          .select('id, objective, title, state, agent_identifier, model_identifier, created_at')
+          .eq('ticket_id', ticketId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('ticket_events')
+          .select('id, event_type, summary, phase, is_blocking, created_at, created_by')
+          .eq('ticket_id', ticketId)
+          .order('created_at', { ascending: false })
+          .limit(30),
+        supabase.from('projects').select('id, name, color').order('name', { ascending: true }),
+        supabase
+          .from('ticket_statuses')
+          .select('organization_id, name, position, status_type')
+          .order('position', { ascending: true }),
+        supabase
+          .from('artifacts')
+          .select('id, label, storage_path, metadata, created_at')
+          .eq('ticket_id', ticketId)
+          .not('storage_path', 'is', null)
+          .order('created_at', { ascending: false }),
+        userId
+          ? supabase
+              .from('user_integrations')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('provider', 'everhour')
+              .limit(1)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null })
+      ]);
 
       if (loadSequenceRef.current !== loadSequence) {
         return;
@@ -197,6 +218,11 @@ export default function TicketDetailScreen() {
         setProjects(projectsRes.data);
       } else if (reset) {
         setProjects([]);
+      }
+      if (statusDefinitionsRes.data) {
+        setStatusDefinitions(statusDefinitionsRes.data as TicketStatusDefinition[]);
+      } else if (reset) {
+        setStatusDefinitions([]);
       }
       if (documentsRes.data) {
         setDocuments(
@@ -331,6 +357,12 @@ export default function TicketDetailScreen() {
   useEffect(() => {
     setAcceptanceCriteriaDraft(ticket?.acceptance_criteria ?? '');
   }, [ticket?.acceptance_criteria]);
+
+  useEffect(() => {
+    if (!editingTitle) {
+      setTitleDraft(ticket?.title ?? '');
+    }
+  }, [editingTitle, ticket?.title]);
 
   useFocusEffect(
     useCallback(() => {
@@ -475,6 +507,7 @@ export default function TicketDetailScreen() {
     const previousProjectId = selectedProjectId;
     setSelectedProjectId(nextProjectId);
     setShowProjectPicker(false);
+    setShowStatusPicker(false);
     setSavingProject(true);
 
     try {
@@ -495,6 +528,47 @@ export default function TicketDetailScreen() {
       );
     } finally {
       setSavingProject(false);
+    }
+  }
+
+  async function handleStatusChange(nextStatus: string) {
+    if (!ticket) return;
+
+    const previousStatus = ticket.status;
+    if (previousStatus === nextStatus) {
+      setShowStatusPicker(false);
+      return;
+    }
+
+    setTicket(current => (current ? { ...current, status: nextStatus } : current));
+    setShowStatusPicker(false);
+
+    try {
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('tickets')
+        .update({ status: nextStatus })
+        .eq('id', ticket.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { error: eventError } = await supabase.from('ticket_events').insert({
+        event_type: 'status_change',
+        summary: `Status changed to ${formatStatusName(nextStatus)} from mobile.`,
+        ticket_id: ticket.id
+      });
+
+      if (eventError) {
+        console.error('Failed to record status update event:', eventError.message);
+      }
+    } catch (error) {
+      setTicket(current => (current ? { ...current, status: previousStatus } : current));
+      Alert.alert(
+        'Unable to update status',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
     }
   }
 
@@ -631,6 +705,68 @@ export default function TicketDetailScreen() {
       setSavingAcceptanceCriteria(false);
     }
   }
+
+  const handleBeginTitleEdit = useCallback(() => {
+    if (!ticket || savingTitleRef.current) return;
+    setTitleDraft(ticket.title ?? '');
+    setEditingTitle(true);
+  }, [ticket]);
+
+  const handleSaveTitle = useCallback(async () => {
+    if (!ticket || savingTitleRef.current) return;
+
+    const nextTitle = titleDraft.trim();
+    const previousTitle = ticket.title ?? '';
+
+    if (!nextTitle) {
+      Alert.alert('Title required', 'Ticket titles cannot be empty.');
+      setTitleDraft(previousTitle);
+      setEditingTitle(false);
+      return;
+    }
+
+    if (nextTitle === previousTitle.trim()) {
+      setTitleDraft(previousTitle);
+      setEditingTitle(false);
+      return;
+    }
+
+    const supabase = getSupabase();
+    setEditingTitle(false);
+    savingTitleRef.current = true;
+    setTicket(current => (current ? { ...current, title: nextTitle } : current));
+    setTitleDraft(nextTitle);
+
+    try {
+      const { error } = await supabase
+        .from('tickets')
+        .update({ title: nextTitle })
+        .eq('id', ticket.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const { error: eventError } = await supabase.from('ticket_events').insert({
+        event_type: 'system',
+        summary: 'Ticket title updated from mobile.',
+        ticket_id: ticket.id
+      });
+
+      if (eventError) {
+        console.error('Failed to record ticket title update event:', eventError.message);
+      }
+    } catch (error) {
+      setTitleDraft(previousTitle);
+      setTicket(current => (current ? { ...current, title: previousTitle } : current));
+      Alert.alert(
+        'Unable to update ticket title',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      savingTitleRef.current = false;
+    }
+  }, [ticket, titleDraft]);
 
   async function launchWithPassword(server: Server, password: string) {
     if (!ticket || !resolvedAssignedSelection) return;
@@ -1046,6 +1182,10 @@ export default function TicketDetailScreen() {
   }
 
   const currentProject = projects.find(p => p.id === selectedProjectId) ?? null;
+  const ticketStatuses = statusDefinitions
+    .filter(status => status.organization_id === ticket.organization_id)
+    .slice()
+    .sort((left, right) => left.position - right.position);
   const dueLabel = ticket.due_datetime ? new Date(ticket.due_datetime).toLocaleDateString() : null;
 
   const ticketSequenceLabel = ticket.ticket_sequence ? `OVL-${ticket.ticket_sequence}` : null;
@@ -1058,6 +1198,9 @@ export default function TicketDetailScreen() {
     <SafeAreaView style={styles.container} edges={[]}>
       <Stack.Screen
         options={{
+          headerTransparent: true,
+          headerStyle: { backgroundColor: 'transparent' },
+          headerTintColor: colors.foreground,
           headerLeft: returnToPath
             ? ({ tintColor }) => (
                 <Pressable
@@ -1129,14 +1272,26 @@ export default function TicketDetailScreen() {
       <TicketDetailContent
         ticket={ticket}
         ticketId={ticketId}
+        titleDraft={titleDraft}
+        editingTitle={editingTitle}
         dueLabel={dueLabel}
         currentProject={currentProject}
         projects={projects}
         selectedProjectId={selectedProjectId}
         showProjectPicker={showProjectPicker}
+        statusDefinitions={ticketStatuses}
+        showStatusPicker={showStatusPicker}
         savingProject={savingProject}
-        onToggleProjectPicker={() => setShowProjectPicker(prev => !prev)}
+        onToggleProjectPicker={() => {
+          setShowStatusPicker(false);
+          setShowProjectPicker(prev => !prev);
+        }}
+        onToggleStatusPicker={() => {
+          setShowProjectPicker(false);
+          setShowStatusPicker(prev => !prev);
+        }}
         onChangeProject={handleProjectChange}
+        onChangeStatus={handleStatusChange}
         objectiveDraft={objectiveDraft}
         setObjectiveDraft={setObjectiveDraft}
         executedObjectives={executedObjectives}
@@ -1179,6 +1334,19 @@ export default function TicketDetailScreen() {
         onToggleActivityFilter={() =>
           setActivityFilter(current => (current === 'completed' ? 'all' : 'completed'))
         }
+        onBeginTitleEdit={handleBeginTitleEdit}
+        onTitleChange={setTitleDraft}
+        onTitleSubmit={() => {
+          void handleSaveTitle();
+        }}
+        onTitleBlur={() => {
+          void handleSaveTitle();
+        }}
+        onBackgroundPress={() => {
+          if (editingTitle) {
+            void handleSaveTitle();
+          }
+        }}
       />
       <TicketDetailModals
         overflowOpen={overflowOpen}

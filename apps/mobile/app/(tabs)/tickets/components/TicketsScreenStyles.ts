@@ -35,6 +35,7 @@ export const createTicketsScreenStyles = (colors: ThemeColors) =>
       borderRadius: 10,
       paddingHorizontal: 10,
       height: 36,
+      marginRight: 40,
       overflow: 'hidden'
     },
     searchWrapFallback: {

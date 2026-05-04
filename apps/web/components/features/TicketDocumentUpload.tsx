@@ -181,7 +181,6 @@ export function TicketDocumentUpload({
   const documentCount = documents.length + uploading.filter(u => u.progress === 'uploading').length;
 
   return (
-
     <AccordionItem value="documents" className="border-b-0">
       <div
         className={cn(
@@ -243,9 +242,7 @@ export function TicketDocumentUpload({
                 key={u.id}
                 className={cn(
                   'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
-                  u.progress === 'error'
-                    ? 'border-destructive/50 bg-destructive/5'
-                    : 'bg-muted/30'
+                  u.progress === 'error' ? 'border-destructive/50 bg-destructive/5' : 'bg-muted/30'
                 )}
               >
                 {u.progress === 'uploading' ? (
@@ -316,6 +313,5 @@ export function TicketDocumentUpload({
         )}
       </AccordionContent>
     </AccordionItem>
-
   );
 }

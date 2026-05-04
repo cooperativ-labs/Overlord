@@ -193,7 +193,7 @@ export function TicketCard({
       </View>
       <View style={styles.ticketListRight}>
         {showProjectHint ? (
-          <Text style={styles.ticketListProjectHint} numberOfLines={1}>
+          <Text style={styles.ticketListProjectHint} numberOfLines={2}>
             {projectLabel}
           </Text>
         ) : null}

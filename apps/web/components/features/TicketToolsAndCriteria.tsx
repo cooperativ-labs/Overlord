@@ -7,10 +7,11 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
-import { TicketTaggingDebug } from './TicketTaggingDebug';
-import { TicketDocumentUpload } from './TicketDocumentUpload';
 import type { TicketDocument } from '@/lib/actions/artifacts';
 import type { TaggingInspector } from '@/lib/tagging-engine';
+
+import { TicketDocumentUpload } from './TicketDocumentUpload';
+import { TicketTaggingDebug } from './TicketTaggingDebug';
 
 interface TicketToolsAndCriteriaProps {
   ticketId: string;
@@ -29,7 +30,6 @@ export function TicketToolsAndCriteria({
   initialDocuments,
   inspector
 }: TicketToolsAndCriteriaProps) {
-
   return (
     <Accordion type="multiple">
       <AccordionItem value="tools" className="border-b-0">

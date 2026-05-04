@@ -27,7 +27,6 @@ function formatEngineDecision(value: TaggingInspector['tags'][number]['engineDec
 
 export function TicketTaggingDebug({ inspector }: TicketTaggingDebugProps) {
   if (!inspector) return null;
-  if (process.env.NODE_ENV === 'production') return null;
 
   return (
     <AccordionItem value="tagging-debug" className="border-b-0">
@@ -109,6 +108,5 @@ export function TicketTaggingDebug({ inspector }: TicketTaggingDebugProps) {
         </div>
       </AccordionContent>
     </AccordionItem>
-
   );
 }

@@ -252,10 +252,10 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
   const InnerSurface = glassAvailable ? GlassView : View;
   const innerSurfaceProps = glassAvailable
     ? {
-        glassEffectStyle: 'regular' as const,
-        style: styles.card,
-        colorScheme: (colors.isDark ? 'dark' : 'light') as 'dark' | 'light'
-      }
+      glassEffectStyle: 'regular' as const,
+      style: styles.card,
+      colorScheme: (colors.isDark ? 'dark' : 'light') as 'dark' | 'light'
+    }
     : { style: [styles.card, styles.cardFallback] };
 
   return (
@@ -271,12 +271,12 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.avoider}
-            keyboardVerticalOffset={Math.max(insets.bottom, 10)}
+            // keyboardVerticalOffset={Math.max(insets.bottom, 10)}
             pointerEvents="box-none"
           >
             <Pressable
               style={[styles.cardWrap, { paddingBottom: Math.max(insets.bottom, 10) }]}
-              onPress={() => {}}
+              onPress={() => { }}
             >
               <InnerSurface {...innerSurfaceProps}>
                 <View style={[styles.cardSize, { maxHeight: cardMaxHeight }]}>

@@ -25,6 +25,7 @@ import {
   getProjectUserSshSettingsByProjectId
 } from '@/lib/actions/projects';
 import { getTicketTagsAction } from '@/lib/actions/tags';
+import { isAdminEmail } from '@/lib/auth/admin';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -156,10 +157,10 @@ export async function TicketPanelContent({
       .order('name', { ascending: true }),
     ticket.schedule_id
       ? supabase
-        .from('schedule')
-        .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
-        .eq('id', ticket.schedule_id)
-        .maybeSingle()
+          .from('schedule')
+          .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
+          .eq('id', ticket.schedule_id)
+          .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
@@ -281,9 +282,11 @@ export async function TicketPanelContent({
   });
   const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
-  const taggingInspector = ticket.project_id
-    ? await getTicketTaggingInspector({ supabase, ticketId }).catch(() => null)
-    : null;
+  const canViewTaggingInspector = isAdminEmail(user?.email);
+  const taggingInspector =
+    ticket.project_id && canViewTaggingInspector
+      ? await getTicketTaggingInspector({ supabase, ticketId }).catch(() => null)
+      : null;
 
   return (
     <TicketLiveProvider
@@ -384,15 +387,15 @@ export async function TicketPanelContent({
                   initialSchedule={
                     schedule
                       ? {
-                        periodType: schedule.period_type,
-                        periodInterval: schedule.period_interval,
-                        daysOfWeek: Array.isArray(schedule.days_of_week)
-                          ? schedule.days_of_week
-                          : [],
-                        daysOfMonth: schedule.days_of_month ?? undefined,
-                        weeksOfMonth: schedule.weeks_of_month ?? undefined,
-                        timezone: schedule.timezone
-                      }
+                          periodType: schedule.period_type,
+                          periodInterval: schedule.period_interval,
+                          daysOfWeek: Array.isArray(schedule.days_of_week)
+                            ? schedule.days_of_week
+                            : [],
+                          daysOfMonth: schedule.days_of_month ?? undefined,
+                          weeksOfMonth: schedule.weeks_of_month ?? undefined,
+                          timezone: schedule.timezone
+                        }
                       : null
                   }
                 />
@@ -432,7 +435,6 @@ export async function TicketPanelContent({
               initialDocuments={initialDocuments}
               inspector={taggingInspector}
             />
-
 
             <ErrorBoundary>
               <TicketPanelLive

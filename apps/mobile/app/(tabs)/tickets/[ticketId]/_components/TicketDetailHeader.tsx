@@ -101,12 +101,7 @@ export function TicketHeaderRight({ onPress }: { onPress: () => void }) {
       accessibilityRole="button"
       style={styles.headerIconPressable}
     >
-      <IconContainer
-        style={iconStyle}
-        {...(glassAvailable ? { glassEffectStyle: 'regular' as const } : {})}
-      >
-        <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
-      </IconContainer>
+      <Ionicons name="ellipsis-horizontal" size={18} color={colors.foreground} />
     </Pressable>
   );
 }

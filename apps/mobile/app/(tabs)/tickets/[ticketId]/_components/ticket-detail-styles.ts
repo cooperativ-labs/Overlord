@@ -13,7 +13,7 @@ export const createStyles = (colors: ThemeColors) =>
     },
     errorText: { color: colors.mutedForeground, fontSize: 16 },
     scroll: { flex: 1 },
-    scrollContent: { paddingBottom: 40 },
+    scrollContent: { paddingBottom: 120, paddingTop: 120 },
     headerTitlePill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -21,8 +21,9 @@ export const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 999,
-      maxWidth: 240,
-      overflow: 'hidden'
+      maxWidth: 260,
+      overflow: 'hidden',
+      boxShadow: '0 0 10px 0 rgba(0, 0, 0, 0.1)'
     },
     headerTitlePillFallback: {
       backgroundColor: colors.card,
@@ -37,7 +38,7 @@ export const createStyles = (colors: ThemeColors) =>
       marginTop: 1,
       textTransform: 'capitalize'
     },
-    headerIconPressable: { marginRight: 4 },
+    headerIconPressable: { marginRight: 0 },
     headerIconButton: {
       width: 36,
       height: 36,
@@ -192,7 +193,23 @@ export const createStyles = (colors: ThemeColors) =>
       fontWeight: '600',
       fontVariant: ['tabular-nums']
     },
+    titlePressable: {
+      alignSelf: 'flex-start',
+      maxWidth: '100%'
+    },
     titleText: { color: colors.foreground, fontSize: 22, fontWeight: '700', lineHeight: 28 },
+    titleInput: {
+      color: colors.foreground,
+      fontSize: 22,
+      fontWeight: '700',
+      lineHeight: 28,
+      padding: 0,
+      margin: 0,
+      minWidth: 0,
+      width: '100%',
+      alignSelf: 'stretch',
+      includeFontPadding: false
+    },
     pillRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -234,6 +251,71 @@ export const createStyles = (colors: ThemeColors) =>
     projectPickerItemSelected: { backgroundColor: colors.secondary },
     projectPickerItemText: { color: colors.secondaryForeground, fontSize: 15 },
     projectPickerItemTextSelected: { color: colors.foreground, fontWeight: '600' },
+    selectorBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20
+    },
+    selectorCard: {
+      width: '100%',
+      maxWidth: 420,
+      maxHeight: 440,
+      backgroundColor: colors.background,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      gap: 12
+    },
+    selectorHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12
+    },
+    selectorTitle: { color: colors.foreground, fontSize: 16, fontWeight: '700' },
+    selectorCloseButton: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: colors.secondary
+    },
+    selectorCloseButtonText: { color: colors.foreground, fontSize: 12, fontWeight: '600' },
+    selectorScroll: { flexGrow: 0 },
+    selectorScrollContent: {
+      gap: 8,
+      paddingBottom: 4
+    },
+    selectorEmpty: {
+      color: colors.mutedForeground,
+      fontSize: 13,
+      paddingVertical: 8
+    },
+    selectorItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.secondary
+    },
+    selectorItemSelected: {
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)'
+    },
+    selectorItemLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+      minWidth: 0
+    },
+    selectorDot: { width: 10, height: 10, borderRadius: 5 },
+    selectorItemText: { color: colors.foreground, fontSize: 14, flexShrink: 1 },
+    selectorItemTextSelected: { color: colors.foreground, fontWeight: '600' },
     scheduleRow: {
       flexDirection: 'row',
       gap: 8,

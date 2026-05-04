@@ -1,1 +1,1 @@
-export { default } from './components/TicketDetailScreen';
+export { default } from './_components/TicketDetailScreen';

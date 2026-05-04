@@ -1,11 +1,13 @@
+import { GlassView } from 'expo-glass-effect';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, AppState } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, AppState, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { SidebarDrawer } from '@/components/SidebarDrawer';
-import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { colors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
 import { isTransientNetworkError } from '@/lib/transient-network-error';
@@ -13,6 +15,7 @@ import { isTransientNetworkError } from '@/lib/transient-network-error';
 import {
   ALL_PROJECTS_LABEL,
   getContrastColor,
+  glassAvailable,
   matchesStatusFilter,
   resolvePreferredStatusNameByType,
   type SortMode,
@@ -23,12 +26,12 @@ import {
 } from './components/shared';
 import { TicketsResults } from './components/TicketsResults';
 import { TicketsScreenFilters } from './components/TicketsScreenFilters';
-import { TicketsScreenHeader } from './components/TicketsScreenHeader';
 import { createTicketsScreenStyles } from './components/TicketsScreenStyles';
 
 export default function TicketsScreen() {
   const router = useRouter();
   const { projects, selectedProjectId, selectProject } = useSelectedProject();
+  const searchInputRef = useRef<TextInput | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const { projectId: projectIdParam } = useLocalSearchParams<{ projectId?: string }>();
   const colors = useThemeColors();
@@ -65,7 +68,11 @@ export default function TicketsScreen() {
   }, []);
 
   const handleCreateTicket = useCallback((_dueDate?: string) => {
-    setCreateModalVisible(true);
+    searchInputRef.current?.blur();
+    Keyboard.dismiss();
+    setTimeout(() => {
+      setCreateModalVisible(true);
+    }, 150);
   }, []);
 
   const fetchTickets = useCallback(
@@ -357,16 +364,72 @@ export default function TicketsScreen() {
   const buttonIconColor = getContrastColor(projectColor);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <TicketsScreenHeader
-        search={search}
-        onSearchChange={setSearch}
-        onOpenDrawer={() => setDrawerOpen(true)}
-        onCreateTicket={handleCreateTicket}
-        projectColor={projectColor}
-        buttonIconColor={buttonIconColor}
-      />
+    <SafeAreaView style={styles.container} edges={[]}>
+      <Stack.Screen
+        options={{
+          headerTransparent: false,
+          headerStyle: { backgroundColor: 'transparent' },
+          headerTintColor: colors.foreground,
+
+          headerTitle: () => {
+            return glassAvailable ? (
+              <GlassView style={styles.searchWrap} glassEffectStyle="regular">
+                <Ionicons name="search" size={14} color={colors.mutedForeground} />
+                <TextInput
+                  ref={searchInputRef}
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search ticket"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={styles.searchInput}
+                />
+              </GlassView>
+            ) : (
+              <View style={[styles.searchWrap, styles.searchWrapFallback]}>
+                <Ionicons name="search" size={14} color={colors.mutedForeground} />
+                <TextInput
+                  ref={searchInputRef}
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search ticket"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={styles.searchInput}
+                />
+              </View>
+            );
+          }
+        }}
+      >
+        {/* <Stack.Toolbar placement="bottom" >
+          <Stack.Toolbar.Spacer sharesBackground />
+        </Stack.Toolbar> */}
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.View hidesSharedBackground>
+            <Pressable
+              hitSlop={10}
+              style={styles.ghostButton}
+              onPress={() => setDrawerOpen(true)}
+              accessibilityLabel="Open navigation"
+            >
+              <Ionicons name="menu-outline" size={22} color={colors.foreground} />
+            </Pressable>
+          </Stack.Toolbar.View>
+        </Stack.Toolbar>
+
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.View hidesSharedBackground>
+            <Pressable
+              hitSlop={10}
+              onPress={() => handleCreateTicket()}
+              style={[styles.createButton, { backgroundColor: projectColor }]}
+              accessibilityLabel="Create ticket"
+            >
+              <Ionicons name="add" size={16} color={buttonIconColor} />
+              <Ionicons name="ticket-outline" size={14} color={buttonIconColor} />
+            </Pressable>
+          </Stack.Toolbar.View>
+        </Stack.Toolbar>
+      </Stack.Screen>
       <TicketsScreenFilters
         projectName={projectName}
         projectColor={projectColor}

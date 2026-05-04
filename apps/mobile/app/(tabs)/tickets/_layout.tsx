@@ -34,17 +34,24 @@ export default function TicketsLayout() {
         headerTintColor: colors.foreground
       }}
     >
-      <Stack.Screen name="index" options={{ title: '' }} />
-      <Stack.Screen name="create" options={{ title: 'New Ticket', presentation: 'modal' }} />
+      <Stack.Screen
+        name="index"
+        options={{
+          title: '',
+          headerShown: true,
+          headerTransparent: true
+        }}
+      />
+      {/* <Stack.Screen name="create" options={{ title: 'New Ticket', presentation: 'modal' }} /> */}
       <Stack.Screen
         name="[ticketId]/index"
         options={{
           title: '',
           headerShown: true,
+          // headerBackButtonDisplayMode:
+          //   'minimal' as const,
           headerBackTitle: '',
           headerTitleAlign: 'center',
-          // headerStyle: { backgroundColor: colors.background },
-          // headerTintColor: colors.foreground,
           headerShadowVisible: false
         }}
       />
