@@ -110,7 +110,7 @@ export default function KanbanBoard({
   const reorderTicketsMutation = useReorderTicketsMutation();
   const { mutate: markTicketRead } = useMarkTicketReadMutation();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
-  const [filteredProjectId, setFilteredProjectId] = useState<string | null>(null);
+  const [filteredProjectIds, setFilteredProjectIds] = useState<string[]>([]);
 
   // Tracks the column a card is being dragged into, for immediate synchronous
   // re-render of SortableContext items (shows the insertion gap in the target column).
@@ -209,16 +209,27 @@ export default function KanbanBoard({
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [projectId, tickets]);
 
+  const toggleFilteredProject = useCallback((projectFilterId: string) => {
+    setFilteredProjectIds(prev =>
+      prev.includes(projectFilterId)
+        ? prev.filter(id => id !== projectFilterId)
+        : [...prev, projectFilterId]
+    );
+  }, []);
+
+  const clearProjectFilter = useCallback(() => {
+    setFilteredProjectIds([]);
+  }, []);
+
   const displayedTickets = useMemo(
     () =>
-      filteredProjectId
-        ? ticketsWithIndicators.filter(t =>
-            filteredProjectId === PERSONAL_PROJECT_FILTER_ID
-              ? t.project_id === null
-              : t.project_id === filteredProjectId
-          )
-        : ticketsWithIndicators,
-    [filteredProjectId, ticketsWithIndicators]
+      filteredProjectIds.length === 0
+        ? ticketsWithIndicators
+        : ticketsWithIndicators.filter(t => {
+            const optionId = t.project_id ?? PERSONAL_PROJECT_FILTER_ID;
+            return filteredProjectIds.includes(optionId);
+          }),
+    [filteredProjectIds, ticketsWithIndicators]
   );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -627,8 +638,9 @@ export default function KanbanBoard({
             initialView={initialView}
             projectId={projectId}
             projectOptions={projectOptions}
-            filteredProjectId={filteredProjectId}
-            onFilterProject={setFilteredProjectId}
+            filteredProjectIds={filteredProjectIds}
+            onToggleFilterProject={toggleFilteredProject}
+            onClearProjectFilter={clearProjectFilter}
             columns={sortedColumns}
             visibleSlugs={visibleSlugs}
             showUncategorized={uncategorized.length > 0}

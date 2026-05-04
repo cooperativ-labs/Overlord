@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpDown, Check, Filter } from 'lucide-react';
+import { ArrowUpDown, Filter } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -17,6 +17,20 @@ import { formatStatusLabel } from './ticket-view-helpers';
 import { SORT_LABELS, type SortKey, type TicketListProjectOption } from './TicketListView.types';
 import TicketsViewControls from './TicketsViewControls';
 
+function listProjectFilterTriggerLabel({
+  filterProjectIds,
+  projectOptions
+}: {
+  filterProjectIds: string[];
+  projectOptions: TicketListProjectOption[];
+}): string {
+  if (filterProjectIds.length === 0) return 'All projects';
+  if (filterProjectIds.length === 1) {
+    return projectOptions.find(p => p.id === filterProjectIds[0])?.name ?? 'Project';
+  }
+  return `${filterProjectIds.length} projects`;
+}
+
 type TicketListToolbarProps = {
   initialView: string;
   projectId?: string;
@@ -28,11 +42,12 @@ type TicketListToolbarProps = {
   statusFilterOptions: string[];
   selectedStatusesSet: Set<string>;
   projectOptions: TicketListProjectOption[];
-  filterProject: string | null;
+  filterProjectIds: string[];
   onSortKeyChange: (key: SortKey) => void;
   onSelectAllStatuses: () => void;
   onToggleStatus: (status: string) => void;
-  onFilterProjectChange: (nextProjectId: string | null) => void;
+  onToggleFilterProject: (projectFilterId: string) => void;
+  onClearProjectFilters: () => void;
 };
 
 export function TicketListToolbar({
@@ -46,11 +61,12 @@ export function TicketListToolbar({
   statusFilterOptions,
   selectedStatusesSet,
   projectOptions,
-  filterProject,
+  filterProjectIds,
   onSortKeyChange,
   onSelectAllStatuses,
   onToggleStatus,
-  onFilterProjectChange
+  onToggleFilterProject,
+  onClearProjectFilters
 }: TicketListToolbarProps) {
   return (
     <div className="flex w-full flex-wrap items-start justify-between gap-2">
@@ -117,23 +133,25 @@ export function TicketListToolbar({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
-                    {filterProject
-                      ? (projectOptions.find(project => project.id === filterProject)?.name ??
-                        'Project')
-                      : 'All projects'}
+                    {listProjectFilterTriggerLabel({ filterProjectIds, projectOptions })}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">
                   <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => onFilterProjectChange(null)} className="gap-2">
+                  <DropdownMenuCheckboxItem
+                    checked={filterProjectIds.length === 0}
+                    onCheckedChange={() => onClearProjectFilters()}
+                    onSelect={event => event.preventDefault()}
+                  >
                     All projects
-                    {filterProject === null && <Check className="ml-auto h-4 w-4" />}
-                  </DropdownMenuItem>
+                  </DropdownMenuCheckboxItem>
                   {projectOptions.map(project => (
-                    <DropdownMenuItem
+                    <DropdownMenuCheckboxItem
                       key={project.id}
-                      onClick={() => onFilterProjectChange(project.id)}
+                      checked={filterProjectIds.includes(project.id)}
+                      onCheckedChange={() => onToggleFilterProject(project.id)}
+                      onSelect={event => event.preventDefault()}
                       className="gap-2"
                     >
                       {project.color ? (
@@ -143,8 +161,7 @@ export function TicketListToolbar({
                         />
                       ) : null}
                       <span className="truncate">{project.name}</span>
-                      {filterProject === project.id && <Check className="ml-auto h-4 w-4" />}
-                    </DropdownMenuItem>
+                    </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>

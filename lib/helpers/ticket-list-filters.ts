@@ -1,17 +1,29 @@
 export type TicketListFilters = {
   selected_statuses: string[];
-  filter_project_id: string | null;
+  /** Empty means all projects (no filter). */
+  filter_project_ids: string[];
 };
 
 type TicketListFiltersInput = {
   selected_statuses?: unknown;
+  filter_project_ids?: unknown;
+  /** Legacy single-project filter; migrated into `filter_project_ids` when parsing. */
   filter_project_id?: unknown;
 };
+
+function normalizeFilterProjectIds(value: TicketListFiltersInput | null | undefined): string[] {
+  const fromArray = normalizeStringList(value?.filter_project_ids);
+  if (fromArray.length > 0) return fromArray;
+  if (typeof value?.filter_project_id === 'string' && value.filter_project_id.trim().length > 0) {
+    return [value.filter_project_id.trim()];
+  }
+  return [];
+}
 
 export function createDefaultTicketListFilters(): TicketListFilters {
   return {
     selected_statuses: [],
-    filter_project_id: null
+    filter_project_ids: []
   };
 }
 
@@ -37,10 +49,7 @@ export function normalizeTicketListFilters(
 ): TicketListFilters {
   return {
     selected_statuses: normalizeStringList(value?.selected_statuses),
-    filter_project_id:
-      typeof value?.filter_project_id === 'string' && value.filter_project_id.trim().length > 0
-        ? value.filter_project_id.trim()
-        : null
+    filter_project_ids: normalizeFilterProjectIds(value ?? undefined)
   };
 }
 
@@ -52,6 +61,7 @@ export function parseTicketListFilters(raw: unknown): TicketListFilters {
   const obj = raw as Record<string, unknown>;
   return normalizeTicketListFilters({
     selected_statuses: obj.selected_statuses,
+    filter_project_ids: obj.filter_project_ids,
     filter_project_id: obj.filter_project_id
   });
 }

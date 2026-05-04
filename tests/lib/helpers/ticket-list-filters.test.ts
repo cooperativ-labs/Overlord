@@ -13,15 +13,39 @@ describe('ticket list filter helpers', () => {
     ]);
   });
 
-  it('normalizes filter payloads', () => {
+  it('normalizes filter payloads with project id list', () => {
     expect(
       normalizeTicketListFilters({
         selected_statuses: [' draft ', 'review', 'review'],
-        filter_project_id: '  project-123  '
+        filter_project_ids: ['  a  ', 'b', 'a']
       })
     ).toEqual({
       selected_statuses: ['draft', 'review'],
-      filter_project_id: 'project-123'
+      filter_project_ids: ['a', 'b']
+    });
+  });
+
+  it('migrates legacy single filter_project_id into filter_project_ids', () => {
+    expect(
+      normalizeTicketListFilters({
+        selected_statuses: ['execute'],
+        filter_project_id: '  project-123  '
+      })
+    ).toEqual({
+      selected_statuses: ['execute'],
+      filter_project_ids: ['project-123']
+    });
+  });
+
+  it('prefers filter_project_ids over legacy id when both are present', () => {
+    expect(
+      normalizeTicketListFilters({
+        filter_project_ids: ['p1'],
+        filter_project_id: 'p2'
+      })
+    ).toEqual({
+      selected_statuses: [],
+      filter_project_ids: ['p1']
     });
   });
 
@@ -30,11 +54,11 @@ describe('ticket list filter helpers', () => {
       parseTicketListFilters({ selected_statuses: ['execute'], filter_project_id: 1 })
     ).toEqual({
       selected_statuses: ['execute'],
-      filter_project_id: null
+      filter_project_ids: []
     });
     expect(parseTicketListFilters(null)).toEqual({
       selected_statuses: [],
-      filter_project_id: null
+      filter_project_ids: []
     });
   });
 });

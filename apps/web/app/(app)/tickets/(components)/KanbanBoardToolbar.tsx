@@ -1,10 +1,11 @@
 'use client';
 
-import { Check, Columns3, Eye, EyeOff, Settings } from 'lucide-react';
+import { Columns3, Eye, EyeOff, Settings } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -27,12 +28,27 @@ type ToolbarColumn = {
 
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
 
+function projectFilterTriggerLabel({
+  filteredProjectIds,
+  projectOptions
+}: {
+  filteredProjectIds: string[];
+  projectOptions: ProjectOption[];
+}): string {
+  if (filteredProjectIds.length === 0) return 'All Projects';
+  if (filteredProjectIds.length === 1) {
+    return projectOptions.find(p => p.id === filteredProjectIds[0])?.name ?? 'Project';
+  }
+  return `${filteredProjectIds.length} projects`;
+}
+
 export default function KanbanBoardToolbar({
   initialView,
   projectId,
   projectOptions,
-  filteredProjectId,
-  onFilterProject,
+  filteredProjectIds,
+  onToggleFilterProject,
+  onClearProjectFilter,
   columns,
   visibleSlugs,
   showUncategorized,
@@ -42,8 +58,9 @@ export default function KanbanBoardToolbar({
   initialView: string;
   projectId?: string;
   projectOptions: ProjectOption[];
-  filteredProjectId: string | null;
-  onFilterProject: (projectId: string | null) => void;
+  filteredProjectIds: string[];
+  onToggleFilterProject: (projectId: string) => void;
+  onClearProjectFilter: () => void;
   columns: ToolbarColumn[];
   visibleSlugs: Set<string>;
   showUncategorized: boolean;
@@ -59,33 +76,35 @@ export default function KanbanBoardToolbar({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
                 <Eye className="h-4 w-4" />
-                {filteredProjectId
-                  ? (projectOptions.find(p => p.id === filteredProjectId)?.name ?? 'Project')
-                  : 'All Projects'}
+                {projectFilterTriggerLabel({ filteredProjectIds, projectOptions })}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-52">
               <DropdownMenuLabel>Filter by project</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => onFilterProject(null)} className="gap-2">
+              <DropdownMenuCheckboxItem
+                checked={filteredProjectIds.length === 0}
+                onCheckedChange={() => onClearProjectFilter()}
+                onSelect={event => event.preventDefault()}
+              >
                 All Projects
-                {filteredProjectId === null && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
+              </DropdownMenuCheckboxItem>
               {projectOptions.map(project => (
-                <DropdownMenuItem
+                <DropdownMenuCheckboxItem
                   key={project.id}
-                  onClick={() => onFilterProject(project.id)}
+                  checked={filteredProjectIds.includes(project.id)}
+                  onCheckedChange={() => onToggleFilterProject(project.id)}
+                  onSelect={event => event.preventDefault()}
                   className="gap-2"
                 >
-                  {project.color && (
+                  {project.color ? (
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-[2px] border"
                       style={{ backgroundColor: project.color, borderColor: project.color }}
                     />
-                  )}
+                  ) : null}
                   <span className="truncate">{project.name}</span>
-                  {filteredProjectId === project.id && <Check className="ml-auto h-4 w-4" />}
-                </DropdownMenuItem>
+                </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>

@@ -68,6 +68,13 @@ function areStringListsEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function areProjectFilterIdsEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
+}
+
 function buildStatusFilterOptions(availableStatuses: string[]): string[] {
   const seen = new Set<string>();
   const next: string[] = [];
@@ -218,11 +225,14 @@ export default function TicketListView({
         storedListFilters?.selected_statuses ?? [...DEFAULT_SELECTED_STATUSES]
     )
   );
-  const [filterProject, setFilterProject] = useState<string | null>(() =>
-    projectId
-      ? null
-      : (initialListFilters?.filter_project_id ?? storedListFilters?.filter_project_id ?? null)
-  );
+  const [filterProjectIds, setFilterProjectIds] = useState<string[]>(() => {
+    if (projectId) return [];
+    const fromInitial = initialListFilters?.filter_project_ids;
+    if (fromInitial && fromInitial.length > 0) return [...fromInitial];
+    const fromStored = storedListFilters?.filter_project_ids;
+    if (fromStored && fromStored.length > 0) return [...fromStored];
+    return [];
+  });
 
   const [expandedStatuses, setExpandedStatuses] = useState<Record<string, boolean>>({});
   const [collapsedStatuses, setCollapsedStatuses] = useState<Set<string>>(
@@ -311,10 +321,10 @@ export default function TicketListView({
   }, [tickets]);
 
   const saveListFilters = useCallback(
-    (nextSelectedStatuses: string[], nextFilterProject: string | null) => {
+    (nextSelectedStatuses: string[], nextFilterProjectIds: string[]) => {
       const nextFilters = normalizeTicketListFilters({
         selected_statuses: nextSelectedStatuses,
-        filter_project_id: projectId ? null : nextFilterProject
+        filter_project_ids: projectId ? [] : nextFilterProjectIds
       });
 
       if (projectId) {
@@ -375,7 +385,7 @@ export default function TicketListView({
       return next;
     });
     queueMicrotask(() => {
-      saveListFilters(next, filterProject);
+      saveListFilters(next, filterProjectIds);
     });
   }
 
@@ -385,12 +395,11 @@ export default function TicketListView({
     if (!areAllStatusesSelected && selectedStatuses.length > 0) {
       filtered = filtered.filter(t => selectedStatusesSet.has(t.status));
     }
-    if (filterProject) {
-      filtered = filtered.filter(t =>
-        filterProject === PERSONAL_PROJECT_FILTER_ID
-          ? t.project_id === null
-          : t.project_id === filterProject
-      );
+    if (filterProjectIds.length > 0) {
+      filtered = filtered.filter(t => {
+        const optionId = t.project_id ?? PERSONAL_PROJECT_FILTER_ID;
+        return filterProjectIds.includes(optionId);
+      });
     }
 
     return [...filtered].sort((a, b) => {
@@ -410,7 +419,7 @@ export default function TicketListView({
     selectedStatusesSet,
     selectedStatuses.length,
     areAllStatusesSelected,
-    filterProject
+    filterProjectIds
   ]);
 
   // Group tickets by status, in the configured status order (with custom order applied).
@@ -484,18 +493,20 @@ export default function TicketListView({
     if (next) {
       const toSave = next;
       queueMicrotask(() => {
-        saveListFilters(toSave, filterProject);
+        saveListFilters(toSave, filterProjectIds);
       });
     }
-  }, [filterProject, saveListFilters, statusFilterOptions]);
+  }, [filterProjectIds, saveListFilters, statusFilterOptions]);
 
   useEffect(() => {
     if (projectId) return;
-    if (filterProject === null) return;
-    if (projectOptions.some(project => project.id === filterProject)) return;
-    saveListFilters(selectedStatuses, null);
-    setFilterProject(null);
-  }, [filterProject, projectId, projectOptions, saveListFilters, selectedStatuses]);
+    if (filterProjectIds.length === 0) return;
+    const validIds = new Set(projectOptions.map(project => project.id));
+    const next = filterProjectIds.filter(id => validIds.has(id));
+    if (areProjectFilterIdsEqual(next, filterProjectIds)) return;
+    saveListFilters(selectedStatuses, next);
+    setFilterProjectIds(next);
+  }, [filterProjectIds, projectId, projectOptions, saveListFilters, selectedStatuses]);
 
   function toggleExpand(statusName: string) {
     setExpandedStatuses(prev => ({ ...prev, [statusName]: !prev[statusName] }));
@@ -838,16 +849,27 @@ export default function TicketListView({
           statusFilterOptions={statusFilterOptions}
           selectedStatusesSet={selectedStatusesSet}
           projectOptions={projectOptions}
-          filterProject={filterProject}
+          filterProjectIds={filterProjectIds}
           onSortKeyChange={setSortKey}
           onSelectAllStatuses={() => {
             setSelectedStatuses(statusFilterOptions);
-            saveListFilters(statusFilterOptions, filterProject);
+            saveListFilters(statusFilterOptions, filterProjectIds);
           }}
           onToggleStatus={toggleStatus}
-          onFilterProjectChange={nextFilterProject => {
-            setFilterProject(nextFilterProject);
-            saveListFilters(selectedStatuses, nextFilterProject);
+          onToggleFilterProject={projectFilterId => {
+            setFilterProjectIds(prev => {
+              const next = prev.includes(projectFilterId)
+                ? prev.filter(id => id !== projectFilterId)
+                : [...prev, projectFilterId];
+              queueMicrotask(() => {
+                saveListFilters(selectedStatuses, next);
+              });
+              return next;
+            });
+          }}
+          onClearProjectFilters={() => {
+            setFilterProjectIds([]);
+            saveListFilters(selectedStatuses, []);
           }}
         />
       ) : null}
