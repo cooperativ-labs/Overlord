@@ -60,7 +60,7 @@ export function TicketListToolbar({
         ) : null}
         {hasTickets ? (
           <>
-            <DropdownMenu>
+            {/* <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   <ArrowUpDown className="h-3.5 w-3.5" />
@@ -81,7 +81,7 @@ export function TicketListToolbar({
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
-            </DropdownMenu>
+            </DropdownMenu> */}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
