@@ -659,7 +659,7 @@ function DemoCliSettings() {
             artifact-upload-file
           </li>
           <li className="break-words">
-            <code className="break-all rounded bg-muted px-1">ovld connect &lt;agent&gt;</code>{' '}
+            <code className="break-all rounded bg-muted px-1">ovld launch &lt;agent&gt;</code>{' '}
             launch agent on a ticket
           </li>
           <li className="break-words">

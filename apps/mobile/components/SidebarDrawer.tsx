@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -6,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/lib/auth-context';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import { useSelectedProject } from '@/lib/selected-project-context';
 
 interface SidebarDrawerProps {

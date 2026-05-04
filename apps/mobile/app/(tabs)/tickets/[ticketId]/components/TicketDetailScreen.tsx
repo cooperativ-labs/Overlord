@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import {
   createAssignedAgent,
   DEFAULT_AGENT_MODEL_SELECTION,
@@ -13,6 +13,8 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useTicketRealtime } from '@/lib/hooks/use-ticket-realtime';
+import { Ionicons } from '@/lib/icons';
+import { buildCliLaunchCommand } from '@/lib/launch-commands';
 import {
   launchTicketOnServer,
   launchTicketOnServerWithPassword,
@@ -72,6 +74,7 @@ export default function TicketDetailScreen() {
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [headerSheetOpen, setHeaderSheetOpen] = useState(false);
+  const [showNewTicketModal, setShowNewTicketModal] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
   const [showAcceptanceCriteria, setShowAcceptanceCriteria] = useState(true);
   const [documents, setDocuments] = useState<TicketDocument[]>([]);
@@ -289,13 +292,16 @@ export default function TicketDetailScreen() {
 
   const handleCopyCliCommand = useCallback(async () => {
     if (!ticket) return;
-    const selectedAgent =
-      assignedSelection?.agent ??
-      resolvedAssignedSelection?.agent ??
-      DEFAULT_AGENT_MODEL_SELECTION.agent;
-    await Clipboard.setStringAsync(`ovld attach ${ticket.id} ${selectedAgent}`);
-    Alert.alert('Copied', 'Attach command copied.');
-  }, [assignedSelection?.agent, resolvedAssignedSelection?.agent, ticket]);
+    const selectedSelection =
+      assignedSelection ?? resolvedAssignedSelection ?? DEFAULT_AGENT_MODEL_SELECTION;
+    await Clipboard.setStringAsync(
+      buildCliLaunchCommand(selectedSelection.agent, ticket.id, {
+        model: selectedSelection.model,
+        thinking: selectedSelection.thinking
+      })
+    );
+    Alert.alert('Copied', 'Launch command copied.');
+  }, [assignedSelection, resolvedAssignedSelection, ticket]);
 
   const handleCopyTicketId = useCallback(async () => {
     if (!ticket) return;
@@ -1179,6 +1185,12 @@ export default function TicketDetailScreen() {
         onCloseOverflow={() => setOverflowOpen(false)}
         onCopyTicketId={handleCopyTicketId}
         onReload={loadData}
+        onNewTicket={() => setShowNewTicketModal(true)}
+      />
+      <QuickCreateTicketModal
+        visible={showNewTicketModal}
+        onClose={() => setShowNewTicketModal(false)}
+        defaultProjectId={ticket.project_id}
       />
     </SafeAreaView>
   );

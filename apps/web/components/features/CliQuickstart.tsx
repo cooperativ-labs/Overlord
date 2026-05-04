@@ -100,11 +100,11 @@ export function CliQuickstart({
 
   const connectCommands = useMemo<QuickstartCommands>(
     () => ({
-      claude: claudeCommand ?? 'ovld connect claude',
-      codex: codexCommand ?? 'ovld connect codex',
-      cursor: cursorCommand ?? 'ovld connect cursor',
-      gemini: geminiCommand ?? 'ovld connect gemini',
-      opencode: opencodeCommand ?? 'ovld connect opencode'
+      claude: claudeCommand ?? 'ovld launch claude',
+      codex: codexCommand ?? 'ovld launch codex',
+      cursor: cursorCommand ?? 'ovld launch cursor',
+      gemini: geminiCommand ?? 'ovld launch gemini',
+      opencode: opencodeCommand ?? 'ovld launch opencode'
     }),
     [claudeCommand, codexCommand, cursorCommand, geminiCommand, opencodeCommand]
   );
@@ -186,7 +186,7 @@ export function CliQuickstart({
                   </>
                 ) : (
                   <CommandRow
-                    label="Attach to this ticket"
+                    label="Launch on this ticket"
                     command={connectCommands[selectedAgent]}
                   />
                 )}

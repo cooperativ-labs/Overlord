@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -17,6 +16,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import { useServerConnections } from '@/lib/server-connections-context';
 import { saveServerDeviceCredential } from '@/lib/server-device-credentials';
 import { getSupabase } from '@/lib/supabase';

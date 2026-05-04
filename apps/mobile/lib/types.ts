@@ -77,6 +77,7 @@ export interface FeedPost {
 export interface TicketListItem {
   id: string;
   title: string | null;
+  organization_id: number;
   status: string;
   priority: TicketPriority;
   execution_target: TicketExecutionTarget;
@@ -84,6 +85,7 @@ export interface TicketListItem {
   ticket_sequence: number;
   due_datetime: string | null;
   updated_at: string;
+  has_executing_objective?: boolean;
 }
 
 /** Full ticket detail view. */

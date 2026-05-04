@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -14,6 +13,7 @@ import {
 import type { PickedFile } from '@/components/DocumentAttachmentsSection';
 import { DocumentAttachmentsSection } from '@/components/DocumentAttachmentsSection';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import type {
   AgentModelSelection,
   Objective,

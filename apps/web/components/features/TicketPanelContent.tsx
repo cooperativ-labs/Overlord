@@ -156,10 +156,10 @@ export async function TicketPanelContent({
       .order('name', { ascending: true }),
     ticket.schedule_id
       ? supabase
-          .from('schedule')
-          .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
-          .eq('id', ticket.schedule_id)
-          .maybeSingle()
+        .from('schedule')
+        .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
+        .eq('id', ticket.schedule_id)
+        .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
@@ -207,20 +207,6 @@ export async function TicketPanelContent({
     gemini: agentConfigs.gemini?.flags ?? [],
     opencode: agentConfigs.opencode?.flags ?? []
   };
-  const { claudeCode, codex, cursor, gemini, opencode } = buildLaunchCommands({
-    platformUrl,
-    ticketId
-  });
-  const {
-    claudeCode: claudeResume,
-    codex: codexResume,
-    cursor: cursorResume,
-    gemini: geminiResume,
-    opencode: opencodeResume
-  } = buildResumeCommands({
-    platformUrl,
-    ticketId
-  });
   const ticketIdentifier = getTicketIdentifier(ticket.id);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
 
@@ -273,6 +259,26 @@ export async function TicketPanelContent({
       objectiveFileMentionPaths = [];
     }
   }
+
+  const { claudeCode, codex, cursor, gemini, opencode } = buildLaunchCommands({
+    platformUrl,
+    ticketId,
+    workingDirectory,
+    sshCommand: projectSshCommand,
+    remoteWorkingDirectory: projectRemoteWorkingDirectory,
+    agentFlags,
+    assignedAgent
+  });
+  const {
+    claudeCode: claudeResume,
+    codex: codexResume,
+    cursor: cursorResume,
+    gemini: geminiResume,
+    opencode: opencodeResume
+  } = buildResumeCommands({
+    platformUrl,
+    ticketId
+  });
   const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
   const taggingInspector = ticket.project_id
@@ -378,15 +384,15 @@ export async function TicketPanelContent({
                   initialSchedule={
                     schedule
                       ? {
-                          periodType: schedule.period_type,
-                          periodInterval: schedule.period_interval,
-                          daysOfWeek: Array.isArray(schedule.days_of_week)
-                            ? schedule.days_of_week
-                            : [],
-                          daysOfMonth: schedule.days_of_month ?? undefined,
-                          weeksOfMonth: schedule.weeks_of_month ?? undefined,
-                          timezone: schedule.timezone
-                        }
+                        periodType: schedule.period_type,
+                        periodInterval: schedule.period_interval,
+                        daysOfWeek: Array.isArray(schedule.days_of_week)
+                          ? schedule.days_of_week
+                          : [],
+                        daysOfMonth: schedule.days_of_month ?? undefined,
+                        weeksOfMonth: schedule.weeks_of_month ?? undefined,
+                        timezone: schedule.timezone
+                      }
                       : null
                   }
                 />
@@ -423,10 +429,10 @@ export async function TicketPanelContent({
               ticketId={ticketId}
               availableTools={ticket.available_tools}
               acceptanceCriteria={ticket.acceptance_criteria}
+              initialDocuments={initialDocuments}
+              inspector={taggingInspector}
             />
-            <TicketTaggingDebug inspector={taggingInspector} />
 
-            <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
 
             <ErrorBoundary>
               <TicketPanelLive

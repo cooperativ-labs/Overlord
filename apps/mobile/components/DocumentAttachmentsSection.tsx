@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import React from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 export type DocumentItem = {
   id: string;

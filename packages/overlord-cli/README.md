@@ -91,8 +91,8 @@ Top-level commands (see `ovld help`):
 - `auth` - `login`, `status`, `repair` (shared Desktop/CLI credentials), or `logout`
 - `tickets` - `create` or `list` (optional `--status`)
 - `ticket` - `context <ticketId>` to print context for one ticket
-- `connect`, `restart` - launch or resume an agent session
-- `run`, `resume` - legacy aliases for `connect` and `restart`
+- `launch`, `restart` - launch or resume an agent session
+- `connect`, `run`, `resume` - legacy aliases for `launch` and `restart`
 - `setup` - install the Overlord connector for an agent; `ovld setup [agent|all]` (interactive with no args). `ovld setup claude` also performs the one-time v3.25.0 to v4 Claude plugin migration
 - `update` - install the latest CLI release from npm
 - `doctor` - validate installed connectors and check for CLI updates

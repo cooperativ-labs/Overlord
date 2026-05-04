@@ -73,6 +73,124 @@ const agentIdentifierMap = {
 
 const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function toTomlString(value) {
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function buildExtraArgs(agent, options = {}) {
+  const args = [];
+  const extraFlags = Array.isArray(options.flags)
+    ? options.flags.map(flag => String(flag).trim()).filter(Boolean)
+    : [];
+
+  if (options.model) {
+    args.push('--model', options.model);
+  }
+
+  if (options.thinking) {
+    if (agent === 'claude') {
+      args.push('--effort', options.thinking);
+    } else if (agent === 'codex') {
+      args.push('-c', `model_reasoning_effort=${toTomlString(options.thinking)}`);
+    } else if (agent === 'gemini') {
+      args.push('--thinking-level', options.thinking);
+    }
+  }
+
+  return [...args, ...extraFlags];
+}
+
+function buildRemoteLaunchCommand(agent, options) {
+  const envParts = [];
+  for (const [key, value] of Object.entries({
+    OVERLORD_URL: process.env.OVERLORD_URL,
+    OVERLORD_ACCESS_TOKEN: process.env.OVERLORD_ACCESS_TOKEN,
+    OVERLORD_ORGANIZATION_ID: process.env.OVERLORD_ORGANIZATION_ID,
+    OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET,
+    TICKET_ID: process.env.TICKET_ID,
+    AGENT_IDENTIFIER: agentIdentifierMap[agent],
+    OVERLORD_MODEL_IDENTIFIER: options.model ?? '',
+    MODEL_IDENTIFIER: options.model ?? ''
+  })) {
+    if (typeof value === 'string') {
+      envParts.push(`export ${key}=${shellQuote(value)}`);
+    }
+  }
+
+  const nestedParts = ['ovld', 'launch', agent, '--ticket-id', shellQuote(process.env.TICKET_ID ?? '')];
+  if (options.launchMode === 'ask') {
+    nestedParts.push('--launch-mode', 'ask');
+  }
+  if (options.model) {
+    nestedParts.push('--model', shellQuote(options.model));
+  }
+  if (options.thinking) {
+    nestedParts.push('--thinking', shellQuote(options.thinking));
+  }
+  for (const flag of options.flags ?? []) {
+    nestedParts.push('--flag', shellQuote(flag));
+  }
+
+  const remoteCwd = typeof options.remoteWorkingDirectory === 'string'
+    ? options.remoteWorkingDirectory.trim()
+    : '';
+  const remotePrelude = [
+    '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"',
+    '[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"',
+    '[ -f "$HOME/.profile" ] && . "$HOME/.profile"',
+    'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
+    '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"',
+    'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"',
+    ...envParts,
+    remoteCwd ? `cd ${shellQuote(remoteCwd)}` : null,
+    nestedParts.join(' ')
+  ].filter(Boolean);
+
+  const innerCommand = remotePrelude.join('; ');
+  const remoteCommand =
+    options.serverMultiplexer === 'tmux'
+      ? buildTmuxWrappedCommand(innerCommand, options.tmuxCommand)
+      : innerCommand;
+
+  return `${options.sshCommand.trim()} ${shellQuote(remoteCommand)}`;
+}
+
+function buildTmuxWrappedCommand(innerCommand, tmuxCommand) {
+  const template = typeof tmuxCommand === 'string' && tmuxCommand.trim().includes('{script}')
+    ? tmuxCommand.trim()
+    : 'tmux new-session bash {script}';
+  const scriptCommand = `bash -lc ${shellQuote(innerCommand)}`;
+  return template.replaceAll('{script}', shellQuote(scriptCommand));
+}
+
+function printLauncherHelp() {
+  console.log(`Usage:
+  ovld launch <agent> --ticket-id <id> [options]
+  ovld connect <agent> --ticket-id <id> [options]   # alias for ovld launch
+  ovld restart <agent> --ticket-id <id> [options]
+
+Options:
+  --ticket-id <id>                  Ticket to launch or resume
+  --working-directory <path>        Change to a local working directory before launch
+  --launch-mode <run|ask>           Ask mode adjusts the fetched prompt context
+  --model <identifier>              Preferred model identifier
+  --thinking <level>                Agent reasoning/effort level
+  --flag <value>                    Extra agent flag (repeatable)
+  --ssh-command <command>           Launch remotely over SSH by running ovld on the target host
+  --remote-working-directory <path> Change to this path on the remote host before launch
+  --server-multiplexer <none|tmux>  Wrap remote launches in tmux
+  --tmux-command <template>         Remote tmux template; use {script} as the placeholder
+
+Notes:
+  - ovld launch is the primary user-facing launcher.
+  - ovld connect remains available as a compatibility alias.
+  - ovld restart keeps using the native resume flow when the target agent supports it.`);
+}
+
 function parseLauncherArgs(args) {
   const positionals = [];
   const flags = {};
@@ -102,11 +220,26 @@ function parseLauncherArgs(args) {
   return { positionals, flags };
 }
 
-async function runAgent(agent, mode = 'run') {
+function parseRepeatedFlags(args) {
+  const result = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--flag' && i + 1 < args.length) {
+      result.push(args[i + 1]);
+      i++;
+      continue;
+    }
+    if (arg.startsWith('--flag=')) {
+      result.push(arg.slice('--flag='.length));
+    }
+  }
+  return result;
+}
+
+async function runAgent(agent, mode = 'run', options = {}) {
   if (!agent || !supportedAgents.includes(agent)) {
-    console.error(
-      `Usage: ovld connect <agent> [--ticket-id <id>] | ovld restart <agent> [--ticket-id <id>]  (agent must be one of: ${supportedAgents.join(', ')})`
-    );
+    printLauncherHelp();
+    console.error(`\nAgent must be one of: ${supportedAgents.join(', ')}`);
     process.exit(1);
   }
 
@@ -116,7 +249,23 @@ async function runAgent(agent, mode = 'run') {
     process.exit(1);
   }
 
+  if (options.workingDirectory) {
+    process.chdir(options.workingDirectory);
+  }
+
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  if (options.sshCommand?.trim()) {
+    const remoteCommand = buildRemoteLaunchCommand(agent, options);
+    try {
+      execFileSync('sh', ['-lc', remoteCommand], { stdio: 'inherit', env: process.env });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(message);
+      process.exit(1);
+    }
+  }
+
   const context = await fetchContext(
     platformUrl,
     bearerToken,
@@ -127,6 +276,7 @@ async function runAgent(agent, mode = 'run') {
   );
 
   const childEnv = { ...process.env, AGENT_IDENTIFIER: agentIdentifierMap[agent] };
+  const extraArgs = buildExtraArgs(agent, options);
 
   try {
     if (agent === 'claude') {
@@ -136,12 +286,14 @@ async function runAgent(agent, mode = 'run') {
         const args = claudeSessionId
           ? ['--resume', claudeSessionId, context]
           : ['--continue', context];
+        args.unshift(...extraArgs);
         if (pluginDir) args.unshift('--plugin-dir', pluginDir);
         execFileSync('claude', args, { stdio: 'inherit', env: childEnv });
       } else {
         const args = [
           '--append-system-prompt',
           context,
+          ...extraArgs,
           'Begin working on this ticket. Start by calling the attach endpoint, then proceed with the objective described in your system prompt.'
         ];
         if (pluginDir) args.unshift('--plugin-dir', pluginDir);
@@ -157,21 +309,26 @@ async function runAgent(agent, mode = 'run') {
         const args = codexSessionId
           ? ['resume', codexSessionId, context]
           : ['resume', '--last', context];
+        args.splice(1, 0, ...extraArgs);
         execFileSync('codex', args, { stdio: 'inherit', env: childEnv });
       } else {
-        execFileSync('codex', [context], { stdio: 'inherit', env: childEnv });
+        execFileSync('codex', [...extraArgs, context], { stdio: 'inherit', env: childEnv });
       }
     } else if (agent === 'cursor') {
-      execFileSync('agent', [context], { stdio: 'inherit', env: childEnv });
+      execFileSync('agent', [...extraArgs, context], { stdio: 'inherit', env: childEnv });
     } else if (agent === 'opencode') {
       if (mode === 'resume') {
         const openCodeSessionId = process.env.OPENCODE_SESSION_ID?.trim();
         const args = openCodeSessionId
           ? ['--continue', '--session', openCodeSessionId, '--prompt', context]
           : ['--continue', '--prompt', context];
+        args.unshift(...extraArgs);
         execFileSync('opencode', args, { stdio: 'inherit', env: childEnv });
       } else {
-        execFileSync('opencode', ['--prompt', context], { stdio: 'inherit', env: childEnv });
+        execFileSync('opencode', [...extraArgs, '--prompt', context], {
+          stdio: 'inherit',
+          env: childEnv
+        });
       }
     } else if (agent === 'gemini') {
       // Write context to a temp file. Passing inline content as a positional arg
@@ -188,13 +345,13 @@ async function runAgent(agent, mode = 'run') {
         const resumeTarget = geminiSessionId ?? 'latest';
         execFileSync(
           'gemini',
-          ['--resume', resumeTarget, '--include-directories', os.tmpdir(), `@${contextFile}`],
+          [...extraArgs, '--resume', resumeTarget, '--include-directories', os.tmpdir(), `@${contextFile}`],
           { stdio: 'inherit', env: childEnv }
         );
       } else {
         execFileSync(
           'gemini',
-          ['--include-directories', os.tmpdir(), `@${contextFile}`],
+          [...extraArgs, '--include-directories', os.tmpdir(), `@${contextFile}`],
           { stdio: 'inherit', env: childEnv }
         );
       }
@@ -203,12 +360,12 @@ async function runAgent(agent, mode = 'run') {
     const isResume = mode === 'resume';
     const noSessionHint =
       agent === 'claude'
-        ? `No prior Claude session was found. Start one with \`ovld connect claude --ticket-id <ticket-id>\` first.`
+        ? `No prior Claude session was found. Start one with \`ovld launch claude --ticket-id <ticket-id>\` first.`
         : agent === 'codex'
-          ? `No prior Codex session was found. Start one with \`ovld connect codex --ticket-id <ticket-id>\` first.`
+          ? `No prior Codex session was found. Start one with \`ovld launch codex --ticket-id <ticket-id>\` first.`
           : agent === 'opencode'
-            ? `No prior OpenCode session was found. Start one with \`ovld connect opencode --ticket-id <ticket-id>\` first.`
-          : '';
+            ? `No prior OpenCode session was found. Start one with \`ovld launch opencode --ticket-id <ticket-id>\` first.`
+            : '';
     const message = error instanceof Error ? error.message : String(error);
 
     if (isResume && noSessionHint) {
@@ -221,13 +378,41 @@ async function runAgent(agent, mode = 'run') {
 }
 
 export async function runLauncherCommand(command, args) {
-  const normalizedCommand = command === 'connect' ? 'run' : command === 'restart' ? 'resume' : command;
+  if (args[0] === '--help' || args[0] === '-h' || args[0] === 'help') {
+    printLauncherHelp();
+    return;
+  }
+
+  const normalizedCommand =
+    command === 'launch' || command === 'connect'
+      ? 'run'
+      : command === 'restart'
+        ? 'resume'
+        : command;
   const { positionals, flags } = parseLauncherArgs(args);
+  const repeatedFlags = parseRepeatedFlags(args);
   const ticketId = typeof flags['ticket-id'] === 'string' ? flags['ticket-id'].trim() : '';
 
   if (ticketId) {
     process.env.TICKET_ID = ticketId;
   }
+
+  const launchOptions = {
+    workingDirectory:
+      typeof flags['working-directory'] === 'string' ? flags['working-directory'].trim() : '',
+    launchMode: flags['launch-mode'] === 'ask' ? 'ask' : 'run',
+    model: typeof flags.model === 'string' ? flags.model.trim() : '',
+    thinking: typeof flags.thinking === 'string' ? flags.thinking.trim() : '',
+    flags: repeatedFlags,
+    sshCommand: typeof flags['ssh-command'] === 'string' ? flags['ssh-command'].trim() : '',
+    remoteWorkingDirectory:
+      typeof flags['remote-working-directory'] === 'string'
+        ? flags['remote-working-directory'].trim()
+        : '',
+    serverMultiplexer:
+      flags['server-multiplexer'] === 'tmux' ? 'tmux' : 'none',
+    tmuxCommand: typeof flags['tmux-command'] === 'string' ? flags['tmux-command'].trim() : ''
+  };
 
   if (normalizedCommand === 'run') {
     // If no ticket-id flag and no TICKET_ID env var, present interactive ticket search
@@ -235,12 +420,12 @@ export async function runLauncherCommand(command, args) {
       await runAttachCommand([undefined, positionals[0]]);
       return;
     }
-    await runAgent(positionals[0]);
+    await runAgent(positionals[0], 'run', launchOptions);
     return;
   }
 
   if (normalizedCommand === 'resume') {
-    await runAgent(positionals[0], 'resume');
+    await runAgent(positionals[0], 'resume', launchOptions);
     return;
   }
 

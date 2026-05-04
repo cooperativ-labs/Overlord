@@ -181,141 +181,141 @@ export function TicketDocumentUpload({
   const documentCount = documents.length + uploading.filter(u => u.progress === 'uploading').length;
 
   return (
-    <Accordion type="single" collapsible>
-      <AccordionItem value="documents">
+
+    <AccordionItem value="documents" className="border-b-0">
+      <div
+        className={cn(
+          'rounded-sm transition-colors',
+          isDragOver && 'ring-2 ring-primary ring-offset-2 bg-primary/5'
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
+          <span className="flex items-center gap-2">
+            Documents
+            {documentCount > 0 && (
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
+                {documentCount}
+              </span>
+            )}
+            {isDragOver && (
+              <span className="text-[10px] font-normal normal-case tracking-normal text-primary">
+                Drop to upload
+              </span>
+            )}
+          </span>
+        </AccordionTrigger>
+      </div>
+      <AccordionContent>
+        {/* Drop zone */}
         <div
           className={cn(
-            'rounded-sm transition-colors',
-            isDragOver && 'ring-2 ring-primary ring-offset-2 bg-primary/5'
+            'relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-6 transition-colors',
+            isDragOver
+              ? 'border-primary bg-primary/5'
+              : 'border-muted-foreground/25 hover:border-muted-foreground/40'
           )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          onClick={() => inputRef.current?.click()}
         >
-          <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
-            <span className="flex items-center gap-2">
-              Documents
-              {documentCount > 0 && (
-                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
-                  {documentCount}
-                </span>
-              )}
-              {isDragOver && (
-                <span className="text-[10px] font-normal normal-case tracking-normal text-primary">
-                  Drop to upload
-                </span>
-              )}
-            </span>
-          </AccordionTrigger>
+          <Upload className="mb-2 h-5 w-5 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Drag & drop files here, or <span className="text-primary underline">browse</span>
+          </p>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleInputChange}
+          />
         </div>
-        <AccordionContent>
-          {/* Drop zone */}
-          <div
-            className={cn(
-              'relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-6 transition-colors',
-              isDragOver
-                ? 'border-primary bg-primary/5'
-                : 'border-muted-foreground/25 hover:border-muted-foreground/40'
-            )}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => inputRef.current?.click()}
-          >
-            <Upload className="mb-2 h-5 w-5 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Drag & drop files here, or <span className="text-primary underline">browse</span>
-            </p>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleInputChange}
-            />
+
+        {/* Uploading status */}
+        {uploading.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {uploading.map(u => (
+              <div
+                key={u.id}
+                className={cn(
+                  'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
+                  u.progress === 'error'
+                    ? 'border-destructive/50 bg-destructive/5'
+                    : 'bg-muted/30'
+                )}
+              >
+                {u.progress === 'uploading' ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+                ) : null}
+                <span className="flex-1 truncate">{u.name}</span>
+                {u.progress === 'error' && (
+                  <>
+                    <span className="text-xs text-destructive">{u.error ?? 'Upload failed'}</span>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={e => {
+                        e.stopPropagation();
+                        dismissError(u.id);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
+        )}
 
-          {/* Uploading status */}
-          {uploading.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {uploading.map(u => (
-                <div
-                  key={u.id}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md border px-3 py-2 text-sm',
-                    u.progress === 'error'
-                      ? 'border-destructive/50 bg-destructive/5'
-                      : 'bg-muted/30'
-                  )}
+        {/* Document list */}
+        {documents.length > 0 && (
+          <div className="mt-3 space-y-1">
+            {documents.map(doc => (
+              <div
+                key={doc.id}
+                className="group flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted/40"
+              >
+                <span className="shrink-0 text-sm" aria-hidden="true">
+                  {fileTypeIcon(doc.fileType)}
+                </span>
+                <button
+                  type="button"
+                  className="flex-1 truncate text-left text-sm text-foreground hover:underline"
+                  onClick={() => handleDownload(doc)}
                 >
-                  {u.progress === 'uploading' ? (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-                  ) : null}
-                  <span className="flex-1 truncate">{u.name}</span>
-                  {u.progress === 'error' && (
-                    <>
-                      <span className="text-xs text-destructive">{u.error ?? 'Upload failed'}</span>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={e => {
-                          e.stopPropagation();
-                          dismissError(u.id);
-                        }}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </>
+                  {doc.label}
+                </button>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {formatFileSize(doc.fileSize)}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
+                  disabled={deletingIds.has(doc.id)}
+                  onClick={e => {
+                    e.stopPropagation();
+                    handleDelete(doc);
+                  }}
+                >
+                  {deletingIds.has(doc.id) ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
                   )}
-                </div>
-              ))}
-            </div>
-          )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </AccordionContent>
+    </AccordionItem>
 
-          {/* Document list */}
-          {documents.length > 0 && (
-            <div className="mt-3 space-y-1">
-              {documents.map(doc => (
-                <div
-                  key={doc.id}
-                  className="group flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted/40"
-                >
-                  <span className="shrink-0 text-sm" aria-hidden="true">
-                    {fileTypeIcon(doc.fileType)}
-                  </span>
-                  <button
-                    type="button"
-                    className="flex-1 truncate text-left text-sm text-foreground hover:underline"
-                    onClick={() => handleDownload(doc)}
-                  >
-                    {doc.label}
-                  </button>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatFileSize(doc.fileSize)}
-                  </span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
-                    disabled={deletingIds.has(doc.id)}
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleDelete(doc);
-                    }}
-                  >
-                    {deletingIds.has(doc.id) ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </AccordionContent>
-      </AccordionItem>
-    </Accordion>
   );
 }

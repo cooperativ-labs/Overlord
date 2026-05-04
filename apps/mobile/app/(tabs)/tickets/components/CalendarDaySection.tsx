@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { format, isToday } from 'date-fns';
 import { Pressable, Text, View } from 'react-native';
 
 import { useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 import type { TicketWithProject } from './shared';
 import { TicketCard } from './TicketCard';

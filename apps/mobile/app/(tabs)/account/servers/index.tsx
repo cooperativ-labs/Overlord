@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import { useServerConnections } from '@/lib/server-connections-context';
 import type { Server, ServerStatus } from '@/lib/types';
 

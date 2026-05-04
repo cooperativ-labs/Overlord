@@ -25,6 +25,7 @@ type TicketListStatusGroupProps = {
   ticketUrlBase?: string;
   showOrganizationName: boolean;
   projectId?: string;
+  completeStatusName?: string;
   isExpanded: boolean;
   isCollapsed: boolean;
   isDropTarget: boolean;
@@ -43,6 +44,7 @@ type TicketListStatusGroupProps = {
   onClearStatusReorderTarget: () => void;
   onTicketDragStart: (ticketId: string, event: React.DragEvent<HTMLDivElement>) => void;
   onTicketDragEnd: () => void;
+  onCompleteTicket?: (ticketId: string) => void;
   onMarkUnread?: (ticketId: string) => void;
   onCreateTicket: (
     status: string,
@@ -64,6 +66,7 @@ export function TicketListStatusGroup({
   ticketUrlBase,
   showOrganizationName,
   projectId,
+  completeStatusName,
   isExpanded,
   isCollapsed,
   isDropTarget,
@@ -82,6 +85,7 @@ export function TicketListStatusGroup({
   onClearStatusReorderTarget,
   onTicketDragStart,
   onTicketDragEnd,
+  onCompleteTicket,
   onMarkUnread,
   onCreateTicket,
   onCreateAndOpenTicket
@@ -248,6 +252,8 @@ export function TicketListStatusGroup({
                       isSelected={isSelected}
                       showOrganizationName={showOrganizationName}
                       showProjectName={!projectId}
+                      completeStatusName={completeStatusName}
+                      onCompleteTicket={onCompleteTicket}
                       onMarkUnread={onMarkUnread}
                       onDragStart={onTicketDragStart}
                       onDragEnd={onTicketDragEnd}

@@ -494,7 +494,7 @@ export function DemoContent() {
               </Button>
               <Button variant="outline" className="gap-2" onClick={handleRun}>
                 <TerminalSquare className="h-4 w-4" />
-                ovld connect
+                ovld launch
               </Button>
             </div>
 

@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Bot, GripVertical, Tag, UserRound } from 'lucide-react';
+import { Bot, Check, GripVertical, Tag, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
@@ -17,6 +17,63 @@ import {
   ProjectColorDot,
   TicketPriorityContextMenu
 } from './TicketCardPrimitives';
+
+function parseHexColor(value: string): { r: number; g: number; b: number } | null {
+  const normalized = value.trim();
+  const hex = normalized.startsWith('#') ? normalized.slice(1) : normalized;
+
+  if (hex.length === 3) {
+    const [r, g, b] = hex.split('');
+    if (!r || !g || !b) return null;
+    return {
+      r: Number.parseInt(r + r, 16),
+      g: Number.parseInt(g + g, 16),
+      b: Number.parseInt(b + b, 16)
+    };
+  }
+
+  if (hex.length === 6) {
+    return {
+      r: Number.parseInt(hex.slice(0, 2), 16),
+      g: Number.parseInt(hex.slice(2, 4), 16),
+      b: Number.parseInt(hex.slice(4, 6), 16)
+    };
+  }
+
+  return null;
+}
+
+function getTicketCheckboxColors(projectColor: string | null | undefined) {
+  if (!projectColor) {
+    return {
+      borderColor: undefined,
+      backgroundColor: undefined,
+      completedBackgroundColor: undefined,
+      checkColor: undefined
+    };
+  }
+
+  const rgb = parseHexColor(projectColor);
+  if (!rgb) {
+    return {
+      borderColor: projectColor,
+      backgroundColor: `${projectColor}22`,
+      completedBackgroundColor: projectColor,
+      checkColor: '#ffffff'
+    };
+  }
+
+  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+  const foreground = luminance > 0.6 ? '#111827' : '#ffffff';
+  const tintedBackground = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.14)`;
+
+  return {
+    borderColor: projectColor,
+    backgroundColor: tintedBackground,
+    completedBackgroundColor: projectColor,
+    checkColor: foreground
+  };
+}
 
 const executionTargetConfig = {
   agent: {
@@ -37,6 +94,8 @@ export default function TicketListCard({
   isSelected,
   showOrganizationName: _showOrganizationName = false,
   showProjectName = false,
+  completeStatusName,
+  onCompleteTicket,
   onMarkUnread,
   onDragStart,
   onDragEnd
@@ -46,6 +105,8 @@ export default function TicketListCard({
   isSelected: boolean;
   showOrganizationName?: boolean;
   showProjectName?: boolean;
+  completeStatusName?: string;
+  onCompleteTicket?: (ticketId: string) => void;
   onMarkUnread?: (ticketId: string) => void;
   onDragStart?: (ticketId: string, event: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd?: () => void;
@@ -58,6 +119,11 @@ export default function TicketListCard({
   const isAgentRunning = ticket.has_executing_objective === true;
   const hasUnopenedWaitingResponse = ticket.has_unopened_waiting_response === true;
   const hasUnopenedReview = ticket.is_read === false;
+  const normalizedTicketStatus = ticket.status.trim().toLowerCase();
+  const normalizedCompleteStatus = completeStatusName?.trim().toLowerCase();
+  const isComplete =
+    normalizedCompleteStatus !== undefined && normalizedTicketStatus === normalizedCompleteStatus;
+  const checkboxColors = getTicketCheckboxColors(ticket.project_color);
 
   const {
     Icon: ExecutionIcon,
@@ -84,12 +150,13 @@ export default function TicketListCard({
             isAgentRunning && 'animate-pulse',
             isDragging && 'opacity-40',
             isSelected && 'bg-muted/50 border-border',
-            hasUnopenedReview && 'bg-sky-50/40 dark:bg-sky-950/15'
+            hasUnopenedReview && 'bg-sky-50/40 dark:bg-sky-950/15',
+            isComplete && 'opacity-60 saturate-0'
           )}
         >
           {/* Running agent shimmer */}
           {isAgentRunning && (
-            <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] overflow-hidden rounded-md bg-linear-to-r from-transparent via-emerald-500/10 to-transparent" />
+            <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] overflow-hidden rounded-md bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
           )}
 
           {/* Drag handle — activates dnd-kit within-group reorder */}
@@ -101,12 +168,52 @@ export default function TicketListCard({
             <GripVertical className="h-3.5 w-3.5" />
           </span>
 
-          {/* Project color dot */}
-          <ProjectColorDot color={ticket.project_color} name={ticket.project_name} size="sm" />
+          {completeStatusName ? (
+            <button
+              type="button"
+              aria-label={isComplete ? 'Ticket completed' : 'Mark ticket complete'}
+              aria-pressed={isComplete}
+              disabled={isComplete}
+              className={cn(
+                'flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors',
+                isComplete ? '' : 'text-transparent',
+                isComplete && 'cursor-default'
+              )}
+              style={{
+                borderColor: ticket.project_color ? checkboxColors.borderColor : undefined,
+                backgroundColor:
+                  isComplete && ticket.project_color
+                    ? checkboxColors.completedBackgroundColor
+                    : ticket.project_color
+                      ? checkboxColors.backgroundColor
+                      : undefined,
+                color: isComplete && ticket.project_color ? checkboxColors.checkColor : undefined
+              }}
+              title={ticket.project_name ?? 'Project'}
+              onPointerDown={e => {
+                e.stopPropagation();
+              }}
+              onClick={e => {
+                e.stopPropagation();
+                if (!isComplete) {
+                  onCompleteTicket?.(ticket.id);
+                }
+              }}
+            >
+              <Check className="h-3 w-3" />
+            </button>
+          ) : (
+            <ProjectColorDot color={ticket.project_color} name={ticket.project_name} size="sm" />
+          )}
 
           {/* Title + delegate + tags */}
           <div className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-medium leading-snug">
+            <span
+              className={cn(
+                'block truncate text-[13px] font-medium leading-snug',
+                isComplete && 'text-muted-foreground'
+              )}
+            >
               {getDisplayTitle(ticket)}
             </span>
             {ticket.delegate ? (

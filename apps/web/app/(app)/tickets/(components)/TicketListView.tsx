@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CheckCheck, Circle, Eye, NotebookPen, Play } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { toast } from 'sonner';
 
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,6 +35,7 @@ import {
   getWaitingRaisedWhileOpenMap,
   markTicketWaitingOpened
 } from '@/lib/helpers/ticket-waiting-response';
+import { getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { Ticket } from './KanbanCard';
@@ -460,6 +462,15 @@ export default function TicketListView({
     return groups;
   }, [orderedStatuses, filteredSortedTickets]);
 
+  const completeStatusName = useMemo(
+    () =>
+      statuses.find(
+        status =>
+          status.status_type === 'complete' && status.name.trim().toLowerCase() !== 'cancelled'
+      )?.name ?? statuses.find(status => status.status_type === 'complete')?.name,
+    [statuses]
+  );
+
   const hasTickets = tickets.length > 0;
 
   useEffect(() => {
@@ -533,6 +544,34 @@ export default function TicketListView({
       placement: 'bottom'
     });
     clearTicketDragState();
+  }
+
+  function handleCompleteTicket(ticketId: string) {
+    if (!completeStatusName) return;
+    const ticket = tickets.find(currentTicket => currentTicket.id === ticketId);
+    if (!ticket || ticket.status === completeStatusName) return;
+
+    const previousStatus = ticket.status;
+    updateStatusMutation.mutate({
+      ticketId,
+      status: completeStatusName,
+      placement: 'bottom'
+    });
+
+    toast.success(`Completed: ${getDisplayTitle(ticket)}`, {
+      position: 'bottom-center',
+      duration: 5000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          updateStatusMutation.mutate({
+            ticketId,
+            status: previousStatus,
+            placement: 'top'
+          });
+        }
+      }
+    });
   }
 
   function handleTicketDragStart(ticketId: string, event: React.DragEvent<HTMLDivElement>) {
@@ -837,6 +876,7 @@ export default function TicketListView({
                   ticketUrlBase={ticketUrlBase}
                   showOrganizationName={showOrganizationName}
                   projectId={projectId}
+                  completeStatusName={completeStatusName}
                   isExpanded={isExpanded}
                   isCollapsed={isCollapsed}
                   isDropTarget={isDropTarget}
@@ -855,6 +895,7 @@ export default function TicketListView({
                   onClearStatusReorderTarget={() => setDropTargetStatusForReorder(null)}
                   onTicketDragStart={handleTicketDragStart}
                   onTicketDragEnd={handleTicketDragEnd}
+                  onCompleteTicket={handleCompleteTicket}
                   onMarkUnread={handleMarkUnread}
                   onCreateTicket={handleCreateTicket}
                   onCreateAndOpenTicket={handleCreateAndOpenTicket}

@@ -35,7 +35,8 @@ Usage:
   ${primaryCommand} tickets <subcommand>       Create or list tickets
   ${primaryCommand} ticket <subcommand>        Work with a single ticket
   ${primaryCommand} protocol <subcommand>      Agent workflow commands
-  ${primaryCommand} connect <agent>            Launch an agent on a ticket
+  ${primaryCommand} launch <agent>             Launch an agent on a ticket
+  ${primaryCommand} connect <agent>            Launch an agent on a ticket (legacy alias)
   ${primaryCommand} restart <agent>            Resume an agent session
   ${primaryCommand} setup [agent|all]          Install Overlord agent connector (interactive if no args)
   ${primaryCommand} update                    Install the latest CLI version from npm
@@ -151,8 +152,9 @@ export async function runCli({ primaryCommand }) {
     return;
   }
 
-  // Launcher commands (`run` / `resume` kept as legacy aliases)
+  // Launcher commands (`connect`, `run`, and `resume` kept as legacy aliases)
   if (
+    command === 'launch' ||
     command === 'connect' ||
     command === 'restart' ||
     command === 'run' ||

@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -10,6 +9,7 @@ import {
   useThemedStyles,
   useThemePreference
 } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 const APPEARANCE_OPTIONS: { value: ThemePreference; label: string; description: string }[] = [
   { value: 'system', label: 'System', description: 'Match the device appearance automatically.' },

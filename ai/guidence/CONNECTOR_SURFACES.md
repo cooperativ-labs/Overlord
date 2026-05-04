@@ -67,11 +67,17 @@ Managed files (Markdown format):
 ### 3. Local launch path
 
 - Launch service:
-  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-launcher.ts)
+- Human CLI launcher:
+  [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
+- Shared copy-command builder:
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 
 Command pattern:
 ```
 claude --append-system-prompt "$(cat <context-file>)" [--settings <temp-settings>] [--model <model>] [--effort <level>] <start-prompt>
+
+ovld launch claude --ticket-id <id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -79,6 +85,7 @@ Checklist:
 - Bundle not installed → temp settings file with per-session hook is passed via `--settings`
 - `instructionMode=bundle` is passed to context route when bundle is installed
 - Model flag: `--model`; thinking/effort flag: `--effort`
+- Desktop local launches intentionally do **not** shell out to `ovld launch`; they prefetch context, write temp hook/settings files, and avoid shell-quoting edge cases before spawning Claude directly
 
 ### 4. Onboarding
 
@@ -128,9 +135,13 @@ Checklist:
 ### 2. Local launch path
 
 - Electron launch service:
-  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-launcher.ts)
+- Human CLI launcher:
+  [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
+- Shared copy-command builder:
+  [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 - Context route:
-  [route.ts](/Users/jake/Development/Cooperativ/Overlord/app/api/protocol/context/[ticketId]/route.ts)
+  [route.ts](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/api/protocol/context/[ticketId]/route.ts)
 - Prompt builder:
   [ticket-prompt.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/ticket-prompt.ts)
 - Capability resolver:
@@ -139,6 +150,8 @@ Checklist:
 Command pattern:
 ```
 codex [--model <model>] [-c model_reasoning_effort="<level>"] "$(cat <context-file>)"
+
+ovld launch codex --ticket-id <id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -149,6 +162,7 @@ Checklist:
 - Prompt text tells Codex to run `ovld auth repair` itself on protocol auth failures before asking the user to log in again or proceed without Overlord updates
 - Prompt text tells Codex to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
 - Thinking/effort flag uses `-c model_reasoning_effort=<value>` (TOML inline format)
+- Desktop local launches intentionally stay on the direct Electron path instead of delegating to `ovld launch`; `ovld launch` is the copy/paste surface and remote shell entrypoint
 
 ### 3. Cloud / headless Codex setup
 
@@ -178,14 +192,17 @@ Checklist:
 - Codex is not presented as a bundle-backed agent
 - Codex connector features list includes: home-local plugin with bundled skill, legacy bundle migration cleanup, permission prefix rules
 
-### 5. CLI legacy compatibility
+### 5. CLI launch + compatibility
 
-- Setup command:
-  [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs)
+- CLI launcher:
+  [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
+- CLI help/index:
+  [index.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/index.mjs)
 
 Checklist:
-- `ovld setup codex` installs the local Codex plugin bundle
-- Help text advertises Codex as a supported setup target
+- `ovld launch codex` is the documented primary launch command
+- `ovld connect codex` remains a compatibility alias for one-command launches
+- `ovld launch` supports Desktop-parity shell flags: `--working-directory`, `--launch-mode`, `--model`, `--thinking`, repeated `--flag`, `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command`
 
 ### 6. Demo / product copy
 
@@ -220,11 +237,15 @@ Managed files:
 ### 2. Local launch path
 
 - Launch service:
-  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-launcher.ts)
+- Human CLI launcher:
+  [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 
 Command pattern:
 ```
 agent [--model <model>] "$(cat <context-file>)"
+
+ovld launch cursor --ticket-id <id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -268,11 +289,15 @@ Note: Gemini uses `{{args}}` for argument interpolation (vs `$ARGUMENTS` for Cla
 ### 2. Local launch path
 
 - Launch service:
-  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-launcher.ts)
+- Human CLI launcher:
+  [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 
 Command pattern:
 ```
 gemini [--model <model>] [--thinking-level <level>] "$(cat <context-file>)"
+
+ovld launch gemini --ticket-id <id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -329,11 +354,15 @@ Managed files (Markdown with `agent: build` frontmatter):
 ### 3. Local launch path
 
 - Launch service:
-  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-launcher.ts)
+  [agent-launcher.ts](/Users/jake/Development/Cooperativ/Overlord/apps/desktop/electron/services/agent-launcher.ts)
+- Human CLI launcher:
+  [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 
 Command pattern:
 ```
 opencode [--model <model>] --prompt "$(cat <context-file>)"
+
+ovld launch opencode --ticket-id <id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -398,6 +427,8 @@ Notes:
 Source-of-truth files:
 - API routes: [apps/web/app/api/protocol/](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/api/protocol)
 - CLI dispatcher: [protocol.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/protocol.mjs)
+- Human CLI launcher: [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
+- Shared copy-command builder: [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 - MCP tool definitions: [tools.ts](/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts)
 - Local Codex MCP shim: [overlord-mcp.mjs](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs)
 - Plugin skill docs: [plugins/claude/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/claude/skills/overlord-ticket/SKILL.md), [plugins/cursor/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/cursor/skills/overlord-ticket/SKILL.md), [plugins/overlord/skills/overlord-ticket/SKILL.md](/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/skills/overlord-ticket/SKILL.md)
@@ -439,6 +470,10 @@ Checklist:
   [AgentsAndMcpPage.tsx](/Users/jake/Development/Cooperativ/Overlord/components/modals/settings/AgentsAndMcpPage.tsx)
 - CLI settings page:
   [CliPage.tsx](/Users/jake/Development/Cooperativ/Overlord/components/modals/settings/CliPage.tsx)
+- Ticket copy surfaces:
+  [CliQuickstart.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/CliQuickstart.tsx)
+  [TicketPanelHeader.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/TicketPanelHeader.tsx)
+  [TicketDetailScreen.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/mobile/app/(tabs)/tickets/[ticketId]/components/TicketDetailScreen.tsx)
 
 ### IPC (Electron)
 
@@ -464,6 +499,7 @@ When changing connector integration, verify the relevant agent(s):
 - Plugin install status in Settings reflects plugin files and `default.rules`
 - Installing the plugin cleans up legacy Codex bundle remnants
 - Launching Codex from Overlord produces Codex-specific workflow instructions in the prompt
+- Copyable ticket commands use `ovld launch ... --ticket-id <id>` and include assigned model/thinking defaults when Codex is selected
 - Codex cloud instructions produce a valid MCP config snippet (`~/.codex/config.toml`)
 - User-facing pages advertise `ovld setup codex` as the CLI install path and do not reference `~/.codex/AGENTS.md` as the local Codex path
 

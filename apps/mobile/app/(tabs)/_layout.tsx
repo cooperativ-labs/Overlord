@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Redirect } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useState } from 'react';
@@ -7,6 +6,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { useAuth } from '@/lib/auth-context';
 import { useThemeColors } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 function AddTicketAccessory({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();

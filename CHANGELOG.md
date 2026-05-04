@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.11.0] - 2026-05-04:08:51
+
+### Added
+- Primary `ovld launch <agent>` CLI flow (with `ovld connect` kept as a compatibility alias), including help text for launcher options.
+- Launcher flags for local working directory, run versus ask launch mode, model and thinking or effort level, repeatable extra `--flag` values, SSH remote execution, remote working directory, and optional tmux wrapping for remote sessions.
+- Shared ticket launch command builder that emits `ovld launch` lines with proper shell quoting and carries workspace, SSH, multiplexer, per-agent flags, and assigned-agent model or thinking into copy or resume surfaces.
+- Mobile quick-create ticket modal gains document attachments and reuses the agent model chooser for new tickets.
+
+### Fixed
+- None.
+
+### Changed
+- Web ticket list cards and status grouping show refined layout and metadata; ticket panel refreshes document upload (clearer drop zone and browse affordance), tools and criteria strip, tagging debug, and CLI quickstart copy to match the launcher story.
+- Mobile tickets list, cards, section headers, create flow, and ticket detail stack pick up styling and behavior updates aligned with the web ticket experience.
+- Demo app ticket mock data and settings copy stay aligned with current CLI and ticket UX.
+
+### Security
+- None.
+
+### Test
+- Add unit coverage for shared launch-command construction.
+
+### Documentation
+- Refresh connector-surface guidance with `ovld launch` examples, corrected file paths, and notes on desktop direct launch versus human-facing CLI launch.
+- Update drift-review skill instructions for connector alignment checks.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.11.0`.
+- Refresh the mobile app icon asset and related Xcode project references.
+
 ## [5.10.0] - 2026-05-01:06:46
 
 ### Added

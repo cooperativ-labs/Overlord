@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, Text } from 'react-native';
 
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 import { createStyles } from './ticket-detail-styles';
 
@@ -9,12 +9,14 @@ export function TicketDetailModals({
   overflowOpen,
   onCloseOverflow,
   onCopyTicketId,
-  onReload
+  onReload,
+  onNewTicket
 }: {
   overflowOpen: boolean;
   onCloseOverflow: () => void;
   onCopyTicketId: () => Promise<void>;
   onReload: () => Promise<void>;
+  onNewTicket?: () => void;
 }) {
   const styles = useThemedStyles(createStyles);
   return (
@@ -27,6 +29,16 @@ export function TicketDetailModals({
       >
         <Pressable style={styles.modalBackdrop} onPress={onCloseOverflow}>
           <Pressable style={styles.modalCard} onPress={() => undefined}>
+            {onNewTicket ? (
+              <OverflowAction
+                icon="ticket-outline"
+                label="New ticket"
+                onPress={() => {
+                  onCloseOverflow();
+                  onNewTicket();
+                }}
+              />
+            ) : null}
             <OverflowAction
               icon="copy-outline"
               label="Copy ticket ID"

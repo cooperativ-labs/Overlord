@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView } from 'react-native';
+import { RefreshControl, ScrollView } from 'react-native';
 import DraggableFlatList, {
   type RenderItemParams,
   ScaleDecorator
@@ -12,6 +12,7 @@ import {
   buildOrderedSections,
   type SectionItem,
   type StatusFilter,
+  type TicketStatusDefinition,
   type TicketWithProject
 } from './shared';
 import { TicketCard } from './TicketCard';
@@ -24,11 +25,13 @@ type TicketsSectionedListProps = {
   statusFilter: StatusFilter;
   filterProject: { id: string; name: string; color: string } | null;
   projects: { id: string; name: string; color: string }[];
+  statusDefinitions: TicketStatusDefinition[];
   projectColor: string;
   collapsedStatuses: Set<string>;
   refreshing: boolean;
   onRefresh: () => Promise<void>;
   onTicketPress: (ticketId: string) => void;
+  onCompleteTicket: (ticketId: string) => void;
   onToggleCollapsed: (statusName: string) => void;
   onSectionedReorder: (nextSectioned: Map<string, TicketWithProject[]>) => void;
 };
@@ -39,11 +42,13 @@ export function TicketsSectionedList({
   statusFilter,
   filterProject,
   projects,
+  statusDefinitions,
   projectColor,
   collapsedStatuses,
   refreshing,
   onRefresh,
   onTicketPress,
+  onCompleteTicket,
   onToggleCollapsed,
   onSectionedReorder
 }: TicketsSectionedListProps) {
@@ -51,8 +56,8 @@ export function TicketsSectionedList({
   const styles = useThemedStyles(createTicketsScreenStyles);
 
   const sections = useMemo(
-    () => buildOrderedSections(tickets, statusFilter),
-    [tickets, statusFilter]
+    () => buildOrderedSections(tickets, statusFilter, statusDefinitions),
+    [tickets, statusDefinitions, statusFilter]
   );
 
   const flattened = useMemo<SectionItem[]>(() => {
@@ -116,6 +121,11 @@ export function TicketsSectionedList({
         return (
           <SectionHeader
             status={item.status}
+            organizationId={
+              sections.find(section => section.status === item.status)?.tickets[0]
+                ?.organization_id ?? null
+            }
+            statusDefinitions={statusDefinitions}
             count={item.count}
             collapsed={item.collapsed}
             onToggle={() => onToggleCollapsed(item.status)}
@@ -124,24 +134,29 @@ export function TicketsSectionedList({
       }
       return (
         <ScaleDecorator>
-          <Pressable
+          <TicketCard
+            ticket={item.ticket}
+            projectColor={projectColor}
+            projects={projects}
+            showProjectName={filterProject === null}
+            isActive={isActive}
             onPress={() => onTicketPress(item.ticket.id)}
-            onLongPress={drag}
-            disabled={isActive}
-            delayLongPress={180}
-          >
-            <TicketCard
-              ticket={item.ticket}
-              projectColor={projectColor}
-              projects={projects}
-              showProjectName={filterProject === null}
-              onPress={() => onTicketPress(item.ticket.id)}
-            />
-          </Pressable>
+            onComplete={() => onCompleteTicket(item.ticket.id)}
+            onDragHandleLongPress={drag}
+          />
         </ScaleDecorator>
       );
     },
-    [filterProject, projectColor, projects, onToggleCollapsed, onTicketPress]
+    [
+      filterProject,
+      onCompleteTicket,
+      onToggleCollapsed,
+      onTicketPress,
+      projectColor,
+      projects,
+      sections,
+      statusDefinitions
+    ]
   );
 
   if (tickets.length === 0) {

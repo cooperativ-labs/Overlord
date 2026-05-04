@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { GlassView } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
 import {
@@ -21,6 +20,7 @@ import { AgentBrandIcon } from '@/components/AgentBrandIcon';
 import { AgentModelChooser } from '@/components/AgentModelChooser';
 import { AGENT_OPTIONS } from '@/lib/agent-models';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import type { AgentModelSelection } from '@/lib/types';
 
 import { glassAvailable } from './ticket-detail-shared';

@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text } from 'react-native';
 
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 import { createTicketsScreenStyles } from './TicketsScreenStyles';
 

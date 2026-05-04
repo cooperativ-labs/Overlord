@@ -338,10 +338,25 @@ export const createTicketsScreenStyles = (colors: ThemeColors) =>
     ticketListRowUnread: {
       backgroundColor: colors.isDark ? 'rgba(14, 165, 233, 0.12)' : 'rgba(14, 165, 233, 0.08)'
     },
+    ticketListRowComplete: {
+      opacity: 0.6
+    },
+    ticketListRowDragging: {
+      opacity: 0.45
+    },
     ticketListProjectDot: {
       width: 8,
       height: 8,
       borderRadius: 4,
+      flexShrink: 0
+    },
+    ticketCheckbox: {
+      width: 16,
+      height: 16,
+      borderRadius: 4,
+      borderWidth: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
       flexShrink: 0
     },
     ticketListMain: {
@@ -354,6 +369,9 @@ export const createTicketsScreenStyles = (colors: ThemeColors) =>
       fontSize: 13,
       fontWeight: '600',
       lineHeight: 18
+    },
+    ticketListTitleComplete: {
+      color: colors.mutedForeground
     },
     ticketListSubrows: {
       flexDirection: 'row',
@@ -394,6 +412,11 @@ export const createTicketsScreenStyles = (colors: ThemeColors) =>
     },
     ticketListExecWrap: {
       opacity: 0.85
+    },
+    ticketDragHandle: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity: 0.65
     },
     unreadDot: {
       width: 6,

@@ -1,6 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  type StyleProp,
+  StyleSheet,
+  Text,
+  View,
+  type ViewStyle
+} from 'react-native';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
 import {
@@ -12,24 +19,35 @@ import {
   resolveAgentModelSelection
 } from '@/lib/agent-models';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import { getSupabase } from '@/lib/supabase';
 import type { AgentModelRecord, AgentModelSelection, LaunchAgentType } from '@/lib/types';
 
 type AgentModelChooserProps = {
   alwaysExpanded?: boolean;
+  accessibilityLabel?: string;
   disabled?: boolean;
+  expanded?: boolean;
   helperText?: string;
   onChange: (selection: AgentModelSelection) => void;
+  onExpandedChange?: (expanded: boolean) => void;
   onResolvedSelectionChange?: (selection: AgentModelSelection) => void;
+  style?: StyleProp<ViewStyle>;
+  triggerMetaLabel?: string;
   value: AgentModelSelection | null;
 };
 
 export function AgentModelChooser({
   alwaysExpanded = false,
+  accessibilityLabel = 'Choose agent model',
   disabled = false,
+  expanded,
   helperText,
   onChange,
+  onExpandedChange,
   onResolvedSelectionChange,
+  style,
+  triggerMetaLabel,
   value
 }: AgentModelChooserProps) {
   const colors = useThemeColors();
@@ -139,15 +157,30 @@ export function AgentModelChooser({
   const selectedAgentOption = AGENT_OPTIONS.find(
     option => option.value === effectiveSelection.agent
   );
+  const isSelectorVisible = alwaysExpanded || (expanded ?? showSelector);
+  const selectedModelLabel = selectedModel?.display_name ?? 'Default model';
+  const selectedThinkingLabel = effectiveSelection.thinking
+    ? ` · ${effectiveSelection.thinking}`
+    : '';
+
+  function setSelectorVisible(nextVisible: boolean) {
+    if (!alwaysExpanded && expanded === undefined) {
+      setShowSelector(nextVisible);
+    }
+    onExpandedChange?.(nextVisible);
+  }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       {helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
 
       {!alwaysExpanded ? (
         <Pressable
           disabled={disabled}
-          onPress={() => setShowSelector(current => !current)}
+          onPress={() => setSelectorVisible(!isSelectorVisible)}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ expanded: isSelectorVisible, disabled }}
           style={({ pressed }) => [
             styles.selectorButton,
             disabled && styles.selectorButtonDisabled,
@@ -161,20 +194,27 @@ export function AgentModelChooser({
               <Ionicons name="hardware-chip-outline" size={16} color={colors.foreground} />
             )}
             <View style={styles.selectorButtonTextWrap}>
-              <Text style={styles.selectorButtonTitle}>
+              <Text style={styles.selectorButtonTitle} numberOfLines={1}>
                 {selectedAgentOption?.label ?? 'Agent'}
+              </Text>
+              <Text style={styles.selectorButtonMeta} numberOfLines={1}>
+                {triggerMetaLabel ?? `${selectedModelLabel}${selectedThinkingLabel}`}
               </Text>
             </View>
           </View>
-          <Ionicons
-            name={showSelector ? 'chevron-up' : 'chevron-down'}
-            size={18}
-            color={colors.mutedForeground}
-          />
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.mutedForeground} />
+          ) : (
+            <Ionicons
+              name={isSelectorVisible ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.mutedForeground}
+            />
+          )}
         </Pressable>
       ) : null}
 
-      {showSelector ? (
+      {isSelectorVisible ? (
         <View style={styles.selectorPanel}>
           <Text style={styles.groupLabel}>Agent</Text>
           <View style={styles.chipWrap}>
@@ -354,14 +394,12 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: 10,
-      backgroundColor: colors.secondary,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 10,
+      gap: 12,
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
+      borderRadius: 12,
       paddingHorizontal: 10,
       paddingVertical: 8,
-      marginBottom: 8
+      marginBottom: 6
     },
     selectorButtonPressed: {
       opacity: 0.85
@@ -382,11 +420,19 @@ const createStyles = (colors: ThemeColors) =>
     },
     selectorButtonTitle: {
       color: colors.foreground,
-      fontSize: 13,
+      fontSize: 15,
       fontWeight: '600'
     },
+    selectorButtonMeta: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      marginTop: 2
+    },
     selectorPanel: {
-      gap: 4
+      gap: 4,
+      padding: 10,
+      borderRadius: 12,
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
     },
     groupLabel: {
       color: colors.mutedForeground,

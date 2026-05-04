@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { GlassView } from 'expo-glass-effect';
 import { Pressable, TextInput, View } from 'react-native';
 
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 import { glassAvailable } from './shared';
 import { createTicketsScreenStyles } from './TicketsScreenStyles';

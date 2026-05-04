@@ -1,24 +1,44 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
-import { getStatusColors, statusLabel } from './shared';
+import {
+  formatStatusName,
+  getStatusColors,
+  getStatusDefinition,
+  type TicketStatusDefinition
+} from './shared';
 import { createTicketsScreenStyles } from './TicketsScreenStyles';
 
 type SectionHeaderProps = {
   status: string;
+  organizationId: number | null;
+  statusDefinitions: TicketStatusDefinition[];
   count: number;
   collapsed: boolean;
   onToggle: () => void;
 };
 
-export function SectionHeader({ status, count, collapsed, onToggle }: SectionHeaderProps) {
+export function SectionHeader({
+  status,
+  organizationId,
+  statusDefinitions,
+  count,
+  collapsed,
+  onToggle
+}: SectionHeaderProps) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createTicketsScreenStyles);
   const statusColors = getStatusColors(colors);
-  const accent = statusColors[status] ?? colors.mutedForeground;
-  const label = statusLabel[status] ?? status;
+  const definition =
+    (organizationId === null
+      ? null
+      : getStatusDefinition(statusDefinitions, organizationId, status)) ??
+    statusDefinitions.find(candidate => candidate.name === status) ??
+    null;
+  const accent = definition ? statusColors[definition.status_type] : colors.mutedForeground;
+  const label = formatStatusName(status);
 
   return (
     <Pressable style={styles.sectionHeader} onPress={onToggle} accessibilityRole="button">

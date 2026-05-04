@@ -7,59 +7,70 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
+import { TicketTaggingDebug } from './TicketTaggingDebug';
+import { TicketDocumentUpload } from './TicketDocumentUpload';
+import type { TicketDocument } from '@/lib/actions/artifacts';
+import type { TaggingInspector } from '@/lib/tagging-engine';
 
 interface TicketToolsAndCriteriaProps {
   ticketId: string;
   organizationId: number;
   availableTools: string | null;
   acceptanceCriteria: string | null;
+  initialDocuments: TicketDocument[];
+  inspector: TaggingInspector | null;
 }
 
 export function TicketToolsAndCriteria({
   ticketId,
   organizationId,
   availableTools,
-  acceptanceCriteria
+  acceptanceCriteria,
+  initialDocuments,
+  inspector
 }: TicketToolsAndCriteriaProps) {
+
   return (
-    <Accordion type="single" collapsible>
-      <AccordionItem value="tools-criteria">
+    <Accordion type="multiple">
+      <AccordionItem value="tools" className="border-b-0">
         <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
-          Tools and Acceptance Criteria
+          Available Tools
         </AccordionTrigger>
         <AccordionContent>
-          <div className="flex flex-col gap-4 pl-2 pb-2">
-            <div>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Available Tools
-              </h2>
-              <InlineEditField
-                displayClassName="text-sm leading-relaxed"
-                field="available_tools"
-                organizationId={organizationId}
-                initialValue={availableTools ?? ''}
-                multiline
-                placeholder="None specified — click to add."
-                ticketId={ticketId}
-              />
-            </div>
-            <div>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Acceptance Criteria
-              </h2>
-              <InlineEditField
-                displayClassName="text-sm leading-relaxed"
-                field="acceptance_criteria"
-                organizationId={organizationId}
-                initialValue={acceptanceCriteria ?? ''}
-                multiline
-                placeholder="None specified — click to add."
-                ticketId={ticketId}
-              />
-            </div>
+          <div className="pl-2 pb-2">
+            <InlineEditField
+              displayClassName="text-sm leading-relaxed"
+              field="available_tools"
+              organizationId={organizationId}
+              initialValue={availableTools ?? ''}
+              multiline
+              placeholder="None specified — click to add."
+              ticketId={ticketId}
+            />
           </div>
         </AccordionContent>
       </AccordionItem>
+      <AccordionItem value="acceptance-criteria" className="border-b-0">
+        <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
+          Acceptance Criteria
+        </AccordionTrigger>
+        <AccordionContent>
+          <div className="pl-2 pb-2">
+            <InlineEditField
+              displayClassName="text-sm leading-relaxed"
+              field="acceptance_criteria"
+              organizationId={organizationId}
+              initialValue={acceptanceCriteria ?? ''}
+              multiline
+              placeholder="None specified — click to add."
+              ticketId={ticketId}
+            />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+      <TicketTaggingDebug inspector={inspector} />
+
+      <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
     </Accordion>
   );
 }

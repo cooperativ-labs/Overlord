@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { SidebarDrawer } from '@/components/SidebarDrawer';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { useSelectedProject } from '@/lib/selected-project-context';
@@ -12,8 +13,11 @@ import { isTransientNetworkError } from '@/lib/transient-network-error';
 import {
   ALL_PROJECTS_LABEL,
   getContrastColor,
+  matchesStatusFilter,
+  resolvePreferredStatusNameByType,
   type SortMode,
   type StatusFilter,
+  type TicketStatusDefinition,
   type TicketWithProject,
   type ViewMode
 } from './components/shared';
@@ -25,6 +29,7 @@ import { createTicketsScreenStyles } from './components/TicketsScreenStyles';
 export default function TicketsScreen() {
   const router = useRouter();
   const { projects, selectedProjectId, selectProject } = useSelectedProject();
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   const { projectId: projectIdParam } = useLocalSearchParams<{ projectId?: string }>();
   const colors = useThemeColors();
   const styles = useThemedStyles(createTicketsScreenStyles);
@@ -48,6 +53,7 @@ export default function TicketsScreen() {
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [collapsedStatuses, setCollapsedStatuses] = useState<Set<string>>(new Set());
+  const [statusDefinitions, setStatusDefinitions] = useState<TicketStatusDefinition[]>([]);
 
   const toggleCollapsed = useCallback((statusName: string) => {
     setCollapsedStatuses(prev => {
@@ -58,18 +64,9 @@ export default function TicketsScreen() {
     });
   }, []);
 
-  const handleCreateTicket = useCallback(
-    (dueDate?: string) => {
-      router.push({
-        pathname: '/(tabs)/tickets/create',
-        params: {
-          ...(filterProjectId ? { projectId: filterProjectId } : {}),
-          ...(dueDate ? { dueDate } : {})
-        }
-      });
-    },
-    [filterProjectId, router]
-  );
+  const handleCreateTicket = useCallback((_dueDate?: string) => {
+    setCreateModalVisible(true);
+  }, []);
 
   const fetchTickets = useCallback(
     async (options?: { suppressTransientNetworkAlert?: boolean }) => {
@@ -79,7 +76,7 @@ export default function TicketsScreen() {
         let q = supabase
           .from('tickets')
           .select(
-            'id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position'
+            'id, organization_id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position'
           )
           .order('updated_at', { ascending: false })
           .limit(100);
@@ -89,9 +86,31 @@ export default function TicketsScreen() {
 
       const MAX_ATTEMPTS = options?.suppressTransientNetworkAlert ? 4 : 3;
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        const { data, error } = await runQuery();
+        const [
+          { data, error },
+          { data: execObjectives },
+          { data: statusRows, error: statusError }
+        ] = await Promise.all([
+          runQuery(),
+          supabase.from('objectives').select('ticket_id').eq('state', 'executing'),
+          supabase
+            .from('ticket_statuses')
+            .select('organization_id,name,position,status_type')
+            .order('position', { ascending: true })
+        ]);
         if (!error && data) {
-          setTickets(data as TicketWithProject[]);
+          if (statusError) {
+            Alert.alert('Unable to load ticket statuses', statusError.message);
+            return;
+          }
+          const executingTicketIds = new Set((execObjectives ?? []).map(o => o.ticket_id));
+          setStatusDefinitions((statusRows ?? []) as TicketStatusDefinition[]);
+          setTickets(
+            data.map(t => ({
+              ...t,
+              has_executing_objective: executingTicketIds.has(t.id)
+            })) as TicketWithProject[]
+          );
           return;
         }
         if (error) {
@@ -143,6 +162,11 @@ export default function TicketsScreen() {
         { event: '*', schema: 'public', table: 'tickets' },
         () => void fetchTickets({ suppressTransientNetworkAlert: true })
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'objectives' },
+        () => void fetchTickets({ suppressTransientNetworkAlert: true })
+      )
       .subscribe(status => {
         if (status === 'SUBSCRIBED') {
           stopPolling();
@@ -179,13 +203,9 @@ export default function TicketsScreen() {
     let result = [...tickets];
 
     if (statusFilter !== 'all') {
-      if (statusFilter === 'open') {
-        result = result.filter(
-          ticket => !['complete', 'cancelled', 'icebox'].includes(ticket.status)
-        );
-      } else {
-        result = result.filter(ticket => ticket.status === statusFilter);
-      }
+      result = result.filter(ticket =>
+        matchesStatusFilter(ticket, statusDefinitions, statusFilter)
+      );
     }
 
     if (search.trim()) {
@@ -216,7 +236,7 @@ export default function TicketsScreen() {
     }
 
     return result;
-  }, [tickets, statusFilter, search, sortMode]);
+  }, [tickets, statusDefinitions, statusFilter, search, sortMode]);
 
   const persistReorder = useCallback(
     async (
@@ -287,6 +307,45 @@ export default function TicketsScreen() {
       void persistReorder(orderedIdsByStatus, statusChange);
     },
     [persistReorder, tickets]
+  );
+
+  const handleCompleteTicket = useCallback(
+    async (ticketId: string) => {
+      const previousTicket = tickets.find(ticket => ticket.id === ticketId);
+      if (!previousTicket) {
+        return;
+      }
+
+      const completeStatusName = resolvePreferredStatusNameByType(
+        statusDefinitions,
+        previousTicket.organization_id,
+        'complete'
+      );
+      if (!completeStatusName || previousTicket.status === completeStatusName) return;
+
+      setTickets(prev =>
+        prev.map(ticket =>
+          ticket.id === ticketId
+            ? { ...ticket, status: completeStatusName, board_position: 0 }
+            : ticket
+        )
+      );
+
+      const supabase = getSupabase();
+      const { error } = await supabase
+        .from('tickets')
+        .update({ status: completeStatusName })
+        .eq('id', ticketId);
+
+      if (error) {
+        setTickets(prev => prev.map(ticket => (ticket.id === ticketId ? previousTicket : ticket)));
+        Alert.alert('Unable to complete ticket', error.message);
+        return;
+      }
+
+      void fetchTickets({ suppressTransientNetworkAlert: true });
+    },
+    [fetchTickets, statusDefinitions, tickets]
   );
 
   const filterProject = useMemo(
@@ -362,15 +421,22 @@ export default function TicketsScreen() {
         viewMode={viewMode}
         filterProject={filterProject}
         projects={projects}
+        statusDefinitions={statusDefinitions}
         projectColor={projectColor}
         collapsedStatuses={collapsedStatuses}
         onToggleCollapsed={toggleCollapsed}
         onSectionedReorder={handleSectionedReorder}
+        onCompleteTicket={handleCompleteTicket}
         onRefresh={onRefresh}
         onCreateTicket={handleCreateTicket}
         onTicketPress={ticketId => router.push(`/(tabs)/tickets/${ticketId}`)}
       />
       <SidebarDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <QuickCreateTicketModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        defaultProjectId={filterProjectId}
+      />
     </SafeAreaView>
   );
 }

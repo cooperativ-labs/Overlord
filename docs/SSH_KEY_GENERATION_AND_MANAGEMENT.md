@@ -235,7 +235,7 @@ When the ticket detail screen launches work on a connected server:
    - `OVERLORD_ACCESS_TOKEN`
    - `OVERLORD_ORGANIZATION_ID`
    - `TICKET_ID`
-5. It starts the agent inside `tmux` by running `ovld connect <agent> --ticket-id <ticket-id>`.
+5. It starts the agent inside `tmux` by running `ovld launch <agent> --ticket-id <ticket-id>`.
 
 The remote launcher also sources common shell profiles so that `node`, `nvm`, and `ovld` are more likely to exist on the remote PATH.
 

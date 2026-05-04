@@ -613,7 +613,7 @@ export const DISCUSS_TERMINAL_LINES: TerminalLine[] = [
 ];
 
 export const RUN_TERMINAL_LINES: TerminalLine[] = [
-  { text: '$ ovld connect claude --ticket-id demo-003c', type: 'command', delay: 0 },
+  { text: '$ ovld launch claude --ticket-id demo-003c', type: 'command', delay: 0 },
   { text: '', type: 'system', delay: 400 },
   { text: 'Starting your agent...', type: 'system', delay: 600 },
   { text: 'Attaching to ticket ID: demo-003c', type: 'agent', delay: 1200 },
@@ -680,7 +680,7 @@ export const OVLD_COMMANDS_TERMINAL_LINES: TerminalLine[] = [
     delay: 1400
   },
   {
-    text: '  ovld connect <agent>            Launch an agent on a ticket',
+    text: '  ovld launch <agent>             Launch an agent on a ticket',
     type: 'system',
     delay: 1500
   },

@@ -2,7 +2,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 
-import type { StatusFilter, TicketWithProject, ViewMode } from './shared';
+import type { StatusFilter, TicketStatusDefinition, TicketWithProject, ViewMode } from './shared';
 import { TicketsCalendarResults } from './TicketsCalendarResults';
 import { createTicketsScreenStyles } from './TicketsScreenStyles';
 import { TicketsSectionedList } from './TicketsSectionedList';
@@ -16,10 +16,12 @@ type TicketsResultsProps = {
   viewMode: ViewMode;
   filterProject: { id: string; name: string; color: string } | null;
   projects: { id: string; name: string; color: string }[];
+  statusDefinitions: TicketStatusDefinition[];
   projectColor: string;
   collapsedStatuses: Set<string>;
   onToggleCollapsed: (statusName: string) => void;
   onSectionedReorder: (nextSectioned: Map<string, TicketWithProject[]>) => void;
+  onCompleteTicket: (ticketId: string) => void;
   onRefresh: () => Promise<void>;
   onCreateTicket: (dueDate?: string) => void;
   onTicketPress: (ticketId: string) => void;
@@ -34,10 +36,12 @@ export function TicketsResults({
   viewMode,
   filterProject,
   projects,
+  statusDefinitions,
   projectColor,
   collapsedStatuses,
   onToggleCollapsed,
   onSectionedReorder,
+  onCompleteTicket,
   onRefresh,
   onCreateTicket,
   onTicketPress
@@ -80,11 +84,13 @@ export function TicketsResults({
       statusFilter={statusFilter}
       filterProject={filterProject}
       projects={projects}
+      statusDefinitions={statusDefinitions}
       projectColor={projectColor}
       collapsedStatuses={collapsedStatuses}
       refreshing={refreshing}
       onRefresh={onRefresh}
       onTicketPress={onTicketPress}
+      onCompleteTicket={onCompleteTicket}
       onToggleCollapsed={onToggleCollapsed}
       onSectionedReorder={onSectionedReorder}
     />

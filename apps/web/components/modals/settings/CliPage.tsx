@@ -202,7 +202,7 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     kind: 'bundle',
     bundleAgent: 'claude',
     supportNote:
-      'Migration is needed when upgrading from desktop app v3.25.0 to v4.0.0 or later. The plugin is loaded by `ovld connect claude` and desktop launches with `claude --plugin-dir`.'
+      'Migration is needed when upgrading from desktop app v3.25.0 to v4.0.0 or later. The plugin is loaded by `ovld launch claude` and desktop launches with `claude --plugin-dir`.'
   },
   {
     key: 'codex:overlord-plugin',
@@ -1278,7 +1278,7 @@ export function CliPage({ open }: { open: boolean }) {
             artifact-upload-file
           </li>
           <li className="break-words">
-            <code className="rounded bg-muted px-1 break-all">ovld connect &lt;agent&gt;</code>{' '}
+            <code className="rounded bg-muted px-1 break-all">ovld launch &lt;agent&gt;</code>{' '}
             launch agent on a ticket
           </li>
           <li className="break-words">

@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,17 +17,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AgentBrandIcon } from '@/components/AgentBrandIcon';
+import { AgentModelChooser } from '@/components/AgentModelChooser';
 import {
   DocumentAttachmentsSection,
   type DocumentItem,
   type PickedFile
 } from '@/components/DocumentAttachmentsSection';
-import { AGENT_OPTIONS, createAssignedAgent } from '@/lib/agent-models';
+import { createAssignedAgent, DEFAULT_AGENT_MODEL_SELECTION } from '@/lib/agent-models';
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
-import type { AgentModelSelection, LaunchAgentType, TicketExecutionTarget } from '@/lib/types';
+import type { AgentModelSelection, TicketExecutionTarget } from '@/lib/types';
 
 const glassAvailable = Platform.OS === 'ios' && isLiquidGlassAvailable();
 
@@ -103,7 +103,10 @@ export default function CreateTicketScreen() {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
-  const [agent, setAgent] = useState<LaunchAgentType>('claude');
+  const [agentSelection, setAgentSelection] = useState<AgentModelSelection | null>(null);
+  const [resolvedAgentSelection, setResolvedAgentSelection] = useState<AgentModelSelection>(
+    DEFAULT_AGENT_MODEL_SELECTION
+  );
   const [showAgentMenu, setShowAgentMenu] = useState(false);
   const [objective, setObjective] = useState('');
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
@@ -149,7 +152,6 @@ export default function CreateTicketScreen() {
   }, [projectIdParam, contextSelectedProjectId]);
 
   const selectedProject = projects.find(p => p.id === projectId) ?? null;
-  const selectedAgent = AGENT_OPTIONS.find(o => o.value === agent) ?? AGENT_OPTIONS[0];
   const canSubmit = objective.trim().length > 0 && !!selectedProject && !submitting;
 
   function closeProjectMenu() {
@@ -169,15 +171,6 @@ export default function CreateTicketScreen() {
     }
   }
 
-  function toggleAgentMenu() {
-    if (showAgentMenu) {
-      closeAgentMenu();
-    } else {
-      closeProjectMenu();
-      setShowAgentMenu(true);
-    }
-  }
-
   async function handleSubmit() {
     const trimmedObjective = objective.trim();
     if (!trimmedObjective || !selectedProject) return;
@@ -187,7 +180,7 @@ export default function CreateTicketScreen() {
       const supabase = getSupabase();
       const title =
         trimmedObjective.length > 80 ? trimmedObjective.substring(0, 77) + '...' : trimmedObjective;
-      const selection: AgentModelSelection = { agent, model: null, thinking: null };
+      const selection = agentSelection ?? resolvedAgentSelection;
       const dueDatetime = dueDateKey ? `${dueDateKey}T12:00:00.000Z` : null;
 
       const { data: ticket, error: ticketError } = await supabase
@@ -310,66 +303,36 @@ export default function CreateTicketScreen() {
             />
 
             <View style={styles.chooserStack}>
-              <View style={styles.chooserRow}>
-                {/* Project chooser */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.dropdownButton,
-                    styles.dropdownButtonFlex,
-                    pressed && styles.dropdownButtonPressed
-                  ]}
-                  onPress={toggleProjectMenu}
-                  disabled={loadingProjects}
-                  accessibilityLabel="Choose project"
-                >
-                  <View style={styles.dropdownButtonIcon}>
-                    {selectedProject ? (
-                      <View
-                        style={[styles.projectDotLarge, { backgroundColor: selectedProject.color }]}
-                      />
-                    ) : (
-                      <Ionicons name="folder-outline" size={18} color={colors.foreground} />
-                    )}
-                  </View>
-                  <View style={styles.dropdownButtonTextWrap}>
-                    <Text style={styles.dropdownButtonLabel} numberOfLines={1}>
-                      {loadingProjects ? 'Loading…' : (selectedProject?.name ?? 'Select project')}
-                    </Text>
-                    <Text style={styles.dropdownButtonMeta}>Project</Text>
-                  </View>
-                  <Ionicons
-                    name={showProjectMenu ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={colors.mutedForeground}
-                  />
-                </Pressable>
-
-                {/* Agent chooser */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.dropdownButton,
-                    styles.dropdownButtonFlex,
-                    pressed && styles.dropdownButtonPressed
-                  ]}
-                  onPress={toggleAgentMenu}
-                  accessibilityLabel="Choose agent"
-                >
-                  <View style={styles.dropdownButtonIcon}>
-                    <AgentBrandIcon agent={selectedAgent.value} size={18} />
-                  </View>
-                  <View style={styles.dropdownButtonTextWrap}>
-                    <Text style={styles.dropdownButtonLabel} numberOfLines={1}>
-                      {selectedAgent.label}
-                    </Text>
-                    <Text style={styles.dropdownButtonMeta}>Agent</Text>
-                  </View>
-                  <Ionicons
-                    name={showAgentMenu ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={colors.mutedForeground}
-                  />
-                </Pressable>
-              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.dropdownButton,
+                  pressed && styles.dropdownButtonPressed
+                ]}
+                onPress={toggleProjectMenu}
+                disabled={loadingProjects}
+                accessibilityLabel="Choose project"
+              >
+                <View style={styles.dropdownButtonIcon}>
+                  {selectedProject ? (
+                    <View
+                      style={[styles.projectDotLarge, { backgroundColor: selectedProject.color }]}
+                    />
+                  ) : (
+                    <Ionicons name="folder-outline" size={18} color={colors.foreground} />
+                  )}
+                </View>
+                <View style={styles.dropdownButtonTextWrap}>
+                  <Text style={styles.dropdownButtonLabel} numberOfLines={1}>
+                    {loadingProjects ? 'Loading…' : (selectedProject?.name ?? 'Select project')}
+                  </Text>
+                  <Text style={styles.dropdownButtonMeta}>Project</Text>
+                </View>
+                <Ionicons
+                  name={showProjectMenu ? 'chevron-up' : 'chevron-down'}
+                  size={16}
+                  color={colors.mutedForeground}
+                />
+              </Pressable>
 
               {showProjectMenu ? (
                 <View style={styles.dropdownPanel}>
@@ -397,31 +360,17 @@ export default function CreateTicketScreen() {
                 </View>
               ) : null}
 
-              {showAgentMenu ? (
-                <View style={styles.dropdownPanel}>
-                  {AGENT_OPTIONS.map(option => {
-                    const isSelected = option.value === agent;
-                    return (
-                      <Pressable
-                        key={option.value}
-                        style={styles.menuItem}
-                        onPress={() => {
-                          setAgent(option.value);
-                          closeAgentMenu();
-                        }}
-                      >
-                        <View style={styles.menuItemLeft}>
-                          <AgentBrandIcon agent={option.value} size={16} />
-                          <Text style={styles.menuItemText}>{option.label}</Text>
-                        </View>
-                        {isSelected ? (
-                          <Ionicons name="checkmark" size={16} color={colors.primary} />
-                        ) : null}
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : null}
+              <AgentModelChooser
+                value={agentSelection}
+                onChange={setAgentSelection}
+                onResolvedSelectionChange={setResolvedAgentSelection}
+                expanded={showAgentMenu}
+                onExpandedChange={expanded => {
+                  if (expanded) closeProjectMenu();
+                  setShowAgentMenu(expanded);
+                }}
+                disabled={submitting}
+              />
             </View>
 
             {/* Collapsed sections */}
@@ -530,13 +479,6 @@ const createStyles = (colors: ThemeColors) =>
     },
     chooserStack: {
       gap: 8
-    },
-    chooserRow: {
-      flexDirection: 'row',
-      gap: 8
-    },
-    dropdownButtonFlex: {
-      flex: 1
     },
     dropdownButton: {
       flexDirection: 'row',

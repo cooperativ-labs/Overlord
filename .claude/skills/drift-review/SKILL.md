@@ -11,6 +11,8 @@ user-invocable: true
 
 Review all Overlord product surfaces for alignment drift. The goal is to ensure that API routes, CLI commands, MCP tools, and agent plugins expose the same operations with matching parameters, so that agents can use any surface interchangeably.
 
+When a change touches agent launch commands, also compare the human-launch surfaces: `packages/overlord-cli/bin/_cli/launcher.mjs`, `lib/overlord/launch-commands.ts`, and any ticket copy surfaces that emit copy/paste launch commands.
+
 ## Product Surfaces
 
 Overlord exposes its protocol through four parallel surfaces:
@@ -43,6 +45,8 @@ Read `packages/overlord-cli/bin/_cli/protocol.mjs`. Extract:
 - Each subcommand from the dispatch block (the `if (subcommand === '...')` section)
 - The flags each handler function reads via `parseFlags()`
 - Any flag aliases or defaults
+
+If the task changes human launch commands, also read `packages/overlord-cli/bin/_cli/launcher.mjs` and `lib/overlord/launch-commands.ts` so you can compare `ovld launch` / `ovld restart` help, aliases, and emitted copy commands against Desktop and product copy.
 
 #### 3. MCP Tools
 Read `plugins/overlord/scripts/overlord-mcp.mjs`. Extract:
@@ -99,6 +103,11 @@ An operation exists in multiple surfaces but parameters differ:
 - Agent plugin skills missing documentation for operations that do exist
 - Inconsistent descriptions of the same operation across surfaces
 
+#### 3e. Launch Command Drift
+- `ovld launch` help text, accepted flags, and alias behavior diverge from `lib/overlord/launch-commands.ts`
+- Ticket copy surfaces emit stale launcher names (`ovld connect`) or omit required launch flags
+- Desktop launch behavior changed but `CONNECTOR_SURFACES.md` no longer documents the deliberate asymmetry
+
 ### Phase 4: Generate the Drift Report
 
 Produce a structured report:
@@ -151,4 +160,4 @@ If no drift is found, confirm alignment and note the operation count.
 
 </drift-review>
 
-<!-- version: 1.0.0 -->
+<!-- version: 1.0.1 -->

@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -19,6 +18,7 @@ import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors'
 import { loadFeedPosts } from '@/lib/feed-posts';
 import { useExecutingFeedTickets } from '@/lib/hooks/use-executing-feed-tickets';
 import { useFeedRealtime } from '@/lib/hooks/use-feed-realtime';
+import { Ionicons } from '@/lib/icons';
 import { loadProjectSummaries, type ProjectSummary } from '@/lib/projects';
 import type { FeedPost } from '@/lib/types';
 
@@ -171,7 +171,7 @@ export default function FeedScreen() {
           }
         ]}
       >
-        <Ionicons name="newspaper-outline" size={14} color={colors.mutedForeground} />
+        <Ionicons name="newspaper-outline" size={20} color={colors.mutedForeground} />
         <Text style={{ color: colors.foreground, fontSize: 24, fontWeight: '600' }}>Feed</Text>
       </View>
     );

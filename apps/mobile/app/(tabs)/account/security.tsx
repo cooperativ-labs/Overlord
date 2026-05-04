@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import {
   DEFAULT_SERVER_TERMINAL_CUSTOM_COMMAND,
   DEFAULT_SERVER_TERMINAL_PREFERENCE,

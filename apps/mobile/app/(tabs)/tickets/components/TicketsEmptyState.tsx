@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from 'react-native';
 
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 
 import type { StatusFilter } from './shared';
 import { createTicketsScreenStyles } from './TicketsScreenStyles';

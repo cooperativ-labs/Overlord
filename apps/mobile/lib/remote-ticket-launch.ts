@@ -108,7 +108,7 @@ function buildRemoteLaunchCommand({
     `OVERLORD_ACCESS_TOKEN=${quoteShell(accessToken)}`,
     `OVERLORD_ORGANIZATION_ID=${quoteShell(String(organizationId))}`,
     `TICKET_ID=${quoteShell(ticketId)}`,
-    'ovld connect',
+    'ovld launch',
     agent,
     '--ticket-id',
     ticketId
@@ -120,7 +120,7 @@ function buildRemoteLaunchCommand({
     'export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"',
     '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"'
   ].join('; ');
-  const launcher = `${profileSetup}; ${innerCmd}; EXIT_CODE=$?; if [ $EXIT_CODE -ne 0 ]; then echo ""; echo "[ovld connect exited with code $EXIT_CODE]"; echo "Press Enter to close this window..."; read; fi`;
+  const launcher = `${profileSetup}; ${innerCmd}; EXIT_CODE=$?; if [ $EXIT_CODE -ne 0 ]; then echo ""; echo "[ovld launch exited with code $EXIT_CODE]"; echo "Press Enter to close this window..."; read; fi`;
 
   if (terminalPreference.launchMode === 'custom') {
     const trimmedTemplate = terminalPreference.customCommand.trim();

@@ -1,4 +1,21 @@
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import type { SshConnectionConfig } from '@/lib/workspace/types';
+
+export type LaunchAgentName = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+
+type LaunchCommandOptions = {
+  workingDirectory?: string | null;
+  launchMode?: 'run' | 'ask' | null;
+  flags?: string[] | null;
+  model?: string | null;
+  thinking?: string | null;
+  sshCommand?: string | SshConnectionConfig | null;
+  remoteWorkingDirectory?: string | null;
+  serverMultiplexer?: {
+    enabled: boolean;
+    tmuxCommand?: string | null;
+  } | null;
+};
 
 /**
  * Derive a legacy free-form ssh command string from a structured SshConnectionConfig.
@@ -24,6 +41,15 @@ type BuildLaunchCommandsInput = {
   platformUrl: string;
   oauthAccessToken?: string;
   organizationId?: number | null;
+  workingDirectory?: string | null;
+  sshCommand?: string | SshConnectionConfig | null;
+  remoteWorkingDirectory?: string | null;
+  serverMultiplexer?: {
+    enabled: boolean;
+    tmuxCommand?: string | null;
+  } | null;
+  agentFlags?: Partial<Record<LaunchAgentName, string[]>>;
+  assignedAgent?: TicketAssignedAgent | null;
 };
 
 export type LaunchCommands = {
@@ -43,6 +69,70 @@ export type ResumeCommands = {
   opencode: string;
 };
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function pushOptionalFlag(parts: string[], name: string, value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return;
+  parts.push(name, shellQuote(trimmed));
+}
+
+function normalizeAgentLaunchOptions(
+  agent: LaunchAgentName,
+  input: BuildLaunchCommandsInput
+): LaunchCommandOptions {
+  const assignedAgent = input.assignedAgent?.agent === agent ? input.assignedAgent : null;
+  return {
+    workingDirectory: input.workingDirectory,
+    launchMode: 'run',
+    flags: input.agentFlags?.[agent] ?? [],
+    model: assignedAgent?.model ?? null,
+    thinking: assignedAgent?.thinking ?? null,
+    sshCommand: input.sshCommand,
+    remoteWorkingDirectory: input.remoteWorkingDirectory,
+    serverMultiplexer: input.serverMultiplexer
+  };
+}
+
+export function buildAgentLaunchCommand(
+  agent: LaunchAgentName,
+  ticketId: string,
+  options: LaunchCommandOptions = {}
+): string {
+  const parts = ['ovld', 'launch', agent, '--ticket-id', shellQuote(ticketId)];
+
+  pushOptionalFlag(parts, '--working-directory', options.workingDirectory ?? null);
+
+  if (options.launchMode === 'ask') {
+    parts.push('--launch-mode', 'ask');
+  }
+
+  pushOptionalFlag(parts, '--model', options.model ?? null);
+  pushOptionalFlag(parts, '--thinking', options.thinking ?? null);
+
+  for (const flag of options.flags ?? []) {
+    const trimmed = flag.trim();
+    if (!trimmed) continue;
+    parts.push('--flag', shellQuote(trimmed));
+  }
+
+  const sshCommand =
+    typeof options.sshCommand === 'string'
+      ? options.sshCommand
+      : sshConnectionConfigToCommand(options.sshCommand ?? null);
+  pushOptionalFlag(parts, '--ssh-command', sshCommand ?? null);
+  pushOptionalFlag(parts, '--remote-working-directory', options.remoteWorkingDirectory ?? null);
+
+  if (options.serverMultiplexer?.enabled) {
+    parts.push('--server-multiplexer', 'tmux');
+    pushOptionalFlag(parts, '--tmux-command', options.serverMultiplexer.tmuxCommand ?? null);
+  }
+
+  return parts.join(' ');
+}
+
 /**
  * Builds human-readable launch commands for clipboard / display use.
  * These use the Overlord CLI which handles context fetching internally.
@@ -53,16 +143,52 @@ export type ResumeCommands = {
  */
 export function buildLaunchCommands({
   ticketId,
-  platformUrl
+  platformUrl,
+  workingDirectory,
+  sshCommand,
+  remoteWorkingDirectory,
+  serverMultiplexer,
+  agentFlags,
+  assignedAgent
 }: BuildLaunchCommandsInput): LaunchCommands {
   const contextUrl = `${platformUrl}/api/protocol/context/${ticketId}`;
+  const sharedInput: BuildLaunchCommandsInput = {
+    ticketId,
+    platformUrl,
+    workingDirectory,
+    sshCommand,
+    remoteWorkingDirectory,
+    serverMultiplexer,
+    agentFlags,
+    assignedAgent
+  };
 
   return {
-    claudeCode: `ovld connect claude --ticket-id ${ticketId}`,
-    codex: `ovld connect codex --ticket-id ${ticketId}`,
-    cursor: `ovld connect cursor --ticket-id ${ticketId}`,
-    gemini: `ovld connect gemini --ticket-id ${ticketId}`,
-    opencode: `ovld connect opencode --ticket-id ${ticketId}`,
+    claudeCode: buildAgentLaunchCommand(
+      'claude',
+      ticketId,
+      normalizeAgentLaunchOptions('claude', sharedInput)
+    ),
+    codex: buildAgentLaunchCommand(
+      'codex',
+      ticketId,
+      normalizeAgentLaunchOptions('codex', sharedInput)
+    ),
+    cursor: buildAgentLaunchCommand(
+      'cursor',
+      ticketId,
+      normalizeAgentLaunchOptions('cursor', sharedInput)
+    ),
+    gemini: buildAgentLaunchCommand(
+      'gemini',
+      ticketId,
+      normalizeAgentLaunchOptions('gemini', sharedInput)
+    ),
+    opencode: buildAgentLaunchCommand(
+      'opencode',
+      ticketId,
+      normalizeAgentLaunchOptions('opencode', sharedInput)
+    ),
     contextUrl
   };
 }
@@ -87,7 +213,7 @@ export function buildResumeCommands({ ticketId }: BuildLaunchCommandsInput): Res
  * Normal usage goes through ovld so shared OAuth credentials are resolved from ~/.ovld.
  */
 export function buildRawLaunchCommand(
-  agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
+  agent: LaunchAgentName,
   { ticketId, platformUrl, oauthAccessToken, organizationId }: BuildLaunchCommandsInput
 ): string {
   const envParts = [`OVERLORD_URL=${platformUrl}`];
@@ -98,7 +224,7 @@ export function buildRawLaunchCommand(
     envParts.push(`OVERLORD_ORGANIZATION_ID=${organizationId}`);
   }
   const envPrefix = envParts.join(' ');
-  return `${envPrefix} ovld connect ${agent} --ticket-id ${ticketId}`;
+  return `${envPrefix} ${buildAgentLaunchCommand(agent, ticketId)}`;
 }
 
 export function selectRestartSessionCommand(

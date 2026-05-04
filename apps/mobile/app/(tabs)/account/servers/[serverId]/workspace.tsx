@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 
 import { type ThemeColors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { Ionicons } from '@/lib/icons';
 import { useServerConnections } from '@/lib/server-connections-context';
 import type { GitStatusFile, GitStatusResult, MobileHelperConfig } from '@/lib/workspace';
 import {

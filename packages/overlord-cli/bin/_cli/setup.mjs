@@ -822,7 +822,7 @@ function installClaude() {
   } else {
     console.log('  ✓ No v3.25 Claude connector files needed migration.');
   }
-  console.log('  ✓ `ovld connect claude` now loads this plugin with `claude --plugin-dir`.');
+  console.log('  ✓ `ovld launch claude` now loads this plugin with `claude --plugin-dir`.');
 
   const manifest = readManifest();
   manifest.claude = {

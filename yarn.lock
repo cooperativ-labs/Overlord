@@ -4097,7 +4097,6 @@ __metadata:
   dependencies:
     "@babel/core": "npm:^7.25.0"
     "@expo/log-box": "npm:55.0.11"
-    "@expo/vector-icons": "npm:^15.0.2"
     "@react-navigation/bottom-tabs": "npm:^7.3.9"
     "@react-navigation/native": "npm:^7.1.8"
     "@sentry/react-native": "npm:^8.9.1"
@@ -4117,6 +4116,7 @@ __metadata:
     expo-secure-store: "npm:~55.0.3"
     expo-splash-screen: "npm:~55.0.8"
     expo-status-bar: "npm:~55.0.3"
+    lucide-react-native: "npm:^1.14.0"
     react: "npm:19.2.0"
     react-native: "npm:0.83.4"
     react-native-draggable-flatlist: "npm:^4.0.3"
@@ -16628,6 +16628,17 @@ __metadata:
   version: 7.18.3
   resolution: "lru-cache@npm:7.18.3"
   checksum: 10c0/b3a452b491433db885beed95041eb104c157ef7794b9c9b4d647be503be91769d11206bb573849a16b4cc0d03cbd15ffd22df7960997788b74c1d399ac7a4fed
+  languageName: node
+  linkType: hard
+
+"lucide-react-native@npm:^1.14.0":
+  version: 1.14.0
+  resolution: "lucide-react-native@npm:1.14.0"
+  peerDependencies:
+    react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    react-native: "*"
+    react-native-svg: ^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0
+  checksum: 10c0/3786a33be5c6c8e01935a5e28a6e6ec86bbb92595c6873c8caccc7e3f4bc7c74d5c987127e0435054df4374236eb330fec8315443af1bb5cc741ad803106069a
   languageName: node
   linkType: hard
 
