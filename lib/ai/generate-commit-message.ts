@@ -11,7 +11,7 @@ const SYSTEM_INSTRUCTION = `You write clear, conventional commit messages for a 
 
 Rules:
 - First line: imperative subject, <= 72 characters, no trailing period.
-- Optional body: blank line, then wrapped bullet points describing the "why" behind the change.
+- Body: blank line, then wrapped bullet points describing the "why" behind the change. <= 100 characters per line.
 - Prefer conventional commit prefixes (feat, fix, chore, refactor, docs, test, style, perf, build, ci) when a category is obvious.
 - Describe the observable change, not every file touched.
 - Return ONLY the commit message text. No markdown fences, no commentary.`;
