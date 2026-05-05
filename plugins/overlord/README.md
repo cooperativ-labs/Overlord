@@ -24,7 +24,7 @@ personal marketplace entry at `~/.agents/plugins/marketplace.json`.
 - Ticket session flow: `attach_ticket`, `connect_ticket`, `load_ticket_context`, `prompt_ticket`
 - Progress and review flow: `post_update`, `record_change_rationales`, `ask_blocking_question`, `deliver_ticket`
 - Shared context: `read_shared_context`, `write_shared_context`
-- Artifacts: `prepare_artifact_upload`, `finalize_artifact_upload`, `get_artifact_download_url`, `upload_artifact_file`
+- Objective attachments: `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`
 
 The MCP server shells into the installed `ovld` binary so the plugin stays aligned with the shipped CLI behavior instead of depending on this repository checkout.
 

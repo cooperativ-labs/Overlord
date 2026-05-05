@@ -3,6 +3,7 @@ import { Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { TicketSummary } from './types';
@@ -81,7 +82,7 @@ export function TicketFilterPopover({
                   ) : null}
                 </span>
                 <span className="min-w-0 truncate">
-                  {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                  {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
                 </span>
                 {ticket.status ? (
                   <span className="ml-auto shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] text-muted-foreground">

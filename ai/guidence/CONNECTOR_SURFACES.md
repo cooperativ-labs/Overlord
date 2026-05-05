@@ -409,10 +409,10 @@ when one surface changes, check the others against this table.
 | read-context | `POST /api/protocol/read-context` | `read-context` | `read_context` |
 | write-context | `POST /api/protocol/write-context` | `write-context` | `write_context` |
 | deliver | `POST /api/protocol/deliver` | `deliver` | `deliver` |
-| artifact prepare | `POST /api/protocol/artifacts/prepare-upload` | `artifact-prepare-upload` | `prepare_artifact_upload` |
-| artifact finalize | `POST /api/protocol/artifacts/finalize-upload` | `artifact-finalize-upload` | `finalize_artifact_upload` |
-| artifact upload (composite) | — (client-side) | `artifact-upload-file` | `upload_artifact_file` |
-| artifact download URL | `POST /api/protocol/artifacts/get-download-url` | `artifact-download-url` | `get_artifact_download_url` |
+| attachment prepare | `POST /api/protocol/attachments/prepare-upload` | `attachment-prepare-upload` | `prepare_attachment_upload` |
+| attachment finalize | `POST /api/protocol/attachments/finalize-upload` | `attachment-finalize-upload` | `finalize_attachment_upload` |
+| attachment upload (composite) | — (client-side) | `attachment-upload-file` | `upload_attachment_file` |
+| attachment download URL | `POST /api/protocol/attachments/get-download-url` | `attachment-download-url` | `get_attachment_download_url` |
 | context fetch | `GET/POST /api/protocol/context/[ticketId]` | — | — (UI-private) |
 | projects (list) | `GET /api/protocol/projects` | — | — (UI-private) |
 
@@ -421,7 +421,7 @@ Notes:
 - `deliver` requires `artifacts` on every surface — empty array is allowed but the field must be present.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
-- MCP artifact tools follow `<verb>_<noun>` naming. CLI artifact subcommands keep the `artifact-*` shape for terminal ergonomics.
+- MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)
 - `GET /context/[ticketId]` and `GET /projects` are intentionally UI-only (Overlord desktop/web). They are marked `// UI-private — not exposed via CLI/MCP by design` in code so future drift audits don't re-flag them.
 
 Source-of-truth files:

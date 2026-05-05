@@ -122,7 +122,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
       status: executeStatusName,
       title: nextTitle
     })
-    .select('id,organization_id,project_id,execution_target,status,ticket_sequence')
+    .select('id,ticket_id,organization_id,project_id,execution_target,status,ticket_sequence')
     .single();
 
   if (ticketError || !ticket) {
@@ -213,13 +213,14 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
         payload: {
           created_via: 'protocol.spawn',
           spawned_ticket_id: ticket.id,
+          spawned_ticket_id_label: ticket.ticket_id,
           spawned_ticket_title: nextTitle,
           spawned_ticket_sequence: ticket.ticket_sequence,
           delegate: ticketDelegate
         },
         phase: 'execute',
         session_id: parentSession.id,
-        summary: `Spawned ticket #${ticket.ticket_sequence}: ${nextTitle}`,
+        summary: `Spawned ticket ${ticket.ticket_id ?? ticket.ticket_sequence}: ${nextTitle}`,
         ticket_id: parentTicketId,
         created_by: createdBy
       });
@@ -237,6 +238,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
         personal: ticket.project_id === null,
         executionTarget: ticket.execution_target,
         status: ticket.status,
+        ticketId: ticket.ticket_id,
         ticketSequence: ticket.ticket_sequence
       },
       session: {

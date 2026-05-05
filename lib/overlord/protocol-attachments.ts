@@ -7,27 +7,41 @@ type OrganizationRole = Database['public']['Enums']['organization_role'];
 
 const WRITE_ROLES = new Set<OrganizationRole>(['AGENT', 'MANAGER', 'ADMIN']);
 
-type ArtifactAccessInput = {
+type TicketForAttachment = {
+  id: string;
+  organization_id: number;
+  project_id: string | null;
+};
+
+type ObjectiveForAttachment = {
+  id: string;
+  ticket_id: string;
+};
+
+type AttachmentAccessInput = {
   organizationId: number;
+  objectiveId: string;
   requireWrite: boolean;
   sessionKey: string;
   ticketId: string;
   userId: string;
 };
 
-type ArtifactAccessResult =
+type AttachmentAccessResult =
   | {
       error: string;
+      objective: null;
       session: null;
       ticket: null;
     }
   | {
       error: null;
+      objective: ObjectiveForAttachment;
       session: { id: string };
-      ticket: { id: string; organization_id: number; project_id: string | null };
+      ticket: TicketForAttachment;
     };
 
-export function sanitizeArtifactFileName(fileName: string): string {
+export function sanitizeAttachmentFileName(fileName: string): string {
   const sanitized = fileName
     .replace(/[\\/\0]/g, '-')
     .replace(/[\r\n\t]/g, ' ')
@@ -35,28 +49,30 @@ export function sanitizeArtifactFileName(fileName: string): string {
     .trim();
 
   if (!sanitized) {
-    return 'artifact';
+    return 'attachment';
   }
 
   return sanitized.slice(0, 180);
 }
 
-export function buildTicketStoragePath(
-  ticket: { organization_id: number; project_id: string | null; id: string },
+export function buildObjectiveAttachmentStoragePath(
+  ticket: TicketForAttachment,
+  objectiveId: string,
   fileName: string
 ) {
-  return `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${Date.now()}-${sanitizeArtifactFileName(fileName)}`;
+  return `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${objectiveId}/${Date.now()}-${sanitizeAttachmentFileName(fileName)}`;
 }
 
-export function ensureTicketStoragePath(
+export function ensureObjectiveAttachmentStoragePath(
   storagePath: string,
-  ticket: { organization_id: number; project_id: string | null; id: string }
+  ticket: TicketForAttachment,
+  objectiveId: string
 ) {
-  const expectedPrefix = `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/`;
+  const expectedPrefix = `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${objectiveId}/`;
   return storagePath.startsWith(expectedPrefix);
 }
 
-export function buildSignedUploadUrl(storagePath: string, token: string) {
+export function buildAttachmentSignedUploadUrl(storagePath: string, token: string) {
   const supabaseUrl = getSupabaseUrl().replace(/\/$/, '');
   const encodedPath = storagePath
     .split('/')
@@ -65,14 +81,15 @@ export function buildSignedUploadUrl(storagePath: string, token: string) {
   return `${supabaseUrl}/storage/v1/object/upload/sign/artifacts/${encodedPath}?token=${encodeURIComponent(token)}`;
 }
 
-export async function resolveArtifactAccess(
-  input: ArtifactAccessInput
-): Promise<ArtifactAccessResult> {
+export async function resolveAttachmentAccess(
+  input: AttachmentAccessInput
+): Promise<AttachmentAccessResult> {
   const supabase = createServiceRoleClient();
   const resolved = await resolveSession(input.sessionKey, input.ticketId, input.organizationId);
   if (!resolved.session) {
     return {
       error: resolved.error ?? 'Session not found.',
+      objective: null,
       session: null,
       ticket: null
     };
@@ -88,6 +105,23 @@ export async function resolveArtifactAccess(
   if (ticketError || !ticket) {
     return {
       error: 'Ticket not found or access denied.',
+      objective: null,
+      session: null,
+      ticket: null
+    };
+  }
+
+  const { data: objective, error: objectiveError } = await supabase
+    .from('objectives')
+    .select('id, ticket_id')
+    .eq('id', input.objectiveId)
+    .eq('ticket_id', input.ticketId)
+    .single();
+
+  if (objectiveError || !objective) {
+    return {
+      error: 'Objective not found for ticket.',
+      objective: null,
       session: null,
       ticket: null
     };
@@ -103,6 +137,7 @@ export async function resolveArtifactAccess(
   if (memberError || !member?.role) {
     return {
       error: 'Membership not found for token user.',
+      objective: null,
       session: null,
       ticket: null
     };
@@ -110,7 +145,8 @@ export async function resolveArtifactAccess(
 
   if (input.requireWrite && !WRITE_ROLES.has(member.role)) {
     return {
-      error: 'Insufficient role for artifact write access.',
+      error: 'Insufficient role for attachment write access.',
+      objective: null,
       session: null,
       ticket: null
     };
@@ -118,6 +154,7 @@ export async function resolveArtifactAccess(
 
   return {
     error: null,
+    objective,
     session: { id: resolved.session.id },
     ticket
   };

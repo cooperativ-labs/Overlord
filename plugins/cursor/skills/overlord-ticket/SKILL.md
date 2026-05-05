@@ -123,11 +123,13 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 ```bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
 ```
 
-The CLI also exposes the two-step variants `artifact-prepare-upload` and `artifact-finalize-upload` for callers that need a signed URL directly. Prefer `artifact-upload-file` for one-shot uploads.
+Objective attachment uploads also expose two-step variants — `attachment-prepare-upload` and `attachment-finalize-upload` — for callers that need a signed URL directly. Prefer `attachment-upload-file` for one-shot uploads.
+
+"Artifacts" in `deliver` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files.
 
 ## Defaults And Notes
 
@@ -146,4 +148,4 @@ The CLI also exposes the two-step variants `artifact-prepare-upload` and `artifa
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.2 -->
+<!-- version: 0.4.3 -->

@@ -1,19 +1,23 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { ensureTicketStoragePath, resolveArtifactAccess } from '@/lib/overlord/protocol-artifacts';
+import {
+  ensureObjectiveAttachmentStoragePath,
+  resolveAttachmentAccess
+} from '@/lib/overlord/protocol-attachments';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
-import { artifactGetDownloadUrlSchema } from '@/lib/overlord/validation';
+import { attachmentGetDownloadUrlSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
-  const parsed = await parseProtocolBody(request, artifactGetDownloadUrlSchema);
+  const parsed = await parseProtocolBody(request, attachmentGetDownloadUrlSchema);
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const {
-      artifactId,
+      attachmentId,
       expiresIn,
+      objectiveId: inputObjectiveId,
       sessionKey,
       storagePath: inputStoragePath,
       ticketId: rawTicketId
@@ -22,8 +26,41 @@ export async function POST(request: Request) {
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
-    const access = await resolveArtifactAccess({
+    const supabase = createServiceRoleClient();
+
+    let storagePath = inputStoragePath ?? null;
+    let objectiveId = inputObjectiveId ?? null;
+    if (!storagePath && attachmentId) {
+      const { data: attachment, error: attachmentError } = await supabase
+        .from('objective_attachments')
+        .select('storage_path, objective_id')
+        .eq('id', attachmentId)
+        .eq('ticket_id', ticketId)
+        .single();
+
+      if (attachmentError || !attachment?.storage_path) {
+        return NextResponse.json(
+          { error: 'Attachment not found or has no storage path.' },
+          { status: 404 }
+        );
+      }
+      storagePath = attachment.storage_path;
+      objectiveId = attachment.objective_id;
+    }
+
+    if (!storagePath) {
+      return NextResponse.json({ error: 'storagePath is required.' }, { status: 400 });
+    }
+    if (!objectiveId) {
+      return NextResponse.json(
+        { error: 'objectiveId is required when using storagePath.' },
+        { status: 400 }
+      );
+    }
+
+    const access = await resolveAttachmentAccess({
       organizationId,
+      objectiveId,
       requireWrite: false,
       sessionKey,
       ticketId,
@@ -34,33 +71,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: access.error ?? 'Access denied.' }, { status: 403 });
     }
 
-    const supabase = createServiceRoleClient();
-
-    let storagePath = inputStoragePath ?? null;
-    if (!storagePath && artifactId) {
-      const { data: artifact, error: artifactError } = await supabase
-        .from('artifacts')
-        .select('storage_path')
-        .eq('id', artifactId)
-        .eq('ticket_id', ticketId)
-        .single();
-
-      if (artifactError || !artifact?.storage_path) {
-        return NextResponse.json(
-          { error: 'Artifact not found or has no storage path.' },
-          { status: 404 }
-        );
-      }
-      storagePath = artifact.storage_path;
-    }
-
-    if (!storagePath) {
-      return NextResponse.json({ error: 'storagePath is required.' }, { status: 400 });
-    }
-
-    if (!ensureTicketStoragePath(storagePath, access.ticket)) {
+    if (!ensureObjectiveAttachmentStoragePath(storagePath, access.ticket, objectiveId)) {
       return NextResponse.json(
-        { error: 'storagePath does not match ticket path.' },
+        { error: 'storagePath does not match ticket/objective path.' },
         { status: 400 }
       );
     }

@@ -4,7 +4,7 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { type TokenContext } from '../auth.ts';
 import { resolveSession } from '../session.ts';
 
-type ArtifactAccess =
+type AttachmentAccess =
   | {
       error: string;
       session: null;
@@ -13,38 +13,40 @@ type ArtifactAccess =
   | {
       error: null;
       session: { id: string };
-      ticket: { id: string; organization_id: number; project_id: string };
+      ticket: { id: string; organization_id: number; project_id: string | null };
     };
 
 const WRITE_ROLES = new Set(['AGENT', 'MANAGER', 'ADMIN']);
 
-export function sanitizeArtifactFileName(fileName: string): string {
+export function sanitizeAttachmentFileName(fileName: string): string {
   const sanitized = fileName
     .replace(/[\\/\0]/g, '-')
     .replace(/[\r\n\t]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (!sanitized) return 'artifact';
+  if (!sanitized) return 'attachment';
   return sanitized.slice(0, 180);
 }
 
-export function buildTicketStoragePath(
-  ticket: { organization_id: number; project_id: string; id: string },
+export function buildObjectiveAttachmentStoragePath(
+  ticket: { organization_id: number; project_id: string | null; id: string },
+  objectiveId: string,
   fileName: string
 ) {
-  return `${ticket.organization_id}/${ticket.project_id}/${ticket.id}/${Date.now()}-${sanitizeArtifactFileName(fileName)}`;
+  return `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${objectiveId}/${Date.now()}-${sanitizeAttachmentFileName(fileName)}`;
 }
 
-export function ensureTicketStoragePath(
+export function ensureObjectiveAttachmentStoragePath(
   storagePath: string,
-  ticket: { organization_id: number; project_id: string; id: string }
+  ticket: { organization_id: number; project_id: string | null; id: string },
+  objectiveId: string
 ) {
-  const expectedPrefix = `${ticket.organization_id}/${ticket.project_id}/${ticket.id}/`;
+  const expectedPrefix = `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${objectiveId}/`;
   return storagePath.startsWith(expectedPrefix);
 }
 
-export function buildSignedUploadUrl(storagePath: string, token: string) {
+export function buildAttachmentSignedUploadUrl(storagePath: string, token: string) {
   const supabaseUrl = (Deno.env.get('SUPABASE_URL') ?? '').replace(/\/$/, '');
   const encodedPath = storagePath
     .split('/')
@@ -53,11 +55,11 @@ export function buildSignedUploadUrl(storagePath: string, token: string) {
   return `${supabaseUrl}/storage/v1/object/upload/sign/artifacts/${encodedPath}?token=${encodeURIComponent(token)}`;
 }
 
-export async function resolveArtifactAccess(
+export async function resolveAttachmentAccess(
   supabase: SupabaseClient,
-  args: { sessionKey: string; ticketId: string; requireWrite: boolean },
+  args: { sessionKey: string; ticketId: string; objectiveId: string; requireWrite: boolean },
   ctx: TokenContext
-): Promise<ArtifactAccess> {
+): Promise<AttachmentAccess> {
   const resolved = await resolveSession(
     supabase,
     args.sessionKey,
@@ -89,6 +91,21 @@ export async function resolveArtifactAccess(
     };
   }
 
+  const { data: objective, error: objectiveError } = await supabase
+    .from('objectives')
+    .select('id')
+    .eq('id', args.objectiveId)
+    .eq('ticket_id', resolvedTicketId)
+    .single();
+
+  if (objectiveError || !objective) {
+    return {
+      error: 'Objective not found for ticket.',
+      session: null,
+      ticket: null
+    };
+  }
+
   const { data: member, error: memberError } = await supabase
     .from('members')
     .select('role')
@@ -106,7 +123,7 @@ export async function resolveArtifactAccess(
 
   if (args.requireWrite && !WRITE_ROLES.has(member.role)) {
     return {
-      error: 'Insufficient role for artifact write access.',
+      error: 'Insufficient role for attachment write access.',
       session: null,
       ticket: null
     };

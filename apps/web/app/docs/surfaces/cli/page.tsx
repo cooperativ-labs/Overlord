@@ -84,11 +84,11 @@ ovld protocol read-context --session-key <key> --ticket-id <id>
 ovld protocol write-context --session-key <key> --ticket-id <id> \\
   --key "key" --value '"json-value"'
 
-# Upload and download artifacts
-ovld protocol artifact-upload-file --session-key <key> --ticket-id <id> \\
-  --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <key> --ticket-id <id> \\
-  --artifact-id <artifact-id>
+# Upload and download objective attachments
+ovld protocol attachment-upload-file --session-key <key> --ticket-id <id> \\
+  --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <key> --ticket-id <id> \\
+  --attachment-id <attachment-id>
 \`\`\`
 
 ## When to use the CLI

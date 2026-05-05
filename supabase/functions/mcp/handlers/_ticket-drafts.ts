@@ -237,7 +237,7 @@ export async function createDraftTicket(
       status: draftStatusName,
       title: draft.title
     })
-    .select('id, organization_id, project_id, execution_target, status, title')
+    .select('id, ticket_id, organization_id, project_id, execution_target, status, title')
     .single();
 
   if (createTicketError || !createdTicket) {
@@ -262,7 +262,7 @@ export async function createDraftTicket(
     draftStatusName
   );
 
-  const ticketReference = createdTicket.id.slice(-8);
+  const ticketReference = createdTicket.ticket_id ?? createdTicket.id.slice(-8);
   const { error: eventError } = await supabase.from('ticket_events').insert({
     event_type: 'system',
     payload: {

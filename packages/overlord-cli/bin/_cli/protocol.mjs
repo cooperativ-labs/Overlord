@@ -43,7 +43,11 @@ export function resolveProtocolAgentIdentifier(flags = {}) {
   return envAgent || 'claude-code';
 }
 
-export function resolveProtocolTicketDelegate(flags = {}, modelIdentifier = '', agentIdentifier = '') {
+export function resolveProtocolTicketDelegate(
+  flags = {},
+  modelIdentifier = '',
+  agentIdentifier = ''
+) {
   const explicitDelegate = typeof flags.delegate === 'string' ? flags.delegate.trim() : '';
   if (explicitDelegate) return explicitDelegate;
 
@@ -120,19 +124,20 @@ async function apiPost(
     if (error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
       throw new Error(
         `Request timed out after ${timeoutMs}ms calling ${requestUrl}.\n` +
-        `Tip: Ensure Overlord is running and reachable from this environment. ` +
-        `Increase the limit with --timeout <ms> or OVERLORD_TIMEOUT=<ms>.`
+          `Tip: Ensure Overlord is running and reachable from this environment. ` +
+          `Increase the limit with --timeout <ms> or OVERLORD_TIMEOUT=<ms>.`
       );
     }
 
-    const causeCode = (
+    const causeCode =
       typeof error === 'object' &&
       error !== null &&
       'cause' in error &&
       typeof error.cause === 'object' &&
       error.cause !== null &&
       'code' in error.cause
-    ) ? String(error.cause.code) : '';
+        ? String(error.cause.code)
+        : '';
 
     let hint = 'Check your network and Overlord server settings.';
     if (causeCode === 'ECONNREFUSED') {
@@ -162,10 +167,10 @@ async function apiPost(
   if (res.status === 401) {
     throw new Error(
       `Authentication failed (401): ${data.error ?? 'Invalid or missing token.'}\n` +
-      `IMPORTANT: Stop all work immediately. Your Overlord auth session is invalid, expired, or missing required scope.\n` +
-      `First run \`ovld auth repair\` yourself.\n` +
-      `If repair does not fix it, ask the user to sign in again with Overlord Desktop or \`ovld auth login\` if needed.\n` +
-      `Then ask whether they would like to proceed without submitting updates to Overlord.`
+        `IMPORTANT: Stop all work immediately. Your Overlord auth session is invalid, expired, or missing required scope.\n` +
+        `First run \`ovld auth repair\` yourself.\n` +
+        `If repair does not fix it, ask the user to sign in again with Overlord Desktop or \`ovld auth login\` if needed.\n` +
+        `Then ask whether they would like to proceed without submitting updates to Overlord.`
     );
   }
 
@@ -376,10 +381,10 @@ function createFileChangeCheckError(message, changedFiles, rationalePaths = []) 
 
   return new Error(
     `${message}\n` +
-    `Overlord persists file changes through \`changeRationales\`, not \`file_changes\` artifacts.\n` +
-    `Re-run with --change-rationales-json or --change-rationales-file, or pass --skip-file-change-check if this was intentional.` +
-    `${changedPreview ? `\nChanged files: ${changedPreview}${changedFiles.size > 10 ? ', ...' : ''}` : ''}` +
-    `${rationalePreview ? `\nProvided rationale paths: ${rationalePreview}${rationalePaths.length > 10 ? ', ...' : ''}` : ''}`
+      `Overlord persists file changes through \`changeRationales\`, not \`file_changes\` artifacts.\n` +
+      `Re-run with --change-rationales-json or --change-rationales-file, or pass --skip-file-change-check if this was intentional.` +
+      `${changedPreview ? `\nChanged files: ${changedPreview}${changedFiles.size > 10 ? ', ...' : ''}` : ''}` +
+      `${rationalePreview ? `\nProvided rationale paths: ${rationalePreview}${rationalePaths.length > 10 ? ', ...' : ''}` : ''}`
   );
 }
 
@@ -427,7 +432,8 @@ function detectClaudeSessionId() {
 
     if (!fs.existsSync(sessionsDir)) return null;
 
-    const files = fs.readdirSync(sessionsDir)
+    const files = fs
+      .readdirSync(sessionsDir)
       .filter(f => f.endsWith('.jsonl'))
       .map(f => ({
         name: f,
@@ -553,7 +559,9 @@ async function protocolUpdate(args) {
       : {}),
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
     ...(flags['event-type'] ? { eventType: String(flags['event-type']) } : {}),
-    ...(flags['payload-json'] ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) } : {}),
+    ...(flags['payload-json']
+      ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) }
+      : {}),
     ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
 
@@ -634,7 +642,9 @@ async function protocolAsk(args) {
     ticketId,
     question,
     ...(flags.phase ? { phase: String(flags.phase) } : {}),
-    ...(flags['payload-json'] ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) } : {})
+    ...(flags['payload-json']
+      ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) }
+      : {})
   };
 
   const data = await apiPost(
@@ -737,7 +747,13 @@ async function protocolWriteContext(args) {
     ticketId,
     key,
     value,
-    ...(flags.tags ? { tags: String(flags.tags).split(',').map(t => t.trim()) } : {})
+    ...(flags.tags
+      ? {
+          tags: String(flags.tags)
+            .split(',')
+            .map(t => t.trim())
+        }
+      : {})
   };
 
   const data = await apiPost(
@@ -764,7 +780,8 @@ async function protocolDeliver(args) {
   const deliverPayload = flags['payload-file']
     ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
     : null;
-  const summary = deliverPayload?.summary ??
+  const summary =
+    deliverPayload?.summary ??
     (flags['summary-file']
       ? readTextFile(String(flags['summary-file']), '--summary-file')
       : requireFlag(flags, 'summary', undefined));
@@ -789,7 +806,8 @@ async function protocolDeliver(args) {
     throw new Error('Use either --payload-file or change-rationale flags, not both');
   }
 
-  const changeRationales = deliverPayload?.changeRationales ?? await resolveChangeRationales(flags);
+  const changeRationales =
+    deliverPayload?.changeRationales ?? (await resolveChangeRationales(flags));
   validateDeliverFileChanges(flags, changeRationales);
 
   const body = {
@@ -813,14 +831,15 @@ async function protocolDeliver(args) {
 }
 
 // ---------------------------------------------------------------------------
-// artifacts
+// objective attachments
 // ---------------------------------------------------------------------------
 
-async function protocolArtifactPrepareUpload(args) {
+async function protocolAttachmentPrepareUpload(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const fileName = requireFlag(flags, 'file-name', undefined);
 
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
@@ -829,12 +848,14 @@ async function protocolArtifactPrepareUpload(args) {
   const body = {
     sessionKey,
     ticketId,
+    objectiveId,
     fileName,
     ...(flags.label ? { label: String(flags.label) } : {}),
-    ...(flags['artifact-type'] ? { artifactType: String(flags['artifact-type']) } : {}),
     ...(flags['content-type'] ? { contentType: String(flags['content-type']) } : {}),
     ...(flags['file-size'] ? { fileSize: parseInt(String(flags['file-size']), 10) } : {}),
-    ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
+    ...(flags['metadata-json']
+      ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) }
+      : {})
   };
 
   const data = await apiPost(
@@ -842,18 +863,19 @@ async function protocolArtifactPrepareUpload(args) {
     bearerToken,
     localSecret,
     organizationId,
-    '/api/protocol/artifacts/prepare-upload',
+    '/api/protocol/attachments/prepare-upload',
     body,
     timeoutMs
   );
   console.log(JSON.stringify(data, null, 2));
 }
 
-async function protocolArtifactFinalizeUpload(args) {
+async function protocolAttachmentFinalizeUpload(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const storagePath = requireFlag(flags, 'storage-path', undefined);
   const label = requireFlag(flags, 'label', undefined);
 
@@ -863,12 +885,14 @@ async function protocolArtifactFinalizeUpload(args) {
   const body = {
     sessionKey,
     ticketId,
+    objectiveId,
     storagePath,
     label,
-    ...(flags['artifact-type'] ? { artifactType: String(flags['artifact-type']) } : {}),
     ...(flags['content-type'] ? { contentType: String(flags['content-type']) } : {}),
     ...(flags['file-size'] ? { fileSize: parseInt(String(flags['file-size']), 10) } : {}),
-    ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
+    ...(flags['metadata-json']
+      ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) }
+      : {})
   };
 
   const data = await apiPost(
@@ -876,20 +900,23 @@ async function protocolArtifactFinalizeUpload(args) {
     bearerToken,
     localSecret,
     organizationId,
-    '/api/protocol/artifacts/finalize-upload',
+    '/api/protocol/attachments/finalize-upload',
     body,
     timeoutMs
   );
   console.log(JSON.stringify(data, null, 2));
 }
 
-async function protocolArtifactGetDownloadUrl(args) {
+async function protocolAttachmentGetDownloadUrl(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
-  if (!flags['artifact-id'] && !flags['storage-path']) {
-    throw new Error('--artifact-id or --storage-path is required');
+  if (!flags['attachment-id'] && !flags['storage-path']) {
+    throw new Error('--attachment-id or --storage-path is required');
+  }
+  if (flags['storage-path'] && !flags['objective-id']) {
+    throw new Error('--objective-id is required when using --storage-path');
   }
 
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
@@ -898,7 +925,8 @@ async function protocolArtifactGetDownloadUrl(args) {
   const body = {
     sessionKey,
     ticketId,
-    ...(flags['artifact-id'] ? { artifactId: String(flags['artifact-id']) } : {}),
+    ...(flags['objective-id'] ? { objectiveId: String(flags['objective-id']) } : {}),
+    ...(flags['attachment-id'] ? { attachmentId: String(flags['attachment-id']) } : {}),
     ...(flags['storage-path'] ? { storagePath: String(flags['storage-path']) } : {}),
     ...(flags['expires-in'] ? { expiresIn: parseInt(String(flags['expires-in']), 10) } : {})
   };
@@ -908,18 +936,19 @@ async function protocolArtifactGetDownloadUrl(args) {
     bearerToken,
     localSecret,
     organizationId,
-    '/api/protocol/artifacts/get-download-url',
+    '/api/protocol/attachments/get-download-url',
     body,
     timeoutMs
   );
   console.log(JSON.stringify(data, null, 2));
 }
 
-async function protocolArtifactUploadFile(args) {
+async function protocolAttachmentUploadFile(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const filePath = requireFlag(flags, 'file', undefined);
 
   const { readFile, stat } = await import('node:fs/promises');
@@ -934,21 +963,25 @@ async function protocolArtifactUploadFile(args) {
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const timeoutMs = resolveTimeout(flags);
 
+  const metadata = flags['metadata-json']
+    ? parseJsonFlag('--metadata-json', flags['metadata-json'])
+    : undefined;
+
   const prepared = await apiPost(
     platformUrl,
     bearerToken,
     localSecret,
     organizationId,
-    '/api/protocol/artifacts/prepare-upload',
+    '/api/protocol/attachments/prepare-upload',
     {
       sessionKey,
       ticketId,
+      objectiveId,
       fileName,
       label,
-      artifactType: String(flags['artifact-type'] ?? 'document'),
       contentType,
       fileSize: fileStats.size,
-      ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
+      ...(metadata ? { metadata } : {})
     },
     timeoutMs
   );
@@ -966,16 +999,16 @@ async function protocolArtifactUploadFile(args) {
     bearerToken,
     localSecret,
     organizationId,
-    '/api/protocol/artifacts/finalize-upload',
+    '/api/protocol/attachments/finalize-upload',
     {
       sessionKey,
       ticketId,
+      objectiveId,
       storagePath,
       label,
-      artifactType: String(flags['artifact-type'] ?? 'document'),
       contentType,
       fileSize: fileStats.size,
-      ...(flags['metadata-json'] ? { metadata: parseJsonFlag('--metadata-json', flags['metadata-json']) } : {})
+      ...(metadata ? { metadata } : {})
     },
     timeoutMs
   );
@@ -1098,12 +1131,18 @@ async function protocolPrompt(args) {
     ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
     ...(personal ? { personal: true } : {}),
     ...(workingDirectory ? { workingDirectory: String(workingDirectory) } : {}),
-    ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
+    ...(flags['acceptance-criteria']
+      ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
+      : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
     delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier),
-    ...(flags['parent-session-key'] ? { parentSessionKey: String(flags['parent-session-key']) } : {}),
-    ...(flags['parent-ticket-id'] ? { parentTicketId: String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '') } : {})
+    ...(flags['parent-session-key']
+      ? { parentSessionKey: String(flags['parent-session-key']) }
+      : {}),
+    ...(flags['parent-ticket-id']
+      ? { parentTicketId: String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '') }
+      : {})
   };
 
   const data = await apiPost(
@@ -1151,7 +1190,9 @@ async function protocolCreateTicket(args) {
       objective,
       ...(flags.title ? { title: String(flags.title) } : {}),
       ...(flags.priority ? { priority: String(flags.priority) } : {}),
-      ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
+      ...(flags['acceptance-criteria']
+        ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
+        : {}),
       ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
       ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
       delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
@@ -1189,7 +1230,9 @@ async function protocolCreateTicket(args) {
     ...(standaloneWorkingDirectory ? { workingDirectory: standaloneWorkingDirectory } : {}),
     ...(flags.title ? { title: String(flags.title) } : {}),
     ...(flags.priority ? { priority: String(flags.priority) } : {}),
-    ...(flags['acceptance-criteria'] ? { acceptanceCriteria: String(flags['acceptance-criteria']) } : {}),
+    ...(flags['acceptance-criteria']
+      ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
+      : {}),
     ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
     ...(flags['execution-target'] ? { executionTarget: String(flags['execution-target']) } : {}),
     delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
@@ -1227,7 +1270,10 @@ async function protocolSearchTickets(args) {
     ...(flags.query ? { query: String(flags.query) } : {}),
     ...(statuses?.length ? { statuses } : {}),
     ...(flags['include-completed'] !== undefined
-      ? { includeCompleted: flags['include-completed'] !== false && flags['include-completed'] !== 'false' }
+      ? {
+          includeCompleted:
+            flags['include-completed'] !== false && flags['include-completed'] !== 'false'
+        }
       : {}),
     ...(flags.limit ? { limit: parseInt(String(flags.limit), 10) } : {}),
     ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
@@ -1318,11 +1364,11 @@ Subcommands:
   permission-request        Notify Overlord that the agent is requesting tool permission
   read-context              Read shared persistent context for this ticket
   write-context             Write shared persistent context for future sessions
-  deliver                   Finish work, send artifacts, and move the ticket to review
-  artifact-prepare-upload   Get a signed upload URL for a ticket artifact
-  artifact-finalize-upload  Finalize an uploaded artifact row after storage upload
-  artifact-download-url     Get a signed download URL for an existing artifact
-  artifact-upload-file      Prepare, upload, and finalize a local file in one command
+  deliver                     Finish work, send artifacts, and move the ticket to review
+  attachment-prepare-upload   Get a signed upload URL for an objective attachment
+  attachment-finalize-upload  Finalize an uploaded attachment row after storage upload
+  attachment-download-url     Get a signed download URL for an existing attachment
+  attachment-upload-file      Prepare, upload, and finalize a local file in one command
 
 Environment fallback:
   --session-key <- SESSION_KEY
@@ -1551,47 +1597,48 @@ create:
     Standalone create auto-discovers the project from the current working directory unless --personal is set.
     Follow-up create requires both --session-key and --ticket-id.
 
-artifact-prepare-upload:
+attachment-prepare-upload:
   Required:
     --session-key <key>
     --ticket-id <id>
+    --objective-id <id>
     --file-name <name>
   Optional:
     --label <text>
-    --artifact-type <type>
     --content-type <mime>
     --file-size <bytes>
     --metadata-json <json>
 
-artifact-finalize-upload:
+attachment-finalize-upload:
   Required:
     --session-key <key>
     --ticket-id <id>
+    --objective-id <id>
     --storage-path <path>
     --label <text>
   Optional:
-    --artifact-type <type>
     --content-type <mime>
     --file-size <bytes>
     --metadata-json <json>
 
-artifact-download-url:
+attachment-download-url:
   Required:
     --session-key <key>
     --ticket-id <id>
-    one of: --artifact-id <id> | --storage-path <path>
+    one of: --attachment-id <id> | --storage-path <path>
   Optional:
+    --objective-id <id>       Required when using --storage-path
     --expires-in <seconds>
 
-artifact-upload-file:
+attachment-upload-file:
   Required:
     --session-key <key>
     --ticket-id <id>
+    --objective-id <id>
     --file <path>
   Optional:
     --file-name <name>        Defaults to basename of --file
     --label <text>            Defaults to file name
-    --artifact-type <type>    Defaults to document
     --content-type <mime>     Defaults to application/octet-stream
     --metadata-json <json>
 
@@ -1614,9 +1661,9 @@ Examples:
   ovld protocol ask --session-key <key> --ticket-id <id> --question-file ./question.txt
   ovld protocol read-context --session-key <key> --ticket-id <id> --query arch --limit 5
   ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"' --tags repo,agent
-  ovld protocol artifact-prepare-upload --session-key <key> --ticket-id <id> --file-name spec.pdf --content-type application/pdf
-  ovld protocol artifact-upload-file --session-key <key> --ticket-id <id> --file ./spec.pdf --content-type application/pdf
-  ovld protocol artifact-download-url --session-key <key> --ticket-id <id> --artifact-id <artifact-id>
+  ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
+  ovld protocol attachment-upload-file --session-key <key> --ticket-id <id> --objective-id <objective-id> --file ./spec.pdf
+  ovld protocol attachment-download-url --session-key <key> --ticket-id <id> --attachment-id <attachment-id>
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <id> --payload-file ./deliver.json
@@ -1627,25 +1674,82 @@ Examples:
     return;
   }
 
-  if (subcommand === 'discover-project') { await protocolDiscoverProject(args); return; }
-  if (subcommand === 'auth-status') { await protocolAuthStatus(); return; }
-  if (subcommand === 'attach') { await protocolAttach(args); return; }
-  if (subcommand === 'connect') { await protocolConnect(args); return; }
-  if (subcommand === 'load-context') { await protocolLoadContext(args); return; }
-  if (subcommand === 'search-tickets') { await protocolSearchTickets(args); return; }
-  if (subcommand === 'create' || subcommand === 'create-ticket') { await protocolCreateTicket(args); return; }
-  if (subcommand === 'prompt' || subcommand === 'spawn') { await protocolPrompt(args); return; }
-  if (subcommand === 'artifact-prepare-upload') { await protocolArtifactPrepareUpload(args); return; }
-  if (subcommand === 'artifact-finalize-upload') { await protocolArtifactFinalizeUpload(args); return; }
-  if (subcommand === 'artifact-download-url') { await protocolArtifactGetDownloadUrl(args); return; }
-  if (subcommand === 'artifact-upload-file') { await protocolArtifactUploadFile(args); return; }
-  if (subcommand === 'update') { await protocolUpdate(args); return; }
-  if (subcommand === 'record-change-rationales') { await protocolRecordChangeRationales(args); return; }
-  if (subcommand === 'ask') { await protocolAsk(args); return; }
-  if (subcommand === 'permission-request') { await protocolPermissionRequest(args); return; }
-  if (subcommand === 'read-context') { await protocolReadContext(args); return; }
-  if (subcommand === 'write-context') { await protocolWriteContext(args); return; }
-  if (subcommand === 'deliver') { await protocolDeliver(args); return; }
+  if (subcommand === 'discover-project') {
+    await protocolDiscoverProject(args);
+    return;
+  }
+  if (subcommand === 'auth-status') {
+    await protocolAuthStatus();
+    return;
+  }
+  if (subcommand === 'attach') {
+    await protocolAttach(args);
+    return;
+  }
+  if (subcommand === 'connect') {
+    await protocolConnect(args);
+    return;
+  }
+  if (subcommand === 'load-context') {
+    await protocolLoadContext(args);
+    return;
+  }
+  if (subcommand === 'search-tickets') {
+    await protocolSearchTickets(args);
+    return;
+  }
+  if (subcommand === 'create' || subcommand === 'create-ticket') {
+    await protocolCreateTicket(args);
+    return;
+  }
+  if (subcommand === 'prompt' || subcommand === 'spawn') {
+    await protocolPrompt(args);
+    return;
+  }
+  if (subcommand === 'attachment-prepare-upload') {
+    await protocolAttachmentPrepareUpload(args);
+    return;
+  }
+  if (subcommand === 'attachment-finalize-upload') {
+    await protocolAttachmentFinalizeUpload(args);
+    return;
+  }
+  if (subcommand === 'attachment-download-url') {
+    await protocolAttachmentGetDownloadUrl(args);
+    return;
+  }
+  if (subcommand === 'attachment-upload-file') {
+    await protocolAttachmentUploadFile(args);
+    return;
+  }
+  if (subcommand === 'update') {
+    await protocolUpdate(args);
+    return;
+  }
+  if (subcommand === 'record-change-rationales') {
+    await protocolRecordChangeRationales(args);
+    return;
+  }
+  if (subcommand === 'ask') {
+    await protocolAsk(args);
+    return;
+  }
+  if (subcommand === 'permission-request') {
+    await protocolPermissionRequest(args);
+    return;
+  }
+  if (subcommand === 'read-context') {
+    await protocolReadContext(args);
+    return;
+  }
+  if (subcommand === 'write-context') {
+    await protocolWriteContext(args);
+    return;
+  }
+  if (subcommand === 'deliver') {
+    await protocolDeliver(args);
+    return;
+  }
 
   console.error(`Unknown protocol subcommand: ${subcommand}\n`);
   console.log('Run: ovld protocol help');

@@ -118,10 +118,10 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `read-context` - read shared persistent context for this ticket
 - `write-context` - write shared persistent context for future sessions
 - `deliver` - finish work, send artifacts, and move the ticket to review
-- `artifact-prepare-upload` - get a signed upload URL for a ticket artifact
-- `artifact-finalize-upload` - finalize an uploaded artifact row after storage upload
-- `artifact-download-url` - get a signed download URL for an existing artifact
-- `artifact-upload-file` - prepare, upload, and finalize a local file in one command
+- `attachment-prepare-upload` - get a signed upload URL for an objective attachment
+- `attachment-finalize-upload` - finalize an uploaded objective attachment row after storage upload
+- `attachment-download-url` - get a signed download URL for an existing objective attachment
+- `attachment-upload-file` - prepare, upload, and finalize a local objective attachment in one command
 
 ## License
 

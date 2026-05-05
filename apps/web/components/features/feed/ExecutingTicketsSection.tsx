@@ -42,7 +42,7 @@ export function ExecutingTicketsSection({ tickets }: ExecutingTicketsSectionProp
               </div>
 
               <p className="line-clamp-2 text-sm font-medium leading-5 text-foreground">
-                {ticket.ticket_sequence ? `#${ticket.ticket_sequence} ` : ''}
+                {ticket.ticket_id ? `${ticket.ticket_id} ` : ''}
                 {ticket.title ?? 'Untitled ticket'}
               </p>
 

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.12.0] - 2026-05-05:13:46
+
+### Added
+- Add objective attachment upload support across web ticket surfaces, protocol routes, server actions, and MCP handlers.
+- Add ticket identifier support in schema and ticket search flows to improve referencing and lookup.
+
+### Fixed
+- Keep protocol attachment upload and download flows aligned across API, CLI, MCP handlers, and plugin surfaces after the artifact-to-attachment transition.
+
+### Changed
+- Rename protocol and backend artifact surfaces to attachment-oriented naming throughout web routes, shared protocol helpers, edge handlers, and generated connector prompts.
+- Refresh ticket feed, panel, and filter surfaces on web and mobile to align with the updated attachment and ticket metadata experience.
+
+### Security
+- None.
+
+### Documentation
+- Update CLI, connector, and agent skill docs to reflect the attachment protocol surface, revised ticket flows, and current command references.
+
 ## [5.11.0] - 2026-05-04:08:51
 
 ### Added

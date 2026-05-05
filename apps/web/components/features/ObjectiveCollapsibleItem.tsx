@@ -4,9 +4,11 @@ import { CheckCircle, ChevronDown, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
+import { ObjectiveAttachmentUpload } from '@/components/features/ObjectiveAttachmentUpload';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
@@ -20,6 +22,7 @@ type ObjectiveCollapsibleItemProps = {
   objective: ObjectiveRow;
   index: number;
   ticketId: string;
+  attachments: ObjectiveAttachment[];
   isLatest?: boolean;
 };
 
@@ -27,6 +30,7 @@ export function ObjectiveCollapsibleItem({
   objective,
   index,
   ticketId,
+  attachments,
   isLatest
 }: ObjectiveCollapsibleItemProps) {
   const objectiveTimestamp = new Date(objective.created_at).toLocaleString();
@@ -99,6 +103,12 @@ export function ObjectiveCollapsibleItem({
         </div>
         <CollapsibleContent className="px-3 pb-2 pt-1 border-b">
           <MarkdownContent compact>{objective.objective}</MarkdownContent>
+          <ObjectiveAttachmentUpload
+            compact
+            ticketId={ticketId}
+            objectiveId={objective.id}
+            initialAttachments={attachments}
+          />
         </CollapsibleContent>
       </div>
     </Collapsible>

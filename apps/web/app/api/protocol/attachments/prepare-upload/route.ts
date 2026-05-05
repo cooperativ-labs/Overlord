@@ -2,26 +2,26 @@ import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import {
-  buildSignedUploadUrl,
-  buildTicketStoragePath,
-  resolveArtifactAccess
-} from '@/lib/overlord/protocol-artifacts';
+  buildAttachmentSignedUploadUrl,
+  buildObjectiveAttachmentStoragePath,
+  resolveAttachmentAccess
+} from '@/lib/overlord/protocol-attachments';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
-import { artifactPrepareUploadSchema } from '@/lib/overlord/validation';
+import { attachmentPrepareUploadSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
-  const parsed = await parseProtocolBody(request, artifactPrepareUploadSchema);
+  const parsed = await parseProtocolBody(request, attachmentPrepareUploadSchema);
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const {
-      artifactType,
       contentType,
       fileName,
       fileSize,
       label,
       metadata,
+      objectiveId,
       sessionKey,
       ticketId: rawTicketId
     } = parsed.data;
@@ -29,8 +29,9 @@ export async function POST(request: Request) {
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
-    const access = await resolveArtifactAccess({
+    const access = await resolveAttachmentAccess({
       organizationId,
+      objectiveId,
       requireWrite: true,
       sessionKey,
       ticketId,
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: access.error ?? 'Access denied.' }, { status: 403 });
     }
 
-    const storagePath = buildTicketStoragePath(access.ticket, fileName);
+    const storagePath = buildObjectiveAttachmentStoragePath(access.ticket, objectiveId, fileName);
     const supabase = createServiceRoleClient();
 
     const { data, error } = await supabase.storage
@@ -59,14 +60,14 @@ export async function POST(request: Request) {
       upload: {
         method: 'PUT',
         token: data.token,
-        url: buildSignedUploadUrl(storagePath, data.token)
+        url: buildAttachmentSignedUploadUrl(storagePath, data.token)
       },
       draft: {
-        artifactType,
         contentType,
         fileSize: fileSize ?? null,
         label: (label?.trim() || fileName).slice(0, 160),
         metadata,
+        objectiveId,
         storagePath,
         ticketId
       }

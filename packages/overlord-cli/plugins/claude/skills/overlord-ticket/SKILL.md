@@ -141,8 +141,8 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 ```bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
 ```
 
 ## Rules
@@ -158,4 +158,4 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.2.5 -->
+<!-- version: 0.2.6 -->

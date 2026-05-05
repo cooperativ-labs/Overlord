@@ -1,31 +1,33 @@
 'use client';
 
 import { InlineEditField } from '@/components/features/InlineEditField';
+import { ObjectiveAttachmentUpload } from '@/components/features/ObjectiveAttachmentUpload';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
+import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 
 type DraftObjectiveProps = {
   ticketId: string;
-  organizationId: number;
   objectiveId: string;
   objectiveState: string | null;
   initialValue: string;
   canMarkExecuted: boolean;
   fileMentionPaths: string[];
+  initialAttachments: ObjectiveAttachment[];
   workingDirectory: string | null;
 };
 
 export function DraftObjective({
   ticketId,
-  organizationId,
   objectiveId,
   objectiveState,
   initialValue,
   canMarkExecuted,
   fileMentionPaths,
+  initialAttachments,
   workingDirectory
 }: DraftObjectiveProps) {
   return (
-    <div className="flex w-full items-start gap-3">
+    <div className="flex w-full flex-col">
       <InlineEditField
         displayClassName="text-base leading-relaxed"
         field="objective"
@@ -33,7 +35,6 @@ export function DraftObjective({
         initialValue={initialValue}
         inputClassName="text-base leading-relaxed"
         multiline
-        organizationId={organizationId}
         placeholder="Click to add an objective…"
         renderMarkdown
         ticketId={ticketId}
@@ -47,6 +48,11 @@ export function DraftObjective({
           ticketId={ticketId}
         />
       </InlineEditField>
+      <ObjectiveAttachmentUpload
+        ticketId={ticketId}
+        objectiveId={objectiveId}
+        initialAttachments={initialAttachments}
+      />
     </div>
   );
 }

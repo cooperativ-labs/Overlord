@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     const { data: sourceTicket, error: sourceTicketError } = await supabase
       .from('tickets')
-      .select('id,organization_id,project_id')
+      .select('id,organization_id,project_id,ticket_id')
       .eq('id', ticketId)
       .eq('organization_id', organizationId)
       .single();
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         status: draftStatusName,
         title: nextTitle
       })
-      .select('id,organization_id,project_id,execution_target')
+      .select('id,ticket_id,organization_id,project_id,execution_target')
       .single();
 
     if (createTicketError || !createdTicket) {
@@ -93,8 +93,8 @@ export async function POST(request: Request) {
     await upsertDraftObjective(supabase, createdTicket.id, objective, createdBy);
     await syncTicketTagAssignments({ supabase, ticketId: createdTicket.id });
 
-    const createdReference = getTicketIdentifier(createdTicket.id);
-    const sourceReference = getTicketIdentifier(ticketId);
+    const createdReference = getTicketIdentifier(createdTicket);
+    const sourceReference = getTicketIdentifier(sourceTicket);
 
     const { error: childEventError } = await supabase.from('ticket_events').insert({
       event_type: 'system',

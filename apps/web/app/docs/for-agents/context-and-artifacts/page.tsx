@@ -112,27 +112,15 @@ Pass these as part of the \`deliver\` payload. Supported types:
 }
 \`\`\`
 
-### File artifacts (uploads)
+### Objective attachments (uploaded files)
+
+User-uploaded files are attached to a specific objective on the ticket, not the ticket itself.
 
 \`\`\`bash
 # One-call upload
-ovld protocol artifact-upload-file \\
+ovld protocol attachment-upload-file \\
   --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
-  --file ./spec.pdf --content-type application/pdf
-
-# Two-step upload with a signed URL
-ovld protocol artifact-prepare-upload \\
-  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
-  --file-name spec.pdf --content-type application/pdf
-# ...upload the bytes to the returned URL...
-ovld protocol artifact-finalize-upload \\
-  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
-  --storage-path <path> --label "Spec"
-
-# Signed download URL for an existing artifact
-ovld protocol artifact-download-url \\
-  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
-  --artifact-id <artifact-id>
+  --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
 \`\`\`
 
 ## Related pages

@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
-import { uploadImageArtifactAction } from '@/lib/actions/artifacts';
 import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutations';
 import { convertInlineFileMentionsToMarkdown } from '@/lib/helpers/file-mentions';
 import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
@@ -17,7 +16,6 @@ const EMPTY_MENTION_PATHS: string[] = [];
 
 type Props = {
   ticketId: string;
-  organizationId?: number;
   field: EditableField;
   initialValue: string;
   multiline?: boolean;
@@ -38,7 +36,6 @@ type Props = {
 
 export function InlineEditField({
   ticketId,
-  organizationId,
   field,
   initialValue,
   multiline = false,
@@ -126,49 +123,6 @@ export function InlineEditField({
     setEditing(false);
   }
 
-  async function handleDrop(e: React.DragEvent) {
-    if (field !== 'objective') return;
-
-    const files = Array.from(e.dataTransfer.files);
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
-
-    if (imageFiles.length === 0) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    for (const file of imageFiles) {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      try {
-        const result = await uploadImageArtifactAction(ticketId, organizationId ?? 0, formData);
-        const markdown = `[${result.label}](artifact:${result.uri})`;
-
-        const textArea = inputRef.current as EditableTextareaHandle | null;
-        if (textArea) {
-          const start = textArea.selectionStart ?? value.length;
-          const end = textArea.selectionEnd ?? start;
-          const newValue = value.substring(0, start) + markdown + value.substring(end);
-          setValue(newValue);
-
-          // Wait for React to update the state before setting cursor position.
-          // requestAnimationFrame is preferred over setTimeout for DOM updates
-          // and doesn't require cleanup since it fires before the next paint.
-          requestAnimationFrame(() => {
-            textArea.selectionStart = textArea.selectionEnd = start + markdown.length;
-            textArea.focus();
-            autoResize();
-          });
-        } else {
-          setValue(prev => (prev ? `${prev}\n${markdown}` : markdown));
-        }
-      } catch (error) {
-        console.error('Failed to upload image artifact:', error);
-      }
-    }
-  }
-
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -209,13 +163,6 @@ export function InlineEditField({
               onBlur={save}
               onChange={autoResize}
               onKeyDown={handleKeyDown}
-              onDragOver={e => {
-                if (field === 'objective') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }
-              }}
-              onDrop={handleDrop}
             />
             {children ? (
               <div className="absolute top-1 right-1 z-10 py-1 border-none focus:outline-none">

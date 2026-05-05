@@ -4,6 +4,14 @@ function normalizeObjectiveForTitle(objective: string | null | undefined): strin
   return collapseInlineFileMentions((objective ?? '').trim());
 }
 
+type TicketReferenceInput =
+  | string
+  | {
+      id?: string | null;
+      ticket_id?: string | null;
+      ticket_sequence?: number | null;
+    };
+
 /**
  * Returns a display title for a ticket.
  * Uses the explicit title if set, otherwise returns 'Untitled'.
@@ -14,9 +22,20 @@ export function getDisplayTitle(ticket: { title?: string | null }): string {
   return 'Untitled';
 }
 
-export function getTicketIdentifier(ticketId: string): string {
-  if (!ticketId) return '';
-  return ticketId.slice(-8);
+export function getTicketIdentifier(ticket: TicketReferenceInput): string {
+  if (typeof ticket === 'string') {
+    return ticket ? ticket.slice(-8) : '';
+  }
+
+  const persistedIdentifier = ticket.ticket_id?.trim();
+  if (persistedIdentifier) return persistedIdentifier;
+
+  if (typeof ticket.ticket_sequence === 'number' && Number.isFinite(ticket.ticket_sequence)) {
+    return String(ticket.ticket_sequence);
+  }
+
+  const fallbackId = ticket.id?.trim();
+  return fallbackId ? fallbackId.slice(-8) : '';
 }
 
 /**

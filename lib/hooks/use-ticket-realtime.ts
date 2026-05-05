@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
 import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
 
@@ -72,14 +73,14 @@ function shouldShowDesktopNotification(event: TicketEvent): boolean {
   return isAgentNotificationEvent(event);
 }
 
-function getNotificationTitle(ticketId: string, event: TicketEvent): string {
+function getNotificationTitle(ticketReference: string, event: TicketEvent): string {
   if (event.event_type === 'question') {
-    return `Agent Question (${ticketId.slice(-8)})`;
+    return `Agent Question (${ticketReference})`;
   }
   if (event.event_type === 'deliver') {
-    return `Agent Delivered (${ticketId.slice(-8)})`;
+    return `Agent Delivered (${ticketReference})`;
   }
-  return `Agent Notification (${ticketId.slice(-8)})`;
+  return `Agent Notification (${ticketReference})`;
 }
 
 function getNotificationBody(event: TicketEvent): string {
@@ -94,6 +95,7 @@ function getNotificationBody(event: TicketEvent): string {
 
 type UseTicketRealtimeOptions = {
   ticketId: string;
+  ticketReference?: string;
   initialEvents: TicketEvent[];
   initialArtifacts: Artifact[];
   initialFileChanges: FileChange[];
@@ -103,6 +105,7 @@ type UseTicketRealtimeOptions = {
 
 export function useTicketRealtime({
   ticketId,
+  ticketReference,
   initialEvents,
   initialArtifacts,
   initialFileChanges,
@@ -111,6 +114,7 @@ export function useTicketRealtime({
 }: UseTicketRealtimeOptions) {
   const queryClient = useQueryClient();
   const notifiedEventIdsRef = useRef<Set<string>>(new Set());
+  const resolvedTicketReference = ticketReference || getTicketIdentifier(ticketId);
   const eventsQuery = useQuery({
     queryKey: ticketQueryKeys.ticketEvents(ticketId),
     queryFn: async () => initialEvents,
@@ -158,7 +162,7 @@ export function useTicketRealtime({
     queryClient.setQueryData(ticketQueryKeys.ticketSession(ticketId), initialSession);
     queryClient.setQueryData(ticketQueryKeys.ticketSharedState(ticketId), initialSharedState);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial* omitted on purpose; see comment above
-  }, [queryClient, ticketId]);
+  }, [queryClient, resolvedTicketReference, ticketId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,7 +262,7 @@ export function useTicketRealtime({
             if (notifiedEventIdsRef.current.size > 500) {
               notifiedEventIdsRef.current.clear();
             }
-            const title = getNotificationTitle(ticketId, incomingEvent);
+            const title = getNotificationTitle(resolvedTicketReference, incomingEvent);
             const body = getNotificationBody(incomingEvent);
             void window.electronAPI?.app?.notify(title, body);
           }

@@ -376,11 +376,11 @@ ovld protocol read-context --session-key <sessionKey> --ticket-id ${ticketId}
 ovld protocol write-context --session-key <sessionKey> --ticket-id ${ticketId} --key "descriptive-key" --value '"json-value"'
 \`\`\`
 
-### 5 — Storage artifacts (optional upload/download)
+### 5 — Objective attachments (optional upload/download)
 
 \`\`\`bash
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id ${ticketId} --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id ${ticketId} --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id ${ticketId} --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id ${ticketId} --attachment-id <attachment-id>
 \`\`\`
 
 ### 6 — Deliver (always last)
@@ -453,8 +453,8 @@ ${settingsJson}
 
 **Step 2** — Available MCP tools:
 - \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
-- \`prepare_artifact_upload\` / \`finalize_artifact_upload\` — upload and associate storage artifacts
-- \`get_artifact_download_url\` — signed read URL for storage artifacts (CLI: \`artifact-download-url\`)
+- \`prepare_attachment_upload\` / \`finalize_attachment_upload\` — upload a file as an objective attachment
+- \`get_attachment_download_url\` — signed read URL for an existing attachment (CLI: \`attachment-download-url\`)
 - \`update\` — post progress updates
 - \`record_change_rationales\` — persist structured change rationales to the \`file_changes\` table
 - \`ask\` — ask a blocking question
@@ -513,12 +513,12 @@ ${generateAskPayloadExample(ticketId)}
 
 For persisting findings across sessions.
 
-### 5 — artifact tools (optional)
+### 5 — attachment tools (optional)
 
-Upload/download storage artifacts:
-- \`prepare_artifact_upload\` — begin upload
-- \`finalize_artifact_upload\` — commit upload
-- \`get_artifact_download_url\` — get signed URL
+Upload/download objective attachments:
+- \`prepare_attachment_upload\` — begin upload
+- \`finalize_attachment_upload\` — commit upload
+- \`get_attachment_download_url\` — get signed URL
 
 ### 6 — create_ticket (optional)
 

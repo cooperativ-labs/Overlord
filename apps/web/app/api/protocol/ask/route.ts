@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { askSchema } from '@/lib/overlord/validation';
@@ -16,6 +17,11 @@ export async function POST(request: Request) {
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
+    const { data: ticket } = await supabase
+      .from('tickets')
+      .select('id,ticket_id')
+      .eq('id', ticketId)
+      .maybeSingle();
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
@@ -45,7 +51,7 @@ export async function POST(request: Request) {
 
     after(async () => {
       await sendPushNotification(supabase, {
-        title: `Agent Question (${ticketId.slice(-8)})`,
+        title: `Agent Question (${getTicketIdentifier(ticket ?? ticketId)})`,
         body: question || 'The agent is waiting for your input.',
         organizationId,
         data: { ticketId, eventType: 'question' }

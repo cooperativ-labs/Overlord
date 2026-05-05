@@ -35,6 +35,7 @@ export function useTicketLive(): TicketLiveState {
 type TicketLiveProviderProps = {
   children: React.ReactNode;
   ticketId: string;
+  ticketReference?: string;
   initialEvents: TicketEvent[];
   initialArtifacts: Artifact[];
   initialFileChanges: FileChange[];
@@ -45,6 +46,7 @@ type TicketLiveProviderProps = {
 export function TicketLiveProvider({
   children,
   ticketId,
+  ticketReference,
   initialEvents,
   initialArtifacts,
   initialFileChanges,
@@ -53,6 +55,7 @@ export function TicketLiveProvider({
 }: TicketLiveProviderProps) {
   const liveState = useTicketRealtime({
     ticketId,
+    ticketReference,
     initialEvents,
     initialArtifacts,
     initialFileChanges,

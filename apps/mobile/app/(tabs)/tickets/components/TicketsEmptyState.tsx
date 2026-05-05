@@ -21,7 +21,7 @@ export function TicketsEmptyState({ search, statusFilter, filterProject }: Ticke
       <Ionicons name="ticket-outline" size={48} color={colors.mutedForeground} />
       <Text style={styles.emptyText}>No tickets</Text>
       <Text style={styles.emptySub}>
-        {search.trim() || statusFilter !== 'all'
+        {search.trim() || statusFilter.length > 0
           ? 'Try clearing filters.'
           : filterProject
             ? `No tickets in ${filterProject.name}.`

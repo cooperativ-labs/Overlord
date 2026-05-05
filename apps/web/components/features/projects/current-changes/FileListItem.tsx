@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import { getStatusClasses, getStatusInitial, getStatusTooltipLabel } from './helpers';
@@ -20,7 +21,7 @@ export function FileListItem({ file, isSelected, onSelect }: FileListItemProps) 
   const ticketCount = file.tickets.length;
   const primaryTicketTitle =
     file.primaryTicket?.title?.trim() ||
-    (file.primaryTicket ? `Ticket ${file.primaryTicket.id.slice(-8)}` : null);
+    (file.primaryTicket ? `Ticket ${getTicketIdentifier(file.primaryTicket)}` : null);
 
   const tooltipBody = (
     <div className="space-y-1">

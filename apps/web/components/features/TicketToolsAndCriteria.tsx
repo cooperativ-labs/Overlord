@@ -7,27 +7,21 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
-import type { TicketDocument } from '@/lib/actions/artifacts';
 import type { TaggingInspector } from '@/lib/tagging-engine';
 
-import { TicketDocumentUpload } from './TicketDocumentUpload';
 import { TicketTaggingDebug } from './TicketTaggingDebug';
 
 interface TicketToolsAndCriteriaProps {
   ticketId: string;
-  organizationId: number;
   availableTools: string | null;
   acceptanceCriteria: string | null;
-  initialDocuments: TicketDocument[];
   inspector: TaggingInspector | null;
 }
 
 export function TicketToolsAndCriteria({
   ticketId,
-  organizationId,
   availableTools,
   acceptanceCriteria,
-  initialDocuments,
   inspector
 }: TicketToolsAndCriteriaProps) {
   return (
@@ -41,7 +35,6 @@ export function TicketToolsAndCriteria({
             <InlineEditField
               displayClassName="text-sm leading-relaxed"
               field="available_tools"
-              organizationId={organizationId}
               initialValue={availableTools ?? ''}
               multiline
               placeholder="None specified — click to add."
@@ -59,7 +52,6 @@ export function TicketToolsAndCriteria({
             <InlineEditField
               displayClassName="text-sm leading-relaxed"
               field="acceptance_criteria"
-              organizationId={organizationId}
               initialValue={acceptanceCriteria ?? ''}
               multiline
               placeholder="None specified — click to add."
@@ -69,8 +61,6 @@ export function TicketToolsAndCriteria({
         </AccordionContent>
       </AccordionItem>
       <TicketTaggingDebug inspector={inspector} />
-
-      <TicketDocumentUpload ticketId={ticketId} initialDocuments={initialDocuments} />
     </Accordion>
   );
 }

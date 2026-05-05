@@ -44,7 +44,7 @@ export function useFeedRealtime() {
       // Fetch ticket info
       const { data: ticket } = await supabase
         .from('tickets')
-        .select('title, ticket_sequence')
+        .select('title, ticket_id, ticket_sequence')
         .eq('id', row.ticket_id)
         .single();
 
@@ -107,6 +107,7 @@ export function useFeedRealtime() {
         updated_at: row.updated_at,
         project_name: project?.name ?? 'Unknown',
         project_color: project?.color ?? '#6b7280',
+        ticket_identifier: ticket?.ticket_id ?? null,
         ticket_title: ticket?.title ?? null,
         ticket_objective: objectiveText,
         ticket_sequence: ticket?.ticket_sequence ?? null

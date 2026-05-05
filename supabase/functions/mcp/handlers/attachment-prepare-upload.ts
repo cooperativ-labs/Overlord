@@ -5,12 +5,12 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 
 import {
-  buildSignedUploadUrl,
-  buildTicketStoragePath,
-  resolveArtifactAccess
-} from './_artifacts.ts';
+  buildAttachmentSignedUploadUrl,
+  buildObjectiveAttachmentStoragePath,
+  resolveAttachmentAccess
+} from './_attachments.ts';
 
-export async function handleArtifactPrepareUpload(
+export async function handleAttachmentPrepareUpload(
   supabase: SupabaseClient,
   args: any,
   ctx: TokenContext
@@ -18,26 +18,30 @@ export async function handleArtifactPrepareUpload(
   const {
     sessionKey,
     ticketId,
+    objectiveId,
     fileName,
     label,
-    artifactType = 'document',
     contentType = 'application/octet-stream',
     fileSize,
     metadata = {}
   } = args;
 
-  if (!sessionKey || !ticketId || !fileName) {
-    return toolErr('sessionKey, ticketId, and fileName are required.');
+  if (!sessionKey || !ticketId || !objectiveId || !fileName) {
+    return toolErr('sessionKey, ticketId, objectiveId, and fileName are required.');
   }
 
-  const access = await resolveArtifactAccess(
+  const access = await resolveAttachmentAccess(
     supabase,
-    { sessionKey, ticketId, requireWrite: true },
+    { sessionKey, ticketId, objectiveId, requireWrite: true },
     ctx
   );
   if (access.error || !access.ticket) return toolErr(access.error ?? 'Access denied.');
 
-  const storagePath = buildTicketStoragePath(access.ticket, String(fileName));
+  const storagePath = buildObjectiveAttachmentStoragePath(
+    access.ticket,
+    String(objectiveId),
+    String(fileName)
+  );
   const { data, error } = await supabase.storage
     .from('artifacts')
     .createSignedUploadUrl(storagePath);
@@ -51,14 +55,14 @@ export async function handleArtifactPrepareUpload(
     upload: {
       method: 'PUT',
       token: data.token,
-      url: buildSignedUploadUrl(storagePath, data.token)
+      url: buildAttachmentSignedUploadUrl(storagePath, data.token)
     },
     draft: {
-      artifactType,
       contentType,
       fileSize: fileSize ?? null,
       label: (String(label ?? fileName).trim() || String(fileName)).slice(0, 160),
       metadata,
+      objectiveId,
       storagePath,
       ticketId
     }

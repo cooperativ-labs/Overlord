@@ -68,7 +68,7 @@ export async function searchTickets(
   const {
     limit = 8,
     query = '',
-    select = 'id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)'
+    select = 'id,title,ticket_id,ticket_sequence,project_id,organization_id,status,project:projects(name)'
   } = options;
 
   const normalizedLimit = Math.min(Math.max(limit, 1), 50);
@@ -104,7 +104,7 @@ export async function searchTickets(
   let fallbackQuery = supabase
     .from('tickets')
     .select(select)
-    .ilike('title', `%${escapedPattern}%`)
+    .or(`title.ilike.%${escapedPattern}%,ticket_id.ilike.%${escapedPattern}%`)
     .order('updated_at', { ascending: false })
     .limit(normalizedLimit);
 

@@ -204,37 +204,38 @@ export const discoverProjectSchema = z.object({
   workingDirectory: z.string().trim().min(1).max(1024)
 });
 
-export const artifactPrepareUploadSchema = z.object({
+export const attachmentPrepareUploadSchema = z.object({
   sessionKey: z.uuid(),
   ticketId: ticketIdSchema,
+  objectiveId: z.uuid(),
   fileName: z.string().trim().min(1).max(240),
   label: z.string().trim().max(160).optional(),
-  artifactType: z.string().trim().max(80).optional().default('document'),
   contentType: z.string().trim().max(200).optional().default('application/octet-stream'),
   fileSize: z.number().int().min(0).optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({})
 });
 
-export const artifactFinalizeUploadSchema = z.object({
+export const attachmentFinalizeUploadSchema = z.object({
   sessionKey: z.uuid(),
   ticketId: ticketIdSchema,
+  objectiveId: z.uuid(),
   storagePath: z.string().trim().min(1).max(1024),
   label: z.string().trim().min(1).max(160),
-  artifactType: z.string().trim().max(80).optional().default('document'),
   contentType: z.string().trim().max(200).optional().default('application/octet-stream'),
   fileSize: z.number().int().min(0).optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({})
 });
 
-export const artifactGetDownloadUrlSchema = z
+export const attachmentGetDownloadUrlSchema = z
   .object({
     sessionKey: z.uuid(),
     ticketId: ticketIdSchema,
-    artifactId: z.uuid().optional(),
+    objectiveId: z.uuid().optional(),
+    attachmentId: z.uuid().optional(),
     storagePath: z.string().trim().min(1).max(1024).optional(),
     expiresIn: z.number().int().min(60).max(86_400).optional().default(3600)
   })
-  .refine(input => Boolean(input.artifactId || input.storagePath), {
-    message: 'artifactId or storagePath is required.',
-    path: ['artifactId']
+  .refine(input => Boolean(input.attachmentId || input.storagePath), {
+    message: 'attachmentId or storagePath is required.',
+    path: ['attachmentId']
   });

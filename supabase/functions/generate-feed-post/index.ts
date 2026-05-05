@@ -70,6 +70,7 @@ type FeedPostContext = {
   }>;
   spawnedTickets: Array<{
     id: string;
+    ticket_id: string | null;
     title: string | null;
     ticket_sequence: number;
     delegate: string | null;
@@ -284,6 +285,7 @@ function buildFallbackFeedPost(context: FeedPostContext): FeedPostPayload {
     files_touched: changedFiles,
     tickets_created: context.spawnedTickets.map(t => ({
       id: t.id,
+      reference: t.ticket_id,
       sequence: t.ticket_sequence,
       title: t.title ?? 'Untitled'
     }))
@@ -302,7 +304,7 @@ function buildPrompt(context: FeedPostContext): string {
   const spawnedLines = context.spawnedTickets
     .map(
       t =>
-        `- #${t.ticket_sequence}: ${t.title ?? 'Untitled'}${t.delegate ? ` (delegate: ${t.delegate})` : ''}`
+        `- ${t.ticket_id ?? t.ticket_sequence}: ${t.title ?? 'Untitled'}${t.delegate ? ` (delegate: ${t.delegate})` : ''}`
     )
     .join('\n');
 
@@ -521,6 +523,7 @@ Deno.serve(async (req: Request) => {
     // with parentSessionKey pointing back to this session).
     let spawnedTickets: Array<{
       id: string;
+      ticket_id: string | null;
       title: string | null;
       ticket_sequence: number;
       delegate: string | null;
@@ -544,7 +547,7 @@ Deno.serve(async (req: Request) => {
       if (spawnedIds.length > 0) {
         const { data: tickets } = await supabase
           .from('tickets')
-          .select('id, title, ticket_sequence, delegate')
+          .select('id, ticket_id, title, ticket_sequence, delegate')
           .in('id', spawnedIds);
         spawnedTickets = tickets ?? [];
       }
@@ -599,6 +602,7 @@ Deno.serve(async (req: Request) => {
     // Build structured tickets_created from source data (not Gemini output)
     const ticketsCreatedPayload = spawnedTickets.map(t => ({
       id: t.id,
+      reference: t.ticket_id,
       sequence: t.ticket_sequence,
       title: t.title ?? 'Untitled'
     }));

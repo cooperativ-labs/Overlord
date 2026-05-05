@@ -19,7 +19,12 @@ export type FeedPost = {
   files_touched: string[];
   tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
   human_actions: string[];
-  tickets_created: Array<{ id: string; sequence: number; title: string }>;
+  tickets_created: Array<{
+    id: string;
+    reference?: string | null;
+    sequence: number;
+    title: string;
+  }>;
   source_event_ids: string[];
   source_window_start: string | null;
   source_window_end: string | null;
@@ -27,6 +32,7 @@ export type FeedPost = {
   updated_at: string;
   project_name: string;
   project_color: string;
+  ticket_identifier?: string | null;
   ticket_title: string | null;
   ticket_objective: string | null;
   ticket_sequence: number | null;
@@ -36,6 +42,7 @@ export type ExecutingFeedTicket = {
   id: string;
   project_id: string;
   title: string | null;
+  ticket_id: string | null;
   ticket_sequence: number | null;
   project_name: string;
   project_color: string;
@@ -64,7 +71,7 @@ export async function getFeedPostsAction(options?: {
       `
       *,
       projects!inner(name, color),
-      tickets!inner(title, ticket_sequence),
+      tickets!inner(title, ticket_id, ticket_sequence),
       objectives(objective)
     `
     )
@@ -148,6 +155,7 @@ export async function getFeedPostsAction(options?: {
   return rows.map((row: Record<string, unknown>) => {
     const projects = row.projects as { name: string; color: string } | null;
     const tickets = row.tickets as {
+      ticket_id: string | null;
       title: string | null;
       ticket_sequence: number | null;
     } | null;
@@ -186,6 +194,7 @@ export async function getFeedPostsAction(options?: {
       updated_at: row.updated_at as string,
       project_name: projects?.name ?? 'Unknown',
       project_color: projects?.color ?? '#6b7280',
+      ticket_identifier: tickets?.ticket_id ?? null,
       ticket_title: tickets?.title ?? null,
       ticket_objective: objectiveText,
       ticket_sequence: tickets?.ticket_sequence ?? null
@@ -221,6 +230,7 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
           organization_id,
           project_id,
           title,
+          ticket_id,
           ticket_sequence,
           updated_at,
           projects!inner(name, color)
@@ -254,6 +264,7 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
       organization_id: number;
       project_id: string;
       title: string | null;
+      ticket_id: string | null;
       ticket_sequence: number | null;
     }
   >;
@@ -333,6 +344,7 @@ export async function getExecutingFeedTicketsAction(): Promise<ExecutingFeedTick
         id: ticket.id,
         project_id: ticket.project_id,
         title: ticket.title,
+        ticket_id: ticket.ticket_id,
         ticket_sequence: ticket.ticket_sequence,
         project_name: project?.name ?? 'Unknown',
         project_color: project?.color ?? '#6b7280',

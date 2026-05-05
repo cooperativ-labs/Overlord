@@ -288,72 +288,73 @@ const tools = [
     subcommand: 'deliver'
   },
   {
-    name: 'prepare_artifact_upload',
-    description: 'Prepare an Overlord artifact upload and return a signed upload URL.',
+    name: 'prepare_attachment_upload',
+    description: 'Prepare an objective attachment upload and return a signed upload URL.',
     inputSchema: {
       type: 'object',
       properties: {
         session_key: { type: 'string' },
         ticket_id: { type: 'string' },
+        objective_id: { type: 'string' },
         file_name: { type: 'string' },
         label: { type: 'string' },
-        artifact_type: { type: 'string' },
         content_type: { type: 'string' },
         file_size: { type: 'number' },
         metadata: { type: 'object' }
       },
-      required: ['session_key', 'ticket_id', 'file_name']
+      required: ['session_key', 'ticket_id', 'objective_id', 'file_name']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
       'file-name': args.file_name,
       label: args.label,
-      'artifact-type': args.artifact_type,
       'content-type': args.content_type,
       'file-size': args.file_size,
       'metadata-json': args.metadata
     }),
-    subcommand: 'artifact-prepare-upload'
+    subcommand: 'attachment-prepare-upload'
   },
   {
-    name: 'finalize_artifact_upload',
-    description: 'Finalize an artifact after uploading bytes to the signed storage URL.',
+    name: 'finalize_attachment_upload',
+    description: 'Finalize an objective attachment after uploading bytes to the signed storage URL.',
     inputSchema: {
       type: 'object',
       properties: {
         session_key: { type: 'string' },
         ticket_id: { type: 'string' },
+        objective_id: { type: 'string' },
         storage_path: { type: 'string' },
         label: { type: 'string' },
-        artifact_type: { type: 'string' },
         content_type: { type: 'string' },
         file_size: { type: 'number' },
         metadata: { type: 'object' }
       },
-      required: ['session_key', 'ticket_id', 'storage_path', 'label']
+      required: ['session_key', 'ticket_id', 'objective_id', 'storage_path', 'label']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
       'storage-path': args.storage_path,
       label: args.label,
-      'artifact-type': args.artifact_type,
       'content-type': args.content_type,
       'file-size': args.file_size,
       'metadata-json': args.metadata
     }),
-    subcommand: 'artifact-finalize-upload'
+    subcommand: 'attachment-finalize-upload'
   },
   {
-    name: 'get_artifact_download_url',
-    description: 'Create a signed download URL for an uploaded Overlord artifact.',
+    name: 'get_attachment_download_url',
+    description: 'Create a signed download URL for an uploaded objective attachment.',
     inputSchema: {
       type: 'object',
       properties: {
         session_key: { type: 'string' },
         ticket_id: { type: 'string' },
-        artifact_id: { type: 'string' },
+        objective_id: { type: 'string' },
+        attachment_id: { type: 'string' },
         storage_path: { type: 'string' },
         expires_in: { type: 'number' }
       },
@@ -362,40 +363,41 @@ const tools = [
     toCliFlags: args => ({
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
-      'artifact-id': args.artifact_id,
+      'objective-id': args.objective_id,
+      'attachment-id': args.attachment_id,
       'storage-path': args.storage_path,
       'expires-in': args.expires_in
     }),
-    subcommand: 'artifact-download-url'
+    subcommand: 'attachment-download-url'
   },
   {
-    name: 'upload_artifact_file',
-    description: 'Prepare, upload, and finalize a local file as an Overlord artifact in one step.',
+    name: 'upload_attachment_file',
+    description: 'Prepare, upload, and finalize a local file as an objective attachment in one step.',
     inputSchema: {
       type: 'object',
       properties: {
         session_key: { type: 'string' },
         ticket_id: { type: 'string' },
+        objective_id: { type: 'string' },
         file: { type: 'string' },
         file_name: { type: 'string' },
         label: { type: 'string' },
-        artifact_type: { type: 'string' },
         content_type: { type: 'string' },
         metadata: { type: 'object' }
       },
-      required: ['session_key', 'ticket_id', 'file']
+      required: ['session_key', 'ticket_id', 'objective_id', 'file']
     },
     toCliFlags: args => ({
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id,
       file: args.file,
       'file-name': args.file_name,
       label: args.label,
-      'artifact-type': args.artifact_type,
       'content-type': args.content_type,
       'metadata-json': args.metadata
     }),
-    subcommand: 'artifact-upload-file'
+    subcommand: 'attachment-upload-file'
   }
 ];
 
@@ -602,7 +604,7 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.1.1'
+        version: '0.1.2'
       },
       instructions:
         'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Most operations expect a session key from attach or connect.'

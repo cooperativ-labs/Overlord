@@ -1275,7 +1275,7 @@ export function CliPage({ open }: { open: boolean }) {
               ovld protocol &lt;subcommand&gt;
             </code>{' '}
             attach, connect, load-context, spawn, update, ask, read-context, write-context, deliver,
-            artifact-upload-file
+            attachment-upload-file
           </li>
           <li className="break-words">
             <code className="rounded bg-muted px-1 break-all">ovld launch &lt;agent&gt;</code>{' '}

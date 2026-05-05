@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { SidebarDrawer } from '@/components/SidebarDrawer';
-import { colors, useThemeColors, useThemedStyles } from '@/lib/colors';
+import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
@@ -14,6 +14,8 @@ import { isTransientNetworkError } from '@/lib/transient-network-error';
 
 import {
   ALL_PROJECTS_LABEL,
+  buildStatusFilterOptions,
+  formatStatusName,
   getContrastColor,
   glassAvailable,
   matchesStatusFilter,
@@ -49,7 +51,7 @@ export default function TicketsScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('updated');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>([]);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -209,10 +211,8 @@ export default function TicketsScreen() {
   const displayTickets = useMemo(() => {
     let result = [...tickets];
 
-    if (statusFilter !== 'all') {
-      result = result.filter(ticket =>
-        matchesStatusFilter(ticket, statusDefinitions, statusFilter)
-      );
+    if (statusFilter.length > 0) {
+      result = result.filter(ticket => matchesStatusFilter(ticket, statusFilter));
     }
 
     if (search.trim()) {
@@ -243,7 +243,38 @@ export default function TicketsScreen() {
     }
 
     return result;
-  }, [tickets, statusDefinitions, statusFilter, search, sortMode]);
+  }, [tickets, statusFilter, search, sortMode]);
+
+  const statusFilterOptions = useMemo(
+    () => buildStatusFilterOptions(statusDefinitions, tickets),
+    [statusDefinitions, tickets]
+  );
+  const allStatusesSelected =
+    statusFilter.length === 0 || statusFilter.length === statusFilterOptions.length;
+  const statusFilterLabel = useMemo(() => {
+    if (statusFilter.length === 0 || statusFilterOptions.length === 0 || allStatusesSelected) {
+      return 'All statuses';
+    }
+    if (statusFilter.length === 1) {
+      return formatStatusName(statusFilter[0] ?? '');
+    }
+    if (statusFilter.length <= 2) {
+      return statusFilter.map(formatStatusName).join(', ');
+    }
+    return `${statusFilter.length} statuses`;
+  }, [allStatusesSelected, statusFilter, statusFilterOptions.length]);
+
+  useEffect(() => {
+    if (statusFilter.length === 0) return;
+
+    const available = new Set(statusFilterOptions);
+    setStatusFilter(current => {
+      if (current.length === 0) return current;
+      const next = current.filter(status => available.has(status));
+      if (next.length === current.length) return current;
+      return next.length > 0 ? next : [];
+    });
+  }, [statusFilter.length, statusFilterOptions]);
 
   const persistReorder = useCallback(
     async (
@@ -438,8 +469,11 @@ export default function TicketsScreen() {
         statusMenuOpen={statusMenuOpen}
         sortMode={sortMode}
         statusFilter={statusFilter}
+        statusFilterLabel={statusFilterLabel}
+        statusFilterOptions={statusFilterOptions}
         projects={projects}
         filterProjectId={filterProjectId}
+        allStatusesSelected={allStatusesSelected}
         onToggleProjectMenu={() => {
           setSortMenuOpen(false);
           setStatusMenuOpen(false);
@@ -470,7 +504,23 @@ export default function TicketsScreen() {
         }}
         onSelectProject={projectId => selectProject(projectId)}
         onSelectSort={mode => setSortMode(mode)}
-        onSelectStatus={filter => setStatusFilter(filter)}
+        onSelectStatus={status => {
+          setStatusFilter(current => {
+            const currentlyAllSelected =
+              current.length === 0 || current.length === statusFilterOptions.length;
+            if (currentlyAllSelected) {
+              return [status];
+            }
+
+            if (current.includes(status)) {
+              const next = current.filter(currentStatus => currentStatus !== status);
+              return next.length > 0 ? next : [];
+            }
+
+            return [...current, status];
+          });
+        }}
+        onSelectAllStatuses={() => setStatusFilter([])}
       />
       <TicketsResults
         loading={loading}

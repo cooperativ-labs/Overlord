@@ -1,22 +1,25 @@
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
-import { ensureTicketStoragePath, resolveArtifactAccess } from '@/lib/overlord/protocol-artifacts';
+import {
+  ensureObjectiveAttachmentStoragePath,
+  resolveAttachmentAccess
+} from '@/lib/overlord/protocol-attachments';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
-import { artifactFinalizeUploadSchema } from '@/lib/overlord/validation';
+import { attachmentFinalizeUploadSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 export async function POST(request: Request) {
-  const parsed = await parseProtocolBody(request, artifactFinalizeUploadSchema);
+  const parsed = await parseProtocolBody(request, attachmentFinalizeUploadSchema);
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
     const {
-      artifactType,
       contentType,
       fileSize,
       label,
       metadata,
+      objectiveId,
       sessionKey,
       storagePath,
       ticketId: rawTicketId
@@ -25,8 +28,9 @@ export async function POST(request: Request) {
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
 
-    const access = await resolveArtifactAccess({
+    const access = await resolveAttachmentAccess({
       organizationId,
+      objectiveId,
       requireWrite: true,
       sessionKey,
       ticketId,
@@ -37,9 +41,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: access.error ?? 'Access denied.' }, { status: 403 });
     }
 
-    if (!ensureTicketStoragePath(storagePath, access.ticket)) {
+    if (!ensureObjectiveAttachmentStoragePath(storagePath, access.ticket, objectiveId)) {
       return NextResponse.json(
-        { error: 'storagePath does not match ticket path.' },
+        { error: 'storagePath does not match ticket/objective path.' },
         { status: 400 }
       );
     }
@@ -58,46 +62,54 @@ export async function POST(request: Request) {
       );
     }
 
-    const artifactMetadata = {
+    const attachmentMetadata = {
       ...metadata,
       fileName,
       size: fileSize ?? null,
       type: contentType
     };
 
-    const { data: artifact, error: artifactError } = await supabase
-      .from('artifacts')
+    const { data: attachment, error: attachmentError } = await supabase
+      .from('objective_attachments')
       .insert({
-        artifact_type: artifactType,
+        content_type: contentType,
+        created_by: userId,
+        file_size: fileSize ?? 0,
         label,
-        metadata: artifactMetadata,
+        metadata: attachmentMetadata,
+        objective_id: objectiveId,
         session_id: access.session.id,
         storage_path: storagePath,
-        ticket_id: ticketId,
-        created_by: userId
+        ticket_id: ticketId
       })
-      .select('id, artifact_type, label, storage_path, ticket_id, created_at, metadata')
+      .select(
+        'id, ticket_id, objective_id, label, storage_path, content_type, file_size, created_at, metadata'
+      )
       .single();
 
-    if (artifactError || !artifact) {
+    if (attachmentError || !attachment) {
       return NextResponse.json(
-        { error: artifactError?.message ?? 'Failed to create artifact record.' },
+        { error: attachmentError?.message ?? 'Failed to create attachment record.' },
         { status: 500 }
       );
     }
 
     await supabase.from('ticket_events').insert({
       event_type: 'artifact',
-      payload: { artifact_id: artifact.id, storage_path: storagePath },
+      payload: {
+        attachment_id: attachment.id,
+        objective_id: objectiveId,
+        storage_path: storagePath
+      },
       phase: 'execute',
       session_id: access.session.id,
-      summary: `Artifact uploaded: ${label}`,
+      summary: `Objective attachment uploaded: ${label}`,
       ticket_id: ticketId,
       created_by: userId
     });
 
     return NextResponse.json({
-      artifact,
+      attachment,
       ok: true
     });
   } catch (error) {

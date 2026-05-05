@@ -53,7 +53,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
 
   const { data: sourceTicket, error: sourceErr } = await supabase
     .from('tickets')
-    .select('id, organization_id, project_id')
+    .select('id, ticket_id, organization_id, project_id')
     .eq('id', ticketId)
     .eq('organization_id', organizationId)
     .single();
@@ -82,7 +82,7 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
       status: draftStatusName,
       title: nextTitle
     })
-    .select('id, organization_id, project_id, execution_target')
+    .select('id, ticket_id, organization_id, project_id, execution_target')
     .single();
 
   if (createErr || !created) return toolErr(createErr?.message ?? 'Failed to create ticket.');
@@ -97,8 +97,8 @@ export async function handleCreateTicket(supabase: SupabaseClient, args: any, ct
 
   if (objectiveErr) return toolErr(objectiveErr.message);
 
-  const sourceRef = ticketId.slice(-8);
-  const createdRef = created.id.slice(-8);
+  const sourceRef = sourceTicket.ticket_id ?? sourceTicket.id.slice(-8);
+  const createdRef = created.ticket_id ?? created.id.slice(-8);
 
   await Promise.all([
     supabase.from('ticket_events').insert({

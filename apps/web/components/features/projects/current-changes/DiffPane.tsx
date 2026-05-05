@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
 import type { DiffViewMode } from '../CurrentChangesPage';
@@ -59,7 +60,7 @@ export function DiffPane({
 
   const primaryTicketTitle =
     file.primaryTicket?.title?.trim() ||
-    (file.primaryTicket ? `Ticket ${file.primaryTicket.id.slice(-8)}` : null);
+    (file.primaryTicket ? `Ticket ${getTicketIdentifier(file.primaryTicket)}` : null);
   const changeLabel = file.primaryFileChange?.label || file.summary;
   const hasRationale = Boolean(file.primaryFileChange || file.primaryTicket);
   const linesAdded = file.file.linesAdded;
@@ -212,7 +213,7 @@ export function DiffPane({
                           className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border bg-background px-2 py-0.5 text-[10px] text-foreground hover:bg-muted"
                         >
                           <span className="truncate">
-                            {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                            {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
                           </span>
                           {ticket.status ? (
                             <span className="text-muted-foreground">· {ticket.status}</span>
@@ -225,7 +226,7 @@ export function DiffPane({
                             className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
                             href={buildTicketPath({ projectId, ticketId: ticket.id })}
                           >
-                            {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                            {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
                           </Link>
                           <p className="text-xs text-muted-foreground">
                             {ticket.objective?.trim() || 'No ticket objective yet.'}

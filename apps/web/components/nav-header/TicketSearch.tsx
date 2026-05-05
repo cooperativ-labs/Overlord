@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 type TicketSearchResult = {
   id: string;
   title: string | null;
+  ticket_id: string | null;
   ticket_sequence: number | null;
   project_id: string | null;
   project: {
@@ -217,10 +218,8 @@ export function TicketSearch({ className }: TicketSearchProps) {
                     {ticket.title || 'Untitled ticket'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {ticket.ticket_sequence
-                      ? `#${ticket.ticket_sequence}`
-                      : getTicketIdentifier(ticket.id)}{' '}
-                    • {ticket.project?.name ?? (ticket.project_id ? 'Unknown project' : 'Personal')}
+                    {getTicketIdentifier(ticket)} •{' '}
+                    {ticket.project?.name ?? (ticket.project_id ? 'Unknown project' : 'Personal')}
                   </p>
                 </li>
               );

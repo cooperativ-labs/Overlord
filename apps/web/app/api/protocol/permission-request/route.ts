@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
     // Verify the ticket belongs to this org
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('id')
+      .select('id,ticket_id')
       .eq('id', ticketId)
       .eq('organization_id', organizationId)
       .maybeSingle();
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
 
     after(async () => {
       await sendPushNotification(supabase, {
-        title: `Agent Question (${ticketId.slice(-8)})`,
+        title: `Agent Question (${getTicketIdentifier(ticket ?? ticketId)})`,
         body: summary,
         organizationId,
         data: { ticketId, eventType: 'question' }

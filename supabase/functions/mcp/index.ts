@@ -13,11 +13,11 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from '@supabase/supabase-js';
 
-import { handleArtifactFinalizeUpload } from './handlers/artifact-finalize-upload.ts';
-import { handleArtifactGetDownloadUrl } from './handlers/artifact-get-download-url.ts';
-import { handleArtifactPrepareUpload } from './handlers/artifact-prepare-upload.ts';
 import { handleAsk } from './handlers/ask.ts';
 import { handleAttach } from './handlers/attach.ts';
+import { handleAttachmentFinalizeUpload } from './handlers/attachment-finalize-upload.ts';
+import { handleAttachmentGetDownloadUrl } from './handlers/attachment-get-download-url.ts';
+import { handleAttachmentPrepareUpload } from './handlers/attachment-prepare-upload.ts';
 import { handleCreateTicket } from './handlers/create-ticket.ts';
 import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
 import { handleDeliver } from './handlers/deliver.ts';
@@ -214,12 +214,12 @@ Deno.serve(async (req: Request) => {
         result = await handleAttach(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket_draft') {
         result = await handleCreateTicketDraft(supabase, toolArgs, requestContext);
-      } else if (toolName === 'prepare_artifact_upload') {
-        result = await handleArtifactPrepareUpload(supabase, toolArgs, requestContext);
-      } else if (toolName === 'finalize_artifact_upload') {
-        result = await handleArtifactFinalizeUpload(supabase, toolArgs, requestContext);
-      } else if (toolName === 'get_artifact_download_url') {
-        result = await handleArtifactGetDownloadUrl(supabase, toolArgs, requestContext);
+      } else if (toolName === 'prepare_attachment_upload') {
+        result = await handleAttachmentPrepareUpload(supabase, toolArgs, requestContext);
+      } else if (toolName === 'finalize_attachment_upload') {
+        result = await handleAttachmentFinalizeUpload(supabase, toolArgs, requestContext);
+      } else if (toolName === 'get_attachment_download_url') {
+        result = await handleAttachmentGetDownloadUrl(supabase, toolArgs, requestContext);
       } else if (toolName === 'save_ticket_draft') {
         result = await handleSaveTicketDraft(supabase, toolArgs, requestContext);
       } else if (toolName === 'update') {

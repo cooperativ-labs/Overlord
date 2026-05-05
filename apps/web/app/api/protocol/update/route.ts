@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { resolveObjectiveModelIdentifier } from '@/lib/objectives';
 import {
   buildAgentNotificationSummary,
@@ -41,6 +42,12 @@ export async function POST(request: Request) {
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
+    const { data: ticketReferenceRow } = await supabase
+      .from('tickets')
+      .select('id,ticket_id')
+      .eq('id', ticketId)
+      .maybeSingle();
+    const ticketReference = getTicketIdentifier(ticketReferenceRow ?? ticketId);
     const typedSupabase = supabase as SupabaseClient<Database>;
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
@@ -208,8 +215,8 @@ export async function POST(request: Request) {
       for (const notification of notifications) {
         const notifTitle =
           notification.kind === 'question'
-            ? `Agent Question (${ticketId.slice(-8)})`
-            : `Agent Notification (${ticketId.slice(-8)})`;
+            ? `Agent Question (${ticketReference})`
+            : `Agent Notification (${ticketReference})`;
         const notifBody =
           buildAgentNotificationSummary(notification) || 'New agent event received.';
         after(async () => {

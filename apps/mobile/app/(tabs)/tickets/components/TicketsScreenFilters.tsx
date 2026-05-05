@@ -6,10 +6,10 @@ import { Ionicons } from '@/lib/icons';
 import { FilterChip } from './FilterChip';
 import {
   ALL_PROJECTS_LABEL,
+  formatStatusName,
   sortLabels,
   type SortMode,
   type StatusFilter,
-  statusFilterLabels,
   type ViewMode
 } from './shared';
 import { createTicketsScreenStyles } from './TicketsScreenStyles';
@@ -26,8 +26,11 @@ type TicketsScreenFiltersProps = {
   statusMenuOpen: boolean;
   sortMode: SortMode;
   statusFilter: StatusFilter;
+  statusFilterLabel: string;
+  statusFilterOptions: string[];
   projects: { id: string; name: string; color: string }[];
   filterProjectId: string | null;
+  allStatusesSelected: boolean;
   onToggleProjectMenu: () => void;
   onToggleSortMenu: () => void;
   onToggleStatusMenu: () => void;
@@ -35,7 +38,8 @@ type TicketsScreenFiltersProps = {
   onSelectView: (mode: ViewMode) => void;
   onSelectProject: (projectId: string | null) => void;
   onSelectSort: (mode: SortMode) => void;
-  onSelectStatus: (filter: StatusFilter) => void;
+  onSelectStatus: (status: string) => void;
+  onSelectAllStatuses: () => void;
 };
 
 export function TicketsScreenFilters({
@@ -49,8 +53,11 @@ export function TicketsScreenFilters({
   statusMenuOpen,
   sortMode,
   statusFilter,
+  statusFilterLabel,
+  statusFilterOptions,
   projects,
   filterProjectId,
+  allStatusesSelected,
   onToggleProjectMenu,
   onToggleSortMenu,
   onToggleStatusMenu,
@@ -58,7 +65,8 @@ export function TicketsScreenFilters({
   onSelectView,
   onSelectProject,
   onSelectSort,
-  onSelectStatus
+  onSelectStatus,
+  onSelectAllStatuses
 }: TicketsScreenFiltersProps) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createTicketsScreenStyles);
@@ -114,7 +122,7 @@ export function TicketsScreenFilters({
           />
           <FilterChip
             icon="funnel-outline"
-            label={statusFilterLabels[statusFilter]}
+            label={statusFilterLabel}
             onPress={onToggleStatusMenu}
             active={statusMenuOpen}
           />
@@ -144,14 +152,23 @@ export function TicketsScreenFilters({
 
       {statusMenuOpen && (
         <View style={styles.menu}>
-          {(Object.keys(statusFilterLabels) as StatusFilter[]).map(filter => (
-            <Pressable key={filter} style={styles.menuItem} onPress={() => onSelectStatus(filter)}>
-              <Text style={styles.menuItemText}>{statusFilterLabels[filter]}</Text>
-              {statusFilter === filter && (
-                <Ionicons name="checkmark" size={14} color={colors.primary} />
-              )}
-            </Pressable>
-          ))}
+          <Pressable style={styles.menuItem} onPress={onSelectAllStatuses}>
+            <Text style={styles.menuItemText}>All statuses</Text>
+            {allStatusesSelected && <Ionicons name="checkmark" size={14} color={colors.primary} />}
+          </Pressable>
+          {statusFilterOptions.map(status => {
+            const selected = allStatusesSelected || statusFilter.includes(status);
+            return (
+              <Pressable
+                key={status}
+                style={styles.menuItem}
+                onPress={() => onSelectStatus(status)}
+              >
+                <Text style={styles.menuItemText}>{formatStatusName(status)}</Text>
+                {selected && <Ionicons name="checkmark" size={14} color={colors.primary} />}
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </>

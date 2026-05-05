@@ -224,76 +224,83 @@ export const TOOLS = [
     }
   },
   {
-    name: 'prepare_artifact_upload',
+    name: 'prepare_attachment_upload',
     annotations: {
-      title: 'Prepare Artifact Upload',
+      title: 'Prepare Attachment Upload',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false
     },
     description:
-      'Create a signed upload URL for a ticket artifact in Supabase Storage. Requires AGENT+ org role.',
+      'Create a signed upload URL for an objective attachment in Supabase Storage. Requires AGENT+ org role.',
     inputSchema: {
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: { type: 'string', description: 'Ticket UUID.' },
+        objectiveId: { type: 'string', description: 'Objective UUID.' },
         fileName: { type: 'string', description: 'Original filename (e.g. design-spec.pdf).' },
-        label: { type: 'string', description: 'Optional display label for the artifact row.' },
-        artifactType: { type: 'string', description: 'Artifact type (default: document).' },
+        label: { type: 'string', description: 'Optional display label for the attachment row.' },
         contentType: { type: 'string', description: 'MIME type of upload.' },
         fileSize: { type: 'number', description: 'Optional file size in bytes.' },
         metadata: { type: 'object', description: 'Optional metadata for finalize step.' }
       },
-      required: ['sessionKey', 'ticketId', 'fileName']
+      required: ['sessionKey', 'ticketId', 'objectiveId', 'fileName']
     }
   },
   {
-    name: 'finalize_artifact_upload',
+    name: 'finalize_attachment_upload',
     annotations: {
-      title: 'Finalize Artifact Upload',
+      title: 'Finalize Attachment Upload',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
       openWorldHint: false
     },
     description:
-      'Create the public.artifacts row after the storage upload succeeds, associating storage_path to ticket_id.',
+      'Create the public.objective_attachments row after the storage upload succeeds, associating storage_path to ticket_id and objective_id.',
     inputSchema: {
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: { type: 'string', description: 'Ticket UUID.' },
-        storagePath: { type: 'string', description: 'Path returned from prepare_artifact_upload.' },
-        label: { type: 'string', description: 'Artifact label shown in UI.' },
-        artifactType: { type: 'string', description: 'Artifact type (default: document).' },
+        objectiveId: { type: 'string', description: 'Objective UUID.' },
+        storagePath: {
+          type: 'string',
+          description: 'Path returned from prepare_attachment_upload.'
+        },
+        label: { type: 'string', description: 'Attachment label shown in UI.' },
         contentType: { type: 'string', description: 'MIME type.' },
         fileSize: { type: 'number', description: 'Optional file size in bytes.' },
-        metadata: { type: 'object', description: 'Optional metadata to persist on artifact row.' }
+        metadata: { type: 'object', description: 'Optional metadata to persist on row.' }
       },
-      required: ['sessionKey', 'ticketId', 'storagePath', 'label']
+      required: ['sessionKey', 'ticketId', 'objectiveId', 'storagePath', 'label']
     }
   },
   {
-    name: 'get_artifact_download_url',
+    name: 'get_attachment_download_url',
     annotations: {
-      title: 'Get Artifact Download URL',
+      title: 'Get Attachment Download URL',
       readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: false
     },
     description:
-      'Create a signed download URL for an existing ticket artifact storage object. Org member access required.',
+      'Create a signed download URL for an existing objective attachment storage object. Org member access required.',
     inputSchema: {
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
         ticketId: { type: 'string', description: 'Ticket UUID.' },
-        artifactId: { type: 'string', description: 'Artifact UUID (preferred).' },
+        objectiveId: {
+          type: 'string',
+          description: 'Objective UUID. Required when using storagePath.'
+        },
+        attachmentId: { type: 'string', description: 'Attachment UUID (preferred).' },
         storagePath: {
           type: 'string',
-          description: 'Direct storage path fallback if artifactId is unavailable.'
+          description: 'Direct storage path fallback if attachmentId is unavailable.'
         },
         expiresIn: { type: 'number', description: 'Expiry in seconds (default 3600, max 86400).' }
       },

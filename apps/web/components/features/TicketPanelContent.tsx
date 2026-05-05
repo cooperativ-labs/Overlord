@@ -6,7 +6,6 @@ import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTi
 import { InlineEditField } from '@/components/features/InlineEditField';
 import { DueDateEditor } from '@/components/features/scheduling/DueDateEditor';
 import { ScheduleEditor } from '@/components/features/scheduling/ScheduleEditor';
-import { TicketDocumentUpload } from '@/components/features/TicketDocumentUpload';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
 import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
 import { TicketObjectivesSection } from '@/components/features/TicketObjectivesSection';
@@ -14,10 +13,9 @@ import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
-import { TicketTaggingDebug } from '@/components/features/TicketTaggingDebug';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
-import { listTicketDocumentsAction } from '@/lib/actions/artifacts';
+import { listObjectiveAttachmentsAction } from '@/lib/actions/attachments';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
 import {
@@ -208,7 +206,7 @@ export async function TicketPanelContent({
     gemini: agentConfigs.gemini?.flags ?? [],
     opencode: agentConfigs.opencode?.flags ?? []
   };
-  const ticketIdentifier = getTicketIdentifier(ticket.id);
+  const ticketIdentifier = getTicketIdentifier(ticket);
   const statusOptions = statuses?.map(s => s.name) ?? fallbackStatuses;
 
   const activeProjectId = ticket.project_id;
@@ -280,7 +278,7 @@ export async function TicketPanelContent({
     platformUrl,
     ticketId
   });
-  const initialDocuments = await listTicketDocumentsAction(ticketId).catch(() => []);
+  const objectiveAttachments = await listObjectiveAttachmentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
   const canViewTaggingInspector = isAdminEmail(user?.email);
   const taggingInspector =
@@ -291,6 +289,7 @@ export async function TicketPanelContent({
   return (
     <TicketLiveProvider
       ticketId={ticketId}
+      ticketReference={ticketIdentifier}
       initialEvents={events ?? []}
       initialArtifacts={artifacts ?? []}
       initialFileChanges={fileChanges ?? []}
@@ -343,7 +342,6 @@ export async function TicketPanelContent({
                 <InlineEditField
                   displayClassName="text-xl font-bold tracking-tight"
                   field="title"
-                  organizationId={organizationId}
                   initialValue={ticket.title ?? ''}
                   inputClassName="text-xl font-bold tracking-tight"
                   placeholder="Untitled — click to add a title"
@@ -417,8 +415,8 @@ export async function TicketPanelContent({
              </h2> */}
               <TicketObjectivesSection
                 ticketId={ticketId}
-                organizationId={organizationId}
                 objectives={objectives ?? []}
+                objectiveAttachments={objectiveAttachments}
                 objectiveFileMentionPaths={objectiveFileMentionPaths}
                 workingDirectory={workingDirectory}
               />
@@ -428,11 +426,9 @@ export async function TicketPanelContent({
           </section>
           <section className="flex flex-col px-5 pt-5 ">
             <TicketToolsAndCriteria
-              organizationId={organizationId}
               ticketId={ticketId}
               availableTools={ticket.available_tools}
               acceptanceCriteria={ticket.acceptance_criteria}
-              initialDocuments={initialDocuments}
               inspector={taggingInspector}
             />
 

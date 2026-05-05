@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 
 import type { FileChangeRecord, TicketSummary } from './types';
 
@@ -59,7 +60,7 @@ export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopo
                 className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                 href={buildTicketPath({ projectId, ticketId: ticket.id })}
               >
-                {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
               </Link>
               {ticket.status ? (
                 <Badge variant="outline" className="rounded-full text-[10px]">

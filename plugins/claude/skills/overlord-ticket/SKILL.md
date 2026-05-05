@@ -142,8 +142,8 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 ```bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
 ```
 
 ## Defaults And Notes
@@ -151,7 +151,8 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `claude-code`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
 - `permission-request` is invoked by the Claude Code permission hook installed by the bundle. Agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the same `file_changes` table. The dedicated CLI route is `POST /api/protocol/record-change-rationales`.
-- Artifact tools follow the `<verb>_<noun>` MCP naming: `prepare_artifact_upload`, `finalize_artifact_upload`, `get_artifact_download_url`, `upload_artifact_file`. The CLI keeps the noun-first command names (`artifact-prepare-upload`, etc.) for terminal ergonomics.
+- Objective attachment tools follow the `<verb>_<noun>` MCP naming: `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.
+- "Artifacts" in `deliver` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files. Files attached by users live on objectives via the attachment tools above.
 
 ## Rules
 
@@ -165,4 +166,4 @@ ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICK
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.2 -->
+<!-- version: 0.4.3 -->

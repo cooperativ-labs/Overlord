@@ -107,6 +107,7 @@ export type FileChangeRecord = {
   summary: string;
   ticket: {
     id: string;
+    ticket_id?: string | null;
     objective?: string | null;
     latest_objective_agent?: string | null;
     status: string;
@@ -124,6 +125,7 @@ export type DiffState = {
 
 export type TicketSummary = {
   id: string;
+  ticket_id?: string | null;
   objective?: string | null;
   latest_objective_agent?: string | null;
   status: string | null;

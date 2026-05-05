@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 
 import { FileListItem } from './FileListItem';
 import type { EnrichedCurrentChangeFile, GitStatusResponse, TicketSummary } from './types';
@@ -62,7 +63,7 @@ export function FileListPane({
               className="inline-flex max-w-[180px] items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary"
             >
               <span className="truncate">
-                {ticket.title?.trim() || `Ticket ${ticket.id.slice(-8)}`}
+                {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
               </span>
             </span>
           ))}

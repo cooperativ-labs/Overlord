@@ -38,7 +38,8 @@ export async function GET(request: Request) {
     limit: 6,
     organizationId: organizationId ?? undefined,
     query: rawQuery,
-    select: 'id,title,ticket_sequence,project_id,organization_id,status,project:projects(name)'
+    select:
+      'id,title,ticket_id,ticket_sequence,project_id,organization_id,status,project:projects(name)'
   });
 
   if (error) {

@@ -56,6 +56,7 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
         body: p.body,
         project_name: p.project_name,
         project_color: p.project_color,
+        ticket_identifier: p.ticket_identifier ?? null,
         ticket_title: p.ticket_title,
         ticket_sequence: p.ticket_sequence,
         impact_level: p.impact_level,

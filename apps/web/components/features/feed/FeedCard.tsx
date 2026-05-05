@@ -85,7 +85,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot }: FeedCardProps) {
           </span>
           <span className="text-muted-foreground/40">&middot;</span>
           <Link href={ticketPath} className="hover:underline underline-offset-2 text-primary">
-            {post.ticket_sequence ? `#${post.ticket_sequence} ` : ''}
+            {post.ticket_identifier ? `${post.ticket_identifier} ` : ''}
             {post.ticket_title ?? 'Untitled ticket'}
           </Link>
         </div>
@@ -223,7 +223,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot }: FeedCardProps) {
                           href={buildTicketPath({ projectId: post.project_id, ticketId: t.id })}
                           className="hover:underline underline-offset-2"
                         >
-                          #{t.sequence}: {t.title}
+                          {t.reference ?? t.sequence}: {t.title}
                         </Link>
                       </li>
                     ))}

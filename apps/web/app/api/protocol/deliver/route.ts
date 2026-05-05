@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
@@ -25,6 +26,12 @@ export async function POST(request: Request) {
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
+    const { data: ticket } = await supabase
+      .from('tickets')
+      .select('id,ticket_id')
+      .eq('id', ticketId)
+      .maybeSingle();
+    const ticketReference = getTicketIdentifier(ticket ?? ticketId);
     const typedSupabase = supabase as SupabaseClient<Database>;
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
@@ -187,7 +194,7 @@ export async function POST(request: Request) {
 
         // Send mobile push notification
         await sendPushNotification(supabase, {
-          title: `Agent Delivered (${ticketId.slice(-8)})`,
+          title: `Agent Delivered (${ticketReference})`,
           body: summary || 'The agent delivered this ticket for review.',
           organizationId,
           data: { ticketId, eventType: 'deliver' }

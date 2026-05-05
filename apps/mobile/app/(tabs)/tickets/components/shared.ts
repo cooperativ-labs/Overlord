@@ -6,7 +6,7 @@ import type { ThemeColors } from '@/lib/colors';
 import type { AssignedAgent, TicketListItem } from '@/lib/types';
 
 export type SortMode = 'updated' | 'created' | 'priority';
-export type StatusFilter = 'all' | 'open' | 'draft' | 'next-up' | 'execute' | 'review' | 'complete';
+export type StatusFilter = string[];
 export type ViewMode = 'list' | 'calendar';
 export type TicketStatusType =
   | 'draft'
@@ -54,33 +54,12 @@ export const sortLabels: Record<SortMode, string> = {
   priority: 'Priority'
 };
 
-export const statusFilterLabels: Record<StatusFilter, string> = {
-  all: 'All statuses',
-  open: 'Open',
-  draft: 'Draft',
-  'next-up': 'Next up',
-  execute: 'Executing',
-  review: 'In review',
-  complete: 'Complete'
-};
-
 export type TicketWithProject = TicketListItem & {
   created_at: string;
   project_id: string | null;
   board_position: number;
   has_unread?: boolean;
 };
-
-export const STATUS_DISPLAY_ORDER = [
-  'draft',
-  'next-up',
-  'execute',
-  'review',
-  'complete',
-  'blocked',
-  'cancelled',
-  'icebox'
-] as const satisfies readonly TicketStatusType[];
 
 export type SectionItem =
   | { kind: 'header'; status: string; count: number; collapsed: boolean }
@@ -180,6 +159,10 @@ export function formatStatusName(status: string): string {
     .join(' ');
 }
 
+function normalizeStatusName(status: string): string {
+  return status.trim().toLowerCase();
+}
+
 export function getStatusDefinition(
   statusDefinitions: TicketStatusDefinition[],
   organizationId: number,
@@ -193,39 +176,24 @@ export function getStatusDefinition(
   );
 }
 
-function getStatusNamesForFilter(
-  statusDefinitions: TicketStatusDefinition[],
-  filter: Exclude<StatusFilter, 'all' | 'open'>
-): Set<string> {
-  return new Set(
-    statusDefinitions
-      .filter(status => status.status_type === filter)
-      .map(status => status.name.trim().toLowerCase())
-  );
+function sortStatusDefinitions(
+  statusDefinitions: TicketStatusDefinition[]
+): TicketStatusDefinition[] {
+  return [...statusDefinitions].sort((left, right) => {
+    const orgDiff = left.organization_id - right.organization_id;
+    if (orgDiff !== 0) return orgDiff;
+    const positionDiff = left.position - right.position;
+    if (positionDiff !== 0) return positionDiff;
+    return left.name.localeCompare(right.name);
+  });
 }
 
 export function matchesStatusFilter(
   ticket: Pick<TicketWithProject, 'organization_id' | 'status'>,
-  statusDefinitions: TicketStatusDefinition[],
   filter: StatusFilter
 ): boolean {
-  if (filter === 'all') return true;
-
-  const definition = getStatusDefinition(
-    statusDefinitions,
-    ticket.organization_id,
-    ticket.status.trim().toLowerCase()
-  );
-
-  if (filter === 'open') {
-    return !definition || !['complete', 'cancelled', 'icebox'].includes(definition.status_type);
-  }
-
-  if (definition) {
-    return definition.status_type === filter;
-  }
-
-  return getStatusNamesForFilter(statusDefinitions, filter).has(ticket.status.trim().toLowerCase());
+  if (filter.length === 0) return true;
+  return filter.includes(normalizeStatusName(ticket.status));
 }
 
 export function resolvePreferredStatusNameByType(
@@ -274,23 +242,31 @@ export function buildOrderedSections(
     groups.set(ticket.status, list);
   }
 
-  if (statusFilter === 'all' || statusFilter === 'open') {
-    for (const statusType of STATUS_DISPLAY_ORDER) {
-      if (statusFilter === 'open' && ['complete', 'cancelled', 'icebox'].includes(statusType)) {
-        continue;
-      }
-      const matchingDefinitions = statusDefinitions.filter(
-        status => status.status_type === statusType
-      );
-      for (const status of matchingDefinitions) {
-        if (!groups.has(status.name)) groups.set(status.name, []);
+  const filterSet = new Set(statusFilter.map(normalizeStatusName));
+  const sortedDefinitions = sortStatusDefinitions(statusDefinitions);
+
+  if (filterSet.size === 0) {
+    for (const status of sortedDefinitions) {
+      if (!groups.has(status.name)) groups.set(status.name, []);
+    }
+  } else {
+    const existingNormalizedStatuses = new Set(
+      [...groups.keys()].map(statusName => normalizeStatusName(statusName))
+    );
+
+    for (const status of sortedDefinitions) {
+      const normalizedStatus = normalizeStatusName(status.name);
+      if (filterSet.has(normalizedStatus) && !existingNormalizedStatuses.has(normalizedStatus)) {
+        groups.set(status.name, []);
+        existingNormalizedStatuses.add(normalizedStatus);
       }
     }
-  } else if (!groups.has(statusFilter)) {
-    for (const status of statusDefinitions.filter(
-      definition => definition.status_type === statusFilter
-    )) {
-      if (!groups.has(status.name)) groups.set(status.name, []);
+
+    for (const statusName of statusFilter) {
+      const normalizedStatus = normalizeStatusName(statusName);
+      if (existingNormalizedStatuses.has(normalizedStatus)) continue;
+      groups.set(statusName, []);
+      existingNormalizedStatuses.add(normalizedStatus);
     }
   }
 
@@ -303,41 +279,42 @@ export function buildOrderedSections(
     groups.set(statusName, list);
   }
 
-  const orderIndex = (status: string): number => {
-    const firstTicketOrgId = listFirstOrganizationId(groups.get(status));
-    if (firstTicketOrgId !== null) {
-      const definition = getStatusDefinition(statusDefinitions, firstTicketOrgId, status);
-      if (definition) {
-        const idx = STATUS_DISPLAY_ORDER.indexOf(definition.status_type);
-        return idx === -1 ? STATUS_DISPLAY_ORDER.length + 1 : idx;
-      }
-    }
-
-    const matchingDefinitions = statusDefinitions
-      .filter(definition => definition.name === status)
-      .sort((left, right) => left.position - right.position);
-    const fallbackType = matchingDefinitions[0]?.status_type;
-    const idx = fallbackType ? STATUS_DISPLAY_ORDER.indexOf(fallbackType) : -1;
-    return idx === -1 ? STATUS_DISPLAY_ORDER.length + 1 : idx;
-  };
-
-  const positionForStatus = (status: string): number => {
-    const definition = statusDefinitions
-      .filter(definition => definition.name === status)
-      .sort((left, right) => left.position - right.position)[0];
-    return definition?.position ?? Number.MAX_SAFE_INTEGER;
-  };
+  const statusOrder = new Map<string, number>();
+  sortedDefinitions.forEach((definition, index) => {
+    if (!statusOrder.has(definition.name)) statusOrder.set(definition.name, index);
+  });
 
   return [...groups.entries()]
-    .sort(
-      ([a], [b]) =>
-        orderIndex(a) - orderIndex(b) ||
-        positionForStatus(a) - positionForStatus(b) ||
-        a.localeCompare(b)
-    )
+    .sort(([a], [b]) => {
+      const orderDiff =
+        (statusOrder.get(a) ?? Number.MAX_SAFE_INTEGER) -
+        (statusOrder.get(b) ?? Number.MAX_SAFE_INTEGER);
+      if (orderDiff !== 0) return orderDiff;
+      return a.localeCompare(b);
+    })
     .map(([status, list]) => ({ status, tickets: list }));
 }
 
-function listFirstOrganizationId(tickets: TicketWithProject[] | undefined): number | null {
-  return tickets?.[0]?.organization_id ?? null;
+export function buildStatusFilterOptions(
+  statusDefinitions: TicketStatusDefinition[],
+  tickets: Pick<TicketWithProject, 'status'>[]
+): string[] {
+  const options: string[] = [];
+  const seen = new Set<string>();
+
+  for (const status of sortStatusDefinitions(statusDefinitions)) {
+    const normalized = normalizeStatusName(status.name);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    options.push(normalized);
+  }
+
+  for (const ticket of tickets) {
+    const normalized = normalizeStatusName(ticket.status);
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    options.push(normalized);
+  }
+
+  return options;
 }

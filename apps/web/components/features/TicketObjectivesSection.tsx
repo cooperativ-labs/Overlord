@@ -2,6 +2,7 @@
 
 import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
+import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import type { Database } from '@/types/database.types';
@@ -13,16 +14,16 @@ type ObjectiveRow = Pick<
 
 type TicketObjectivesSectionProps = {
   ticketId: string;
-  organizationId: number;
   objectives: ObjectiveRow[];
+  objectiveAttachments: ObjectiveAttachment[];
   objectiveFileMentionPaths: string[];
   workingDirectory: string | null;
 };
 
 export function TicketObjectivesSection({
   ticketId,
-  organizationId,
   objectives: initialObjectives,
+  objectiveAttachments,
   objectiveFileMentionPaths,
   workingDirectory
 }: TicketObjectivesSectionProps) {
@@ -55,6 +56,9 @@ export function TicketObjectivesSection({
                 objective={objective}
                 index={index}
                 ticketId={ticketId}
+                attachments={objectiveAttachments.filter(
+                  attachment => attachment.objectiveId === objective.id
+                )}
                 isLatest={
                   index === orderedExecutedObjectives.length - 1 && !editableObjectiveValue.trim()
                 }
@@ -68,9 +72,11 @@ export function TicketObjectivesSection({
           canMarkExecuted={Boolean(editableObjective?.objective?.trim())}
           fileMentionPaths={objectiveFileMentionPaths}
           initialValue={editableObjectiveValue}
+          initialAttachments={objectiveAttachments.filter(
+            attachment => attachment.objectiveId === editableObjective?.id
+          )}
           objectiveId={editableObjective?.id ?? ''}
           objectiveState={editableObjective?.state ?? 'complete'}
-          organizationId={organizationId}
           ticketId={ticketId}
           workingDirectory={workingDirectory}
         />

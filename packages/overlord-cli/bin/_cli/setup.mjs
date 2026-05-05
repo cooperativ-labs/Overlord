@@ -130,7 +130,7 @@ ovld protocol prompt --agent claude-code --objective "Implement feature X" --pri
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
 \`\`\`
 
 ## Rules
@@ -209,7 +209,7 @@ ovld protocol prompt --agent opencode --objective "Implement feature X" --priori
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
 \`\`\`
 
 ## Rules
@@ -540,7 +540,11 @@ function currentContentHashForAgent(agent) {
     return contentHashForDirectory(cursorSourcePluginDir());
   }
   if (agent === 'gemini') {
-    return contentHash(slashCommandFiles('gemini').map(file => file.content).join('\n'));
+    return contentHash(
+      slashCommandFiles('gemini')
+        .map(file => file.content)
+        .join('\n')
+    );
   }
   if (agent === 'codex') return codexContentHash();
   return contentHash(
@@ -796,7 +800,14 @@ function cursorPaths() {
   const base = path.join(os.homedir(), '.cursor');
   return {
     pluginDir: path.join(base, 'plugins', 'local', 'overlord'),
-    pluginManifest: path.join(base, 'plugins', 'local', 'overlord', '.cursor-plugin', 'plugin.json'),
+    pluginManifest: path.join(
+      base,
+      'plugins',
+      'local',
+      'overlord',
+      '.cursor-plugin',
+      'plugin.json'
+    ),
     rulesFile: path.join(base, 'rules', 'overlord-local.mdc'),
     settingsFile: path.join(base, 'settings.json')
   };
@@ -956,10 +967,7 @@ function installCursor() {
       ? existingSettings.permissions
       : {};
   const mergedAllow = Array.from(
-    new Set([
-      ...asStringArray(permissions.allow),
-      'Shell(ovld protocol:*)'
-    ])
+    new Set([...asStringArray(permissions.allow), 'Shell(ovld protocol:*)'])
   );
   writeJsonFile(paths.settingsFile, {
     ...existingSettings,
@@ -1327,7 +1335,7 @@ function installClaudePermissions(platformUrl) {
   const entries = ['Bash(ovld protocol:*)'];
 
   const existing = new Set(settings.permissions.allow);
-  const toAdd = entries.filter((e) => !existing.has(e));
+  const toAdd = entries.filter(e => !existing.has(e));
 
   if (toAdd.length === 0) {
     console.log('  All required permissions already present. Nothing to do.\n');
@@ -1466,7 +1474,9 @@ export async function runSetupCommand(args) {
     const selectedAgents = selectedLabels.map(label => label.split('-')[0].trim());
 
     // Step 2: Install selected agents
-    console.log(`\nPreparing Overlord agent plugins/connectors for: ${selectedAgents.join(', ')}...\n`);
+    console.log(
+      `\nPreparing Overlord agent plugins/connectors for: ${selectedAgents.join(', ')}...\n`
+    );
 
     const installedAgents = [];
     for (const a of selectedAgents) {
@@ -1616,6 +1626,9 @@ export async function runDoctorCommand({ latestCliVersion = null } = {}) {
   }
   if (updateVersion) {
     console.log();
-    printCliUpdateNotice(updateVersion, { currentVersion: getCurrentCliVersion(), stream: process.stdout });
+    printCliUpdateNotice(updateVersion, {
+      currentVersion: getCurrentCliVersion(),
+      stream: process.stdout
+    });
   }
 }

@@ -129,7 +129,7 @@ export async function POST(request: Request) {
         status: draftStatusName,
         title: nextTitle
       })
-      .select('id, organization_id, project_id, execution_target, status')
+      .select('id, ticket_id, organization_id, project_id, execution_target, status')
       .single();
 
     if (ticketError || !ticket) {
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
         organizationId: ticket.organization_id,
         projectId: ticket.project_id,
         personal: ticket.project_id === null,
-        reference: getTicketIdentifier(ticket.id),
+        reference: getTicketIdentifier(ticket),
         status: ticket.status,
         title: nextTitle
       }

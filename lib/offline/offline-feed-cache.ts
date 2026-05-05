@@ -7,6 +7,7 @@ export type CachedFeedPost = {
   body: string;
   project_name: string;
   project_color: string;
+  ticket_identifier: string | null;
   ticket_title: string | null;
   ticket_sequence: number | null;
   impact_level: string;

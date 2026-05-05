@@ -65,11 +65,12 @@ function FeedSection({ cachedPosts }: { cachedPosts: CachedFeedPost[] }) {
                   />
                   {post.project_name}
                 </span>
-                {post.ticket_sequence && (
+                {(post.ticket_identifier || post.ticket_sequence) && (
                   <>
                     <span className="text-muted-foreground/40">&middot;</span>
                     <span>
-                      #{post.ticket_sequence} {post.ticket_title ?? 'Untitled'}
+                      {post.ticket_identifier ?? post.ticket_sequence}{' '}
+                      {post.ticket_title ?? 'Untitled'}
                     </span>
                   </>
                 )}

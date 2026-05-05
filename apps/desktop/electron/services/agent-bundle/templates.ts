@@ -138,11 +138,11 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
 \`\`\`
 
-The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\` for callers that need a signed URL directly. Prefer \`artifact-upload-file\` for one-shot uploads.
+Objective attachments also expose two-step variants — \`attachment-prepare-upload\` and \`attachment-finalize-upload\` — for callers that need a signed URL directly. Prefer \`attachment-upload-file\` for one-shot uploads.
 
 ## Defaults & Notes
 
@@ -150,7 +150,8 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
 - If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
-- Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
+- Objective attachment MCP tools follow \`<verb>_<noun>\` naming: \`prepare_attachment_upload\`, \`finalize_attachment_upload\`, \`get_attachment_download_url\`, \`upload_attachment_file\`. CLI commands use the \`attachment-*\` shape and require \`--objective-id\` for upload/finalize.
+- "Artifacts" in \`deliver\` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files.
 
 ## Rules
 
@@ -283,11 +284,11 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
 \`\`\`
 
-The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\` for callers that need a signed URL directly. Prefer \`artifact-upload-file\` for one-shot uploads.
+Objective attachments also expose two-step variants — \`attachment-prepare-upload\` and \`attachment-finalize-upload\` — for callers that need a signed URL directly. Prefer \`attachment-upload-file\` for one-shot uploads.
 
 ## Defaults & Notes
 
@@ -295,7 +296,8 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
 - If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
-- Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
+- Objective attachment MCP tools follow \`<verb>_<noun>\` naming: \`prepare_attachment_upload\`, \`finalize_attachment_upload\`, \`get_attachment_download_url\`, \`upload_attachment_file\`. CLI commands use the \`attachment-*\` shape and require \`--objective-id\` for upload/finalize.
+- "Artifacts" in \`deliver\` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files.
 
 ## Rules
 
@@ -419,11 +421,11 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 \`\`\`bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
 \`\`\`
 
-The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\` for callers that need a signed URL directly. Prefer \`artifact-upload-file\` for one-shot uploads.
+Objective attachments also expose two-step variants — \`attachment-prepare-upload\` and \`attachment-finalize-upload\` — for callers that need a signed URL directly. Prefer \`attachment-upload-file\` for one-shot uploads.
 
 ## Defaults & Notes
 
@@ -431,7 +433,8 @@ The CLI also exposes \`artifact-prepare-upload\` and \`artifact-finalize-upload\
 - \`permission-request\` is invoked by the installed permission hook/rules; agents do not normally call it directly.
 - If Overlord is unreachable because \`OVERLORD_URL\` cannot be reached, request permission escalation or network access before retrying.
 - \`record_change_rationales\` (MCP) and \`ovld protocol record-change-rationales\` (CLI) both write to the \`file_changes\` table; the dedicated route is \`POST /api/protocol/record-change-rationales\`.
-- Artifact MCP tools follow \`<verb>_<noun>\` naming: \`prepare_artifact_upload\`, \`finalize_artifact_upload\`, \`get_artifact_download_url\`, \`upload_artifact_file\`. CLI commands keep the \`artifact-*\` shape.
+- Objective attachment MCP tools follow \`<verb>_<noun>\` naming: \`prepare_attachment_upload\`, \`finalize_attachment_upload\`, \`get_attachment_download_url\`, \`upload_attachment_file\`. CLI commands use the \`attachment-*\` shape and require \`--objective-id\` for upload/finalize.
+- "Artifacts" in \`deliver\` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files.
 
 ## Rules
 

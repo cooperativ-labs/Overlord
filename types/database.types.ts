@@ -580,6 +580,77 @@ export type Database = {
           }
         ];
       };
+      objective_attachments: {
+        Row: {
+          content_type: string;
+          created_at: string;
+          created_by: string | null;
+          file_size: number;
+          id: string;
+          label: string;
+          metadata: Json;
+          objective_id: string;
+          session_id: string | null;
+          storage_path: string;
+          ticket_id: string;
+        };
+        Insert: {
+          content_type?: string;
+          created_at?: string;
+          created_by?: string | null;
+          file_size?: number;
+          id?: string;
+          label: string;
+          metadata?: Json;
+          objective_id: string;
+          session_id?: string | null;
+          storage_path: string;
+          ticket_id: string;
+        };
+        Update: {
+          content_type?: string;
+          created_at?: string;
+          created_by?: string | null;
+          file_size?: number;
+          id?: string;
+          label?: string;
+          metadata?: Json;
+          objective_id?: string;
+          session_id?: string | null;
+          storage_path?: string;
+          ticket_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'objective_attachments_objective_id_fkey';
+            columns: ['objective_id'];
+            isOneToOne: false;
+            referencedRelation: 'objectives';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'objective_attachments_objective_ticket_fkey';
+            columns: ['objective_id', 'ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'objectives';
+            referencedColumns: ['id', 'ticket_id'];
+          },
+          {
+            foreignKeyName: 'objective_attachments_session_id_fkey';
+            columns: ['session_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'objective_attachments_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       objectives: {
         Row: {
           agent_identifier: string | null;
@@ -1247,6 +1318,29 @@ export type Database = {
           }
         ];
       };
+      ticket_identifier_counters: {
+        Row: {
+          next_sequence: number;
+          organization_id: number;
+        };
+        Insert: {
+          next_sequence: number;
+          organization_id: number;
+        };
+        Update: {
+          next_sequence?: number;
+          organization_id?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ticket_identifier_counters_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: true;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       ticket_statuses: {
         Row: {
           created_at: string;
@@ -1396,6 +1490,7 @@ export type Database = {
           slack_workspace_id: string | null;
           source: string | null;
           status: string;
+          ticket_id: string;
           ticket_sequence: number;
           title: string | null;
           updated_at: string;
@@ -1426,6 +1521,7 @@ export type Database = {
           slack_workspace_id?: string | null;
           source?: string | null;
           status?: string;
+          ticket_id: string;
           ticket_sequence?: number;
           title?: string | null;
           updated_at?: string;
@@ -1456,6 +1552,7 @@ export type Database = {
           slack_workspace_id?: string | null;
           source?: string | null;
           status?: string;
+          ticket_id?: string;
           ticket_sequence?: number;
           title?: string | null;
           updated_at?: string;
@@ -1598,6 +1695,10 @@ export type Database = {
       };
       first_ticket_objective_text: {
         Args: { p_ticket_id: string };
+        Returns: string;
+      };
+      generate_ticket_identifier: {
+        Args: { p_organization_id: number };
         Returns: string;
       };
       has_org_role: {

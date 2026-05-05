@@ -569,7 +569,7 @@ async function getProjectInfoByEverhourTaskId(
 }
 
 function buildEverhourTaskName(ticket: { id: string; title: string | null }): string {
-  const label = getTicketIdentifier(ticket.id) || 'Ticket';
+  const label = getTicketIdentifier(ticket) || 'Ticket';
   const title = ticket.title?.trim() || 'Untitled';
   return `${label}: ${title}`;
 }

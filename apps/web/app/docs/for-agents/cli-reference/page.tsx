@@ -276,28 +276,28 @@ Optional:
 In a git workspace, \`deliver\` validates that changed files are represented by
 \`changeRationales\` unless the check is skipped.
 
-## Artifacts
+## Objective attachments
 
-Upload and download ticket artifacts.
+Upload and download files attached to a ticket objective.
 
 \`\`\`bash
 # Upload a local file in one call
-ovld protocol artifact-upload-file \\
-  --session-key <key> --ticket-id <id> \\
+ovld protocol attachment-upload-file \\
+  --session-key <key> --ticket-id <id> --objective-id <objective-id> \\
   --file ./spec.pdf --content-type application/pdf
 
 # Or do it in two steps with a signed URL
-ovld protocol artifact-prepare-upload \\
-  --session-key <key> --ticket-id <id> \\
+ovld protocol attachment-prepare-upload \\
+  --session-key <key> --ticket-id <id> --objective-id <objective-id> \\
   --file-name spec.pdf --content-type application/pdf
-ovld protocol artifact-finalize-upload \\
-  --session-key <key> --ticket-id <id> \\
+ovld protocol attachment-finalize-upload \\
+  --session-key <key> --ticket-id <id> --objective-id <objective-id> \\
   --storage-path <path> --label "Spec"
 
 # Get a signed download URL
-ovld protocol artifact-download-url \\
+ovld protocol attachment-download-url \\
   --session-key <key> --ticket-id <id> \\
-  --artifact-id <artifact-id>
+  --attachment-id <attachment-id>
 \`\`\`
 
 ---

@@ -102,8 +102,8 @@ Record only meaningful behavioral changes. Skip formatting-only noise. Prefer 1-
 ```bash
 ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
 ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
-ovld protocol artifact-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --file ./spec.pdf --content-type application/pdf
-ovld protocol artifact-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --artifact-id <artifact-id>
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
 ```
 
 ## Project Discovery And Ticket Creation
@@ -140,4 +140,4 @@ When in doubt, ask yourself: *can this be done entirely inside a terminal or bro
 - When the ticket was launched by Overlord, the ticket prompt remains authoritative for the specific task objective and ticket-level constraints.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 
-<!-- version: 0.2.4 -->
+<!-- version: 0.2.5 -->
