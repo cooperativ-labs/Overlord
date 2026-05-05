@@ -1,8 +1,7 @@
 'use client';
 
-import { InlineEditField } from '@/components/features/InlineEditField';
+import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
-import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import type { Database } from '@/types/database.types';
@@ -64,31 +63,17 @@ export function TicketObjectivesSection({
           </div>
         ) : null}
 
-        <div className="flex w-full items-start gap-1">
-          <InlineEditField
-            key={editableObjective?.id ?? 'current-objective'}
-            displayClassName="text-base leading-relaxed"
-            field="objective"
-            initialValue={editableObjectiveValue}
-            inputClassName="text-base leading-relaxed"
-            multiline
-            organizationId={organizationId}
-            placeholder="Click to add an objective…"
-            renderMarkdown
-            ticketId={ticketId}
-            variant="textarea"
-            fileMentionPaths={objectiveFileMentionPaths}
-            workingDirectory={workingDirectory}
-          >
-            {' '}
-            <ObjectiveMenuButton
-              ticketId={ticketId}
-              objectiveId={editableObjective?.id ?? ''}
-              state={editableObjective?.state ?? 'complete'}
-              canMarkExecuted={Boolean(editableObjective?.objective?.trim())}
-            />
-          </InlineEditField>
-        </div>
+        <DraftObjective
+          key={editableObjective?.id ?? 'current-objective'}
+          canMarkExecuted={Boolean(editableObjective?.objective?.trim())}
+          fileMentionPaths={objectiveFileMentionPaths}
+          initialValue={editableObjectiveValue}
+          objectiveId={editableObjective?.id ?? ''}
+          objectiveState={editableObjective?.state ?? 'complete'}
+          organizationId={organizationId}
+          ticketId={ticketId}
+          workingDirectory={workingDirectory}
+        />
       </div>
     </div>
   );
