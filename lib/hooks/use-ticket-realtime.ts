@@ -360,7 +360,7 @@ export function useTicketRealtime({
       window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
-  }, [queryClient, ticketId]);
+  }, [queryClient, resolvedTicketReference, ticketId]);
 
   return {
     events: eventsQuery.data ?? [],

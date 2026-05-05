@@ -1521,7 +1521,7 @@ export type Database = {
           slack_workspace_id?: string | null;
           source?: string | null;
           status?: string;
-          ticket_id: string;
+          ticket_id?: string;
           ticket_sequence?: number;
           title?: string | null;
           updated_at?: string;
