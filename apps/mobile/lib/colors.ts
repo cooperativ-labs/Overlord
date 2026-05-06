@@ -9,6 +9,7 @@ import {
   useState
 } from 'react';
 import {
+  Appearance,
   type ImageStyle,
   StyleSheet,
   type TextStyle,
@@ -122,6 +123,10 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
   const resolvedTheme = resolveThemePreference(preference, systemScheme);
   const currentColors = resolvedTheme === 'light' ? lightColors : darkColors;
+
+  useEffect(() => {
+    Appearance.setColorScheme(preference === 'system' ? 'unspecified' : preference);
+  }, [preference]);
 
   const contextValue = useMemo<ThemeContextValue>(
     () => ({
