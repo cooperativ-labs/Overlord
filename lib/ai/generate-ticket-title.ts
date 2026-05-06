@@ -42,7 +42,7 @@ export async function generateTitleWithGemini(objective: string): Promise<string
     // Enforce 60 char limit as a safety net
     return text.length <= 60 ? text : text.slice(0, 60) + '…';
   } catch (err) {
-    console.error('[generate-ticket-title] Gemini call failed:', err);
+    console.warn('[generate-ticket-title] Gemini call failed; falling back to local title:', err);
     return null;
   }
 }

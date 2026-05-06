@@ -1,3 +1,5 @@
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import React from 'react';
 import {
   ActivityIndicator,
@@ -12,7 +14,6 @@ import {
 } from 'react-native';
 
 import type { PickedFile } from '@/components/DocumentAttachmentsSection';
-import { DocumentAttachmentsSection } from '@/components/DocumentAttachmentsSection';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import type {
@@ -33,9 +34,9 @@ import {
   eventLabels,
   getEventIcons,
   getObjectiveStateColors,
+  type ObjectiveAttachmentItem,
   type Project,
-  statusPillColor,
-  type TicketDocument
+  statusPillColor
 } from './ticket-detail-shared';
 import { createStyles } from './ticket-detail-styles';
 
@@ -72,16 +73,12 @@ export function TicketDetailContent({
   resolvedAssignedSelection,
   allServers,
   availableServers,
-  documents,
-  uploadingDocument,
-  showDocuments,
-  onToggleDocuments,
-  onPickFile,
-  onOpenDocument,
+  objectiveAttachments,
+  uploadingAttachment,
+  onAttachToObjective,
+  onOpenAttachment,
+  draftObjectiveId,
   hasEverhourApiKey,
-  ticketContext,
-  ticketConstraints,
-  ticketAcceptanceCriteria,
   showAcceptanceCriteria,
   onToggleAcceptanceCriteria,
   acceptanceCriteriaDraft,
@@ -134,16 +131,12 @@ export function TicketDetailContent({
   resolvedAssignedSelection: AgentModelSelection | null;
   allServers: Server[];
   availableServers: Server[];
-  documents: TicketDocument[];
-  uploadingDocument: boolean;
-  showDocuments: boolean;
-  onToggleDocuments: () => void;
-  onPickFile: (file: PickedFile) => void | Promise<void>;
-  onOpenDocument: (document: TicketDocument) => void;
+  objectiveAttachments: ObjectiveAttachmentItem[];
+  uploadingAttachment: boolean;
+  onAttachToObjective: (file: PickedFile) => void | Promise<void>;
+  onOpenAttachment: (attachment: ObjectiveAttachmentItem) => void;
+  draftObjectiveId: string | null;
   hasEverhourApiKey: boolean;
-  ticketContext: string;
-  ticketConstraints: string;
-  ticketAcceptanceCriteria: string | null;
   showAcceptanceCriteria: boolean;
   onToggleAcceptanceCriteria: () => void;
   acceptanceCriteriaDraft: string;
@@ -357,18 +350,18 @@ export function TicketDetailContent({
               multiline
               textAlignVertical="top"
             />
-            {canSaveObjective && (
-              <Pressable
-                onPress={onSaveObjective}
-                style={({ pressed }) => [styles.saveObjective, pressed && styles.pressed]}
-              >
-                {savingObjective ? (
-                  <ActivityIndicator size="small" color={colors.primaryForeground} />
-                ) : (
-                  <Text style={styles.saveObjectiveText}>{objectiveActionLabel}</Text>
-                )}
-              </Pressable>
-            )}
+            <DraftObjectiveAttachments
+              attachments={objectiveAttachments.filter(
+                attachment => attachment.objectiveId === draftObjectiveId
+              )}
+              uploading={uploadingAttachment}
+              canAttach={draftObjectiveId !== null || objectiveDraft.trim().length > 0}
+              onAttach={onAttachToObjective}
+              onOpen={onOpenAttachment}
+              actionLabel={canSaveObjective ? objectiveActionLabel : null}
+              onSave={onSaveObjective}
+              savingObjective={savingObjective}
+            />
           </View>
 
           <View style={styles.runSection}>
@@ -416,37 +409,6 @@ export function TicketDetailContent({
               </Text>
             )}
           </View>
-
-          <CollapsibleSection label="DOCUMENTS" open={showDocuments} onToggle={onToggleDocuments}>
-            <DocumentAttachmentsSection
-              documents={documents}
-              uploading={uploadingDocument}
-              onPickFile={onPickFile}
-              onOpenDocument={onOpenDocument}
-            />
-            {ticketContext.trim() !== '' && (
-              <View style={styles.docBlock}>
-                <Text style={styles.docLabel}>Context</Text>
-                <Text style={styles.docBody}>{ticketContext}</Text>
-              </View>
-            )}
-            {ticketConstraints.trim() !== '' && (
-              <View style={styles.docBlock}>
-                <Text style={styles.docLabel}>Constraints</Text>
-                <Text style={styles.docBody}>{ticketConstraints}</Text>
-              </View>
-            )}
-            {ticketAcceptanceCriteria && (
-              <View style={styles.docBlock}>
-                <Text style={styles.docLabel}>Acceptance Criteria</Text>
-                <Text style={styles.docBody}>{ticketAcceptanceCriteria}</Text>
-              </View>
-            )}
-            {ticketContext.trim() === '' &&
-              ticketConstraints.trim() === '' &&
-              !ticketAcceptanceCriteria &&
-              documents.length === 0 && <Text style={styles.docEmpty}>No documents attached.</Text>}
-          </CollapsibleSection>
 
           <CollapsibleSection
             label="ACCEPTANCE CRITERIA"
@@ -649,6 +611,152 @@ export function TicketDetailContent({
         )}
       </SelectorModal>
     </>
+  );
+}
+
+function DraftObjectiveAttachments({
+  attachments,
+  uploading,
+  canAttach,
+  onAttach,
+  onOpen,
+  actionLabel,
+  onSave,
+  savingObjective
+}: {
+  attachments: ObjectiveAttachmentItem[];
+  uploading: boolean;
+  canAttach: boolean;
+  onAttach: (file: PickedFile) => void | Promise<void>;
+  onOpen: (attachment: ObjectiveAttachmentItem) => void;
+  actionLabel: string | null;
+  onSave: () => void;
+  savingObjective: boolean;
+}) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
+
+  async function handleTakePhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Camera permission needed', 'Enable camera access to take a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85 });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    await onAttach({
+      uri: asset.uri,
+      fileName: asset.fileName ?? `photo-${Date.now()}.jpg`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      fileSize: asset.fileSize ?? 0
+    });
+  }
+
+  async function handleSelectImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Photo library permission needed',
+        'Enable photo library access to select images.'
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    await onAttach({
+      uri: asset.uri,
+      fileName: asset.fileName ?? `image-${Date.now()}.jpg`,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      fileSize: asset.fileSize ?? 0
+    });
+  }
+
+  async function handleSelectFile() {
+    const result = await DocumentPicker.getDocumentAsync({ type: '*/*', multiple: false });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    await onAttach({
+      uri: asset.uri,
+      fileName: asset.name,
+      mimeType: asset.mimeType ?? 'application/octet-stream',
+      fileSize: asset.size ?? 0
+    });
+  }
+
+  function showAttachOptions() {
+    if (!canAttach) {
+      Alert.alert('Objective required', 'Enter an objective before attaching files.');
+      return;
+    }
+    Alert.alert('Attach to objective', undefined, [
+      { text: 'Take photo', onPress: () => void handleTakePhoto() },
+      { text: 'Choose from library', onPress: () => void handleSelectImage() },
+      { text: 'Choose file', onPress: () => void handleSelectFile() },
+      { text: 'Cancel', style: 'cancel' as const }
+    ]);
+  }
+
+  return (
+    <View style={styles.draftAttachmentsBlock}>
+      {attachments.length > 0 && (
+        <View style={styles.draftAttachmentsList}>
+          {attachments.map(attachment => (
+            <Pressable
+              key={attachment.id}
+              onPress={() => onOpen(attachment)}
+              style={({ pressed }) => [styles.draftAttachmentRow, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name={
+                  attachment.contentType.startsWith('image/') ? 'image-outline' : 'document-outline'
+                }
+                size={14}
+                color={colors.mutedForeground}
+              />
+              <Text style={styles.draftAttachmentLabel} numberOfLines={1}>
+                {attachment.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      <View style={styles.draftActionsRow}>
+        <Pressable
+          onPress={showAttachOptions}
+          disabled={uploading}
+          accessibilityRole="button"
+          accessibilityLabel="Attach file to objective"
+          style={({ pressed }) => [
+            styles.attachIconButton,
+            uploading && styles.attachIconButtonDisabled,
+            pressed && styles.pressed
+          ]}
+        >
+          {uploading ? (
+            <ActivityIndicator size="small" color={colors.mutedForeground} />
+          ) : (
+            <Ionicons name="document-attach-outline" size={18} color={colors.foreground} />
+          )}
+        </Pressable>
+        {actionLabel && (
+          <Pressable
+            onPress={onSave}
+            style={({ pressed }) => [styles.saveObjective, pressed && styles.pressed]}
+          >
+            {savingObjective ? (
+              <ActivityIndicator size="small" color={colors.primaryForeground} />
+            ) : (
+              <Text style={styles.saveObjectiveText}>{actionLabel}</Text>
+            )}
+          </Pressable>
+        )}
+      </View>
+    </View>
   );
 }
 

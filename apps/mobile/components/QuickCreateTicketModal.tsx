@@ -189,11 +189,19 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
         throw new Error(ticketError?.message ?? 'Failed to create ticket.');
       }
 
-      await supabase.from('objectives').insert({
-        ticket_id: ticket.id,
-        objective: trimmed,
-        state: 'draft'
-      });
+      const { data: objective, error: objectiveError } = await supabase
+        .from('objectives')
+        .insert({
+          ticket_id: ticket.id,
+          objective: trimmed,
+          state: 'draft'
+        })
+        .select('id')
+        .single();
+
+      if (objectiveError || !objective) {
+        throw new Error(objectiveError?.message ?? 'Failed to create objective.');
+      }
 
       await supabase.from('ticket_events').insert({
         event_type: 'system',
@@ -202,7 +210,7 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
       });
 
       for (const doc of pendingDocuments) {
-        const storagePath = `${selectedProject.organization_id}/${selectedProject.id}/${ticket.id}/${Date.now()}-${doc.fileName}`;
+        const storagePath = `${selectedProject.organization_id}/${selectedProject.id}/${ticket.id}/${objective.id}/${Date.now()}-${doc.fileName}`;
         const response = await fetch(doc.uri);
         const blob = await response.blob();
         const buffer = await blob.arrayBuffer();
@@ -210,9 +218,11 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
           .from('artifacts')
           .upload(storagePath, buffer, { contentType: doc.mimeType, upsert: false });
         if (uploadError) continue;
-        await supabase.from('artifacts').insert({
+        await supabase.from('objective_attachments').insert({
+          objective_id: objective.id,
           ticket_id: ticket.id,
-          artifact_type: doc.mimeType.startsWith('image/') ? 'image' : 'document',
+          content_type: doc.mimeType,
+          file_size: doc.fileSize,
           label: doc.fileName,
           storage_path: storagePath,
           metadata: { size: doc.fileSize, type: doc.mimeType, fileName: doc.fileName }

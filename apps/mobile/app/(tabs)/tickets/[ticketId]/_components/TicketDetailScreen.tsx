@@ -39,7 +39,7 @@ import { generateKey, installPublicKey, isSSHSupported, verifyConnection } from 
 
 import { formatStatusName, type TicketStatusDefinition } from '../../components/shared';
 
-import { type Project, type TicketDocument } from './ticket-detail-shared';
+import { type ObjectiveAttachmentItem, type Project } from './ticket-detail-shared';
 import { createStyles } from './ticket-detail-styles';
 import { TicketDetailContent } from './TicketDetailContent';
 import { TicketHeaderRight, TicketHeaderSheet, TicketHeaderTitle } from './TicketDetailHeader';
@@ -79,10 +79,9 @@ export default function TicketDetailScreen() {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [headerSheetOpen, setHeaderSheetOpen] = useState(false);
   const [showNewTicketModal, setShowNewTicketModal] = useState(false);
-  const [showDocuments, setShowDocuments] = useState(false);
   const [showAcceptanceCriteria, setShowAcceptanceCriteria] = useState(false);
-  const [documents, setDocuments] = useState<TicketDocument[]>([]);
-  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [objectiveAttachments, setObjectiveAttachments] = useState<ObjectiveAttachmentItem[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [showCliQuickstart, setShowCliQuickstart] = useState(false);
   const [activityFilter, setActivityFilter] = useState<'all' | 'completed'>('all');
   const [copyingPromptContext, setCopyingPromptContext] = useState<'cli' | 'web' | null>(null);
@@ -114,7 +113,7 @@ export default function TicketDetailScreen() {
         setShowProjectPicker(false);
         setShowStatusPicker(false);
         setStatusDefinitions([]);
-        setDocuments([]);
+        setObjectiveAttachments([]);
         setEventProfiles({});
       }
 
@@ -152,10 +151,9 @@ export default function TicketDetailScreen() {
           .select('organization_id, name, position, status_type')
           .order('position', { ascending: true }),
         supabase
-          .from('artifacts')
-          .select('id, label, storage_path, metadata, created_at')
+          .from('objective_attachments')
+          .select('id, objective_id, label, storage_path, content_type, file_size, created_at')
           .eq('ticket_id', ticketId)
-          .not('storage_path', 'is', null)
           .order('created_at', { ascending: false }),
         userId
           ? supabase
@@ -225,21 +223,19 @@ export default function TicketDetailScreen() {
         setStatusDefinitions([]);
       }
       if (documentsRes.data) {
-        setDocuments(
-          documentsRes.data.map(document => {
-            const metadata = (document.metadata ?? {}) as Record<string, unknown>;
-            return {
-              id: document.id,
-              label: document.label,
-              storagePath: document.storage_path ?? '',
-              fileType: typeof metadata.type === 'string' ? metadata.type : '',
-              fileSize: typeof metadata.size === 'number' ? metadata.size : 0,
-              createdAt: document.created_at
-            };
-          })
+        setObjectiveAttachments(
+          documentsRes.data.map(attachment => ({
+            id: attachment.id,
+            objectiveId: attachment.objective_id,
+            label: attachment.label,
+            storagePath: attachment.storage_path ?? '',
+            contentType: attachment.content_type ?? '',
+            fileSize: Number(attachment.file_size ?? 0),
+            createdAt: attachment.created_at
+          }))
         );
       } else if (reset) {
-        setDocuments([]);
+        setObjectiveAttachments([]);
       }
       setHasEverhourApiKey(Boolean(everhourRes.data));
       if (
@@ -584,18 +580,51 @@ export default function TicketDetailScreen() {
     return sanitized.slice(0, 180);
   }
 
-  async function uploadDocument(options: {
+  async function ensureDraftObjectiveId(): Promise<string | null> {
+    if (draftObjective?.id) return draftObjective.id;
+    const trimmed = objectiveDraft.trim();
+    if (!trimmed) {
+      Alert.alert('Objective required', 'Enter an objective before attaching files.');
+      return null;
+    }
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('objectives')
+      .insert({
+        ticket_id: ticketId,
+        objective: trimmed,
+        state: 'draft'
+      })
+      .select('id')
+      .single();
+    if (error || !data) {
+      Alert.alert('Unable to save objective', error?.message ?? 'An unexpected error occurred.');
+      return null;
+    }
+    await supabase.from('ticket_events').insert({
+      event_type: 'system',
+      summary: 'Objective created from mobile.',
+      ticket_id: ticketId
+    });
+    await loadData();
+    return data.id;
+  }
+
+  async function handleAttachToObjective(options: {
     uri: string;
     fileName: string;
     mimeType: string;
     fileSize: number;
   }) {
-    if (!ticket || uploadingDocument) return;
+    if (!ticket || uploadingAttachment) return;
 
-    setUploadingDocument(true);
+    const objectiveId = await ensureDraftObjectiveId();
+    if (!objectiveId) return;
+
+    setUploadingAttachment(true);
     try {
       const supabase = getSupabase();
-      const storagePath = `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${Date.now()}-${sanitizeFileName(options.fileName)}`;
+      const storagePath = `${ticket.organization_id}/${ticket.project_id ?? 'personal'}/${ticket.id}/${objectiveId}/${Date.now()}-${sanitizeFileName(options.fileName)}`;
       const response = await fetch(options.uri);
       const blob = await response.blob();
       const buffer = await blob.arrayBuffer();
@@ -611,9 +640,11 @@ export default function TicketDetailScreen() {
         throw new Error(uploadError.message);
       }
 
-      const { error: artifactError } = await supabase.from('artifacts').insert({
+      const { error: attachmentError } = await supabase.from('objective_attachments').insert({
+        objective_id: objectiveId,
         ticket_id: ticket.id,
-        artifact_type: options.mimeType.startsWith('image/') ? 'image' : 'document',
+        content_type: options.mimeType,
+        file_size: options.fileSize,
         label: options.fileName,
         storage_path: storagePath,
         metadata: {
@@ -623,47 +654,46 @@ export default function TicketDetailScreen() {
         }
       });
 
-      if (artifactError) {
-        throw new Error(artifactError.message);
+      if (attachmentError) {
+        throw new Error(attachmentError.message);
       }
 
       const { error: eventError } = await supabase.from('ticket_events').insert({
         event_type: 'artifact',
-        summary: `Document uploaded from mobile: ${options.fileName}`,
+        summary: `Objective attachment uploaded: ${options.fileName}`,
         ticket_id: ticket.id
       });
 
       if (eventError) {
-        console.error('Failed to record upload event:', eventError.message);
+        console.error('Failed to record attachment event:', eventError.message);
       }
 
       await loadData();
-      setShowDocuments(true);
     } catch (error) {
       Alert.alert(
         'Upload failed',
         error instanceof Error ? error.message : 'An unexpected upload error occurred.'
       );
     } finally {
-      setUploadingDocument(false);
+      setUploadingAttachment(false);
     }
   }
 
-  async function handleOpenDocument(document: TicketDocument) {
+  async function handleOpenAttachment(attachment: ObjectiveAttachmentItem) {
     try {
       const supabase = getSupabase();
       const { data, error } = await supabase.storage
         .from('artifacts')
-        .createSignedUrl(document.storagePath, 3600);
+        .createSignedUrl(attachment.storagePath, 3600);
 
       if (error || !data?.signedUrl) {
-        throw new Error(error?.message ?? 'Unable to open document.');
+        throw new Error(error?.message ?? 'Unable to open attachment.');
       }
 
       await Linking.openURL(data.signedUrl);
     } catch (error) {
       Alert.alert(
-        'Unable to open document',
+        'Unable to open attachment',
         error instanceof Error ? error.message : 'Please try again.'
       );
     }
@@ -1308,16 +1338,12 @@ export default function TicketDetailScreen() {
         resolvedAssignedSelection={resolvedAssignedSelection}
         allServers={allServers}
         availableServers={availableServers}
-        documents={documents}
-        uploadingDocument={uploadingDocument}
-        showDocuments={showDocuments}
-        onToggleDocuments={() => setShowDocuments(open => !open)}
-        onPickFile={uploadDocument}
-        onOpenDocument={handleOpenDocument}
+        objectiveAttachments={objectiveAttachments}
+        uploadingAttachment={uploadingAttachment}
+        onAttachToObjective={handleAttachToObjective}
+        onOpenAttachment={handleOpenAttachment}
+        draftObjectiveId={draftObjective?.id ?? null}
         hasEverhourApiKey={hasEverhourApiKey}
-        ticketContext={ticket.context}
-        ticketConstraints={ticket.constraints}
-        ticketAcceptanceCriteria={ticket.acceptance_criteria}
         showAcceptanceCriteria={showAcceptanceCriteria}
         onToggleAcceptanceCriteria={() => setShowAcceptanceCriteria(open => !open)}
         acceptanceCriteriaDraft={acceptanceCriteriaDraft}

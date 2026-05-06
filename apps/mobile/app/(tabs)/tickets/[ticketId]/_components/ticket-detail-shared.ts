@@ -9,11 +9,12 @@ export type Project = {
   color: string;
 };
 
-export type TicketDocument = {
+export type ObjectiveAttachmentItem = {
   id: string;
+  objectiveId: string;
   label: string;
   storagePath: string;
-  fileType: string;
+  contentType: string;
   fileSize: number;
   createdAt: string;
 };

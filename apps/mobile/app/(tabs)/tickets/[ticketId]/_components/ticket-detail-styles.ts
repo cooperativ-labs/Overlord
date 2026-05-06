@@ -380,14 +380,49 @@ export const createStyles = (colors: ThemeColors) =>
       padding: 0
     },
     saveObjective: {
-      alignSelf: 'flex-end',
-      marginTop: 10,
       paddingHorizontal: 12,
       paddingVertical: 7,
       borderRadius: 8,
       backgroundColor: colors.primary
     },
     saveObjectiveText: { color: colors.primaryForeground, fontSize: 13, fontWeight: '600' },
+    draftAttachmentsBlock: {
+      marginTop: 10,
+      gap: 8
+    },
+    draftAttachmentsList: {
+      gap: 4
+    },
+    draftAttachmentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 4
+    },
+    draftAttachmentLabel: {
+      flex: 1,
+      color: colors.foreground,
+      fontSize: 12
+    },
+    draftActionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8
+    },
+    attachIconButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.secondary,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    attachIconButtonDisabled: {
+      opacity: 0.5
+    },
     runSection: { paddingHorizontal: 16, marginBottom: 18 },
     launchServerButton: {
       backgroundColor: colors.primary,
