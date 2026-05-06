@@ -401,7 +401,6 @@ export default function TicketsScreen() {
           headerTransparent: false,
           headerStyle: { backgroundColor: 'transparent' },
           headerTintColor: colors.foreground,
-
           headerTitle: () => {
             return glassAvailable ? (
               <GlassView style={styles.searchWrap} glassEffectStyle="regular">
