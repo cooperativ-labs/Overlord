@@ -152,10 +152,10 @@ export async function TicketPanelContent({
       .order('name', { ascending: true }),
     ticket.schedule_id
       ? supabase
-          .from('schedule')
-          .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
-          .eq('id', ticket.schedule_id)
-          .maybeSingle()
+        .from('schedule')
+        .select('period_type,period_interval,days_of_week,days_of_month,weeks_of_month,timezone')
+        .eq('id', ticket.schedule_id)
+        .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     supabase
       .from('agent_sessions')
@@ -345,26 +345,7 @@ export async function TicketPanelContent({
               </div>
 
               <div className="mb-3 flex flex-wrap items-center gap-2">
-                <TicketProjectSelect
-                  ticketId={ticketId}
-                  organizationId={organizationId}
-                  currentProjectId={activeProjectId}
-                  projects={projectOptions}
-                />
-                {!ticket.project_id ? (
-                  <>
-                    <div className="h-4 w-px bg-border" />
-                    <span className="text-xs text-muted-foreground">
-                      Personal ticket • only visible to you until assigned to a project
-                    </span>
-                  </>
-                ) : null}
-                <div className="h-4 w-px bg-border" />
-                <TicketStatusSelect
-                  currentStatus={ticket.status ?? ''}
-                  statusOptions={[...statusOptions]}
-                  ticketId={ticketId}
-                />
+
                 <div className="h-4 w-px bg-border" />
                 <TicketExecutionTargetSelect
                   currentExecutionTarget={ticket.execution_target ?? 'agent'}
@@ -380,15 +361,15 @@ export async function TicketPanelContent({
                   initialSchedule={
                     schedule
                       ? {
-                          periodType: schedule.period_type,
-                          periodInterval: schedule.period_interval,
-                          daysOfWeek: Array.isArray(schedule.days_of_week)
-                            ? schedule.days_of_week
-                            : [],
-                          daysOfMonth: schedule.days_of_month ?? undefined,
-                          weeksOfMonth: schedule.weeks_of_month ?? undefined,
-                          timezone: schedule.timezone
-                        }
+                        periodType: schedule.period_type,
+                        periodInterval: schedule.period_interval,
+                        daysOfWeek: Array.isArray(schedule.days_of_week)
+                          ? schedule.days_of_week
+                          : [],
+                        daysOfMonth: schedule.days_of_month ?? undefined,
+                        weeksOfMonth: schedule.weeks_of_month ?? undefined,
+                        timezone: schedule.timezone
+                      }
                       : null
                   }
                 />
