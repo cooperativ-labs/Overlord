@@ -31,10 +31,6 @@
   },
   "include": [
     "agent-models.json",
-    "instrumentation.ts",
-    "instrumentation-client.ts",
-    "sentry.edge.config.ts",
-    "sentry.server.config.ts",
     "lib/**/*.ts",
     "lib/**/*.tsx",
     "packages/**/*.ts",

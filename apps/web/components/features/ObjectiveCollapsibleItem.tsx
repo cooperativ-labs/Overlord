@@ -4,7 +4,10 @@ import { CheckCircle, ChevronDown, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
-import { ObjectiveAttachmentUpload } from '@/components/features/ObjectiveAttachmentUpload';
+import {
+  ObjectiveAttachmentList,
+  useObjectiveAttachmentState
+} from '@/components/features/ObjectiveAttachmentUpload';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,6 +39,18 @@ export function ObjectiveCollapsibleItem({
   const agentType = getAgentTypeByIdentifier(objective.agent_identifier);
   const modelIdentifier = objective.model_identifier?.trim() || null;
   const timestampLabel = isExecuting ? 'Executing since' : 'Completed';
+  const {
+    attachments: objectiveAttachments,
+    uploading,
+    deletingIds,
+    handleDownload,
+    handleDelete,
+    dismissUploadingItem
+  } = useObjectiveAttachmentState({
+    ticketId,
+    objectiveId: objective.id,
+    initialAttachments: attachments
+  });
 
   return (
     <Collapsible defaultOpen={false}>
@@ -101,11 +116,13 @@ export function ObjectiveCollapsibleItem({
         </div>
         <CollapsibleContent className="px-3 pb-2 pt-1 border-b">
           <MarkdownContent compact>{objective.objective}</MarkdownContent>
-          <ObjectiveAttachmentUpload
-            compact
-            ticketId={ticketId}
-            objectiveId={objective.id}
-            initialAttachments={attachments}
+          <ObjectiveAttachmentList
+            attachments={objectiveAttachments}
+            uploading={uploading}
+            deletingIds={deletingIds}
+            onDownload={handleDownload}
+            onDelete={handleDelete}
+            onDismissUploadingItem={dismissUploadingItem}
           />
         </CollapsibleContent>
       </div>

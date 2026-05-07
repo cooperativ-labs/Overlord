@@ -3,10 +3,21 @@
 import { AtSign } from 'lucide-react';
 import { useRef } from 'react';
 
+import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
 import { InlineEditField, type InlineEditFieldHandle } from '@/components/features/InlineEditField';
-import { ObjectiveAttachmentUpload } from '@/components/features/ObjectiveAttachmentUpload';
+import {
+  ObjectiveAttachmentList,
+  ObjectiveAttachmentUploadTrigger,
+  useObjectiveAttachmentState
+} from '@/components/features/ObjectiveAttachmentUpload';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
+import { AgentSplitButtonLive } from '@/components/features/TicketLiveProvider';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
+import {
+  getLaunchAgentTypeByIdentifier,
+  type LaunchAgentTypeValue
+} from '@/lib/helpers/agent-types';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 
 type DraftObjectiveProps = {
   ticketId: string;
@@ -17,6 +28,13 @@ type DraftObjectiveProps = {
   fileMentionPaths: string[];
   initialAttachments: ObjectiveAttachment[];
   workingDirectory: string | null;
+  assignedAgent?: TicketAssignedAgent | null;
+  projectId?: string | null;
+  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
+  agentCommands?: Record<LaunchAgentTypeValue, string>;
+  sshCommand?: string | null;
+  remoteWorkingDirectory?: string | null;
+  hasProjectWorkingDirectory?: boolean;
 };
 
 export function DraftObjective({
@@ -27,9 +45,36 @@ export function DraftObjective({
   canMarkExecuted,
   fileMentionPaths,
   initialAttachments,
-  workingDirectory
+  workingDirectory,
+  assignedAgent,
+  projectId,
+  agentFlags,
+  agentCommands,
+  sshCommand,
+  remoteWorkingDirectory,
+  hasProjectWorkingDirectory
 }: DraftObjectiveProps) {
   const editFieldRef = useRef<InlineEditFieldHandle>(null);
+  const showAgentControls = assignedAgent !== undefined;
+  const {
+    attachments,
+    uploading,
+    deletingIds,
+    hasItems,
+    isDragOver,
+    inputRef,
+    handleInputChange,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleDownload,
+    handleDelete,
+    dismissUploadingItem
+  } = useObjectiveAttachmentState({
+    ticketId,
+    objectiveId,
+    initialAttachments
+  });
 
   return (
     <div className="w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40">
@@ -61,11 +106,26 @@ export function DraftObjective({
         workingDirectory={workingDirectory}
       />
       <div className="border-t border-border/40">
-        <ObjectiveAttachmentUpload
+        <ObjectiveAttachmentList
+          attachments={attachments}
+          uploading={uploading}
+          deletingIds={deletingIds}
+          onDownload={handleDownload}
+          onDelete={handleDelete}
+          onDismissUploadingItem={dismissUploadingItem}
           toolbar
-          ticketId={ticketId}
+        />
+        <ObjectiveAttachmentUploadTrigger
+          toolbar
           objectiveId={objectiveId}
-          initialAttachments={initialAttachments}
+          attachmentsCount={attachments.length}
+          hasItems={hasItems}
+          isDragOver={isDragOver}
+          inputRef={inputRef}
+          onInputChange={handleInputChange}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
           <ObjectiveMenuButton
             canMarkExecuted={canMarkExecuted}
@@ -73,7 +133,40 @@ export function DraftObjective({
             state={objectiveState}
             ticketId={ticketId}
           />
-        </ObjectiveAttachmentUpload>
+          {showAgentControls ? (
+            <>
+              <div className="mx-1 h-4 w-px bg-border/50" />
+              <AgentModelChooserButton
+                ticketId={ticketId}
+                initialSelection={assignedAgent ?? null}
+                persistSelection
+              />
+              <AgentSplitButtonLive
+                assignedSelection={assignedAgent ?? null}
+                defaultAgent={
+                  assignedAgent ? getLaunchAgentTypeByIdentifier(assignedAgent.agent) : undefined
+                }
+                ticketId={ticketId}
+                projectId={projectId ?? null}
+                agentFlags={agentFlags}
+                commands={
+                  agentCommands ?? {
+                    claude: '',
+                    codex: '',
+                    cursor: '',
+                    gemini: '',
+                    opencode: ''
+                  }
+                }
+                workingDirectory={workingDirectory}
+                sshCommand={sshCommand ?? null}
+                remoteWorkingDirectory={remoteWorkingDirectory ?? null}
+                hasProjectWorkingDirectory={hasProjectWorkingDirectory ?? false}
+                size="sm"
+              />
+            </>
+          ) : null}
+        </ObjectiveAttachmentUploadTrigger>
       </div>
     </div>
   );

@@ -35,6 +35,37 @@ type UploadingFile = {
   error?: string;
 };
 
+type UseObjectiveAttachmentStateArgs = {
+  ticketId: string;
+  objectiveId: string;
+  initialAttachments: ObjectiveAttachment[];
+};
+
+type ObjectiveAttachmentListProps = {
+  attachments: ObjectiveAttachment[];
+  uploading: UploadingFile[];
+  deletingIds: Set<string>;
+  onDownload: (attachment: ObjectiveAttachment) => void;
+  onDelete: (attachment: ObjectiveAttachment) => void;
+  onDismissUploadingItem: (id: string) => void;
+  toolbar?: boolean;
+};
+
+type ObjectiveAttachmentUploadTriggerProps = {
+  objectiveId: string;
+  attachmentsCount: number;
+  hasItems: boolean;
+  isDragOver: boolean;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onDragOver: (event: React.DragEvent) => void;
+  onDragLeave: (event: React.DragEvent) => void;
+  onDrop: (event: React.DragEvent) => void;
+  compact?: boolean;
+  toolbar?: boolean;
+  children?: React.ReactNode;
+};
+
 type ObjectiveAttachmentUploadProps = {
   ticketId: string;
   objectiveId: string;
@@ -46,14 +77,11 @@ type ObjectiveAttachmentUploadProps = {
   children?: React.ReactNode;
 };
 
-export function ObjectiveAttachmentUpload({
+export function useObjectiveAttachmentState({
   ticketId,
   objectiveId,
-  initialAttachments,
-  compact = false,
-  toolbar = false,
-  children
-}: ObjectiveAttachmentUploadProps) {
+  initialAttachments
+}: UseObjectiveAttachmentStateArgs) {
   const [attachments, setAttachments] = useState<ObjectiveAttachment[]>(initialAttachments);
   const [uploading, setUploading] = useState<UploadingFile[]>([]);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -100,11 +128,7 @@ export function ObjectiveAttachmentUpload({
               label: draft.label,
               storagePath: draft.storagePath
             };
-            const attachment = await finalizeObjectiveAttachmentUploadAction(
-              ticketId,
-              objectiveId,
-              finalizedDraft
-            );
+            const attachment = await finalizeObjectiveAttachmentUploadAction(ticketId, objectiveId, finalizedDraft);
             setAttachments(prev => [attachment, ...prev]);
             setUploading(prev => prev.filter(item => item.id !== uploadId));
           } catch (error) {
@@ -187,11 +211,40 @@ export function ObjectiveAttachmentUpload({
 
   const hasItems = attachments.length > 0 || uploading.length > 0;
 
-  if (!objectiveId) {
-    return null;
-  }
+  const dismissUploadingItem = useCallback((id: string) => {
+    setUploading(prev => prev.filter(item => item.id !== id));
+  }, []);
 
-  const attachmentListEl = hasItems ? (
+  return {
+    attachments,
+    uploading,
+    deletingIds,
+    hasItems,
+    isDragOver,
+    inputRef,
+    handleInputChange,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleDownload,
+    handleDelete,
+    dismissUploadingItem
+  };
+}
+
+export function ObjectiveAttachmentList({
+  attachments,
+  uploading,
+  deletingIds,
+  onDownload,
+  onDelete,
+  onDismissUploadingItem,
+  toolbar = false
+}: ObjectiveAttachmentListProps) {
+  const hasItems = attachments.length > 0 || uploading.length > 0;
+  if (!hasItems) return null;
+
+  return (
     <div className={cn('space-y-1', toolbar ? 'px-2 pb-0 pt-1' : 'mt-2')}>
       {uploading.map(item => (
         <div
@@ -213,7 +266,7 @@ export function ObjectiveAttachmentUpload({
                 size="icon"
                 variant="ghost"
                 className="h-6 w-6 shrink-0"
-                onClick={() => setUploading(prev => prev.filter(u => u.id !== item.id))}
+                onClick={() => onDismissUploadingItem(item.id)}
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -230,7 +283,7 @@ export function ObjectiveAttachmentUpload({
           <button
             type="button"
             className="min-w-0 flex-1 truncate text-left text-xs hover:underline"
-            onClick={() => handleDownload(attachment)}
+            onClick={() => onDownload(attachment)}
           >
             {attachment.label}
           </button>
@@ -243,7 +296,7 @@ export function ObjectiveAttachmentUpload({
             variant="ghost"
             className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
             disabled={deletingIds.has(attachment.id)}
-            onClick={() => handleDelete(attachment)}
+            onClick={() => onDelete(attachment)}
           >
             {deletingIds.has(attachment.id) ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -254,7 +307,26 @@ export function ObjectiveAttachmentUpload({
         </div>
       ))}
     </div>
-  ) : null;
+  );
+}
+
+export function ObjectiveAttachmentUploadTrigger({
+  objectiveId,
+  attachmentsCount,
+  hasItems,
+  isDragOver,
+  inputRef,
+  onInputChange,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  compact = false,
+  toolbar = false,
+  children
+}: ObjectiveAttachmentUploadTriggerProps) {
+  if (!objectiveId) {
+    return null;
+  }
 
   const triggerRow = (
     <div className={cn('flex items-center gap-2', toolbar ? 'px-2 py-1.5' : '')}>
@@ -269,22 +341,21 @@ export function ObjectiveAttachmentUpload({
         <Paperclip className="h-3.5 w-3.5" />
       </Button>
       <div className="min-w-0 flex-1 text-xs text-muted-foreground">
-        {isDragOver ? 'Drop to upload' : hasItems ? 'Attachments' : 'Attach files'}
+        {isDragOver ? 'Drop to upload' : null}
       </div>
-      {attachments.length > 0 ? (
+      {attachmentsCount > 0 ? (
         <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
-          {attachments.length}
+          {attachmentsCount}
         </span>
       ) : null}
-      <input ref={inputRef} type="file" multiple className="hidden" onChange={handleInputChange} />
+      <input ref={inputRef} type="file" multiple className="hidden" onChange={onInputChange} />
       {children}
     </div>
   );
 
   if (toolbar) {
     return (
-      <div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-        {attachmentListEl}
+      <div onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
         {triggerRow}
       </div>
     );
@@ -297,9 +368,9 @@ export function ObjectiveAttachmentUpload({
         isDragOver ? 'border-primary bg-primary/5' : 'border-border/70',
         compact ? 'px-2 py-2' : 'px-3 py-2'
       )}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <div className="flex items-center gap-2">
         <Button
@@ -316,9 +387,9 @@ export function ObjectiveAttachmentUpload({
         <div className="min-w-0 flex-1 text-xs text-muted-foreground">
           {isDragOver ? 'Drop to upload' : hasItems ? 'Attachments' : 'Attach files'}
         </div>
-        {attachments.length > 0 ? (
+        {attachmentsCount > 0 ? (
           <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
-            {attachments.length}
+            {attachmentsCount}
           </span>
         ) : null}
         <input
@@ -326,10 +397,72 @@ export function ObjectiveAttachmentUpload({
           type="file"
           multiple
           className="hidden"
-          onChange={handleInputChange}
+          onChange={onInputChange}
         />
       </div>
-      {attachmentListEl}
+      {children}
+    </div>
+  );
+}
+
+export function ObjectiveAttachmentUpload({
+  ticketId,
+  objectiveId,
+  initialAttachments,
+  compact = false,
+  toolbar = false,
+  children
+}: ObjectiveAttachmentUploadProps) {
+  const {
+    attachments,
+    uploading,
+    deletingIds,
+    hasItems,
+    isDragOver,
+    inputRef,
+    handleInputChange,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleDownload,
+    handleDelete,
+    dismissUploadingItem
+  } = useObjectiveAttachmentState({
+    ticketId,
+    objectiveId,
+    initialAttachments
+  });
+
+  if (!objectiveId) {
+    return null;
+  }
+
+  return (
+    <div>
+      <ObjectiveAttachmentList
+        attachments={attachments}
+        uploading={uploading}
+        deletingIds={deletingIds}
+        onDownload={handleDownload}
+        onDelete={handleDelete}
+        onDismissUploadingItem={dismissUploadingItem}
+        toolbar={toolbar}
+      />
+      <ObjectiveAttachmentUploadTrigger
+        objectiveId={objectiveId}
+        attachmentsCount={attachments.length}
+        hasItems={hasItems}
+        isDragOver={isDragOver}
+        inputRef={inputRef}
+        onInputChange={handleInputChange}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        compact={compact}
+        toolbar={toolbar}
+      >
+        {children}
+      </ObjectiveAttachmentUploadTrigger>
     </div>
   );
 }

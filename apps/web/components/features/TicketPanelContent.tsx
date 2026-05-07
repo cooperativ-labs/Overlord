@@ -419,6 +419,19 @@ export async function TicketPanelContent({
                 objectiveAttachments={objectiveAttachments}
                 objectiveFileMentionPaths={objectiveFileMentionPaths}
                 workingDirectory={workingDirectory}
+                assignedAgent={assignedAgent}
+                projectId={activeProjectId}
+                agentFlags={agentFlags}
+                agentCommands={{
+                  claude: claudeCode,
+                  codex,
+                  cursor,
+                  gemini,
+                  opencode
+                }}
+                sshCommand={projectSshCommand}
+                remoteWorkingDirectory={projectRemoteWorkingDirectory}
+                hasProjectWorkingDirectory={hasProjectWorkingDirectory}
               />
 
               {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}

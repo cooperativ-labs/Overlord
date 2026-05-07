@@ -1,13 +1,19 @@
+// This file configures the initialization of Sentry on the server.
+// The config you add here will be used whenever the server handles a request.
+// https://docs.sentry.io/platforms/javascript/guides/nextjs/
+
 import * as Sentry from '@sentry/nextjs';
 
 Sentry.init({
   dsn: 'https://aa0c95110792065107c70ff26e11cab2@o4508852831977472.ingest.us.sentry.io/4511274266263552',
-  // Sentry 10.50's Node OTel auto-setup currently calls helpers that are missing in
-  // the runtime package graph we deploy. Keep server error reporting enabled while
-  // bypassing the incompatible instrumentation hook path.
-  skipOpenTelemetrySetup: true,
-  integrations: integrations => integrations.filter(integration => integration.name !== 'Http'),
+
+  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,
+  replaysSessionSampleRate: 0,
+  // Enable logs to be sent to Sentry
   enableLogs: true,
+
+  // Enable sending user PII (Personally Identifiable Information)
+  // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
   sendDefaultPii: true
 });

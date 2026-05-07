@@ -3,6 +3,8 @@
 import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
+import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import type { Database } from '@/types/database.types';
@@ -18,6 +20,13 @@ type TicketObjectivesSectionProps = {
   objectiveAttachments: ObjectiveAttachment[];
   objectiveFileMentionPaths: string[];
   workingDirectory: string | null;
+  assignedAgent?: TicketAssignedAgent | null;
+  projectId?: string | null;
+  agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
+  agentCommands?: Record<LaunchAgentTypeValue, string>;
+  sshCommand?: string | null;
+  remoteWorkingDirectory?: string | null;
+  hasProjectWorkingDirectory?: boolean;
 };
 
 export function TicketObjectivesSection({
@@ -25,7 +34,14 @@ export function TicketObjectivesSection({
   objectives: initialObjectives,
   objectiveAttachments,
   objectiveFileMentionPaths,
-  workingDirectory
+  workingDirectory,
+  assignedAgent,
+  projectId,
+  agentFlags,
+  agentCommands,
+  sshCommand,
+  remoteWorkingDirectory,
+  hasProjectWorkingDirectory
 }: TicketObjectivesSectionProps) {
   const objectives = useTicketObjectivesRealtime({
     ticketId,
@@ -76,6 +92,13 @@ export function TicketObjectivesSection({
           objectiveState={editableObjective?.state ?? 'complete'}
           ticketId={ticketId}
           workingDirectory={workingDirectory}
+          assignedAgent={assignedAgent}
+          projectId={projectId}
+          agentFlags={agentFlags}
+          agentCommands={agentCommands}
+          sshCommand={sshCommand}
+          remoteWorkingDirectory={remoteWorkingDirectory}
+          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
         />
       </div>
     </div>
