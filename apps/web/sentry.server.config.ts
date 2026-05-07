@@ -9,14 +9,12 @@ Sentry.init({
 
   tracesSampleRate: 1,
   enableLogs: true,
-  sendDefaultPii: true,
+  sendDefaultPii: true
 
   // Node.js 24 ships undici v7 which removed getHttpClientSubscriptions.
   // Disable undici instrumentation until Sentry supports the new API.
-  integrations: (integrations) =>
-    integrations.map((integration) =>
-      integration.name === 'Http'
-        ? Sentry.httpIntegration({ undici: false })
-        : integration
-    )
+  // integrations: integrations =>
+  //   integrations.map((integration: any) =>
+  //     integration.name === 'Http' ? Sentry.httpIntegration({ undici: false }) : integration
+  //   )
 });

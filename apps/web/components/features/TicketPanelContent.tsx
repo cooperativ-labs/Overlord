@@ -269,8 +269,6 @@ export async function TicketPanelContent({
     platformUrl,
     ticketId,
     workingDirectory,
-    sshCommand: projectSshCommand,
-    remoteWorkingDirectory: projectRemoteWorkingDirectory,
     agentFlags,
     assignedAgent
   });
