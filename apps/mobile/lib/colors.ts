@@ -1,3 +1,4 @@
+import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import * as SecureStore from 'expo-secure-store';
 import {
   createContext,
@@ -11,11 +12,14 @@ import {
 import {
   Appearance,
   type ImageStyle,
+  Platform,
   StyleSheet,
   type TextStyle,
   useColorScheme,
   type ViewStyle
 } from 'react-native';
+
+const baseGlassAvailable = Platform.OS === 'ios' && isLiquidGlassAvailable();
 
 const THEME_PREFERENCE_KEY = 'mobile-theme-preference';
 
@@ -176,4 +180,21 @@ export function useThemedStyles<T extends NamedStyles<T>>(factory: (colors: Them
   const currentColors = useThemeColors();
 
   return useMemo(() => StyleSheet.create(factory(currentColors)), [currentColors, factory]);
+}
+
+/**
+ * Returns true when iOS Liquid Glass is supported AND the user's chosen theme
+ * matches the device's system color scheme. iOS UIVisualEffectView (used by
+ * expo-glass-effect, UINavigationBar blur, etc.) reads its appearance from the
+ * UIWindow's trait collection, which RN's Appearance.setColorScheme() does not
+ * override. When the user picks a theme that conflicts with the system, the
+ * blur renders the wrong palette — so we fall back to a themed solid surface.
+ */
+export function useGlassAvailable(): boolean {
+  const systemScheme = useColorScheme();
+  const { resolvedTheme } = useThemePreference();
+
+  if (!baseGlassAvailable) return false;
+  const systemResolved = systemScheme === 'light' ? 'light' : 'dark';
+  return systemResolved === resolvedTheme;
 }

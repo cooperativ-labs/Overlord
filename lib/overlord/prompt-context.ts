@@ -4,6 +4,20 @@ type TicketEvent = Database['public']['Tables']['ticket_events']['Row'];
 type Artifact = Database['public']['Tables']['artifacts']['Row'];
 type SharedState = Database['public']['Tables']['shared_state']['Row'];
 
+export type PromptContextAttachment = {
+  id: string;
+  label: string;
+  content_type: string | null;
+  file_size: number | null;
+  objective_id: string;
+};
+
+export type PromptContextObjective = {
+  id: string;
+  state: string | null;
+  objective: string | null;
+};
+
 type TicketLike = {
   id: string;
   title: string | null | undefined;
@@ -22,6 +36,7 @@ export type PromptContextSections = {
   task: string;
   guidance: string;
   history: string;
+  attachments: string;
   artifacts: string;
   sharedContext: string;
 };
@@ -31,6 +46,8 @@ type BuildPromptContextInput = {
   recentEvents?: TicketEvent[];
   history?: TicketEvent[];
   artifacts?: Artifact[];
+  attachments?: PromptContextAttachment[];
+  objectives?: PromptContextObjective[];
   sharedState?: SharedState[];
   customInstructions?: string | null;
   workingDirectory?: string | null;
@@ -79,6 +96,19 @@ function formatArtifactLine(artifact: Artifact): string {
   return `- ${artifact.label} (${artifact.artifact_type}) — ${location}`;
 }
 
+function formatBytes(size: number | null | undefined): string {
+  if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return '';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
+  return `${Math.round(size / (1024 * 102.4)) / 10} MB`;
+}
+
+function formatAttachmentLine(attachment: PromptContextAttachment): string {
+  const meta = [attachment.content_type, formatBytes(attachment.file_size)].filter(Boolean).join(', ');
+  const metaSuffix = meta ? ` (${meta})` : '';
+  return `- ${attachment.label}${metaSuffix} — attachment-id: \`${attachment.id}\` | objective-id: \`${attachment.objective_id}\``;
+}
+
 function formatSharedStateLine(item: SharedState): string {
   const rendered = formatJsonInline(item.state_value);
   return `- ${item.state_key}: ${rendered}`;
@@ -90,15 +120,29 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
     recentEvents = [],
     history = [],
     artifacts = [],
+    attachments = [],
+    objectives = [],
     sharedState = [],
     customInstructions,
     workingDirectory,
     launchMode = 'run'
   } = input;
 
+  const objectiveIdsSubsection = objectives.length > 0
+    ? `### Objective IDs\n\n${objectives
+        .map(o => {
+          const text = (o.objective ?? '').trim();
+          const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
+          const stateSuffix = o.state ? ` [${o.state}]` : '';
+          return `- \`${o.id}\`${stateSuffix}${preview}`;
+        })
+        .join('\n')}`
+    : '';
+
   const taskParts = [
     formatTicketMetadata(ticket),
     optionalSubsection('Objective', ticket.objective),
+    objectiveIdsSubsection,
     optionalSubsection('Acceptance Criteria', ticket.acceptance_criteria),
     optionalSubsection('Constraints', ticket.constraints),
     optionalSubsection('Available Tools', ticket.available_tools),
@@ -159,11 +203,17 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
 
   const artifactLines = artifacts.map(formatArtifactLine);
   const sharedStateLines = sharedState.map(formatSharedStateLine);
+  const attachmentLines = attachments.map(formatAttachmentLine);
+
+  const attachmentsBody = attachmentLines.length > 0
+    ? `${attachmentLines.join('\n')}\n\nDownload with: \`ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id ${ticket.id} --attachment-id <attachment-id>\` (MCP: \`get_attachment_download_url\`).`
+    : '';
 
   return {
     task: taskParts.join('\n\n'),
     guidance: guidanceLines.join('\n'),
     history: historyParts.join('\n'),
+    attachments: attachmentsBody,
     artifacts: artifactLines.length > 0 ? artifactLines.join('\n') : '',
     sharedContext: sharedStateLines.length > 0 ? sharedStateLines.join('\n') : ''
   };
@@ -174,7 +224,8 @@ export function renderPromptContextMarkdown(sections: PromptContextSections): st
     section('Task', sections.task),
     section('Guidance', sections.guidance),
     section('History', sections.history),
-    section('Artifacts', sections.artifacts),
+    section('Attachments', sections.attachments),
+    section('Delivery Artifacts', sections.artifacts),
     section('Shared Context', sections.sharedContext)
   ]
     .filter(Boolean)

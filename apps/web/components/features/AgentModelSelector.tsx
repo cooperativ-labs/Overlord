@@ -47,12 +47,28 @@ let cachedLaunchPreference: UserLaunchPreference | null | undefined;
 let cachedSelection: AgentModelSelection | null = null;
 
 /**
- * Rendered in the app layout to pre-populate the model cache from a server-fetched list.
- * Sets the module-level cache synchronously during render so useAgentModels() sees it immediately.
+ * Rendered in the app layout to pre-populate every module-level cache from server-fetched data.
+ * Runs synchronously during render so all hooks see populated caches immediately and never
+ * need to hit the server again during the session. After this, the cache is the source of truth:
+ * user actions update it directly, broadcasts sync it across components, and the fire-and-forget
+ * server saves never feed back into client state.
  */
-export function AgentModelsPrefetch({ models }: { models: AgentModel[] }) {
+export function AgentModelsPrefetch({
+  models,
+  configs,
+  launchPreference
+}: {
+  models: AgentModel[];
+  configs: Record<string, AgentConfig>;
+  launchPreference: UserLaunchPreference | null;
+}) {
   if (cachedResolvedModels === null) {
     cachedResolvedModels = models;
+  }
+  if (cachedSelection === null) {
+    cachedConfigs = configs;
+    cachedLaunchPreference = launchPreference;
+    cachedSelection = resolveAgentModelSelection(configs, launchPreference);
   }
   return null;
 }
@@ -347,6 +363,11 @@ export function useAgentModelPreference(): {
   const [loaded, setLoaded] = useState(() => cachedSelection !== null);
 
   useEffect(() => {
+    // Cache is populated by AgentModelsPrefetch in the app layout. Skip fetching when it's
+    // already there — re-fetching here would race against in-flight fire-and-forget saves and
+    // can overwrite the user's just-clicked selection with stale server state.
+    if (cachedSelection !== null) return;
+
     let cancelled = false;
     Promise.allSettled([getAllAgentConfigsAction(), getUserLaunchPreferenceAction()]).then(
       results => {

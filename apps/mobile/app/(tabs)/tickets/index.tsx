@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { SidebarDrawer } from '@/components/SidebarDrawer';
-import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { useGlassAvailable, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import { useSelectedProject } from '@/lib/selected-project-context';
 import { getSupabase } from '@/lib/supabase';
@@ -17,7 +17,6 @@ import {
   buildStatusFilterOptions,
   formatStatusName,
   getContrastColor,
-  glassAvailable,
   matchesStatusFilter,
   resolvePreferredStatusNameByType,
   type SortMode,
@@ -38,6 +37,7 @@ export default function TicketsScreen() {
   const { projectId: projectIdParam } = useLocalSearchParams<{ projectId?: string }>();
   const colors = useThemeColors();
   const styles = useThemedStyles(createTicketsScreenStyles);
+  const glassAvailable = useGlassAvailable();
 
   useEffect(() => {
     if (projectIdParam) selectProject(projectIdParam);
@@ -410,8 +410,8 @@ export default function TicketsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <Stack.Screen
         options={{
-          headerTransparent: false,
-          headerStyle: { backgroundColor: 'transparent' },
+          headerTransparent: true,
+          headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.foreground,
           headerTitle: () => {
             return glassAvailable ? (

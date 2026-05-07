@@ -834,6 +834,33 @@ async function protocolDeliver(args) {
 // objective attachments
 // ---------------------------------------------------------------------------
 
+async function protocolAttachmentList(args) {
+  const flags = parseFlags(args);
+  const { sessionKey, ticketId } = resolveSessionFlags(flags);
+  if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
+  if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    sessionKey,
+    ticketId,
+    ...(flags['objective-id'] ? { objectiveId: String(flags['objective-id']) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/attachments/list',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
 async function protocolAttachmentPrepareUpload(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
@@ -1365,6 +1392,7 @@ Subcommands:
   read-context              Read shared persistent context for this ticket
   write-context             Write shared persistent context for future sessions
   deliver                     Finish work, send artifacts, and move the ticket to review
+  attachment-list             List objective attachments visible to the current session
   attachment-prepare-upload   Get a signed upload URL for an objective attachment
   attachment-finalize-upload  Finalize an uploaded attachment row after storage upload
   attachment-download-url     Get a signed download URL for an existing attachment
@@ -1597,6 +1625,15 @@ create:
     Standalone create auto-discovers the project from the current working directory unless --personal is set.
     Follow-up create requires both --session-key and --ticket-id.
 
+attachment-list:
+  Required:
+    --session-key <key>
+    --ticket-id <id>
+  Optional:
+    --objective-id <id>       Filter to a single objective
+  Returns:
+    JSON array of { id, label, content_type, file_size, objective_id, storage_path, created_at }
+
 attachment-prepare-upload:
   Required:
     --session-key <key>
@@ -1661,6 +1698,7 @@ Examples:
   ovld protocol ask --session-key <key> --ticket-id <id> --question-file ./question.txt
   ovld protocol read-context --session-key <key> --ticket-id <id> --query arch --limit 5
   ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"' --tags repo,agent
+  ovld protocol attachment-list --session-key <key> --ticket-id <id>
   ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
   ovld protocol attachment-upload-file --session-key <key> --ticket-id <id> --objective-id <objective-id> --file ./spec.pdf
   ovld protocol attachment-download-url --session-key <key> --ticket-id <id> --attachment-id <attachment-id>
@@ -1704,6 +1742,10 @@ Examples:
   }
   if (subcommand === 'prompt' || subcommand === 'spawn') {
     await protocolPrompt(args);
+    return;
+  }
+  if (subcommand === 'attachment-list') {
+    await protocolAttachmentList(args);
     return;
   }
   if (subcommand === 'attachment-prepare-upload') {

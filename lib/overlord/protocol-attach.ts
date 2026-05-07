@@ -217,6 +217,8 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
   const [
     { data: history },
     { data: artifacts },
+    { data: attachments },
+    { data: objectives },
     { data: sharedState },
     { data: recentEvents },
     { data: project },
@@ -236,6 +238,19 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       .select('*')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('objective_attachments')
+      .select('id, label, content_type, file_size, objective_id, storage_path, created_at')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('objectives')
+      .select('id, objective, state, created_at')
+      .eq('ticket_id', ticketId)
+      .neq('state', 'draft')
+      .order('created_at', { ascending: true })
       .limit(50),
     supabase
       .from('shared_state')
@@ -278,6 +293,8 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     recentEvents: recentEvents ?? [],
     history: history ?? [],
     artifacts: artifacts ?? [],
+    attachments: attachments ?? [],
+    objectives: objectives ?? [],
     sharedState: sharedState ?? [],
     customInstructions: profile?.custom_agent_instructions ?? null,
     workingDirectory: resolveSessionWorkingDirectory({
@@ -292,6 +309,8 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     data: {
       history: history ?? [],
       artifacts: artifacts ?? [],
+      attachments: attachments ?? [],
+      objectives: objectives ?? [],
       session: {
         id: session.id,
         sessionKey: session.session_key,

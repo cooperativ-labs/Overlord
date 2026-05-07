@@ -296,6 +296,26 @@ const tools = [
     subcommand: 'deliver'
   },
   {
+    name: 'list_attachments',
+    description:
+      'List objective attachments visible to the current ticket session. Returns attachment IDs needed by get_attachment_download_url, plus their objective_id, label, content_type, file_size, and storage_path.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_key: { type: 'string' },
+        ticket_id: { type: 'string' },
+        objective_id: { type: 'string' }
+      },
+      required: ['session_key', 'ticket_id']
+    },
+    toCliFlags: args => ({
+      'session-key': args.session_key,
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id
+    }),
+    subcommand: 'attachment-list'
+  },
+  {
     name: 'prepare_attachment_upload',
     description: 'Prepare an objective attachment upload and return a signed upload URL.',
     inputSchema: {

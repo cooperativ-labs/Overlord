@@ -224,6 +224,29 @@ export const TOOLS = [
     }
   },
   {
+    name: 'list_attachments',
+    annotations: {
+      title: 'List Objective Attachments',
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    },
+    description:
+      'List objective attachments visible to the current ticket session. Returns id, label, content_type, file_size, objective_id, storage_path, and created_at for each. Use these IDs with get_attachment_download_url.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionKey: { type: 'string', description: 'Session key from attach.' },
+        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        objectiveId: {
+          type: 'string',
+          description: 'Optional objective UUID filter.'
+        }
+      },
+      required: ['sessionKey', 'ticketId']
+    }
+  },
+  {
     name: 'prepare_attachment_upload',
     annotations: {
       title: 'Prepare Attachment Upload',

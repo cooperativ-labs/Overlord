@@ -207,6 +207,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   const [
     { data: history },
     { data: artifacts },
+    { data: attachments },
+    { data: objectives },
     { data: sharedState },
     { data: recentEvents },
     { data: profile }
@@ -223,6 +225,19 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       .select('*')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('objective_attachments')
+      .select('id, label, content_type, file_size, objective_id, storage_path, created_at')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('objectives')
+      .select('id, objective, state, created_at')
+      .eq('ticket_id', ticketId)
+      .neq('state', 'draft')
+      .order('created_at', { ascending: true })
       .limit(50),
     supabase
       .from('shared_state')
@@ -246,6 +261,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     recentEvents: recentEvents ?? [],
     history: history ?? [],
     artifacts: artifacts ?? [],
+    attachments: attachments ?? [],
+    objectives: objectives ?? [],
     sharedState: sharedState ?? [],
     customInstructions: profile?.custom_agent_instructions ?? null
   });
@@ -253,6 +270,8 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   return toolOk({
     history: history ?? [],
     artifacts: artifacts ?? [],
+    attachments: attachments ?? [],
+    objectives: objectives ?? [],
     session: { id: session.id, sessionKey: session.session_key, state: session.session_state },
     sharedState: sharedState ?? [],
     promptContext,

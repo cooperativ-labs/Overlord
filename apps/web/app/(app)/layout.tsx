@@ -25,11 +25,13 @@ import { NavHeader } from '@/components/nav-header';
 import { AppQueryClientProvider } from '@/components/providers/query-client-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { getAgentModelsAction } from '@/lib/actions/agent-models';
 import { getOnboardingState } from '@/lib/actions/onboarding';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
+import { getUserLaunchPreferenceAction } from '@/lib/actions/user-launch-preference';
 import { isAdminEmail } from '@/lib/auth/admin';
 import {
   createClientForRequest,
@@ -63,12 +65,15 @@ export default async function RootLayout({
     data: { user }
   } = await supabase.auth.getUser();
 
-  const [projects, organizations, profileSettings, agentModels] = await Promise.all([
-    getProjectsForCurrentUser(),
-    user ? getUserOrganizations() : Promise.resolve([]),
-    user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null),
-    getAgentModelsAction()
-  ]);
+  const [projects, organizations, profileSettings, agentModels, agentConfigs, launchPreference] =
+    await Promise.all([
+      getProjectsForCurrentUser(),
+      user ? getUserOrganizations() : Promise.resolve([]),
+      user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null),
+      getAgentModelsAction(),
+      user ? getAllAgentConfigsAction() : Promise.resolve({}),
+      user ? getUserLaunchPreferenceAction() : Promise.resolve(null)
+    ]);
 
   const initialDefaultProjectId = await getRequestDefaultProjectId({
     profileDefaultProjectId: profileSettings?.default_project_id ?? null
@@ -122,7 +127,11 @@ export default async function RootLayout({
 
   return (
     <div>
-      <AgentModelsPrefetch models={agentModels} />
+      <AgentModelsPrefetch
+        models={agentModels}
+        configs={agentConfigs}
+        launchPreference={launchPreference}
+      />
       <ElectronDetector />
 
       <WebAuthGate />

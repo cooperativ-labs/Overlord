@@ -2,7 +2,7 @@
 
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
 import {
   AgentModelSelector,
@@ -36,6 +36,17 @@ function isSameSelection(left: AgentModelSelection, right: AgentModelSelection):
   );
 }
 
+function isSameAssigned(
+  left: TicketAssignedAgent | null,
+  right: TicketAssignedAgent | null
+): boolean {
+  if (left === right) return true;
+  if (left === null || right === null) return false;
+  return (
+    left.agent === right.agent && left.model === right.model && left.thinking === right.thinking
+  );
+}
+
 export function AgentModelChooserButton({
   ticketId,
   objectiveId,
@@ -59,9 +70,29 @@ export function AgentModelChooserButton({
   );
   const [, startTransition] = useTransition();
 
+  // Track the last initialSelection value (by content) so we only re-sync local state when the
+  // prop actually changes — not on every parent re-render. Without this, our own server save
+  // can echo back through live data while the user has already moved on, reverting their pick.
+  const lastInitialRef = useRef(initialSelection);
+
   useEffect(() => {
-    const nextSelection = initialSelection ?? preferenceSelection;
-    setSelection(current => (isSameSelection(current, nextSelection) ? current : nextSelection));
+    const initialChanged = !isSameAssigned(lastInitialRef.current, initialSelection);
+    lastInitialRef.current = initialSelection;
+
+    if (initialChanged && initialSelection !== null) {
+      // Truly new ticket assignment — sync local to it
+      setSelection(current => (isSameSelection(current, initialSelection) ? current : initialSelection));
+      return;
+    }
+
+    if (initialSelection === null) {
+      // No per-ticket assignment — follow cross-component preference broadcasts
+      setSelection(current =>
+        isSameSelection(current, preferenceSelection) ? current : preferenceSelection
+      );
+    }
+    // else: initialSelection didn't change and is non-null — local state is authoritative,
+    // don't override the user's pick with a stale prop or a preference broadcast.
   }, [initialSelection, preferenceSelection]);
 
   const agent = getAgentTypeByValue(selection.agent);

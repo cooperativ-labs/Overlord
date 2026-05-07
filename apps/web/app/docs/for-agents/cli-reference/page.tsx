@@ -278,9 +278,15 @@ In a git workspace, \`deliver\` validates that changed files are represented by
 
 ## Objective attachments
 
-Upload and download files attached to a ticket objective.
+Upload and download files attached to a ticket objective. The \`attach\` and
+\`load-context\` responses already include \`attachments\` and \`objectives\`
+arrays — use those for \`<attachment-id>\` and \`<objective-id>\` values.
 
 \`\`\`bash
+# Discover attachments mid-session (also surfaced in attach response)
+ovld protocol attachment-list \\
+  --session-key <key> --ticket-id <id>
+
 # Upload a local file in one call
 ovld protocol attachment-upload-file \\
   --session-key <key> --ticket-id <id> --objective-id <objective-id> \\

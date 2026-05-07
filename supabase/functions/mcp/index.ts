@@ -17,6 +17,7 @@ import { handleAsk } from './handlers/ask.ts';
 import { handleAttach } from './handlers/attach.ts';
 import { handleAttachmentFinalizeUpload } from './handlers/attachment-finalize-upload.ts';
 import { handleAttachmentGetDownloadUrl } from './handlers/attachment-get-download-url.ts';
+import { handleAttachmentList } from './handlers/attachment-list.ts';
 import { handleAttachmentPrepareUpload } from './handlers/attachment-prepare-upload.ts';
 import { handleCreateTicket } from './handlers/create-ticket.ts';
 import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
@@ -214,6 +215,8 @@ Deno.serve(async (req: Request) => {
         result = await handleAttach(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket_draft') {
         result = await handleCreateTicketDraft(supabase, toolArgs, requestContext);
+      } else if (toolName === 'list_attachments') {
+        result = await handleAttachmentList(supabase, toolArgs, requestContext);
       } else if (toolName === 'prepare_attachment_upload') {
         result = await handleAttachmentPrepareUpload(supabase, toolArgs, requestContext);
       } else if (toolName === 'finalize_attachment_upload') {

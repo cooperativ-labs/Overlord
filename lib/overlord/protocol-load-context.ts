@@ -73,7 +73,13 @@ export async function runLoadContextProtocol(
         .maybeSingle()
     ).data;
 
-  const [{ data: history }, { data: artifacts }, { data: sharedState }] = await Promise.all([
+  const [
+    { data: history },
+    { data: artifacts },
+    { data: attachments },
+    { data: objectives },
+    { data: sharedState }
+  ] = await Promise.all([
     supabase
       .from('ticket_events')
       .select('*')
@@ -86,6 +92,19 @@ export async function runLoadContextProtocol(
       .select('*')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('objective_attachments')
+      .select('id, label, content_type, file_size, objective_id, storage_path, created_at')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('objectives')
+      .select('id, objective, state, created_at')
+      .eq('ticket_id', ticketId)
+      .neq('state', 'draft')
+      .order('created_at', { ascending: true })
       .limit(50),
     supabase
       .from('shared_state')
@@ -104,6 +123,8 @@ export async function runLoadContextProtocol(
       },
       history: history ?? [],
       artifacts: artifacts ?? [],
+      attachments: attachments ?? [],
+      objectives: objectives ?? [],
       sharedState: sharedState ?? []
     }
   } as const;

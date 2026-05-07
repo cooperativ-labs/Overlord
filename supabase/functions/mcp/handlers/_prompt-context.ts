@@ -18,6 +18,7 @@ type PromptContextSections = {
   task: string;
   guidance: string;
   history: string;
+  attachments: string;
   artifacts: string;
   sharedContext: string;
 };
@@ -60,6 +61,19 @@ function formatArtifactLine(artifact: any): string {
   return `- ${artifact.label} (${artifact.artifact_type}) — ${location}`;
 }
 
+function formatBytes(size: number | null | undefined): string {
+  if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return '';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 102.4) / 10} KB`;
+  return `${Math.round(size / (1024 * 102.4)) / 10} MB`;
+}
+
+function formatAttachmentLine(attachment: any): string {
+  const meta = [attachment.content_type, formatBytes(attachment.file_size)].filter(Boolean).join(', ');
+  const metaSuffix = meta ? ` (${meta})` : '';
+  return `- ${attachment.label}${metaSuffix} — attachment-id: \`${attachment.id}\` | objective-id: \`${attachment.objective_id}\``;
+}
+
 function formatSharedStateLine(item: any): string {
   return `- ${item.state_key}: ${formatJsonInline(item.state_value)}`;
 }
@@ -69,6 +83,8 @@ export function buildPromptContext(input: {
   recentEvents?: any[];
   history?: any[];
   artifacts?: any[];
+  attachments?: any[];
+  objectives?: any[];
   sharedState?: any[];
   customInstructions?: string | null;
   workingDirectory?: string | null;
@@ -82,15 +98,29 @@ export function buildPromptContext(input: {
     recentEvents = [],
     history = [],
     artifacts = [],
+    attachments = [],
+    objectives = [],
     sharedState = [],
     customInstructions,
     workingDirectory,
     launchMode = 'run'
   } = input;
 
+  const objectiveIdsSubsection = objectives.length > 0
+    ? `### Objective IDs\n\n${objectives
+        .map((o: any) => {
+          const text = String(o.objective ?? '').trim();
+          const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
+          const stateSuffix = o.state ? ` [${o.state}]` : '';
+          return `- \`${o.id}\`${stateSuffix}${preview}`;
+        })
+        .join('\n')}`
+    : '';
+
   const task = [
     formatTicketMetadata(ticket),
     optionalSubsection('Objective', ticket.objective),
+    objectiveIdsSubsection,
     optionalSubsection('Acceptance Criteria', ticket.acceptance_criteria),
     optionalSubsection('Constraints', ticket.constraints),
     optionalSubsection('Available Tools', ticket.available_tools),
@@ -132,10 +162,16 @@ export function buildPromptContext(input: {
     historyParts.push('### Prior Deliveries', '', deliverHistoryLines.join('\n'));
   }
 
+  const attachmentLines = attachments.map(formatAttachmentLine);
+  const attachmentsBody = attachmentLines.length > 0
+    ? `${attachmentLines.join('\n')}\n\nDownload via the \`get_attachment_download_url\` MCP tool (or \`ovld protocol attachment-download-url --attachment-id <id>\`).`
+    : '';
+
   const promptContextSections = {
     task,
     guidance: guidanceLines.join('\n'),
     history: historyParts.join('\n'),
+    attachments: attachmentsBody,
     artifacts: artifacts.map(formatArtifactLine).join('\n'),
     sharedContext: sharedState.map(formatSharedStateLine).join('\n')
   };
@@ -144,7 +180,8 @@ export function buildPromptContext(input: {
     section('Task', promptContextSections.task),
     section('Guidance', promptContextSections.guidance),
     section('History', promptContextSections.history),
-    section('Artifacts', promptContextSections.artifacts),
+    section('Attachments', promptContextSections.attachments),
+    section('Delivery Artifacts', promptContextSections.artifacts),
     section('Shared Context', promptContextSections.sharedContext)
   ]
     .filter(Boolean)

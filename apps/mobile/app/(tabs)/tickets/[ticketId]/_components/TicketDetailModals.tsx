@@ -89,7 +89,7 @@ function OverflowAction({
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
-  const actionColor = destructive ? colors.error : colors.foreground;
+  const actionColor = destructive ? colors.destructive : colors.foreground;
   return (
     <Pressable
       style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}

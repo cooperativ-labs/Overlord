@@ -226,6 +226,12 @@ export const attachmentFinalizeUploadSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().default({})
 });
 
+export const attachmentListSchema = z.object({
+  sessionKey: z.uuid(),
+  ticketId: ticketIdSchema,
+  objectiveId: z.uuid().optional()
+});
+
 export const attachmentGetDownloadUrlSchema = z
   .object({
     sessionKey: z.uuid(),

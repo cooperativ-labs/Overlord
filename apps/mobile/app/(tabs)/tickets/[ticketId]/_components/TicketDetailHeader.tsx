@@ -17,11 +17,10 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
-import { useThemeColors, useThemedStyles } from '@/lib/colors';
+import { useGlassAvailable, useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import type { AgentModelSelection } from '@/lib/types';
 
-import { glassAvailable } from './ticket-detail-shared';
 import { createStyles } from './ticket-detail-styles';
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
@@ -42,6 +41,7 @@ export function TicketHeaderTitle({
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
+  const glassAvailable = useGlassAvailable();
   const PillContainer = glassAvailable ? GlassView : View;
   const pillStyle = glassAvailable
     ? styles.headerTitlePill
@@ -129,6 +129,7 @@ export function TicketHeaderSheet({
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
+  const glassAvailable = useGlassAvailable();
   const sheetMaxHeight = useSharedValue(0);
   const sheetTranslateY = useSharedValue(-6);
 

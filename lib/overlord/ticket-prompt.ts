@@ -378,7 +378,10 @@ ovld protocol write-context --session-key <sessionKey> --ticket-id ${ticketId} -
 
 ### 5 — Objective attachments (optional upload/download)
 
+The \`attach\` response already lists existing attachments and objective IDs in the \`attachments\` and \`objectives\` arrays (also rendered as the **Attachments** and **Objective IDs** sections of the prompt above). To list mid-session, run \`attachment-list\`.
+
 \`\`\`bash
+ovld protocol attachment-list --session-key <sessionKey> --ticket-id ${ticketId}
 ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id ${ticketId} --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
 ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id ${ticketId} --attachment-id <attachment-id>
 \`\`\`
@@ -453,6 +456,7 @@ ${settingsJson}
 
 **Step 2** — Available MCP tools:
 - \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
+- \`list_attachments\` — discover objective attachments (returns attachment IDs needed below)
 - \`prepare_attachment_upload\` / \`finalize_attachment_upload\` — upload a file as an objective attachment
 - \`get_attachment_download_url\` — signed read URL for an existing attachment (CLI: \`attachment-download-url\`)
 - \`update\` — post progress updates
@@ -515,10 +519,11 @@ For persisting findings across sessions.
 
 ### 5 — attachment tools (optional)
 
-Upload/download objective attachments:
+The \`attach\` response includes an \`attachments\` array with the IDs needed below. Call \`list_attachments\` mid-session if new files have been added. Upload/download objective attachments:
+- \`list_attachments\` — discover existing attachment + objective IDs
 - \`prepare_attachment_upload\` — begin upload
 - \`finalize_attachment_upload\` — commit upload
-- \`get_attachment_download_url\` — get signed URL
+- \`get_attachment_download_url\` — get signed URL using an attachment ID from \`list_attachments\` or the prompt's Attachments section
 
 ### 6 — create_ticket (optional)
 

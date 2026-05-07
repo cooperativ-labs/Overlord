@@ -116,11 +116,22 @@ Pass these as part of the \`deliver\` payload. Supported types:
 
 User-uploaded files are attached to a specific objective on the ticket, not the ticket itself.
 
+The \`attach\` and \`load-context\` responses include \`attachments\` and \`objectives\` arrays — these surface the \`<attachment-id>\` and \`<objective-id>\` values agents need below. The same data is rendered in the \`Attachments\` and \`Objective IDs\` sections of the assembled prompt context. Use \`attachment-list\` (CLI) / \`list_attachments\` (MCP) to refresh this list mid-session.
+
 \`\`\`bash
+# Discover attachments
+ovld protocol attachment-list \\
+  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID"
+
 # One-call upload
 ovld protocol attachment-upload-file \\
   --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
   --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+
+# Signed download URL for an existing attachment
+ovld protocol attachment-download-url \\
+  --session-key "$SESSION_KEY" --ticket-id "$TICKET_ID" \\
+  --attachment-id <attachment-id>
 \`\`\`
 
 ## Related pages
