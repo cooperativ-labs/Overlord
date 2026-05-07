@@ -1,7 +1,15 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  useTransition
+} from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
@@ -10,6 +18,10 @@ import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutatio
 import { convertInlineFileMentionsToMarkdown } from '@/lib/helpers/file-mentions';
 import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
+
+export type InlineEditFieldHandle = {
+  triggerAtMention: () => void;
+};
 
 type EditableField = 'title' | 'objective' | 'available_tools' | 'acceptance_criteria';
 const EMPTY_MENTION_PATHS: string[] = [];
@@ -31,32 +43,66 @@ type Props = {
   /** Optional absolute directory used for local Electron file mention suggestions */
   workingDirectory?: string | null;
   variant?: 'default' | 'textarea';
+  /** Remove the component's own border/bg so a parent container can provide the visual boundary */
+  seamless?: boolean;
   children?: React.ReactNode;
 };
 
-export function InlineEditField({
-  ticketId,
-  field,
-  initialValue,
-  multiline = false,
-  placeholder = 'Click to add…',
-  displayClassName,
-  inputClassName,
-  renderMarkdown = false,
-  fileMentionPaths = EMPTY_MENTION_PATHS,
-  workingDirectory,
-  variant = 'default',
-  children
-}: Props) {
+export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function InlineEditField(
+  {
+    ticketId,
+    field,
+    initialValue,
+    multiline = false,
+    placeholder = 'Click to add…',
+    displayClassName,
+    inputClassName,
+    renderMarkdown = false,
+    fileMentionPaths = EMPTY_MENTION_PATHS,
+    workingDirectory,
+    variant = 'default',
+    seamless = false,
+    children
+  }: Props,
+  ref
+) {
   const [editing, setEditing] = useState(false);
   const [savedValue, setSavedValue] = useState(initialValue);
   const [value, setValue] = useState(initialValue);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null);
+  const pendingAtMentionRef = useRef(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
   const canMentionFiles = multiline && field === 'objective';
+
+  useImperativeHandle(ref, () => ({
+    triggerAtMention() {
+      pendingAtMentionRef.current = true;
+      setEditing(true);
+    }
+  }));
+
+  useEffect(() => {
+    if (!editing || !pendingAtMentionRef.current) return;
+    pendingAtMentionRef.current = false;
+    requestAnimationFrame(() => {
+      const el = inputRef.current as HTMLTextAreaElement | null;
+      if (!el) return;
+      const cursor = el.selectionStart ?? el.value.length;
+      const currentVal = el.value;
+      const needsSpace =
+        cursor > 0 && currentVal[cursor - 1] !== ' ' && currentVal[cursor - 1] !== '\n';
+      const insert = needsSpace ? ' @' : '@';
+      setValue(currentVal.slice(0, cursor) + insert + currentVal.slice(cursor));
+      const newCursor = cursor + insert.length;
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(newCursor, newCursor);
+      });
+    });
+  }, [editing]);
 
   const { files: workspaceFiles } = useWorkspaceFileTree({
     fileMentionPaths,
@@ -134,13 +180,16 @@ export function InlineEditField({
     }
   }
 
+  const isTextareaVariant = variant === 'textarea';
   const baseInputClass = cn(
-    'w-full bg-background border border-border/40 rounded-md px-2 py-1',
-    'focus:outline-none focus:ring-1 focus:ring-ring/40',
+    seamless && isTextareaVariant
+      ? 'w-full bg-transparent px-3 py-2'
+      : 'w-full bg-background border border-border/40 rounded-md px-2 py-1',
+    'focus:outline-none',
+    !seamless && 'focus:ring-1 focus:ring-ring/40',
     'disabled:opacity-50',
     inputClassName
   );
-  const isTextareaVariant = variant === 'textarea';
 
   if (editing) {
     if (multiline) {
@@ -148,7 +197,7 @@ export function InlineEditField({
         <div
           className={cn(
             'relative w-full',
-            isTextareaVariant && 'ring-1 rounded-md ring-muted-foreground/40'
+            isTextareaVariant && !seamless && 'ring-1 rounded-md ring-muted-foreground/40'
           )}
         >
           <div className={cn(baseInputClass, 'resize-none leading-relaxed relative')}>
@@ -196,14 +245,16 @@ export function InlineEditField({
       className={cn(
         'relative w-full cursor-text rounded-md transition-colors',
         displayClassName,
-        isTextareaVariant
-          ? [
-              'px-3 py-1 bg-gray-200/40 dark:bg-gray-900/30 rounded-md',
-              isEmpty
-                ? 'min-h-[100px] ring-1 ring-muted-foreground/40 hover:ring-muted-foreground'
-                : 'hover:ring-1 hover:ring-muted-foreground/60'
-            ]
-          : ['-mx-2 -my-1 px-2 py-1', 'hover:bg-muted/50']
+        isTextareaVariant && seamless
+          ? ['px-3 py-2', isEmpty && 'min-h-[100px]']
+          : isTextareaVariant
+            ? [
+                'px-3 py-1 bg-gray-200/40 dark:bg-gray-900/30 rounded-md',
+                isEmpty
+                  ? 'min-h-[100px] ring-1 ring-muted-foreground/40 hover:ring-muted-foreground'
+                  : 'hover:ring-1 hover:ring-muted-foreground/60'
+              ]
+            : ['-mx-2 -my-1 px-2 py-1', 'hover:bg-muted/50']
       )}
       role="button"
       tabIndex={0}
@@ -240,4 +291,4 @@ export function InlineEditField({
       ) : null}
     </div>
   );
-}
+});

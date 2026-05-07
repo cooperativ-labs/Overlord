@@ -33,6 +33,7 @@ type TicketsBoardClientProps = {
   initialListFilters?: TicketListFilters | null;
   initialCollapsedStatuses?: string[];
   initialStatusOrder?: string[];
+  scheduledVisibilityDays: number;
   ticketUrlBase: string;
   completeStatusName?: string;
 };
@@ -53,6 +54,7 @@ export default function TicketsBoardClient({
   initialListFilters,
   initialCollapsedStatuses,
   initialStatusOrder,
+  scheduledVisibilityDays,
   ticketUrlBase,
   completeStatusName
 }: TicketsBoardClientProps) {
@@ -153,6 +155,7 @@ export default function TicketsBoardClient({
             workingDirectory={workingDirectory}
             initialView={activeView}
             initialHiddenColumns={initialHiddenColumns}
+            scheduledVisibilityDays={scheduledVisibilityDays}
           />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 pb-4 md:px-6">
@@ -168,6 +171,7 @@ export default function TicketsBoardClient({
               initialListFilters={initialListFilters}
               initialCollapsedStatuses={initialCollapsedStatuses}
               initialStatusOrder={initialStatusOrder}
+              scheduledVisibilityDays={scheduledVisibilityDays}
             />
           </div>
         )}

@@ -87,10 +87,10 @@ export function TicketHeaderTitle({
 export function TicketHeaderRight({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
-  const IconContainer = glassAvailable ? GlassView : View;
-  const iconStyle = glassAvailable
-    ? styles.headerIconButton
-    : [styles.headerIconButton, styles.headerIconButtonFallback];
+  // const IconContainer = glassAvailable ? GlassView : View;
+  // const iconStyle = glassAvailable
+  //   ? styles.headerIconButton
+  //   : [styles.headerIconButton, styles.headerIconButtonFallback];
 
   return (
     <Pressable

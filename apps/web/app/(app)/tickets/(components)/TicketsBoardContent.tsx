@@ -1,10 +1,16 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 
 import { getGlobalListViewPreferencesAction } from '@/lib/actions/global-list-view-preferences';
 import { getProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
+import { getScheduledTicketVisibilityDaysForUser } from '@/lib/actions/scheduled-ticket-visibility-preference';
 import { getRawViewPreference } from '@/lib/actions/view-preference';
 import type { BoardScope, BoardStatus } from '@/lib/client-data/tickets/board-types';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
+import {
+  getScheduledTicketVisibilityWindow,
+  mergeRowsById
+} from '@/lib/helpers/scheduled-ticket-visibility';
 import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
@@ -29,6 +35,21 @@ function getRelationItem<T>(relation: T | T[] | null | undefined): T | null {
   if (!relation) return null;
   if (Array.isArray(relation)) return relation[0] ?? null;
   return relation;
+}
+
+function toLoadError(error: unknown): { message: string } | null {
+  if (!error) {
+    return null;
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.length > 0) {
+      return { message };
+    }
+  }
+
+  return { message: 'Failed to load tickets' };
 }
 
 function dedupeStatuses(
@@ -104,6 +125,75 @@ type WaitingQuestionForBoard = Pick<
 >;
 const INITIAL_TICKETS_PER_STATUS = 20;
 
+async function loadTicketsForStatus(
+  supabase: SupabaseClient<Database>,
+  {
+    status,
+    organizationId,
+    projectId,
+    ticketSelectFields,
+    window
+  }: {
+    status: string;
+    organizationId?: number;
+    projectId?: string;
+    ticketSelectFields: string;
+    window: { startIso: string; endIso: string } | null;
+  }
+): Promise<RawTicket[]> {
+  let recentQuery = supabase
+    .from('tickets')
+    .select(ticketSelectFields)
+    .eq('status', status)
+    .order('updated_at', { ascending: false })
+    .limit(INITIAL_TICKETS_PER_STATUS);
+
+  if (organizationId !== undefined) {
+    recentQuery = recentQuery.eq('organization_id', organizationId);
+  }
+
+  if (projectId !== undefined) {
+    recentQuery = recentQuery.eq('project_id', projectId);
+  }
+
+  const { data: recentTickets, error: recentError } = await recentQuery;
+  if (recentError) {
+    throw recentError;
+  }
+
+  if (!window) {
+    return (recentTickets ?? []) as unknown as RawTicket[];
+  }
+
+  let scheduledQuery = supabase
+    .from('tickets')
+    .select(ticketSelectFields)
+    .eq('status', status)
+    .not('schedule_id', 'is', null)
+    .gte('due_datetime', window.startIso)
+    .lte('due_datetime', window.endIso)
+    .order('due_datetime', { ascending: true })
+    .limit(100);
+
+  if (organizationId !== undefined) {
+    scheduledQuery = scheduledQuery.eq('organization_id', organizationId);
+  }
+
+  if (projectId !== undefined) {
+    scheduledQuery = scheduledQuery.eq('project_id', projectId);
+  }
+
+  const { data: scheduledTickets, error: scheduledError } = await scheduledQuery;
+  if (scheduledError) {
+    throw scheduledError;
+  }
+
+  return mergeRowsById(
+    (recentTickets ?? []) as unknown as RawTicket[],
+    (scheduledTickets ?? []) as unknown as RawTicket[]
+  );
+}
+
 export default async function TicketsBoardContent({
   organizationId,
   showOrganizationName = false,
@@ -138,6 +228,10 @@ export default async function TicketsBoardContent({
   const {
     data: { user }
   } = await supabase.auth.getUser();
+  const scheduledVisibilityDays = user
+    ? await getScheduledTicketVisibilityDaysForUser(supabase, user.id)
+    : 0;
+  const scheduledWindow = getScheduledTicketVisibilityWindow(scheduledVisibilityDays);
 
   // In cross-org mode (no org filter) we need (organization_id, name)→status_type
   // so each ticket can be remapped to its synthetic status_type column.
@@ -189,37 +283,70 @@ export default async function TicketsBoardContent({
   const ticketQueriesPromise = isCrossOrg
     ? Promise.all([
         (async () => {
-          let query = supabase
-            .from('tickets')
-            .select(ticketSelectFields)
-            .order('updated_at', { ascending: false })
-            .limit(INITIAL_TICKETS_PER_STATUS * STATUS_TYPE_ORDER.length);
+          try {
+            let query = supabase
+              .from('tickets')
+              .select(ticketSelectFields)
+              .order('updated_at', { ascending: false })
+              .limit(INITIAL_TICKETS_PER_STATUS * STATUS_TYPE_ORDER.length);
 
-          if (projectId !== undefined) {
-            query = query.eq('project_id', projectId);
+            if (projectId !== undefined) {
+              query = query.eq('project_id', projectId);
+            }
+
+            const { data: recentTickets, error: recentError } = await query;
+            if (recentError) {
+              return { data: [], error: recentError };
+            }
+
+            if (!scheduledWindow) {
+              return { data: recentTickets ?? [], error: null };
+            }
+
+            let scheduledQuery = supabase
+              .from('tickets')
+              .select(ticketSelectFields)
+              .not('schedule_id', 'is', null)
+              .gte('due_datetime', scheduledWindow.startIso)
+              .lte('due_datetime', scheduledWindow.endIso)
+              .order('due_datetime', { ascending: true })
+              .limit(100);
+
+            if (projectId !== undefined) {
+              scheduledQuery = scheduledQuery.eq('project_id', projectId);
+            }
+
+            const { data: scheduledTickets, error: scheduledError } = await scheduledQuery;
+            if (scheduledError) {
+              return { data: [], error: scheduledError };
+            }
+
+            return {
+              data: mergeRowsById(
+                (recentTickets ?? []) as RawTicket[],
+                (scheduledTickets ?? []) as RawTicket[]
+              ),
+              error: null
+            };
+          } catch (error) {
+            return { data: [], error };
           }
-
-          return query;
         })()
       ])
     : Promise.all(
         allStatuses.map(async status => {
-          let query = supabase
-            .from('tickets')
-            .select(ticketSelectFields)
-            .eq('status', status.name)
-            .order('updated_at', { ascending: false })
-            .limit(INITIAL_TICKETS_PER_STATUS);
-
-          if (organizationId !== undefined) {
-            query = query.eq('organization_id', organizationId);
+          try {
+            const data = await loadTicketsForStatus(supabase, {
+              status: status.name,
+              organizationId,
+              projectId,
+              ticketSelectFields,
+              window: scheduledWindow
+            });
+            return { data, error: null };
+          } catch (error) {
+            return { data: [], error };
           }
-
-          if (projectId !== undefined) {
-            query = query.eq('project_id', projectId);
-          }
-
-          return query;
         })
       );
 
@@ -345,7 +472,7 @@ export default async function TicketsBoardContent({
     };
   });
   const statuses = allStatuses;
-  const loadError = ticketLoadError ?? statusesResult.error;
+  const loadError = toLoadError(ticketLoadError) ?? toLoadError(statusesResult.error);
   let objectiveFileMentionPaths: string[] = [];
   let kanbanWorkingDirectory: string | null = null;
 
@@ -422,6 +549,7 @@ export default async function TicketsBoardContent({
       initialListFilters={initialListFilters}
       initialCollapsedStatuses={initialCollapsedStatuses}
       initialStatusOrder={initialStatusOrder}
+      scheduledVisibilityDays={scheduledVisibilityDays}
       ticketUrlBase={projectId ? `/projects/${projectId}` : '/u'}
       completeStatusName={completeStatusName}
     />

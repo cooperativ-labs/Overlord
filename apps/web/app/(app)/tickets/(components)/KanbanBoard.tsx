@@ -72,7 +72,8 @@ export default function KanbanBoard({
   fileMentionPaths = EMPTY_FILE_MENTION_PATHS,
   workingDirectory = null,
   initialView,
-  initialHiddenColumns = []
+  initialHiddenColumns = [],
+  scheduledVisibilityDays
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number; status_type?: string }>;
@@ -83,6 +84,7 @@ export default function KanbanBoard({
   workingDirectory?: string | null;
   initialView: string;
   initialHiddenColumns?: string[];
+  scheduledVisibilityDays: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -644,6 +646,7 @@ export default function KanbanBoard({
             columns={sortedColumns}
             visibleSlugs={visibleSlugs}
             showUncategorized={uncategorized.length > 0}
+            scheduledVisibilityDays={scheduledVisibilityDays}
             onToggleColumnVisibility={toggleColumnVisibility}
             onOpenProjectSettings={projectSettings?.openProjectSettings}
           />

@@ -40,13 +40,19 @@ type ObjectiveAttachmentUploadProps = {
   objectiveId: string;
   initialAttachments: ObjectiveAttachment[];
   compact?: boolean;
+  /** Render as a bare toolbar row (no dashed border container). Attachment list appears above the row. */
+  toolbar?: boolean;
+  /** Extra content rendered at the trailing end of the toolbar row (e.g. a menu button) */
+  children?: React.ReactNode;
 };
 
 export function ObjectiveAttachmentUpload({
   ticketId,
   objectiveId,
   initialAttachments,
-  compact = false
+  compact = false,
+  toolbar = false,
+  children
 }: ObjectiveAttachmentUploadProps) {
   const [attachments, setAttachments] = useState<ObjectiveAttachment[]>(initialAttachments);
   const [uploading, setUploading] = useState<UploadingFile[]>([]);
@@ -185,6 +191,105 @@ export function ObjectiveAttachmentUpload({
     return null;
   }
 
+  const attachmentListEl = hasItems ? (
+    <div className={cn('space-y-1', toolbar ? 'px-2 pb-0 pt-1' : 'mt-2')}>
+      {uploading.map(item => (
+        <div
+          key={item.id}
+          className={cn(
+            'flex min-h-8 items-center gap-2 rounded px-2 py-1 text-xs',
+            item.progress === 'error' ? 'bg-destructive/5 text-destructive' : 'bg-muted/30'
+          )}
+        >
+          {item.progress === 'uploading' ? (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+          ) : null}
+          <span className="min-w-0 flex-1 truncate">{item.name}</span>
+          {item.progress === 'error' ? (
+            <>
+              <span className="shrink truncate">{item.error ?? 'Upload failed'}</span>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 shrink-0"
+                onClick={() => setUploading(prev => prev.filter(u => u.id !== item.id))}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </>
+          ) : null}
+        </div>
+      ))}
+      {attachments.map(attachment => (
+        <div
+          key={attachment.id}
+          className="group flex min-h-8 items-center gap-2 rounded px-2 py-1 hover:bg-muted/40"
+        >
+          <AttachmentIcon contentType={attachment.contentType} />
+          <button
+            type="button"
+            className="min-w-0 flex-1 truncate text-left text-xs hover:underline"
+            onClick={() => handleDownload(attachment)}
+          >
+            {attachment.label}
+          </button>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {formatFileSize(attachment.fileSize)}
+          </span>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
+            disabled={deletingIds.has(attachment.id)}
+            onClick={() => handleDelete(attachment)}
+          >
+            {deletingIds.has(attachment.id) ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Trash2 className="h-3 w-3" />
+            )}
+          </Button>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
+  const triggerRow = (
+    <div className={cn('flex items-center gap-2', toolbar ? 'px-2 py-1.5' : '')}>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7 shrink-0"
+        onClick={() => inputRef.current?.click()}
+        aria-label="Upload objective attachment"
+      >
+        <Paperclip className="h-3.5 w-3.5" />
+      </Button>
+      <div className="min-w-0 flex-1 text-xs text-muted-foreground">
+        {isDragOver ? 'Drop to upload' : hasItems ? 'Attachments' : 'Attach files'}
+      </div>
+      {attachments.length > 0 ? (
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
+          {attachments.length}
+        </span>
+      ) : null}
+      <input ref={inputRef} type="file" multiple className="hidden" onChange={handleInputChange} />
+      {children}
+    </div>
+  );
+
+  if (toolbar) {
+    return (
+      <div onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+        {attachmentListEl}
+        {triggerRow}
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -224,72 +329,7 @@ export function ObjectiveAttachmentUpload({
           onChange={handleInputChange}
         />
       </div>
-
-      {hasItems ? (
-        <div className="mt-2 space-y-1">
-          {uploading.map(item => (
-            <div
-              key={item.id}
-              className={cn(
-                'flex min-h-8 items-center gap-2 rounded px-2 py-1 text-xs',
-                item.progress === 'error' ? 'bg-destructive/5 text-destructive' : 'bg-muted/30'
-              )}
-            >
-              {item.progress === 'uploading' ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-              ) : null}
-              <span className="min-w-0 flex-1 truncate">{item.name}</span>
-              {item.progress === 'error' ? (
-                <>
-                  <span className="shrink truncate">{item.error ?? 'Upload failed'}</span>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 shrink-0"
-                    onClick={() => setUploading(prev => prev.filter(u => u.id !== item.id))}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </>
-              ) : null}
-            </div>
-          ))}
-
-          {attachments.map(attachment => (
-            <div
-              key={attachment.id}
-              className="group flex min-h-8 items-center gap-2 rounded px-2 py-1 hover:bg-muted/40"
-            >
-              <AttachmentIcon contentType={attachment.contentType} />
-              <button
-                type="button"
-                className="min-w-0 flex-1 truncate text-left text-xs hover:underline"
-                onClick={() => handleDownload(attachment)}
-              >
-                {attachment.label}
-              </button>
-              <span className="shrink-0 text-[10px] text-muted-foreground">
-                {formatFileSize(attachment.fileSize)}
-              </span>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
-                disabled={deletingIds.has(attachment.id)}
-                onClick={() => handleDelete(attachment)}
-              >
-                {deletingIds.has(attachment.id) ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Trash2 className="h-3 w-3" />
-                )}
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {attachmentListEl}
     </div>
   );
 }

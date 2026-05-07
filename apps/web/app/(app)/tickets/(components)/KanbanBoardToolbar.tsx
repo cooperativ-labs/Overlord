@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 
+import ScheduledTicketVisibilityControl from './ScheduledTicketVisibilityControl';
 import TicketsViewControls from './TicketsViewControls';
 
 type ProjectOption = {
@@ -52,6 +53,7 @@ export default function KanbanBoardToolbar({
   columns,
   visibleSlugs,
   showUncategorized,
+  scheduledVisibilityDays,
   onToggleColumnVisibility,
   onOpenProjectSettings
 }: {
@@ -64,6 +66,7 @@ export default function KanbanBoardToolbar({
   columns: ToolbarColumn[];
   visibleSlugs: Set<string>;
   showUncategorized: boolean;
+  scheduledVisibilityDays: number;
   onToggleColumnVisibility: (slug: string) => void;
   onOpenProjectSettings?: () => void;
 }) {
@@ -71,6 +74,7 @@ export default function KanbanBoardToolbar({
     <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6">
       <div className="flex items-center gap-2">
         <TicketsViewControls initialView={initialView} projectId={projectId} />
+        <ScheduledTicketVisibilityControl scheduledVisibilityDays={scheduledVisibilityDays} />
         {projectOptions.length > 1 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

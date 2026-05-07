@@ -173,7 +173,8 @@ export default function TicketListView({
   projectId,
   initialListFilters,
   initialCollapsedStatuses,
-  initialStatusOrder
+  initialStatusOrder,
+  scheduledVisibilityDays
 }: {
   tickets: Ticket[];
   statuses: Array<{ name: string; position: number; status_type?: string }>;
@@ -186,6 +187,7 @@ export default function TicketListView({
   initialListFilters?: TicketListFilters | null;
   initialCollapsedStatuses?: string[];
   initialStatusOrder?: string[];
+  scheduledVisibilityDays: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -850,6 +852,7 @@ export default function TicketListView({
           selectedStatusesSet={selectedStatusesSet}
           projectOptions={projectOptions}
           filterProjectIds={filterProjectIds}
+          scheduledVisibilityDays={scheduledVisibilityDays}
           onSortKeyChange={setSortKey}
           onSelectAllStatuses={() => {
             setSelectedStatuses(statusFilterOptions);

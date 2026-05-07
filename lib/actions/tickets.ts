@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
+import { getScheduledTicketVisibilityDaysForUser } from '@/lib/actions/scheduled-ticket-visibility-preference';
 import type {
   BoardBootstrap,
   BoardDataset,
@@ -22,6 +23,10 @@ import {
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { normalizeHexColor } from '@/lib/helpers/color';
+import {
+  getScheduledTicketVisibilityWindow,
+  mergeRowsById
+} from '@/lib/helpers/scheduled-ticket-visibility';
 import {
   createTicketAssignedAgent,
   parseTicketAssignedAgent
@@ -1635,6 +1640,86 @@ function mapBoardTicket(
   };
 }
 
+async function loadBoardTicketsForStatus(
+  supabase: ServerSupabase,
+  {
+    status,
+    organizationId,
+    projectId,
+    window
+  }: {
+    status: string;
+    organizationId?: number;
+    projectId?: string;
+    window: { startIso: string; endIso: string } | null;
+  }
+): Promise<{
+  tickets: RawBoardTicket[];
+  pageInfo: { cutoff: string | null; hasMore: boolean };
+}> {
+  let recentQuery = supabase
+    .from('tickets')
+    .select(TICKET_BOARD_SELECT)
+    .eq('status', status)
+    .order('updated_at', { ascending: false })
+    .limit(20);
+
+  if (organizationId !== undefined) {
+    recentQuery = recentQuery.eq('organization_id', organizationId);
+  }
+  if (projectId !== undefined) {
+    recentQuery = recentQuery.eq('project_id', projectId);
+  }
+
+  const { data: recentTickets, error: recentError } = await recentQuery;
+  if (recentError) {
+    throw new Error(recentError.message);
+  }
+
+  if (!window) {
+    const rows = (recentTickets ?? []) as RawBoardTicket[];
+    return {
+      tickets: rows,
+      pageInfo: {
+        cutoff: rows.at(-1)?.updated_at ?? null,
+        hasMore: rows.length === 20
+      }
+    };
+  }
+
+  let scheduledQuery = supabase
+    .from('tickets')
+    .select(TICKET_BOARD_SELECT)
+    .eq('status', status)
+    .not('schedule_id', 'is', null)
+    .gte('due_datetime', window.startIso)
+    .lte('due_datetime', window.endIso)
+    .order('due_datetime', { ascending: true })
+    .limit(100);
+
+  if (organizationId !== undefined) {
+    scheduledQuery = scheduledQuery.eq('organization_id', organizationId);
+  }
+  if (projectId !== undefined) {
+    scheduledQuery = scheduledQuery.eq('project_id', projectId);
+  }
+
+  const { data: scheduledTickets, error: scheduledError } = await scheduledQuery;
+  if (scheduledError) {
+    throw new Error(scheduledError.message);
+  }
+
+  const recentRows = (recentTickets ?? []) as RawBoardTicket[];
+  const scheduledRows = (scheduledTickets ?? []) as RawBoardTicket[];
+  return {
+    tickets: mergeRowsById(recentRows, scheduledRows),
+    pageInfo: {
+      cutoff: recentRows.at(-1)?.updated_at ?? null,
+      hasMore: recentRows.length === 20
+    }
+  };
+}
+
 export async function getTicketStatusesAction(organizationId?: number): Promise<BoardStatus[]> {
   const supabase = await createClientForRequest();
   let query = supabase
@@ -1664,52 +1749,59 @@ export async function getTicketBoardBootstrapAction(
   const organizationId = scope.organizationId;
   const projectId = scope.kind === 'project' ? scope.projectId : undefined;
   const statuses = await getTicketStatusesAction(organizationId);
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  const scheduledVisibilityDays = user
+    ? await getScheduledTicketVisibilityDaysForUser(supabase, user.id)
+    : 0;
+  const scheduledWindow =
+    dataset === 'calendar' ? null : getScheduledTicketVisibilityWindow(scheduledVisibilityDays);
 
-  const ticketResults =
-    dataset === 'calendar'
-      ? [
-          await (async () => {
-            let query = supabase
-              .from('tickets')
-              .select(TICKET_BOARD_SELECT)
-              .not('due_datetime', 'is', null)
-              .order('due_datetime', { ascending: true })
-              .limit(500);
+  let rawTickets: RawBoardTicket[];
+  let columnPageInfo: Record<string, { cutoff: string | null; hasMore: boolean }> | undefined;
 
-            if (organizationId !== undefined) {
-              query = query.eq('organization_id', organizationId);
-            }
-            if (projectId !== undefined) {
-              query = query.eq('project_id', projectId);
-            }
+  if (dataset === 'calendar') {
+    let query = supabase
+      .from('tickets')
+      .select(TICKET_BOARD_SELECT)
+      .not('due_datetime', 'is', null)
+      .order('due_datetime', { ascending: true })
+      .limit(500);
 
-            return query;
-          })()
-        ]
-      : await Promise.all(
-          statuses.map(async status => {
-            let query = supabase
-              .from('tickets')
-              .select(TICKET_BOARD_SELECT)
-              .eq('status', status.name)
-              .order('updated_at', { ascending: false })
-              .limit(20);
+    if (organizationId !== undefined) {
+      query = query.eq('organization_id', organizationId);
+    }
+    if (projectId !== undefined) {
+      query = query.eq('project_id', projectId);
+    }
 
-            if (organizationId !== undefined) {
-              query = query.eq('organization_id', organizationId);
-            }
-            if (projectId !== undefined) {
-              query = query.eq('project_id', projectId);
-            }
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(error.message);
+    }
 
-            return query;
-          })
-        );
+    rawTickets = (data ?? []) as RawBoardTicket[];
+  } else {
+    const ticketResults = await Promise.all(
+      statuses.map(status =>
+        loadBoardTicketsForStatus(supabase, {
+          status: status.name,
+          organizationId,
+          projectId,
+          window: scheduledWindow
+        })
+      )
+    );
 
-  const ticketLoadError = ticketResults.find(result => result.error)?.error;
-  if (ticketLoadError) throw new Error(ticketLoadError.message);
-
-  const rawTickets = ticketResults.flatMap(result => (result.data ?? []) as RawBoardTicket[]);
+    rawTickets = ticketResults.flatMap(result => result.tickets);
+    columnPageInfo = Object.fromEntries(
+      statuses.map((status, index) => [
+        status.name,
+        ticketResults[index]?.pageInfo ?? { cutoff: null, hasMore: false }
+      ])
+    );
+  }
   const ticketIds = rawTickets.map(ticket => ticket.id);
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
   const executingObjectiveByTicket = new Set<string>();
@@ -1747,13 +1839,7 @@ export async function getTicketBoardBootstrapAction(
         executingObjectiveByTicket.has(ticket.id)
       )
     ),
-    columnPageInfo: Object.fromEntries(
-      statuses.map(status => {
-        const rows = rawTickets.filter(ticket => ticket.status === status.name);
-        const cutoff = rows.at(-1)?.updated_at ?? null;
-        return [status.name, { cutoff, hasMore: rows.length === 20 }];
-      })
-    )
+    columnPageInfo
   };
 }
 

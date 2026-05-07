@@ -10,13 +10,15 @@ export function TicketDetailModals({
   onCloseOverflow,
   onCopyTicketId,
   onReload,
-  onNewTicket
+  onNewTicket,
+  onDelete
 }: {
   overflowOpen: boolean;
   onCloseOverflow: () => void;
   onCopyTicketId: () => Promise<void>;
   onReload: () => Promise<void>;
   onNewTicket?: () => void;
+  onDelete?: () => Promise<void>;
 }) {
   const styles = useThemedStyles(createStyles);
   return (
@@ -55,6 +57,17 @@ export function TicketDetailModals({
                 void onReload();
               }}
             />
+            {onDelete ? (
+              <OverflowAction
+                icon="trash-outline"
+                label="Delete"
+                onPress={() => {
+                  onCloseOverflow();
+                  void onDelete();
+                }}
+                destructive
+              />
+            ) : null}
             <OverflowAction icon="close-outline" label="Close" onPress={onCloseOverflow} />
           </Pressable>
         </Pressable>
@@ -66,21 +79,24 @@ export function TicketDetailModals({
 function OverflowAction({
   icon,
   label,
-  onPress
+  onPress,
+  destructive
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  destructive?: boolean;
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
+  const actionColor = destructive ? colors.error : colors.foreground;
   return (
     <Pressable
       style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
       onPress={onPress}
     >
-      <Ionicons name={icon} size={16} color={colors.foreground} />
-      <Text style={styles.overflowText}>{label}</Text>
+      <Ionicons name={icon} size={16} color={actionColor} />
+      <Text style={[styles.overflowText, destructive && { color: actionColor }]}>{label}</Text>
     </Pressable>
   );
 }

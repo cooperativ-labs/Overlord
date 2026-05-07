@@ -1,20 +1,20 @@
 'use client';
 
-import { ArrowUpDown, Filter } from 'lucide-react';
+import { Filter } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 
+import ScheduledTicketVisibilityControl from './ScheduledTicketVisibilityControl';
 import { formatStatusLabel } from './ticket-view-helpers';
-import { SORT_LABELS, type SortKey, type TicketListProjectOption } from './TicketListView.types';
+import type { SortKey, TicketListProjectOption } from './TicketListView.types';
 import TicketsViewControls from './TicketsViewControls';
 
 function listProjectFilterTriggerLabel({
@@ -43,6 +43,7 @@ type TicketListToolbarProps = {
   selectedStatusesSet: Set<string>;
   projectOptions: TicketListProjectOption[];
   filterProjectIds: string[];
+  scheduledVisibilityDays: number;
   onSortKeyChange: (key: SortKey) => void;
   onSelectAllStatuses: () => void;
   onToggleStatus: (status: string) => void;
@@ -55,14 +56,15 @@ export function TicketListToolbar({
   projectId,
   showViewToggle,
   hasTickets,
-  sortKey,
+  sortKey: _sortKey,
   statusFilterLabel,
   areAllStatusesSelected,
   statusFilterOptions,
   selectedStatusesSet,
   projectOptions,
   filterProjectIds,
-  onSortKeyChange,
+  scheduledVisibilityDays,
+  onSortKeyChange: _onSortKeyChange,
   onSelectAllStatuses,
   onToggleStatus,
   onToggleFilterProject,
@@ -74,6 +76,7 @@ export function TicketListToolbar({
         {showViewToggle ? (
           <TicketsViewControls initialView={initialView} projectId={projectId} />
         ) : null}
+        <ScheduledTicketVisibilityControl scheduledVisibilityDays={scheduledVisibilityDays} />
         {hasTickets ? (
           <>
             {/* <DropdownMenu>

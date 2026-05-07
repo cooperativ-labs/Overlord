@@ -331,6 +331,37 @@ export default function TicketDetailScreen() {
     Alert.alert('Copied', 'Ticket ID copied to clipboard.');
   }, [ticket]);
 
+  const handleDeleteTicket = useCallback(async () => {
+    if (!ticket) return;
+
+    Alert.alert(
+      'Delete Ticket?',
+      'This action cannot be undone. The ticket will be permanently deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const supabase = getSupabase();
+              const { error } = await supabase.from('tickets').delete().eq('id', ticket.id);
+              if (error) {
+                throw new Error(error.message);
+              }
+              router.replace('/(tabs)/tickets');
+            } catch (error) {
+              Alert.alert(
+                'Unable to delete ticket',
+                error instanceof Error ? error.message : 'An unexpected error occurred.'
+              );
+            }
+          }
+        }
+      ]
+    );
+  }, [ticket, router]);
+
   const executedObjectives = useMemo(
     () =>
       objectives
@@ -1380,6 +1411,7 @@ export default function TicketDetailScreen() {
         onCopyTicketId={handleCopyTicketId}
         onReload={loadData}
         onNewTicket={() => setShowNewTicketModal(true)}
+        onDelete={handleDeleteTicket}
       />
       <QuickCreateTicketModal
         visible={showNewTicketModal}
