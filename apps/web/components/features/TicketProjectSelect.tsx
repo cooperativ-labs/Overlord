@@ -208,7 +208,7 @@ export function TicketProjectSelect({
         <SelectTrigger
           id="ticket-project-select"
           aria-label="Select project"
-          className="h-6 w-auto rounded-lg border bg-transparent px-3 text-xs font-base hover:bg-muted"
+        // className="h-6 w-auto rounded-md border bg-transparent px-3 text-xs font-base hover:bg-muted"
         >
           <span className="flex items-center gap-1.5">
             {selectedProject ? (

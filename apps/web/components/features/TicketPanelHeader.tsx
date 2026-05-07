@@ -67,27 +67,28 @@ export function TicketPanelHeader({
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
+      <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center gap-1.5">
+          <TicketProjectSelect
+            ticketId={ticketId}
+            organizationId={organizationId}
+            currentProjectId={projectId}
+            projects={projects}
+          />
+          <div className="h-3.5 w-px bg-border" />
+          <TicketStatusSelect
+            ticketId={ticketId}
+            currentStatus={currentStatus}
+            statusOptions={statusOptions}
+          />
+        </div>
 
-      <div className="flex items-center gap-1.5">
-        <TicketProjectSelect
-          ticketId={ticketId}
-          organizationId={organizationId}
-          currentProjectId={projectId}
-          projects={projects}
-        />
-        <div className="h-3.5 w-px bg-border" />
-        <TicketStatusSelect
-          ticketId={ticketId}
-          currentStatus={currentStatus}
-          statusOptions={statusOptions}
-        />
+        <Button asChild size="icon" variant="ghost" className="h-7 w-7">
+          <Link href={closePath} aria-label="Close panel">
+            <ArrowRightToLine className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
       </div>
-
-      <Button asChild size="icon" variant="ghost" className="h-7 w-7">
-        <Link href={closePath} aria-label="Close panel">
-          <ArrowRightToLine className="h-3.5 w-3.5" />
-        </Link>
-      </Button>
     </div>
   );
 }

@@ -28,7 +28,7 @@ export function TicketStatusSelect({ ticketId, currentStatus, statusOptions }: P
       <SelectTrigger
         id="ticket-status-select"
         aria-label="Select status"
-        className="h-6 w-auto rounded-lg border bg-transparent px-3 text-xs font-base hover:bg-muted"
+      // className="h-6 w-auto rounded-lg border bg-transparent px-3 text-xs font-base hover:bg-muted"
       >
         {capitalizeFirst(currentStatus)}
       </SelectTrigger>
