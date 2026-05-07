@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.15.0] - 2026-05-07:16:01
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- CLI and web ticket surfaces now gather attachements from objectives instead of tickets.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.15.0`.
+
 ## [5.14.0] - 2026-05-07:14:12
 
 ### Added
