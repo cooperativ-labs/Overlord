@@ -423,6 +423,15 @@ export const createStyles = (colors: ThemeColors) =>
     attachIconButtonDisabled: {
       opacity: 0.5
     },
+    attachIconButtonActive: {
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+      borderColor: colors.primary
+    },
+    draftAgentPanel: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 10
+    },
     runSection: { paddingHorizontal: 16, marginBottom: 18 },
     launchServerButton: {
       backgroundColor: colors.primary,

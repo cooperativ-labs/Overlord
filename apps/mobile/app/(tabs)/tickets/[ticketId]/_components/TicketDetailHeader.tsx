@@ -1,5 +1,5 @@
 import { GlassView } from 'expo-glass-effect';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -17,7 +17,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
-import { ProjectAgentSelector } from '@/components/ProjectAgentSelector';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import type { AgentModelSelection } from '@/lib/types';
@@ -110,11 +109,7 @@ export function TicketHeaderSheet({
   onClose,
   title,
   subtitle,
-  assignedSelection,
-  savingAssignedAgent,
   copyingPromptContext,
-  onAssignedAgentChange,
-  onResolvedSelectionChange,
   onOpenOverflow,
   onCopyCliCommand,
   onCopyPrompt,
@@ -125,11 +120,7 @@ export function TicketHeaderSheet({
   onClose: () => void;
   title: string;
   subtitle: string;
-  assignedSelection: AgentModelSelection | null;
-  savingAssignedAgent: boolean;
   copyingPromptContext: 'cli' | 'web' | null;
-  onAssignedAgentChange: (selection: AgentModelSelection) => void;
-  onResolvedSelectionChange: (selection: AgentModelSelection) => void;
   onOpenOverflow: () => void;
   onCopyCliCommand: () => void;
   onCopyPrompt: (context: 'cli' | 'web') => void;
@@ -138,13 +129,8 @@ export function TicketHeaderSheet({
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
-  const [openSelectorPanel, setOpenSelectorPanel] = useState<'agent' | 'project' | null>(null);
   const sheetMaxHeight = useSharedValue(0);
   const sheetTranslateY = useSharedValue(-6);
-
-  useEffect(() => {
-    if (!visible) setOpenSelectorPanel(null);
-  }, [visible]);
 
   useEffect(() => {
     const windowHeight = Dimensions.get('window').height;
@@ -235,19 +221,6 @@ export function TicketHeaderSheet({
                   <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
                 </View>
 
-                <View style={styles.headerSheetPickerSection}>
-                  <ProjectAgentSelector
-                    openPanel={openSelectorPanel}
-                    onOpenPanelChange={setOpenSelectorPanel}
-                    agent={{
-                      value: assignedSelection,
-                      onChange: onAssignedAgentChange,
-                      onResolvedSelectionChange,
-                      disabled: savingAssignedAgent
-                    }}
-                  />
-                </View>
-
                 <HeaderSheetRow
                   icon="copy-outline"
                   label="Copy ticket ID"
@@ -312,19 +285,6 @@ export function TicketHeaderSheet({
                     disabled={copyingPromptContext !== null}
                   />
                   <HeaderSheetChip icon="refresh-outline" label="Reload" onPress={onReload} />
-                </View>
-
-                <View style={styles.headerSheetPickerSection}>
-                  <ProjectAgentSelector
-                    openPanel={openSelectorPanel}
-                    onOpenPanelChange={setOpenSelectorPanel}
-                    agent={{
-                      value: assignedSelection,
-                      onChange: onAssignedAgentChange,
-                      onResolvedSelectionChange,
-                      disabled: savingAssignedAgent
-                    }}
-                  />
                 </View>
 
                 <HeaderSheetRow

@@ -3,6 +3,8 @@ import Link from 'next/link';
 
 import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
+import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
+import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -39,11 +41,11 @@ export function TicketPanelHeader({
   closePath
 }: TicketPanelHeaderProps) {
   return (
-    <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-3">
+    <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-2.5">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button aria-label="Ticket actions" className="h-8 w-8" size="icon" variant="ghost">
-            <EllipsisVertical className="h-4 w-4" />
+          <Button aria-label="Ticket actions" className="h-7 w-7" size="icon" variant="ghost">
+            <EllipsisVertical className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
@@ -65,13 +67,27 @@ export function TicketPanelHeader({
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="flex items-center justify-end gap-2">
-        <Button asChild size="icon" variant="ghost" className="ml-2 h-8 w-10">
-          <Link href={closePath} aria-label="Close panel">
-            <ArrowRightToLine className="h-4 w-4" />
-          </Link>
-        </Button>
+
+      <div className="flex items-center gap-1.5">
+        <TicketProjectSelect
+          ticketId={ticketId}
+          organizationId={organizationId}
+          currentProjectId={projectId}
+          projects={projects}
+        />
+        <div className="h-3.5 w-px bg-border" />
+        <TicketStatusSelect
+          ticketId={ticketId}
+          currentStatus={currentStatus}
+          statusOptions={statusOptions}
+        />
       </div>
+
+      <Button asChild size="icon" variant="ghost" className="h-7 w-7">
+        <Link href={closePath} aria-label="Close panel">
+          <ArrowRightToLine className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
     </div>
   );
 }

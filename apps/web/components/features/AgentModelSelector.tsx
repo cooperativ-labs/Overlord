@@ -2,7 +2,7 @@
 
 import { Check, Info } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -33,6 +33,7 @@ type AgentModelSelectorProps = {
 };
 
 const AGENT_MODEL_SELECTION_EVENT = 'overlord:agent-model-selection-changed';
+type AgentModelSelectionEvent = { selection: AgentModelSelection; sourceId: string };
 const DEFAULT_SELECTION: AgentModelSelection = {
   agent: 'claude',
   model: null,
@@ -114,11 +115,11 @@ function syncConfigsForSelection(
   };
 }
 
-function broadcastAgentModelSelection(selection: AgentModelSelection): void {
+function broadcastAgentModelSelection(selection: AgentModelSelection, sourceId: string): void {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(
-    new CustomEvent<AgentModelSelection>(AGENT_MODEL_SELECTION_EVENT, {
-      detail: selection
+    new CustomEvent<AgentModelSelectionEvent>(AGENT_MODEL_SELECTION_EVENT, {
+      detail: { selection, sourceId }
     })
   );
 }
@@ -324,6 +325,7 @@ export function useAgentModelPreference(): {
   selectAgent: (agent: AgentTypeValue) => void;
   loaded: boolean;
 } {
+  const instanceId = useRef(Math.random().toString(36).slice(2));
   const [selection, setSelection] = useState<AgentModelSelection>(
     () => cachedSelection ?? DEFAULT_SELECTION
   );
@@ -363,7 +365,11 @@ export function useAgentModelPreference(): {
     if (typeof window === 'undefined') return;
 
     function handleSelectionChange(event: Event) {
-      const nextSelection = (event as CustomEvent<AgentModelSelection>).detail;
+      const { selection: nextSelection, sourceId } = (
+        event as CustomEvent<AgentModelSelectionEvent>
+      ).detail;
+      // Skip events emitted by this same hook instance — state is already up to date
+      if (sourceId === instanceId.current) return;
       cachedSelection = nextSelection;
       setSelection(nextSelection);
       setConfigs(current => {
@@ -393,7 +399,7 @@ export function useAgentModelPreference(): {
     cachedLaunchPreference = nextSelection;
     setLaunchPreference(nextSelection);
     setLoaded(true);
-    broadcastAgentModelSelection(nextSelection);
+    broadcastAgentModelSelection(nextSelection, instanceId.current);
   }, []);
 
   const selectAgent = useCallback(
@@ -404,7 +410,7 @@ export function useAgentModelPreference(): {
       cachedLaunchPreference = nextSelection;
       setLaunchPreference(nextSelection);
       setLoaded(true);
-      broadcastAgentModelSelection(nextSelection);
+      broadcastAgentModelSelection(nextSelection, instanceId.current);
       void updateUserLaunchAgentPreferenceAction(agent);
     },
     [configs, launchPreference]

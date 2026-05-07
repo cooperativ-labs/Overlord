@@ -176,6 +176,13 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       clearMentionState();
     }, [mentionPaths.length, clearMentionState]);
 
+    React.useEffect(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }, [value]);
+
     const handleCollapsedMentionBackspace = React.useCallback(
       (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
         const selectionStart = event.currentTarget.selectionStart;
@@ -210,7 +217,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       <div ref={containerRef} className={cn('relative w-full', containerClassName)}>
         <textarea
           ref={setRefs}
-          className={cn('relative z-10 w-full focus:outline-none focus-visible:ring-0', className)}
+          className={cn('relative z-10 w-full resize-none overflow-hidden focus:outline-none focus-visible:ring-0', className)}
           value={value}
           onChange={event => {
             const nextValue = event.target.value;

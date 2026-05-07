@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 
 import type { PickedFile } from '@/components/DocumentAttachmentsSection';
+import { AgentBrandIcon } from '@/components/AgentBrandIcon';
+import { AgentModelChooser } from '@/components/AgentModelChooser';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import type {
@@ -78,6 +80,10 @@ export function TicketDetailContent({
   onAttachToObjective,
   onOpenAttachment,
   draftObjectiveId,
+  assignedSelection,
+  savingAssignedAgent,
+  onAssignedAgentChange,
+  onResolvedSelectionChange,
   hasEverhourApiKey,
   showAcceptanceCriteria,
   onToggleAcceptanceCriteria,
@@ -136,6 +142,10 @@ export function TicketDetailContent({
   onAttachToObjective: (file: PickedFile) => void | Promise<void>;
   onOpenAttachment: (attachment: ObjectiveAttachmentItem) => void;
   draftObjectiveId: string | null;
+  assignedSelection: AgentModelSelection | null;
+  savingAssignedAgent: boolean;
+  onAssignedAgentChange: (selection: AgentModelSelection) => void;
+  onResolvedSelectionChange: (selection: AgentModelSelection) => void;
   hasEverhourApiKey: boolean;
   showAcceptanceCriteria: boolean;
   onToggleAcceptanceCriteria: () => void;
@@ -361,6 +371,10 @@ export function TicketDetailContent({
               actionLabel={canSaveObjective ? objectiveActionLabel : null}
               onSave={onSaveObjective}
               savingObjective={savingObjective}
+              assignedSelection={assignedSelection}
+              savingAssignedAgent={savingAssignedAgent}
+              onAssignedAgentChange={onAssignedAgentChange}
+              onResolvedSelectionChange={onResolvedSelectionChange}
             />
           </View>
 
@@ -622,7 +636,11 @@ function DraftObjectiveAttachments({
   onOpen,
   actionLabel,
   onSave,
-  savingObjective
+  savingObjective,
+  assignedSelection,
+  savingAssignedAgent,
+  onAssignedAgentChange,
+  onResolvedSelectionChange
 }: {
   attachments: ObjectiveAttachmentItem[];
   uploading: boolean;
@@ -632,9 +650,14 @@ function DraftObjectiveAttachments({
   actionLabel: string | null;
   onSave: () => void;
   savingObjective: boolean;
+  assignedSelection: AgentModelSelection | null;
+  savingAssignedAgent: boolean;
+  onAssignedAgentChange: (selection: AgentModelSelection) => void;
+  onResolvedSelectionChange: (selection: AgentModelSelection) => void;
 }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
+  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
 
   async function handleTakePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -743,6 +766,26 @@ function DraftObjectiveAttachments({
             <Ionicons name="document-attach-outline" size={18} color={colors.foreground} />
           )}
         </Pressable>
+        <Pressable
+          onPress={() => setAgentPanelOpen(open => !open)}
+          disabled={savingAssignedAgent}
+          accessibilityRole="button"
+          accessibilityLabel="Select agent"
+          style={({ pressed }) => [
+            styles.attachIconButton,
+            savingAssignedAgent && styles.attachIconButtonDisabled,
+            agentPanelOpen && styles.attachIconButtonActive,
+            pressed && styles.pressed
+          ]}
+        >
+          {savingAssignedAgent ? (
+            <ActivityIndicator size="small" color={colors.mutedForeground} />
+          ) : assignedSelection?.agent ? (
+            <AgentBrandIcon agent={assignedSelection.agent} size={16} />
+          ) : (
+            <Ionicons name="hardware-chip-outline" size={18} color={colors.foreground} />
+          )}
+        </Pressable>
         {actionLabel && (
           <Pressable
             onPress={onSave}
@@ -756,6 +799,17 @@ function DraftObjectiveAttachments({
           </Pressable>
         )}
       </View>
+      {agentPanelOpen && (
+        <View style={styles.draftAgentPanel}>
+          <AgentModelChooser
+            alwaysExpanded
+            value={assignedSelection}
+            onChange={onAssignedAgentChange}
+            onResolvedSelectionChange={onResolvedSelectionChange}
+            disabled={savingAssignedAgent}
+          />
+        </View>
+      )}
     </View>
   );
 }

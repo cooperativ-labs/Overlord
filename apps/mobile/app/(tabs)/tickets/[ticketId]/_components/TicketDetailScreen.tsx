@@ -1291,11 +1291,7 @@ export default function TicketDetailScreen() {
         onClose={() => setHeaderSheetOpen(false)}
         title={ticket.title || 'Ticket'}
         subtitle={ticketHeaderSubtitle}
-        assignedSelection={assignedSelection}
-        savingAssignedAgent={savingAssignedAgent}
         copyingPromptContext={copyingPromptContext}
-        onAssignedAgentChange={handleAssignedAgentChange}
-        onResolvedSelectionChange={setResolvedAssignedSelection}
         onOpenOverflow={() => {
           setHeaderSheetOpen(false);
           setOverflowOpen(true);
@@ -1361,6 +1357,10 @@ export default function TicketDetailScreen() {
         onAttachToObjective={handleAttachToObjective}
         onOpenAttachment={handleOpenAttachment}
         draftObjectiveId={draftObjective?.id ?? null}
+        assignedSelection={assignedSelection}
+        savingAssignedAgent={savingAssignedAgent}
+        onAssignedAgentChange={handleAssignedAgentChange}
+        onResolvedSelectionChange={setResolvedAssignedSelection}
         hasEverhourApiKey={hasEverhourApiKey}
         showAcceptanceCriteria={showAcceptanceCriteria}
         onToggleAcceptanceCriteria={() => setShowAcceptanceCriteria(open => !open)}
