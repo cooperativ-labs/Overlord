@@ -46,10 +46,10 @@ export async function generateCommitMessageWithGemini(params: {
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.3,
-        maxOutputTokens: 512
+        maxOutputTokens: 1024
       }
     });
-
+    console.log('generateCommitMessageWithGemini response', response);
     const text = (response.text ?? '').trim();
     if (!text) return null;
     // Strip markdown code fences if the model ignored instructions.

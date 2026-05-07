@@ -59,6 +59,7 @@ export function PushToGithubPanel({
         diff: aggregate.diff,
         status: aggregate.status
       });
+      console.log('generateCommitMessageActionWithRetry result', result);
       if ('error' in result) {
         toast.error(result.error);
         setGenerateButtonState('error');
@@ -127,7 +128,7 @@ export function PushToGithubPanel({
               ? 'Write a commit message, or tap the sparkle icon to generate one.'
               : 'No uncommitted changes.'
           }
-          rows={3}
+          rows={7}
           disabled={disabled}
           className="pr-10"
         />
