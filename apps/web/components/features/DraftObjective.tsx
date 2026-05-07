@@ -1,6 +1,5 @@
 'use client';
 
-import { AtSign } from 'lucide-react';
 import { useRef } from 'react';
 
 import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
@@ -78,7 +77,7 @@ export function DraftObjective({
 
   return (
     <div className="w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40">
-      {workingDirectory ? (
+      {/* {workingDirectory ? (
         <div className="px-3 pt-3 pb-1">
           <button
             type="button"
@@ -89,9 +88,10 @@ export function DraftObjective({
             Add context
           </button>
         </div>
-      ) : null}
+      ) : null} */}
       <InlineEditField
         ref={editFieldRef}
+        alwaysEditing
         displayClassName="text-base leading-relaxed"
         field="objective"
         fileMentionPaths={fileMentionPaths}
@@ -138,6 +138,7 @@ export function DraftObjective({
               <div className="mx-1 h-4 w-px bg-border/50" />
               <AgentModelChooserButton
                 ticketId={ticketId}
+                objectiveId={objectiveId}
                 initialSelection={assignedAgent ?? null}
                 persistSelection
               />

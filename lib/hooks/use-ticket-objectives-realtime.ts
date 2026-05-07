@@ -9,7 +9,14 @@ import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  'id' | 'objective' | 'created_at' | 'title' | 'state' | 'agent_identifier' | 'model_identifier'
+  | 'id'
+  | 'objective'
+  | 'created_at'
+  | 'title'
+  | 'state'
+  | 'agent_identifier'
+  | 'model_identifier'
+  | 'assigned_agent'
 >;
 
 function parseTimestamp(value: string | null | undefined): number {
@@ -67,7 +74,9 @@ export function useTicketObjectivesRealtime({
     const syncObjectives = async () => {
       const { data } = await supabase
         .from('objectives')
-        .select('id,objective,created_at,title,state,agent_identifier,model_identifier')
+        .select(
+          'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent'
+        )
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: false });
 

@@ -30,6 +30,7 @@ type Props = {
   ticketId: string;
   field: EditableField;
   initialValue: string;
+  alwaysEditing?: boolean;
   multiline?: boolean;
   placeholder?: string;
   /** Classes applied to the display element (view mode) */
@@ -53,6 +54,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     ticketId,
     field,
     initialValue,
+    alwaysEditing = false,
     multiline = false,
     placeholder = 'Click to add…',
     displayClassName,
@@ -77,32 +79,37 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
   const canMentionFiles = multiline && field === 'objective';
 
+  const insertAtMention = useCallback(() => {
+    const el = inputRef.current as HTMLTextAreaElement | null;
+    if (!el) return;
+    const cursor = el.selectionStart ?? el.value.length;
+    const currentVal = el.value;
+    const needsSpace =
+      cursor > 0 && currentVal[cursor - 1] !== ' ' && currentVal[cursor - 1] !== '\n';
+    const insert = needsSpace ? ' @' : '@';
+    setValue(currentVal.slice(0, cursor) + insert + currentVal.slice(cursor));
+    const newCursor = cursor + insert.length;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(newCursor, newCursor);
+    });
+  }, []);
+
   useImperativeHandle(ref, () => ({
     triggerAtMention() {
       pendingAtMentionRef.current = true;
       setEditing(true);
+      if (alwaysEditing) {
+        requestAnimationFrame(insertAtMention);
+      }
     }
   }));
 
   useEffect(() => {
     if (!editing || !pendingAtMentionRef.current) return;
     pendingAtMentionRef.current = false;
-    requestAnimationFrame(() => {
-      const el = inputRef.current as HTMLTextAreaElement | null;
-      if (!el) return;
-      const cursor = el.selectionStart ?? el.value.length;
-      const currentVal = el.value;
-      const needsSpace =
-        cursor > 0 && currentVal[cursor - 1] !== ' ' && currentVal[cursor - 1] !== '\n';
-      const insert = needsSpace ? ' @' : '@';
-      setValue(currentVal.slice(0, cursor) + insert + currentVal.slice(cursor));
-      const newCursor = cursor + insert.length;
-      requestAnimationFrame(() => {
-        el.focus();
-        el.setSelectionRange(newCursor, newCursor);
-      });
-    });
-  }, [editing]);
+    requestAnimationFrame(insertAtMention);
+  }, [editing, insertAtMention]);
 
   const { files: workspaceFiles } = useWorkspaceFileTree({
     fileMentionPaths,
@@ -154,19 +161,25 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
 
   function save() {
     if (value === savedValue) {
-      setEditing(false);
+      if (!alwaysEditing) {
+        setEditing(false);
+      }
       return;
     }
     startTransition(async () => {
       await updateFieldsMutation.mutateAsync({ ticketId, patch: { [field]: value } });
       setSavedValue(value);
-      setEditing(false);
+      if (!alwaysEditing) {
+        setEditing(false);
+      }
     });
   }
 
   function cancel() {
     setValue(savedValue);
-    setEditing(false);
+    if (!alwaysEditing) {
+      setEditing(false);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -191,7 +204,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     inputClassName
   );
 
-  if (editing) {
+  if (editing || alwaysEditing) {
     if (multiline) {
       return (
         <div

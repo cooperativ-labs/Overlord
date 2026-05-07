@@ -28,8 +28,8 @@ import {
   mergeRowsById
 } from '@/lib/helpers/scheduled-ticket-visibility';
 import {
-  createTicketAssignedAgent,
-  parseTicketAssignedAgent
+  createObjectiveAssignedAgent,
+  parseObjectiveAssignedAgent
 } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath, buildTicketPath } from '@/lib/helpers/ticket-path';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
@@ -1577,7 +1577,7 @@ export async function getTicketDiscussionPromptForCopy(
 }
 
 const TICKET_BOARD_SELECT =
-  'id,title,due_datetime,execution_target,status,priority,assigned_agent,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+  'id,title,due_datetime,execution_target,status,priority,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,delegate,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
 type RawBoardTicket = {
   id: string;
@@ -1586,7 +1586,6 @@ type RawBoardTicket = {
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
-  assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
   is_read: boolean;
   updated_at: string;
   board_position: number;
@@ -1605,6 +1604,7 @@ type RawBoardTicket = {
 function mapBoardTicket(
   raw: RawBoardTicket,
   latestObjectiveAgent: string | null = null,
+  latestObjectiveAssignedAgent: Database['public']['Tables']['objectives']['Row']['assigned_agent'] = null,
   hasExecutingObjective = false
 ) {
   const p = Array.isArray(raw.project) ? raw.project[0] : raw.project;
@@ -1617,7 +1617,7 @@ function mapBoardTicket(
     execution_target: raw.execution_target,
     status: raw.status,
     priority: raw.priority,
-    assigned_agent: parseTicketAssignedAgent(raw.assigned_agent),
+    assigned_agent: parseObjectiveAssignedAgent(latestObjectiveAssignedAgent),
     latest_objective_agent: latestObjectiveAgent,
     is_read: raw.is_read,
     updated_at: raw.updated_at,
@@ -1804,12 +1804,16 @@ export async function getTicketBoardBootstrapAction(
   }
   const ticketIds = rawTickets.map(ticket => ticket.id);
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
+  const latestObjectiveAssignedAgentByTicket = new Map<
+    string,
+    Database['public']['Tables']['objectives']['Row']['assigned_agent']
+  >();
   const executingObjectiveByTicket = new Set<string>();
 
   if (ticketIds.length > 0) {
     const { data: objectives, error: objectivesError } = await supabase
       .from('objectives')
-      .select('ticket_id,agent_identifier,state')
+      .select('ticket_id,agent_identifier,assigned_agent,state')
       .in('ticket_id', ticketIds)
       .order('created_at', { ascending: false });
 
@@ -1818,10 +1822,14 @@ export async function getTicketBoardBootstrapAction(
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       agent_identifier: string | null;
+      assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
       state: string | null;
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+      if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
+        latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
       }
       if (objective.state === 'executing') {
         executingObjectiveByTicket.add(objective.ticket_id);
@@ -1836,6 +1844,7 @@ export async function getTicketBoardBootstrapAction(
       mapBoardTicket(
         ticket,
         latestObjectiveAgentByTicket.get(ticket.id) ?? null,
+        latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
         executingObjectiveByTicket.has(ticket.id)
       )
     ),
@@ -1877,6 +1886,10 @@ export async function loadMoreTicketsAction({
   const tickets = (data ?? []) as RawBoardTicket[];
   const ticketIds = tickets.map(ticket => ticket.id);
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
+  const latestObjectiveAssignedAgentByTicket = new Map<
+    string,
+    Database['public']['Tables']['objectives']['Row']['assigned_agent']
+  >();
   const executingObjectiveByTicket = new Set<string>();
   const waitingLatestByTicket = new Map<string, string>();
 
@@ -1887,7 +1900,7 @@ export async function loadMoreTicketsAction({
     ] = await Promise.all([
       supabase
         .from('objectives')
-        .select('ticket_id,agent_identifier,state')
+        .select('ticket_id,agent_identifier,assigned_agent,state')
         .in('ticket_id', ticketIds)
         .order('created_at', { ascending: false }),
       supabase
@@ -1905,10 +1918,14 @@ export async function loadMoreTicketsAction({
     for (const objective of (objectives ?? []) as Array<{
       ticket_id: string;
       agent_identifier: string | null;
+      assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
       state: string | null;
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+      if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
+        latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
       }
       if (objective.state === 'executing') {
         executingObjectiveByTicket.add(objective.ticket_id);
@@ -1930,6 +1947,7 @@ export async function loadMoreTicketsAction({
       const mapped = mapBoardTicket(
         ticket,
         latestObjectiveAgentByTicket.get(ticket.id) ?? null,
+        latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null,
         executingObjectiveByTicket.has(ticket.id)
       );
       const waitingAt = waitingLatestByTicket.get(ticket.id);
@@ -1964,15 +1982,62 @@ export async function updateTicketDueDateAction(
 
 export async function updateTicketAssignedAgentAction(
   ticketId: string,
-  selection: AgentModelSelection
+  selection: AgentModelSelection,
+  objectiveId?: string | null
 ): Promise<void> {
   const supabase = await createClientForRequest();
   const ticket = await assertTicketAccess(supabase, ticketId);
+  let targetObjectiveId = objectiveId ?? null;
+
+  if (targetObjectiveId) {
+    const { data: objective, error: objectiveError } = await supabase
+      .from('objectives')
+      .select('id')
+      .eq('id', targetObjectiveId)
+      .eq('ticket_id', ticketId)
+      .single();
+
+    if (objectiveError || !objective) {
+      throw new Error(objectiveError?.message ?? 'Objective not found.');
+    }
+  } else {
+    const { data: draftObjective, error: draftError } = await supabase
+      .from('objectives')
+      .select('id')
+      .eq('ticket_id', ticketId)
+      .eq('state', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (draftError) throw new Error(draftError.message);
+
+    targetObjectiveId = draftObjective?.id ?? null;
+
+    if (!targetObjectiveId) {
+      const { data: createdObjective, error: createError } = await supabase
+        .from('objectives')
+        .insert({
+          ticket_id: ticketId,
+          objective: '',
+          state: 'draft'
+        })
+        .select('id')
+        .single();
+
+      if (createError || !createdObjective) {
+        throw new Error(createError?.message ?? 'Failed to create draft objective.');
+      }
+
+      targetObjectiveId = createdObjective.id;
+    }
+  }
 
   const { error } = await supabase
-    .from('tickets')
-    .update({ assigned_agent: createTicketAssignedAgent(selection) })
-    .eq('id', ticketId);
+    .from('objectives')
+    .update({ assigned_agent: createObjectiveAssignedAgent(selection) })
+    .eq('id', targetObjectiveId)
+    .eq('ticket_id', ticketId);
 
   if (error) throw new Error(error.message);
 

@@ -11,7 +11,7 @@ import {
   getScheduledTicketVisibilityWindow,
   mergeRowsById
 } from '@/lib/helpers/scheduled-ticket-visibility';
-import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -94,7 +94,6 @@ type RawTicket = {
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
-  assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
   is_read: boolean;
   updated_at: string;
   board_position: number;
@@ -274,7 +273,7 @@ export default async function TicketsBoardContent({
     : dedupeStatuses(rawStatusRows);
 
   const ticketSelectFields =
-    'id,title,due_datetime,execution_target,status,priority,assigned_agent,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
+    'id,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
   // Always fetch board/list data (per-status). Calendar data is fetched
   // client-side on demand via TanStack Query prefetch in TicketsBoardClient.
@@ -377,6 +376,10 @@ export default async function TicketsBoardContent({
   const waitingQuestionByTicket = new Map<string, string>();
   const executedObjectivesCountByTicket = new Map<string, number>();
   const latestObjectiveAgentByTicket = new Map<string, string | null>();
+  const latestObjectiveAssignedAgentByTicket = new Map<
+    string,
+    Database['public']['Tables']['objectives']['Row']['assigned_agent']
+  >();
   const objectiveAgentByTicket = new Map<string, string>();
 
   if (ticketIds.length > 0) {
@@ -396,7 +399,7 @@ export default async function TicketsBoardContent({
           .order('created_at', { ascending: false }),
         supabase
           .from('objectives')
-          .select('ticket_id,state,agent_identifier')
+          .select('ticket_id,state,agent_identifier,assigned_agent')
           .in('ticket_id', ticketIds)
           .order('created_at', { ascending: false })
       ]);
@@ -420,9 +423,13 @@ export default async function TicketsBoardContent({
       ticket_id: string;
       state: string | null;
       agent_identifier: string | null;
+      assigned_agent: Database['public']['Tables']['objectives']['Row']['assigned_agent'];
     }>) {
       if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
         latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+      }
+      if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
+        latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
       }
       if (objective.state === 'complete') {
         executedObjectivesCountByTicket.set(
@@ -454,7 +461,9 @@ export default async function TicketsBoardContent({
     return {
       ...ticket,
       status: remappedStatus,
-      assigned_agent: parseTicketAssignedAgent(ticket.assigned_agent),
+      assigned_agent: parseObjectiveAssignedAgent(
+        latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null
+      ),
       objective: null,
       project_id: ticket.project_id,
       organization_name: getOrganizationName(organization),

@@ -128,7 +128,11 @@ export function useObjectiveAttachmentState({
               label: draft.label,
               storagePath: draft.storagePath
             };
-            const attachment = await finalizeObjectiveAttachmentUploadAction(ticketId, objectiveId, finalizedDraft);
+            const attachment = await finalizeObjectiveAttachmentUploadAction(
+              ticketId,
+              objectiveId,
+              finalizedDraft
+            );
             setAttachments(prev => [attachment, ...prev]);
             setUploading(prev => prev.filter(item => item.id !== uploadId));
           } catch (error) {
@@ -392,13 +396,7 @@ export function ObjectiveAttachmentUploadTrigger({
             {attachmentsCount}
           </span>
         ) : null}
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={onInputChange}
-        />
+        <input ref={inputRef} type="file" multiple className="hidden" onChange={onInputChange} />
       </div>
       {children}
     </div>

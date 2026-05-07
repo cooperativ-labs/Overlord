@@ -654,6 +654,7 @@ export type Database = {
       objectives: {
         Row: {
           agent_identifier: string | null;
+          assigned_agent: Json | null;
           completed_at: string | null;
           created_at: string;
           created_by: string | null;
@@ -667,6 +668,7 @@ export type Database = {
         };
         Insert: {
           agent_identifier?: string | null;
+          assigned_agent?: Json | null;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -680,6 +682,7 @@ export type Database = {
         };
         Update: {
           agent_identifier?: string | null;
+          assigned_agent?: Json | null;
           completed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -1466,7 +1469,6 @@ export type Database = {
       tickets: {
         Row: {
           acceptance_criteria: string | null;
-          assigned_agent: Json | null;
           available_tools: string;
           board_position: number;
           constraints: string;
@@ -1497,7 +1499,6 @@ export type Database = {
         };
         Insert: {
           acceptance_criteria?: string | null;
-          assigned_agent?: Json | null;
           available_tools?: string;
           board_position?: number;
           constraints?: string;
@@ -1528,7 +1529,6 @@ export type Database = {
         };
         Update: {
           acceptance_criteria?: string | null;
-          assigned_agent?: Json | null;
           available_tools?: string;
           board_position?: number;
           constraints?: string;

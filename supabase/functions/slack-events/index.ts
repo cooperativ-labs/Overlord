@@ -882,13 +882,20 @@ async function handleLinkShared(
 
     const { data: ticket } = await supabase
       .from('tickets')
-      .select('id,title,status,assigned_agent,priority,created_at')
+      .select('id,title,status,priority,created_at')
       .eq('id', ticketId)
       .maybeSingle();
 
     if (!ticket) continue;
 
-    const agentJson = ticket.assigned_agent as Record<string, unknown> | null;
+    const { data: objective } = await supabase
+      .from('objectives')
+      .select('assigned_agent')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const agentJson = objective?.assigned_agent as Record<string, unknown> | null;
     const agentLabel = agentJson?.agent
       ? `${agentJson.agent}${agentJson.model ? ` (${agentJson.model})` : ''}`
       : null;

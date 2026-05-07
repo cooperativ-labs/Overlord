@@ -12,7 +12,7 @@ import {
   removeTicketFromBoards,
   updateTicketInBoards
 } from '@/lib/client-data/tickets/cache';
-import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import {
   TICKET_DELETED_EVENT,
   type TicketDeletedEventDetail
@@ -41,7 +41,6 @@ type RealtimeBoardTicketRow = {
   execution_target: Database['public']['Enums']['ticket_execution_target'];
   status: string;
   priority: string;
-  assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
   delegate: string | null;
   is_read: boolean;
   updated_at: string;
@@ -95,7 +94,7 @@ function mapRealtimeBoardTicketRow(row: RealtimeBoardTicketRow): Ticket {
     status: row.status,
     priority: row.priority,
     execution_target: row.execution_target,
-    assigned_agent: parseTicketAssignedAgent(row.assigned_agent),
+    assigned_agent: null,
     board_position: row.board_position,
     organization_name: organization?.name ?? null,
     waiting_for_response_at: null,
@@ -264,7 +263,7 @@ export function useTicketBoardRealtime({
       let query = supabase
         .from('tickets')
         .select(
-          'id,title,due_datetime,execution_target,status,priority,assigned_agent,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
+          'id,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)'
         )
         .eq('id', ticketId)
         .limit(1);
@@ -299,7 +298,7 @@ export function useTicketBoardRealtime({
       const [{ data: objectives }, { data: sessions }] = await Promise.all([
         supabase
           .from('objectives')
-          .select('state,agent_identifier')
+          .select('state,agent_identifier,assigned_agent')
           .eq('ticket_id', ticketId)
           .order('created_at', { ascending: false }),
         supabase
@@ -313,15 +312,20 @@ export function useTicketBoardRealtime({
       if (cancelled || !ticketIdsRef.current.has(ticketId)) return;
 
       let latestObjectiveAgent: string | null = null;
+      let latestObjectiveAssignedAgent: Objective['assigned_agent'] = null;
       let executingObjectiveAgent: string | null = null;
       let executedObjectivesCount = 0;
 
       for (const objective of (objectives ?? []) as Array<{
         state: string | null;
         agent_identifier: string | null;
+        assigned_agent: Objective['assigned_agent'];
       }>) {
         if (latestObjectiveAgent === null) {
           latestObjectiveAgent = objective.agent_identifier ?? null;
+        }
+        if (latestObjectiveAssignedAgent === null) {
+          latestObjectiveAssignedAgent = objective.assigned_agent;
         }
         if (objective.state === 'complete') {
           executedObjectivesCount += 1;
@@ -343,6 +347,7 @@ export function useTicketBoardRealtime({
       updateTicketInBoards(queryClient, ticketId, {
         agent_session_state: session?.session_state ?? null,
         latest_objective_agent: latestObjectiveAgent,
+        assigned_agent: parseObjectiveAssignedAgent(latestObjectiveAssignedAgent),
         running_agent: executingObjectiveAgent ?? (isAttached ? session.agent_identifier : null),
         has_executing_objective: executingObjectiveAgent !== null,
         objectives_executed_count: executedObjectivesCount
@@ -377,11 +382,11 @@ export function useTicketBoardRealtime({
           .order('created_at', { ascending: false }),
         supabase
           .from('tickets')
-          .select('id,status,title,assigned_agent,delegate,is_read,board_position,updated_at')
+          .select('id,status,title,delegate,is_read,board_position,updated_at')
           .in('id', ticketIds),
         supabase
           .from('objectives')
-          .select('ticket_id,state,agent_identifier')
+          .select('ticket_id,state,agent_identifier,assigned_agent')
           .in('ticket_id', ticketIds)
           .order('created_at', { ascending: false })
       ]);
@@ -389,6 +394,7 @@ export function useTicketBoardRealtime({
       if (cancelled) return;
 
       const latestObjectiveAgentByTicket = new Map<string, string | null>();
+      const latestObjectiveAssignedAgentByTicket = new Map<string, Objective['assigned_agent']>();
       const executingObjectiveAgentByTicket = new Map<string, string>();
       const executedObjectivesCountByTicket = new Map<string, number>();
       const sessionByTicket = new Map<
@@ -410,7 +416,6 @@ export function useTicketBoardRealtime({
             id: string;
             status: string | null;
             title: string | null;
-            assigned_agent: Database['public']['Tables']['tickets']['Row']['assigned_agent'];
             delegate: string | null;
             is_read: boolean;
             board_position: number;
@@ -423,9 +428,13 @@ export function useTicketBoardRealtime({
         ticket_id: string;
         state: string | null;
         agent_identifier: string | null;
+        assigned_agent: Objective['assigned_agent'];
       }>) {
         if (!latestObjectiveAgentByTicket.has(objective.ticket_id)) {
           latestObjectiveAgentByTicket.set(objective.ticket_id, objective.agent_identifier ?? null);
+        }
+        if (!latestObjectiveAssignedAgentByTicket.has(objective.ticket_id)) {
+          latestObjectiveAssignedAgentByTicket.set(objective.ticket_id, objective.assigned_agent);
         }
         if (objective.state === 'complete') {
           executedObjectivesCountByTicket.set(
@@ -458,7 +467,10 @@ export function useTicketBoardRealtime({
           updated_at: update.updated_at ?? ticket.updated_at,
           latest_objective_agent:
             latestObjectiveAgentByTicket.get(ticket.id) ?? ticket.latest_objective_agent,
-          assigned_agent: parseTicketAssignedAgent(update.assigned_agent) ?? ticket.assigned_agent,
+          assigned_agent:
+            parseObjectiveAssignedAgent(
+              latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null
+            ) ?? ticket.assigned_agent,
           delegate: update.delegate,
           agent_session_state: session?.session_state ?? ticket.agent_session_state ?? null,
           running_agent: runningAgent,

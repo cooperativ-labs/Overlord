@@ -68,7 +68,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
   // Auto-transition the ticket back to execute and reactivate the session.
   const { data: currentTicket } = await supabase
     .from('tickets')
-    .select('status,assigned_agent')
+    .select('status')
     .eq('id', ticketId)
     .single();
 
@@ -103,7 +103,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
       }),
       supabase
         .from('objectives')
-        .select('id')
+        .select('id,assigned_agent')
         .eq('ticket_id', ticketId)
         .eq('state', 'complete')
         .order('created_at', { ascending: false })
@@ -118,9 +118,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
               agent_identifier: resolved.session.agent_identifier,
               model_identifier:
                 readModelIdentifierFromMetadata(resolved.session.metadata) ??
-                readModelIdentifierFromAssignedAgent(
-                  (currentTicket as { assigned_agent?: unknown } | null)?.assigned_agent
-                ),
+                readModelIdentifierFromAssignedAgent(latestObjective.assigned_agent ?? null),
               completed_at: null
             })
             .eq('id', latestObjective.id);

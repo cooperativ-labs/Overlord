@@ -9,7 +9,7 @@ type ObjectiveClient = SupabaseClient<Database>;
 
 type DraftObjective = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  'id' | 'objective' | 'state'
+  'id' | 'objective' | 'state' | 'assigned_agent'
 >;
 
 type EditableObjective = DraftObjective;
@@ -19,7 +19,7 @@ type ObjectiveTimelineItem = Pick<Database['public']['Tables']['objectives']['Ro
 type ObjectiveExecutionSnapshot = {
   agentIdentifier?: string | null;
   metadata?: Json;
-  ticketAssignedAgent?: Json | null;
+  objectiveAssignedAgent?: Json | null;
 };
 
 function isObjectiveStateConstraintError(error: { code?: string; message?: string } | null) {
@@ -65,11 +65,11 @@ function readModelIdentifierFromMetadata(metadata: Json | undefined): string | n
 }
 
 export function resolveObjectiveModelIdentifier(
-  executionSnapshot?: Pick<ObjectiveExecutionSnapshot, 'metadata' | 'ticketAssignedAgent'>
+  executionSnapshot?: Pick<ObjectiveExecutionSnapshot, 'metadata' | 'objectiveAssignedAgent'>
 ): string | null {
   return (
     readModelIdentifierFromMetadata(executionSnapshot?.metadata) ??
-    parseTicketAssignedAgent(executionSnapshot?.ticketAssignedAgent ?? null)?.model ??
+    parseTicketAssignedAgent(executionSnapshot?.objectiveAssignedAgent ?? null)?.model ??
     null
   );
 }
@@ -89,7 +89,7 @@ export async function upsertDraftObjective(
   const normalizedObjective = normalizeObjectiveText(objective);
   const { data: editableObjective, error: editableObjectiveError } = await supabase
     .from('objectives')
-    .select('id,objective,state')
+    .select('id,objective,state,assigned_agent')
     .eq('ticket_id', ticketId)
     .in('state', ['draft', 'submitted'])
     .order('created_at', { ascending: false })
@@ -127,7 +127,7 @@ export async function upsertDraftObjective(
 export async function submitDraftObjective(supabase: ObjectiveClient, ticketId: string) {
   const { data: draft, error: draftError } = await supabase
     .from('objectives')
-    .select('id,objective,state')
+    .select('id,objective,state,assigned_agent')
     .eq('ticket_id', ticketId)
     .eq('state', 'draft')
     .order('created_at', { ascending: false })
@@ -166,7 +166,7 @@ export async function markSubmittedObjectiveExecuting(
 ) {
   const { data: submittedObjective, error: submittedError } = await supabase
     .from('objectives')
-    .select('id,objective,state')
+    .select('id,objective,state,assigned_agent')
     .eq('ticket_id', ticketId)
     .eq('state', 'submitted')
     .order('created_at', { ascending: false })
@@ -182,7 +182,7 @@ export async function markSubmittedObjectiveExecuting(
     : (
         await supabase
           .from('objectives')
-          .select('id,objective,state')
+          .select('id,objective,state,assigned_agent')
           .eq('ticket_id', ticketId)
           .eq('state', 'draft')
           .order('created_at', { ascending: false })
@@ -204,7 +204,11 @@ export async function markSubmittedObjectiveExecuting(
     .update({
       state: 'executing',
       agent_identifier: executionSnapshot?.agentIdentifier ?? null,
-      model_identifier: resolveObjectiveModelIdentifier(executionSnapshot),
+      model_identifier: resolveObjectiveModelIdentifier({
+        metadata: executionSnapshot?.metadata,
+        objectiveAssignedAgent:
+          executionSnapshot?.objectiveAssignedAgent ?? launchObjective.assigned_agent
+      }),
       completed_at: null
     })
     .eq('id', launchObjective.id);

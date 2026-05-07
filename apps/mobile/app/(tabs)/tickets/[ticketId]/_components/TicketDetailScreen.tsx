@@ -130,13 +130,15 @@ export default function TicketDetailScreen() {
         supabase
           .from('tickets')
           .select(
-            'id, organization_id, title, status, priority, execution_target, assigned_agent, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
+            'id, organization_id, title, status, priority, execution_target, due_datetime, ticket_sequence, context, constraints, acceptance_criteria, created_at, updated_at, project_id'
           )
           .eq('id', ticketId)
           .single(),
         supabase
           .from('objectives')
-          .select('id, objective, title, state, agent_identifier, model_identifier, created_at')
+          .select(
+            'id, objective, title, state, agent_identifier, model_identifier, assigned_agent, created_at'
+          )
           .eq('ticket_id', ticketId)
           .order('created_at', { ascending: false }),
         supabase
@@ -378,8 +380,8 @@ export default function TicketDetailScreen() {
   }, [draftObjective?.id, draftObjective?.objective]);
 
   useEffect(() => {
-    setAssignedSelection(selectionFromAssignedAgent(ticket?.assigned_agent));
-  }, [ticket?.assigned_agent]);
+    setAssignedSelection(selectionFromAssignedAgent(draftObjective?.assigned_agent));
+  }, [draftObjective?.assigned_agent]);
 
   useEffect(() => {
     setAcceptanceCriteriaDraft(ticket?.acceptance_criteria ?? '');
@@ -441,7 +443,8 @@ export default function TicketDetailScreen() {
         const { error } = await supabase.from('objectives').insert({
           ticket_id: ticketId,
           objective: trimmedObjective,
-          state: 'draft'
+          state: 'draft',
+          assigned_agent: assignedSelection ? createAssignedAgent(assignedSelection) : null
         });
 
         if (error) {
@@ -473,28 +476,20 @@ export default function TicketDetailScreen() {
   }
 
   async function handleAssignedAgentChange(nextSelection: AgentModelSelection) {
-    if (!ticket || savingAssignedAgent) return;
+    if (!ticket || !draftObjective || savingAssignedAgent) return;
 
     const supabase = getSupabase();
-    const previousAssignedAgent = ticket.assigned_agent;
+    const previousAssignedAgent = draftObjective?.assigned_agent ?? null;
     const nextAssignedAgent = createAssignedAgent(nextSelection);
 
     setAssignedSelection(nextSelection);
-    setTicket(current =>
-      current
-        ? {
-            ...current,
-            assigned_agent: nextAssignedAgent
-          }
-        : current
-    );
     setSavingAssignedAgent(true);
 
     try {
       const { error } = await supabase
-        .from('tickets')
+        .from('objectives')
         .update({ assigned_agent: nextAssignedAgent })
-        .eq('id', ticket.id);
+        .eq('id', draftObjective?.id ?? '');
 
       if (error) {
         throw new Error(error.message);
@@ -511,14 +506,6 @@ export default function TicketDetailScreen() {
       }
     } catch (error) {
       setAssignedSelection(selectionFromAssignedAgent(previousAssignedAgent));
-      setTicket(current =>
-        current
-          ? {
-              ...current,
-              assigned_agent: previousAssignedAgent
-            }
-          : current
-      );
       Alert.alert(
         'Unable to update assigned agent',
         error instanceof Error ? error.message : 'An unexpected error occurred.'

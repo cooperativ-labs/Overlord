@@ -53,6 +53,9 @@ export function parseTicketAssignedAgent(value: Json | null): TicketAssignedAgen
   };
 }
 
+export const createObjectiveAssignedAgent = createTicketAssignedAgent;
+export const parseObjectiveAssignedAgent = parseTicketAssignedAgent;
+
 export function getAssignedAgentIdentifier(
   assignedAgent: TicketAssignedAgent | null | undefined
 ): string | null {

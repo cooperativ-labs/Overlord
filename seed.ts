@@ -216,7 +216,6 @@ async function main() {
       priority: 'high',
       board_position: 1,
       acceptance_criteria: null,
-      assigned_agent: null,
       everhour_task_id: null,
       delegate: null
     },
@@ -230,7 +229,6 @@ async function main() {
       priority: 'medium',
       board_position: 2,
       acceptance_criteria: null,
-      assigned_agent: null,
       everhour_task_id: null,
       delegate: null
     },
@@ -244,7 +242,6 @@ async function main() {
       priority: 'low',
       board_position: 3,
       acceptance_criteria: null,
-      assigned_agent: null,
       everhour_task_id: null,
       delegate: null
     },
@@ -259,7 +256,6 @@ async function main() {
       status: 'draft',
       priority: 'medium',
       board_position: 1,
-      assigned_agent: null,
       acceptance_criteria: null,
       everhour_task_id: null
     },
@@ -274,7 +270,6 @@ async function main() {
       priority: 'high',
       board_position: 2,
       acceptance_criteria: 'The script runs without errors and resolves all WCAG AA violations.',
-      assigned_agent: null,
       everhour_task_id: null
     },
     {
@@ -289,7 +284,6 @@ async function main() {
       acceptance_criteria:
         'The script runs without errors and migrates all records from the old schema to the new one.',
       everhour_task_id: null,
-      assigned_agent: null,
       delegate: null
     }
   ]);

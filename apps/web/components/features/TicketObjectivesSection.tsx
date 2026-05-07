@@ -4,14 +4,24 @@ import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import {
+  parseObjectiveAssignedAgent,
+  type TicketAssignedAgent
+} from '@/lib/helpers/ticket-assigned-agent';
 import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-realtime';
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import type { Database } from '@/types/database.types';
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
-  'id' | 'objective' | 'created_at' | 'title' | 'state' | 'agent_identifier' | 'model_identifier'
+  | 'id'
+  | 'objective'
+  | 'created_at'
+  | 'title'
+  | 'state'
+  | 'agent_identifier'
+  | 'model_identifier'
+  | 'assigned_agent'
 >;
 
 type TicketObjectivesSectionProps = {
@@ -60,6 +70,9 @@ export function TicketObjectivesSection({
   );
   const orderedExecutedObjectives = sortObjectivesByCreatedAtAscending(executedObjectives);
   const editableObjectiveValue = editableObjective?.objective ?? '';
+  const editableObjectiveAssignedAgent = editableObjective
+    ? parseObjectiveAssignedAgent(editableObjective.assigned_agent)
+    : assignedAgent;
 
   return (
     <div className="flex flex-col pb-5">
@@ -92,7 +105,7 @@ export function TicketObjectivesSection({
           objectiveState={editableObjective?.state ?? 'complete'}
           ticketId={ticketId}
           workingDirectory={workingDirectory}
-          assignedAgent={assignedAgent}
+          assignedAgent={editableObjectiveAssignedAgent}
           projectId={projectId}
           agentFlags={agentFlags}
           agentCommands={agentCommands}

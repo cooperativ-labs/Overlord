@@ -31,7 +31,7 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
 
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
-    .select('id,status,assigned_agent')
+    .select('id,status')
     .eq('id', ticketId)
     .eq('organization_id', organizationId)
     .single();
@@ -78,8 +78,7 @@ export async function runConnectProtocol(supabase: ConnectClient, params: Connec
     ticketId,
     {
       agentIdentifier,
-      metadata,
-      ticketAssignedAgent: ticket.assigned_agent
+      metadata
     },
     userId
   );

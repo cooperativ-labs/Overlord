@@ -38,12 +38,14 @@ function isSameSelection(left: AgentModelSelection, right: AgentModelSelection):
 
 export function AgentModelChooserButton({
   ticketId,
+  objectiveId,
   initialSelection,
   disabled = false,
   onSelectionChange,
   persistSelection = true
 }: {
   ticketId?: string | null;
+  objectiveId?: string | null;
   initialSelection: TicketAssignedAgent | null;
   disabled?: boolean;
   onSelectionChange?: (selection: AgentModelSelection) => void;
@@ -80,7 +82,11 @@ export function AgentModelChooserButton({
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto min-w-[320px] p-2">
+      <PopoverContent
+        align="start"
+        collisionPadding={{ left: 8, right: 8 }}
+        className="w-auto min-w-[320px] p-2"
+      >
         <AgentModelSelector
           value={selection}
           onChange={nextSelection => {
@@ -89,7 +95,7 @@ export function AgentModelChooserButton({
             onSelectionChange?.(nextSelection);
             if (persistSelection && ticketId) {
               startTransition(() => {
-                void updateTicketAssignedAgentActionWithRetry(ticketId, nextSelection);
+                void updateTicketAssignedAgentActionWithRetry(ticketId, nextSelection, objectiveId);
               });
             }
           }}

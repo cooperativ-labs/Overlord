@@ -85,7 +85,7 @@ export default function TicketsScreen() {
         let q = supabase
           .from('tickets')
           .select(
-            'id, organization_id, title, status, priority, execution_target, assigned_agent, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position'
+            'id, organization_id, title, status, priority, execution_target, ticket_sequence, due_datetime, created_at, updated_at, project_id, board_position'
           )
           .order('updated_at', { ascending: false })
           .limit(100);
@@ -98,10 +98,15 @@ export default function TicketsScreen() {
         const [
           { data, error },
           { data: execObjectives },
+          { data: assignedObjectives },
           { data: statusRows, error: statusError }
         ] = await Promise.all([
           runQuery(),
           supabase.from('objectives').select('ticket_id').eq('state', 'executing'),
+          supabase
+            .from('objectives')
+            .select('ticket_id,assigned_agent')
+            .order('created_at', { ascending: false }),
           supabase
             .from('ticket_statuses')
             .select('organization_id,name,position,status_type')
@@ -113,10 +118,17 @@ export default function TicketsScreen() {
             return;
           }
           const executingTicketIds = new Set((execObjectives ?? []).map(o => o.ticket_id));
+          const assignedByTicket = new Map<string, unknown>();
+          for (const objective of assignedObjectives ?? []) {
+            if (!assignedByTicket.has(objective.ticket_id)) {
+              assignedByTicket.set(objective.ticket_id, objective.assigned_agent);
+            }
+          }
           setStatusDefinitions((statusRows ?? []) as TicketStatusDefinition[]);
           setTickets(
             data.map(t => ({
               ...t,
+              assigned_agent: assignedByTicket.get(t.id) ?? null,
               has_executing_objective: executingTicketIds.has(t.id)
             })) as TicketWithProject[]
           );

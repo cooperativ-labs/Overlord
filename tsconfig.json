@@ -42,7 +42,8 @@
     "tests/**/*.tsx",
     "types/**/*.ts",
     "types/**/*.tsx",
-    "seed.ts"
+    "seed.ts",
+    "instrumentation-client.ts"
   ],
   "exclude": [
     "node_modules",

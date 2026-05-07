@@ -15,7 +15,7 @@ import {
  * IMPORTANT: Keep this in sync with lib/overlord/protocol-attach.ts (TICKET_AGENT_FIELDS).
  */
 const TICKET_AGENT_FIELDS =
-  'id,title,ticket_id,status,priority,assigned_agent,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
+  'id,title,ticket_id,status,priority,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
 
 export async function handleAttach(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
@@ -85,7 +85,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   // submitted objectives, fall back to the newest draft so launch still works.
   const { data: submittedObjective } = await supabase
     .from('objectives')
-    .select('id, objective')
+    .select('id, objective, assigned_agent')
     .eq('ticket_id', ticketId)
     .eq('state', 'submitted')
     .order('created_at', { ascending: false })
@@ -97,7 +97,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     (
       await supabase
         .from('objectives')
-        .select('id, objective')
+        .select('id, objective, assigned_agent')
         .eq('ticket_id', ticketId)
         .eq('state', 'draft')
         .order('created_at', { ascending: false })
@@ -107,13 +107,13 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
 
   let executedObjective: string | null = null;
   if (draftObjective && draftObjective.objective.trim().length > 0) {
-    const ticketAssignedAgent =
-      ticket.assigned_agent &&
-      typeof ticket.assigned_agent === 'object' &&
-      !Array.isArray(ticket.assigned_agent) &&
-      typeof ticket.assigned_agent.model === 'string' &&
-      ticket.assigned_agent.model.trim().length > 0
-        ? ticket.assigned_agent.model.trim()
+    const objectiveAssignedModel =
+      draftObjective.assigned_agent &&
+      typeof draftObjective.assigned_agent === 'object' &&
+      !Array.isArray(draftObjective.assigned_agent) &&
+      typeof draftObjective.assigned_agent.model === 'string' &&
+      draftObjective.assigned_agent.model.trim().length > 0
+        ? draftObjective.assigned_agent.model.trim()
         : null;
     const explicitModel =
       typeof modelIdentifier === 'string' && modelIdentifier.trim().length > 0
@@ -144,7 +144,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
       .update({
         state: 'executing',
         agent_identifier: agentIdentifier ?? null,
-        model_identifier: metadataModel ?? ticketAssignedAgent,
+        model_identifier: metadataModel ?? objectiveAssignedModel,
         completed_at: null
       })
       .eq('id', draftObjective.id);

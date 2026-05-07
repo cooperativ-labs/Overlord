@@ -96,7 +96,6 @@ export interface TicketDetail {
   status: string;
   priority: TicketPriority;
   execution_target: TicketExecutionTarget;
-  assigned_agent: AssignedAgent | null;
   due_datetime: string | null;
   ticket_sequence: number;
   context: string;
@@ -115,6 +114,7 @@ export interface Objective {
   state: 'draft' | 'executing' | 'complete';
   agent_identifier: string | null;
   model_identifier: string | null;
+  assigned_agent: AssignedAgent | null;
   created_at: string;
 }
 

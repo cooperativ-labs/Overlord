@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     // Auto-transition the ticket back to execute and reactivate the session.
     const { data: currentTicket } = await supabase
       .from('tickets')
-      .select('status,assigned_agent')
+      .select('status')
       .eq('id', ticketId)
       .single();
 
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         // of the latest complete objective and then update by primary key.
         supabase
           .from('objectives')
-          .select('id')
+          .select('id,assigned_agent')
           .eq('ticket_id', ticketId)
           .eq('state', 'complete')
           .order('created_at', { ascending: false })
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
                   agent_identifier: resolved.session.agent_identifier,
                   model_identifier: resolveObjectiveModelIdentifier({
                     metadata: resolved.session.metadata,
-                    ticketAssignedAgent: currentTicket?.assigned_agent ?? null
+                    objectiveAssignedAgent: latestObjective.assigned_agent ?? null
                   }),
                   completed_at: null
                 })

@@ -159,8 +159,7 @@ export async function runSpawnProtocol(supabase: SpawnClient, params: SpawnParam
     ticket.id,
     {
       agentIdentifier,
-      metadata,
-      ticketAssignedAgent: null
+      metadata
     },
     createdBy
   );

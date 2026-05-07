@@ -179,8 +179,7 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
           project_id: selectedProject.id,
           acceptance_criteria:
             acceptanceCriteria.trim().length > 0 ? acceptanceCriteria.trim() : null,
-          available_tools: availableTools.trim().length > 0 ? availableTools.trim() : '',
-          assigned_agent: createAssignedAgent(selection)
+          available_tools: availableTools.trim().length > 0 ? availableTools.trim() : ''
         })
         .select('id')
         .single();
@@ -194,7 +193,8 @@ export function QuickCreateTicketModal({ visible, onClose, defaultProjectId }: P
         .insert({
           ticket_id: ticket.id,
           objective: trimmed,
-          state: 'draft'
+          state: 'draft',
+          assigned_agent: createAssignedAgent(selection)
         })
         .select('id')
         .single();

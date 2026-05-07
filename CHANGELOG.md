@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.13.0] - 2026-05-07:12:25
+
+### Added
+- Add a database migration that moves ticket-level assigned-agent data onto objectives and backfills existing records.
+- Add objective-scoped agent model selection support across web and mobile ticket objective editing surfaces.
+
+### Fixed
+- Keep ticket board and objective realtime updates in sync after objective-level assignee changes so views stop showing stale agent assignments.
+
+### Changed
+- Shift protocol, MCP, and server action assignment handling from ticket-level agent fields to objective-level assignment metadata.
+- Update ticket panel, objective draft/edit, and quick-create flows on web and mobile to read and write assignment data through objectives.
+
+### Security
+- None.
+
 ## [5.12.0] - 2026-05-05:13:46
 
 ### Added

@@ -27,7 +27,7 @@ import { isAdminEmail } from '@/lib/auth/admin';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
-import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
@@ -95,7 +95,6 @@ export async function TicketPanelContent({
   }
 
   const profileSettings = user ? await fetchProfileSettings(supabase, user.id) : null;
-  const assignedAgent = parseTicketAssignedAgent(ticket.assigned_agent);
   const projectsSelect = 'id,name,color,everhour_project_id';
 
   // Fetch all related data in parallel. Individual query failures are
@@ -169,7 +168,9 @@ export async function TicketPanelContent({
       .maybeSingle(),
     supabase
       .from('objectives')
-      .select('id,objective,created_at,title,state,agent_identifier,model_identifier')
+      .select(
+        'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent'
+      )
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: false })
   ]);
@@ -184,6 +185,13 @@ export async function TicketPanelContent({
   const schedule = scheduleResult.data;
   const agentSession = agentSessionResult.data;
   const objectives = objectivesResult.data;
+  const editableObjective =
+    objectives?.find(objective => objective.state === 'draft') ??
+    objectives?.find(objective => objective.state === 'submitted') ??
+    null;
+  const assignedAgent = editableObjective
+    ? parseObjectiveAssignedAgent(editableObjective.assigned_agent)
+    : null;
   const projectOptionsRaw = projects ?? [];
   const projectIdsForSettings = projectOptionsRaw.map(project => project.id);
   const [sshSettingsByProjectId, localSettingsByProjectId] = await Promise.all([
