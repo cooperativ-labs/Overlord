@@ -23,7 +23,6 @@ import {
   getProjectUserSshSettingsByProjectId
 } from '@/lib/actions/projects';
 import { getTicketTagsAction } from '@/lib/actions/tags';
-import { isAdminEmail } from '@/lib/auth/admin';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
@@ -31,7 +30,6 @@ import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
-import { getTicketTaggingInspector } from '@/lib/tagging-engine';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -288,11 +286,6 @@ export async function TicketPanelContent({
   });
   const objectiveAttachments = await listObjectiveAttachmentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
-  const canViewTaggingInspector = isAdminEmail(user?.email);
-  const taggingInspector =
-    ticket.project_id && canViewTaggingInspector
-      ? await getTicketTaggingInspector({ supabase, ticketId }).catch(() => null)
-      : null;
 
   return (
     <TicketLiveProvider
@@ -308,21 +301,17 @@ export async function TicketPanelContent({
         <TicketPanelHeader
           ticketId={ticketId}
           ticketIdentifier={ticketIdentifier}
+          organizationId={organizationId}
           projectId={activeProjectId}
-          agentFlags={agentFlags}
-          agentIdentifier={agentSession?.agent_identifier ?? null}
-          assignedAgent={assignedAgent}
-          claudeCommand={claudeCode}
-          codexCommand={codex}
-          cursorCommand={cursor}
-          geminiCommand={gemini}
-          opencodeCommand={opencode}
-          workingDirectory={workingDirectory}
-          sshCommand={projectSshCommand}
-          remoteWorkingDirectory={projectRemoteWorkingDirectory}
-          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+          projects={projectOptions.map(p => ({
+            id: p.id,
+            name: p.name,
+            color: p.color,
+            everhour_project_id: p.everhour_project_id
+          }))}
+          currentStatus={ticket.status ?? ''}
+          statusOptions={[...statusOptions]}
           closePath={closePath}
-          isAgentRunning={agentSession?.session_state === 'attached'}
         />
 
         <TimerWithTimeEntries
@@ -450,7 +439,6 @@ export async function TicketPanelContent({
               ticketId={ticketId}
               availableTools={ticket.available_tools}
               acceptanceCriteria={ticket.acceptance_criteria}
-              inspector={taggingInspector}
             />
 
             <ErrorBoundary>

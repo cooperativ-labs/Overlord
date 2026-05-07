@@ -7,7 +7,6 @@ import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { resolveProtocolTicketCreatorUserId } from '@/lib/overlord/protocol-ticket-creator';
 import { resolveTicketDelegate } from '@/lib/overlord/protocol-ticket-delegate';
 import { createFollowUpTicketSchema } from '@/lib/overlord/validation';
-import { syncTicketTagAssignments } from '@/lib/tagging-engine';
 import { resolvePreferredStatusNameByType } from '@/lib/ticket-statuses';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -91,7 +90,6 @@ export async function POST(request: Request) {
     }
 
     await upsertDraftObjective(supabase, createdTicket.id, objective, createdBy);
-    await syncTicketTagAssignments({ supabase, ticketId: createdTicket.id });
 
     const createdReference = getTicketIdentifier(createdTicket);
     const sourceReference = getTicketIdentifier(sourceTicket);

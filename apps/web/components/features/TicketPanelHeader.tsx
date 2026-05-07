@@ -3,54 +3,40 @@ import Link from 'next/link';
 
 import { CopyTicketIdentifierButton } from '@/components/features/CopyTicketIdentifierButton';
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
-import { TicketHeaderAction } from '@/components/features/TicketHeaderAction';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
-import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+
+type ProjectOption = {
+  id: string;
+  name: string;
+  color: string;
+  everhour_project_id: string | null;
+};
 
 type TicketPanelHeaderProps = {
   ticketId: string;
   ticketIdentifier: string;
+  organizationId: number;
   projectId: string | null;
-  agentFlags: Partial<Record<LaunchAgentTypeValue, string[]>>;
-  agentIdentifier: string | null;
-  assignedAgent: TicketAssignedAgent | null;
-  claudeCommand: string;
-  codexCommand: string;
-  cursorCommand: string;
-  geminiCommand: string;
-  opencodeCommand: string;
-  workingDirectory: string | null;
-  sshCommand: string | null;
-  remoteWorkingDirectory: string | null;
-  hasProjectWorkingDirectory: boolean;
+  projects: ProjectOption[];
+  currentStatus: string;
+  statusOptions: string[];
   closePath: string;
-  isAgentRunning?: boolean;
 };
 
 export function TicketPanelHeader({
   ticketId,
   ticketIdentifier,
+  organizationId,
   projectId,
-  agentFlags,
-  agentIdentifier,
-  assignedAgent,
-  claudeCommand,
-  codexCommand,
-  cursorCommand,
-  geminiCommand,
-  opencodeCommand,
-  workingDirectory,
-  sshCommand,
-  remoteWorkingDirectory,
-  hasProjectWorkingDirectory,
-  closePath,
-  isAgentRunning = false
+  projects,
+  currentStatus,
+  statusOptions,
+  closePath
 }: TicketPanelHeaderProps) {
   return (
     <div className="relative flex items-center justify-between gap-2 overflow-hidden border-b px-4 py-3">
@@ -80,23 +66,6 @@ export function TicketPanelHeader({
         </DropdownMenuContent>
       </DropdownMenu>
       <div className="flex items-center justify-end gap-2">
-        <TicketHeaderAction
-          ticketId={ticketId}
-          projectId={projectId}
-          agentFlags={agentFlags}
-          agentIdentifier={agentIdentifier}
-          assignedAgent={assignedAgent}
-          claudeCommand={claudeCommand}
-          codexCommand={codexCommand}
-          cursorCommand={cursorCommand}
-          geminiCommand={geminiCommand}
-          opencodeCommand={opencodeCommand}
-          workingDirectory={workingDirectory}
-          sshCommand={sshCommand}
-          remoteWorkingDirectory={remoteWorkingDirectory}
-          hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-        />
-
         <Button asChild size="icon" variant="ghost" className="ml-2 h-8 w-10">
           <Link href={closePath} aria-label="Close panel">
             <ArrowRightToLine className="h-4 w-4" />

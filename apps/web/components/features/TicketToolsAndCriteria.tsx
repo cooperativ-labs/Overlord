@@ -7,22 +7,17 @@ import {
   AccordionItem,
   AccordionTrigger
 } from '@/components/ui/accordion';
-import type { TaggingInspector } from '@/lib/tagging-engine';
-
-import { TicketTaggingDebug } from './TicketTaggingDebug';
 
 interface TicketToolsAndCriteriaProps {
   ticketId: string;
   availableTools: string | null;
   acceptanceCriteria: string | null;
-  inspector: TaggingInspector | null;
 }
 
 export function TicketToolsAndCriteria({
   ticketId,
   availableTools,
-  acceptanceCriteria,
-  inspector
+  acceptanceCriteria
 }: TicketToolsAndCriteriaProps) {
   return (
     <Accordion type="multiple">
@@ -60,7 +55,6 @@ export function TicketToolsAndCriteria({
           </div>
         </AccordionContent>
       </AccordionItem>
-      <TicketTaggingDebug inspector={inspector} />
     </Accordion>
   );
 }

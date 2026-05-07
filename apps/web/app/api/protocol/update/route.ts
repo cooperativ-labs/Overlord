@@ -13,7 +13,6 @@ import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { updateSchema } from '@/lib/overlord/validation';
-import { syncTicketTagAssignments } from '@/lib/tagging-engine';
 import {
   resolvePreferredStatusNameByType,
   resolveStatusNameForPhase,
@@ -169,19 +168,6 @@ export async function POST(request: Request) {
       if (sessionUpdateError) {
         return NextResponse.json({ error: sessionUpdateError.message }, { status: 500 });
       }
-    }
-
-    try {
-      await syncTicketTagAssignments({
-        supabase: typedSupabase,
-        ticketId,
-        includeExecutionEvidence: true
-      });
-    } catch (taggingError) {
-      console.error('[protocol:update] tagging sync error:', taggingError);
-      Sentry.captureException(taggingError, {
-        extra: { ticketId, sessionId: resolved.session.id, eventId: event.id }
-      });
     }
 
     const notifications = extractAgentNotifications(payload);
