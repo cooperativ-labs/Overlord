@@ -6,6 +6,7 @@ Sentry.init({
   // the runtime package graph we deploy. Keep server error reporting enabled while
   // bypassing the incompatible instrumentation hook path.
   skipOpenTelemetrySetup: true,
+  integrations: integrations => integrations.filter(integration => integration.name !== 'Http'),
   tracesSampleRate: 1,
   enableLogs: true,
   sendDefaultPii: true

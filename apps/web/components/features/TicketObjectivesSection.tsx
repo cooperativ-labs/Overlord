@@ -59,9 +59,6 @@ export function TicketObjectivesSection({
                 attachments={objectiveAttachments.filter(
                   attachment => attachment.objectiveId === objective.id
                 )}
-                isLatest={
-                  index === orderedExecutedObjectives.length - 1 && !editableObjectiveValue.trim()
-                }
               />
             ))}
           </div>

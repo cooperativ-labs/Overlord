@@ -23,15 +23,13 @@ type ObjectiveCollapsibleItemProps = {
   index: number;
   ticketId: string;
   attachments: ObjectiveAttachment[];
-  isLatest?: boolean;
 };
 
 export function ObjectiveCollapsibleItem({
   objective,
   index,
   ticketId,
-  attachments,
-  isLatest
+  attachments
 }: ObjectiveCollapsibleItemProps) {
   const objectiveTimestamp = new Date(objective.created_at).toLocaleString();
   const isExecuting = objective.state === 'executing';
@@ -40,7 +38,7 @@ export function ObjectiveCollapsibleItem({
   const timestampLabel = isExecuting ? 'Executing since' : 'Completed';
 
   return (
-    <Collapsible defaultOpen={isLatest}>
+    <Collapsible defaultOpen={false}>
       <div className="relative rounded-md overflow-hidden">
         {isExecuting && (
           <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent " />
