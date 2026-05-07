@@ -46,6 +46,17 @@ let cachedConfigs: Record<string, AgentConfig> | null = null;
 let cachedLaunchPreference: UserLaunchPreference | null | undefined;
 let cachedSelection: AgentModelSelection | null = null;
 
+/**
+ * Rendered in the app layout to pre-populate the model cache from a server-fetched list.
+ * Sets the module-level cache synchronously during render so useAgentModels() sees it immediately.
+ */
+export function AgentModelsPrefetch({ models }: { models: AgentModel[] }) {
+  if (cachedResolvedModels === null) {
+    cachedResolvedModels = models;
+  }
+  return null;
+}
+
 /** Returns the agent model list, using module-level cache to avoid duplicate fetches. */
 export function useAgentModels(): { models: AgentModel[]; loading: boolean } {
   const [models, setModels] = useState<AgentModel[]>(() => cachedResolvedModels ?? []);

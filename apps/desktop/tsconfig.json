@@ -8,6 +8,16 @@
     "strict": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@/app/*": ["./apps/web/app/*"],
+      "@/components/*": ["./apps/web/components/*"],
+      "@/lib/*": ["./lib/*"],
+      "@/supabase/*": ["./supabase/*"],
+      "@/types/*": ["./types/*"],
+      "@/agent-models": ["./agent-models.json"],
+      "@/agent-models.json": ["./agent-models.json"]
+    },
     "declaration": false,
     "sourceMap": true,
     "skipLibCheck": true

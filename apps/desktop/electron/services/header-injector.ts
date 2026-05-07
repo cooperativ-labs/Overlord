@@ -87,16 +87,19 @@ export function installRendererResponseHeaders(
   csp: string,
   platformOrigin: string
 ): void {
-  session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: composeRendererResponseHeaders(
-        details.responseHeaders ?? {},
-        csp,
-        details.url,
-        platformOrigin
-      )
-    });
-  });
+  session.webRequest.onHeadersReceived(
+    { urls: buildOriginPatterns(platformOrigin) },
+    (details, callback) => {
+      callback({
+        responseHeaders: composeRendererResponseHeaders(
+          details.responseHeaders ?? {},
+          csp,
+          details.url,
+          platformOrigin
+        )
+      });
+    }
+  );
 }
 
 export function installAuthHeaderInjector(options: {

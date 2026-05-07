@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.14.0] - 2026-05-07:14:12
+
+### Added
+- Add size-aware guardrails for untracked-file diff previews in local workspace clients so large files are summarized instead of fully inlined.
+
+### Fixed
+- Prevent local workspace git stat collection from over-scanning untracked files by limiting stat reads to a bounded candidate list.
+
+### Changed
+- Package the desktop app as an Electron shell with bundled agent resources and remove the standalone Next.js web build step from the Electron build pipeline.
+- Switch local workspace status collection to normal untracked-file reporting to avoid recursively expanding untracked directories during status scans.
+
+### Security
+- None.
+
 ## [5.13.0] - 2026-05-07:12:25
 
 ### Added

@@ -31,7 +31,6 @@ const securityHeaders = async () => [
 
 const nextConfig = withSerwist({
   reactStrictMode: true,
-  output: 'standalone',
   experimental: {
     externalDir: true
   },

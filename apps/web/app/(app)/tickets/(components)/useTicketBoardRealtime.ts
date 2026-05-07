@@ -207,6 +207,14 @@ export function useTicketBoardRealtime({
       }),
     [openedWaitingTimestamps, tickets, waitingByTicket, waitingRaisedWhileOpen]
   );
+  const ticketIdSignature = useMemo(
+    () =>
+      tickets
+        .map(ticket => ticket.id)
+        .sort()
+        .join('|'),
+    [tickets]
+  );
 
   ticketIdsRef.current = new Set(tickets.map(ticket => ticket.id));
   ticketsByIdRef.current = new Map(ticketsWithIndicators.map(ticket => [ticket.id, ticket]));
@@ -512,91 +520,153 @@ export function useTicketBoardRealtime({
       }
     };
 
-    const channel = supabase
-      .channel(`tickets-realtime:${organizationId ?? 'all'}:${projectId ?? 'all'}`)
-      .on<TicketEvent>(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ticket_events',
-          filter: 'event_type=eq.question'
-        },
-        payload => {
-          const event = payload.new;
-          if (!event.is_blocking) return;
-          if (!ticketIdsRef.current.has(event.ticket_id)) return;
-          mergeWaitingQuestionIntoBoards(queryClient, event);
+    const handleQuestionEvent = (event: TicketEvent) => {
+      if (!event.is_blocking) return;
+      if (!ticketIdsRef.current.has(event.ticket_id)) return;
+      mergeWaitingQuestionIntoBoards(queryClient, event);
 
-          setWaitingByTicket(previous => {
-            const existing = previous[event.ticket_id];
-            if (existing && Date.parse(existing) >= Date.parse(event.created_at)) {
-              return previous;
+      setWaitingByTicket(previous => {
+        const existing = previous[event.ticket_id];
+        if (existing && Date.parse(existing) >= Date.parse(event.created_at)) {
+          return previous;
+        }
+        return { ...previous, [event.ticket_id]: event.created_at };
+      });
+      markTicketWaitingRaised(event.ticket_id, openTicketIdRef.current === event.ticket_id);
+      setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
+      setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
+
+      const ticket = ticketsByIdRef.current.get(event.ticket_id);
+      const title = ticket?.title?.trim()
+        ? `Agent waiting: ${ticket.title.trim()}`
+        : 'Agent waiting for response';
+
+      void window.electronAPI?.app?.notify(title, getEventMessage(event));
+
+      const waitingSound = waitingSoundRef.current;
+      if (waitingSound) {
+        waitingSound.currentTime = 0;
+        void waitingSound.play().catch(() => undefined);
+      }
+    };
+
+    const handleStatusChangeEvent = (event: TicketEvent) => {
+      if (!event.phase) return;
+      if (!ticketIdsRef.current.has(event.ticket_id)) return;
+
+      const shouldMoveToTopOfReview = event.phase === 'review' && event.session_id !== null;
+      const existingTicket = ticketsByIdRef.current.get(event.ticket_id);
+      updateTicketInBoards(queryClient, event.ticket_id, {
+        status: event.phase,
+        board_position:
+          shouldMoveToTopOfReview && existingTicket
+            ? getTopBoardPositionForStatus(
+                [...ticketsByIdRef.current.values()],
+                event.phase,
+                event.ticket_id
+              )
+            : existingTicket?.board_position,
+        updated_at: event.created_at ?? existingTicket?.updated_at,
+        ...(openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
+      });
+
+      if (event.phase !== 'review') return;
+
+      const reviewSound = reviewSoundRef.current;
+      if (reviewSound) {
+        reviewSound.currentTime = 0;
+        void reviewSound.play().catch(() => undefined);
+      }
+
+      const reviewTicket = ticketsByIdRef.current.get(event.ticket_id);
+      const reviewTitle = reviewTicket?.title?.trim()
+        ? `Ready for review: ${reviewTicket.title.trim()}`
+        : 'Ticket moved to review';
+      void window.electronAPI?.app?.notify(reviewTitle, 'The agent has delivered this ticket.');
+    };
+
+    let channel = supabase.channel(
+      `tickets-realtime:${organizationId ?? 'all'}:${projectId ?? 'all'}:${ticketIdsRef.current.size}`
+    );
+
+    for (const ticketId of ticketIdsRef.current) {
+      channel = channel
+        .on<TicketEvent>(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'ticket_events',
+            filter: `ticket_id=eq.${ticketId}`
+          },
+          payload => {
+            const event = payload.new;
+            if (event.event_type === 'question') {
+              handleQuestionEvent(event);
+              return;
             }
-            return { ...previous, [event.ticket_id]: event.created_at };
-          });
-          markTicketWaitingRaised(event.ticket_id, openTicketIdRef.current === event.ticket_id);
-          setOpenedWaitingTimestamps(getOpenedWaitingTimestamps());
-          setWaitingRaisedWhileOpen(getWaitingRaisedWhileOpenMap());
-
-          const ticket = ticketsByIdRef.current.get(event.ticket_id);
-          const title = ticket?.title?.trim()
-            ? `Agent waiting: ${ticket.title.trim()}`
-            : 'Agent waiting for response';
-
-          void window.electronAPI?.app?.notify(title, getEventMessage(event));
-
-          const waitingSound = waitingSoundRef.current;
-          if (waitingSound) {
-            waitingSound.currentTime = 0;
-            void waitingSound.play().catch(() => undefined);
+            if (event.event_type === 'status_change') {
+              handleStatusChangeEvent(event);
+            }
           }
-        }
-      )
-      .on<TicketEvent>(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ticket_events',
-          filter: 'event_type=eq.status_change'
-        },
-        payload => {
-          const event = payload.new;
-          if (!event.phase) return;
-          if (!ticketIdsRef.current.has(event.ticket_id)) return;
-
-          const shouldMoveToTopOfReview = event.phase === 'review' && event.session_id !== null;
-          const existingTicket = ticketsByIdRef.current.get(event.ticket_id);
-          updateTicketInBoards(queryClient, event.ticket_id, {
-            status: event.phase,
-            board_position:
-              shouldMoveToTopOfReview && existingTicket
-                ? getTopBoardPositionForStatus(
-                    [...ticketsByIdRef.current.values()],
-                    event.phase,
-                    event.ticket_id
-                  )
-                : existingTicket?.board_position,
-            updated_at: event.created_at ?? existingTicket?.updated_at,
-            ...(openTicketIdRef.current !== event.ticket_id ? { is_read: false } : {})
-          });
-
-          if (event.phase !== 'review') return;
-
-          const reviewSound = reviewSoundRef.current;
-          if (reviewSound) {
-            reviewSound.currentTime = 0;
-            void reviewSound.play().catch(() => undefined);
+        )
+        .on<AgentSession>(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'agent_sessions',
+            filter: `ticket_id=eq.${ticketId}`
+          },
+          payload => {
+            const session = payload.new;
+            latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
+            mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
+              session_state: session.session_state,
+              agent_identifier: session.agent_identifier,
+              attached_at: session.attached_at
+            });
+            applySessionOverride(session);
           }
+        )
+        .on<AgentSession>(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'agent_sessions',
+            filter: `ticket_id=eq.${ticketId}`
+          },
+          payload => {
+            const session = payload.new;
+            const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
+            if (session.attached_at < latestAt) return;
+            mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
+              session_state: session.session_state,
+              agent_identifier: session.agent_identifier,
+              attached_at: session.attached_at
+            });
+            applySessionOverride(session);
+          }
+        )
+        .on<Objective>(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'objectives',
+            filter: `ticket_id=eq.${ticketId}`
+          },
+          payload => {
+            const changedTicketId =
+              getObjectivePayloadTicketId(payload.new) ?? getObjectivePayloadTicketId(payload.old);
+            if (!changedTicketId) return;
+            void syncObjectiveStateForTicket(changedTicketId);
+          }
+        );
+    }
 
-          const reviewTicket = ticketsByIdRef.current.get(event.ticket_id);
-          const reviewTitle = reviewTicket?.title?.trim()
-            ? `Ready for review: ${reviewTicket.title.trim()}`
-            : 'Ticket moved to review';
-          void window.electronAPI?.app?.notify(reviewTitle, 'The agent has delivered this ticket.');
-        }
-      )
+    channel = channel
       .on<Database['public']['Tables']['tickets']['Row']>(
         'postgres_changes',
         {
@@ -648,63 +718,17 @@ export function useTicketBoardRealtime({
           removeTicketFromBoard(deletedId);
         }
       )
-      .on<AgentSession>(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'agent_sessions' },
-        payload => {
-          const session = payload.new;
-          if (!ticketIdsRef.current.has(session.ticket_id)) return;
-          latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
-          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
-            session_state: session.session_state,
-            agent_identifier: session.agent_identifier,
-            attached_at: session.attached_at
-          });
-          applySessionOverride(session);
-        }
-      )
-      .on<AgentSession>(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'agent_sessions' },
-        payload => {
-          const session = payload.new;
-          if (!ticketIdsRef.current.has(session.ticket_id)) return;
-          const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
-          if (session.attached_at < latestAt) return;
-          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
-            session_state: session.session_state,
-            agent_identifier: session.agent_identifier,
-            attached_at: session.attached_at
-          });
-          applySessionOverride(session);
-        }
-      )
-      .on<Objective>(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'objectives' },
-        payload => {
-          const ticketId =
-            getObjectivePayloadTicketId(payload.new) ?? getObjectivePayloadTicketId(payload.old);
-          if (!ticketId || !ticketIdsRef.current.has(ticketId)) return;
-          void syncObjectiveStateForTicket(ticketId);
-        }
-      )
       .subscribe(status => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           void syncBoardData();
         }
       });
 
-    const pollId = window.setInterval(() => {
-      void syncBoardData();
-    }, 20_000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
-  }, [organizationId, projectId, queryClient, removeTicketFromBoard]);
+  }, [organizationId, projectId, queryClient, removeTicketFromBoard, ticketIdSignature]);
 
   const mergeWaitingFromLoadedTickets = useCallback((incoming: Ticket[]) => {
     if (incoming.length === 0) return;

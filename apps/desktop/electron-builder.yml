@@ -8,7 +8,6 @@ afterSign: scripts/notarize.cjs
 
 files:
   - "apps/desktop/dist-electron/**/*"
-  - "apps/web/.next/standalone/**/*"
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
   - "plugins/claude/**/*"
@@ -36,7 +35,6 @@ linux:
   icon: apps/web/public/images/512.png
 
 asarUnpack:
-  - "apps/web/.next/standalone/**/*"
   - "packages/overlord-cli/**/*"
   - "plugins/overlord/**/*"
   - "plugins/claude/**/*"

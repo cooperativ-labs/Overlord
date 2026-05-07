@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
+import { AgentModelsPrefetch } from '@/components/features/AgentModelSelector';
 import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
 import {
   ElectronAuthBoundary,
@@ -24,6 +25,7 @@ import { NavHeader } from '@/components/nav-header';
 import { AppQueryClientProvider } from '@/components/providers/query-client-provider';
 import { SidePanel, SidePanelProvider } from '@/components/ui/side-panel';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { getAgentModelsAction } from '@/lib/actions/agent-models';
 import { getOnboardingState } from '@/lib/actions/onboarding';
 import { getUserOrganizations } from '@/lib/actions/organizations';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
@@ -61,10 +63,11 @@ export default async function RootLayout({
     data: { user }
   } = await supabase.auth.getUser();
 
-  const [projects, organizations, profileSettings] = await Promise.all([
+  const [projects, organizations, profileSettings, agentModels] = await Promise.all([
     getProjectsForCurrentUser(),
     user ? getUserOrganizations() : Promise.resolve([]),
-    user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null)
+    user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null),
+    getAgentModelsAction()
   ]);
 
   const initialDefaultProjectId = await getRequestDefaultProjectId({
@@ -119,6 +122,7 @@ export default async function RootLayout({
 
   return (
     <div>
+      <AgentModelsPrefetch models={agentModels} />
       <ElectronDetector />
 
       <WebAuthGate />

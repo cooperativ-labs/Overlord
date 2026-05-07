@@ -2,7 +2,7 @@
   "name": "Overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "5.13.0",
+  "version": "5.14.0",
   "private": true,
   "main": "apps/desktop/dist-electron/main.js",
   "workspaces": [
@@ -63,7 +63,6 @@
     "electron:dev:web": "cd apps/web && node ../../node_modules/next/dist/bin/next dev",
     "electron:dev": "yarn electron:build-main && node node_modules/concurrently/dist/bin/concurrently.js \"yarn electron:dev:web\" \"node node_modules/wait-on/bin/wait-on http://localhost:3000 && node node_modules/electron/cli.js .\"",
     "electron:build-web": "cd apps/web && node ../../node_modules/next/dist/bin/next build",
-    "electron:copy-static": "cp -r apps/web/.next/static apps/web/.next/standalone/.next/static",
     "electron:build": "node scripts/electron-build.mjs",
     "electron:build:mac:x64": "node scripts/electron-build.mjs --platform mac --mac-arch x64",
     "electron:build:mac:arm64": "node scripts/electron-build.mjs --platform mac --mac-arch arm64",

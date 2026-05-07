@@ -94,6 +94,10 @@ var DEFAULT_MAX_ENTRIES_PER_DIRECTORY = 5e3;
 var DEFAULT_GIT_TIMEOUT_MS = 15e3;
 var DEFAULT_GH_TIMEOUT_MS = 3e4;
 var DEFAULT_READ_MAX_BYTES = 512 * 1024;
+var MAX_UNTRACKED_FILES_FOR_STATS = 50;
+var MAX_UNTRACKED_FILE_BYTES_FOR_STATS = 512 * 1024;
+var MAX_UNTRACKED_FILES_FOR_AGGREGATE_DIFF = 25;
+var MAX_UNTRACKED_FILE_BYTES_FOR_AGGREGATE_DIFF = 512 * 1024;
 var IGNORED_DIRECTORY_NAMES = /* @__PURE__ */ new Set([
   ".git",
   ".next",
@@ -172,7 +176,12 @@ async function pushCurrentBranch(repoRoot, branch) {
 }
 async function readUntrackedStats(repoRoot, relativePath) {
   try {
-    const content = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
+    const absolutePath = path.join(repoRoot, relativePath);
+    const stat = await fs.stat(absolutePath);
+    if (!stat.isFile() || stat.size > MAX_UNTRACKED_FILE_BYTES_FOR_STATS) {
+      return null;
+    }
+    const content = await fs.readFile(absolutePath, "utf8");
     return { linesAdded: countLines(content), linesRemoved: 0 };
   } catch {
     return null;
@@ -185,9 +194,9 @@ async function getGitFileStats(repoRoot, files) {
     { allowFailure: true }
   );
   const stats = parseNumStat(tracked.output);
+  const untrackedFilesForStats = files.filter((file) => file.status === "untracked" && !stats.has(file.path)).slice(0, MAX_UNTRACKED_FILES_FOR_STATS);
   await Promise.all(
-    files.map(async (file) => {
-      if (file.status !== "untracked" || stats.has(file.path)) return;
+    untrackedFilesForStats.map(async (file) => {
       const untracked = await readUntrackedStats(repoRoot, file.path);
       if (untracked) stats.set(file.path, untracked);
     })
@@ -320,7 +329,7 @@ var LocalWorkspaceClient = class {
         "status",
         "--porcelain=v1",
         "-z",
-        "--untracked-files=all"
+        "--untracked-files=normal"
       ]);
       const files = parseGitStatus(statusResult.output);
       const stats = await getGitFileStats(repoRoot, files);
@@ -429,8 +438,26 @@ var LocalWorkspaceClient = class {
       );
       const untrackedFiles = untrackedResult.output.split("\0").filter(Boolean);
       let untrackedDiff = "";
-      for (const relPath of untrackedFiles.slice(0, 50)) {
+      for (const relPath of untrackedFiles.slice(0, MAX_UNTRACKED_FILES_FOR_AGGREGATE_DIFF)) {
         const fullPath = path.join(repoRoot, relPath);
+        const stat = await fs.stat(fullPath).catch(() => null);
+        if (!stat?.isFile()) continue;
+        if (stat.size > MAX_UNTRACKED_FILE_BYTES_FOR_AGGREGATE_DIFF) {
+          untrackedDiff += `diff --git a/${relPath} b/${relPath}
+`;
+          untrackedDiff += `new file mode 100644
+`;
+          untrackedDiff += `--- /dev/null
+`;
+          untrackedDiff += `+++ b/${relPath}
+`;
+          untrackedDiff += `@@ -0,0 +1 @@
+`;
+          untrackedDiff += `+[untracked file omitted: ${stat.size} bytes exceeds ${MAX_UNTRACKED_FILE_BYTES_FOR_AGGREGATE_DIFF} byte preview limit]
+
+`;
+          continue;
+        }
         const piece = await runGit(
           repoRoot,
           ["diff", "--no-index", "--no-ext-diff", "--unified=2", "--", "/dev/null", fullPath],
