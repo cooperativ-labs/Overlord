@@ -25,6 +25,7 @@ export function ElectronLoginScreen() {
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const [showRefreshButton, setShowRefreshButton] = useState(false);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoreBlockedRef = React.useRef(false);
   const nextPath = sanitizeNextPath(searchParams.get('next'));
 
   // Stable ref so the effect doesn't re-run when router identity changes.
@@ -47,6 +48,8 @@ export function ElectronLoginScreen() {
     };
 
     const restoreSession = async () => {
+      if (restoreBlockedRef.current) return;
+
       setIsRestoringSession(true);
       setSignInButtonState('loading');
 
@@ -55,7 +58,7 @@ export function ElectronLoginScreen() {
         if (cancelled) return;
         if (status.isAuthenticated) {
           const tokenResult = await electronAuth.getAccessToken();
-          if (!cancelled && tokenResult?.ok) {
+          if (!cancelled && !restoreBlockedRef.current && tokenResult?.ok) {
             routerRef.current.replace(nextPathRef.current);
             return;
           }
@@ -78,6 +81,7 @@ export function ElectronLoginScreen() {
   }, []);
 
   async function handleLogout() {
+    restoreBlockedRef.current = true;
     await window.electronAPI?.auth.logout?.();
     setIsRestoringSession(false);
     setSignInButtonState('default');
@@ -87,6 +91,7 @@ export function ElectronLoginScreen() {
     const electronAuth = window.electronAPI?.auth;
     if (!electronAuth) return;
 
+    restoreBlockedRef.current = false;
     setIsRestoringSession(false);
     setSignInButtonState('loading');
     setErrorMessage('');

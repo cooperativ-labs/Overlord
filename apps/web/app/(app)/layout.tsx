@@ -3,7 +3,10 @@ import type { Metadata } from 'next';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
-import { ElectronAuthGate } from '@/components/features/electron-auth/ElectronAuthGate';
+import {
+  ElectronAuthBoundary,
+  ElectronAuthGate
+} from '@/components/features/electron-auth/ElectronAuthGate';
 import { ElectronOfflineGate } from '@/components/features/electron-offline/ElectronOfflineGate';
 import { OfflineTicketProcessor } from '@/components/features/electron-offline/OfflineTicketProcessor';
 import { RepoProfileMaintenance } from '@/components/features/electron-offline/RepoProfileMaintenance';
@@ -121,70 +124,72 @@ export default async function RootLayout({
       <WebAuthGate />
       <ElectronAuthGate />
       <ElectronOfflineGate>
-        <AppQueryClientProvider>
-          <TerminalProvider>
-            <DefaultProjectProvider
-              projects={projects}
-              initialDefaultProjectId={initialDefaultProjectId}
-            >
-              <ProjectCreatorProvider>
-                <TutorialProvider
-                  autoOpen={tutorialAutoOpen}
-                  autoOpenStep={tutorialAutoStep}
-                  initialState={onboardingState}
-                >
-                  <SystemNotificationProvider>
-                    <SidebarProvider defaultOpen={sidebarDefaultOpen} className="h-dvh min-h-0">
-                      {user ? (
-                        <div className="flex h-full w-full flex-col overflow-hidden [--sidebar-top-offset:2.75rem]">
-                          <OfflineTicketProcessor />
-                          <RepoProfileMaintenance projects={projects} />
-                          <AnnouncementBar />
-                          <NavHeader projects={projects} />
-                          <div className="flex min-h-0 flex-1 overflow-hidden">
-                            <AppSidebar
-                              user={{
-                                name:
-                                  user.user_metadata?.full_name ??
-                                  user.email?.split('@')[0] ??
-                                  'User',
-                                email: user.email ?? '',
-                                avatar:
-                                  user.user_metadata?.picture ??
-                                  user.user_metadata?.avatar_url ??
-                                  ''
-                              }}
-                              isAdmin={isAdminEmail(user.email)}
-                              projects={projects}
-                              organizations={organizations}
-                              selectedOrgId={selectedOrgId}
-                            />
-                            <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
-                              <SidePanelProvider className="flex flex-col overflow-hidden">
-                                <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-                                  <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
-                                    {children}
-                                  </main>
-                                  <SidePanel />
-                                </div>
-                              </SidePanelProvider>
-                            </SidebarInset>
+        <ElectronAuthBoundary>
+          <AppQueryClientProvider>
+            <TerminalProvider>
+              <DefaultProjectProvider
+                projects={projects}
+                initialDefaultProjectId={initialDefaultProjectId}
+              >
+                <ProjectCreatorProvider>
+                  <TutorialProvider
+                    autoOpen={tutorialAutoOpen}
+                    autoOpenStep={tutorialAutoStep}
+                    initialState={onboardingState}
+                  >
+                    <SystemNotificationProvider>
+                      <SidebarProvider defaultOpen={sidebarDefaultOpen} className="h-dvh min-h-0">
+                        {user ? (
+                          <div className="flex h-full w-full flex-col overflow-hidden [--sidebar-top-offset:2.75rem]">
+                            <OfflineTicketProcessor />
+                            <RepoProfileMaintenance projects={projects} />
+                            <AnnouncementBar />
+                            <NavHeader projects={projects} />
+                            <div className="flex min-h-0 flex-1 overflow-hidden">
+                              <AppSidebar
+                                user={{
+                                  name:
+                                    user.user_metadata?.full_name ??
+                                    user.email?.split('@')[0] ??
+                                    'User',
+                                  email: user.email ?? '',
+                                  avatar:
+                                    user.user_metadata?.picture ??
+                                    user.user_metadata?.avatar_url ??
+                                    ''
+                                }}
+                                isAdmin={isAdminEmail(user.email)}
+                                projects={projects}
+                                organizations={organizations}
+                                selectedOrgId={selectedOrgId}
+                              />
+                              <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
+                                <SidePanelProvider className="flex flex-col overflow-hidden">
+                                  <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                                    <main className="flex min-h-0 min-w-0 flex-col w-full overflow-hidden">
+                                      {children}
+                                    </main>
+                                    <SidePanel />
+                                  </div>
+                                </SidePanelProvider>
+                              </SidebarInset>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="flex w-full flex-col ">
-                          <main className="w-full h-full ">{children}</main>
-                        </div>
-                      )}
-                      <TutorialWizardModal />
-                    </SidebarProvider>
-                    <SystemNotificationRoot />
-                  </SystemNotificationProvider>
-                </TutorialProvider>
-              </ProjectCreatorProvider>
-            </DefaultProjectProvider>
-          </TerminalProvider>
-        </AppQueryClientProvider>
+                        ) : (
+                          <div className="flex w-full flex-col ">
+                            <main className="w-full h-full ">{children}</main>
+                          </div>
+                        )}
+                        <TutorialWizardModal />
+                      </SidebarProvider>
+                      <SystemNotificationRoot />
+                    </SystemNotificationProvider>
+                  </TutorialProvider>
+                </ProjectCreatorProvider>
+              </DefaultProjectProvider>
+            </TerminalProvider>
+          </AppQueryClientProvider>
+        </ElectronAuthBoundary>
       </ElectronOfflineGate>
     </div>
   );

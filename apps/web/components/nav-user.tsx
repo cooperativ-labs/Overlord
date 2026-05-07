@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import {
   BadgeCheck,
   Bell,
@@ -57,6 +58,22 @@ export function NavUser({
   const { isElectron } = useElectron();
   const { theme, setTheme } = useTheme();
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  async function handleLogout() {
+    if (isElectron && window.electronAPI?.auth) {
+      try {
+        await window.electronAPI.auth.logout();
+      } finally {
+        queryClient.clear();
+        window.location.assign('/electron-login');
+      }
+      return;
+    }
+
+    const result = await signOutWithRetry();
+    if (result.redirect) router.push(result.redirect);
+  }
 
   return (
     <SidebarMenu>
@@ -155,9 +172,8 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={async () => {
-                const result = await signOutWithRetry();
-                if (result.redirect) router.push(result.redirect);
+              onClick={() => {
+                void handleLogout();
               }}
             >
               <LogOut />
