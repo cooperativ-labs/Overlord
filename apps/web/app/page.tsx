@@ -301,8 +301,8 @@ export default async function HomePage() {
               size="sm"
               className="rounded-full bg-white px-4 text-slate-950 hover:bg-slate-100 whitespace-nowrap text-sm"
             >
-              <Link href="/early-access">
-                Get Access
+              <Link href="/signup">
+                Create Account
                 <ArrowRight className="size-3.5" />
               </Link>
             </Button>

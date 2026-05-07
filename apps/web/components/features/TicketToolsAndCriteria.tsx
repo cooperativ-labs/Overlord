@@ -28,7 +28,7 @@ export function TicketToolsAndCriteria({
     <Accordion type="multiple">
       <AccordionItem value="tools" className="border-b-0">
         <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:no-underline">
-          Available Tools
+          Tools
         </AccordionTrigger>
         <AccordionContent>
           <div className="pl-2 pb-2">
