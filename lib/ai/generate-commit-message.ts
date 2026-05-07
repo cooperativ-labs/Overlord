@@ -49,7 +49,6 @@ export async function generateCommitMessageWithGemini(params: {
         maxOutputTokens: 1024
       }
     });
-    console.log('generateCommitMessageWithGemini response', response);
     const text = (response.text ?? '').trim();
     if (!text) return null;
     // Strip markdown code fences if the model ignored instructions.
