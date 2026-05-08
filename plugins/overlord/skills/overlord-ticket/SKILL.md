@@ -9,10 +9,10 @@ Use this skill when Codex needs to work with Overlord, whether the session was l
 
 ## Mode 1: Launched From Overlord Desktop Or CLI
 
-1. Attach first with `ovld protocol attach --ticket-id <ticket-id>`.
+1. Attach first with `ovld protocol attach --ticket-id <ticket_id>`.
 2. Store the returned `SESSION_KEY` or `session.sessionKey`.
 3. Treat the Overlord ticket prompt as authoritative for the specific objective and ticket-level constraints.
-4. While working, publish meaningful progress with `ovld protocol update --session-key <sessionKey> --ticket-id <ticket-id> --phase execute --summary "..."`.
+4. While working, publish meaningful progress with `ovld protocol update --session-key <sessionKey> --ticket-id <ticket_id> --phase execute --summary "..."`.
 5. If a later user message arrives during the ticket session, publish it immediately with `--event-type user_follow_up` before doing anything else.
 6. If blocked on a human-only action, ask a precise blocking question with `ovld protocol ask` and stop.
 7. Deliver last with `ovld protocol deliver`, including meaningful `changeRationales` for every behavioral git-tracked change.
@@ -72,8 +72,8 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
 2. Default to `create` for new tickets. Only use `ovld protocol prompt --agent codex --objective "..."` when the user explicitly asks to create and execute immediately.
    `prompt` creates the ticket in `execute` status and attaches immediately.
-3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket-id>`.
-4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1. Use `ovld protocol connect --ticket-id <ticket-id>` instead when you only need a session key without the full ticket payload.
+3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket_id>`.
+4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket_id>` and then switch to Mode 1. Use `ovld protocol connect --ticket-id <ticket_id>` instead when you only need a session key without the full ticket payload.
 5. If the user wants to find existing tickets by keyword, status, project, creator, or update window, run `ovld protocol search-tickets --query "..." --status next-up,execute --limit 10`. The MCP `search_tickets` tool exposes the same filters.
 6. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.

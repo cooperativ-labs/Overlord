@@ -265,9 +265,10 @@ export async function TicketPanelContent({
     }
   }
 
+  const launchTicketId = ticket?.ticket_id || ticketId;
   const { claudeCode, codex, cursor, gemini, opencode } = buildLaunchCommands({
     platformUrl,
-    ticketId,
+    ticketId: launchTicketId,
     workingDirectory,
     agentFlags,
     assignedAgent
@@ -280,7 +281,7 @@ export async function TicketPanelContent({
     opencode: opencodeResume
   } = buildResumeCommands({
     platformUrl,
-    ticketId
+    ticketId: launchTicketId
   });
   const objectiveAttachments = await listObjectiveAttachmentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];

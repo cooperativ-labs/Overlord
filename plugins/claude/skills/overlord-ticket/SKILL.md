@@ -11,7 +11,7 @@ Use this skill whenever Claude Code needs to work with Overlord, whether the ses
 
 Use this mode when the prompt already contains a ticket ID or explicitly says the session was launched by Overlord.
 
-1. Attach first with `ovld protocol attach --ticket-id <ticket-id>`.
+1. Attach first with `ovld protocol attach --ticket-id <ticket_id>`.
 2. Keep the returned `session.sessionKey` for all follow-up calls.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working with `ovld protocol update --phase execute`.
@@ -76,9 +76,9 @@ Use this mode when the conversation starts normally and the user asks Claude to 
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
 2. Default to `create` for new tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
    `prompt` creates the ticket in `execute` status and attaches immediately.
-3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket-id>`.
-4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket-id>`.
-5. If the user wants to establish a persistent session with a ticket by ID, use `/overlord:attach` or run `ovld protocol attach --ticket-id <ticket-id>`.
+3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
+4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
+5. If the user wants to establish a persistent session with a ticket by ID, use `/overlord:attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
 6. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or run `ovld protocol search-tickets --query "..." --status next-up,execute` and ask the user to confirm.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 8. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.

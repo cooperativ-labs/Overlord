@@ -28,18 +28,18 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
   } = args;
   const { organizationId } = ctx;
 
-  // Resolve short ID (8-char hex) to full UUID if needed.
+  // Resolve a human-readable ticket_id (e.g. 1:899) to the internal UUID.
   let ticketId: string = rawTicketId;
   if (
     rawTicketId &&
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTicketId)
   ) {
-    if (/^[0-9a-f]{8}$/i.test(rawTicketId)) {
+    if (/^\d+:\d+$/.test(rawTicketId)) {
       const { data: found } = await supabase
         .from('tickets')
         .select('id')
         .eq('organization_id', organizationId)
-        .ilike('id', `%${rawTicketId}`)
+        .eq('ticket_id', rawTicketId)
         .limit(2);
       if (!found || found.length !== 1) return toolErr('Ticket not found or access denied.');
       ticketId = found[0].id;

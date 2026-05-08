@@ -93,16 +93,19 @@ export function AgentsPage({ projectId, open }: AgentsPageProps) {
       <div className="grid gap-1">
         <p className="text-sm font-medium">Agent token</p>
         <p className="text-xs text-muted-foreground">
-          An alternative to OAuth for agents running in cloud environments. Generate a token below. <strong>Note: The token is scoped to this project — generate a separate token in each project&apos;s
-            settings.</strong>
+          An alternative to OAuth for agents running in cloud environments. Generate a token below.{' '}
+          <strong>
+            Note: The token is scoped to this project — generate a separate token in each
+            project&apos;s settings.
+          </strong>
         </p>
-
       </div>
 
       <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
         <p className="text-sm font-medium">Environment setup for Claude Code (Cloud)</p>
         <p className="text-xs text-muted-foreground">
-          Claude allows you to configure custom environments for your agents to run in. Use the notes below to set up your agent environment.
+          Claude allows you to configure custom environments for your agents to run in. Use the
+          notes below to set up your agent environment.
         </p>
 
         <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
@@ -119,9 +122,7 @@ export function AgentsPage({ projectId, open }: AgentsPageProps) {
             <code className="rounded bg-muted px-1">ovld.ai</code> (wildcard optional:{' '}
             <code className="rounded bg-muted px-1">*.ovld.ai</code>).
           </li>
-          <li>
-            Add both environment variables exactly as shown below.
-          </li>
+          <li>Add both environment variables exactly as shown below.</li>
         </ol>
 
         <div className="space-y-2">

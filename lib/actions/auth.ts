@@ -52,7 +52,9 @@ async function findAuthUserByEmail(email: string) {
       throw new Error(error.message ?? 'Failed to inspect existing auth users.');
     }
 
-    const user = data.users.find(candidate => candidate.email?.toLowerCase() === email.toLowerCase());
+    const user = data.users.find(
+      candidate => candidate.email?.toLowerCase() === email.toLowerCase()
+    );
 
     if (user) {
       return user;

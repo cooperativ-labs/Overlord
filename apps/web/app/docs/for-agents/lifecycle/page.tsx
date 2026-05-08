@@ -25,7 +25,7 @@ You always attach first and always deliver last.
 ## 1. Attach
 
 \`\`\`bash
-ovld protocol attach --ticket-id <ticket-id>
+ovld protocol attach --ticket-id <ticket_id>
 \`\`\`
 
 Returns JSON with:
@@ -39,7 +39,7 @@ Returns JSON with:
 \`\`\`bash
 # Export the key once so follow-up calls stay short
 export SESSION_KEY=<session.sessionKey>
-export TICKET_ID=<ticket-id>
+export TICKET_ID=<ticket_id>
 \`\`\`
 
 The CLI also honors \`SESSION_KEY\` and \`TICKET_ID\` from the environment.

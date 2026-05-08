@@ -6,14 +6,14 @@ const ticketStatusSchema = z.enum(ticketStatuses);
 const connectionMethodSchema = z.enum(connectionMethods);
 const ticketExecutionTargetSchema = z.enum(ticketExecutionTargets);
 
-/** Accepts a full UUID or an 8-character hex short ID (last 8 chars of UUID). */
+/** Accepts a full UUID or a human-readable ticket_id (e.g. "1:899"). */
 const ticketIdSchema = z
   .string()
   .refine(
     v =>
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ||
-      /^[0-9a-f]{8}$/i.test(v),
-    'Must be a UUID or 8-character short ID'
+      /^\d+:\d+$/.test(v),
+    'Must be a UUID or ticket_id (e.g. 1:899)'
   );
 
 export const createTicketSchema = z.object({

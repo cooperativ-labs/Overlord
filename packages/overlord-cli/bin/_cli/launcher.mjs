@@ -169,12 +169,12 @@ function buildTmuxWrappedCommand(innerCommand, tmuxCommand) {
 
 function printLauncherHelp() {
   console.log(`Usage:
-  ovld launch <agent> --ticket-id <id> [options]
-  ovld connect <agent> --ticket-id <id> [options]   # alias for ovld launch
-  ovld restart <agent> --ticket-id <id> [options]
+  ovld launch <agent> --ticket-id <ticket_id> [options]
+  ovld connect <agent> --ticket-id <ticket_id> [options]   # alias for ovld launch
+  ovld restart <agent> --ticket-id <ticket_id> [options]
 
 Options:
-  --ticket-id <id>                  Ticket to launch or resume
+  --ticket-id <ticket_id>           Ticket to launch or resume (e.g. 1:899). Also accepts UUID.
   --working-directory <path>        Change to a local working directory before launch
   --launch-mode <run|ask>           Ask mode adjusts the fetched prompt context
   --model <identifier>              Preferred model identifier
@@ -360,11 +360,11 @@ async function runAgent(agent, mode = 'run', options = {}) {
     const isResume = mode === 'resume';
     const noSessionHint =
       agent === 'claude'
-        ? `No prior Claude session was found. Start one with \`ovld launch claude --ticket-id <ticket-id>\` first.`
+        ? `No prior Claude session was found. Start one with \`ovld launch claude --ticket-id <ticket_id>\` first.`
         : agent === 'codex'
-          ? `No prior Codex session was found. Start one with \`ovld launch codex --ticket-id <ticket-id>\` first.`
+          ? `No prior Codex session was found. Start one with \`ovld launch codex --ticket-id <ticket_id>\` first.`
           : agent === 'opencode'
-            ? `No prior OpenCode session was found. Start one with \`ovld launch opencode --ticket-id <ticket-id>\` first.`
+            ? `No prior OpenCode session was found. Start one with \`ovld launch opencode --ticket-id <ticket_id>\` first.`
             : '';
     const message = error instanceof Error ? error.message : String(error);
 

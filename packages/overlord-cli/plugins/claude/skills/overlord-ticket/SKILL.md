@@ -11,7 +11,7 @@ Use this skill whenever Claude Code needs to work with Overlord, whether the ses
 
 Use this mode when the prompt already contains a ticket ID or explicitly says the session was launched by Overlord.
 
-1. Attach first with `ovld protocol attach --ticket-id <ticket-id>`.
+1. Attach first with `ovld protocol attach --ticket-id <ticket_id>`.
 2. Keep the returned `session.sessionKey` for all follow-up calls.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working with `ovld protocol update --phase execute`.
@@ -76,8 +76,8 @@ Use this mode when the conversation starts normally and the user asks Claude to 
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to the caller's configured Overlord `project_user.local_working_directory`, then creates a standalone draft.
 2. Default to `create` for new tickets. Only use `/overlord:spawn` or `ovld protocol spawn --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
    `spawn` creates the ticket in `execute` status and attaches immediately.
-3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket-id>`.
-4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket-id>`.
+3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
+4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
 5. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or ask the user for the ticket ID if staying strictly inside chat is the better fit.
 6. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 7. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.

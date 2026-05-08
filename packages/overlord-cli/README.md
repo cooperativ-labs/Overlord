@@ -62,9 +62,9 @@ ovld prompt "Draft a fix for the onboarding flow"
 ovld version
 ovld update
 ovld protocol discover-project
-ovld protocol attach --ticket-id <ticket-id>
+ovld protocol attach --ticket-id <ticket_id>
 ovld protocol search-tickets --query "auth refactor" --status next-up,execute
-ovld protocol update --session-key <session-key> --ticket-id <ticket-id> --summary "Working on it" --phase execute
+ovld protocol update --session-key <session-key> --ticket-id <ticket_id> --summary "Working on it" --phase execute
 ovld setup
 ovld setup codex
 ovld setup claude

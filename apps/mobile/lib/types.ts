@@ -91,6 +91,7 @@ export interface TicketListItem {
 /** Full ticket detail view. */
 export interface TicketDetail {
   id: string;
+  ticket_id: string | null;
   organization_id: number;
   title: string | null;
   status: string;

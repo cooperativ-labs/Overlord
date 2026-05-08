@@ -44,7 +44,7 @@ function claudeCommandFiles(): ManagedFile[] {
       path: path.join(base, 'connect.md'),
       content: `---
 description: Connect this session to another Overlord ticket (requires: ticket-id)
-argument-hint: <ticket-id>
+argument-hint: <ticket_id>
 disable-model-invocation: true
 ---
 
@@ -54,7 +54,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol connect --ticket-id <ticketId>\`
+\`ovld protocol connect --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`connect\`, not \`attach\`.
@@ -65,7 +65,7 @@ Rules:
       path: path.join(base, 'load.md'),
       content: `---
 description: Load Overlord ticket context (requires: ticket-id)
-argument-hint: <ticket-id>
+argument-hint: <ticket_id>
 disable-model-invocation: true
 ---
 
@@ -75,7 +75,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol load-context --ticket-id <ticketId>\`
+\`ovld protocol load-context --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`load-context\`, not \`attach\`.
@@ -86,7 +86,7 @@ Rules:
       path: path.join(base, 'attach.md'),
       content: `---
 description: Attach this session to an Overlord ticket (requires: ticket-id)
-argument-hint: <ticket-id>
+argument-hint: <ticket_id>
 disable-model-invocation: true
 ---
 
@@ -96,7 +96,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol attach --ticket-id <ticketId>\`
+\`ovld protocol attach --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`attach\` to establish a persistent session with a ticket.
@@ -154,7 +154,7 @@ The text after \`/connect\` is the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol connect --ticket-id <ticketId>\`
+\`ovld protocol connect --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`connect\`, not \`attach\`.
@@ -169,7 +169,7 @@ The text after \`/load\` is the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol load-context --ticket-id <ticketId>\`
+\`ovld protocol load-context --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`load-context\`, not \`attach\`.
@@ -184,7 +184,7 @@ The text after \`/attach\` is the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol attach --ticket-id <ticketId>\`
+\`ovld protocol attach --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`attach\` to establish a persistent session with a ticket.
@@ -242,7 +242,7 @@ If no ticket ID was provided, ask the user for one and stop.
 
 Run:
 ` +
-        '`ovld protocol connect --ticket-id <ticketId>`' +
+        '`ovld protocol connect --ticket-id <ticket_id>`' +
         `
 
 Rules:
@@ -271,7 +271,7 @@ If no ticket ID was provided, ask the user for one and stop.
 
 Run:
 ` +
-        '`ovld protocol load-context --ticket-id <ticketId>`' +
+        '`ovld protocol load-context --ticket-id <ticket_id>`' +
         `
 
 Rules:
@@ -298,7 +298,7 @@ If no ticket ID was provided, ask the user for one and stop.
 
 Run:
 ` +
-        '`ovld protocol attach --ticket-id <ticketId>`' +
+        '`ovld protocol attach --ticket-id <ticket_id>`' +
         `
 
 Rules:
@@ -401,7 +401,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol connect --ticket-id <ticketId>\`
+\`ovld protocol connect --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`connect\`, not \`attach\`.
@@ -421,7 +421,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol load-context --ticket-id <ticketId>\`
+\`ovld protocol load-context --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`load-context\`, not \`attach\`.
@@ -441,7 +441,7 @@ Treat \`$ARGUMENTS\` as the target ticket ID.
 If no ticket ID was provided, ask the user for one and stop.
 
 Run:
-\`ovld protocol attach --ticket-id <ticketId>\`
+\`ovld protocol attach --ticket-id <ticket_id>\`
 
 Rules:
 - Use \`attach\` to establish a persistent session with a ticket.

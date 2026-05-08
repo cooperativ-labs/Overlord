@@ -1,31 +1,35 @@
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SHORT_ID_REGEX = /^[0-9a-f]{8}$/i;
+const TICKET_ID_REGEX = /^\d+:\d+$/;
 
 /**
- * Resolves a ticket ID to a full UUID.
+ * Resolves a ticket identifier to a full UUID.
  * - Full UUIDs are returned as-is (no DB query).
- * - 8-character short IDs (last 8 chars of UUID) are resolved via DB lookup scoped to the org.
- * - Returns null for invalid format, ambiguous matches, or not-found short IDs.
+ * - Human-readable ticket_id strings (e.g. "1:899") are resolved via exact match on the ticket_id column.
+ * - Returns null for invalid format, ambiguous matches, or not-found identifiers.
  */
 export async function resolveTicketId(
   shortOrFull: string,
   organizationId: number
 ): Promise<string | null> {
   if (UUID_REGEX.test(shortOrFull)) return shortOrFull;
-  if (!SHORT_ID_REGEX.test(shortOrFull)) return null;
 
   const supabase = createServiceRoleClient();
-  const { data } = await supabase
-    .from('tickets')
-    .select('id')
-    .eq('organization_id', organizationId)
-    .ilike('id', `%${shortOrFull}`)
-    .limit(2);
 
-  if (!data || data.length !== 1) return null;
-  return data[0].id;
+  if (TICKET_ID_REGEX.test(shortOrFull)) {
+    const { data } = await supabase
+      .from('tickets')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('ticket_id', shortOrFull)
+      .limit(2);
+
+    if (!data || data.length !== 1) return null;
+    return data[0].id;
+  }
+
+  return null;
 }
 
 type EventInsert = {

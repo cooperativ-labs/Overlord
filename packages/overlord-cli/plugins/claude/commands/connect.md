@@ -1,6 +1,6 @@
 ---
 description: Connect this session to another Overlord ticket by ticket ID
-argument-hint: <ticket-id>
+argument-hint: <ticket_id>
 disable-model-invocation: true
 ---
 
