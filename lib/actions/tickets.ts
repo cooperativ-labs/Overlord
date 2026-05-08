@@ -1021,9 +1021,6 @@ export async function updateTicketFieldAction(
     data = result.data;
   }
 
-  if (field !== 'available_tools') {
-  }
-
   await supabase.from('ticket_events').insert({
     event_type: 'system',
     summary: `${field.replace('_', ' ')} updated.`,
