@@ -1,16 +1,16 @@
 import { type SupabaseClient } from '@supabase/supabase-js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SHORT_ID_REGEX = /^[0-9a-f]{8}$/i;
+const TICKET_ID_REGEX = /^\d+:\d+$/;
 
 /** Sessions without a heartbeat for this duration are considered stale. */
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Resolves a ticket ID to a full UUID, scoped to the organization.
+ * Resolves a ticket identifier to a full UUID, scoped to the organization.
  * - Full UUIDs are returned as-is (no DB query).
- * - 8-character short IDs are resolved via DB lookup.
- * - Returns null for invalid format, ambiguous matches, or not-found short IDs.
+ * - Human-readable ticket_id strings (e.g. "1:899") are resolved via exact ticket_id lookup.
+ * - Returns null for invalid format or not-found identifiers.
  */
 async function resolveTicketId(
   supabase: SupabaseClient,
@@ -18,17 +18,20 @@ async function resolveTicketId(
   organizationId: number
 ): Promise<string | null> {
   if (UUID_REGEX.test(shortOrFull)) return shortOrFull;
-  if (!SHORT_ID_REGEX.test(shortOrFull)) return null;
 
-  const { data } = await supabase
-    .from('tickets')
-    .select('id')
-    .eq('organization_id', organizationId)
-    .ilike('id', `%${shortOrFull}`)
-    .limit(2);
+  if (TICKET_ID_REGEX.test(shortOrFull)) {
+    const { data } = await supabase
+      .from('tickets')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('ticket_id', shortOrFull)
+      .limit(2);
 
-  if (!data || data.length !== 1) return null;
-  return data[0].id;
+    if (!data || data.length !== 1) return null;
+    return data[0].id;
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------

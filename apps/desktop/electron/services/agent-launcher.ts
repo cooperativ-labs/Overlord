@@ -303,7 +303,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
   const workspaceParam = isRemote ? '&workspace=ssh' : '';
   const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron&agent=${input.agent}${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}${workspaceParam}`;
-  const launchEnv = {
+  const launchEnv: Record<string, string> = {
     OVERLORD_URL: connectorUrl,
     OVERLORD_CONNECTOR_URL: connectorUrl,
     OVERLORD_ACCESS_TOKEN: launchAuth.bearerToken,
@@ -353,6 +353,13 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     throw new Error(
       `Failed to fetch ticket context (${contextUrl}): ${response.status} ${response.statusText}${suffix}`
     );
+  }
+
+  // Prefer the human-readable ticket_id from the response header so TICKET_ID
+  // env var holds a value like "1:899" instead of the raw UUID.
+  const humanTicketId = response.headers.get('X-Ticket-Id');
+  if (humanTicketId) {
+    launchEnv.TICKET_ID = humanTicketId;
   }
 
   // Use the project's working directory from the API if the caller didn't provide one

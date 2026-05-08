@@ -77,7 +77,7 @@ Command pattern:
 ```
 claude --append-system-prompt "$(cat <context-file>)" [--settings <temp-settings>] [--model <model>] [--effort <level>] <start-prompt>
 
-ovld launch claude --ticket-id <id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch claude --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -151,7 +151,7 @@ Command pattern:
 ```
 codex [--model <model>] [-c model_reasoning_effort="<level>"] "$(cat <context-file>)"
 
-ovld launch codex --ticket-id <id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch codex --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -245,7 +245,7 @@ Command pattern:
 ```
 agent [--model <model>] "$(cat <context-file>)"
 
-ovld launch cursor --ticket-id <id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
+ovld launch cursor --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -297,7 +297,7 @@ Command pattern:
 ```
 gemini [--model <model>] [--thinking-level <level>] "$(cat <context-file>)"
 
-ovld launch gemini --ticket-id <id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch gemini --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -362,7 +362,7 @@ Command pattern:
 ```
 opencode [--model <model>] --prompt "$(cat <context-file>)"
 
-ovld launch opencode --ticket-id <id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
+ovld launch opencode --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -499,7 +499,7 @@ When changing connector integration, verify the relevant agent(s):
 - Plugin install status in Settings reflects plugin files and `default.rules`
 - Installing the plugin cleans up legacy Codex bundle remnants
 - Launching Codex from Overlord produces Codex-specific workflow instructions in the prompt
-- Copyable ticket commands use `ovld launch ... --ticket-id <id>` and include assigned model/thinking defaults when Codex is selected
+- Copyable ticket commands use `ovld launch ... --ticket-id <ticket_id>` and include assigned model/thinking defaults when Codex is selected
 - Codex cloud instructions produce a valid MCP config snippet (`~/.codex/config.toml`)
 - User-facing pages advertise `ovld setup codex` as the CLI install path and do not reference `~/.codex/AGENTS.md` as the local Codex path
 
@@ -517,3 +517,177 @@ When changing connector integration, verify the relevant agent(s):
 - Launching OpenCode from Overlord produces correct prompt (slim for bundle mode, full for legacy)
 - Slash commands written to `~/.config/opencode/commands/` (Markdown with `agent: build` frontmatter)
 - `--prompt` flag is present in the launch command
+
+---
+
+## Migration checklist: replace `id` (UUID) with `ticket_id` (human-readable) as the ticket identifier
+
+**Goal:** All CLI commands, MCP calls, and agent prompts should use the human-readable `ticket_id` (format: `<org_id>:<sequence>`, e.g. `1:899`) instead of the raw UUID when identifying tickets. The UUID remains the internal primary key; `ticket_id` becomes the public-facing identifier.
+
+**Background:** The `tickets` table has both `id` (UUID, internal PK) and `ticket_id` (text, human-readable, added in migration `20260505130000`). Today every surface passes the UUID. After this migration, every surface passes `ticket_id`.
+
+### Layer 1 — Validation schema
+
+File: `lib/overlord/validation.ts`
+
+- [ ] Extend `ticketIdSchema` (line 10) to accept the `ticket_id` format in addition to UUID.
+  - Add: `/^\d+:\d+$/` to accept `<org_id>:<sequence>` strings like `1:899`.
+  - Update the `.refine()` error message to: `'Must be a UUID or ticket_id (e.g. 1:899)'`.
+- [ ] Verify the updated schema is used by all exported schemas that contain `ticketId: ticketIdSchema`: `attachSchema`, `askSchema`, `updateSchema`, `readContextSchema`, `writeContextSchema`, `deliverSchema`, `recordChangeRationalesSchema`, `createFollowUpTicketSchema`, `connectSchema`, `loadContextSchema`, `attachmentPrepareUploadSchema`, `attachmentFinalizeUploadSchema`, `attachmentListSchema`, `attachmentGetDownloadUrlSchema` (lines 38–247).
+
+### Layer 2 — Database resolution function
+
+File: `lib/overlord/protocol-db.ts`
+
+- [ ] Extend `resolveTicketId()` (line 12) to handle the `ticket_id` format.
+  - Add a regex constant (e.g. `TICKET_ID_REGEX = /^\d+:\d+$/`) alongside the existing `UUID_REGEX`.
+  - When the input matches `TICKET_ID_REGEX`, query `tickets` WHERE `ticket_id = input` AND `organization_id = organizationId`, return the resolved `id` (UUID).
+  - Preserve the existing UUID passthrough branch.
+  - Return `null` for ambiguous/not-found results as before.
+- [ ] Update the JSDoc comment on `resolveTicketId()` to document all three accepted formats.
+
+### Layer 3 — Context route: pass `ticket_id` to the prompt builder
+
+File: `apps/web/app/api/protocol/context/[ticketId]/route.ts`
+
+- [ ] At line 156–168, the `ticket` object passed to `buildTicketPromptMarkdown` uses `id: ticket.id`.
+  - Change `id: ticket.id` to `id: ticket.ticket_id ?? ticket.id` so the prompt builder receives the human-readable identifier when available, falling back to UUID when `ticket_id` is empty or null.
+- [ ] Same change applies to the POST handler in the same file (if it also calls `buildTicketPromptMarkdown`).
+- [ ] Confirm the fallback to UUID does not break tickets that pre-date the `ticket_id` column being populated.
+
+### Layer 4 — Ticket prompt builder
+
+File: `lib/overlord/ticket-prompt.ts`
+
+- [ ] The `ticketId` parameter flows through `buildGeneralAgentInstructions()` and all per-agent prompt functions. No code changes are needed here if Layer 3 passes the correct value — but verify:
+  - All `--ticket-id ${ticketId}` strings in the prompt will automatically show the human-readable ID once Layer 3 is done.
+  - The line `- **Ticket ID:** ${ticketId}` (multiple agent sections) will show the human-readable ID.
+  - The MCP config section `attach — use ticketId: \`${ticketId}\`` (line 458) will show the human-readable ID.
+- [ ] Search for any hardcoded UUID-format expectations (e.g. regex checks) in `ticket-prompt.ts` and remove them.
+
+### Layer 5 — CLI `prompt` command: output `ticket_id` not UUID
+
+File: `packages/overlord-cli/bin/_cli/protocol.mjs`
+
+- [ ] In `protocolPrompt()` (line 1186), the code reads `data.ticket?.id` for the `TICKET_ID` stderr output.
+  - Change to `data.ticket?.ticket_id ?? data.ticket?.id` so `TICKET_ID=1:899` is emitted instead of `TICKET_ID=<uuid>`.
+- [ ] Confirm the `attach` command (`protocolAttach()`, line 493) does **not** emit `TICKET_ID` — the caller reads it from the JSON output. No change needed there, but verify the JSON response includes `ticket.ticket_id` in the attach API response so callers can extract it.
+- [ ] Update the help text block (around lines 1365, 1403, 1409, 1437, 1453):
+  - Change `--ticket-id <id>` → `--ticket-id <ticket_id>` in the flag description.
+  - Change the example `ovld protocol attach --ticket-id <id>` → `ovld protocol attach --ticket-id <ticket_id>`.
+  - Add a note: `ticket_id is the human-readable identifier (e.g. 1:899), not the UUID.`
+
+### Layer 6 — CLI launcher: use `ticket_id` in launch commands and help text
+
+File: `packages/overlord-cli/bin/_cli/launcher.mjs`
+
+- [ ] At line 124, the nested command uses `process.env.TICKET_ID` directly — this will automatically show the human-readable value once the TICKET_ID env var is set correctly (by Layer 5 or by the Desktop launcher). No code change needed if the env var is already the human-readable value.
+- [ ] Update launcher help text (lines 172–174):
+  - `ovld launch <agent> --ticket-id <id>` → `ovld launch <agent> --ticket-id <ticket_id>`
+  - `ovld connect <agent> --ticket-id <id>` → `ovld connect <agent> --ticket-id <ticket_id>`
+  - `ovld restart <agent> --ticket-id <id>` → `ovld restart <agent> --ticket-id <ticket_id>`
+  - `--ticket-id <id>` flag description → `--ticket-id <ticket_id>`
+- [ ] Update error messages (lines 363–367) that reference `--ticket-id <ticket_id>`.
+
+### Layer 7 — Shared launch-commands builder
+
+File: `lib/overlord/launch-commands.ts`
+
+- [ ] The `ticketId` parameter in `buildAgentLaunchCommand()` (line 101) and `buildResumeCommands()` (line 201) flows into `ovld launch <agent> --ticket-id <ticketId>` strings shown as copyable commands.
+  - Ensure callers (Desktop Electron launcher, web copy-command surface) pass `ticket.ticket_id` instead of `ticket.id` when constructing these commands.
+- [ ] Audit all callers of `buildLaunchCommands()` and `buildResumeCommands()` to confirm they source `ticketId` from `ticket.ticket_id` after this migration.
+
+### Layer 8 — Desktop Electron agent launcher
+
+File: `apps/desktop/electron/services/agent-launcher.ts`
+
+- [ ] Locate where the Electron launcher fetches or holds the `ticketId` used to build commands and set environment variables.
+- [ ] Change the source from `ticket.id` to `ticket.ticket_id ?? ticket.id` so the child process receives `TICKET_ID=1:899`.
+- [ ] Confirm the context fetch URL (`/api/protocol/context/<ticketId>`) continues to work — it will, because Layer 2 teaches `resolveTicketId()` to accept the human-readable format.
+
+### Layer 9 — MCP tool descriptions
+
+File: `supabase/functions/mcp/tools.ts`
+
+- [ ] Update the `attach` tool's `ticketId` description (line 67): `'Ticket UUID — use the TICKET_ID from your instructions.'` → `'Ticket identifier — use the TICKET_ID from your instructions (e.g. 1:899).'`
+- [ ] Update all other tools whose `ticketId` description reads `'Ticket UUID.'` (lines 108, 180, 240, 264, 290, 318):
+  - Change to: `'Ticket identifier (e.g. 1:899). Accepts ticket_id or UUID.'`
+- [ ] Update tools where `ticketId` has no description (lines 348, 372, 393, 416, 521) — add: `'Ticket identifier (e.g. 1:899).'`
+- [ ] Update the `create_ticket` tool's `ticketId` description (line 521): `'Current ticket UUID (follow-up will be linked to this).'` → `'Current ticket identifier (e.g. 1:899). Follow-up ticket will be linked to this.'`
+
+### Layer 10 — Codex MCP shim
+
+File: `plugins/overlord/scripts/overlord-mcp.mjs`
+
+- [ ] The shim already uses `ticket_id` (snake_case) as the MCP parameter name, and passes it as `'ticket-id': args.ticket_id` to the CLI. No parameter rename is needed.
+- [ ] Update any description strings (lines 52, 73, 92, 147, 178, 201, 224, 245, 269, 298) from generic `'Target ticket ID'` or empty to `'Ticket identifier (e.g. 1:899).'`.
+- [ ] Verify the CLI call `'ticket-id': args.ticket_id` still works after Layer 5 and Layer 2 changes (it will, since Layer 2 resolves the new format).
+
+### Layer 11 — Slash command content (installer)
+
+File: `apps/desktop/electron/services/agent-bundle/slash-commands.ts`
+
+- [ ] Replace all instances of `<ticketId>` in user-facing content strings with `<ticket_id>` for clarity.
+- [ ] Update command examples embedded in slash command content:
+  - `ovld protocol connect --ticket-id <ticketId>` → `ovld protocol connect --ticket-id <ticket_id>`
+  - `ovld protocol load-context --ticket-id <ticketId>` → `ovld protocol load-context --ticket-id <ticket_id>`
+  - `ovld protocol attach --ticket-id <ticketId>` → `ovld protocol attach --ticket-id <ticket_id>`
+- [ ] Check the `argument-hint` fields (lines 47, 68, 89): keep `<ticket_id>` consistent everywhere.
+
+### Layer 12 — Bundle templates (skill content embedded in installer)
+
+File: `apps/desktop/electron/services/agent-bundle/templates.ts`
+
+- [ ] All `$TICKET_ID` references in template strings (lines 36, 42, 54, 60, 76, 82, etc.) refer to the env var value — no code change needed since the env var will now hold the human-readable value.
+- [ ] In any explanatory prose within template strings, replace mentions of "UUID" with "ticket identifier (e.g. `1:899`)" if they describe what `$TICKET_ID` contains.
+- [ ] Confirm the `--ticket-id $TICKET_ID` shell fragments in templates remain syntactically correct after the value changes format (they will — it's just a different string).
+
+### Layer 13 — Plugin skill docs
+
+Files:
+- `plugins/claude/skills/overlord-ticket/SKILL.md`
+- `plugins/cursor/skills/overlord-ticket/SKILL.md`
+- `plugins/overlord/skills/overlord-ticket/SKILL.md`
+
+- [ ] In each SKILL.md, search for any prose that calls `$TICKET_ID` a "UUID" or implies it is one and update to "ticket identifier (e.g. `1:899`)".
+- [ ] Confirm the attach example `ovld protocol attach --ticket-id $TICKET_ID` remains correct (it does — only the value changes).
+- [ ] After changing templates, re-run `ovld setup claude`, `ovld setup cursor`, and `ovld setup codex` (or instruct users to do so) to push updated skill content to `~/.claude/skills/overlord-local/SKILL.md`, `~/.cursor/plugins/local/overlord/rules/overlord-local.mdc`, and the Codex plugin directory.
+
+### Layer 14 — CONNECTOR_SURFACES.md command patterns
+
+File: `ai/guidence/CONNECTOR_SURFACES.md`
+
+- [ ] Claude Code local launch pattern (§ "Local launch path"): `ovld launch claude --ticket-id <id>` → `ovld launch claude --ticket-id <ticket_id>`
+- [ ] Codex local launch pattern: `ovld launch codex --ticket-id <id>` → `ovld launch codex --ticket-id <ticket_id>`
+- [ ] Cursor local launch pattern: `ovld launch cursor --ticket-id <id>` → `ovld launch cursor --ticket-id <ticket_id>`
+- [ ] Gemini local launch pattern: `ovld launch gemini --ticket-id <id>` → `ovld launch gemini --ticket-id <ticket_id>`
+- [ ] OpenCode local launch pattern: `ovld launch opencode --ticket-id <id>` → `ovld launch opencode --ticket-id <ticket_id>`
+- [ ] Codex regression check (line ~502): `ovld launch ... --ticket-id <id>` → `--ticket-id <ticket_id>`
+- [ ] Add a note to the Protocol surfaces section clarifying that `ticketId` in all three surfaces (API, CLI, MCP) now accepts `ticket_id` or UUID.
+
+### Layer 15 — Ticket copy/quickstart UI surfaces
+
+Files:
+- `apps/web/components/features/CliQuickstart.tsx`
+- `apps/web/components/features/TicketPanelHeader.tsx`
+- `apps/mobile/app/(tabs)/tickets/[ticketId]/components/TicketDetailScreen.tsx`
+
+- [ ] Wherever these components build copyable `ovld launch` commands, confirm they source the identifier from `ticket.ticket_id` (not `ticket.id`) so the copied command uses the human-readable format.
+- [ ] If they use `buildLaunchCommands()` or `buildResumeCommands()` from `lib/overlord/launch-commands.ts`, the fix in Layer 7 covers them automatically.
+- [ ] If they build command strings inline, update to use `ticket.ticket_id ?? ticket.id`.
+
+### Layer 16 — Attach API response
+
+File: `apps/web/app/api/protocol/attach/route.ts`
+
+- [ ] Confirm the attach response already includes `ticket.ticket_id` in the returned ticket object (the current response does include it, verified from live attach output).
+- [ ] No field additions needed — just verify `ticket_id` is not accidentally omitted from the select query or stripped in the response serialization.
+
+### Layer 17 — Regression and compatibility
+
+- [ ] After all changes: run attach with a UUID and confirm `resolveTicketId` still returns the correct ticket.
+- [ ] Run attach with `ticket_id` format (`1:899`) and confirm it resolves correctly.
+- [ ] Confirm that tickets with an empty or null `ticket_id` column fall back gracefully (context route passes UUID, which resolves fine).
+- [ ] Confirm `ovld protocol attach --ticket-id 1:899` succeeds end-to-end with a real ticket.
+- [ ] Confirm MCP `attach` call with `ticketId: "1:899"` succeeds end-to-end.
+- [ ] Confirm the `SESSION_KEY=…` and any `TICKET_ID=…` stderr output from CLI commands contains the human-readable value after the migration.

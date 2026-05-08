@@ -1,6 +1,6 @@
 ---
 description: Load Overlord ticket context without creating a new session
-argument-hint: <ticket-id>
+argument-hint: <ticket_id>
 disable-model-invocation: true
 ---
 

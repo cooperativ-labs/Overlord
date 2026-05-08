@@ -154,7 +154,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const markdown = buildTicketPromptMarkdown({
       ticket: {
-        id: ticket.id,
+        id: ticket.ticket_id || ticket.id,
         title: ticket.title,
         objective: currentObjective?.objective,
         acceptance_criteria: ticket.acceptance_criteria,
@@ -185,6 +185,8 @@ export async function GET(request: Request, { params }: RouteContext) {
     if (workingDirectory) {
       headers['X-Working-Directory'] = workingDirectory;
     }
+    const humanTicketId = ticket.ticket_id || ticket.id;
+    headers['X-Ticket-Id'] = humanTicketId;
 
     return new NextResponse(markdown, { headers });
   } catch (error) {
@@ -208,7 +210,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const supabase = createServiceRoleClient();
   const { data: ticket, error } = await supabase
     .from('tickets')
-    .select('id')
+    .select('id, ticket_id')
     .eq('id', ticketId)
     .eq('organization_id', organizationId)
     .single();
@@ -221,7 +223,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const platformUrl = getPlatformUrl(requestOrigin);
   const { claudeCode, codex, cursor, gemini, opencode, contextUrl } = buildLaunchCommands({
     platformUrl,
-    ticketId
+    ticketId: ticket.ticket_id || ticketId
   });
 
   // Include the configured MCP URL for agent setup snippets.

@@ -9,7 +9,7 @@ Use this skill whenever Cursor needs to work with Overlord, whether the session 
 
 ## Mode 1: Launched From Overlord Desktop Or CLI
 
-1. Attach first with `ovld protocol attach --ticket-id <ticket-id>`.
+1. Attach first with `ovld protocol attach --ticket-id <ticket_id>`.
 2. Keep the returned `session.sessionKey` for all follow-up calls.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working with `ovld protocol update --phase execute`.
@@ -69,9 +69,9 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
 2. Default to `create` for new tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately.
-3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket-id>`.
-4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket-id>`.
-5. If the user wants to establish a persistent session with a ticket by ID, use `/attach` or run `ovld protocol attach --ticket-id <ticket-id>`.
+3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
+4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
+5. If the user wants to establish a persistent session with a ticket by ID, use `/attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
 6. If the user wants to find a ticket by keyword/status/project/creator/date, run `ovld protocol search-tickets --query "..." --status next-up,execute`.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 8. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.

@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkForCliUpdate, getCurrentCliVersion, printCliUpdateNotice } from './cli-update.mjs';
 
-const BUNDLE_VERSION = '1.9.0';
+const BUNDLE_VERSION = '1.11.0';
 const MD_MARKER_START = '<!-- overlord:managed:start -->';
 const MD_MARKER_END = '<!-- overlord:managed:end -->';
 const MANIFEST_DIR = path.join(os.homedir(), '.ovld');
@@ -371,22 +371,22 @@ function slashCommandFiles(agent) {
       {
         path: path.join(base, 'connect.md'),
         content: `---
-description: Connect this session to another Overlord ticket by ticket ID
-argument-hint: <ticket-id>
+description: Connect this session to another Overlord ticket by ticket identifier
+argument-hint: <ticket_id>
 disable-model-invocation: true
 ---
 
-Run \`ovld protocol connect --ticket-id <ticketId>\` using \`$ARGUMENTS\` as the ticket ID.`
+Run \`ovld protocol connect --ticket-id <ticket_id>\` using \`$ARGUMENTS\` as the ticket ID.`
       },
       {
         path: path.join(base, 'load.md'),
         content: `---
 description: Load Overlord ticket context without creating a new session
-argument-hint: <ticket-id>
+argument-hint: <ticket_id>
 disable-model-invocation: true
 ---
 
-Run \`ovld protocol load-context --ticket-id <ticketId>\` using \`$ARGUMENTS\` as the ticket ID.`
+Run \`ovld protocol load-context --ticket-id <ticket_id>\` using \`$ARGUMENTS\` as the ticket ID.`
       },
       {
         path: path.join(base, 'create.md'),

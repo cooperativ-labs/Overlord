@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.16.0] - 2026-05-08:14:09
+
+### Added
+- Add a local development protocol auth token path for localhost web requests so local agent workflows can attach without OAuth setup.
+- Add protocol auth test coverage for local development token handling.
+
+### Fixed
+- Keep protocol context and launch snippets aligned with human-readable ticket identifiers by forwarding `ticket_id` in prompt output and response headers.
+
+### Changed
+- Switch protocol and MCP ticket identifier resolution from legacy UUID short-suffix matching to explicit `ticket_id` values (for example `1:899`), while still accepting full UUIDs.
+- Update CLI protocol help, setup-generated slash commands, and connector guidance to describe `--ticket-id` as the human-readable ticket identifier format.
+
+### Security
+- None.
+
+### Test
+- Add tests that validate local development protocol token acceptance and fallback auth behavior.
+
+### Documentation
+- Refresh connector-surface and new-user documentation for the updated ticket identifier and protocol attach/connect wording.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.16.0`.
+
 ## [5.15.0] - 2026-05-07:16:01
 
 ### Added

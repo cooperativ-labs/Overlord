@@ -6,6 +6,9 @@ import { getSupabaseUrl } from '@/lib/env';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 const LOCAL_SECRET_HEADER = 'x-overlord-local-secret';
+const LOCAL_DEV_TOKEN = 'overlord-local-dev-token';
+const LOCAL_DEV_USER_ID = '11111111-1111-4111-8111-111111111111';
+const LOCAL_DEV_ORGANIZATION_ID = 1;
 
 let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 let cachedIssuer: string | null = null;
@@ -24,7 +27,7 @@ export type ProtocolAuthContext = {
   userId: string;
   organizationId: number;
   tokenValue: string;
-  authMethod: 'oauth_jwt';
+  authMethod: 'oauth_jwt' | 'local_dev_token';
 };
 
 function extractBearerToken(request: Request): string | null {
@@ -56,6 +59,29 @@ function parseOrganizationIdHeader(request: Request): number | null {
   if (!raw) return null;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isLocalDevRequest(request: Request): boolean {
+  try {
+    const url = new URL(request.url);
+    return url.protocol === 'http:' && url.hostname === 'localhost' && url.port === '3000';
+  } catch {
+    return false;
+  }
+}
+
+function resolveLocalDevTokenContext(
+  request: Request,
+  providedToken: string
+): ProtocolAuthContext | null {
+  if (providedToken !== LOCAL_DEV_TOKEN || !isLocalDevRequest(request)) return null;
+
+  return {
+    userId: LOCAL_DEV_USER_ID,
+    organizationId: LOCAL_DEV_ORGANIZATION_ID,
+    tokenValue: providedToken,
+    authMethod: 'local_dev_token'
+  };
 }
 
 async function verifySupabaseJwt(providedToken: string): Promise<string | null> {
@@ -151,6 +177,14 @@ export async function resolveProtocolAuth(
         { error: `Missing bearer token. ${reauthInstructions}` },
         { status: 401 }
       )
+    };
+  }
+
+  const localDevContext = resolveLocalDevTokenContext(request, providedToken);
+  if (localDevContext) {
+    return {
+      context: localDevContext,
+      error: null
     };
   }
 

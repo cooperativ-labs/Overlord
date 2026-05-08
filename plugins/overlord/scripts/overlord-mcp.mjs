@@ -49,7 +49,7 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string', description: 'Target ticket ID' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         agent: { type: 'string' },
         method: { type: 'string' },
         external_session_id: { type: ['string', 'null'] }
@@ -70,7 +70,7 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         agent: { type: 'string' },
         method: { type: 'string' }
       },
@@ -144,7 +144,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         summary: { type: 'string' },
         phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
         event_type: { type: 'string', enum: ['update', 'user_follow_up', 'alert'] },
@@ -175,7 +175,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         summary: { type: 'string' },
         phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
         change_rationales: { type: 'array' }
@@ -198,7 +198,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         question: { type: 'string' },
         phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
         payload: { type: 'object' }
@@ -221,7 +221,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         query: { type: 'string' },
         limit: { type: 'number' }
       },
@@ -242,7 +242,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         key: { type: 'string' },
         value: {},
         tags: { type: 'array', items: { type: 'string' } }
@@ -266,7 +266,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         summary: { type: 'string' },
         artifacts: { type: 'array' },
         change_rationales: { type: 'array' },
@@ -295,7 +295,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' }
       },
       required: ['session_key', 'ticket_id']
@@ -314,7 +314,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         file_name: { type: 'string' },
         label: { type: 'string' },
@@ -343,7 +343,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         storage_path: { type: 'string' },
         label: { type: 'string' },
@@ -372,7 +372,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         attachment_id: { type: 'string' },
         storage_path: { type: 'string' },
@@ -397,7 +397,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         file: { type: 'string' },
         file_name: { type: 'string' },

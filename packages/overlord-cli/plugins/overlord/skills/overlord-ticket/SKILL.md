@@ -9,10 +9,10 @@ Use this skill when Codex needs to work with Overlord, whether the session was l
 
 ## Mode 1: Launched From Overlord Desktop Or CLI
 
-1. Attach first with `ovld protocol attach --ticket-id <ticket-id>`.
+1. Attach first with `ovld protocol attach --ticket-id <ticket_id>`.
 2. Store the returned `SESSION_KEY` or `session.sessionKey`.
 3. Treat the Overlord ticket prompt as authoritative for the specific objective and ticket-level constraints.
-4. While working, publish meaningful progress with `ovld protocol update --session-key <sessionKey> --ticket-id <ticket-id> --phase execute --summary "..."`.
+4. While working, publish meaningful progress with `ovld protocol update --session-key <sessionKey> --ticket-id <ticket_id> --phase execute --summary "..."`.
 5. If a later user message arrives during the ticket session, publish it immediately with `--event-type user_follow_up` before doing anything else.
 6. If blocked on a human-only action, ask a precise blocking question with `ovld protocol ask` and stop.
 7. Deliver last with `ovld protocol deliver`, including meaningful `changeRationales` for every behavioral git-tracked change.
@@ -69,8 +69,8 @@ For larger delivery payloads, prefer `--payload-file -` and stream the full JSON
 
 1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent codex --objective "..."`.
 2. Default to `create` for new tickets. Only use `ovld protocol spawn --agent codex --objective "..."` when the user explicitly asks to create and execute immediately.
-3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket-id>`.
-4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket-id>` and then switch to Mode 1.
+3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket_id>`.
+4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket_id>` and then switch to Mode 1.
 5. If the user wants to find existing tickets by keyword or workflow state, use the `search_tickets` tool.
 6. If you need to understand project routing before spawning, use `ovld protocol discover-project`.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.

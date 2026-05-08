@@ -64,7 +64,8 @@ export const TOOLS = [
       properties: {
         ticketId: {
           type: 'string',
-          description: 'Ticket UUID — use the TICKET_ID from your instructions.'
+          description:
+            'Ticket identifier — use the TICKET_ID from your instructions (e.g. 1:899). Also accepts UUID.'
         },
         agentIdentifier: {
           type: 'string',
@@ -105,7 +106,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
-        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         summary: { type: 'string', description: 'What you did and why.' },
         externalUrl: {
           type: ['string', 'null'],
@@ -177,7 +181,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
-        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         summary: {
           type: 'string',
           description: 'Optional summary for the associated ticket event.'
@@ -237,7 +244,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
-        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objectiveId: {
           type: 'string',
           description: 'Optional objective UUID filter.'
@@ -261,7 +271,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
-        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objectiveId: { type: 'string', description: 'Objective UUID.' },
         fileName: { type: 'string', description: 'Original filename (e.g. design-spec.pdf).' },
         label: { type: 'string', description: 'Optional display label for the attachment row.' },
@@ -287,7 +300,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
-        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objectiveId: { type: 'string', description: 'Objective UUID.' },
         storagePath: {
           type: 'string',
@@ -315,7 +331,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string', description: 'Session key from attach.' },
-        ticketId: { type: 'string', description: 'Ticket UUID.' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objectiveId: {
           type: 'string',
           description: 'Objective UUID. Required when using storagePath.'
@@ -345,7 +364,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string' },
-        ticketId: { type: 'string' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         question: { type: 'string', description: 'Specific question for the PM.' },
         phase: {
           type: 'string',
@@ -369,7 +391,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string' },
-        ticketId: { type: 'string' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         query: { type: 'string', description: 'Optional key filter.' },
         limit: { type: 'number', description: 'Max entries to return (default 20).' }
       },
@@ -390,7 +415,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string' },
-        ticketId: { type: 'string' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         key: { type: 'string', description: 'Descriptive key.' },
         value: { description: 'Any JSON-serializable value.' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags.' }
@@ -413,7 +441,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionKey: { type: 'string' },
-        ticketId: { type: 'string' },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         summary: {
           type: 'string',
           description:
@@ -520,7 +551,8 @@ export const TOOLS = [
         sessionKey: { type: 'string' },
         ticketId: {
           type: 'string',
-          description: 'Current ticket UUID (follow-up will be linked to this).'
+          description:
+            'Current ticket identifier (e.g. 1:899). Follow-up ticket will be linked to this. Also accepts UUID.'
         },
         title: { type: 'string', description: 'Short title for the new ticket.' },
         objective: {

@@ -184,7 +184,7 @@ ovld attach
 ovld create "Investigate the failing build" --agent codex
 ovld prompt "Draft a fix for the onboarding flow" --agent codex
 ovld tickets list --status next-up
-ovld ticket context <ticket-id>
+ovld ticket context <ticket_id>
 ovld launch codex
 ovld restart codex
 ```
@@ -297,7 +297,7 @@ ovld restart codex
 The first thing an agent must do after receiving a ticket ID is attach:
 
 ```bash
-ovld protocol attach --ticket-id <ticket-id>
+ovld protocol attach --ticket-id <ticket_id>
 ```
 
 Attach returns the ticket, objective IDs, attachments, history, artifacts, shared context, assembled prompt context, and a `session.sessionKey`. The session key is required for later lifecycle calls.
@@ -305,13 +305,13 @@ Attach returns the ticket, objective IDs, attachments, history, artifacts, share
 Agents can use `connect` when they only need a lightweight session key:
 
 ```bash
-ovld protocol connect --ticket-id <ticket-id>
+ovld protocol connect --ticket-id <ticket_id>
 ```
 
 Agents can inspect a ticket without creating a working session:
 
 ```bash
-ovld protocol load-context --ticket-id <ticket-id>
+ovld protocol load-context --ticket-id <ticket_id>
 ```
 
 ### 4. Post Progress Updates
@@ -321,7 +321,7 @@ Agents should post meaningful progress while working:
 ```bash
 ovld protocol update \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --phase execute \
   --summary "Inspected the invite email flow and found the regression in the SMTP provider branch."
 ```
@@ -349,7 +349,7 @@ If a user sends a follow-up message during an active agent session, the agent sh
 ```bash
 ovld protocol update \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --phase execute \
   --event-type user_follow_up \
   --summary "User follow-up: <verbatim message>"
@@ -362,7 +362,7 @@ If an agent needs a human decision or cannot continue safely, it should ask a bl
 ```bash
 ovld protocol ask \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --question "Which payment provider should remain the source of truth for failed invoice retries?"
 ```
 
@@ -371,7 +371,7 @@ After `ask` succeeds, the agent should stop until the human responds.
 For tool permission prompts, installed connectors may use:
 
 ```bash
-ovld protocol permission-request --ticket-id <ticket-id> --payload-file -
+ovld protocol permission-request --ticket-id <ticket_id> --payload-file -
 ```
 
 That is normally handled by connector hooks rather than typed manually.
@@ -383,7 +383,7 @@ When the work is done, the agent delivers a final narrative, artifacts, and chan
 ```bash
 ovld protocol deliver \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --summary "Updated the invite email flow, added regression coverage, and verified the targeted tests pass." \
   --artifacts-json '[{"type":"test_results","label":"Verification","content":"yarn test invite-email passed."}]' \
   --change-rationales-json '[{"label":"Fix invite email fallback","file_path":"lib/actions/invites.ts","summary":"Restored SMTP fallback handling.","why":"The previous branch skipped provider fallback when the primary response was empty.","impact":"Invite emails retry through the configured fallback provider again.","hunks":[{"header":"@@ -42,7 +42,13 @@"}]}]'
@@ -392,7 +392,7 @@ ovld protocol deliver \
 For larger delivery payloads, agents should prefer stdin so they do not create scratch JSON files:
 
 ```bash
-ovld protocol deliver --session-key <session-key> --ticket-id <ticket-id> --payload-file -
+ovld protocol deliver --session-key <session-key> --ticket-id <ticket_id> --payload-file -
 ```
 
 Deliveries move the ticket into review. A human can then inspect the summary, artifacts, changes, and rationales before deciding what to do next.
@@ -417,7 +417,7 @@ Record rationales without a normal progress update:
 ```bash
 ovld protocol record-change-rationales \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --summary "Recorded rationale details for the latest docs changes." \
   --phase execute \
   --change-rationales-json '[{"label":"Expand user guide","file_path":"docs/overlord-new-user-guide.md","summary":"Added setup and protocol workflow detail.","why":"New users need the current end-to-end process in one place.","impact":"Readers can follow the current setup and ticket lifecycle without guessing.","hunks":[{"header":"@@ -1,225 +1,430 @@"}]}]'
@@ -430,7 +430,7 @@ Do not send file changes as a generic artifact. Use change rationales so Overlor
 Attachments are files tied to ticket objectives. Attach returns visible attachment IDs and objective IDs. Agents can refresh the list:
 
 ```bash
-ovld protocol attachment-list --session-key <session-key> --ticket-id <ticket-id>
+ovld protocol attachment-list --session-key <session-key> --ticket-id <ticket_id>
 ```
 
 Upload a local file to an objective:
@@ -438,7 +438,7 @@ Upload a local file to an objective:
 ```bash
 ovld protocol attachment-upload-file \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --objective-id <objective-id> \
   --file ./spec.pdf \
   --content-type application/pdf
@@ -449,7 +449,7 @@ Get a download URL for an attachment:
 ```bash
 ovld protocol attachment-download-url \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --attachment-id <attachment-id>
 ```
 
@@ -467,7 +467,7 @@ Shared context is persistent ticket memory for future sessions. Use it for facts
 ```bash
 ovld protocol write-context \
   --session-key <session-key> \
-  --ticket-id <ticket-id> \
+  --ticket-id <ticket_id> \
   --key "repo.testing" \
   --value '"Use yarn test:e2e:ci for full browser regression checks."' \
   --tags repo,testing
@@ -476,7 +476,7 @@ ovld protocol write-context \
 Read it later:
 
 ```bash
-ovld protocol read-context --session-key <session-key> --ticket-id <ticket-id>
+ovld protocol read-context --session-key <session-key> --ticket-id <ticket_id>
 ```
 
 ## Review Workflow
@@ -594,7 +594,7 @@ ovld attach
 ovld create "Write a regression test for invite emails" --agent codex
 ovld prompt "Fix the invite email regression" --agent codex
 ovld tickets list --status next-up
-ovld ticket context <ticket-id>
+ovld ticket context <ticket_id>
 ovld launch codex
 ovld restart codex
 ```
@@ -613,19 +613,19 @@ Agent lifecycle:
 ```bash
 ovld protocol auth-status
 ovld protocol discover-project
-ovld protocol attach --ticket-id <ticket-id>
-ovld protocol update --session-key <session-key> --ticket-id <ticket-id> --phase execute --summary "Working on it."
-ovld protocol ask --session-key <session-key> --ticket-id <ticket-id> --question "Blocking question?"
-ovld protocol deliver --session-key <session-key> --ticket-id <ticket-id> --summary "Done."
+ovld protocol attach --ticket-id <ticket_id>
+ovld protocol update --session-key <session-key> --ticket-id <ticket_id> --phase execute --summary "Working on it."
+ovld protocol ask --session-key <session-key> --ticket-id <ticket_id> --question "Blocking question?"
+ovld protocol deliver --session-key <session-key> --ticket-id <ticket_id> --summary "Done."
 ```
 
 Agent context and attachments:
 
 ```bash
-ovld protocol read-context --session-key <session-key> --ticket-id <ticket-id>
-ovld protocol write-context --session-key <session-key> --ticket-id <ticket-id> --key "key" --value '"value"'
-ovld protocol attachment-list --session-key <session-key> --ticket-id <ticket-id>
-ovld protocol attachment-upload-file --session-key <session-key> --ticket-id <ticket-id> --objective-id <objective-id> --file ./spec.pdf
+ovld protocol read-context --session-key <session-key> --ticket-id <ticket_id>
+ovld protocol write-context --session-key <session-key> --ticket-id <ticket_id> --key "key" --value '"value"'
+ovld protocol attachment-list --session-key <session-key> --ticket-id <ticket_id>
+ovld protocol attachment-upload-file --session-key <session-key> --ticket-id <ticket_id> --objective-id <objective-id> --file ./spec.pdf
 ```
 
 ## Summary

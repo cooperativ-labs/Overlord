@@ -1183,7 +1183,7 @@ async function protocolPrompt(args) {
   );
 
   const sessionKey = data.session?.sessionKey;
-  const ticketId = data.ticket?.id;
+  const ticketId = data.ticket?.ticket_id ?? data.ticket?.id;
   console.log(JSON.stringify(data, null, 2));
 
   if (sessionKey) {
@@ -1362,7 +1362,7 @@ export async function runProtocolCommand(subcommand, args) {
 
 Use this for ticket lifecycle work from an agent runtime: create a standalone
 draft with \`ovld protocol create\`, create-and-attach with \`ovld protocol prompt\`,
-or attach to an existing ticket with \`ovld protocol attach --ticket-id <id>\`.
+or attach to an existing ticket with \`ovld protocol attach --ticket-id <ticket_id>\`.
 
 Project discovery:
   When prompting or creating tickets, the CLI automatically resolves the correct
@@ -1399,14 +1399,14 @@ Subcommands:
   attachment-upload-file      Prepare, upload, and finalize a local file in one command
 
 Environment fallback:
-  --session-key <- SESSION_KEY
-  --ticket-id   <- TICKET_ID
+  --session-key  <- SESSION_KEY
+  --ticket-id    <- TICKET_ID  (human-readable ticket_id, e.g. 1:899)
   auth/host     <- OVERLORD_URL, optional OVERLORD_ACCESS_TOKEN + OVERLORD_ORGANIZATION_ID, or shared OAuth credentials from ovld auth/Desktop login
   --timeout     <- OVERLORD_TIMEOUT
 
 Common flags:
   --timeout <ms>              Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})
-  --ticket-id <id>            Ticket id when the subcommand operates on an existing ticket
+  --ticket-id <ticket_id>     Ticket identifier (e.g. 1:899) when the subcommand operates on an existing ticket
   --session-key <key>         Session key returned by attach/connect/prompt
   --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
   --model <identifier>        Model identifier to snapshot on executing objectives
@@ -1434,7 +1434,7 @@ attach:
   Purpose:
     Create the working session for an agent on an existing ticket. This is the normal first call.
   Required:
-    --ticket-id <id>
+    --ticket-id <ticket_id>   Human-readable identifier (e.g. 1:899). Also accepts UUID.
   Optional:
     --agent <identifier>
     --model <identifier>
@@ -1450,7 +1450,7 @@ connect:
   Purpose:
     Create a lightweight session when you only need a session key and not the full ticket payload
   Required:
-    --ticket-id <id>
+    --ticket-id <ticket_id>   Human-readable identifier (e.g. 1:899). Also accepts UUID.
   Optional:
     --agent <identifier>
     --model <identifier>

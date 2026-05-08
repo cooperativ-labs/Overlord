@@ -284,7 +284,8 @@ export default function TicketDetailScreen() {
       try {
         const { accessToken, organizationId } = await resolveLaunchOAuthSession();
         const platformUrl = resolvePlatformUrl();
-        const url = new URL(`/api/protocol/context/${ticket.id}`, `${platformUrl}/`);
+        const promptTicketId = ticket.ticket_id ?? ticket.id;
+        const url = new URL(`/api/protocol/context/${promptTicketId}`, `${platformUrl}/`);
         url.searchParams.set('context', context);
         url.searchParams.set('mode', 'run');
         const response = await fetch(url.toString(), {
@@ -318,8 +319,9 @@ export default function TicketDetailScreen() {
     if (!ticket) return;
     const selectedSelection =
       assignedSelection ?? resolvedAssignedSelection ?? DEFAULT_AGENT_MODEL_SELECTION;
+    const cliTicketId = ticket.ticket_id ?? ticket.id;
     await Clipboard.setStringAsync(
-      buildCliLaunchCommand(selectedSelection.agent, ticket.id, {
+      buildCliLaunchCommand(selectedSelection.agent, cliTicketId, {
         model: selectedSelection.model,
         thinking: selectedSelection.thinking
       })
@@ -329,7 +331,7 @@ export default function TicketDetailScreen() {
 
   const handleCopyTicketId = useCallback(async () => {
     if (!ticket) return;
-    await Clipboard.setStringAsync(ticket.id);
+    await Clipboard.setStringAsync(ticket.ticket_id ?? ticket.id);
     Alert.alert('Copied', 'Ticket ID copied to clipboard.');
   }, [ticket]);
 
@@ -831,7 +833,7 @@ export default function TicketDetailScreen() {
     setLaunchingServerId(server.id);
     try {
       const result = await launchTicketOnServerWithPassword({
-        ticketId: ticket.id,
+        ticketId: ticket.ticket_id ?? ticket.id,
         ticketSequence: ticket.ticket_sequence,
         agent: resolvedAssignedSelection.agent,
         server,
@@ -954,14 +956,14 @@ export default function TicketDetailScreen() {
       // 6. Launch — use key if pubkey auth works, otherwise use password
       const result = keyAuthWorks
         ? await launchTicketOnServer({
-            ticketId: ticket.id,
+            ticketId: ticket.ticket_id ?? ticket.id,
             ticketSequence: ticket.ticket_sequence,
             agent: resolvedAssignedSelection.agent,
             server,
             keyTag: tag
           })
         : await launchTicketOnServerWithPassword({
-            ticketId: ticket.id,
+            ticketId: ticket.ticket_id ?? ticket.id,
             ticketSequence: ticket.ticket_sequence,
             agent: resolvedAssignedSelection.agent,
             server,
@@ -1030,7 +1032,7 @@ export default function TicketDetailScreen() {
 
     try {
       const result = await launchTicketOnServer({
-        ticketId: ticket.id,
+        ticketId: ticket.ticket_id ?? ticket.id,
         ticketSequence: ticket.ticket_sequence,
         agent: resolvedAssignedSelection.agent,
         server,
