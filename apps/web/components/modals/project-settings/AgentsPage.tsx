@@ -25,10 +25,16 @@ type AgentsPageProps = {
 export function AgentsPage({ projectId, open }: AgentsPageProps) {
   const [tokenInfo, setTokenInfo] = useState<AgentTokenInfo | null>(null);
   const [newToken, setNewToken] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [generateState, setGenerateState] = useState<ButtonLoadingState>('default');
   const [revokeState, setRevokeState] = useState<ButtonLoadingState>('default');
   const [message, setMessage] = useState<string | null>(null);
+  const mcpUrl = 'https://www.ovld.ai/api/mcp';
+  const allowedDomain = 'ovld.ai';
+  const envBlock = newToken
+    ? `OVERLORD_AGENT_TOKEN=${newToken}\nOVERLORD_MCP_URL=${mcpUrl}`
+    : `OVERLORD_AGENT_TOKEN=<paste token>\nOVERLORD_MCP_URL=${mcpUrl}`;
 
   useEffect(() => {
     if (!open) return;
@@ -70,8 +76,14 @@ export function AgentsPage({ projectId, open }: AgentsPageProps) {
   async function handleCopy() {
     if (!newToken) return;
     await navigator.clipboard.writeText(newToken);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
+  }
+
+  async function handleCopyField({ value, field }: { value: string; field: string }) {
+    await navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
   }
 
   const hasToken = Boolean(tokenInfo);
@@ -81,16 +93,82 @@ export function AgentsPage({ projectId, open }: AgentsPageProps) {
       <div className="grid gap-1">
         <p className="text-sm font-medium">Agent token</p>
         <p className="text-xs text-muted-foreground">
-          Use an <code className="rounded bg-muted px-1">AGENT_TOKEN</code> as an alternative to
-          OAuth when running agents in cloud environments like Claude. Set the token as an
-          environment variable and Overlord will use it to authenticate and identify this project
-          and your account automatically.
+          An alternative to OAuth for agents running in cloud environments. Generate a token below. <strong>Note: The token is scoped to this project — generate a separate token in each project&apos;s
+            settings.</strong>
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Set <code className="rounded bg-muted px-1">OVERLORD_AGENT_TOKEN</code> in your Claude
-          environment settings. The token is scoped to this project — you must generate a separate
-          token in each project&apos;s settings.
+
+      </div>
+
+      <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
+        <p className="text-sm font-medium">Environment setup for Claude Code (Cloud)</p>
+        <p className="text-xs text-muted-foreground">
+          Claude allows you to configure custom environments for your agents to run in. Use the notes below to set up your agent environment.
         </p>
+
+        <ol className="list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+          <li>
+            Set <span className="font-medium text-foreground">Name</span> to your project name
+            (example: Overlord).
+          </li>
+          <li>
+            Set <span className="font-medium text-foreground">Network access</span> to{' '}
+            <span className="font-medium text-foreground">Custom</span>.
+          </li>
+          <li>
+            Add <span className="font-medium text-foreground">Allowed domains</span>:{' '}
+            <code className="rounded bg-muted px-1">ovld.ai</code> (wildcard optional:{' '}
+            <code className="rounded bg-muted px-1">*.ovld.ai</code>).
+          </li>
+          <li>
+            Add both environment variables exactly as shown below.
+          </li>
+        </ol>
+
+        <div className="space-y-2">
+          <div className="space-y-1 rounded-md border bg-background p-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-foreground">Allowed domain</p>
+              <button
+                type="button"
+                onClick={() => void handleCopyField({ value: allowedDomain, field: 'domain' })}
+                className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {copiedField === 'domain' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <code className="text-xs">{allowedDomain}</code>
+          </div>
+
+          <div className="space-y-1 rounded-md border bg-background p-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-foreground">OVERLORD_MCP_URL</p>
+              <button
+                type="button"
+                onClick={() => void handleCopyField({ value: mcpUrl, field: 'mcp-url' })}
+                className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {copiedField === 'mcp-url' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <code className="text-xs">{mcpUrl}</code>
+          </div>
+
+          <div className="space-y-1 rounded-md border bg-background p-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-foreground">Environment variables block</p>
+              <button
+                type="button"
+                onClick={() => void handleCopyField({ value: envBlock, field: 'env-block' })}
+                className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {copiedField === 'env-block' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
+              {envBlock}
+            </pre>
+          </div>
+        </div>
       </div>
 
       {newToken ? (
@@ -103,7 +181,7 @@ export function AgentsPage({ projectId, open }: AgentsPageProps) {
               className="shrink-0 rounded p-1 hover:bg-muted"
               title="Copy token"
             >
-              {copied ? (
+              {copiedToken ? (
                 <Check className="h-3.5 w-3.5 text-green-500" />
               ) : (
                 <Copy className="h-3.5 w-3.5 text-muted-foreground" />

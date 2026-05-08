@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
+import { AlertTriangle, Check, Copy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -96,17 +96,9 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
       return 'ovld.ai';
     }
   })();
-  const supabaseDomain = (() => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!supabaseUrl) return null;
-    try {
-      return new URL(supabaseUrl).hostname;
-    } catch {
-      return null;
-    }
-  })();
+
   const domainSnippet = Array.from(
-    new Set([resolvedPlatformDomain, supabaseDomain].filter((v): v is string => Boolean(v)))
+    new Set([resolvedPlatformDomain].filter((v): v is string => Boolean(v)))
   ).join('\n');
   const isLocationUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -164,12 +156,20 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
             Agents running in cloud environments communicate with Overlord through MCP. Configure
             clients with the MCP endpoint below and authenticate through OAuth.
           </p>
-          <p className="text-xs text-muted-foreground">
-            If the OAuth connector is unreliable in your environment, you can use a per-project{' '}
-            <code className="rounded bg-muted px-1">OVERLORD_AGENT_TOKEN</code> instead. Generate
-            one in each project&apos;s settings under{' '}
-            <span className="font-medium">Project settings &rarr; Agents</span>.
-          </p>
+          <div className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <p className="text-xs text-amber-900 dark:text-amber-200">
+                <span className="font-semibold">OAuth fallback:</span> If the OAuth connector is
+                unreliable in your environment, use a per-project{' '}
+                <code className="rounded bg-amber-200/50 px-1 text-amber-950 dark:bg-amber-900/40 dark:text-amber-100">
+                  OVERLORD_AGENT_TOKEN
+                </code>{' '}
+                instead. Generate one in each project&apos;s settings under{' '}
+                <span className="font-semibold">Project settings &rarr; Agents</span>.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

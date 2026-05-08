@@ -12,19 +12,24 @@ import { createClient } from '@/supabase/utils/client';
 
 type ConfirmEmailFormProps = {
   email?: string;
+  initialMessage?: string;
   next?: string;
 };
 
 const CODE_LENGTH = 8;
 
-export function ConfirmEmailForm({ email, next = '/onboarding' }: ConfirmEmailFormProps) {
+export function ConfirmEmailForm({
+  email,
+  initialMessage,
+  next = '/onboarding'
+}: ConfirmEmailFormProps) {
   const router = useRouter();
   const [supabase] = React.useState(createClient);
   const [code, setCode] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [resendButtonState, setResendButtonState] = React.useState<ButtonLoadingState>('default');
   const [error, setError] = React.useState<string>();
-  const [message, setMessage] = React.useState<string>();
+  const [message, setMessage] = React.useState<string | undefined>(initialMessage);
 
   const isMissingEmail = !email;
   const normalizedCode = code.replace(/\D/g, '').slice(0, CODE_LENGTH);
