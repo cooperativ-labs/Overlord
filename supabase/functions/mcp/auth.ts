@@ -3,7 +3,7 @@ import { type SupabaseClient } from '@supabase/supabase-js';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'npm:jose@6.1.0';
 
 // ---------------------------------------------------------------------------
-// Auth — Supabase OAuth JWTs only
+// Auth — Supabase OAuth JWTs + per-project AGENT_TOKEN
 // ---------------------------------------------------------------------------
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -13,10 +13,12 @@ const SUPABASE_JWKS = createRemoteJWKSet(new URL(`${SUPABASE_AUTH_ISSUER}/.well-
 export type TokenContext = {
   userId: string;
   organizationId: number;
+  /** Set when authenticated via a per-project AGENT_TOKEN. */
+  projectId?: string | null;
   /** The raw bearer value. */
   tokenValue: string;
   /** Identifies how the caller authenticated. */
-  authMethod: 'oauth_jwt';
+  authMethod: 'oauth_jwt' | 'agent_token';
   /** Streamable HTTP session id when provided by MCP clients. */
   mcpSessionId?: string | null;
 };
@@ -24,9 +26,13 @@ export type TokenContext = {
 /**
  * Resolve the bearer token from the request.
  *
+ * Accepts two forms:
+ *   1. OAuth JWT / opaque token — standard Supabase auth (existing path)
+ *   2. Per-project AGENT_TOKEN (prefix "oat_") — looks up a hashed token row
+ *      in project_agent_tokens and derives user + org from there.
+ *
  * For OAuth JWT auth with multi-org users, the `x-organization-id` header
- * selects which organization to scope the request to. Without it, the first
- * membership (by org ID ascending) is used.
+ * selects which organization to scope the request to.
  */
 export async function resolveToken(
   req: Request,
@@ -36,11 +42,74 @@ export async function resolveToken(
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
   if (!token) return null;
 
+  // Agent token path — prefix-routed so we never attempt JWT validation
+  if (token.startsWith('oat_')) {
+    return resolveAgentToken(token, supabase);
+  }
+
   // Optional org hint for multi-org OAuth users
   const orgIdHint = req.headers.get('x-organization-id');
   const parsedOrgId = orgIdHint ? parseInt(orgIdHint, 10) : null;
 
   return resolveOAuthJwt(token, supabase, parsedOrgId);
+}
+
+// ---------------------------------------------------------------------------
+// Per-project AGENT_TOKEN resolution
+// ---------------------------------------------------------------------------
+
+async function hashToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function resolveAgentToken(
+  token: string,
+  supabase: SupabaseClient
+): Promise<TokenContext | null> {
+  const tokenHash = await hashToken(token);
+
+  const { data: row } = await supabase
+    .from('project_agent_tokens')
+    .select('user_id, project_id')
+    .eq('token_hash', tokenHash)
+    .single();
+
+  if (!row) {
+    console.warn('[mcp] agent token lookup failed — no matching token');
+    return null;
+  }
+
+  // Resolve the user's organization via project membership
+  const { data: project } = await supabase
+    .from('projects')
+    .select('organization_id')
+    .eq('id', row.project_id)
+    .single();
+
+  if (!project) {
+    console.warn('[mcp] agent token: project not found for token');
+    return null;
+  }
+
+  // Fire-and-forget last_used_at update
+  supabase
+    .from('project_agent_tokens')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('token_hash', tokenHash)
+    .then(() => {});
+
+  return {
+    userId: row.user_id,
+    organizationId: project.organization_id,
+    projectId: row.project_id,
+    tokenValue: token,
+    authMethod: 'agent_token'
+  };
 }
 
 // ---------------------------------------------------------------------------

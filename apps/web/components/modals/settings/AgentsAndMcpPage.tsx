@@ -164,6 +164,12 @@ export function AgentsAndMcpPage({ open }: { open: boolean }) {
             Agents running in cloud environments communicate with Overlord through MCP. Configure
             clients with the MCP endpoint below and authenticate through OAuth.
           </p>
+          <p className="text-xs text-muted-foreground">
+            If the OAuth connector is unreliable in your environment, you can use a per-project{' '}
+            <code className="rounded bg-muted px-1">OVERLORD_AGENT_TOKEN</code> instead. Generate
+            one in each project&apos;s settings under{' '}
+            <span className="font-medium">Project settings &rarr; Agents</span>.
+          </p>
         </div>
       </div>
 

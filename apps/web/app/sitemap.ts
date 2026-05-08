@@ -26,13 +26,16 @@ function toRoutePath(pageFile: string): string | null {
 
   if (
     segments.some(
-      segment => EXCLUDED_GROUPS.has(segment) || isDynamicSegment(segment) || segment.startsWith('_')
+      segment =>
+        EXCLUDED_GROUPS.has(segment) || isDynamicSegment(segment) || segment.startsWith('_')
     )
   ) {
     return null;
   }
 
-  const cleanSegments = segments.filter(segment => !segment.startsWith('(') || !segment.endsWith(')'));
+  const cleanSegments = segments.filter(
+    segment => !segment.startsWith('(') || !segment.endsWith(')')
+  );
 
   if (cleanSegments.length === 0) {
     return '/';
@@ -77,9 +80,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return Array.from(routes)
     .sort((a, b) => a.localeCompare(b))
     .map(routePath => ({
-    url: `${SITE_URL}${routePath}`,
-    lastModified: now,
-    changeFrequency: routePath.startsWith('/docs') ? 'weekly' : 'monthly',
-    priority: routePath === '/' ? 1 : 0.7
+      url: `${SITE_URL}${routePath}`,
+      lastModified: now,
+      changeFrequency: routePath.startsWith('/docs') ? 'weekly' : 'monthly',
+      priority: routePath === '/' ? 1 : 0.7
     }));
 }

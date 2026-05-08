@@ -207,15 +207,6 @@ export function useTicketBoardRealtime({
       }),
     [openedWaitingTimestamps, tickets, waitingByTicket, waitingRaisedWhileOpen]
   );
-  const ticketIdSignature = useMemo(
-    () =>
-      tickets
-        .map(ticket => ticket.id)
-        .sort()
-        .join('|'),
-    [tickets]
-  );
-
   ticketIdsRef.current = new Set(tickets.map(ticket => ticket.id));
   ticketsByIdRef.current = new Map(ticketsWithIndicators.map(ticket => [ticket.id, ticket]));
 
@@ -585,88 +576,77 @@ export function useTicketBoardRealtime({
       void window.electronAPI?.app?.notify(reviewTitle, 'The agent has delivered this ticket.');
     };
 
+    // Use a stable channel name (no ticket-set size) so the channel survives
+    // ticket additions/removals — otherwise we tear down and rebuild on every
+    // ticket-set change and miss INSERTs during the gap.
     let channel = supabase.channel(
-      `tickets-realtime:${organizationId ?? 'all'}:${projectId ?? 'all'}:${ticketIdsRef.current.size}`
+      `tickets-realtime:${organizationId ?? 'all'}:${projectId ?? 'all'}`
     );
 
-    for (const ticketId of ticketIdsRef.current) {
-      channel = channel
-        .on<TicketEvent>(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'ticket_events',
-            filter: `ticket_id=eq.${ticketId}`
-          },
-          payload => {
-            const event = payload.new;
-            if (event.event_type === 'question') {
-              handleQuestionEvent(event);
-              return;
-            }
-            if (event.event_type === 'status_change') {
-              handleStatusChangeEvent(event);
-            }
-          }
-        )
-        .on<AgentSession>(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'agent_sessions',
-            filter: `ticket_id=eq.${ticketId}`
-          },
-          payload => {
-            const session = payload.new;
-            latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
-            mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
-              session_state: session.session_state,
-              agent_identifier: session.agent_identifier,
-              attached_at: session.attached_at
-            });
-            applySessionOverride(session);
-          }
-        )
-        .on<AgentSession>(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'agent_sessions',
-            filter: `ticket_id=eq.${ticketId}`
-          },
-          payload => {
-            const session = payload.new;
-            const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
-            if (session.attached_at < latestAt) return;
-            mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
-              session_state: session.session_state,
-              agent_identifier: session.agent_identifier,
-              attached_at: session.attached_at
-            });
-            applySessionOverride(session);
-          }
-        )
-        .on<Objective>(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'objectives',
-            filter: `ticket_id=eq.${ticketId}`
-          },
-          payload => {
-            const changedTicketId =
-              getObjectivePayloadTicketId(payload.new) ?? getObjectivePayloadTicketId(payload.old);
-            if (!changedTicketId) return;
-            void syncObjectiveStateForTicket(changedTicketId);
-          }
-        );
-    }
-
+    // Subscribe once at the schema level for ticket_events / agent_sessions /
+    // objectives instead of attaching one filtered listener per ticket.
+    // Per-ticket filters scaled linearly with the visible ticket count and hit
+    // Supabase Realtime's per-channel filter limits, dropping events silently
+    // under load. RLS still gates row visibility; we filter to the visible
+    // ticket set client-side via ticketIdsRef.
     channel = channel
+      .on<TicketEvent>(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ticket_events' },
+        payload => {
+          const event = payload.new;
+          if (!ticketIdsRef.current.has(event.ticket_id)) return;
+          if (event.event_type === 'question') {
+            handleQuestionEvent(event);
+            return;
+          }
+          if (event.event_type === 'status_change') {
+            handleStatusChangeEvent(event);
+          }
+        }
+      )
+      .on<AgentSession>(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'agent_sessions' },
+        payload => {
+          const session = payload.new;
+          if (!ticketIdsRef.current.has(session.ticket_id)) return;
+          latestSessionAttachedAtRef.current.set(session.ticket_id, session.attached_at);
+          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
+            session_state: session.session_state,
+            agent_identifier: session.agent_identifier,
+            attached_at: session.attached_at
+          });
+          applySessionOverride(session);
+        }
+      )
+      .on<AgentSession>(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'agent_sessions' },
+        payload => {
+          const session = payload.new;
+          if (!ticketIdsRef.current.has(session.ticket_id)) return;
+          const latestAt = latestSessionAttachedAtRef.current.get(session.ticket_id) ?? '';
+          if (session.attached_at < latestAt) return;
+          mergeSessionMetaIntoBoards(queryClient, session.ticket_id, {
+            session_state: session.session_state,
+            agent_identifier: session.agent_identifier,
+            attached_at: session.attached_at
+          });
+          applySessionOverride(session);
+        }
+      )
+      .on<Objective>(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'objectives' },
+        payload => {
+          const changedTicketId =
+            getObjectivePayloadTicketId(payload.new) ?? getObjectivePayloadTicketId(payload.old);
+          if (!changedTicketId) return;
+          if (!ticketIdsRef.current.has(changedTicketId)) return;
+          void syncObjectiveStateForTicket(changedTicketId);
+        }
+      )
       .on<Database['public']['Tables']['tickets']['Row']>(
         'postgres_changes',
         {
@@ -724,11 +704,20 @@ export function useTicketBoardRealtime({
         }
       });
 
+    // Safety net: even when the channel reports SUBSCRIBED, Realtime can
+    // silently drop events (e.g. transient backend hiccups, network proxies,
+    // sleeping tabs). Reconcile every 30s so the board never strands on a
+    // stale state for more than that long.
+    const pollId = window.setInterval(() => {
+      void syncBoardData();
+    }, 30_000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(pollId);
       void supabase.removeChannel(channel);
     };
-  }, [organizationId, projectId, queryClient, removeTicketFromBoard, ticketIdSignature]);
+  }, [organizationId, projectId, queryClient, removeTicketFromBoard]);
 
   const mergeWaitingFromLoadedTickets = useCallback((incoming: Ticket[]) => {
     if (incoming.length === 0) return;

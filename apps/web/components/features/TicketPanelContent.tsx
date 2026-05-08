@@ -344,14 +344,6 @@ export async function TicketPanelContent({
                 />
               </div>
 
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <div className="h-4 w-px bg-border" />
-                <TicketExecutionTargetSelect
-                  currentExecutionTarget={ticket.execution_target ?? 'agent'}
-                  ticketId={ticketId}
-                />
-              </div>
-
               <div className="mb-4 flex flex-wrap items-center gap-2">
                 <DueDateEditor initialDueDatetime={ticket.due_datetime} ticketId={ticketId} />
                 <ScheduleEditor
@@ -371,6 +363,10 @@ export async function TicketPanelContent({
                         }
                       : null
                   }
+                />
+                <TicketExecutionTargetSelect
+                  currentExecutionTarget={ticket.execution_target ?? 'agent'}
+                  ticketId={ticketId}
                 />
               </div>
 
