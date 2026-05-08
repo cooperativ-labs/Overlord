@@ -122,8 +122,12 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     if (!multiline) return;
     const el = inputRef.current as EditableTextareaHandle | null;
     if (!el) return;
+    // Preserve scroll position: setting height to 'auto' briefly collapses the
+    // textarea, which triggers a browser auto-scroll to keep the cursor visible.
+    const scrollY = window.scrollY;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
+    window.scrollTo(0, scrollY);
   }, [multiline]);
 
   useEffect(() => {

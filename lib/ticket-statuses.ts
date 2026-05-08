@@ -61,7 +61,7 @@ export async function resolvePreferredStatusNameByType(
 ): Promise<string> {
   const { data, error } = await supabase
     .from('ticket_statuses')
-    .select('name,position,status_type')
+    .select('name,position,status_type,is_default')
     .eq('organization_id', organizationId)
     .eq('status_type', statusType)
     .order('position', { ascending: true });
@@ -70,7 +70,13 @@ export async function resolvePreferredStatusNameByType(
     throw new Error(error.message);
   }
 
-  return pickPreferredStatusName((data ?? []) as StatusRow[], statusType);
+  const rows = (data ?? []) as (StatusRow & { is_default: boolean })[];
+  const defaultRow = rows.find(status => status.is_default);
+  if (defaultRow) {
+    return defaultRow.name;
+  }
+
+  return pickPreferredStatusName(rows, statusType);
 }
 
 export async function resolveNamedStatus(

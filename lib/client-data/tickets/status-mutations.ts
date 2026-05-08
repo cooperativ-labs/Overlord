@@ -6,6 +6,7 @@ import {
   createTicketStatusAction,
   deleteTicketStatusAction,
   reorderTicketStatusesAction,
+  setDefaultTicketStatusAction,
   updateTicketStatusNameAction
 } from '@/lib/actions/ticket-statuses';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -91,6 +92,7 @@ const createTicketStatusActionWithRetry = withElectronActionRetry(createTicketSt
 const deleteTicketStatusActionWithRetry = withElectronActionRetry(deleteTicketStatusAction);
 const updateTicketStatusNameActionWithRetry = withElectronActionRetry(updateTicketStatusNameAction);
 const reorderTicketStatusesActionWithRetry = withElectronActionRetry(reorderTicketStatusesAction);
+const setDefaultTicketStatusActionWithRetry = withElectronActionRetry(setDefaultTicketStatusAction);
 
 export function useCreateTicketStatusMutation() {
   const queryClient = useQueryClient();
@@ -180,6 +182,12 @@ export function useRenameTicketStatusMutation() {
       );
       renameStatusInBoards(queryClient, nextName, updatedStatus);
     }
+  });
+}
+
+export function useSetDefaultTicketStatusMutation() {
+  return useMutation({
+    mutationFn: setDefaultTicketStatusActionWithRetry
   });
 }
 

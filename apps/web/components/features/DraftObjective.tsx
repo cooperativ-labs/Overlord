@@ -17,6 +17,7 @@ import {
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import { cn } from '@/lib/utils';
 
 type DraftObjectiveProps = {
   ticketId: string;
@@ -74,9 +75,15 @@ export function DraftObjective({
     objectiveId,
     initialAttachments
   });
+  const isSubmitted = objectiveState === 'submitted';
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40">
+    <div
+      className={cn(
+        'w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40',
+        isSubmitted && 'border-sky-400/45 bg-sky-500/[0.03] focus-within:ring-sky-400/30'
+      )}
+    >
       {/* {workingDirectory ? (
         <div className="px-3 pt-3 pb-1">
           <button

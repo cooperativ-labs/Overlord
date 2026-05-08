@@ -15,7 +15,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, ChevronDown, GripVertical, Pencil, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, GripVertical, Pencil, Star, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +29,8 @@ import {
   useCreateTicketStatusMutation,
   useDeleteTicketStatusMutation,
   useRenameTicketStatusMutation,
-  useReorderTicketStatusesMutation
+  useReorderTicketStatusesMutation,
+  useSetDefaultTicketStatusMutation
 } from '@/lib/client-data/tickets/status-mutations';
 import { ticketStatusTypeOptions } from '@/lib/options';
 import { cn } from '@/lib/utils';
@@ -113,6 +114,7 @@ export function ProjectStatusSettings({
   const deleteStatusMutation = useDeleteTicketStatusMutation();
   const renameStatusMutation = useRenameTicketStatusMutation();
   const reorderStatusesMutation = useReorderTicketStatusesMutation();
+  const setDefaultStatusMutation = useSetDefaultTicketStatusMutation();
   const [statusesOpen, setStatusesOpen] = useState(defaultExpanded);
   const [statusName, setStatusName] = useState('');
   const [statusType, setStatusType] = useState<TicketStatusType>(() =>
@@ -125,6 +127,9 @@ export function ProjectStatusSettings({
   const [editingStatusName, setEditingStatusName] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [defaultStatusName, setDefaultStatusName] = useState<string | null>(
+    () => initialStatuses.find(status => status.isDefault)?.name ?? null
+  );
 
   useEffect(() => {
     setStatusType(prevStatusType => {
@@ -188,6 +193,19 @@ export function ProjectStatusSettings({
     } catch (cause) {
       setAddButtonState('error');
       setError(cause instanceof Error ? cause.message : 'Failed to add status.');
+    }
+  }
+
+  async function handleSetDefault(name: string) {
+    const previous = defaultStatusName;
+    setDefaultStatusName(name);
+    setError(null);
+
+    try {
+      await setDefaultStatusMutation.mutateAsync({ organizationId, projectId, name });
+    } catch (cause) {
+      setDefaultStatusName(previous);
+      setError(cause instanceof Error ? cause.message : 'Failed to set default status.');
     }
   }
 
@@ -282,6 +300,7 @@ export function ProjectStatusSettings({
     deleteStatusMutation.isPending ||
     renameStatusMutation.isPending ||
     reorderStatusesMutation.isPending ||
+    setDefaultStatusMutation.isPending ||
     pendingDeleteName !== null ||
     pendingReorder ||
     pendingRenameName !== null;
@@ -325,9 +344,11 @@ export function ProjectStatusSettings({
                       <SortableStatusRow
                         key={status.name}
                         status={status}
+                        isDefault={defaultStatusName === status.name}
                         editingStatusName={editingStatusName}
                         editingNameValue={editingNameValue}
                         hasPendingMutation={hasPendingMutation}
+                        onSetDefault={handleSetDefault}
                         onDeleteStatus={handleDeleteStatus}
                         onStartRename={handleStartRename}
                         onSaveRename={handleSaveRename}
@@ -408,9 +429,11 @@ export function ProjectStatusSettings({
 
 type SortableStatusRowProps = {
   status: StatusRow;
+  isDefault: boolean;
   editingStatusName: string | null;
   editingNameValue: string;
   hasPendingMutation: boolean;
+  onSetDefault: (name: string) => Promise<void>;
   onDeleteStatus: (name: string) => Promise<void>;
   onStartRename: (name: string) => void;
   onSaveRename: (currentName: string) => Promise<void>;
@@ -420,9 +443,11 @@ type SortableStatusRowProps = {
 
 function SortableStatusRow({
   status,
+  isDefault,
   editingStatusName,
   editingNameValue,
   hasPendingMutation,
+  onSetDefault,
   onDeleteStatus,
   onStartRename,
   onSaveRename,
@@ -479,6 +504,25 @@ function SortableStatusRow({
       <Badge variant="outline" className="rounded-full text-[11px]">
         Type: {statusTypeOptions.find(option => option.value === status.statusType)?.label}
       </Badge>
+
+      {isDefault ? (
+        <Badge variant="secondary" className="gap-1 rounded-full text-[11px]">
+          <Star className="h-2.5 w-2.5 fill-current" />
+          Default
+        </Badge>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-[11px] text-muted-foreground"
+          onClick={() => onSetDefault(status.name)}
+          disabled={hasPendingMutation || editingStatusName !== null}
+          aria-label={`Set ${status.name} as default status for new tickets`}
+        >
+          Set default
+        </Button>
+      )}
 
       {editingStatusName === status.name ? (
         <>

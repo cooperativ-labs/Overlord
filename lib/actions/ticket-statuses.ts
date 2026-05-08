@@ -250,6 +250,48 @@ export async function updateTicketStatusNameAction(input: {
   };
 }
 
+export async function setDefaultTicketStatusAction(input: {
+  organizationId: number;
+  projectId: string;
+  name: string;
+}) {
+  const organizationId = Number(input.organizationId);
+  if (!Number.isInteger(organizationId) || organizationId <= 0) {
+    throw new Error('Invalid organization.');
+  }
+
+  const projectId = input.projectId.trim();
+  if (!projectId) {
+    throw new Error('Project is required.');
+  }
+
+  const name = normalizeStatusName(input.name);
+
+  const supabase = await createClientForRequest();
+
+  const { error: clearError } = await supabase
+    .from('ticket_statuses')
+    .update({ is_default: false })
+    .eq('organization_id', organizationId)
+    .eq('is_default', true);
+
+  if (clearError) {
+    throw new Error(clearError.message ?? 'Failed to update default status.');
+  }
+
+  const { error: setError } = await supabase
+    .from('ticket_statuses')
+    .update({ is_default: true })
+    .eq('organization_id', organizationId)
+    .eq('name', name);
+
+  if (setError) {
+    throw new Error(setError.message ?? 'Failed to set default status.');
+  }
+
+  revalidateTicketStatusPaths(projectId);
+}
+
 export async function reorderTicketStatusesAction(input: {
   organizationId: number;
   projectId: string;
