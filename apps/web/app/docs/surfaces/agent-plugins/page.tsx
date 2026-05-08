@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
+import { Suspense } from 'react';
 
 import { AgentPluginsTabs } from './agent-plugins-tabs';
 
@@ -56,7 +57,9 @@ export default function AgentPluginsPage() {
           Once the plugin files exist on disk, tell your agent where to find them. Pick the tab that
           matches your setup.
         </p>
-        <AgentPluginsTabs />
+        <Suspense fallback={null}>
+          <AgentPluginsTabs />
+        </Suspense>
       </section>
 
       <section className="space-y-3">
