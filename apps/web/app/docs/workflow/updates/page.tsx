@@ -31,7 +31,7 @@ That helps when work pauses, resumes later, or moves between different agent run
 
 ## Human-in-the-loop review
 
-When the agent is blocked, it can ask a question directly in the ticket workflow. The user can respond in the ticket and keep the work moving without losing context.
+When the agent is blocked, it can ask a question and publish it to the ticket. The user can respond directly in the chat and keep the work moving without losing context.
 
 ## Related pages
 

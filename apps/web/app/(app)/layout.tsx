@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 import { AppSidebar } from '@/components/app-sidebar';
-import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { AgentModelsPrefetch } from '@/components/features/AgentModelSelector';
+import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
 import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
 import {
   ElectronAuthBoundary,

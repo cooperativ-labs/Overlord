@@ -1,71 +1,179 @@
 import type { Metadata } from 'next';
-
-import { DocsMarkdownPage } from '../../_components/docs-markdown-page';
+import Image from 'next/image';
 
 export const metadata: Metadata = {
   title: 'Desktop App'
 };
 
+function Screenshot({
+  src,
+  alt,
+  width,
+  height
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+}) {
+  return (
+    <figure className="space-y-2">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <Image src={src} alt={alt} width={width} height={height} className="h-auto w-full" />
+      </div>
+      <figcaption className="text-sm text-muted-foreground">{alt}</figcaption>
+    </figure>
+  );
+}
+
 export default function DesktopAppPage() {
   return (
-    <DocsMarkdownPage
-      title="Desktop App"
-      lead="The desktop app is a thin local wrapper around the web app with access to your machine."
-    >
-      {`
-## What it adds
+    <main className="flex max-w-5xl flex-1 flex-col gap-8 p-6 md:p-10">
+      <div className="space-y-4">
+        <h1 className="text-3xl font-bold tracking-tight">Desktop App</h1>
+        <p className="text-lg leading-7 text-muted-foreground">
+          The desktop app is a thin local wrapper around the web app with access to your machine.
+        </p>
+      </div>
 
-The desktop app provides local capabilities that a browser cannot:
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold tracking-tight">What it adds</h2>
+        <p className="leading-7 text-muted-foreground">
+          The desktop app provides local capabilities that a browser cannot.
+        </p>
+        <ul className="list-disc space-y-2 pl-6 text-sm leading-7">
+          <li>Direct connection to your local terminal.</li>
+          <li>Linking Overlord projects to repository folders on your machine.</li>
+          <li>Launching agents into those repositories.</li>
+          <li>Embedded terminal sessions with configurable tmux profiles.</li>
+          <li>AI-assisted Git commit messages and push from the Current Changes view.</li>
+          <li>Per-user agent configuration synced through Overlord.</li>
+          <li>Local notifications.</li>
+        </ul>
+      </section>
 
-- direct connection to your local terminal
-- linking Overlord projects to repository folders on your machine
-- launching agents into those repositories
-- embedded terminal sessions with configurable tmux profiles (local and server)
-- AI-assisted Git commit messages and push from the Current Changes view
-- per-user agent configuration (flags, default model, permissions) synced through Overlord
-- local notifications
+      <section className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold tracking-tight">Product Surfaces</h2>
+          <p className="leading-7 text-muted-foreground">
+            The desktop app also packages local agent connectors so Claude and Codex can work on
+            Overlord tickets without leaving their native app surfaces.
+          </p>
+        </div>
 
-## The main use case
+        <div className="grid gap-6">
+          <div className="space-y-4 rounded-xl border bg-card p-6">
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold tracking-tight">Claude Desktop</h3>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Use the Claude desktop app as an idea-to-ticket and ticket-to-execution surface.
+                Overlord keeps the workflow centered on tickets while Claude handles the live
+                conversation and repository work.
+              </p>
+            </div>
+            <ul className="list-disc space-y-2 pl-6 text-sm leading-7">
+              <li>Brainstorm an idea, then ask Claude to turn it into an Overlord ticket.</li>
+              <li>Ask Claude to review an existing Overlord ticket and tighten the scope.</li>
+              <li>Ask Claude to execute a ticket and stream updates back into Overlord.</li>
+              <li>Ask Claude to draft acceptance criteria, rollout notes, or next steps.</li>
+              <li>
+                Ask Claude to summarize the diff before delivery so the ticket handoff is clean.
+              </li>
+            </ul>
+          </div>
 
-This is the surface that makes Overlord useful for real repository work instead of only abstract planning.
+          <div className="space-y-4 rounded-xl border bg-card p-6">
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold tracking-tight">Codex Desktop</h3>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Codex works well as the hands-on execution surface for linked repositories. The
+                bundled Overlord plugin gives Codex durable ticket lifecycle instructions plus a
+                local bridge into the installed <code>ovld</code> CLI.
+              </p>
+            </div>
+            <ul className="list-disc space-y-2 pl-6 text-sm leading-7">
+              <li>Brainstorm an idea, then ask Codex to make an Overlord ticket.</li>
+              <li>
+                Ask Codex to inspect a ticket and suggest implementation changes before launch.
+              </li>
+              <li>
+                Ask Codex to execute a ticket, run checks, and deliver the result back to Overlord.
+              </li>
+              <li>
+                Ask Codex to review the current branch and attach a clearer rationale to the work.
+              </li>
+              <li>
+                Ask Codex to turn feedback from a review thread into a follow-up Overlord ticket.
+              </li>
+            </ul>
+            <Screenshot
+              src="/images/screenshots/codex-plugin-screenshot.png"
+              alt="Codex desktop app with the Overlord plugin installed and available in chat."
+              width={2138}
+              height={1970}
+            />
+          </div>
+        </div>
+      </section>
 
-## Local agent connectors
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold tracking-tight">Local agent connectors</h2>
+        <p className="leading-7 text-muted-foreground">
+          Overlord packages these connectors in both the desktop app and the CLI. In the desktop
+          app, install them from{' '}
+          <span className="font-medium">Settings → Agents &amp; Plugins</span>. If you already use
+          the CLI, the equivalent commands are <code>ovld setup claude</code> and{' '}
+          <code>ovld setup codex</code>.
+        </p>
+        <p className="leading-7 text-muted-foreground">
+          For Codex, the desktop app manages <code>~/.codex/plugins/overlord</code>,{' '}
+          <code>~/.agents/plugins/marketplace.json</code>, and{' '}
+          <code>~/.codex/rules/default.rules</code>. Claude follows the same bundled install model
+          through <code>ovld setup claude</code> or the desktop app settings flow.
+        </p>
+      </section>
 
-The desktop app is also where Overlord manages durable local agent integrations.
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold tracking-tight">Change Viewer</h2>
+        <p className="leading-7 text-muted-foreground">
+          The desktop app also includes a built-in diff browser for linked repositories.
+        </p>
+        <ol className="list-decimal space-y-2 pl-6 text-sm leading-7">
+          <li>Open the project&apos;s Current Changes view.</li>
+          <li>Inspect uncommitted files and their status.</li>
+          <li>View the unified diff for any file.</li>
+          <li>Inspect the rationale attached to changed hunks.</li>
+        </ol>
+        <p className="leading-7 text-muted-foreground">
+          That rationale comes from agent deliveries and helps explain why a change was made.
+        </p>
+      </section>
 
-For Codex, the desktop app can install the Overlord plugin into:
-
-- \`~/.codex/plugins/overlord\`
-- \`~/.agents/plugins/marketplace.json\`
-- \`~/.codex/rules/default.rules\`
-
-That local plugin bundles the Overlord Codex workflow skill and the MCP bridge that shells into
-the installed \`ovld\` CLI.
-
-If you already installed the npm CLI, you can install the same local Codex plugin with
-\`ovld setup codex\`. Cursor has an equivalent local plugin connector installable with
-\`ovld setup cursor\`, and Claude Code, OpenCode, and Gemini integrations follow the same
-\`ovld setup <agent>\` pattern.
-
-## Change Viewer
-
-The desktop app also includes a built-in diff browser for linked repositories.
-
-It lets you:
-
-1. open the project's Current Changes view
-2. inspect uncommitted files and their status
-3. view the unified diff for any file
-4. inspect the rationale attached to changed hunks
-
-That rationale comes from agent deliveries and helps explain why a change was made.
-
-## Related pages
-
-- [Web app](/docs/surfaces/web-app)
-- [Workflow review](/docs/workflow/review)
-- [Data boundaries](/docs/security/data-boundaries)
-      `}
-    </DocsMarkdownPage>
+      <section className="space-y-3">
+        <h2 className="text-2xl font-semibold tracking-tight">Related pages</h2>
+        <ul className="list-disc space-y-2 pl-6 text-sm leading-7">
+          <li>
+            <a className="underline-offset-2 hover:underline" href="/docs/agent-plugins">
+              Agent Plugins
+            </a>
+          </li>
+          <li>
+            <a className="underline-offset-2 hover:underline" href="/docs/surfaces/web-app">
+              Web app
+            </a>
+          </li>
+          <li>
+            <a className="underline-offset-2 hover:underline" href="/docs/workflow/review">
+              Workflow review
+            </a>
+          </li>
+          <li>
+            <a className="underline-offset-2 hover:underline" href="/docs/security/data-boundaries">
+              Data boundaries
+            </a>
+          </li>
+        </ul>
+      </section>
+    </main>
   );
 }

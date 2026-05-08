@@ -1,6 +1,14 @@
 User-agent: *
+Allow: /docs/
+Allow: /agent-docs/
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /.well-known/llms.txt
+Allow: /.well-known/llms-full.txt
 Disallow: /api/
 Disallow: /login/
 Disallow: /sign-up/
 Disallow: /settings/
-Disallow: /manage-subscription/ 
+Disallow: /manage-subscription/
+
+Sitemap: https://www.ovld.ai/sitemap.xml

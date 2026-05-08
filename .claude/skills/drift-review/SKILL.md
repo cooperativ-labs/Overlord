@@ -1,6 +1,6 @@
 ---
 name: Drift Review
-description: Reviews product surface alignment across API routes, CLI commands, MCP tools, and agent plugins to identify drift in functions, parameters, and capabilities.
+description: Reviews product surface alignment across API routes, CLI commands, MCP tools, agent plugins, docs/public, and the CLI README to identify drift in functions, parameters, and capabilities.
 allowed-tools: Read, Bash, Grep, Glob, Task
 user-invocable: true
 ---
@@ -9,13 +9,13 @@ user-invocable: true
 
 <drift-review>
 
-Review all Overlord product surfaces for alignment drift. The goal is to ensure that API routes, CLI commands, MCP tools, and agent plugins expose the same operations with matching parameters, so that agents can use any surface interchangeably.
+Review all Overlord product surfaces for alignment drift. The goal is to ensure that API routes, CLI commands, MCP tools, agent plugins, and public docs expose the same operations with matching parameters, so that agents can use any surface interchangeably.
 
 When a change touches agent launch commands, also compare the human-launch surfaces: `packages/overlord-cli/bin/_cli/launcher.mjs`, `lib/overlord/launch-commands.ts`, and any ticket copy surfaces that emit copy/paste launch commands.
 
 ## Product Surfaces
 
-Overlord exposes its protocol through four parallel surfaces:
+Overlord exposes its protocol through six parallel surfaces:
 
 | Surface | Location | Convention |
 |---------|----------|------------|
@@ -23,6 +23,8 @@ Overlord exposes its protocol through four parallel surfaces:
 | **CLI commands** | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <subcommand>`, `--kebab-case` flags |
 | **MCP tools** | `plugins/overlord/scripts/overlord-mcp.mjs` | `snake_case` tool names, `snake_case` parameters |
 | **Agent plugins** | `plugins/{claude,cursor,overlord}/skills/overlord-ticket/` | Skill instructions referencing CLI/MCP |
+| **Public docs for agents** | `docs/public/` | AI-agent-facing explainers that help agents explain Overlord to end users |
+| **CLI README** | `packages/overlord-cli/README.md` | User-facing CLI documentation and examples |
 
 ## Review Process
 
@@ -62,16 +64,26 @@ Read the `overlord-ticket` skill in each plugin directory:
 
 Extract which operations and parameters are documented for agents to use.
 
+#### 5. Public Docs for Agent Messaging
+Read relevant files in `docs/public/`.
+
+These docs are specifically targeted to AI agents, and their purpose is to help agents explain Overlord to users accurately. Treat drift here as high-importance documentation drift whenever operations, parameters, or behavioral descriptions differ from API/CLI/MCP reality.
+
+#### 6. CLI README
+Read `packages/overlord-cli/README.md`.
+
+Extract which `ovld protocol` operations, flags, and examples are documented, then compare them to the real CLI implementation and matching API/MCP surfaces.
+
 ### Phase 2: Build the Alignment Matrix
 
-Create a matrix comparing operations across all four surfaces:
+Create a matrix comparing operations across all six surfaces:
 
 ```
-| Operation         | API Route              | CLI Subcommand         | MCP Tool               | Plugin Docs |
-|-------------------|------------------------|------------------------|------------------------|-------------|
-| Attach            | POST /protocol/attach  | ovld protocol attach   | attach_ticket          | Y / N       |
-| Discover Project  | POST /protocol/disc... | ovld protocol disc...  | discover_project       | Y / N       |
-| ...               | ...                    | ...                    | ...                    | ...         |
+| Operation         | API Route              | CLI Subcommand         | MCP Tool               | Plugin Docs | Public Docs | CLI README |
+|-------------------|------------------------|------------------------|------------------------|-------------|-------------|------------|
+| Attach            | POST /protocol/attach  | ovld protocol attach   | attach_ticket          | Y / N       | Y / N       | Y / N      |
+| Discover Project  | POST /protocol/disc... | ovld protocol disc...  | discover_project       | Y / N       | Y / N       | Y / N      |
+| ...               | ...                    | ...                    | ...                    | ...         | ...         | ...        |
 ```
 
 ### Phase 3: Identify Drift
@@ -84,6 +96,8 @@ An operation exists in one surface but not another:
 - CLI subcommand with no corresponding MCP tool
 - MCP tool with no corresponding API route
 - Operations not documented in agent plugin skills
+- Operations not documented (or inaccurately documented) in `docs/public/`
+- Operations not documented (or inaccurately documented) in `packages/overlord-cli/README.md`
 
 #### 3b. Parameter Drift
 An operation exists in multiple surfaces but parameters differ:
@@ -102,6 +116,9 @@ An operation exists in multiple surfaces but parameters differ:
 - Agent plugin skills referencing operations or parameters that no longer exist
 - Agent plugin skills missing documentation for operations that do exist
 - Inconsistent descriptions of the same operation across surfaces
+- `docs/public/` guidance that no longer matches the current protocol surface
+- `docs/public/` explanations that would cause an AI agent to explain Overlord incorrectly
+- `packages/overlord-cli/README.md` command or flag examples that no longer match `packages/overlord-cli/bin/_cli/protocol.mjs`
 
 #### 3e. Launch Command Drift
 - `ovld launch` help text, accepted flags, and alias behavior diverge from `lib/overlord/launch-commands.ts`
@@ -116,7 +133,7 @@ Produce a structured report:
 # Overlord Surface Drift Report
 
 ## Summary
-- Surfaces audited: API, CLI, MCP, Agent Plugins
+- Surfaces audited: API, CLI, MCP, Agent Plugins, docs/public, CLI README
 - Total operations found: N
 - Fully aligned operations: N
 - Operations with drift: N
@@ -160,4 +177,4 @@ If no drift is found, confirm alignment and note the operation count.
 
 </drift-review>
 
-<!-- version: 1.0.1 -->
+<!-- version: 1.0.3 -->

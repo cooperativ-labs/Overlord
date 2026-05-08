@@ -739,7 +739,7 @@ export async function createTicketInColumnAction(
 
   try {
     await upsertDraftObjective(supabase, data.id, trimmedObjective);
-      if (position === 'bottom') {
+    if (position === 'bottom') {
       await assignTicketToColumnEnd(supabase, data.id, statusForInsert, data.organization_id);
     } else {
       await assignTicketToColumnStart(supabase, data.id, statusForInsert, data.organization_id);
@@ -1022,7 +1022,7 @@ export async function updateTicketFieldAction(
   }
 
   if (field !== 'available_tools') {
-    }
+  }
 
   await supabase.from('ticket_events').insert({
     event_type: 'system',

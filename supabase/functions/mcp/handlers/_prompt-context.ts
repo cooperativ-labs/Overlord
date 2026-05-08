@@ -69,7 +69,9 @@ function formatBytes(size: number | null | undefined): string {
 }
 
 function formatAttachmentLine(attachment: any): string {
-  const meta = [attachment.content_type, formatBytes(attachment.file_size)].filter(Boolean).join(', ');
+  const meta = [attachment.content_type, formatBytes(attachment.file_size)]
+    .filter(Boolean)
+    .join(', ');
   const metaSuffix = meta ? ` (${meta})` : '';
   return `- ${attachment.label}${metaSuffix} — attachment-id: \`${attachment.id}\` | objective-id: \`${attachment.objective_id}\``;
 }
@@ -106,16 +108,17 @@ export function buildPromptContext(input: {
     launchMode = 'run'
   } = input;
 
-  const objectiveIdsSubsection = objectives.length > 0
-    ? `### Objective IDs\n\n${objectives
-        .map((o: any) => {
-          const text = String(o.objective ?? '').trim();
-          const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
-          const stateSuffix = o.state ? ` [${o.state}]` : '';
-          return `- \`${o.id}\`${stateSuffix}${preview}`;
-        })
-        .join('\n')}`
-    : '';
+  const objectiveIdsSubsection =
+    objectives.length > 0
+      ? `### Objective IDs\n\n${objectives
+          .map((o: any) => {
+            const text = String(o.objective ?? '').trim();
+            const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
+            const stateSuffix = o.state ? ` [${o.state}]` : '';
+            return `- \`${o.id}\`${stateSuffix}${preview}`;
+          })
+          .join('\n')}`
+      : '';
 
   const task = [
     formatTicketMetadata(ticket),
@@ -163,9 +166,10 @@ export function buildPromptContext(input: {
   }
 
   const attachmentLines = attachments.map(formatAttachmentLine);
-  const attachmentsBody = attachmentLines.length > 0
-    ? `${attachmentLines.join('\n')}\n\nDownload via the \`get_attachment_download_url\` MCP tool (or \`ovld protocol attachment-download-url --attachment-id <id>\`).`
-    : '';
+  const attachmentsBody =
+    attachmentLines.length > 0
+      ? `${attachmentLines.join('\n')}\n\nDownload via the \`get_attachment_download_url\` MCP tool (or \`ovld protocol attachment-download-url --attachment-id <id>\`).`
+      : '';
 
   const promptContextSections = {
     task,

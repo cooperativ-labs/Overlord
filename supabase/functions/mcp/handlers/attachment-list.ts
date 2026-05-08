@@ -5,11 +5,7 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
-export async function handleAttachmentList(
-  supabase: SupabaseClient,
-  args: any,
-  ctx: TokenContext
-) {
+export async function handleAttachmentList(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const { sessionKey, ticketId, objectiveId } = args;
   if (!sessionKey || !ticketId) {
     return toolErr('sessionKey and ticketId are required.');

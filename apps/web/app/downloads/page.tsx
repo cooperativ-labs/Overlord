@@ -1,5 +1,5 @@
-import type { Metadata } from 'next';
 import { ArrowUpRight, Download } from 'lucide-react';
+import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 

@@ -30,10 +30,6 @@ const data = {
         {
           title: 'Quick Start',
           url: '/docs/quick-start'
-        },
-        {
-          title: 'Agent Plugins',
-          url: '/docs/agent-plugins'
         }
       ]
     },
@@ -56,6 +52,10 @@ const data = {
         {
           title: 'MCP Server',
           url: '/docs/surfaces/mcp-server'
+        },
+        {
+          title: 'Agent Plugins',
+          url: '/docs/surfaces/agent-plugins'
         }
       ]
     },

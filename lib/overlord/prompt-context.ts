@@ -104,7 +104,9 @@ function formatBytes(size: number | null | undefined): string {
 }
 
 function formatAttachmentLine(attachment: PromptContextAttachment): string {
-  const meta = [attachment.content_type, formatBytes(attachment.file_size)].filter(Boolean).join(', ');
+  const meta = [attachment.content_type, formatBytes(attachment.file_size)]
+    .filter(Boolean)
+    .join(', ');
   const metaSuffix = meta ? ` (${meta})` : '';
   return `- ${attachment.label}${metaSuffix} — attachment-id: \`${attachment.id}\` | objective-id: \`${attachment.objective_id}\``;
 }
@@ -128,16 +130,17 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
     launchMode = 'run'
   } = input;
 
-  const objectiveIdsSubsection = objectives.length > 0
-    ? `### Objective IDs\n\n${objectives
-        .map(o => {
-          const text = (o.objective ?? '').trim();
-          const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
-          const stateSuffix = o.state ? ` [${o.state}]` : '';
-          return `- \`${o.id}\`${stateSuffix}${preview}`;
-        })
-        .join('\n')}`
-    : '';
+  const objectiveIdsSubsection =
+    objectives.length > 0
+      ? `### Objective IDs\n\n${objectives
+          .map(o => {
+            const text = (o.objective ?? '').trim();
+            const preview = text ? ` — ${text.length > 80 ? `${text.slice(0, 77)}...` : text}` : '';
+            const stateSuffix = o.state ? ` [${o.state}]` : '';
+            return `- \`${o.id}\`${stateSuffix}${preview}`;
+          })
+          .join('\n')}`
+      : '';
 
   const taskParts = [
     formatTicketMetadata(ticket),
@@ -205,9 +208,10 @@ export function buildPromptContextSections(input: BuildPromptContextInput): Prom
   const sharedStateLines = sharedState.map(formatSharedStateLine);
   const attachmentLines = attachments.map(formatAttachmentLine);
 
-  const attachmentsBody = attachmentLines.length > 0
-    ? `${attachmentLines.join('\n')}\n\nDownload with: \`ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id ${ticket.id} --attachment-id <attachment-id>\` (MCP: \`get_attachment_download_url\`).`
-    : '';
+  const attachmentsBody =
+    attachmentLines.length > 0
+      ? `${attachmentLines.join('\n')}\n\nDownload with: \`ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id ${ticket.id} --attachment-id <attachment-id>\` (MCP: \`get_attachment_download_url\`).`
+      : '';
 
   return {
     task: taskParts.join('\n\n'),

@@ -81,7 +81,9 @@ export function AgentModelChooserButton({
 
     if (initialChanged && initialSelection !== null) {
       // Truly new ticket assignment — sync local to it
-      setSelection(current => (isSameSelection(current, initialSelection) ? current : initialSelection));
+      setSelection(current =>
+        isSameSelection(current, initialSelection) ? current : initialSelection
+      );
       return;
     }
 

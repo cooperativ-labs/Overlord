@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Eye,
   Monitor,
+  Plug,
   ServerCog,
   TerminalSquare,
   Workflow
@@ -56,7 +57,7 @@ export default function DocsPage() {
         <div className="space-y-3">
           <h2 className="text-xl font-semibold tracking-tight">Product surfaces</h2>
           <p className="text-muted-foreground">
-            Four parts serve the same ticket-centered workflow.
+            Five parts serve the same ticket-centered workflow.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <SurfaceCard
@@ -78,6 +79,11 @@ export default function DocsPage() {
               icon={ServerCog}
               title="MCP Server"
               description="Lets remote or hosted agents work with the same tickets and protocol without depending on the desktop app."
+            />
+            <SurfaceCard
+              icon={Plug}
+              title="Agent Plugins"
+              description="Connects local and cloud agents directly into your ticket workflow from the tools they already run in."
             />
           </div>
         </div>

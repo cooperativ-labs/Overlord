@@ -17,10 +17,7 @@ export async function POST(request: Request) {
 
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
-      return NextResponse.json(
-        { error: resolved.error ?? 'Session not found.' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: resolved.error ?? 'Session not found.' }, { status: 403 });
     }
 
     const supabase = createServiceRoleClient();

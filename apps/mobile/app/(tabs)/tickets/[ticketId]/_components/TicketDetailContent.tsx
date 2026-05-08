@@ -13,9 +13,9 @@ import {
   View
 } from 'react-native';
 
-import type { PickedFile } from '@/components/DocumentAttachmentsSection';
 import { AgentBrandIcon } from '@/components/AgentBrandIcon';
 import { AgentModelChooser } from '@/components/AgentModelChooser';
+import type { PickedFile } from '@/components/DocumentAttachmentsSection';
 import { useThemeColors, useThemedStyles } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 import type {
