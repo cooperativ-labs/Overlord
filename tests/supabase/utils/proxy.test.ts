@@ -109,6 +109,24 @@ describe('Electron proxy bearer enforcement', () => {
   });
 });
 
+describe('Public metadata routes', () => {
+  beforeEach(() => {
+    createServerClientMock.mockReset();
+    getElectronUserFromRequestMock.mockReset();
+  });
+
+  it('does not require auth for crawler metadata files', async () => {
+    for (const pathname of ['/sitemap.xml', '/robots.txt', '/llms.txt', '/llms-full.txt']) {
+      const response = await updateSession(makeRequest({ pathname }));
+
+      expect(response.status).toBe(200);
+    }
+
+    expect(createServerClientMock).not.toHaveBeenCalled();
+    expect(getElectronUserFromRequestMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('Electron request header propagation', () => {
   it('attaches the verified bearer context to downstream request headers', () => {
     const request = makeRequest({ pathname: '/u' });
