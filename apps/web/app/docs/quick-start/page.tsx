@@ -15,13 +15,13 @@ export default function QuickStartPage() {
       {`
 ## 1. Create an account
 
-Sign up at [overlord.dev](https://overlord.dev) and finish onboarding in the web app. Your account hosts your projects, tickets, and delivery history.
+Sign up at [ovld.ai/signup](https://www.ovld.ai/signup) and finish onboarding in the web app. Your account hosts your projects, tickets, and delivery history.
 
 ## 2. Download the desktop app
 
 The desktop app is what launches agents locally, follows your repositories, and streams updates back into Overlord.
 
-- Download the latest build from the [Releases page](https://overlord.dev/downloads).
+- Download the latest build from the [Downloads page](https://www.ovld.ai/downloads).
 - Install it like any native app and sign in with the account you just created.
 
 On first launch, the app walks you through linking a workspace folder and choosing which agents to connect.

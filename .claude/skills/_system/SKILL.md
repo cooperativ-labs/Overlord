@@ -1,6 +1,6 @@
 ---
 name: Overskill skills manager — Agent Instructions
-description: This file explains how to use the Overskill skills manager to create, version, and sync skills to your projects.
+description: Instructions for AI agents on how to use create, update, remove, and otherwise modify skills using the Overskill CLI
 ---
 
 You have access to a skills system that provides curated instruction files
@@ -49,10 +49,10 @@ Run them in the terminal:
 - `skill validate <name>` — Check skill file structure
 
 ### Creating New Skills
-To create a new skill:
-1. Write a SKILL.md file following the format of existing skills
-2. Run `skill push <name> --from-stdin` piping in the content, or
-3. Create the file in the skills folder and run `skill push <name>`
+To create a new skill in this repo:
+1. Run `skill new <name>` — this scaffolds the skill and opens it in your editor
+2. Edit the resulting SKILL.md file with your instructions
+3. Run `skill save <name>` — this saves your changes back to the local registry
 
 A good SKILL.md includes:
 - A clear title (# heading)

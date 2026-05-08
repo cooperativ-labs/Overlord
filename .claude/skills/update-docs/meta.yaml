@@ -1,0 +1,8 @@
+slug: update-docs
+name: update-docs
+description: Use when updating, auditing, or writing documentation pages in
+  apps/web/app/docs. Ensures links resolve, CLI commands match the real surface,
+  and content is accurate and complete.
+tags: []
+compat: []
+sha256: df48680f84d013ece2955e50de787ccfc8ee2f4ea3d95ef2e4dfd34b57747908

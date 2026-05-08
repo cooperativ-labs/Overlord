@@ -1,7 +1,8 @@
 {
   "name": "overlord-cli",
-  "version": "5.15.0",
+  "version": "5.15.2",
   "description": "Overlord CLI — launch AI agents on tickets from anywhere",
+  "homepage": "https://www.ovld.ai/docs/",
   "type": "module",
   "bin": {
     "overlord": "bin/ovld.mjs",
@@ -28,7 +29,8 @@
   ],
   "license": "Proprietary",
   "repository": {
+    "private": true,
     "type": "git",
-    "url": "git+https://github.com/cooperativ/overlord.git"
+    "url": "git+https://github.com/cooperativ-labs/overlord/packages/overlord-cli.git"
   }
 }

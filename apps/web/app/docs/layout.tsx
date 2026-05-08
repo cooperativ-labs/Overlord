@@ -38,32 +38,6 @@ const data = {
       ]
     },
     {
-      title: 'For Agents',
-      url: '/docs/for-agents',
-      items: [
-        {
-          title: 'Overview',
-          url: '/docs/for-agents'
-        },
-        {
-          title: 'Ticket Lifecycle',
-          url: '/docs/for-agents/lifecycle'
-        },
-        {
-          title: 'CLI Reference',
-          url: '/docs/for-agents/cli-reference'
-        },
-        {
-          title: 'Context & Artifacts',
-          url: '/docs/for-agents/context-and-artifacts'
-        },
-        {
-          title: 'Rules for Agents',
-          url: '/docs/for-agents/rules'
-        }
-      ]
-    },
-    {
       title: 'Product Surfaces',
       url: '/docs/surfaces',
       items: [
@@ -104,6 +78,32 @@ const data = {
         {
           title: 'Review & Delivery',
           url: '/docs/workflow/review'
+        }
+      ]
+    },
+    {
+      title: 'For AI Agents',
+      url: '/docs/for-agents',
+      items: [
+        {
+          title: 'Overview',
+          url: '/docs/for-agents'
+        },
+        {
+          title: 'Ticket Lifecycle',
+          url: '/docs/for-agents/lifecycle'
+        },
+        {
+          title: 'CLI Reference',
+          url: '/docs/for-agents/cli-reference'
+        },
+        {
+          title: 'Context & Artifacts',
+          url: '/docs/for-agents/context-and-artifacts'
+        },
+        {
+          title: 'Rules for Agents',
+          url: '/docs/for-agents/rules'
         }
       ]
     },

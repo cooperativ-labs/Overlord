@@ -147,7 +147,6 @@ When comparing names across surfaces, these are the expected transformations (no
 | Concept | API Route Path | CLI Flag | MCP Parameter |
 |---------|---------------|----------|---------------|
 | Ticket ID | `ticket_id` in body | `--ticket-id` | `ticket_id` |
-| Objective ID | `objective_id` in body | `--objective-id` | `objective_id` |
 | Session Key | `session_key` in body | `--session-key` | `session_key` |
 | Working Dir | `working_directory` | `--working-directory` | `working_directory` |
 
@@ -161,4 +160,4 @@ If no drift is found, confirm alignment and note the operation count.
 
 </drift-review>
 
-<!-- version: 1.0.2 -->
+<!-- version: 1.0.1 -->

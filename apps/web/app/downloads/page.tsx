@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { ArrowUpRight, Download } from 'lucide-react';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -20,6 +21,10 @@ import {
 } from '@/lib/downloads/desktop';
 import { detectDesktopPlatform } from '@/lib/downloads/platform';
 import { cn } from '@/lib/utils';
+
+export const metadata: Metadata = {
+  title: 'Downloads | Overlord'
+};
 
 const recommendedMessages = {
   macos:
@@ -229,9 +234,9 @@ export default async function DownloadsPage() {
         </Card>
 
         <p className="text-muted-foreground mt-6 text-sm">
-          Looking for account settings?{' '}
+          Already have an account?{' '}
           <Link href="/u?settings=Profile" className="text-foreground underline underline-offset-4">
-            Open profile settings
+            Sign in
           </Link>
           .
         </p>
