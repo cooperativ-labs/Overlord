@@ -159,14 +159,13 @@ Use it to:
 - review activity, questions, artifacts, and deliveries
 - manage account and organization settings
 - configure project-level details
-- answer blocking questions from agents
 
 ### Desktop App
 
 The desktop app is the local execution surface.
 
 Use it to:
-
+- Everyting the web app can do, and;
 - link Overlord projects to local repository folders
 - launch agents into the correct working directory
 - keep terminal sessions close to the ticket
