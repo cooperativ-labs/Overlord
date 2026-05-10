@@ -70,6 +70,9 @@ export class AppUpdaterService {
 
     this.updater.autoDownload = false;
     this.updater.autoInstallOnAppQuit = false;
+    // One-time flag: lets semver-5.x installs accept the 0.x datetime-versioned build.
+    // Safe to remove once all users have transitioned to the new versioning scheme.
+    this.updater.allowDowngrade = true;
     this.updater.setFeedURL({
       provider: 'generic',
       url: feedUrl

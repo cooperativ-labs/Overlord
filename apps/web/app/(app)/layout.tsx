@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AgentModelsPrefetch } from '@/components/features/AgentModelSelector';
 import { AnnouncementBar } from '@/components/features/announcement-bar/AnnouncementBar';
+import { VersionTransitionBanner } from '@/components/features/announcement-bar/VersionTransitionBanner';
 import { WebAuthGate } from '@/components/features/auth/WebAuthGate';
 import {
   ElectronAuthBoundary,
@@ -157,6 +158,7 @@ export default async function RootLayout({
                             <OfflineTicketProcessor />
                             <RepoProfileMaintenance projects={projects} />
                             <AnnouncementBar />
+                            <VersionTransitionBanner />
                             <NavHeader projects={projects} />
                             <div className="flex min-h-0 flex-1 overflow-hidden">
                               <AppSidebar

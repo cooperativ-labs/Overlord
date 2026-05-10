@@ -61,6 +61,17 @@ export function AboutPage({ open }: { open: boolean }) {
   const updateStatusMessage =
     updateStatus?.message ?? 'Use Check for updates to look for a newer release.';
 
+  const isVersionSchemeTransition =
+    updateStatus?.phase === 'not-available' &&
+    updateStatus.availableVersion != null &&
+    (() => {
+      const currentMajor = parseInt(updateStatus.currentVersion.split('.')[0], 10);
+      const availableMajor = parseInt(updateStatus.availableVersion.split('.')[0], 10);
+      return !isNaN(currentMajor) && !isNaN(availableMajor) && currentMajor > availableMajor;
+    })();
+
+  const downloadsUrl = platformUrl ? `${platformUrl}/downloads` : 'https://www.ovld.ai/downloads';
+
   useEffect(() => {
     if (!open || !api) return;
 
@@ -220,6 +231,21 @@ export function AboutPage({ open }: { open: boolean }) {
         {isElectron ? (
           <div className="grid gap-2">
             <p className="text-xs text-muted-foreground">{updateStatusMessage}</p>
+            {isVersionSchemeTransition ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                A new version ({updateStatus?.availableVersion}) uses an updated versioning scheme
+                and cannot be applied automatically. Please{' '}
+                <a
+                  href={downloadsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  download the latest release
+                </a>{' '}
+                manually to continue receiving automatic updates.
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <LoadingButton
                 buttonState={checkUpdateButtonState}
