@@ -4,9 +4,11 @@ import { ArrowUp, Bot, Plus, User, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
-import { useAgentModelPreference } from '@/components/features/AgentModelSelector';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { AgentModelChooserTrigger } from '@/components/features/AgentModelChooserTrigger';
+import {
+  AgentModelSelector,
+  useAgentModelPreference
+} from '@/components/features/AgentModelSelector';
 import {
   finalizeObjectiveAttachmentUploadAction,
   prepareObjectiveAttachmentUploadAction
@@ -73,8 +75,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const [executionTarget, setExecutionTarget] = useState<ExecutionTarget>('agent');
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<null | 'project' | 'model'>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -98,11 +99,9 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     const container = containerRef.current;
     const api = getQuickTaskApi();
     if (container && api) {
-      const chooserAllowance = projectMenuOpen || modelMenuOpen ? 360 : 0;
-      const target = container.offsetHeight + chooserAllowance;
-      api.setHeight(target).catch(() => { });
+      api.setHeight(container.offsetHeight).catch(() => {});
     }
-  }, [modelMenuOpen, projectMenuOpen]);
+  }, []);
 
   useEffect(() => {
     setSelectedProjectId(current => {
@@ -115,18 +114,16 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
 
   useEffect(() => {
     autoResize();
-  }, [autoResize, stagedFiles.length]);
+  }, [autoResize, stagedFiles.length, activeMenu, selection]);
 
-  // Focus the field on mount and after menus close — but never when a popover is open:
-  // `autoResize` changes with menu state; refocusing here was stealing focus from Radix
-  // and instantly dismissing the project/model pickers.
+  // Focus the field on mount and after inline menus close — not while a panel is open.
   useEffect(() => {
-    if (projectMenuOpen || modelMenuOpen) return;
+    if (activeMenu) return;
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
       autoResize();
     });
-  }, [projectMenuOpen, modelMenuOpen, autoResize]);
+  }, [activeMenu, autoResize]);
 
   // Re-focus when window is reshown
   useEffect(() => {
@@ -135,8 +132,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     const off = api.onShown(() => {
       requestAnimationFrame(() => {
         setSelectedProjectId(resolvedDefaultProjectId);
-        setProjectMenuOpen(false);
-        setModelMenuOpen(false);
+        setActiveMenu(null);
         textareaRef.current?.focus();
         autoResize();
       });
@@ -149,23 +145,27 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const handleClose = useCallback(() => {
     const api = getQuickTaskApi();
     if (api) {
-      api.close().catch(() => { });
+      api.close().catch(() => {});
       return;
     }
     setObjective('');
   }, []);
 
-  // Escape closes the window
+  // Escape closes an open inline menu first, otherwise the window
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        if (activeMenu) {
+          setActiveMenu(null);
+          return;
+        }
         handleClose();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleClose]);
+  }, [activeMenu, handleClose]);
 
   const handleFilesSelected = useCallback((fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
@@ -288,7 +288,6 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
         }
       })();
 
-      toast.success('Ticket created');
       setObjective('');
       setStagedFiles([]);
       handleClose();
@@ -310,9 +309,11 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const canSubmit = !!objective.trim() && !isSubmitting && !!selectedProject && selectionLoaded;
 
   return (
-    <div className="flex h-full w-full items-start justify-center p-0">
+    <div
+      ref={containerRef}
+      className="flex w-full flex-col gap-2 bg-neutral-50 dark:bg-neutral-900"
+    >
       <div
-        ref={containerRef}
         className={cn(
           'flex w-full flex-col gap-2 rounded-2xl border border-border/40',
           'bg-background/95 px-4 py-3 shadow-2xl backdrop-blur-md'
@@ -379,64 +380,32 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
               }}
             />
 
-            {/* Project chooser */}
-            <Popover open={projectMenuOpen} onOpenChange={setProjectMenuOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Choose project"
-                  className="flex h-8 items-center gap-1.5 rounded-full px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {selectedProject ? (
-                    <span
-                      className="h-3 w-3 rounded-[4px] border"
-                      style={{
-                        backgroundColor: selectedProject.color,
-                        borderColor: selectedProject.color
-                      }}
-                    />
-                  ) : (
-                    <span className="h-3 w-3 rounded-[4px] border border-border bg-muted" />
-                  )}
-                  <span className="max-w-[110px] truncate text-foreground/80">
-                    {selectedProject?.name ?? 'No project'}
-                  </span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                align="start"
-                sideOffset={8}
-                className="max-h-[260px] w-56 overflow-y-auto p-1"
-              >
-                {projects.length === 0 ? (
-                  <div className="px-2 py-2 text-xs text-muted-foreground">No projects</div>
-                ) : (
-                  projects.map(project => (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedProjectId(project.id);
-                        setProjectMenuOpen(false);
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted',
-                        project.id === selectedProjectId && 'bg-muted/60'
-                      )}
-                    >
-                      <span
-                        className="h-3 w-3 rounded-[4px] border"
-                        style={{
-                          backgroundColor: project.color,
-                          borderColor: project.color
-                        }}
-                      />
-                      <span className="truncate">{project.name}</span>
-                    </button>
-                  ))
-                )}
-              </PopoverContent>
-            </Popover>
+            {/* Project chooser — opens inline panel below */}
+            <button
+              type="button"
+              aria-label="Choose project"
+              aria-expanded={activeMenu === 'project'}
+              onClick={() => setActiveMenu(current => (current === 'project' ? null : 'project'))}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded-full px-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                activeMenu === 'project' && 'bg-muted text-foreground'
+              )}
+            >
+              {selectedProject ? (
+                <span
+                  className="h-3 w-3 rounded-[4px] border"
+                  style={{
+                    backgroundColor: selectedProject.color,
+                    borderColor: selectedProject.color
+                  }}
+                />
+              ) : (
+                <span className="h-3 w-3 rounded-[4px] border border-border bg-muted" />
+              )}
+              <span className="max-w-[110px] truncate text-foreground/80">
+                {selectedProject?.name ?? 'No project'}
+              </span>
+            </button>
 
             {/* Human/Agent toggle */}
             <div className="ml-1 flex items-center rounded-full border border-border/40 bg-muted/40 p-0.5">
@@ -468,13 +437,11 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
               </button>
             </div>
 
-            <AgentModelChooserButton
-              ticketId={null}
-              initialSelection={selection}
+            <AgentModelChooserTrigger
+              selection={selection}
+              active={activeMenu === 'model'}
+              onToggle={() => setActiveMenu(current => (current === 'model' ? null : 'model'))}
               disabled={isSubmitting}
-              onSelectionChange={setSelection}
-              persistSelection={false}
-              onOpenChange={setModelMenuOpen}
               className="border-0 bg-transparent px-2 shadow-none hover:bg-muted"
             />
           </div>
@@ -496,6 +463,44 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
           </button>
         </div>
       </div>
+
+      {activeMenu === 'project' ? (
+        <div className="max-h-[260px] overflow-y-auto rounded-xl border  bg-background/95 p-1  backdrop-blur-md m-4">
+          {projects.length === 0 ? (
+            <div className="px-2 py-2 text-xs text-muted-foreground">No projects</div>
+          ) : (
+            projects.map(project => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => {
+                  setSelectedProjectId(project.id);
+                  setActiveMenu(null);
+                }}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted',
+                  project.id === selectedProjectId && 'bg-muted/60'
+                )}
+              >
+                <span
+                  className="h-3 w-3 rounded-[4px] border"
+                  style={{
+                    backgroundColor: project.color,
+                    borderColor: project.color
+                  }}
+                />
+                <span className="truncate">{project.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+
+      {activeMenu === 'model' ? (
+        <div className="rounded-xl border  bg-background/95 p-2  backdrop-blur-md m-4">
+          <AgentModelSelector inline value={selection} onChange={setSelection} />
+        </div>
+      ) : null}
     </div>
   );
 }

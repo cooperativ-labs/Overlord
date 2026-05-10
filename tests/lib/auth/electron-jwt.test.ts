@@ -144,10 +144,7 @@ describe('verifyElectronAccessToken', () => {
       'local.jwt.token',
       expect.anything(),
       expect.objectContaining({
-        issuer: [
-          'http://localhost:54321/auth/v1',
-          'http://127.0.0.1:54321/auth/v1'
-        ],
+        issuer: ['http://localhost:54321/auth/v1', 'http://127.0.0.1:54321/auth/v1'],
         audience: 'authenticated'
       })
     );
