@@ -1,4 +1,4 @@
-const FILE_MENTION_REGEX = /(^|[\s(])@([A-Za-z0-9._/\\-]+)/g;
+const FILE_MENTION_REGEX = /(^|[\s(])@([A-Za-z0-9._/\\()[\]-]+)/g;
 
 export function isFileMentionPath(value: string): boolean {
   return value.includes('/') || value.includes('\\') || value.includes('.');

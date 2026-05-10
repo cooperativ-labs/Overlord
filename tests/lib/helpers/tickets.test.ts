@@ -9,6 +9,14 @@ describe('ticket title helpers', () => {
     ).toBe('Update @BlankTicketCard.tsx to improve title generation');
   });
 
+  it('keeps the full filename when route segments contain brackets', () => {
+    expect(
+      deriveTitleFromObjective(
+        'Fix @apps/web/app/[organizationId]/tickets/[ticketId]/page.tsx loading'
+      )
+    ).toBe('Fix @page.tsx loading');
+  });
+
   it('returns the title when set', () => {
     expect(getDisplayTitle({ title: 'Fix edge cases' })).toBe('Fix edge cases');
   });

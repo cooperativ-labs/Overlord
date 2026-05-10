@@ -89,15 +89,18 @@ export function parseFileChanges(content: string): FileChangeEntry[] {
 
 export function buildEditorHref(path: string, workspaceRoot: string, editorScheme: string): string {
   const fullPath =
-    path.startsWith('/') || !workspaceRoot ? path : `${workspaceRoot.replace(/\/$/, '')}/${path}`;
+    path.startsWith('/') || !workspaceRoot ? path : `${workspaceRoot.replace(/\/+$/, '')}/${path}`;
 
   if (editorScheme.includes('?')) return `${editorScheme}${fullPath}`;
-  return `${editorScheme}/${fullPath}`;
+  const normalizedEditorScheme = editorScheme.replace(/\/+$/, '');
+  return fullPath.startsWith('/')
+    ? `${normalizedEditorScheme}${fullPath}`
+    : `${normalizedEditorScheme}/${fullPath}`;
 }
 
 export function buildDiffHref(path: string, workspaceRoot: string, editorScheme: string): string {
   const fullPath =
-    path.startsWith('/') || !workspaceRoot ? path : `${workspaceRoot.replace(/\/$/, '')}/${path}`;
+    path.startsWith('/') || !workspaceRoot ? path : `${workspaceRoot.replace(/\/+$/, '')}/${path}`;
   const scheme = editorScheme.split('://')[0];
 
   if ((scheme === 'vscode' || scheme === 'windsurf') && fullPath.startsWith('/')) {

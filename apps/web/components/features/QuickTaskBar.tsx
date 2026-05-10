@@ -99,7 +99,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     const container = containerRef.current;
     const api = getQuickTaskApi();
     if (container && api) {
-      api.setHeight(container.offsetHeight).catch(() => {});
+      api.setHeight(container.offsetHeight).catch(() => { });
     }
   }, []);
 
@@ -145,7 +145,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const handleClose = useCallback(() => {
     const api = getQuickTaskApi();
     if (api) {
-      api.close().catch(() => {});
+      api.close().catch(() => { });
       return;
     }
     setObjective('');
@@ -287,7 +287,6 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
           await uploadStagedFiles(clientTicketId);
         }
       })();
-
       setObjective('');
       setStagedFiles([]);
       handleClose();
@@ -327,7 +326,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
             autoResize();
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything"
+          placeholder="Write and objective"
           rows={1}
           className={cn(
             'w-full resize-none border-none bg-transparent text-base leading-relaxed',
