@@ -1,5 +1,6 @@
 import { AgentModelsPrefetch } from '@/components/features/AgentModelSelector';
 import { ElectronAuthBoundary } from '@/components/features/electron-auth/ElectronAuthGate';
+import { ElectronDetector } from '@/components/features/terminal/ElectronDetector';
 import { AppQueryClientProvider } from '@/components/providers/query-client-provider';
 import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { getAgentModelsAction } from '@/lib/actions/agent-models';
@@ -24,6 +25,7 @@ export default async function QuickLayout({
 
   return (
     <ElectronAuthBoundary>
+      <ElectronDetector />
       <AppQueryClientProvider>
         <AgentModelsPrefetch
           models={agentModels}

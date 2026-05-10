@@ -9,6 +9,8 @@ import {
   AgentModelSelector,
   useAgentModelPreference
 } from '@/components/features/AgentModelSelector';
+import { MentionableTextarea } from '@/components/features/MentionableTextarea';
+import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import {
   finalizeObjectiveAttachmentUploadAction,
   prepareObjectiveAttachmentUploadAction
@@ -21,6 +23,7 @@ import {
   useUpdateTicketFieldsMutation
 } from '@/lib/client-data/tickets/mutations';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
+import { dispatchTicketCreatedEvent } from '@/lib/helpers/ticket-board-events';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/client';
@@ -33,6 +36,7 @@ type ProjectOption = {
   color: string;
   everhour_project_id: string | null;
   organization_id: number;
+  local_working_directory?: string | null;
 };
 
 type ExecutionTarget = 'agent' | 'human';
@@ -89,6 +93,10 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
   const resolvedDefaultProjectId = resolveProjectId(projects, defaultProjectId);
 
+  const { files: mentionPaths } = useWorkspaceFileTree({
+    workingDirectory: selectedProject?.local_working_directory ?? null
+  });
+
   // Auto-resize textarea + window height
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
@@ -99,7 +107,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     const container = containerRef.current;
     const api = getQuickTaskApi();
     if (container && api) {
-      api.setHeight(container.offsetHeight).catch(() => { });
+      api.setHeight(container.offsetHeight).catch(() => {});
     }
   }, []);
 
@@ -114,7 +122,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
 
   useEffect(() => {
     autoResize();
-  }, [autoResize, stagedFiles.length, activeMenu, selection]);
+  }, [autoResize, objective, stagedFiles.length, activeMenu, selection]);
 
   // Focus the field on mount and after inline menus close — not while a panel is open.
   useEffect(() => {
@@ -145,7 +153,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const handleClose = useCallback(() => {
     const api = getQuickTaskApi();
     if (api) {
-      api.close().catch(() => { });
+      api.close().catch(() => {});
       return;
     }
     setObjective('');
@@ -233,7 +241,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     const filesToUpload = stagedFiles;
 
     try {
-      await createTicketMutation.mutateAsync({
+      const createdTicket = await createTicketMutation.mutateAsync({
         optimisticTicket: {
           id: clientTicketId,
           title: deriveTitleFromObjective(trimmed),
@@ -262,21 +270,27 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
         generateServerTitle: false
       });
 
+      dispatchTicketCreatedEvent({
+        ticketId: createdTicket.id,
+        organizationId: createdTicket.organizationId,
+        projectId: createdTicket.projectId
+      });
+
       // Background tasks: assignment, execution target, title, attachments
       void (async () => {
         try {
           if (executionTarget === 'agent') {
-            await updateAssignmentMutation.mutateAsync({ ticketId: clientTicketId, selection });
+            await updateAssignmentMutation.mutateAsync({ ticketId: createdTicket.id, selection });
           } else {
             await updateExecutionTargetMutation.mutateAsync({
-              ticketId: clientTicketId,
+              ticketId: createdTicket.id,
               executionTarget: 'human'
             });
           }
 
           const title = await generateTicketTitleActionWithRetry(trimmed);
           await updateFieldsMutation.mutateAsync({
-            ticketId: clientTicketId,
+            ticketId: createdTicket.id,
             patch: { title, objective: trimmed }
           });
         } catch (error) {
@@ -284,7 +298,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
         }
 
         if (filesToUpload.length > 0) {
-          await uploadStagedFiles(clientTicketId);
+          await uploadStagedFiles(createdTicket.id);
         }
       })();
       setObjective('');
@@ -307,10 +321,13 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
 
   const canSubmit = !!objective.trim() && !isSubmitting && !!selectedProject && selectionLoaded;
 
+  // Drag-to-move support: container is a drag region (only inside Electron via
+  // the html[data-electron] gate); interactive children opt out so clicks and
+  // text selection still work.
   return (
     <div
       ref={containerRef}
-      className="flex w-full flex-col gap-2 bg-neutral-50 dark:bg-neutral-900"
+      className="electron-drag-region flex w-full flex-col gap-2 bg-neutral-50 dark:bg-neutral-900"
     >
       <div
         className={cn(
@@ -318,16 +335,21 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
           'bg-background/95 px-4 py-3 shadow-2xl backdrop-blur-md'
         )}
       >
-        <textarea
+        <MentionableTextarea
           ref={textareaRef}
           value={objective}
-          onChange={event => {
-            setObjective(event.target.value);
+          onValueChange={nextValue => {
+            setObjective(nextValue);
             autoResize();
           }}
+          onMentionSelect={() => {
+            requestAnimationFrame(() => autoResize());
+          }}
+          mentionPaths={mentionPaths}
           onKeyDown={handleKeyDown}
-          placeholder="Write and objective"
+          placeholder="Write an objective"
           rows={1}
+          containerClassName="electron-no-drag"
           className={cn(
             'w-full resize-none border-none bg-transparent text-base leading-relaxed',
             'focus:outline-none focus:ring-0',
@@ -337,7 +359,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
         />
 
         {stagedFiles.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="electron-no-drag flex flex-wrap gap-1.5">
             {stagedFiles.map(({ id, file }) => (
               <span
                 key={id}
@@ -357,7 +379,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="electron-no-drag flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             {/* File upload */}
             <button
@@ -464,7 +486,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
       </div>
 
       {activeMenu === 'project' ? (
-        <div className="max-h-[260px] overflow-y-auto rounded-xl border  bg-background/95 p-1  backdrop-blur-md m-4">
+        <div className="electron-no-drag max-h-[260px] overflow-y-auto rounded-xl border  bg-background/95 p-1  backdrop-blur-md m-4">
           {projects.length === 0 ? (
             <div className="px-2 py-2 text-xs text-muted-foreground">No projects</div>
           ) : (
@@ -496,7 +518,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
       ) : null}
 
       {activeMenu === 'model' ? (
-        <div className="rounded-xl border  bg-background/95 p-2  backdrop-blur-md m-4">
+        <div className="electron-no-drag rounded-xl border  bg-background/95 p-2  backdrop-blur-md m-4">
           <AgentModelSelector inline value={selection} onChange={setSelection} />
         </div>
       ) : null}

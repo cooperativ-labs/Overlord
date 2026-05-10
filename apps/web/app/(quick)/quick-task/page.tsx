@@ -27,7 +27,8 @@ export default async function QuickTaskPage() {
         name: p.name,
         color: p.color,
         everhour_project_id: p.everhourProjectId ?? null,
-        organization_id: p.organizationId
+        organization_id: p.organizationId,
+        local_working_directory: p.localWorkingDirectory ?? null
       }))}
     />
   );

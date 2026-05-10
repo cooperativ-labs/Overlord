@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.19.0] - 2026-05-10:11:57
+
+### Added
+- Remember the Electron Quick Task window position across openings, validate it against connected displays, and fall back to centering on the display under the cursor when needed.
+- Float Quick Task above fullscreen apps on macOS using a panel window and a stronger always-on-top level.
+- Drag the frameless Quick Task bar to move the window in Electron while keeping inputs and controls clickable.
+- Offer `@` path mentions in the Quick Task objective field when the project has a local working directory.
+- Signal ticket creation to open Kanban views via a custom event and `localStorage` so new tickets appear without relying only on Realtime delivery.
+
+### Fixed
+- Prefer the active launch agent model preference over saved per-agent configuration when resolving the chosen model on web and mobile.
+
+### Changed
+- Resolve git-backed project file trees using real paths so symlinked working directories list tracked files correctly.
+- Prefetch agent models, configs, and launch preference in the Quick layout for snappier Quick Task model UI.
+- Clarify local launch prompt copy about how `ovld protocol` reads credentials versus optional environment overrides.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.19.0`.
+
 ## [5.18.0] - 2026-05-10:09:55
 
 ### Added

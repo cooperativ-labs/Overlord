@@ -159,16 +159,19 @@ export function resolveSelectionForAgent(
 ): AgentModelSelection {
   const configSelection = resolveAgentConfigSelection(configs[agent]);
   const isMatchingLaunchPreference = launchPreference?.agent === agent;
-  const model =
-    configSelection.model ??
-    (isMatchingLaunchPreference ? (launchPreference?.model ?? null) : null);
+  const launchPreferenceModel = isMatchingLaunchPreference
+    ? (launchPreference?.model ?? null)
+    : null;
+  const model = launchPreferenceModel ?? configSelection.model;
 
   return {
     agent,
     model,
     thinking: model
-      ? (configSelection.thinking ??
-        (isMatchingLaunchPreference ? (launchPreference?.thinking ?? null) : null))
+      ? launchPreferenceModel !== null
+        ? (launchPreference?.thinking ?? configSelection.thinking)
+        : (configSelection.thinking ??
+          (isMatchingLaunchPreference ? (launchPreference?.thinking ?? null) : null))
       : null
   };
 }

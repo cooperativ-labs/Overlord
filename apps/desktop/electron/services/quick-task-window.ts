@@ -4,10 +4,55 @@ import path from 'path';
 import { store } from './settings-store';
 
 const SETTINGS_KEY = 'quickTaskHotkey';
+const POSITION_SETTINGS_KEY = 'quickTaskWindowPosition';
 export const DEFAULT_QUICK_TASK_HOTKEY = 'Alt+Command+O';
 
 const WINDOW_WIDTH = 620;
 const INITIAL_WINDOW_HEIGHT = 150;
+
+type SavedPosition = { x: number; y: number };
+
+function readSavedPosition(): SavedPosition | null {
+  const raw = store.get(POSITION_SETTINGS_KEY);
+  if (
+    raw &&
+    typeof raw === 'object' &&
+    typeof (raw as SavedPosition).x === 'number' &&
+    typeof (raw as SavedPosition).y === 'number'
+  ) {
+    return { x: (raw as SavedPosition).x, y: (raw as SavedPosition).y };
+  }
+  return null;
+}
+
+function writeSavedPosition(position: SavedPosition): void {
+  store.set(POSITION_SETTINGS_KEY, position);
+}
+
+/**
+ * Returns saved x,y if it still lands on a connected display; otherwise null.
+ * Guards against monitors being unplugged since the position was stored.
+ */
+function getValidatedSavedPosition(width: number, height: number): SavedPosition | null {
+  const saved = readSavedPosition();
+  if (!saved) return null;
+  const displays = screen.getAllDisplays();
+  const fits = displays.some(display => {
+    const { x, y, width: dw, height: dh } = display.workArea;
+    return saved.x + width > x && saved.x < x + dw && saved.y + height > y && saved.y < y + dh;
+  });
+  return fits ? saved : null;
+}
+
+function getCursorDisplayPosition(width: number): SavedPosition {
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor);
+  const { workArea } = display;
+  return {
+    x: workArea.x + Math.round((workArea.width - width) / 2),
+    y: workArea.y + Math.round(workArea.height * 0.18)
+  };
+}
 
 let quickWindow: BrowserWindow | null = null;
 let registeredAccelerator: string | null = null;
@@ -47,16 +92,15 @@ function getQuickTaskUrl(): string {
 function ensureWindow(): BrowserWindow {
   if (quickWindow && !quickWindow.isDestroyed()) return quickWindow;
 
-  const display = screen.getPrimaryDisplay();
-  const { workArea } = display;
-  const x = workArea.x + Math.round((workArea.width - WINDOW_WIDTH) / 2);
-  const y = workArea.y + Math.round(workArea.height * 0.18);
+  const initial =
+    getValidatedSavedPosition(WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT) ??
+    getCursorDisplayPosition(WINDOW_WIDTH);
 
   quickWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: INITIAL_WINDOW_HEIGHT,
-    x,
-    y,
+    x: initial.x,
+    y: initial.y,
     frame: false,
     transparent: true,
     resizable: false,
@@ -69,6 +113,7 @@ function ensureWindow(): BrowserWindow {
     show: false,
     hasShadow: true,
     title: 'Quick Task',
+    type: process.platform === 'darwin' ? 'panel' : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -78,8 +123,13 @@ function ensureWindow(): BrowserWindow {
     }
   });
 
-  quickWindow.setAlwaysOnTop(true, 'floating');
-  quickWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // 'screen-saver' level + visibleOnFullScreen lets the window float above
+  // full-screen apps (e.g. fullscreen browser, Xcode) on macOS.
+  quickWindow.setAlwaysOnTop(true, 'screen-saver');
+  quickWindow.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true,
+    skipTransformProcessType: true
+  });
 
   quickWindow.loadURL(getQuickTaskUrl());
 
@@ -109,6 +159,13 @@ function ensureWindow(): BrowserWindow {
     }
   });
 
+  quickWindow.on('moved', () => {
+    const win = quickWindow;
+    if (!win || win.isDestroyed()) return;
+    const [x, y] = win.getPosition();
+    writeSavedPosition({ x, y });
+  });
+
   quickWindow.on('closed', () => {
     if (quickTaskBlurHideTimer) {
       clearTimeout(quickTaskBlurHideTimer);
@@ -127,6 +184,16 @@ function showQuickTaskWindow(): void {
     window.focus();
     return;
   }
+
+  // Choose where to show: respect the user's last-dragged position when valid;
+  // otherwise center on the display under the cursor (so the bar follows the
+  // user across monitors instead of always returning to the primary display).
+  const [, currentHeight] = window.getSize();
+  const target =
+    getValidatedSavedPosition(WINDOW_WIDTH, currentHeight) ??
+    getCursorDisplayPosition(WINDOW_WIDTH);
+  window.setPosition(target.x, target.y, false);
+
   // Reload to ensure a fresh state each invocation. The page is light.
   if (window.webContents.getURL() !== getQuickTaskUrl()) {
     window.loadURL(getQuickTaskUrl());

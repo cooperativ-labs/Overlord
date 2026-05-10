@@ -69,15 +69,23 @@ async function listGitProjectFiles(
   rootDirectory: string,
   maxFiles: number
 ): Promise<{ files: string[]; truncated: boolean } | null> {
-  const topLevelResult = await runGitCommand(rootDirectory, ['rev-parse', '--show-toplevel'], {
-    allowFailure: true
-  });
-  const repoRoot = topLevelResult.output.trim();
-  if (!topLevelResult.ok || !repoRoot) {
+  const resolvedRootDirectory = await fs
+    .realpath(rootDirectory)
+    .catch(() => path.resolve(rootDirectory));
+  const topLevelResult = await runGitCommand(
+    resolvedRootDirectory,
+    ['rev-parse', '--show-toplevel'],
+    {
+      allowFailure: true
+    }
+  );
+  const rawRepoRoot = topLevelResult.output.trim();
+  if (!topLevelResult.ok || !rawRepoRoot) {
     return null;
   }
 
-  const relativeRoot = path.relative(repoRoot, rootDirectory);
+  const repoRoot = await fs.realpath(rawRepoRoot).catch(() => path.resolve(rawRepoRoot));
+  const relativeRoot = path.relative(repoRoot, resolvedRootDirectory);
   const normalizedRelativeRoot =
     relativeRoot && relativeRoot !== '.' ? toPosixPath(relativeRoot) : null;
   const gitArgs = ['-C', repoRoot, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'];
@@ -97,7 +105,7 @@ async function listGitProjectFiles(
     .filter(Boolean)
     .map(entry => {
       const absolutePath = path.join(repoRoot, entry);
-      return toPosixPath(path.relative(rootDirectory, absolutePath));
+      return toPosixPath(path.relative(resolvedRootDirectory, absolutePath));
     })
     .filter(entry => entry.length > 0 && !entry.startsWith('../') && entry !== '..');
 

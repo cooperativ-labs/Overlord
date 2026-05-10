@@ -14,7 +14,10 @@ import {
 } from '@/lib/client-data/tickets/cache';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import {
+  TICKET_CREATED_EVENT,
+  TICKET_CREATED_STORAGE_KEY,
   TICKET_DELETED_EVENT,
+  type TicketCreatedEventDetail,
   type TicketDeletedEventDetail
 } from '@/lib/helpers/ticket-board-events';
 import {
@@ -159,6 +162,17 @@ function getTopBoardPositionForStatus(
   }
 
   return Number.isFinite(minBoardPosition) ? minBoardPosition - 1 : 0;
+}
+
+function isTicketCreatedDetail(value: unknown): value is TicketCreatedEventDetail {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const detail = value as Record<string, unknown>;
+  return (
+    typeof detail.ticketId === 'string' &&
+    typeof detail.organizationId === 'number' &&
+    (typeof detail.projectId === 'string' || detail.projectId === null)
+  );
 }
 
 export function useTicketBoardRealtime({
@@ -511,6 +525,18 @@ export function useTicketBoardRealtime({
       }
     };
 
+    const handleCreatedTicketSignal = (detail: TicketCreatedEventDetail) => {
+      if (organizationId !== undefined && detail.organizationId !== organizationId) return;
+      if (projectId !== undefined && detail.projectId !== projectId) return;
+
+      void (async () => {
+        const ticket = await fetchRealtimeBoardTicket(detail.ticketId);
+        if (!ticket) return;
+        mergeTicketsIntoBoards(queryClient, [toBoardTicket(ticket)], 'realtime');
+        setWaitingByTicket(previous => mergeWaitingByTicket(previous, [ticket]));
+      })();
+    };
+
     const handleQuestionEvent = (event: TicketEvent) => {
       if (!event.is_blocking) return;
       if (!ticketIdsRef.current.has(event.ticket_id)) return;
@@ -574,6 +600,23 @@ export function useTicketBoardRealtime({
         ? `Ready for review: ${reviewTicket.title.trim()}`
         : 'Ticket moved to review';
       void window.electronAPI?.app?.notify(reviewTitle, 'The agent has delivered this ticket.');
+    };
+
+    const handleTicketCreated = (event: Event) => {
+      const detail = (event as CustomEvent<TicketCreatedEventDetail>).detail;
+      if (!detail) return;
+      handleCreatedTicketSignal(detail);
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== TICKET_CREATED_STORAGE_KEY || !event.newValue) return;
+      try {
+        const parsed: unknown = JSON.parse(event.newValue);
+        if (!isTicketCreatedDetail(parsed)) return;
+        handleCreatedTicketSignal(parsed);
+      } catch {
+        // Ignore malformed storage payloads.
+      }
     };
 
     // Use a stable channel name (no ticket-set size) so the channel survives
@@ -704,6 +747,9 @@ export function useTicketBoardRealtime({
         }
       });
 
+    window.addEventListener(TICKET_CREATED_EVENT, handleTicketCreated);
+    window.addEventListener('storage', handleStorage);
+
     // Safety net: even when the channel reports SUBSCRIBED, Realtime can
     // silently drop events (e.g. transient backend hiccups, network proxies,
     // sleeping tabs). Reconcile every 30s so the board never strands on a
@@ -715,6 +761,8 @@ export function useTicketBoardRealtime({
     return () => {
       cancelled = true;
       window.clearInterval(pollId);
+      window.removeEventListener(TICKET_CREATED_EVENT, handleTicketCreated);
+      window.removeEventListener('storage', handleStorage);
       void supabase.removeChannel(channel);
     };
   }, [organizationId, projectId, queryClient, removeTicketFromBoard]);
