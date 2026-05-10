@@ -9,8 +9,8 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { displayFont, monoFont } from '@/lib/fonts';
 
 export const metadata: Metadata = {
-  title: 'Overlord',
-  description: 'Stop juggling agents. Organize and launch AI agent work with Overlord.',
+  title: 'Overlord AI',
+  description: 'Stop juggling AI agents. Organize and launch agent work with Overlord.',
   icons: {
     apple: '/images/256.png'
   },

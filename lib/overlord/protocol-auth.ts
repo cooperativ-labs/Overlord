@@ -72,13 +72,14 @@ function isLocalDevRequest(request: Request): boolean {
 
 function resolveLocalDevTokenContext(
   request: Request,
-  providedToken: string
+  providedToken: string,
+  organizationIdOverride?: number | null
 ): ProtocolAuthContext | null {
   if (providedToken !== LOCAL_DEV_TOKEN || !isLocalDevRequest(request)) return null;
 
   return {
     userId: LOCAL_DEV_USER_ID,
-    organizationId: LOCAL_DEV_ORGANIZATION_ID,
+    organizationId: organizationIdOverride ?? LOCAL_DEV_ORGANIZATION_ID,
     tokenValue: providedToken,
     authMethod: 'local_dev_token'
   };
@@ -154,7 +155,8 @@ async function resolveOAuthJwtContext(
  * Returns a context object with user/org info on success, or an error response on failure.
  */
 export async function resolveProtocolAuth(
-  request: Request
+  request: Request,
+  organizationIdOverride?: number | null
 ): Promise<{ context: ProtocolAuthContext; error: null } | { context: null; error: NextResponse }> {
   const localSecretError = resolveLocalSecretError(request);
   if (localSecretError) {
@@ -180,7 +182,11 @@ export async function resolveProtocolAuth(
     };
   }
 
-  const localDevContext = resolveLocalDevTokenContext(request, providedToken);
+  const localDevContext = resolveLocalDevTokenContext(
+    request,
+    providedToken,
+    organizationIdOverride
+  );
   if (localDevContext) {
     return {
       context: localDevContext,
@@ -190,7 +196,7 @@ export async function resolveProtocolAuth(
 
   const oauthResult = await resolveOAuthJwtContext(
     providedToken,
-    parseOrganizationIdHeader(request)
+    organizationIdOverride ?? parseOrganizationIdHeader(request)
   );
   if (oauthResult.error) {
     return {

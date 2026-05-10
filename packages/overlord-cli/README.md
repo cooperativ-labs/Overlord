@@ -74,6 +74,8 @@ ovld setup all
 ovld doctor
 ```
 
+For ticket-scoped protocol and launch commands, `ticket_id` values such as `1:899` carry the organization id. The CLI uses that first, then `--organization-id` for UUID compatibility, then stored auth.
+
 ## Requirements
 
 - Node.js 20 or newer

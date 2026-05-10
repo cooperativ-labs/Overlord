@@ -20,6 +20,10 @@ function quoteShell(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+function hasOrganizationInTicketId(ticketId: string): boolean {
+  return /^\d+:\d+$/.test(ticketId.trim());
+}
+
 export function resolvePlatformUrl(): string {
   const explicitUrl = process.env.EXPO_PUBLIC_OVERLORD_URL?.trim();
   if (explicitUrl) {
@@ -106,13 +110,17 @@ function buildRemoteLaunchCommand({
   const innerCmd = [
     `OVERLORD_URL=${quoteShell(platformUrl)}`,
     `OVERLORD_ACCESS_TOKEN=${quoteShell(accessToken)}`,
-    `OVERLORD_ORGANIZATION_ID=${quoteShell(String(organizationId))}`,
+    hasOrganizationInTicketId(ticketId)
+      ? null
+      : `OVERLORD_ORGANIZATION_ID=${quoteShell(String(organizationId))}`,
     `TICKET_ID=${quoteShell(ticketId)}`,
     'ovld launch',
     agent,
     '--ticket-id',
     ticketId
-  ].join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
   const profileSetup = [
     '[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"',
     '[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"',

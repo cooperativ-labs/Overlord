@@ -118,8 +118,8 @@ function organizationIdFromTicketId(ticketId) {
 
 function resolveLaunchOrganizationId(ticketId, optionsOrganizationId, authOrganizationId) {
   return (
-    parseOrganizationId(optionsOrganizationId) ??
     organizationIdFromTicketId(ticketId) ??
+    parseOrganizationId(optionsOrganizationId) ??
     parseOrganizationId(authOrganizationId)
   );
 }
@@ -278,8 +278,15 @@ async function runAgent(agent, mode = 'run', options = {}) {
     process.chdir(options.workingDirectory);
   }
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
   const launchOrganizationId = resolveLaunchOrganizationId(
+    ticketId,
+    options.organizationId,
+    null
+  );
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth({
+    organizationIdHint: launchOrganizationId
+  });
+  const resolvedLaunchOrganizationId = resolveLaunchOrganizationId(
     ticketId,
     options.organizationId,
     organizationId
@@ -287,7 +294,7 @@ async function runAgent(agent, mode = 'run', options = {}) {
   if (options.sshCommand?.trim()) {
     const remoteCommand = buildRemoteLaunchCommand(agent, {
       ...options,
-      organizationId: launchOrganizationId
+      organizationId: resolvedLaunchOrganizationId
     });
     try {
       execFileSync('sh', ['-lc', remoteCommand], { stdio: 'inherit', env: process.env });
@@ -303,7 +310,7 @@ async function runAgent(agent, mode = 'run', options = {}) {
     platformUrl,
     bearerToken,
     localSecret,
-    launchOrganizationId,
+    resolvedLaunchOrganizationId,
     ticketId,
     agent
   );
@@ -311,7 +318,9 @@ async function runAgent(agent, mode = 'run', options = {}) {
   const childEnv = {
     ...process.env,
     AGENT_IDENTIFIER: agentIdentifierMap[agent],
-    ...(launchOrganizationId ? { OVERLORD_ORGANIZATION_ID: String(launchOrganizationId) } : {})
+    ...(resolvedLaunchOrganizationId
+      ? { OVERLORD_ORGANIZATION_ID: String(resolvedLaunchOrganizationId) }
+      : {})
   };
   const extraArgs = buildExtraArgs(agent, options);
 

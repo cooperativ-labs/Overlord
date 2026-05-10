@@ -80,6 +80,10 @@ function pushOptionalFlag(parts: string[], name: string, value: string | null | 
   parts.push(name, shellQuote(trimmed));
 }
 
+function hasOrganizationInTicketId(ticketId: string): boolean {
+  return /^\d+:\d+$/.test(ticketId.trim());
+}
+
 function normalizeAgentLaunchOptions(
   agent: LaunchAgentName,
   input: BuildLaunchCommandsInput
@@ -105,7 +109,11 @@ export function buildAgentLaunchCommand(
 ): string {
   const parts = ['ovld', 'launch', agent, '--ticket-id', shellQuote(ticketId)];
 
-  if (typeof options.organizationId === 'number' && Number.isFinite(options.organizationId)) {
+  if (
+    !hasOrganizationInTicketId(ticketId) &&
+    typeof options.organizationId === 'number' &&
+    Number.isFinite(options.organizationId)
+  ) {
     parts.push('--organization-id', String(options.organizationId));
   }
 
@@ -211,7 +219,9 @@ export function buildResumeCommands({
   organizationId
 }: BuildLaunchCommandsInput): ResumeCommands {
   const organizationFlag =
-    typeof organizationId === 'number' && Number.isFinite(organizationId)
+    !hasOrganizationInTicketId(ticketId) &&
+    typeof organizationId === 'number' &&
+    Number.isFinite(organizationId)
       ? ` --organization-id ${organizationId}`
       : '';
   return {
@@ -235,7 +245,11 @@ export function buildRawLaunchCommand(
   if (oauthAccessToken) {
     envParts.push(`OVERLORD_ACCESS_TOKEN=${oauthAccessToken}`);
   }
-  if (typeof organizationId === 'number' && Number.isFinite(organizationId)) {
+  if (
+    !hasOrganizationInTicketId(ticketId) &&
+    typeof organizationId === 'number' &&
+    Number.isFinite(organizationId)
+  ) {
     envParts.push(`OVERLORD_ORGANIZATION_ID=${organizationId}`);
   }
   const envPrefix = envParts.join(' ');

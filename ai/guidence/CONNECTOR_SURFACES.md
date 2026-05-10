@@ -77,7 +77,7 @@ Command pattern:
 ```
 claude --append-system-prompt "$(cat <context-file>)" [--settings <temp-settings>] [--model <model>] [--effort <level>] <start-prompt>
 
-ovld launch claude --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch claude --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -151,7 +151,7 @@ Command pattern:
 ```
 codex [--model <model>] [-c model_reasoning_effort="<level>"] "$(cat <context-file>)"
 
-ovld launch codex --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch codex --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -202,7 +202,7 @@ Checklist:
 Checklist:
 - `ovld launch codex` is the documented primary launch command
 - `ovld connect codex` remains a compatibility alias for one-command launches
-- `ovld launch` supports Desktop-parity shell flags: `--organization-id`, `--working-directory`, `--launch-mode`, `--model`, `--thinking`, repeated `--flag`, `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command`
+- `ovld launch` infers organization scope from human-readable ticket ids like `1:899`; `--organization-id` remains a legacy compatibility flag for UUID ticket ids. It also supports Desktop-parity shell flags: `--working-directory`, `--launch-mode`, `--model`, `--thinking`, repeated `--flag`, `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command`
 
 ### 6. Demo / product copy
 
@@ -245,7 +245,7 @@ Command pattern:
 ```
 agent [--model <model>] "$(cat <context-file>)"
 
-ovld launch cursor --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--flag <value> ...]
+ovld launch cursor --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -297,7 +297,7 @@ Command pattern:
 ```
 gemini [--model <model>] [--thinking-level <level>] "$(cat <context-file>)"
 
-ovld launch gemini --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch gemini --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -362,7 +362,7 @@ Command pattern:
 ```
 opencode [--model <model>] --prompt "$(cat <context-file>)"
 
-ovld launch opencode --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--flag <value> ...]
+ovld launch opencode --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -418,6 +418,7 @@ when one surface changes, check the others against this table.
 
 Notes:
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
+- Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
 - `deliver` requires `artifacts` on every surface — empty array is allowed but the field must be present.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.

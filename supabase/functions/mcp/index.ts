@@ -36,6 +36,26 @@ import { validateToolInput } from './validate.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const TICKET_ID_REGEX = /^(\d+):\d+$/;
+
+function organizationIdFromTicketId(ticketId: unknown): number | null {
+  if (typeof ticketId !== 'string') return null;
+  const match = ticketId.trim().match(TICKET_ID_REGEX);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1] ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function organizationIdFromRpcBody(body: any): number | null {
+  if (body?.method !== 'tools/call') return null;
+  const args = body?.params?.arguments ?? {};
+  return (
+    organizationIdFromTicketId(args.ticketId) ??
+    organizationIdFromTicketId(args.ticket_id) ??
+    organizationIdFromTicketId(args.parentTicketId) ??
+    organizationIdFromTicketId(args.parent_ticket_id)
+  );
+}
 
 /**
  * Build the Protected Resource Metadata document (RFC 9728).
@@ -87,7 +107,14 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false }
   });
 
-  const tokenCtx = await resolveToken(req, supabase);
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return rpcError(null, -32700, 'Parse error: invalid JSON.');
+  }
+
+  const tokenCtx = await resolveToken(req, supabase, organizationIdFromRpcBody(body));
   if (!tokenCtx) {
     const resourceMetadataUrl = `${SUPABASE_URL}/functions/v1/mcp/.well-known/oauth-protected-resource`;
     return new Response(
@@ -118,13 +145,6 @@ Deno.serve(async (req: Request) => {
     ...tokenCtx,
     mcpSessionId: req.headers.get('mcp-session-id')?.trim() || null
   };
-
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return rpcError(null, -32700, 'Parse error: invalid JSON.');
-  }
 
   const { id, method, params } = body;
 

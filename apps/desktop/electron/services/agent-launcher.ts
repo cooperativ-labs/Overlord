@@ -9,6 +9,7 @@ import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 import { loadElectronCredentials, saveElectronCredentials } from './electron-credentials';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
+const TICKET_ID_REGEX = /^(\d+):\d+$/;
 
 export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 type AgentLaunchMode = 'run' | 'ask';
@@ -88,6 +89,17 @@ function buildProtocolHeaders(
     headers['x-organization-id'] = String(organizationId);
   }
   return headers;
+}
+
+function parseOrganizationId(value: unknown): number | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function organizationIdFromTicketId(ticketId: string): number | null {
+  const match = ticketId.trim().match(TICKET_ID_REGEX);
+  return match ? parseOrganizationId(match[1]) : null;
 }
 
 function getConnectorUrl(): string {
@@ -210,12 +222,9 @@ async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
   const credentials = loadElectronCredentials();
   let oauthToken = credentials?.access_token?.trim() ?? '';
   const organizationId =
-    typeof input.organizationId === 'number' && Number.isFinite(input.organizationId)
-      ? input.organizationId
-      : typeof credentials?.organization_id === 'number' &&
-          Number.isFinite(credentials.organization_id)
-        ? credentials.organization_id
-        : null;
+    organizationIdFromTicketId(input.ticketId) ??
+    parseOrganizationId(input.organizationId) ??
+    parseOrganizationId(credentials?.organization_id);
 
   if (
     credentials?.refresh_token &&

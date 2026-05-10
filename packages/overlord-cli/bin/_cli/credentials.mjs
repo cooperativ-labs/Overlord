@@ -520,11 +520,20 @@ function isLocalDevCli() {
   return !sourcePath.split(path.sep).includes('node_modules');
 }
 
+function parseOrganizationIdHint(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 /**
  * Resolve the Overlord auth session from env vars or shared credentials.
  * Refreshes OAuth access tokens when possible.
+ *
+ * @param {{ organizationIdHint?: number | string | null }} [options]
  */
-export async function resolveAuth() {
+export async function resolveAuth(options = {}) {
+  const organizationIdHint = parseOrganizationIdHint(options.organizationIdHint);
   const selectedCredentials = selectStoredCredentials();
   const creds = selectedCredentials?.credentials ?? migrateLegacyCredentials();
   const overlordUrlFromEnv = normalizePlatformUrl(process.env.OVERLORD_URL);
@@ -548,7 +557,8 @@ export async function resolveAuth() {
       typeof process.env.OVERLORD_ORGANIZATION_ID === 'string'
         ? Number.parseInt(process.env.OVERLORD_ORGANIZATION_ID, 10)
         : null;
-    if (!Number.isFinite(envOrganizationId)) {
+    const resolvedOrganizationId = organizationIdHint ?? envOrganizationId;
+    if (!Number.isFinite(resolvedOrganizationId)) {
       throw new Error(
         'OVERLORD_ACCESS_TOKEN requires OVERLORD_ORGANIZATION_ID so protocol requests stay scoped.'
       );
@@ -559,7 +569,7 @@ export async function resolveAuth() {
         platformUrl,
         bearerToken: envAccessToken,
         localSecret,
-        organizationId: envOrganizationId,
+        organizationId: resolvedOrganizationId,
         authMode: 'oauth_env'
       };
     }
@@ -606,7 +616,7 @@ export async function resolveAuth() {
       platformUrl,
       bearerToken: nextCredentials.access_token,
       localSecret,
-      organizationId: nextCredentials.organization_id,
+      organizationId: organizationIdHint ?? nextCredentials.organization_id,
       authMode: 'oauth'
     };
   }

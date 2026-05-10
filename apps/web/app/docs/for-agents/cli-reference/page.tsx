@@ -19,9 +19,9 @@ All subcommands honor these environment variables so you don't have to pass flag
 
 \`\`\`bash
 SESSION_KEY=<key>        # falls back to --session-key
-TICKET_ID=<id>           # falls back to --ticket-id
+TICKET_ID=<ticket_id>           # falls back to --ticket-id
 OVERLORD_URL=<url>       # API host
-OVERLORD_ORGANIZATION_ID=<id>  # optional org scope for shared OAuth credentials
+OVERLORD_ORGANIZATION_ID=<id>  # legacy org scope for UUID ticket ids and non-ticket commands
 OVERLORD_TIMEOUT=<ms>    # falls back to --timeout
 AGENT_IDENTIFIER=<name>  # falls back to --agent (default: claude-code)
 \`\`\`
@@ -30,12 +30,14 @@ AGENT_IDENTIFIER=<name>  # falls back to --agent (default: claude-code)
 
 \`\`\`text
 --timeout <ms>              Request timeout in milliseconds (default: 30000)
---ticket-id <id>            Ticket this call operates on
+--ticket-id <ticket_id>            Ticket this call operates on
 --session-key <key>         Session key returned by attach/connect/prompt
 --agent <identifier>        Agent identifier (default: AGENT_IDENTIFIER or claude-code)
 --model <identifier>        Model identifier to snapshot on executing objectives
 --method <connectionMethod> Connection method (default: cli)
 \`\`\`
+
+Ticket ids like \`1:899\` carry the organization id. Ticket-scoped commands use that first, then \`--organization-id\` for UUID compatibility, then stored auth.
 
 ---
 
@@ -68,7 +70,7 @@ Prints \`PROJECT_ID=<id>\` on stderr. Returns 404 with a hint when no match is f
 Create the working session on an existing ticket. Normally the first call you make.
 
 \`\`\`bash
-ovld protocol attach --ticket-id <id>
+ovld protocol attach --ticket-id <ticket_id>
 \`\`\`
 
 Optional:
@@ -89,7 +91,7 @@ Returns full JSON including \`session.sessionKey\`, \`ticket\`, \`history\`, \`a
 Lightweight session when you only need a session key, not the full ticket payload.
 
 \`\`\`bash
-ovld protocol connect --ticket-id <id>
+ovld protocol connect --ticket-id <ticket_id>
 \`\`\`
 
 Optional flags match \`attach\`. Prints \`SESSION_KEY\` on stderr when available.
@@ -99,7 +101,7 @@ Optional flags match \`attach\`. Prints \`SESSION_KEY\` on stderr when available
 Read ticket details without creating a session.
 
 \`\`\`bash
-ovld protocol load-context --ticket-id <id>
+ovld protocol load-context --ticket-id <ticket_id>
 \`\`\`
 
 ## search-tickets
@@ -140,7 +142,7 @@ ovld protocol create --agent claude-code \\
   --objective "Capture follow-up work from this repo"
 
 ovld protocol create --agent claude-code \\
-  --session-key <key> --ticket-id <id> \\
+  --session-key <key> --ticket-id <ticket_id> \\
   --objective "Write migration notes"
 \`\`\`
 
@@ -179,7 +181,7 @@ Post progress events during execution.
 
 \`\`\`bash
 ovld protocol update \\
-  --session-key <key> --ticket-id <id> \\
+  --session-key <key> --ticket-id <ticket_id> \\
   --summary "Wired up the new retry policy." \\
   --phase execute
 \`\`\`
@@ -203,7 +205,7 @@ Persist structured file-change rationale records without also posting a progress
 
 \`\`\`bash
 ovld protocol record-change-rationales \\
-  --session-key <key> --ticket-id <id> \\
+  --session-key <key> --ticket-id <ticket_id> \\
   --change-rationales-json '[ ... ]'
 \`\`\`
 
@@ -213,7 +215,7 @@ Raise a blocking question. Stop working until a human responds.
 
 \`\`\`bash
 ovld protocol ask \\
-  --session-key <key> --ticket-id <id> \\
+  --session-key <key> --ticket-id <ticket_id> \\
   --question "Specific question for the reviewer."
 \`\`\`
 
@@ -225,7 +227,7 @@ Notify Overlord that the local runtime is requesting tool permission. Primarily 
 installed permission hooks, not called directly by agent logic.
 
 \`\`\`bash
-ovld protocol permission-request --ticket-id <id> --payload-file -
+ovld protocol permission-request --ticket-id <ticket_id> --payload-file -
 \`\`\`
 
 ---
@@ -235,8 +237,8 @@ ovld protocol permission-request --ticket-id <id> --payload-file -
 Read persistent shared context written by earlier sessions.
 
 \`\`\`bash
-ovld protocol read-context --session-key <key> --ticket-id <id>
-ovld protocol read-context --session-key <key> --ticket-id <id> --query arch --limit 5
+ovld protocol read-context --session-key <key> --ticket-id <ticket_id>
+ovld protocol read-context --session-key <key> --ticket-id <ticket_id> --query arch --limit 5
 \`\`\`
 
 ## write-context
@@ -245,7 +247,7 @@ Save shared facts for future sessions. The value is parsed as JSON first and sto
 string if that fails.
 
 \`\`\`bash
-ovld protocol write-context --session-key <key> --ticket-id <id> \\
+ovld protocol write-context --session-key <key> --ticket-id <ticket_id> \\
   --key "arch" --value '"monorepo"' --tags repo,agent
 \`\`\`
 
@@ -257,7 +259,7 @@ Conclude the session with the final summary, artifacts, and change rationales.
 
 \`\`\`bash
 ovld protocol deliver \\
-  --session-key <key> --ticket-id <id> \\
+  --session-key <key> --ticket-id <ticket_id> \\
   --summary "Done — narrative of what changed and next steps." \\
   --change-rationales-json '[ ... ]'
 \`\`\`
@@ -285,24 +287,24 @@ arrays — use those for \`<attachment-id>\` and \`<objective-id>\` values.
 \`\`\`bash
 # Discover attachments mid-session (also surfaced in attach response)
 ovld protocol attachment-list \\
-  --session-key <key> --ticket-id <id>
+  --session-key <key> --ticket-id <ticket_id>
 
 # Upload a local file in one call
 ovld protocol attachment-upload-file \\
-  --session-key <key> --ticket-id <id> --objective-id <objective-id> \\
+  --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> \\
   --file ./spec.pdf --content-type application/pdf
 
 # Or do it in two steps with a signed URL
 ovld protocol attachment-prepare-upload \\
-  --session-key <key> --ticket-id <id> --objective-id <objective-id> \\
+  --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> \\
   --file-name spec.pdf --content-type application/pdf
 ovld protocol attachment-finalize-upload \\
-  --session-key <key> --ticket-id <id> --objective-id <objective-id> \\
+  --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> \\
   --storage-path <path> --label "Spec"
 
 # Get a signed download URL
 ovld protocol attachment-download-url \\
-  --session-key <key> --ticket-id <id> \\
+  --session-key <key> --ticket-id <ticket_id> \\
   --attachment-id <attachment-id>
 \`\`\`
 

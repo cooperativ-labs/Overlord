@@ -5,7 +5,7 @@ Overlord uses Supabase OAuth access tokens for protocol and MCP authentication.
 ## Current auth model
 
 - MCP and protocol routes authenticate with `Authorization: Bearer <OAuth access token>`.
-- Protocol routes also require `x-organization-id` to scope the request to an organization.
+- Ticket-scoped protocol and MCP calls infer organization scope from a human-readable `ticket_id` first (for example `1:899`), then `x-organization-id`, then the stored/default organization.
 - The bearer token is verified as a Supabase JWT via the Supabase JWKS endpoint. The resolved `sub` claim is cross-checked against the `members` table to confirm the user belongs to the given organization.
 - Desktop and CLI read shared OAuth credentials from `~/.ovld`.
 - Headless or remote shells can inject:
@@ -106,5 +106,6 @@ curl "$OVERLORD_URL/api/auth/config"
 ## Operational notes
 
 - OAuth tokens are organization-scoped at request time via `x-organization-id`. The server verifies membership in the `members` table.
+- For ticket-scoped commands, prefer passing the human-readable `ticket_id`; `--organization-id` and `x-organization-id` are compatibility fallbacks for UUID ticket ids and non-ticket operations.
 - If a protocol/MCP call fails because the session is invalid or expired, the agent should run `ovld auth repair` itself first. If repair does not fix it, then refresh by signing in again with Desktop or `ovld auth login` if needed.
 - The auth method recorded on protocol context is always `oauth_jwt`.

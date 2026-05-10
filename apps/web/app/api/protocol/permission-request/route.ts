@@ -3,6 +3,7 @@ import { after, NextResponse } from 'next/server';
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
@@ -22,17 +23,33 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
  *
  * Auth: Bearer <OAuth access token>.
  */
+const TICKET_ID_REGEX = /^(\d+):\d+$/;
+
+function organizationIdFromTicketId(ticketId: string): number | null {
+  const match = ticketId.trim().match(TICKET_ID_REGEX);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1] ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export async function POST(request: Request) {
-  const authResult = await resolveAgentToken(request);
+  const { searchParams } = new URL(request.url);
+  const rawTicketId = searchParams.get('ticketId');
+  const authResult = await resolveAgentToken(
+    request,
+    rawTicketId ? organizationIdFromTicketId(rawTicketId) : null
+  );
   if (authResult.error) return authResult.error;
 
   const { organizationId, userId } = authResult.context;
 
   try {
-    const { searchParams } = new URL(request.url);
-    const ticketId = searchParams.get('ticketId');
-    if (!ticketId) {
+    if (!rawTicketId) {
       return NextResponse.json({ error: 'ticketId query parameter is required.' }, { status: 400 });
+    }
+    const ticketId = await resolveTicketId(rawTicketId, organizationId);
+    if (!ticketId) {
+      return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     }
 
     let hookPayload: Record<string, unknown> = {};

@@ -8,17 +8,27 @@ type ParseOk<T> = { ok: true; data: T; tokenContext: ProtocolAuthContext };
 type ParseError = { ok: false; errorResponse: NextResponse };
 export type ParseResult<T> = ParseOk<T> | ParseError;
 
+const TICKET_ID_REGEX = /^(\d+):\d+$/;
+
+function organizationIdFromTicketId(ticketId: unknown): number | null {
+  if (typeof ticketId !== 'string') return null;
+  const match = ticketId.trim().match(TICKET_ID_REGEX);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1] ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export async function parseProtocolBody<T>(
   request: Request,
   schema: ZodType<T>
 ): Promise<ParseResult<T>> {
-  const authResult = await resolveAgentToken(request);
-  if (authResult.error) {
-    return { ok: false, errorResponse: authResult.error };
-  }
-
   try {
     const body = await request.json();
+    const authResult = await resolveAgentToken(request, organizationIdFromTicketId(body?.ticketId));
+    if (authResult.error) {
+      return { ok: false, errorResponse: authResult.error };
+    }
+
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
       return {

@@ -188,6 +188,10 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     setStagedFiles(prev => prev.filter(f => f.id !== id));
   }, []);
 
+  const handleMentionMenuOpenChange = useCallback(() => {
+    requestAnimationFrame(() => autoResize());
+  }, [autoResize]);
+
   async function uploadStagedFiles(ticketId: string): Promise<void> {
     if (stagedFiles.length === 0) return;
     try {
@@ -346,10 +350,13 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
             requestAnimationFrame(() => autoResize());
           }}
           mentionPaths={mentionPaths}
+          mentionMenuMode="inline"
+          onMentionMenuOpenChange={handleMentionMenuOpenChange}
           onKeyDown={handleKeyDown}
           placeholder="Write an objective"
           rows={1}
           containerClassName="electron-no-drag"
+          menuClassName="electron-no-drag"
           className={cn(
             'w-full resize-none border-none bg-transparent text-base leading-relaxed',
             'focus:outline-none focus:ring-0',

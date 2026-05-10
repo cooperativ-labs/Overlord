@@ -31,12 +31,14 @@ export type TokenContext = {
  *   2. Per-project AGENT_TOKEN (prefix "oat_") — looks up a hashed token row
  *      in project_agent_tokens and derives user + org from there.
  *
- * For OAuth JWT auth with multi-org users, the `x-organization-id` header
+ * For OAuth JWT auth with multi-org users, ticket-scoped tools can pass an
+ * organization override derived from ticket_id. Otherwise, `x-organization-id`
  * selects which organization to scope the request to.
  */
 export async function resolveToken(
   req: Request,
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  organizationIdOverride: number | null = null
 ): Promise<TokenContext | null> {
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
@@ -51,7 +53,7 @@ export async function resolveToken(
   const orgIdHint = req.headers.get('x-organization-id');
   const parsedOrgId = orgIdHint ? parseInt(orgIdHint, 10) : null;
 
-  return resolveOAuthJwt(token, supabase, parsedOrgId);
+  return resolveOAuthJwt(token, supabase, organizationIdOverride ?? parsedOrgId);
 }
 
 // ---------------------------------------------------------------------------

@@ -18,7 +18,9 @@ type MentionableTextareaProps = Omit<
   mentionPaths?: string[];
   containerClassName?: string;
   menuClassName?: string;
+  mentionMenuMode?: 'portal' | 'inline';
   onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
+  onMentionMenuOpenChange?: (open: boolean) => void;
   onMentionSelect?: (filePath: string) => void;
 };
 
@@ -31,11 +33,13 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       className,
       containerClassName,
       menuClassName,
+      mentionMenuMode = 'portal',
       onKeyDown,
       onBlur,
       onClick,
       onSelect,
       onChange,
+      onMentionMenuOpenChange,
       onMentionSelect,
       ...props
     },
@@ -161,7 +165,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
     );
 
     React.useEffect(() => {
-      if (!mentionMenuOpen) return;
+      if (!mentionMenuOpen || mentionMenuMode !== 'portal') return;
       updateMentionMenuPosition();
       window.addEventListener('resize', updateMentionMenuPosition);
       window.addEventListener('scroll', updateMentionMenuPosition, true);
@@ -169,7 +173,11 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
         window.removeEventListener('resize', updateMentionMenuPosition);
         window.removeEventListener('scroll', updateMentionMenuPosition, true);
       };
-    }, [mentionMenuOpen, updateMentionMenuPosition]);
+    }, [mentionMenuOpen, mentionMenuMode, updateMentionMenuPosition]);
+
+    React.useEffect(() => {
+      onMentionMenuOpenChange?.(mentionMenuOpen);
+    }, [mentionMenuOpen, onMentionMenuOpenChange]);
 
     React.useEffect(() => {
       if (mentionPaths.length > 0) return;
@@ -212,6 +220,48 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       },
       [clearMentionState, onValueChange, value]
     );
+
+    const mentionMenu = mentionMenuOpen ? (
+      <div
+        className={cn(
+          mentionMenuMode === 'portal'
+            ? 'fixed z-50 w-max max-w-[min(64rem,calc(100vw-1rem))] overflow-x-auto overflow-y-auto rounded-md border bg-popover p-1 shadow-md'
+            : 'mt-2 max-h-56 overflow-x-auto overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-sm backdrop-blur-md',
+          menuClassName
+        )}
+        style={
+          mentionMenuMode === 'portal'
+            ? {
+                top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
+                bottom:
+                  mentionMenuPlacement === 'top'
+                    ? window.innerHeight - menuPosition.top
+                    : undefined,
+                left: menuPosition.left,
+                maxHeight: mentionMenuMaxHeight
+              }
+            : undefined
+        }
+      >
+        {mentionResults.map((filePath, index) => (
+          <button
+            key={filePath}
+            className={cn(
+              'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm',
+              index === mentionIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'
+            )}
+            type="button"
+            onMouseDown={event => {
+              event.preventDefault();
+              insertMentionAtCursor(filePath);
+            }}
+          >
+            <span className="font-medium">@{getCollapsedFileMentionLabel(filePath)}</span>
+            <span className="ml-2 text-xs text-muted-foreground">{filePath}</span>
+          </button>
+        ))}
+      </div>
+    ) : null;
 
     return (
       <div ref={containerRef} className={cn('relative w-full', containerClassName)}>
@@ -274,46 +324,9 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
           }}
           {...props}
         />
-        {mentionMenuOpen
-          ? createPortal(
-              <div
-                className={cn(
-                  'fixed z-50 w-max max-w-[min(64rem,calc(100vw-1rem))] overflow-x-auto overflow-y-auto rounded-md border bg-popover p-1 shadow-md',
-                  menuClassName
-                )}
-                style={{
-                  top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
-                  bottom:
-                    mentionMenuPlacement === 'top'
-                      ? window.innerHeight - menuPosition.top
-                      : undefined,
-                  left: menuPosition.left,
-                  maxHeight: mentionMenuMaxHeight
-                }}
-              >
-                {mentionResults.map((filePath, index) => (
-                  <button
-                    key={filePath}
-                    className={cn(
-                      'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm',
-                      index === mentionIndex
-                        ? 'bg-accent text-accent-foreground'
-                        : 'hover:bg-accent/60'
-                    )}
-                    type="button"
-                    onMouseDown={event => {
-                      event.preventDefault();
-                      insertMentionAtCursor(filePath);
-                    }}
-                  >
-                    <span className="font-medium">@{getCollapsedFileMentionLabel(filePath)}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{filePath}</span>
-                  </button>
-                ))}
-              </div>,
-              document.body
-            )
-          : null}
+        {mentionMenuMode === 'portal' && mentionMenu
+          ? createPortal(mentionMenu, document.body)
+          : mentionMenu}
       </div>
     );
   }

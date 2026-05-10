@@ -25,14 +25,22 @@ import type { AgentConfig } from '@/lib/schemas/agent-config';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
+const TICKET_ID_REGEX = /^(\d+):\d+$/;
+
+function organizationIdFromTicketId(ticketId: string): number | null {
+  const match = ticketId.trim().match(TICKET_ID_REGEX);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1] ?? '', 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
-    const authResult = await resolveAgentToken(request);
+    const { ticketId: rawTicketId } = await params;
+    const authResult = await resolveAgentToken(request, organizationIdFromTicketId(rawTicketId));
     if (authResult.error) return authResult.error;
 
     const { organizationId } = authResult.context;
-    const { ticketId: rawTicketId } = await params;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) {
       return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
@@ -196,11 +204,11 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 // Convenience: also expose the launch commands so the UI can fetch them
 export async function POST(request: Request, { params }: RouteContext) {
-  const authResult = await resolveAgentToken(request);
+  const { ticketId: rawTicketId } = await params;
+  const authResult = await resolveAgentToken(request, organizationIdFromTicketId(rawTicketId));
   if (authResult.error) return authResult.error;
 
   const { organizationId } = authResult.context;
-  const { ticketId: rawTicketId } = await params;
   const ticketId = await resolveTicketId(rawTicketId, organizationId);
   if (!ticketId) {
     return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });

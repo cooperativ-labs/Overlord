@@ -7,6 +7,8 @@ import path from 'node:path';
 
 import { buildAuthHeaders, getAuthStatus, resolveAuth } from './credentials.mjs';
 
+const TICKET_ID_REGEX = /^(\d+):\d+$/;
+
 /**
  * Parse simple CLI flags: --key value or --key=value
  * @param {string[]} args
@@ -231,6 +233,25 @@ function requireFlag(flags, name, envAlias) {
     throw new Error(`--${name} is required (or set ${envAlias ?? name.toUpperCase()})`);
   }
   return String(value);
+}
+
+function parseOrganizationId(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function organizationIdFromTicketId(ticketId) {
+  const match = String(ticketId ?? '').trim().match(TICKET_ID_REGEX);
+  return match ? parseOrganizationId(match[1]) : null;
+}
+
+function resolveOrganizationIdHint(flags, ticketId) {
+  return organizationIdFromTicketId(ticketId) ?? parseOrganizationId(flags['organization-id']);
+}
+
+async function resolveProtocolAuthForFlags(flags, ticketId = '') {
+  return resolveAuth({ organizationIdHint: resolveOrganizationIdHint(flags, ticketId) });
 }
 
 function parseJsonFlag(flagName, rawValue) {
@@ -493,7 +514,7 @@ function resolveExternalSessionId(flags) {
 async function protocolAttach(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const externalSessionId = resolveExternalSessionId(flags);
@@ -539,7 +560,7 @@ async function protocolUpdate(args) {
     ? readTextFile(String(flags['summary-file']), '--summary-file')
     : requireFlag(flags, 'summary', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
   const changeRationales = await resolveChangeRationales(flags);
   const externalSessionId = resolveExternalSessionId(flags);
@@ -594,7 +615,7 @@ async function protocolRecordChangeRationales(args) {
     );
   }
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -634,7 +655,7 @@ async function protocolAsk(args) {
     ? readTextFile(String(flags['question-file']), '--question-file')
     : requireFlag(flags, 'question', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -670,7 +691,7 @@ async function protocolPermissionRequest(args) {
     ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
     : {};
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const data = await apiPost(
@@ -695,7 +716,7 @@ async function protocolReadContext(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -739,7 +760,7 @@ async function protocolWriteContext(args) {
     value = String(flags.value);
   }
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -786,7 +807,7 @@ async function protocolDeliver(args) {
       ? readTextFile(String(flags['summary-file']), '--summary-file')
       : requireFlag(flags, 'summary', undefined));
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   let artifacts = deliverPayload?.artifacts ?? [];
@@ -840,7 +861,7 @@ async function protocolAttachmentList(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -869,7 +890,7 @@ async function protocolAttachmentPrepareUpload(args) {
   const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const fileName = requireFlag(flags, 'file-name', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -906,7 +927,7 @@ async function protocolAttachmentFinalizeUpload(args) {
   const storagePath = requireFlag(flags, 'storage-path', undefined);
   const label = requireFlag(flags, 'label', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -946,7 +967,7 @@ async function protocolAttachmentGetDownloadUrl(args) {
     throw new Error('--objective-id is required when using --storage-path');
   }
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -987,7 +1008,7 @@ async function protocolAttachmentUploadFile(args) {
   const fileStats = await stat(filePath);
   const fileBytes = await readFile(filePath);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const metadata = flags['metadata-json']
@@ -1049,7 +1070,8 @@ async function protocolAttachmentUploadFile(args) {
 
 async function protocolDiscoverProject(args) {
   const flags = parseFlags(args);
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
   const timeoutMs = resolveTimeout(flags);
 
   const workingDirectory = String(flags['working-directory'] ?? process.cwd());
@@ -1077,7 +1099,7 @@ async function protocolDiscoverProject(args) {
 async function protocolConnect(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -1112,7 +1134,7 @@ async function protocolConnect(args) {
 async function protocolLoadContext(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = { ticketId };
@@ -1136,7 +1158,12 @@ async function protocolLoadContext(args) {
 async function protocolPrompt(args) {
   const flags = parseFlags(args);
   const objective = requireFlag(flags, 'objective', undefined);
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const parentTicketId =
+    flags['parent-ticket-id'] !== undefined
+      ? String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '')
+      : '';
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, parentTicketId);
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
@@ -1167,9 +1194,7 @@ async function protocolPrompt(args) {
     ...(flags['parent-session-key']
       ? { parentSessionKey: String(flags['parent-session-key']) }
       : {}),
-    ...(flags['parent-ticket-id']
-      ? { parentTicketId: String(flags['parent-ticket-id'] ?? process.env.TICKET_ID ?? '') }
-      : {})
+    ...(parentTicketId ? { parentTicketId } : {})
   };
 
   const data = await apiPost(
@@ -1202,7 +1227,7 @@ async function protocolCreateTicket(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   const objective = requireFlag(flags, 'objective', undefined);
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
@@ -1283,7 +1308,8 @@ async function protocolCreateTicket(args) {
 
 async function protocolSearchTickets(args) {
   const flags = parseFlags(args);
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
   const timeoutMs = resolveTimeout(flags);
 
   const statuses = flags.status
@@ -1407,6 +1433,7 @@ Environment fallback:
 Common flags:
   --timeout <ms>              Request timeout in milliseconds (default: ${DEFAULT_TIMEOUT_MS})
   --ticket-id <ticket_id>     Ticket identifier (e.g. 1:899) when the subcommand operates on an existing ticket
+  --organization-id <id>      Legacy organization override for UUID ticket ids; inferred from ticket_id when possible
   --session-key <key>         Session key returned by attach/connect/prompt
   --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
   --model <identifier>        Model identifier to snapshot on executing objectives
@@ -1463,7 +1490,7 @@ load-context:
   Purpose:
     Read ticket details without creating a session
   Required:
-    --ticket-id <id>
+    --ticket-id <ticket_id>
 
 search-tickets:
   Purpose:
@@ -1486,7 +1513,7 @@ update:
     Post progress or activity events during execution
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --summary <text> or --summary-file <path>
   Optional:
     --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
@@ -1504,7 +1531,7 @@ record-change-rationales:
     Persist structured file-change rationale records without also posting a normal update
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --change-rationales-json <json> or --change-rationales-file <path>
   Optional:
     --summary <text> or --summary-file <path>
@@ -1515,7 +1542,7 @@ ask:
     Raise a blocking question for a human reviewer/PM
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --question <text> or --question-file <path>
   Optional:
     --phase <status>
@@ -1528,7 +1555,7 @@ permission-request:
     Notify Overlord that the local agent runtime is requesting tool permission.
     This is primarily used by installed permission hooks.
   Required:
-    --ticket-id <id>
+    --ticket-id <ticket_id>
   Optional:
     --payload-file <path|->   Hook JSON payload, or stdin when "-"
 
@@ -1537,7 +1564,7 @@ read-context:
     Read persistent shared context written by earlier sessions
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
   Optional:
     --query <text>            Filter by key substring
     --limit <n>               Max entries to return
@@ -1547,7 +1574,7 @@ write-context:
     Save shared facts for future sessions
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --key <name>
     --value <json-or-string>  Parsed as JSON first; stored as a string if JSON parsing fails
   Optional:
@@ -1558,7 +1585,7 @@ deliver:
     Conclude the session and submit the final narrative plus artifacts/change rationales
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --summary <text> or --summary-file <path>
     or: --payload-file <path|-> containing { summary, artifacts, changeRationales }
   Optional:
@@ -1590,7 +1617,7 @@ prompt:
     --execution-target <t>    agent | human
     --delegate <model>        Model or delegate identifier that created the ticket
     --parent-session-key <key>
-    --parent-ticket-id <id>
+    --parent-ticket-id <ticket_id>
     --agent <identifier>
     --model <identifier>
     --method <connectionMethod>
@@ -1607,7 +1634,7 @@ create:
     --objective <text>
   Optional:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --working-directory <path>  Resolve project by your configured local working directory (default: cwd)
     --project-id <id>           Explicit project for standalone draft creation
     --personal                  Create a private standalone draft without a project
@@ -1628,7 +1655,7 @@ create:
 attachment-list:
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
   Optional:
     --objective-id <id>       Filter to a single objective
   Returns:
@@ -1637,7 +1664,7 @@ attachment-list:
 attachment-prepare-upload:
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --objective-id <id>
     --file-name <name>
   Optional:
@@ -1649,7 +1676,7 @@ attachment-prepare-upload:
 attachment-finalize-upload:
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --objective-id <id>
     --storage-path <path>
     --label <text>
@@ -1661,7 +1688,7 @@ attachment-finalize-upload:
 attachment-download-url:
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     one of: --attachment-id <id> | --storage-path <path>
   Optional:
     --objective-id <id>       Required when using --storage-path
@@ -1670,7 +1697,7 @@ attachment-download-url:
 attachment-upload-file:
   Required:
     --session-key <key>
-    --ticket-id <id>
+    --ticket-id <ticket_id>
     --objective-id <id>
     --file <path>
   Optional:
@@ -1684,30 +1711,30 @@ Examples:
   ovld protocol discover-project
   ovld protocol discover-project --working-directory /path/to/repo
   ovld protocol prompt --agent codex --objective "Implement feature X"   # auto-resolves project from cwd
-  ovld protocol attach --ticket-id abc-123
-  ovld protocol attach --ticket-id abc-123 --external-session-id null
-  ovld protocol connect --ticket-id abc-123
-  ovld protocol load-context --ticket-id abc-123
+  ovld protocol attach --ticket-id 1:899
+  ovld protocol attach --ticket-id 1:899 --external-session-id null
+  ovld protocol connect --ticket-id 1:899
+  ovld protocol load-context --ticket-id 1:899
   ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
   ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
-  ovld protocol create --agent codex --session-key <key> --ticket-id <id> --objective "Capture follow-up work"
+  ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
   ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
-  ovld protocol update --session-key <key> --ticket-id <id> --summary "Did X" --phase execute
-  ovld protocol update --session-key <key> --ticket-id <id> --summary-file ./update.txt --event-type user_follow_up
-  ovld protocol record-change-rationales --session-key <key> --ticket-id <id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
-  ovld protocol ask --session-key <key> --ticket-id <id> --question-file ./question.txt
-  ovld protocol read-context --session-key <key> --ticket-id <id> --query arch --limit 5
-  ovld protocol write-context --session-key <key> --ticket-id <id> --key "arch" --value '"monorepo"' --tags repo,agent
-  ovld protocol attachment-list --session-key <key> --ticket-id <id>
-  ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
-  ovld protocol attachment-upload-file --session-key <key> --ticket-id <id> --objective-id <objective-id> --file ./spec.pdf
-  ovld protocol attachment-download-url --session-key <key> --ticket-id <id> --attachment-id <attachment-id>
-  ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done"
-  ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --artifacts-file ./artifacts.json
-  ovld protocol deliver --session-key <key> --ticket-id <id> --payload-file ./deliver.json
-  ovld protocol deliver --session-key <key> --ticket-id <id> --payload-file -
-  ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --skip-file-change-check
-  ovld protocol deliver --session-key <key> --ticket-id <id> --summary "Done" --timeout 60000
+  ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary "Did X" --phase execute
+  ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up
+  ovld protocol record-change-rationales --session-key <key> --ticket-id <ticket_id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
+  ovld protocol ask --session-key <key> --ticket-id <ticket_id> --question-file ./question.txt
+  ovld protocol read-context --session-key <key> --ticket-id <ticket_id> --query arch --limit 5
+  ovld protocol write-context --session-key <key> --ticket-id <ticket_id> --key "arch" --value '"monorepo"' --tags repo,agent
+  ovld protocol attachment-list --session-key <key> --ticket-id <ticket_id>
+  ovld protocol attachment-prepare-upload --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file-name spec.pdf --content-type application/pdf
+  ovld protocol attachment-upload-file --session-key <key> --ticket-id <ticket_id> --objective-id <objective-id> --file ./spec.pdf
+  ovld protocol attachment-download-url --session-key <key> --ticket-id <ticket_id> --attachment-id <attachment-id>
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file ./deliver.json
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000
 `);
     return;
   }
