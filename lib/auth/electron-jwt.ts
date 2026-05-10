@@ -37,6 +37,25 @@ function getJwks(): { jwks: JWTVerifyGetKey; issuer: string } {
   return { jwks: cachedJwks, issuer };
 }
 
+function getAcceptedIssuers(primaryIssuer: string): string[] {
+  const issuers = [primaryIssuer];
+
+  try {
+    const issuerUrl = new URL(primaryIssuer);
+    if (issuerUrl.hostname === 'localhost') {
+      issuerUrl.hostname = '127.0.0.1';
+      issuers.push(issuerUrl.toString().replace(/\/$/, ''));
+    } else if (issuerUrl.hostname === '127.0.0.1') {
+      issuerUrl.hostname = 'localhost';
+      issuers.push(issuerUrl.toString().replace(/\/$/, ''));
+    }
+  } catch {
+    // Keep the primary issuer only.
+  }
+
+  return [...new Set(issuers)];
+}
+
 export async function verifyElectronAccessToken(
   token: string
 ): Promise<VerifiedElectronTokenPayload> {
@@ -45,7 +64,7 @@ export async function verifyElectronAccessToken(
   let payload: Record<string, unknown>;
   try {
     const result = await jwtVerify(token, jwks, {
-      issuer,
+      issuer: getAcceptedIssuers(issuer),
       audience: 'authenticated'
     });
     payload = result.payload as Record<string, unknown>;

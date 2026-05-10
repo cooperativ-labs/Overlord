@@ -100,7 +100,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     if (container && api) {
       const chooserAllowance = projectMenuOpen || modelMenuOpen ? 360 : 0;
       const target = container.offsetHeight + chooserAllowance;
-      api.setHeight(target).catch(() => {});
+      api.setHeight(target).catch(() => { });
     }
   }, [modelMenuOpen, projectMenuOpen]);
 
@@ -117,12 +117,16 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
     autoResize();
   }, [autoResize, stagedFiles.length]);
 
+  // Focus the field on mount and after menus close — but never when a popover is open:
+  // `autoResize` changes with menu state; refocusing here was stealing focus from Radix
+  // and instantly dismissing the project/model pickers.
   useEffect(() => {
+    if (projectMenuOpen || modelMenuOpen) return;
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
       autoResize();
     });
-  }, [autoResize]);
+  }, [projectMenuOpen, modelMenuOpen, autoResize]);
 
   // Re-focus when window is reshown
   useEffect(() => {
@@ -145,7 +149,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
   const handleClose = useCallback(() => {
     const api = getQuickTaskApi();
     if (api) {
-      api.close().catch(() => {});
+      api.close().catch(() => { });
       return;
     }
     setObjective('');

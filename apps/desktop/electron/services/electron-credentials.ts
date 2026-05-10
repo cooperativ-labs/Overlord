@@ -4,11 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 
 const OVLD_DIR = path.join(os.homedir(), '.ovld');
-const DESKTOP_CREDENTIALS_FILE = path.join(OVLD_DIR, 'credentials.desktop.json');
+const PROD_DESKTOP_CREDENTIALS_FILE = path.join(OVLD_DIR, 'credentials.desktop.json');
+const DEV_DESKTOP_CREDENTIALS_FILE = path.join(OVLD_DIR, 'dev-credentials.desktop.json');
 const LEGACY_CREDENTIALS_FILE = path.join(OVLD_DIR, 'credentials.json');
 const LEGACY_ELECTRON_FILE = path.join(OVLD_DIR, 'electron-credentials.json');
 const LEGACY_MIGRATION_MARKER = path.join(OVLD_DIR, '.desktop-migrated');
 const FILE_MODE = 0o600;
+
+export type ElectronCredentialsProfile = 'prod' | 'dev';
+
+let credentialsProfile: ElectronCredentialsProfile =
+  process.env.OVERLORD_DESKTOP_CREDENTIALS_PROFILE === 'dev' ? 'dev' : 'prod';
 
 export type ElectronCredentials = {
   access_token?: string;
@@ -45,6 +51,16 @@ function fileExists(filePath: string): boolean {
   } catch {
     return false;
   }
+}
+
+function getDesktopCredentialsFile(): string {
+  return credentialsProfile === 'dev'
+    ? DEV_DESKTOP_CREDENTIALS_FILE
+    : PROD_DESKTOP_CREDENTIALS_FILE;
+}
+
+export function setElectronCredentialsProfile(profile: ElectronCredentialsProfile): void {
+  credentialsProfile = profile;
 }
 
 function parseCredentials(parsed: Record<string, unknown> | null): ElectronCredentials | null {
@@ -126,6 +142,7 @@ function decryptLegacyElectronCredentials(): ElectronCredentials | null {
 }
 
 function migrateLegacyCredentials(): ElectronCredentials | null {
+  if (credentialsProfile === 'dev') return null;
   if (fileExists(LEGACY_MIGRATION_MARKER)) return null;
 
   const legacyShared = parseCredentials(readJsonFile(LEGACY_CREDENTIALS_FILE));
@@ -173,7 +190,7 @@ function writeDesktopCredentials(credentials: ElectronCredentials): void {
     }
   }
 
-  writeJsonFileAtomic(DESKTOP_CREDENTIALS_FILE, payload);
+  writeJsonFileAtomic(getDesktopCredentialsFile(), payload);
 }
 
 export function loadElectronCredentials(): ElectronCredentials | null {
@@ -188,7 +205,7 @@ export function loadElectronCredentials(): ElectronCredentials | null {
 }
 
 function readDesktopCredentials(): ElectronCredentials | null {
-  const parsed = readJsonFile(DESKTOP_CREDENTIALS_FILE) as {
+  const parsed = readJsonFile(getDesktopCredentialsFile()) as {
     encrypted_access_token?: string;
     encrypted_refresh_token?: string;
     access_token?: string;
@@ -233,7 +250,7 @@ export function saveElectronCredentials(credentials: ElectronCredentials): void 
 }
 
 export function clearElectronCredentials(): void {
-  for (const file of [DESKTOP_CREDENTIALS_FILE]) {
+  for (const file of [getDesktopCredentialsFile()]) {
     try {
       fs.unlinkSync(file);
     } catch {

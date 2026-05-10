@@ -13,6 +13,10 @@ let quickWindow: BrowserWindow | null = null;
 let registeredAccelerator: string | null = null;
 let baseUrl = '';
 let isDevMode = false;
+/** Cleared on focus; avoids hiding when blur is transient (e.g. setSize after popover open). */
+let quickTaskBlurHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+const QUICK_TASK_BLUR_HIDE_MS = 180;
 
 function isReservedAccelerator(accel: string): boolean {
   // Disallow obvious system-level chords. Electron's globalShortcut.register
@@ -84,12 +88,32 @@ function ensureWindow(): BrowserWindow {
   }
 
   quickWindow.on('blur', () => {
-    if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible()) {
-      quickWindow.hide();
+    const win = quickWindow;
+    if (!win || win.isDestroyed() || !win.isVisible()) return;
+    if (quickTaskBlurHideTimer) {
+      clearTimeout(quickTaskBlurHideTimer);
+      quickTaskBlurHideTimer = null;
+    }
+    quickTaskBlurHideTimer = setTimeout(() => {
+      quickTaskBlurHideTimer = null;
+      if (!win.isDestroyed() && win.isVisible() && !win.isFocused()) {
+        win.hide();
+      }
+    }, QUICK_TASK_BLUR_HIDE_MS);
+  });
+
+  quickWindow.on('focus', () => {
+    if (quickTaskBlurHideTimer) {
+      clearTimeout(quickTaskBlurHideTimer);
+      quickTaskBlurHideTimer = null;
     }
   });
 
   quickWindow.on('closed', () => {
+    if (quickTaskBlurHideTimer) {
+      clearTimeout(quickTaskBlurHideTimer);
+      quickTaskBlurHideTimer = null;
+    }
     quickWindow = null;
   });
 

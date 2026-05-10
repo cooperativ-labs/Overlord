@@ -1,4 +1,4 @@
-const SUPABASE_URL = 'https://test.supabase.co';
+let supabaseUrl = 'https://test.supabase.co';
 const ELECTRON_CLIENT_ID = 'overlord-desktop-test';
 
 jest.mock('jose', () => ({
@@ -7,7 +7,7 @@ jest.mock('jose', () => ({
 }));
 
 jest.mock('@/lib/env', () => ({
-  getSupabaseUrl: () => SUPABASE_URL
+  getSupabaseUrl: () => supabaseUrl
 }));
 
 jest.mock('@/lib/auth/oauth-runtime', () => ({
@@ -26,13 +26,14 @@ const VALID_PAYLOAD = {
   sub: 'user-abc',
   email: 'user@example.com',
   aud: 'authenticated',
-  iss: `${SUPABASE_URL}/auth/v1`,
+  iss: 'https://test.supabase.co/auth/v1',
   client_id: ELECTRON_CLIENT_ID,
   exp: Math.floor(Date.now() / 1000) + 3600
 };
 
 describe('verifyElectronAccessToken', () => {
   beforeEach(() => {
+    supabaseUrl = 'https://test.supabase.co';
     resetElectronJwtCache();
     jose.jwtVerify.mockReset();
     jose.createRemoteJWKSet.mockReturnValue({ _remoteJwks: true });
@@ -47,7 +48,7 @@ describe('verifyElectronAccessToken', () => {
     expect(result.email).toBe('user@example.com');
     expect(result.client_id).toBe(ELECTRON_CLIENT_ID);
     expect(jose.jwtVerify).toHaveBeenCalledWith('valid.jwt.token', expect.anything(), {
-      issuer: `${SUPABASE_URL}/auth/v1`,
+      issuer: ['https://test.supabase.co/auth/v1'],
       audience: 'authenticated'
     });
   });
@@ -113,13 +114,40 @@ describe('verifyElectronAccessToken', () => {
     await verifyElectronAccessToken('a.b.c');
 
     expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
-      new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)
+      new URL('https://test.supabase.co/auth/v1/.well-known/jwks.json')
     );
     expect(jose.jwtVerify).toHaveBeenCalledWith(
       'a.b.c',
       expect.anything(),
       expect.objectContaining({
-        issuer: `${SUPABASE_URL}/auth/v1`,
+        issuer: ['https://test.supabase.co/auth/v1'],
+        audience: 'authenticated'
+      })
+    );
+  });
+
+  it('accepts localhost and 127.0.0.1 as equivalent local Supabase issuers', async () => {
+    supabaseUrl = 'http://localhost:54321';
+    jose.jwtVerify.mockResolvedValue({
+      payload: {
+        ...VALID_PAYLOAD,
+        iss: 'http://127.0.0.1:54321/auth/v1'
+      }
+    });
+
+    await verifyElectronAccessToken('local.jwt.token');
+
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
+      new URL('http://localhost:54321/auth/v1/.well-known/jwks.json')
+    );
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'local.jwt.token',
+      expect.anything(),
+      expect.objectContaining({
+        issuer: [
+          'http://localhost:54321/auth/v1',
+          'http://127.0.0.1:54321/auth/v1'
+        ],
         audience: 'authenticated'
       })
     );

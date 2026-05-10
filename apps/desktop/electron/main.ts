@@ -13,6 +13,7 @@ import { registerTailscaleIpc } from './ipc/tailscale';
 import { registerTerminalIpc } from './ipc/terminal';
 import { registerAppMenu } from './services/app-menu';
 import { AppUpdaterService } from './services/app-updater';
+import { setElectronCredentialsProfile } from './services/electron-credentials';
 import {
   installAuthHeaderInjector,
   installRendererResponseHeaders
@@ -40,6 +41,8 @@ import { SupabaseManager } from './services/supabase-manager';
 import { PROD_ENV } from './_prod-env.generated';
 
 const isDev = !app.isPackaged;
+setElectronCredentialsProfile(isDev ? 'dev' : 'prod');
+
 let mainWindow: BrowserWindow | null = null;
 let unsubscribeAppMenu: (() => void) | null = null;
 let platformUrl = '';
