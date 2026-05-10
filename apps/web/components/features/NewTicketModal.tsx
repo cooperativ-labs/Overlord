@@ -177,12 +177,12 @@ export function NewTicketModal({
 
       void (async () => {
         try {
-          await createPromise;
-          await updateAssignmentMutation.mutateAsync({ ticketId: clientTicketId, selection });
+          const createdTicket = await createPromise;
+          await updateAssignmentMutation.mutateAsync({ ticketId: createdTicket.id, selection });
           if (trimmedObjective) {
             const title = await generateTicketTitleActionWithRetry(trimmedObjective);
             await updateFieldsMutation.mutateAsync({
-              ticketId: clientTicketId,
+              ticketId: createdTicket.id,
               patch: { title, objective: trimmedObjective }
             });
           }

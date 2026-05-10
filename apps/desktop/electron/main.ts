@@ -27,6 +27,11 @@ import {
   getSupabaseOrigin,
   refreshOAuthTokens
 } from './services/oauth-tokens';
+import {
+  hideQuickTaskWindow,
+  initQuickTaskWindow,
+  unregisterQuickTaskHotkey
+} from './services/quick-task-window';
 import { createRefreshController } from './services/refresh-controller';
 import { createElectronSessionStore } from './services/session-store';
 import { SupabaseManager } from './services/supabase-manager';
@@ -387,6 +392,8 @@ app.whenReady().then(async () => {
   appUpdater.initialize();
   unsubscribeAppMenu = registerAppMenu({ appUpdater, isDev });
 
+  initQuickTaskWindow({ platformUrl, isDev });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow(windowUrl);
@@ -409,6 +416,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   unsubscribeAppMenu?.();
   unsubscribeAppMenu = null;
+  unregisterQuickTaskHotkey();
+  hideQuickTaskWindow();
   clearLocalRuntime(connectorUrl);
 
   try {

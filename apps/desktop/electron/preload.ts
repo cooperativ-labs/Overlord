@@ -154,6 +154,28 @@ const electronAPI = {
     configure: (options?: { projectDirectory?: string }) =>
       ipcRenderer.invoke('agent-permissions:configure', options)
   },
+  quickTask: {
+    getHotkey: () =>
+      ipcRenderer.invoke('quick-task:get-hotkey') as Promise<{
+        accelerator: string;
+        defaultAccelerator: string;
+      }>,
+    setHotkey: (accelerator: string) =>
+      ipcRenderer.invoke('quick-task:set-hotkey', accelerator) as Promise<{
+        ok: boolean;
+        accelerator: string;
+        error?: string;
+      }>,
+    close: () => ipcRenderer.invoke('quick-task:close'),
+    setHeight: (height: number) => ipcRenderer.invoke('quick-task:set-height', height),
+    onShown: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('quick-task:shown', handler);
+      return () => {
+        ipcRenderer.removeListener('quick-task:shown', handler);
+      };
+    }
+  },
   appUpdate: {
     getStatus: () => ipcRenderer.invoke('app-update:get-status'),
     checkForUpdates: () => ipcRenderer.invoke('app-update:check'),

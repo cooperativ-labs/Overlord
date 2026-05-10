@@ -280,6 +280,15 @@ interface ElectronAPI {
     get: <T = unknown>(key: string) => Promise<T>;
     set: (key: string, value: unknown) => Promise<void>;
   };
+  quickTask: {
+    getHotkey: () => Promise<{ accelerator: string; defaultAccelerator: string }>;
+    setHotkey: (
+      accelerator: string
+    ) => Promise<{ ok: boolean; accelerator: string; error?: string }>;
+    close: () => Promise<unknown>;
+    setHeight: (height: number) => Promise<unknown>;
+    onShown: (cb: () => void) => () => void;
+  };
   app: {
     getConnectorUrl: () => Promise<string>;
     getPlatformUrl: () => Promise<string>;

@@ -177,18 +177,18 @@ export function QuickRunModal({
 
       void (async () => {
         try {
-          await createPromise;
-          await updateAssignmentMutation.mutateAsync({ ticketId: clientTicketId, selection });
+          const createdTicket = await createPromise;
+          await updateAssignmentMutation.mutateAsync({ ticketId: createdTicket.id, selection });
           if (trimmedObjective) {
             const title = await generateTicketTitleActionWithRetry(trimmedObjective);
             await updateFieldsMutation.mutateAsync({
-              ticketId: clientTicketId,
+              ticketId: createdTicket.id,
               patch: { title, objective: trimmedObjective }
             });
           }
 
           await launchAgent(
-            clientTicketId,
+            createdTicket.id,
             selection.agent,
             selectedProject?.local_working_directory ?? undefined,
             'run',
@@ -199,7 +199,7 @@ export function QuickRunModal({
           router.push(
             buildTicketPath({
               projectId: isPersonalTicket ? null : selectedProjectId,
-              ticketId: clientTicketId
+              ticketId: createdTicket.id
             })
           );
         } catch (error) {

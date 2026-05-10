@@ -26,6 +26,13 @@ import {
   repairOverlordPlugin,
   uninstallOverlordPlugin
 } from '../services/overlord-plugin';
+import {
+  DEFAULT_QUICK_TASK_HOTKEY,
+  getStoredQuickTaskHotkey,
+  hideQuickTaskWindow,
+  registerQuickTaskHotkey,
+  setQuickTaskWindowSize
+} from '../services/quick-task-window';
 import { store } from '../services/settings-store';
 
 type RegisterAppIpcOptions = {
@@ -135,6 +142,34 @@ export function registerAppIpc({
     await Sentry.flush(2_000);
 
     return { ok: true, eventId };
+  });
+
+  ipcMain.handle('quick-task:get-hotkey', () => {
+    return {
+      accelerator: getStoredQuickTaskHotkey(),
+      defaultAccelerator: DEFAULT_QUICK_TASK_HOTKEY
+    };
+  });
+
+  ipcMain.handle('quick-task:set-hotkey', (_event, accelerator: string) => {
+    return registerQuickTaskHotkey(accelerator);
+  });
+
+  ipcMain.handle('quick-task:close', event => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window) {
+      window.hide();
+    } else {
+      hideQuickTaskWindow();
+    }
+    return true;
+  });
+
+  ipcMain.handle('quick-task:set-height', (_event, height: number) => {
+    if (typeof height === 'number' && Number.isFinite(height)) {
+      setQuickTaskWindowSize(height);
+    }
+    return true;
   });
 
   ipcMain.handle('app-update:get-status', () => {

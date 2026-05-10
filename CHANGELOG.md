@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.17.0] - 2026-05-10:08:54
+
+### Added
+- Add a global Quick Task window to the Electron desktop app, opened by a configurable global hotkey (default `Alt+Command+O`) for creating tickets and launching agents from anywhere on the system.
+- Add a Quick Task hotkey customization control on the Hotkeys settings page so desktop users can rebind or reset the global accelerator and see a live capture of the recorded chord.
+- Allow projects to designate a default ticket status through the project status settings UI so new tickets created in that project automatically adopt the chosen status.
+
+### Fixed
+- Use the server-issued ticket id instead of the temporary client id when applying agent assignment, generating titles, launching agents, and routing after creation in the New Ticket and Quick Run modals so follow-up updates target the persisted ticket.
+
+### Changed
+- Render Hotkeys settings with separate sections for global desktop shortcuts and in-app shortcuts, and surface the active platform-aware shortcut labels (macOS vs. other platforms).
+
+### Security
+- None.
+
 ## [5.16.0] - 2026-05-08:14:09
 
 ### Added
