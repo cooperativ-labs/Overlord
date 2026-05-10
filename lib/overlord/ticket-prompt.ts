@@ -223,7 +223,7 @@ ovld protocol attach --ticket-id ${ticketId}
 
 ### Rules
 
-- Always attach before discussing or working on the ticket.
+- Always attach before writing code or working on the ticket.
 - Use the Overlord Codex plugin workflow as the source of truth for protocol details.
 ${discussionGuidance}
 ${buildAskModeRules(launchMode)}
