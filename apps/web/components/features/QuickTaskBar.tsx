@@ -519,7 +519,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
 
       {activeMenu === 'model' ? (
         <div className="electron-no-drag rounded-xl border  bg-background/95 p-2  backdrop-blur-md m-4">
-          <AgentModelSelector inline value={selection} onChange={setSelection} />
+          <AgentModelSelector value={selection} onChange={setSelection} />
         </div>
       ) : null}
     </div>

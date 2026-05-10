@@ -16,8 +16,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
-import semver from 'semver';
-import { deriveCliVersion } from '../lib/helpers/cli-versioning.mjs';
+import { generateDatetimeComponent, parseNewVersion } from '../lib/helpers/cli-versioning.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -50,17 +49,23 @@ const ARTIFACT_PATTERNS = {
 };
 
 const VERSION_BUMP = {
+  // Hotfix: same datetime, increment x
   patch: (v) => {
-    const [major, minor, patch] = v.split('.').map(Number);
-    return `${major}.${minor}.${(patch || 0) + 1}`;
+    const parsed = parseNewVersion(v);
+    if (!parsed) throw new Error(`Invalid version: ${v}`);
+    return `${parsed.major}.${parsed.datetime}.${parsed.x + 1}`;
   },
-  minor: (v) => {
-    const [major, minor] = v.split('.').map(Number);
-    return `${major}.${(minor || 0) + 1}.0`;
-  },
+  // Breaking change: increment major, reset datetime and x
   major: (v) => {
-    const [major] = v.split('.').map(Number);
-    return `${(major || 0) + 1}.0.0`;
+    const parsed = parseNewVersion(v);
+    if (!parsed) throw new Error(`Invalid version: ${v}`);
+    return `${parsed.major + 1}.${generateDatetimeComponent()}.0`;
+  },
+  // Default release: new datetime, keep major, reset x
+  datetime: (v) => {
+    const parsed = parseNewVersion(v);
+    if (!parsed) throw new Error(`Invalid version: ${v}`);
+    return `${parsed.major}.${generateDatetimeComponent()}.0`;
   }
 };
 
@@ -103,13 +108,12 @@ function getPackageVersion() {
 function syncCliPackageVersion(version) {
   const cliPkgPath = join(ROOT, 'packages', 'overlord-cli', 'package.json');
   const cliPkg = JSON.parse(readFileSync(cliPkgPath, 'utf8'));
-  const nextVersion = deriveCliVersion(version, cliPkg.version);
-  if (nextVersion !== cliPkg.version) {
-    cliPkg.version = nextVersion;
+  if (version !== cliPkg.version) {
+    cliPkg.version = version;
     writeFileSync(cliPkgPath, JSON.stringify(cliPkg, null, 2) + '\n', 'utf8');
   }
 
-  return cliPkg.version;
+  return version;
 }
 
 function getReleaseArtifacts() {
@@ -214,19 +218,19 @@ function getBuildArgs(target) {
 }
 
 function parseBumpMode(args) {
-  const hasMinor = args.includes('--minor');
+  const hasPatch = args.includes('--patch');
   const hasMajor = args.includes('--major');
   const hasNoBump = args.includes('--no-bump');
 
-  if ([hasMinor, hasMajor, hasNoBump].filter(Boolean).length > 1) {
-    console.error('[upload] Choose only one of --minor, --major, or --no-bump.');
+  if ([hasPatch, hasMajor, hasNoBump].filter(Boolean).length > 1) {
+    console.error('[upload] Choose only one of --patch, --major, or --no-bump.');
     process.exit(1);
   }
 
-  if (hasMinor) return 'minor';
+  if (hasPatch) return 'patch';
   if (hasMajor) return 'major';
   if (hasNoBump) return 'no-bump';
-  return 'patch';
+  return 'datetime';
 }
 
 async function buildAndUploadTarget(supabase, version, target) {
@@ -353,11 +357,19 @@ function getStoredVersions(entries) {
   return entries
     .filter(isDirectoryEntry)
     .map((entry) => entry.name)
-    .filter((name) => semver.valid(name));
+    .filter((name) => parseNewVersion(name) !== null);
+}
+
+function compareVersionsDesc(a, b) {
+  const pa = parseNewVersion(a);
+  const pb = parseNewVersion(b);
+  if (pa.major !== pb.major) return pb.major - pa.major;
+  if (pa.datetime !== pb.datetime) return pb.datetime > pa.datetime ? 1 : -1;
+  return pb.x - pa.x;
 }
 
 function getVersionRetentionPlan(versionDirs, retainCount = RETAIN_VERSION_COUNT) {
-  const sortedVersions = [...versionDirs].sort(semver.rcompare);
+  const sortedVersions = [...versionDirs].sort(compareVersionsDesc);
   return {
     sortedVersions,
     versionsToKeep: sortedVersions.slice(0, retainCount),

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2605101237.0] - 2026-05-10:12:37
+
+### Added
+- None.
+
+### Fixed
+- None.
+
+### Changed
+- Adopt datetime-based versions for the workspace and CLI: `major.yymmddhhmm.x` with the middle segment in UTC (`yymmddhhmm`), replacing prior semver-style `5.x.x` strings. The patch segment is reserved for same-minute hotfixes; routine releases advance the datetime and reset `x` to `0`.
+- Keep published `overlord-cli` on the exact same version string as the root package.
+
+### Security
+- None.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `0.2605101237.0` and align release tooling with the new scheme.
+
 ## [5.19.0] - 2026-05-10:11:57
 
 ### Added

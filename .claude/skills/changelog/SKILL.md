@@ -24,7 +24,9 @@ user-invocable: true
 
 - **Never edit `CHANGELOG.md` directly** outside of this skill’s instructions.
 - **Always read the latest `CHANGELOG.md`** before making changes so you understand the existing structure and most recent version.
-- New entries should follow the pattern: `## [x.y.z] - YYYY-MM-DD:hh:mm` (for example: `## [0.7.0] - 2026-02-24:12:44`) The time is in UTC.
+- New entries use the **project version string** in brackets and a **UTC** timestamp after the colon.
+- **Current version format** (workspace and CLI): `major.yymmddhhmm.x` — three dot-separated parts where the middle segment is ten digits `yymmddhhmm` in **UTC**. Example heading: `## [0.2605101237.0] - 2026-05-10:12:37` (decode `2605101237` → 2026-05-10 12:37 UTC; the heading date/time should match that middle segment).
+- **Legacy entries** in `CHANGELOG.md` may still show historical semver-style tags (for example `## [5.19.0] - 2026-05-10:11:57`); do not rewrite old headings when adding new releases.
 - Use clear, user-facing language that describes **what changed and why it matters**, not low-level implementation details.
 - Prefer present/imperative phrasing in bullets (e.g. `Add agent waiting-response notifications` instead of `Added…`), unless matching an established style in the file.
 
@@ -49,7 +51,7 @@ Only include the following sections if they have changes:
 
 If a section has no changes for a given version, include a single bullet `- None.` under that heading.
 
-New versions should be appended **below** the top-of-file description and **above** older versions, so the newest version appears closest to the top (as in the existing `0.6.0` and `0.5.0` entries).
+New versions should be appended **below** the top-of-file description and **above** older versions, so the newest version appears closest to the top (as in existing entries in the file).
 
 ## Mapping changes to sections
 
@@ -82,12 +84,12 @@ If you are using a conventional commit style, you can map types to sections:
 
 1. **Read the current changelog**
    - Use `Read` on `CHANGELOG.md`.
-   - Identify the most recent version heading (for example `## [0.6.0] - 2026-02-24:12:00`) and review its structure.
+   - Identify the most recent version heading and review its structure.
 
 2. **Determine the target version**
    - If the user provides an explicit version, use that.
    - Otherwise, read `package.json` and use its `version` field as the version number for the new entry.
-   - Use today’s UTC date and time in `YYYY-MM-DD:hh:mm` format.
+   - For the heading suffix after the colon, use **UTC** in `YYYY-MM-DD:hh:mm` format. If the version matches `major.yymmddhhmm.x` (middle segment exactly ten digits), derive that timestamp from the middle segment so it matches the encoded release time; otherwise use the current UTC date and time.
 
 3. **Gather changes to document**
    - Use git history, pull request descriptions, and recent edits in the workspace to understand what changed since the last documented version.
@@ -109,7 +111,7 @@ If you are using a conventional commit style, you can map types to sections:
 
 7. **Verify**
    - Re-read the full changelog around the new entry to ensure dates, version numbers, and headings are correct.
-   - Confirm that the new entry matches the style of existing entries (like `0.6.0` and `0.5.0`).
+   - Confirm that the new entry matches the style of recent entries in the file (required sections, bullets, optional sections only when needed).
 
 ## Examples
 
@@ -171,4 +173,4 @@ You want to add a new release `0.7.0` on `2026-02-24` that introduces a new anal
 
 Use this pattern for all future changelog updates so that the file remains consistent and easy to scan.
 
-<!-- version: 1.1.0 -->
+<!-- version: 1.2.0 -->
