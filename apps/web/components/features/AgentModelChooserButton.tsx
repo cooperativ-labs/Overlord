@@ -53,7 +53,9 @@ export function AgentModelChooserButton({
   initialSelection,
   disabled = false,
   onSelectionChange,
-  persistSelection = true
+  persistSelection = true,
+  onOpenChange,
+  className
 }: {
   ticketId?: string | null;
   objectiveId?: string | null;
@@ -61,6 +63,8 @@ export function AgentModelChooserButton({
   disabled?: boolean;
   onSelectionChange?: (selection: AgentModelSelection) => void;
   persistSelection?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  className?: string;
 }) {
   const { selection: preferenceSelection, setSelection: setPreferenceSelection } =
     useAgentModelPreference();
@@ -68,6 +72,7 @@ export function AgentModelChooserButton({
   const [selection, setSelection] = useState<AgentModelSelection>(
     initialSelection ?? preferenceSelection
   );
+  const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   // Track the last initialSelection value (by content) so we only re-sync local state when the
@@ -100,10 +105,20 @@ export function AgentModelChooserButton({
   const agent = getAgentTypeByValue(selection.agent);
   const label = getSelectionLabel(models, selection.model);
 
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  }
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button className="h-8 gap-2 px-3 text-xs" size="sm" variant="outline" disabled={disabled}>
+        <Button
+          className={cn('h-8 max-w-[230px] gap-2 px-3 text-xs', className)}
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+        >
           <Image
             src={agent.icon}
             alt={`${agent.label} icon`}

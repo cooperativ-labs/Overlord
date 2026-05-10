@@ -19,6 +19,7 @@ const AGENT_TYPES = [
 const LaunchAgentPayloadSchema = z.object({
   ticketId: z.string().min(1).max(256),
   agent: z.enum(AGENT_TYPES),
+  organizationId: z.number().int().positive().optional(),
   cwd: z.string().max(4096).optional(),
   launchMode: z.enum(['run', 'ask']).optional(),
   flags: z.array(z.string().max(512)).max(64).optional(),
@@ -533,6 +534,7 @@ export function registerTerminalIpc(): void {
     const { command, cwd, env } = await prepareAgentLaunch({
       ticketId: payload.ticketId,
       agent: payload.agent,
+      organizationId: payload.organizationId,
       cwd: payload.cwd,
       launchMode: payload.launchMode,
       flags: payload.flags,

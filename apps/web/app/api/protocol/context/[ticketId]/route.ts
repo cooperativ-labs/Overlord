@@ -223,7 +223,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   const platformUrl = getPlatformUrl(requestOrigin);
   const { claudeCode, codex, cursor, gemini, opencode, contextUrl } = buildLaunchCommands({
     platformUrl,
-    ticketId: ticket.ticket_id || ticketId
+    ticketId: ticket.ticket_id || ticketId,
+    organizationId
   });
 
   // Include the configured MCP URL for agent setup snippets.

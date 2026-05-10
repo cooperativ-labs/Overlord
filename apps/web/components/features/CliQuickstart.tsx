@@ -126,21 +126,13 @@ export function CliQuickstart({
     ]
   );
 
-  const nativeResumeCommands: Partial<QuickstartCommands> = useMemo(() => {
-    const claudeResume = buildNativeResumeCommand('claude', externalSessionId);
-    const codexResume = buildNativeResumeCommand('codex', externalSessionId);
-    const cursorResume = buildNativeResumeCommand('cursor', externalSessionId);
-    const geminiResume = buildNativeResumeCommand('gemini', externalSessionId);
-    const openCodeResume = buildNativeResumeCommand('opencode', externalSessionId);
-
-    return {
-      claude: claudeResume ?? 'claude --resume <claude-session-id>',
-      codex: codexResume ?? 'codex resume <codex-session-id>',
-      ...(cursorResume ? { cursor: cursorResume } : {}),
-      ...(geminiResume ? { gemini: geminiResume } : {}),
-      opencode: openCodeResume ?? 'opencode --continue --session <opencode-session-id>'
-    };
-  }, [externalSessionId]);
+  // Only the agent that issued the session ID can use its native resume command.
+  // A Codex session ID won't work with Claude (and vice versa), so we scope this
+  // to the active/issuing agent only.
+  const nativeResumeCommand = useMemo(
+    () => buildNativeResumeCommand(activeAgentValue, externalSessionId),
+    [activeAgentValue, externalSessionId]
+  );
 
   return (
     <section className="mb-6">
@@ -171,18 +163,17 @@ export function CliQuickstart({
               <div className="grid gap-2.5">
                 {externalSessionId ? (
                   <>
-                    <CommandRow
-                      label="Restart session"
-                      command={
-                        nativeResumeCommands[selectedAgent] ?? overlordResumeCommands[selectedAgent]
-                      }
-                    />
-                    {nativeResumeCommands[selectedAgent] ? (
-                      <CommandRow
-                        label="Restart session (Overlord wrapper)"
-                        command={overlordResumeCommands[selectedAgent]}
-                      />
+                    {selectedAgent === activeAgentValue && nativeResumeCommand ? (
+                      <CommandRow label="Restart session" command={nativeResumeCommand} />
                     ) : null}
+                    <CommandRow
+                      label={
+                        selectedAgent === activeAgentValue && nativeResumeCommand
+                          ? 'Restart session (Overlord wrapper)'
+                          : 'Restart session'
+                      }
+                      command={overlordResumeCommands[selectedAgent]}
+                    />
                   </>
                 ) : (
                   <CommandRow

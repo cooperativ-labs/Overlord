@@ -16,6 +16,7 @@ import { type WebAgentMode, WebAgentModeButton } from './WebAgentModeButton';
 
 type TicketHeaderActionProps = {
   ticketId: string;
+  organizationId: number;
   projectId: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   agentIdentifier: string | null;
@@ -33,6 +34,7 @@ type TicketHeaderActionProps = {
 
 export function TicketHeaderAction({
   ticketId,
+  organizationId,
   projectId,
   agentFlags,
   agentIdentifier,
@@ -74,6 +76,7 @@ export function TicketHeaderAction({
         }
         assignedSelection={assignedAgent}
         ticketId={ticketId}
+        organizationId={organizationId}
         projectId={projectId}
         agentFlags={agentFlags}
         commands={{

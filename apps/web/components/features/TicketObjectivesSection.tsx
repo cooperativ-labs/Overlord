@@ -26,6 +26,7 @@ type ObjectiveRow = Pick<
 
 type TicketObjectivesSectionProps = {
   ticketId: string;
+  organizationId?: number;
   objectives: ObjectiveRow[];
   objectiveAttachments: ObjectiveAttachment[];
   objectiveFileMentionPaths: string[];
@@ -41,6 +42,7 @@ type TicketObjectivesSectionProps = {
 
 export function TicketObjectivesSection({
   ticketId,
+  organizationId,
   objectives: initialObjectives,
   objectiveAttachments,
   objectiveFileMentionPaths,
@@ -104,6 +106,7 @@ export function TicketObjectivesSection({
           objectiveId={editableObjective?.id ?? ''}
           objectiveState={editableObjective?.state ?? 'complete'}
           ticketId={ticketId}
+          organizationId={organizationId}
           workingDirectory={workingDirectory}
           assignedAgent={editableObjectiveAssignedAgent}
           projectId={projectId}

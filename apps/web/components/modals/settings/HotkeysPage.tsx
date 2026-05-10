@@ -19,6 +19,20 @@ type QuickTaskApi = {
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta']);
 
+function keyFromPhysicalCode(event: globalThis.KeyboardEvent): string | null {
+  const { code } = event;
+  if (/^Key[A-Z]$/.test(code)) {
+    return code.slice(3);
+  }
+  if (/^Digit\d$/.test(code)) {
+    return code.slice(5);
+  }
+  if (/^Numpad\d$/.test(code)) {
+    return `num${code.slice(6)}`;
+  }
+  return null;
+}
+
 function eventToAccelerator(event: globalThis.KeyboardEvent): string | null {
   const parts: string[] = [];
   if (event.metaKey) parts.push('Command');
@@ -30,7 +44,7 @@ function eventToAccelerator(event: globalThis.KeyboardEvent): string | null {
     return null;
   }
 
-  let key = event.key;
+  let key = keyFromPhysicalCode(event) ?? event.key;
   if (key.length === 1) {
     key = key.toUpperCase();
   } else if (/^F\d{1,2}$/.test(key)) {

@@ -77,7 +77,7 @@ Command pattern:
 ```
 claude --append-system-prompt "$(cat <context-file>)" [--settings <temp-settings>] [--model <model>] [--effort <level>] <start-prompt>
 
-ovld launch claude --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch claude --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -151,7 +151,7 @@ Command pattern:
 ```
 codex [--model <model>] [-c model_reasoning_effort="<level>"] "$(cat <context-file>)"
 
-ovld launch codex --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch codex --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -202,7 +202,7 @@ Checklist:
 Checklist:
 - `ovld launch codex` is the documented primary launch command
 - `ovld connect codex` remains a compatibility alias for one-command launches
-- `ovld launch` supports Desktop-parity shell flags: `--working-directory`, `--launch-mode`, `--model`, `--thinking`, repeated `--flag`, `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command`
+- `ovld launch` supports Desktop-parity shell flags: `--organization-id`, `--working-directory`, `--launch-mode`, `--model`, `--thinking`, repeated `--flag`, `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command`
 
 ### 6. Demo / product copy
 
@@ -245,7 +245,7 @@ Command pattern:
 ```
 agent [--model <model>] "$(cat <context-file>)"
 
-ovld launch cursor --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
+ovld launch cursor --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -297,7 +297,7 @@ Command pattern:
 ```
 gemini [--model <model>] [--thinking-level <level>] "$(cat <context-file>)"
 
-ovld launch gemini --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
+ovld launch gemini --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--thinking <level>] [--flag <value> ...]
 ```
 
 Checklist:
@@ -362,7 +362,7 @@ Command pattern:
 ```
 opencode [--model <model>] --prompt "$(cat <context-file>)"
 
-ovld launch opencode --ticket-id <ticket_id> [--working-directory <path>] [--model <model>] [--flag <value> ...]
+ovld launch opencode --ticket-id <ticket_id> [--organization-id <id>] [--working-directory <path>] [--model <model>] [--flag <value> ...]
 ```
 
 Checklist:

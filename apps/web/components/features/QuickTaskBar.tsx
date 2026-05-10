@@ -4,6 +4,7 @@ import { ArrowUp, Bot, Plus, User, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
 import { useAgentModelPreference } from '@/components/features/AgentModelSelector';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -35,6 +36,7 @@ type ProjectOption = {
 type ExecutionTarget = 'agent' | 'human';
 
 type QuickTaskBarProps = {
+  defaultProjectId: string | null;
   projects: ProjectOption[];
 };
 
@@ -56,24 +58,35 @@ function getQuickTaskApi(): QuickTaskWindowApi | null {
   return api?.quickTask ?? null;
 }
 
-export function QuickTaskBar({ projects }: QuickTaskBarProps) {
+function resolveProjectId(projects: ProjectOption[], defaultProjectId: string | null): string {
+  if (defaultProjectId && projects.some(project => project.id === defaultProjectId)) {
+    return defaultProjectId;
+  }
+  return projects[0]?.id ?? '';
+}
+
+export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) {
   const [objective, setObjective] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id ?? '');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(() =>
+    resolveProjectId(projects, defaultProjectId)
+  );
   const [executionTarget, setExecutionTarget] = useState<ExecutionTarget>('agent');
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { selection, loaded: selectionLoaded } = useAgentModelPreference();
+  const { selection, setSelection, loaded: selectionLoaded } = useAgentModelPreference();
   const createTicketMutation = useCreateTicketMutation();
   const updateAssignmentMutation = useUpdateTicketAssignmentMutation();
   const updateFieldsMutation = useUpdateTicketFieldsMutation();
   const updateExecutionTargetMutation = useUpdateTicketExecutionTargetMutation();
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
+  const resolvedDefaultProjectId = resolveProjectId(projects, defaultProjectId);
 
   // Auto-resize textarea + window height
   const autoResize = useCallback(() => {
@@ -85,10 +98,24 @@ export function QuickTaskBar({ projects }: QuickTaskBarProps) {
     const container = containerRef.current;
     const api = getQuickTaskApi();
     if (container && api) {
-      const target = container.offsetHeight + 24;
+      const chooserAllowance = projectMenuOpen || modelMenuOpen ? 360 : 0;
+      const target = container.offsetHeight + chooserAllowance;
       api.setHeight(target).catch(() => {});
     }
-  }, []);
+  }, [modelMenuOpen, projectMenuOpen]);
+
+  useEffect(() => {
+    setSelectedProjectId(current => {
+      if (current && projects.some(project => project.id === current)) {
+        return current;
+      }
+      return resolvedDefaultProjectId;
+    });
+  }, [projects, resolvedDefaultProjectId]);
+
+  useEffect(() => {
+    autoResize();
+  }, [autoResize, stagedFiles.length]);
 
   useEffect(() => {
     requestAnimationFrame(() => {
@@ -103,13 +130,17 @@ export function QuickTaskBar({ projects }: QuickTaskBarProps) {
     if (!api) return;
     const off = api.onShown(() => {
       requestAnimationFrame(() => {
+        setSelectedProjectId(resolvedDefaultProjectId);
+        setProjectMenuOpen(false);
+        setModelMenuOpen(false);
         textareaRef.current?.focus();
+        autoResize();
       });
     });
     return () => {
       off?.();
     };
-  }, []);
+  }, [autoResize, resolvedDefaultProjectId]);
 
   const handleClose = useCallback(() => {
     const api = getQuickTaskApi();
@@ -275,11 +306,11 @@ export function QuickTaskBar({ projects }: QuickTaskBarProps) {
   const canSubmit = !!objective.trim() && !isSubmitting && !!selectedProject && selectionLoaded;
 
   return (
-    <div className="flex h-full w-full items-start justify-center p-3">
+    <div className="flex h-full w-full items-start justify-center p-0">
       <div
         ref={containerRef}
         className={cn(
-          'flex w-full max-w-[600px] flex-col gap-2 rounded-2xl border border-border/40',
+          'flex w-full flex-col gap-2 rounded-2xl border border-border/40',
           'bg-background/95 px-4 py-3 shadow-2xl backdrop-blur-md'
         )}
       >
@@ -363,7 +394,7 @@ export function QuickTaskBar({ projects }: QuickTaskBarProps) {
                   ) : (
                     <span className="h-3 w-3 rounded-[4px] border border-border bg-muted" />
                   )}
-                  <span className="max-w-[140px] truncate text-foreground/80">
+                  <span className="max-w-[110px] truncate text-foreground/80">
                     {selectedProject?.name ?? 'No project'}
                   </span>
                 </button>
@@ -432,6 +463,16 @@ export function QuickTaskBar({ projects }: QuickTaskBarProps) {
                 <User className="h-3.5 w-3.5" />
               </button>
             </div>
+
+            <AgentModelChooserButton
+              ticketId={null}
+              initialSelection={selection}
+              disabled={isSubmitting}
+              onSelectionChange={setSelection}
+              persistSelection={false}
+              onOpenChange={setModelMenuOpen}
+              className="border-0 bg-transparent px-2 shadow-none hover:bg-muted"
+            />
           </div>
 
           {/* Send */}

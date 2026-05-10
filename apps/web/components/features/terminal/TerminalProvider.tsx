@@ -9,6 +9,7 @@ type TerminalContextValue = {
   launchAgent: (
     ticketId: string,
     agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
+    organizationId?: number,
     cwd?: string,
     launchMode?: 'run' | 'ask',
     flags?: string[],
@@ -28,6 +29,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
     async (
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
+      organizationId?: number,
       cwd?: string,
       launchMode: 'run' | 'ask' = 'run',
       flags?: string[],
@@ -40,6 +42,7 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
       await api.terminal.launchAgent(
         ticketId,
         agent,
+        organizationId,
         cwd,
         launchMode,
         flags,

@@ -190,6 +190,7 @@ export function QuickRunModal({
           await launchAgent(
             createdTicket.id,
             selection.agent,
+            createdTicket.organizationId,
             selectedProject?.local_working_directory ?? undefined,
             'run',
             undefined,

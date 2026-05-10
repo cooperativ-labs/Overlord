@@ -72,6 +72,7 @@ const agentIdentifierMap = {
 };
 
 const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
+const TICKET_ID_REGEX = /^(\d+):\d+$/;
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -104,12 +105,32 @@ function buildExtraArgs(agent, options = {}) {
   return [...args, ...extraFlags];
 }
 
+function parseOrganizationId(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function organizationIdFromTicketId(ticketId) {
+  const match = String(ticketId ?? '').trim().match(TICKET_ID_REGEX);
+  return match ? parseOrganizationId(match[1]) : null;
+}
+
+function resolveLaunchOrganizationId(ticketId, optionsOrganizationId, authOrganizationId) {
+  return (
+    parseOrganizationId(optionsOrganizationId) ??
+    organizationIdFromTicketId(ticketId) ??
+    parseOrganizationId(authOrganizationId)
+  );
+}
+
 function buildRemoteLaunchCommand(agent, options) {
+  const organizationId = parseOrganizationId(options.organizationId);
   const envParts = [];
   for (const [key, value] of Object.entries({
     OVERLORD_URL: process.env.OVERLORD_URL,
     OVERLORD_ACCESS_TOKEN: process.env.OVERLORD_ACCESS_TOKEN,
-    OVERLORD_ORGANIZATION_ID: process.env.OVERLORD_ORGANIZATION_ID,
+    OVERLORD_ORGANIZATION_ID: organizationId ?? process.env.OVERLORD_ORGANIZATION_ID,
     OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET,
     TICKET_ID: process.env.TICKET_ID,
     AGENT_IDENTIFIER: agentIdentifierMap[agent],
@@ -122,6 +143,9 @@ function buildRemoteLaunchCommand(agent, options) {
   }
 
   const nestedParts = ['ovld', 'launch', agent, '--ticket-id', shellQuote(process.env.TICKET_ID ?? '')];
+  if (organizationId) {
+    nestedParts.push('--organization-id', String(organizationId));
+  }
   if (options.launchMode === 'ask') {
     nestedParts.push('--launch-mode', 'ask');
   }
@@ -175,6 +199,7 @@ function printLauncherHelp() {
 
 Options:
   --ticket-id <ticket_id>           Ticket to launch or resume (e.g. 1:899). Also accepts UUID.
+  --organization-id <id>            Organization scope for UUID ticket ids; inferred from ticket_id when possible.
   --working-directory <path>        Change to a local working directory before launch
   --launch-mode <run|ask>           Ask mode adjusts the fetched prompt context
   --model <identifier>              Preferred model identifier
@@ -254,8 +279,16 @@ async function runAgent(agent, mode = 'run', options = {}) {
   }
 
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveAuth();
+  const launchOrganizationId = resolveLaunchOrganizationId(
+    ticketId,
+    options.organizationId,
+    organizationId
+  );
   if (options.sshCommand?.trim()) {
-    const remoteCommand = buildRemoteLaunchCommand(agent, options);
+    const remoteCommand = buildRemoteLaunchCommand(agent, {
+      ...options,
+      organizationId: launchOrganizationId
+    });
     try {
       execFileSync('sh', ['-lc', remoteCommand], { stdio: 'inherit', env: process.env });
       return;
@@ -270,12 +303,16 @@ async function runAgent(agent, mode = 'run', options = {}) {
     platformUrl,
     bearerToken,
     localSecret,
-    organizationId,
+    launchOrganizationId,
     ticketId,
     agent
   );
 
-  const childEnv = { ...process.env, AGENT_IDENTIFIER: agentIdentifierMap[agent] };
+  const childEnv = {
+    ...process.env,
+    AGENT_IDENTIFIER: agentIdentifierMap[agent],
+    ...(launchOrganizationId ? { OVERLORD_ORGANIZATION_ID: String(launchOrganizationId) } : {})
+  };
   const extraArgs = buildExtraArgs(agent, options);
 
   try {
@@ -404,6 +441,8 @@ export async function runLauncherCommand(command, args) {
     model: typeof flags.model === 'string' ? flags.model.trim() : '',
     thinking: typeof flags.thinking === 'string' ? flags.thinking.trim() : '',
     flags: repeatedFlags,
+    organizationId:
+      typeof flags['organization-id'] === 'string' ? flags['organization-id'].trim() : '',
     sshCommand: typeof flags['ssh-command'] === 'string' ? flags['ssh-command'].trim() : '',
     remoteWorkingDirectory:
       typeof flags['remote-working-directory'] === 'string'

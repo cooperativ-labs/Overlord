@@ -37,6 +37,7 @@ type AgentSplitButtonProps = {
   selectedAgent: AgentSelectorValue;
   onSelectAgent: (agent: AgentSelectorValue) => void;
   ticketId: string;
+  organizationId?: number;
   projectId?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
   commands?: Record<LaunchAgentTypeValue, string>;
@@ -106,6 +107,7 @@ export function AgentSplitButton({
   selectedAgent,
   onSelectAgent,
   ticketId,
+  organizationId,
   projectId,
   agentFlags,
   commands,
@@ -197,6 +199,7 @@ export function AgentSplitButton({
         await launchAgent(
           ticketId,
           agentValue,
+          organizationId,
           effectiveWorkingDirectory ?? undefined,
           'run',
           agentFlags?.[agentValue],

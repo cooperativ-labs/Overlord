@@ -1,13 +1,27 @@
 import { QuickTaskBar } from '@/components/features/QuickTaskBar';
+import { fetchProfileSettings } from '@/lib/actions/profile-settings';
 import { getProjectsForCurrentUser } from '@/lib/actions/projects';
+import { createClientForRequest, getRequestDefaultProjectId } from '@/supabase/utils/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function QuickTaskPage() {
-  const projects = await getProjectsForCurrentUser();
+  const supabase = await createClientForRequest();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  const [projects, profileSettings] = await Promise.all([
+    getProjectsForCurrentUser(),
+    user ? fetchProfileSettings(supabase, user.id) : Promise.resolve(null)
+  ]);
+  const defaultProjectId = await getRequestDefaultProjectId({
+    profileDefaultProjectId: profileSettings?.default_project_id ?? null
+  });
 
   return (
     <QuickTaskBar
+      defaultProjectId={defaultProjectId}
       projects={projects.map(p => ({
         id: p.id,
         name: p.name,

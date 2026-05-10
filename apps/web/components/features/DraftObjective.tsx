@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 
 type DraftObjectiveProps = {
   ticketId: string;
+  organizationId?: number;
   objectiveId: string;
   objectiveState: string | null;
   initialValue: string;
@@ -39,6 +40,7 @@ type DraftObjectiveProps = {
 
 export function DraftObjective({
   ticketId,
+  organizationId,
   objectiveId,
   objectiveState,
   initialValue,
@@ -155,6 +157,7 @@ export function DraftObjective({
                   assignedAgent ? getLaunchAgentTypeByIdentifier(assignedAgent.agent) : undefined
                 }
                 ticketId={ticketId}
+                organizationId={organizationId}
                 projectId={projectId ?? null}
                 agentFlags={agentFlags}
                 commands={

@@ -24,6 +24,7 @@ const agentIdentifierMap: Record<AgentType, string> = {
 type LaunchAgentInput = {
   ticketId: string;
   agent: AgentType;
+  organizationId?: number;
   cwd?: string;
   launchMode?: AgentLaunchMode;
   /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
@@ -209,9 +210,12 @@ async function resolveLaunchAuth(input: LaunchAgentInput): Promise<{
   const credentials = loadElectronCredentials();
   let oauthToken = credentials?.access_token?.trim() ?? '';
   const organizationId =
-    typeof credentials?.organization_id === 'number' && Number.isFinite(credentials.organization_id)
-      ? credentials.organization_id
-      : null;
+    typeof input.organizationId === 'number' && Number.isFinite(input.organizationId)
+      ? input.organizationId
+      : typeof credentials?.organization_id === 'number' &&
+          Number.isFinite(credentials.organization_id)
+        ? credentials.organization_id
+        : null;
 
   if (
     credentials?.refresh_token &&
@@ -482,7 +486,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       '  exit 1',
       'fi'
     ].join('; ');
-    const remoteLaunchEnv = { ...launchEnv, ...codexLaunchEnv };
+    const remoteLaunchEnv: Record<string, string> = { ...launchEnv, ...codexLaunchEnv };
     const envExports = Object.entries(remoteLaunchEnv)
       .map(([key, value]) => `export ${key}=${shellQuote(value)}`)
       .join('; ');

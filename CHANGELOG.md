@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.18.0] - 2026-05-10:09:55
+
+### Added
+- Add optional `--organization-id` to `ovld launch` so organization scope is explicit for UUID ticket ids, inferred from `org:seq` ticket identifiers when possible, and propagated through remote SSH launches and agent child environment.
+- Pass organization id through web launch and resume command builders, protocol context launch snippets, and Electron agent launch so auth resolves against the ticket's organization when provided.
+- Group projects in the app sidebar under collapsible organization sections when viewing all organizations.
+- Quick Task honors the user's default project selection, adds in-flow agent model selection, expands the host window while project or model pickers are open, and resets the chosen project when the window is shown again.
+
+### Fixed
+- Show the native per-agent resume command in CLI quick start only for the agent that issued the external session id so restart copy is not misleading when switching agents.
+
+### Changed
+- Record global desktop hotkeys using physical key codes for letter, number, and numpad keys so captured accelerators stay consistent across keyboard layouts.
+- Quick Task bar layout stretches to the available width with tighter outer padding.
+
+### Security
+- None.
+
+### Documentation
+- Update connector surface guidance with optional `--organization-id` on `ovld launch` examples.
+
+### Chore
+- Bump workspace and `overlord-cli` package versions to `5.18.0`.
+
 ## [5.17.0] - 2026-05-10:08:54
 
 ### Added

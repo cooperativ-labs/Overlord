@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ChevronDown,
   GraduationCap,
   ListChecks,
   MessageSquarePlus,
@@ -25,6 +26,7 @@ import { FeedbackModal } from '@/components/modals/FeedbackModal';
 import { SettingsModal, type SettingsNavSection } from '@/components/modals/SettingsModal';
 import { NavUser } from '@/components/nav-user';
 import { TeamSwitcher } from '@/components/team-switcher';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +101,130 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
         <ProjectColorSetter value={color} onSelect={handleChangeColor} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+type ProjectMenuItemProps = {
+  project: SidebarProject;
+  isActive: boolean;
+  onNavigationClick: (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    project: SidebarProject,
+    destinationPath: string
+  ) => void;
+};
+
+function ProjectMenuItem({ project, isActive, onNavigationClick }: ProjectMenuItemProps) {
+  return (
+    <SidebarMenuItem key={project.id}>
+      <SidebarMenuButton asChild isActive={isActive} tooltip={project.name}>
+        <Link
+          href={`/projects/${project.id}`}
+          onClick={event => onNavigationClick(event, project, `/projects/${project.id}`)}
+        >
+          <span
+            className="h-3 w-3 rounded-[6px] border group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:border-0"
+            style={{ backgroundColor: project.color, borderColor: project.color }}
+          />
+          <span className="group-data-[collapsible=icon]:hidden">{project.name}</span>
+        </Link>
+      </SidebarMenuButton>
+      <ProjectColorMenu projectId={project.id} color={project.color} />
+    </SidebarMenuItem>
+  );
+}
+
+type OrgGroupedProjectsProps = {
+  projects: SidebarProject[];
+  organizations: UserOrganization[];
+  isProjectActive: (project: SidebarProject) => boolean;
+  onNavigationClick: (
+    event: React.MouseEvent<HTMLAnchorElement>,
+    project: SidebarProject,
+    destinationPath: string
+  ) => void;
+};
+
+function OrgGroupedProjects({
+  projects,
+  organizations,
+  isProjectActive,
+  onNavigationClick
+}: OrgGroupedProjectsProps) {
+  const orgMap = React.useMemo(
+    () => new Map(organizations.map(org => [org.id, org.name])),
+    [organizations]
+  );
+
+  const groups = React.useMemo(() => {
+    const map = new Map<number, SidebarProject[]>();
+    for (const project of projects) {
+      const list = map.get(project.organizationId) ?? [];
+      list.push(project);
+      map.set(project.organizationId, list);
+    }
+    return Array.from(map.entries()).map(([orgId, orgProjects]) => ({
+      orgId,
+      orgName: orgMap.get(orgId) ?? 'Unknown',
+      projects: orgProjects
+    }));
+  }, [projects, orgMap]);
+
+  const [collapsedOrgs, setCollapsedOrgs] = React.useState<Set<number>>(new Set());
+
+  function toggleOrg(orgId: number) {
+    setCollapsedOrgs(prev => {
+      const next = new Set(prev);
+      if (next.has(orgId)) {
+        next.delete(orgId);
+      } else {
+        next.add(orgId);
+      }
+      return next;
+    });
+  }
+
+  if (groups.length <= 1) {
+    return (
+      <SidebarMenu>
+        {projects.map(project => (
+          <ProjectMenuItem
+            key={project.id}
+            project={project}
+            isActive={isProjectActive(project)}
+            onNavigationClick={onNavigationClick}
+          />
+        ))}
+      </SidebarMenu>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {groups.map(({ orgId, orgName, projects: orgProjects }) => {
+        const isOpen = !collapsedOrgs.has(orgId);
+        return (
+          <Collapsible key={orgId} open={isOpen} onOpenChange={() => toggleOrg(orgId)}>
+            <CollapsibleTrigger className="group/org-trigger flex w-full items-center gap-1 px-2 py-1 text-xs font-medium text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors">
+              <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/org-trigger:-rotate-90" />
+              <span className="truncate group-data-[collapsible=icon]:hidden">{orgName}</span>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarMenu>
+                {orgProjects.map(project => (
+                  <ProjectMenuItem
+                    key={project.id}
+                    project={project}
+                    isActive={isProjectActive(project)}
+                    onNavigationClick={onNavigationClick}
+                  />
+                ))}
+              </SidebarMenu>
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      })}
+    </div>
   );
 }
 
@@ -292,34 +418,25 @@ export function AppSidebar({
             <Plus className="h-3 w-3" />
           </SidebarGroupAction>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {displayedProjects.map(project => (
-                <SidebarMenuItem key={project.id}>
-                  <SidebarMenuButton
-                    asChild
+            {selectedOrgId !== null ? (
+              <SidebarMenu>
+                {displayedProjects.map(project => (
+                  <ProjectMenuItem
+                    key={project.id}
+                    project={project}
                     isActive={isProjectActive(project)}
-                    tooltip={project.name}
-                  >
-                    <Link
-                      href={`/projects/${project.id}`}
-                      onClick={event =>
-                        handleProjectNavigationClick(event, project, `/projects/${project.id}`)
-                      }
-                    >
-                      <span
-                        className="h-3 w-3 rounded-[6px] border group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:w-4 group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:border-0"
-                        style={{
-                          backgroundColor: project.color,
-                          borderColor: project.color
-                        }}
-                      />
-                      <span className="group-data-[collapsible=icon]:hidden">{project.name}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  <ProjectColorMenu projectId={project.id} color={project.color} />
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+                    onNavigationClick={handleProjectNavigationClick}
+                  />
+                ))}
+              </SidebarMenu>
+            ) : (
+              <OrgGroupedProjects
+                projects={displayedProjects}
+                organizations={organizations}
+                isProjectActive={isProjectActive}
+                onNavigationClick={handleProjectNavigationClick}
+              />
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

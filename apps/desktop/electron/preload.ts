@@ -29,6 +29,7 @@ const electronAPI = {
     launchAgent: (
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
+      organizationId?: number,
       cwd?: string,
       launchMode?: 'run' | 'ask',
       flags?: string[],
@@ -40,6 +41,7 @@ const electronAPI = {
       ipcRenderer.invoke('terminal:launch-agent', {
         ticketId,
         agent,
+        organizationId,
         cwd,
         launchMode,
         flags,

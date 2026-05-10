@@ -4,6 +4,7 @@ import type { SshConnectionConfig } from '@/lib/workspace/types';
 export type LaunchAgentName = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 
 type LaunchCommandOptions = {
+  organizationId?: number | null;
   workingDirectory?: string | null;
   launchMode?: 'run' | 'ask' | null;
   flags?: string[] | null;
@@ -86,6 +87,7 @@ function normalizeAgentLaunchOptions(
   const assignedAgent = input.assignedAgent?.agent === agent ? input.assignedAgent : null;
   return {
     workingDirectory: input.workingDirectory,
+    organizationId: input.organizationId,
     launchMode: 'run',
     flags: input.agentFlags?.[agent] ?? [],
     model: assignedAgent?.model ?? null,
@@ -102,6 +104,10 @@ export function buildAgentLaunchCommand(
   options: LaunchCommandOptions = {}
 ): string {
   const parts = ['ovld', 'launch', agent, '--ticket-id', shellQuote(ticketId)];
+
+  if (typeof options.organizationId === 'number' && Number.isFinite(options.organizationId)) {
+    parts.push('--organization-id', String(options.organizationId));
+  }
 
   pushOptionalFlag(parts, '--working-directory', options.workingDirectory ?? null);
 
@@ -144,6 +150,7 @@ export function buildAgentLaunchCommand(
 export function buildLaunchCommands({
   ticketId,
   platformUrl,
+  organizationId,
   workingDirectory,
   sshCommand,
   remoteWorkingDirectory,
@@ -155,6 +162,7 @@ export function buildLaunchCommands({
   const sharedInput: BuildLaunchCommandsInput = {
     ticketId,
     platformUrl,
+    organizationId,
     workingDirectory,
     sshCommand,
     remoteWorkingDirectory,
@@ -198,13 +206,20 @@ export function buildLaunchCommands({
  * The `overlord resume` subcommand fetches latest ticket context and
  * passes it as the first resumed prompt so new system messages are included.
  */
-export function buildResumeCommands({ ticketId }: BuildLaunchCommandsInput): ResumeCommands {
+export function buildResumeCommands({
+  ticketId,
+  organizationId
+}: BuildLaunchCommandsInput): ResumeCommands {
+  const organizationFlag =
+    typeof organizationId === 'number' && Number.isFinite(organizationId)
+      ? ` --organization-id ${organizationId}`
+      : '';
   return {
-    claudeCode: `ovld restart claude --ticket-id ${ticketId}`,
-    codex: `ovld restart codex --ticket-id ${ticketId}`,
-    cursor: `ovld restart cursor --ticket-id ${ticketId}`,
-    gemini: `ovld restart gemini --ticket-id ${ticketId}`,
-    opencode: `ovld restart opencode --ticket-id ${ticketId}`
+    claudeCode: `ovld restart claude --ticket-id ${ticketId}${organizationFlag}`,
+    codex: `ovld restart codex --ticket-id ${ticketId}${organizationFlag}`,
+    cursor: `ovld restart cursor --ticket-id ${ticketId}${organizationFlag}`,
+    gemini: `ovld restart gemini --ticket-id ${ticketId}${organizationFlag}`,
+    opencode: `ovld restart opencode --ticket-id ${ticketId}${organizationFlag}`
   };
 }
 

@@ -109,6 +109,7 @@ interface ElectronAPI {
     launchAgent: (
       ticketId: string,
       agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
+      organizationId?: number,
       cwd?: string,
       launchMode?: 'run' | 'ask',
       flags?: string[],
