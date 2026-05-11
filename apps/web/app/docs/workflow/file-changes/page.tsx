@@ -32,15 +32,13 @@ Overlord uses **[Jujutsu](https://docs.jj-vcs.dev/latest/)** (\`jj\`), a modern 
 In simple terms:
 
 - **Git** stays the format teams already use for branches and collaboration.
-- **jj** helps Overlord keep **isolated, per-session workspaces** and take **lightweight snapshots** so file history and checkpoints do not depend on fragile ad hoc copies.
+- **jj** (when you enable it) lets Overlord take **lightweight snapshots** in your real working directory so checkpoints and file-change metadata stay tied to the tree agents edited.
 
 For ordinary Git repos, Overlord can still read status and diffs directly from the linked working directory.
 
-For plain folders, version control is **off by default**. In the Desktop app, project settings include **Install version control in this folder**. Enabling it initializes \`jj\` in the original local folder and stores the opt-in on your user/project settings. Current Changes then reads that same folder for status and diffs.
+For plain folders, version control is **off by default** — Overlord does not initialize or copy the repo with jj until you opt in. In the Desktop app, project settings include **Initialize in this folder** after you install \`jj\` on your machine. That stores the opt-in on your user/project settings and runs \`jj\` in the working directory you picked. Current Changes then reads that same folder for status and diffs.
 
-When \`jj\` is installed and healthy, delivery creates a local checkpoint before the API request and stores the JJ ids with the file-change records. Older managed sessions may still use a shadow repository and jj workspaces under Overlord’s application data directory, but in-folder JJ is the normal path for plain folders.
-
-If \`jj\` is missing or fails its health check, Overlord **falls back** to a Git worktree backend. Change records and delivery still work; only the richer jj-specific provenance fields may be empty for those sessions.
+When \`jj\` is installed and healthy, delivery creates a local checkpoint before the API request and stores the JJ ids with the file-change records. If \`jj\` is missing, version control is off, or the health check fails, Overlord **falls back** to a Git worktree backend where appropriate. Change records and delivery still work; jj-specific provenance fields may be empty in those cases.
 
 ## Why this matters for review
 

@@ -567,4 +567,27 @@ export function registerTerminalIpc(): void {
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
   });
+
+  ipcMain.handle('terminal:open-homebrew-jj-install', async () => {
+    if (process.platform !== 'darwin') {
+      return { ok: false as const, error: 'Use the install guide for your platform.' };
+    }
+    const pathLine =
+      'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$HOME/.cargo/bin:$PATH"';
+    const command = [
+      pathLine,
+      'if command -v brew >/dev/null 2>&1; then',
+      '  brew install jj',
+      'else',
+      '  echo "Homebrew (brew) was not found on PATH."',
+      '  echo "See: https://docs.jj-vcs.dev/latest/install/"',
+      'fi',
+      'echo ""',
+      'echo "When jj is installed, return to Overlord and click Initialize in this folder."',
+      'read -p "Press Enter to close... " _'
+    ].join('\n');
+    const scriptPath = writeLaunchScript(command);
+    await launchScriptInExternalTerminal(scriptPath);
+    return { ok: true as const };
+  });
 }

@@ -21,7 +21,7 @@ Bundle-backed agents get a slim ticket prompt; unbundled agents always receive t
 - **Bundle supported:** `claude`, `cursor`, `opencode`
 - **Legacy mode only:** `codex`, `gemini`
 
-Desktop local launches run managed JJ workspace provisioning **in the Electron main process** (`prepareManagedSnapshotWorkspace` after `GET /api/protocol/context/...`) and set `OVERLORD_SNAPSHOT_JSON` from that result. When the user has enabled in-folder JJ version control (`project_user.local_version_control = jj`), Desktop launches in the original local working directory instead and sets `OVERLORD_SNAPSHOT_JSON` to that folder. The context API no longer runs `jj` on the server. The CLI `deliver` command creates a local checkpoint before the `/api/protocol/deliver` request for JJ/Git workspaces.
+Desktop local launches set `OVERLORD_SNAPSHOT_JSON` **only** when the user has enabled in-folder JJ version control (`project_user.local_version_control = jj`); the app then points snapshot metadata at the real working directory (after `GET /api/protocol/context/...`). There is no automatic managed/shadow jj workspace for projects that leave version control off. The context API does not run `jj` on the server. The CLI `deliver` command creates a local checkpoint before the `/api/protocol/deliver` request for JJ/Git workspaces.
 
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)

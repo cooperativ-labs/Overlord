@@ -4,8 +4,6 @@ import crypto from 'node:crypto';
 import os from 'os';
 import path from 'path';
 
-import { ticketSequenceFromTicketId } from '../../../../lib/overlord/human-ticket-id';
-import { prepareManagedSnapshotWorkspace } from '../../../../lib/snapshot/prepare-managed-workspace';
 import { parseSshCommand } from '../../../../lib/ssh/shell-utils';
 
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
@@ -416,7 +414,6 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // Prefer the human-readable ticket_id from the response header so TICKET_ID
   // env var holds a value like "1:899" instead of the raw UUID.
   const humanTicketId = response.headers.get('X-Ticket-Id');
-  const ticketIdForWorkspace = humanTicketId?.trim() || input.ticketId;
   if (humanTicketId) {
     launchEnv.TICKET_ID = humanTicketId;
     const orgFromHumanTicketId = organizationIdFromTicketId(humanTicketId);
@@ -437,28 +434,6 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
       workspacePath: input.cwd.trim(),
       workspaceName: path.basename(input.cwd.trim())
     };
-  }
-  if (
-    !clientSnapshotContext &&
-    !isRemote &&
-    input.projectId?.trim() &&
-    input.cwd?.trim() &&
-    ticketSequenceFromTicketId(ticketIdForWorkspace) !== null
-  ) {
-    const ticketSequence = ticketSequenceFromTicketId(ticketIdForWorkspace);
-    if (ticketSequence !== null) {
-      const prepared = await prepareManagedSnapshotWorkspace({
-        projectId: input.projectId.trim(),
-        sourceDirectory: input.cwd.trim(),
-        sessionId: launchSessionId,
-        ticketId: ticketIdForWorkspace,
-        ticketSequence,
-        prefer: 'jj'
-      });
-      if (prepared) {
-        clientSnapshotContext = prepared as unknown as Record<string, unknown>;
-      }
-    }
   }
 
   const resolvedCwd =

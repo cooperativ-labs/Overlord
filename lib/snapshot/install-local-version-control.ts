@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
+import { envWithUserCliPath } from '../os/cli-path-env';
+
 const execFileAsync = promisify(execFile);
 
 type CommandResult = { stdout: string; stderr: string };
@@ -40,7 +42,7 @@ async function defaultRunner(
   try {
     const { stdout, stderr } = await execFileAsync(command, args, {
       cwd: options.cwd,
-      env: { ...process.env, NO_COLOR: '1' },
+      env: { ...envWithUserCliPath(), NO_COLOR: '1' },
       maxBuffer: 10 * 1024 * 1024,
       timeout: 60_000
     });
@@ -92,7 +94,9 @@ export async function installLocalVersionControl(
   } catch {
     return {
       ok: false,
-      error: 'The `jj` command was not found. Install Jujutsu before enabling version control.'
+      error:
+        'The `jj` command was not found from Overlord (GUI apps often see a short PATH). ' +
+        'Install Jujutsu, or use “Install jj in Terminal” in project settings, then try again.'
     };
   }
 

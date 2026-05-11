@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Folder, Loader2 } from 'lucide-react';
+import { BookOpen, Download, Folder, Loader2, Terminal } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -87,6 +87,7 @@ export function WorkflowPage({
     initialLocalVersionControlError
   );
   const [installingVersionControl, setInstallingVersionControl] = useState(false);
+  const [openingHomebrewJjInstall, setOpeningHomebrewJjInstall] = useState(false);
   const directoryInputRef = useRef<HTMLInputElement>(null);
   const hasSavedWorkingDirectory =
     savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
@@ -122,6 +123,14 @@ export function WorkflowPage({
   const [sshSaveState, setSshSaveState] = useState<ButtonLoadingState>('default');
   const [sshError, setSshError] = useState<string | null>(null);
   const hasSshConfig = savedSshHost.trim().length > 0 && savedSshUser.trim().length > 0;
+
+  const isDarwinDesktop = useMemo(
+    () =>
+      isElectron &&
+      typeof navigator !== 'undefined' &&
+      /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent),
+    [isElectron]
+  );
 
   // Remote helper state
   const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
@@ -317,7 +326,7 @@ export function WorkflowPage({
     }
 
     const confirmed = window.confirm(
-      'Install version control in this folder?\n\nOverlord will initialize Jujutsu metadata in the project folder so agent changes can be checkpointed and reviewed.'
+      'Initialize Jujutsu (jj) in this folder?\n\nOverlord will run jj in your working directory so agent changes can be checkpointed. This only applies when jj is installed on your Mac.'
     );
     if (!confirmed) return;
 
@@ -347,7 +356,9 @@ export function WorkflowPage({
       });
       setLocalVersionControl('jj');
       setLocalVersionControlInstalledAt(installedAt);
-      toast.success(result.alreadyInstalled ? 'Jujutsu already enabled.' : 'Jujutsu enabled.');
+      toast.success(
+        result.alreadyInstalled ? 'Jujutsu already initialized here.' : 'Jujutsu initialized.'
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to install version control.';
       setLocalVersionControlError(message);
@@ -359,6 +370,37 @@ export function WorkflowPage({
       });
     } finally {
       setInstallingVersionControl(false);
+    }
+  }
+
+  async function handleOpenJjInstallGuide() {
+    const url = 'https://docs.jj-vcs.dev/latest/install/';
+    if (api?.app?.openExternal) {
+      await api.app.openExternal(url);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleOpenHomebrewJjInstall() {
+    if (!api?.terminal?.openHomebrewJjInstall) {
+      toast.error('Update the Overlord desktop app, or use the install guide.');
+      return;
+    }
+    setOpeningHomebrewJjInstall(true);
+    try {
+      const result = await api.terminal.openHomebrewJjInstall();
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.message(
+        'A terminal window should open. When jj is installed, click Initialize in this folder.'
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to open terminal.');
+    } finally {
+      setOpeningHomebrewJjInstall(false);
     }
   }
 
@@ -496,24 +538,40 @@ export function WorkflowPage({
             <p className="text-xs text-destructive">{workingDirectoryError}</p>
           ) : null}
           <div className="mt-2 rounded-md border bg-muted/20 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium">Install version control in this folder</p>
+                <p className="text-xs font-medium">Local checkpoints (Jujutsu / jj)</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Overlord uses{' '}
+                  This stays{' '}
+                  <span className="font-medium text-foreground">off unless you turn it on</span>.
+                  Overlord does not run jj against your folder until you initialize it here, so copied
+                  or imported repos are not tracked in the background. When enabled, Overlord uses{' '}
                   <a
                     className="underline underline-offset-2"
                     href="/docs/workflow/file-changes"
                     target="_blank"
                     rel="noreferrer"
                   >
-                    jujutsu
+                    Jujutsu
                   </a>{' '}
-                  to let you clearly track and revert changes AI agents make in this folder.
+                  in the working directory above for checkpoints and clearer file-change metadata.
                 </p>
+                <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
+                  <li>
+                    Install the <code className="rounded bg-muted px-1">jj</code> CLI on this
+                    machine (the desktop app uses the same PATH as other GUI apps; Homebrew installs
+                    usually land in <code className="rounded bg-muted px-1">/opt/homebrew/bin</code>
+                    ).
+                  </li>
+                  <li>
+                    Choose <span className="font-medium text-foreground">Initialize in this folder</span>{' '}
+                    so jj metadata exists directly in that directory (or adopt an existing jj repo
+                    there).
+                  </li>
+                </ol>
                 {localVersionControl === 'jj' ? (
                   <p className="mt-2 text-xs text-emerald-600">
-                    Jujutsu enabled
+                    Jujutsu active for this project
                     {localVersionControlInstalledAt
                       ? ` · ${new Date(localVersionControlInstalledAt).toLocaleString()}`
                       : ''}
@@ -523,32 +581,66 @@ export function WorkflowPage({
                   <p className="mt-2 text-xs text-destructive">{localVersionControlError}</p>
                 ) : null}
               </div>
-              <Button
-                type="button"
-                variant={localVersionControl === 'jj' ? 'outline' : 'default'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={handleInstallVersionControl}
-                disabled={
-                  installingVersionControl ||
-                  !hasSavedWorkingDirectory ||
-                  localVersionControl === 'jj'
-                }
-              >
-                {installingVersionControl ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Installing
-                  </>
-                ) : localVersionControl === 'jj' ? (
-                  'Enabled'
-                ) : (
-                  <>
-                    <Download className="h-3.5 w-3.5" />
-                    Install
-                  </>
-                )}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {isDarwinDesktop ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => void handleOpenHomebrewJjInstall()}
+                    disabled={openingHomebrewJjInstall}
+                  >
+                    {openingHomebrewJjInstall ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Opening…
+                      </>
+                    ) : (
+                      <>
+                        <Terminal className="h-3.5 w-3.5" />
+                        Install jj (Homebrew)
+                      </>
+                    )}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => void handleOpenJjInstallGuide()}
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Install guide
+                </Button>
+                <Button
+                  type="button"
+                  variant={localVersionControl === 'jj' ? 'outline' : 'default'}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={handleInstallVersionControl}
+                  disabled={
+                    installingVersionControl ||
+                    !hasSavedWorkingDirectory ||
+                    localVersionControl === 'jj'
+                  }
+                >
+                  {installingVersionControl ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Initializing…
+                    </>
+                  ) : localVersionControl === 'jj' ? (
+                    'Initialized'
+                  ) : (
+                    <>
+                      <Download className="h-3.5 w-3.5" />
+                      Initialize in this folder
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

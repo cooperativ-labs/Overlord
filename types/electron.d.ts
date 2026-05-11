@@ -124,6 +124,7 @@ interface ElectronAPI {
   terminal: {
     launchAgent: (params: LaunchTerminalAgentParams) => Promise<void>;
     chooseDirectory: () => Promise<string | null>;
+    openHomebrewJjInstall: () => Promise<{ ok: true } | { ok: false; error: string }>;
   };
   filesystem: {
     getGitBranches: (options?: WorkspacePayload) => Promise<{

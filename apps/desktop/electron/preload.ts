@@ -41,7 +41,8 @@ const electronAPI = {
       feedPostId?: string;
       initialQuestion?: string;
     }) => ipcRenderer.invoke('terminal:launch-agent', params),
-    chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
+    chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory'),
+    openHomebrewJjInstall: () => ipcRenderer.invoke('terminal:open-homebrew-jj-install')
   },
   filesystem: {
     directoryExists: (options?: WorkspacePayload) =>

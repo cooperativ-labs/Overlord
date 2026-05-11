@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605111412.0] - 2026-05-11:14:12
+
+### Added
+- macOS Desktop **Install jj (Homebrew)** action that opens an external terminal with PATH prepended and runs `brew install jj` when Homebrew is available.
+- **`lib/os/cli-path-env`** helpers that prepend common CLI locations (Homebrew, `~/.local/bin`, Cargo, and related paths) so subprocesses resolve `jj` and similar tools under Electron’s minimal GUI `PATH`.
+
+### Fixed
+- Reduce false **“jj not found”** failures during in-folder initialization by widening subprocess `PATH`, and surface clearer guidance when the CLI is still missing.
+
+### Changed
+- **Remove automatic managed shadow jj workspaces** on Desktop: local launches stay in the real working directory, and **`OVERLORD_SNAPSHOT_JSON`** is set for snapshot metadata only when the member has opted into in-folder Jujutsu (`project_user.local_version_control = jj`).
+- **Project workflow** settings clarify that local JJ is **opt-in**, rename the primary action to **Initialize in this folder**, add an **Install guide** link, and explain GUI `PATH` limitations next to the JJ controls.
+
+### Security
+- None.
+
+### Removed
+- Delete the unused **`lib/snapshot`** managed-backend stack (`backend`, `paths`, `prepare-managed-workspace`, `root`, `types`) and the old snapshot unit tests superseded by this model.
+
+### Refactor
+- Narrow **`lib/snapshot`** public surface to local install and checkpoint helpers only.
+
+### Test
+- Add **`tests/lib/os/cli-path-env.test.ts`** for PATH prefixing and merged environment behavior.
+
+### Documentation
+- Refresh **`docs/jujustu-integration.md`**, the **file-changes** workflow doc page, and **`CONNECTOR_SURFACES`** so they describe in-folder JJ and no longer promise automatic shadow workspaces.
+
+### Chore
+- Bump workspace version to **`5.2605111412.0`** and **`overlord-cli`** to **`0.2605111412.0`**.
+
 ## [5.2605111338.0] - 2026-05-11:13:38
 
 ### Added
