@@ -197,20 +197,23 @@ export function AgentSplitButton({
       setIsLaunching(true);
       try {
         await submitTicketObjectiveActionWithRetry(ticketId);
-        await launchAgent(
+        await launchAgent({
           ticketId,
-          agentValue,
+          agent: agentValue,
           organizationId,
-          effectiveWorkingDirectory ?? undefined,
-          'run',
-          agentFlags?.[agentValue],
-          options?.useStoredModelPreference ? (effectiveSelection.model ?? undefined) : undefined,
-          options?.useStoredModelPreference
+          cwd: effectiveWorkingDirectory ?? undefined,
+          launchMode: 'run',
+          flags: agentFlags?.[agentValue],
+          model: options?.useStoredModelPreference
+            ? (effectiveSelection.model ?? undefined)
+            : undefined,
+          thinking: options?.useStoredModelPreference
             ? (effectiveSelection.thinking ?? undefined)
             : undefined,
-          effectiveSshCommand ?? undefined,
-          effectiveRemoteWorkingDirectory ?? undefined
-        );
+          sshCommand: effectiveSshCommand ?? undefined,
+          remoteWorkingDirectory: effectiveRemoteWorkingDirectory ?? undefined,
+          projectId: projectId ?? undefined
+        });
       } catch (error) {
         console.error('Failed to launch agent:', error);
         toast.error('Failed to open terminal', {

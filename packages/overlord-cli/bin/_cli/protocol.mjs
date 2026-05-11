@@ -359,6 +359,164 @@ async function resolveSnapshotContext(flags) {
   return null;
 }
 
+/**
+ * Shallow-merge snapshot metadata: launch/env context first, then deliver payload
+ * (payload wins on duplicate keys) so agents can add jj ids without losing workspace
+ * paths from OVERLORD_SNAPSHOT_JSON.
+ * @param {Record<string, unknown> | null | undefined} fromEnvOrFlags
+ * @param {Record<string, unknown> | null | undefined} fromPayload
+ * @returns {Record<string, unknown> | null}
+ */
+function mergeDeliverSnapshot(fromEnvOrFlags, fromPayload) {
+  const base =
+    fromEnvOrFlags && typeof fromEnvOrFlags === 'object' && !Array.isArray(fromEnvOrFlags)
+      ? { ...fromEnvOrFlags }
+      : {};
+  const overlay =
+    fromPayload && typeof fromPayload === 'object' && !Array.isArray(fromPayload)
+      ? { ...fromPayload }
+      : {};
+  const merged = { ...base, ...overlay };
+  return Object.keys(merged).length > 0 ? merged : null;
+}
+
+function runLocalCommand(command, args, options = {}) {
+  return execFileSync(command, args, {
+    cwd: options.cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: options.timeoutMs ?? 60000,
+    maxBuffer: 10 * 1024 * 1024
+  });
+}
+
+function commandSucceeds(command, args, cwd) {
+  try {
+    runLocalCommand(command, args, { cwd, timeoutMs: 15000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function detectLocalCheckpointBackend(workspacePath, preference) {
+  if (!workspacePath || !fs.existsSync(workspacePath)) return null;
+  if (preference === 'jj') return 'jj';
+  if (preference === 'git') return 'git';
+  if (
+    fs.existsSync(path.join(workspacePath, '.jj')) ||
+    commandSucceeds('jj', ['--repository', workspacePath, 'root'], workspacePath)
+  ) {
+    return 'jj';
+  }
+  if (commandSucceeds('git', ['-C', workspacePath, 'rev-parse', '--show-toplevel'], workspacePath)) {
+    return 'git';
+  }
+  return null;
+}
+
+function createLocalDeliveryCheckpoint(flags, snapshot) {
+  if (flags['skip-checkpoint']) return null;
+
+  const preference = String(flags['checkpoint-backend'] ?? 'auto').trim();
+  if (!['auto', 'jj', 'git'].includes(preference)) {
+    throw new Error('--checkpoint-backend must be one of: auto, jj, git');
+  }
+
+  const workspacePath = path.resolve(
+    String(snapshot?.workspacePath ?? process.env.OVERLORD_WORKSPACE_PATH ?? process.cwd())
+  );
+  if (!fs.existsSync(workspacePath)) return null;
+
+  const backend = detectLocalCheckpointBackend(workspacePath, preference);
+  if (!backend) return null;
+
+  if (backend === 'jj') {
+    try {
+      runLocalCommand('jj', ['--repository', workspacePath, 'util', 'snapshot'], {
+        cwd: workspacePath
+      });
+      const commit = runLocalCommand(
+        'jj',
+        ['--repository', workspacePath, 'log', '-r', '@', '-T', 'change_id ++ " " ++ commit_id'],
+        { cwd: workspacePath }
+      );
+      const operation = runLocalCommand(
+        'jj',
+        [
+          '--repository',
+          workspacePath,
+          'op',
+          'log',
+          '--at-op=@',
+          '--ignore-working-copy',
+          '-n',
+          '1',
+          '-T',
+          'id'
+        ],
+        { cwd: workspacePath }
+      );
+      const diffStat = runLocalCommand('jj', ['--repository', workspacePath, 'diff', '--stat'], {
+        cwd: workspacePath
+      });
+      const [jjChangeId = null, jjCommitId = null] = commit.trim().split(/\s+/, 2);
+      return {
+        checkpoint: {
+          diffStat: diffStat.trim() || null,
+          kind: 'delivery'
+        },
+        snapshot: {
+          backend: 'jj',
+          workspacePath,
+          workspaceName: snapshot?.workspaceName ?? path.basename(workspacePath),
+          jjChangeId,
+          jjCommitId,
+          jjOperationId: operation.trim() || null,
+          diffStat: diffStat.trim() || null
+        }
+      };
+    } catch (error) {
+      throw new Error(
+        `Failed to create JJ delivery checkpoint in ${workspacePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }\nRe-run with --skip-checkpoint only if you intentionally want to deliver without local JJ provenance.`
+      );
+    }
+  }
+
+  if (preference === 'jj') {
+    throw new Error(`JJ checkpoint requested, but ${workspacePath} is not a JJ repository.`);
+  }
+
+  try {
+    const gitCommitId = runLocalCommand('git', ['-C', workspacePath, 'rev-parse', 'HEAD'], {
+      cwd: workspacePath
+    }).trim();
+    const diffStat = runLocalCommand('git', ['-C', workspacePath, 'diff', '--stat', 'HEAD'], {
+      cwd: workspacePath
+    }).trim();
+    return {
+      checkpoint: {
+        diffStat: diffStat || null,
+        kind: 'delivery'
+      },
+      snapshot: {
+        backend: 'git',
+        workspacePath,
+        workspaceName: snapshot?.workspaceName ?? path.basename(workspacePath),
+        gitCommitId: gitCommitId || null,
+        diffStat: diffStat || null
+      }
+    };
+  } catch {
+    if (preference === 'git') {
+      throw new Error(`Git checkpoint requested, but metadata could not be read in ${workspacePath}.`);
+    }
+    return null;
+  }
+}
+
 function normalizeRepoRelativeFilePath(filePath, repoRoot) {
   if (typeof filePath !== 'string') return null;
 
@@ -853,7 +1011,14 @@ async function protocolDeliver(args) {
 
   const changeRationales =
     deliverPayload?.changeRationales ?? (await resolveChangeRationales(flags));
-  const snapshot = (await resolveSnapshotContext(flags)) ?? deliverPayload?.snapshot ?? null;
+  let snapshot = mergeDeliverSnapshot(
+    await resolveSnapshotContext(flags),
+    deliverPayload?.snapshot ?? null
+  );
+  const checkpointResult = createLocalDeliveryCheckpoint(flags, snapshot);
+  if (checkpointResult) {
+    snapshot = mergeDeliverSnapshot(snapshot, checkpointResult.snapshot);
+  }
   validateDeliverFileChanges(flags, changeRationales);
 
   const body = {
@@ -861,6 +1026,9 @@ async function protocolDeliver(args) {
     ticketId,
     summary,
     artifacts,
+    ...(checkpointResult?.checkpoint
+      ? { checkpoint: { ...checkpointResult.checkpoint, summary } }
+      : {}),
     ...(snapshot ? { snapshot } : {}),
     ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
@@ -1621,10 +1789,13 @@ deliver:
     --artifacts-file <path|->
     --change-rationales-json <json>
     --change-rationales-file <path|->
+    --checkpoint-backend <auto|jj|git>  Backend for the local delivery checkpoint (default: auto)
+    --skip-checkpoint       Bypass automatic local checkpoint creation
     --skip-file-change-check  Bypass local git vs changeRationales validation
   Notes:
     Use --payload-file - to read the full delivery JSON from stdin without creating a scratch file.
     Do not combine --payload-file with --artifacts-json/--artifacts-file or change-rationale flags.
+    Deliver creates a local checkpoint before the API request when the current workspace is JJ- or Git-managed.
     In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
 
 prompt:
@@ -1761,6 +1932,7 @@ Examples:
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file ./deliver.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --checkpoint-backend jj
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000
 `);

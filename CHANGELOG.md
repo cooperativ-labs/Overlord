@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605111338.0] - 2026-05-11:13:38
+
+### Added
+- Persist **delivery checkpoints** (`project_checkpoints`), link **file changes** to a checkpoint, and hydrate checkpoint rows from the file-changes API for Current Changes.
+- Run a **local checkpoint before `ovld protocol deliver`** when the working directory uses Jujutsu or Git (auto-detect with `--checkpoint-backend` and `--skip-checkpoint` to override).
+- **Project workflow** control to **install Jujutsu in the local working directory** on Desktop, with persisted opt-in state and install error feedback per project member.
+- **Current Changes** can read **JJ status and diffs** from the real project folder when Jujutsu is active, alongside the existing Git path.
+- **Feed post discuss** flow: build a full ask prompt for the clipboard and pass **feed post id** plus an **initial question** into Desktop agent launches so context includes the discussion appendix.
+- Extend protocol **deliver** validation and MCP **deliver** to accept optional **checkpoint** payloads and richer **snapshot** metadata (including plain Git checkpoints and diff stats).
+
+### Fixed
+- None.
+
+### Changed
+- **Shallow-merge** launch snapshot metadata with deliver payload snapshot fields so workspace paths from **`OVERLORD_SNAPSHOT_JSON`** stay intact while deliver-time JJ ids overlay.
+
+### Security
+- None.
+
+### Test
+- Add coverage for local version-control install helpers, protocol **deliver** checkpoint behavior, feed-discuss appendix layering, human-readable ticket id parsing, file-change provenance validation, and Current Changes diff/view-model helpers.
+
+### Documentation
+- Add workflow docs for **objectives** and **file-changes**; refresh agent skills and connector surfaces for checkpoints and local JJ behavior.
+
+### Chore
+- Add migration **`20260511133000_local_jj_versioning_checkpoints.sql`** (checkpoints table, `checkpoint_id` on `file_changes`, `project_user` local versioning columns); regenerate **`types/database.types.ts`**.
+- Bump workspace version to **`5.2605111338.0`** and **`overlord-cli`** to **`0.2605111338.0`**.
+
 ## [5.2605111118.0] - 2026-05-11:11:18
 
 ### Added

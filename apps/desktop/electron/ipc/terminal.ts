@@ -26,7 +26,10 @@ const LaunchAgentPayloadSchema = z.object({
   model: z.string().max(128).optional(),
   thinking: z.string().max(64).optional(),
   sshCommand: z.string().max(4096).optional(),
-  remoteWorkingDirectory: z.string().max(4096).optional()
+  remoteWorkingDirectory: z.string().max(4096).optional(),
+  projectId: z.string().uuid().nullable().optional(),
+  feedPostId: z.string().uuid().optional(),
+  initialQuestion: z.string().max(8000).optional()
 });
 
 function runAppleScript(script: string) {
@@ -535,6 +538,7 @@ export function registerTerminalIpc(): void {
       ticketId: payload.ticketId,
       agent: payload.agent,
       organizationId: payload.organizationId,
+      projectId: payload.projectId ?? undefined,
       cwd: payload.cwd,
       launchMode: payload.launchMode,
       flags: payload.flags,
@@ -542,6 +546,8 @@ export function registerTerminalIpc(): void {
       thinking: payload.thinking,
       sshCommand: payload.sshCommand,
       remoteWorkingDirectory: payload.remoteWorkingDirectory,
+      feedPostId: payload.feedPostId,
+      initialQuestion: payload.initialQuestion,
       serverMultiplexer: isRemote ? getServerMultiplexerConfig() : undefined
     });
 

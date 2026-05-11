@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import os from 'os';
 import path from 'path';
 
+import { ticketSequenceFromTicketId } from '../../../../lib/overlord/human-ticket-id';
+import { prepareManagedSnapshotWorkspace } from '../../../../lib/snapshot/prepare-managed-workspace';
 import { parseSshCommand } from '../../../../lib/ssh/shell-utils';
 
 import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
@@ -26,6 +28,8 @@ type LaunchAgentInput = {
   ticketId: string;
   agent: AgentType;
   organizationId?: number;
+  /** Project UUID when the ticket is project-scoped; required for managed JJ workspaces. */
+  projectId?: string | null;
   cwd?: string;
   launchMode?: AgentLaunchMode;
   /** Extra CLI flags from local agent configuration (e.g. --enable-auto-mode). */
@@ -38,6 +42,10 @@ type LaunchAgentInput = {
   sshCommand?: string;
   /** Working directory path on the remote server. */
   remoteWorkingDirectory?: string;
+  /** When set, context markdown includes the feed post appendix (desktop feed discuss). */
+  feedPostId?: string;
+  /** First user question for feed discuss (paired with feedPostId). */
+  initialQuestion?: string;
   /**
    * Server-side multiplexer config. When `enabled` is true (tmux on the
    * remote host), the agent command is wrapped in `tmuxCommand` with
@@ -71,13 +79,20 @@ export function buildAgentContextUrl(input: {
   launchMode: AgentLaunchMode;
   sessionId: string;
   ticketId: string;
+  feedPostId?: string;
+  initialQuestion?: string;
 }): string {
   const workspaceParam = input.isRemote ? '&workspace=ssh' : '';
+  const feedParams =
+    input.feedPostId?.trim() && typeof input.initialQuestion === 'string'
+      ? `&feedPostId=${encodeURIComponent(input.feedPostId.trim())}&initialQuestion=${encodeURIComponent(input.initialQuestion)}`
+      : '';
   return (
     `${input.connectorUrl}/api/protocol/context/${input.ticketId}` +
     `?context=electron&agent=${input.agent}` +
     `${input.launchMode === 'ask' ? '&mode=ask' : ''}` +
-    `&instructionMode=${input.instructionMode}${workspaceParam}&sessionId=${input.sessionId}`
+    `&instructionMode=${input.instructionMode}${workspaceParam}&sessionId=${input.sessionId}` +
+    feedParams
   );
 }
 
@@ -107,16 +122,6 @@ function buildProtocolHeaders(
     headers['x-organization-id'] = String(organizationId);
   }
   return headers;
-}
-
-function parseSnapshotContextHeader(value: string | null): Record<string, unknown> | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 function parseOrganizationId(value: unknown): number | null {
@@ -351,7 +356,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     isRemote,
     launchMode,
     sessionId: launchSessionId,
-    ticketId: input.ticketId
+    ticketId: input.ticketId,
+    feedPostId: input.feedPostId,
+    initialQuestion: input.initialQuestion
   });
   const launchEnv: Record<string, string> = {
     OVERLORD_URL: connectorUrl,
@@ -409,6 +416,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   // Prefer the human-readable ticket_id from the response header so TICKET_ID
   // env var holds a value like "1:899" instead of the raw UUID.
   const humanTicketId = response.headers.get('X-Ticket-Id');
+  const ticketIdForWorkspace = humanTicketId?.trim() || input.ticketId;
   if (humanTicketId) {
     launchEnv.TICKET_ID = humanTicketId;
     const orgFromHumanTicketId = organizationIdFromTicketId(humanTicketId);
@@ -419,10 +427,45 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // Use the project's working directory from the API if the caller didn't provide one
   const apiWorkingDirectory = response.headers.get('X-Working-Directory');
-  const apiSnapshotContext = parseSnapshotContextHeader(
-    response.headers.get('X-Overlord-Snapshot-Context')
-  );
-  const resolvedCwd = input.cwd || apiWorkingDirectory || undefined;
+  const localVersionControl = response.headers.get('X-Local-Version-Control');
+
+  let clientSnapshotContext: Record<string, unknown> | null = null;
+  if (!isRemote && localVersionControl === 'jj' && input.cwd?.trim()) {
+    clientSnapshotContext = {
+      backend: 'jj',
+      projectId: input.projectId ?? null,
+      workspacePath: input.cwd.trim(),
+      workspaceName: path.basename(input.cwd.trim())
+    };
+  }
+  if (
+    !clientSnapshotContext &&
+    !isRemote &&
+    input.projectId?.trim() &&
+    input.cwd?.trim() &&
+    ticketSequenceFromTicketId(ticketIdForWorkspace) !== null
+  ) {
+    const ticketSequence = ticketSequenceFromTicketId(ticketIdForWorkspace);
+    if (ticketSequence !== null) {
+      const prepared = await prepareManagedSnapshotWorkspace({
+        projectId: input.projectId.trim(),
+        sourceDirectory: input.cwd.trim(),
+        sessionId: launchSessionId,
+        ticketId: ticketIdForWorkspace,
+        ticketSequence,
+        prefer: 'jj'
+      });
+      if (prepared) {
+        clientSnapshotContext = prepared as unknown as Record<string, unknown>;
+      }
+    }
+  }
+
+  const resolvedCwd =
+    (clientSnapshotContext?.workspacePath as string | undefined) ||
+    input.cwd ||
+    apiWorkingDirectory ||
+    undefined;
 
   // Pre-flight check: if a local cwd is configured but missing, surface a clear
   // error to the renderer instead of opening a terminal where `cd` silently
@@ -437,8 +480,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     }
   }
 
-  if (apiSnapshotContext) {
-    launchEnv.OVERLORD_SNAPSHOT_JSON = JSON.stringify(apiSnapshotContext);
+  if (clientSnapshotContext) {
+    launchEnv.OVERLORD_SNAPSHOT_JSON = JSON.stringify(clientSnapshotContext);
   }
 
   const contextMarkdown = await response.text();

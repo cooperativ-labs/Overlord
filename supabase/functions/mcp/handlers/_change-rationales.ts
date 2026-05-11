@@ -13,6 +13,7 @@ export async function insertChangeRationales(
   supabase: SupabaseClient,
   input: {
     changeRationales: any[];
+    checkpointId?: string | null;
     eventId: string;
     snapshot?: {
       backend?: string;
@@ -35,6 +36,7 @@ export async function insertChangeRationales(
       attribution_source: rationale.attribution_source ?? 'explicit',
       change_kind: rationale.change_kind ?? 'modify',
       confidence: rationale.confidence ?? 'explicit',
+      checkpoint_id: input.checkpointId ?? null,
       event_id: input.eventId,
       jj_change_id: rationale.jj_change_id ?? input.snapshot?.jjChangeId ?? null,
       jj_commit_id: rationale.jj_commit_id ?? input.snapshot?.jjCommitId ?? null,

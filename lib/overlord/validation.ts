@@ -75,9 +75,11 @@ const changeRationaleHunkSchema = z
   );
 
 const snapshotContextSchema = z.object({
-  backend: z.enum(['git-worktree', 'jj']).optional(),
+  backend: z.enum(['git-worktree', 'jj', 'git']).optional(),
   baseGitCommitId: z.string().trim().min(1).max(160).optional(),
   baseJjCommitId: z.string().trim().min(1).max(160).optional(),
+  diffStat: z.string().trim().max(20_000).nullable().optional(),
+  gitCommitId: z.string().trim().min(1).max(160).nullable().optional(),
   projectId: z.string().trim().min(1).max(160).optional(),
   shadowRepoPath: z.string().trim().min(1).max(1024).optional(),
   jjChangeId: z.string().trim().min(1).max(160).optional(),
@@ -87,6 +89,12 @@ const snapshotContextSchema = z.object({
   workspacePath: z.string().trim().min(1).max(1024).optional()
 });
 
+const checkpointSchema = z.object({
+  diffStat: z.string().trim().max(20_000).nullable().optional(),
+  kind: z.enum(['delivery', 'manual', 'objective']).optional().default('delivery'),
+  summary: z.string().trim().max(2_000).nullable().optional()
+});
+
 export const changeRationaleSchema = z.object({
   attribution_source: z.string().trim().min(1).max(40).optional().default('explicit'),
   change_kind: z.string().trim().min(1).max(40).optional().default('modify'),
@@ -94,9 +102,15 @@ export const changeRationaleSchema = z.object({
   file_path: z.string().trim().min(1).max(1024),
   hunks: z.array(changeRationaleHunkSchema).max(20).optional().default([]),
   impact: z.string().trim().min(1).max(2_000),
+  jj_change_id: z.string().trim().min(1).max(160).nullable().optional(),
+  jj_commit_id: z.string().trim().min(1).max(160).nullable().optional(),
+  jj_operation_id: z.string().trim().min(1).max(160).nullable().optional(),
   label: z.string().trim().min(1).max(160),
+  snapshot_backend: z.string().trim().min(1).max(40).nullable().optional(),
   summary: z.string().trim().min(1).max(2_000),
-  why: z.string().trim().min(1).max(2_000)
+  why: z.string().trim().min(1).max(2_000),
+  workspace_name: z.string().trim().min(1).max(240).nullable().optional(),
+  workspace_path: z.string().trim().min(1).max(1024).nullable().optional()
 });
 
 export const updateSchema = z.object({
@@ -129,6 +143,7 @@ export const writeContextSchema = z.object({
 
 export const deliverSchema = z.object({
   changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
+  checkpoint: checkpointSchema.optional(),
   sessionKey: z.string().uuid(),
   snapshot: snapshotContextSchema.optional(),
   ticketId: ticketIdSchema,

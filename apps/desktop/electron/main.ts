@@ -66,7 +66,9 @@ const appUpdater = new AppUpdaterService({
 });
 
 Sentry.init({
-  dsn: 'https://4217dfda3fcd82c64dab291ea1d15aef@o4508852831977472.ingest.us.sentry.io/4511274027450368'
+  dsn: 'https://4217dfda3fcd82c64dab291ea1d15aef@o4508852831977472.ingest.us.sentry.io/4511274027450368',
+  // Unpacked dev runs (Electron CLI / local desktop) must not send events or replays.
+  enabled: app.isPackaged
 });
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();

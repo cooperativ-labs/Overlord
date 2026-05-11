@@ -23,9 +23,11 @@ export type FileChangeInput = {
 type InsertFileChangesInput = {
   changeRationales: FileChangeInput[];
   eventId: string;
+  checkpointId?: string | null;
   sessionId: string;
   snapshot?: {
     backend?: string;
+    gitCommitId?: string | null;
     jjChangeId?: string | null;
     jjCommitId?: string | null;
     jjOperationId?: string | null;
@@ -44,6 +46,7 @@ function deriveFileName(filePath: string): string {
 
 export async function insertFileChanges({
   changeRationales,
+  checkpointId,
   eventId,
   sessionId,
   snapshot,
@@ -59,6 +62,7 @@ export async function insertFileChanges({
       attribution_source: rationale.attribution_source ?? 'explicit',
       change_kind: rationale.change_kind ?? 'modify',
       confidence: rationale.confidence ?? 'explicit',
+      checkpoint_id: checkpointId ?? null,
       event_id: eventId,
       jj_change_id: rationale.jj_change_id ?? snapshot?.jjChangeId ?? null,
       jj_commit_id: rationale.jj_commit_id ?? snapshot?.jjCommitId ?? null,

@@ -1,0 +1,125 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import type { Database } from '@/types/database.types';
+
+type ServerSupabase = SupabaseClient<Database>;
+
+export type ResolveProtocolObjectiveResult =
+  | { ok: true; objectiveText: string; feedPostId?: string }
+  | { ok: false; error: string };
+
+/**
+ * Resolves the objective text shown in agent context prompts.
+ * When `feedPostId` is set, prefer the objective row linked from that feed post
+ * (the work the post summarizes) instead of a newer draft on the ticket.
+ */
+export async function resolveProtocolObjectiveText(input: {
+  supabase: ServerSupabase;
+  ticketId: string;
+  organizationId: number;
+  feedPostId?: string | null;
+}): Promise<ResolveProtocolObjectiveResult> {
+  const { supabase, ticketId, organizationId, feedPostId } = input;
+
+  if (feedPostId?.trim()) {
+    const { data: feedPost, error: feedError } = await supabase
+      .from('feed_posts')
+      .select('id, ticket_id, organization_id, objective_id')
+      .eq('id', feedPostId.trim())
+      .maybeSingle();
+
+    if (feedError || !feedPost) {
+      return { ok: false, error: 'Feed post not found.' };
+    }
+
+    if (feedPost.ticket_id !== ticketId || feedPost.organization_id !== organizationId) {
+      return { ok: false, error: 'Feed post does not match this ticket.' };
+    }
+
+    if (feedPost.objective_id) {
+      const { data: linkedObjective } = await supabase
+        .from('objectives')
+        .select('objective')
+        .eq('id', feedPost.objective_id)
+        .maybeSingle();
+
+      const text = linkedObjective?.objective?.trim();
+      if (text) {
+        return { ok: true, objectiveText: text, feedPostId: feedPost.id };
+      }
+    }
+
+    const { data: completeObjective } = await supabase
+      .from('objectives')
+      .select('objective')
+      .eq('ticket_id', ticketId)
+      .eq('state', 'complete')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const completeText = completeObjective?.objective?.trim();
+    if (completeText) {
+      return { ok: true, objectiveText: completeText, feedPostId: feedPost.id };
+    }
+
+    const fallback = await resolveLatestTrackedObjective(supabase, ticketId);
+    if (fallback) {
+      return { ok: true, objectiveText: fallback, feedPostId: feedPost.id };
+    }
+
+    return {
+      ok: true,
+      objectiveText:
+        '_(No objective text on file for this feed post — rely on the feed post section and ticket metadata below.)_',
+      feedPostId: feedPost.id
+    };
+  }
+
+  const tracked = await resolveLatestTrackedObjective(supabase, ticketId);
+  if (!tracked) {
+    return { ok: false, error: 'No objective found for this ticket.' };
+  }
+  return { ok: true, objectiveText: tracked };
+}
+
+async function resolveLatestTrackedObjective(
+  supabase: ServerSupabase,
+  ticketId: string
+): Promise<string | null> {
+  const { data: executingObjective } = await supabase
+    .from('objectives')
+    .select('objective')
+    .eq('ticket_id', ticketId)
+    .eq('state', 'executing')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const fromExecuting = executingObjective?.objective?.trim();
+  if (fromExecuting) return fromExecuting;
+
+  const { data: submittedObjective } = await supabase
+    .from('objectives')
+    .select('objective')
+    .eq('ticket_id', ticketId)
+    .eq('state', 'submitted')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const fromSubmitted = submittedObjective?.objective?.trim();
+  if (fromSubmitted) return fromSubmitted;
+
+  const { data: draftObjective } = await supabase
+    .from('objectives')
+    .select('objective')
+    .eq('ticket_id', ticketId)
+    .eq('state', 'draft')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const fromDraft = draftObjective?.objective?.trim();
+  return fromDraft || null;
+}

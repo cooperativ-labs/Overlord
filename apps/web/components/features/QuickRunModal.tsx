@@ -187,16 +187,16 @@ export function QuickRunModal({
             });
           }
 
-          await launchAgent(
-            createdTicket.id,
-            selection.agent,
-            createdTicket.organizationId,
-            selectedProject?.local_working_directory ?? undefined,
-            'run',
-            undefined,
-            selection.model ?? undefined,
-            selection.thinking ?? undefined
-          );
+          await launchAgent({
+            ticketId: createdTicket.id,
+            agent: selection.agent,
+            organizationId: createdTicket.organizationId,
+            cwd: selectedProject?.local_working_directory ?? undefined,
+            launchMode: 'run',
+            model: selection.model ?? undefined,
+            thinking: selection.thinking ?? undefined,
+            projectId: isPersonalTicket ? undefined : selectedProjectId
+          });
           router.push(
             buildTicketPath({
               projectId: isPersonalTicket ? null : selectedProjectId,

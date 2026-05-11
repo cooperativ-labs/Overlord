@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 
 import { getRationalePaths } from '@/components/features/projects/current-changes/helpers';
@@ -8,6 +8,7 @@ import type {
   DiffState,
   FileChangeRecord,
   GitBranchesResponse,
+  GitDiffFilterEntry,
   GitDiffResponse,
   GitStatusFile,
   GitStatusResponse
@@ -85,6 +86,87 @@ export function useGitStatusQuery(input: {
     refetchOnMount: 'always',
     refetchOnWindowFocus: false
   });
+}
+
+export function buildGitDiffFilterMapFromQueries(args: {
+  diffQueryResults: Array<{
+    data: DiffState | undefined;
+    isFetched: boolean;
+    isFetching: boolean;
+  }>;
+  files: GitStatusFile[];
+}): Map<string, GitDiffFilterEntry> {
+  const map = new Map<string, GitDiffFilterEntry>();
+  const { diffQueryResults, files } = args;
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const q = diffQueryResults[i];
+    if (!q) continue;
+
+    const entry: GitDiffFilterEntry =
+      q.isFetching || !q.isFetched
+        ? { kind: 'pending' }
+        : { kind: 'ready', parsed: q.data?.parsed ?? null };
+
+    map.set(file.path, entry);
+    if (file.originalPath) {
+      map.set(file.originalPath, entry);
+    }
+  }
+
+  return map;
+}
+
+export function useGitDiffFilterMap(input: {
+  api: ElectronFilesystemApi | undefined;
+  canInspectChanges: boolean;
+  directory: string | null;
+  files: GitStatusFile[];
+  isElectron: boolean;
+}) {
+  const diffQueryResults = useQueries({
+    queries: input.files.map(file => ({
+      queryKey: currentChangesQueryKeys.diff(input.directory, file),
+      queryFn: async (): Promise<DiffState> => {
+        if (!input.api?.getGitDiff || !input.directory) {
+          return { error: null, isLoading: false, parsed: null };
+        }
+
+        const result = (await input.api.getGitDiff({
+          directory: input.directory,
+          originalPath: file.originalPath ?? undefined,
+          path: file.path,
+          status: file.status
+        })) as GitDiffResponse;
+
+        return {
+          error: result.error ?? null,
+          isLoading: false,
+          parsed: result.diff ? parseUnifiedDiff(result.diff) : null
+        };
+      },
+      enabled:
+        input.isElectron &&
+        input.canInspectChanges &&
+        Boolean(input.api?.getGitDiff) &&
+        Boolean(input.directory) &&
+        input.files.length > 0,
+      staleTime: 15_000,
+      refetchOnMount: 'always' as const,
+      refetchOnWindowFocus: false
+    }))
+  });
+
+  const filterMap = buildGitDiffFilterMapFromQueries({
+    diffQueryResults,
+    files: input.files
+  });
+
+  const allSettled =
+    diffQueryResults.length === 0 || diffQueryResults.every(queryResult => queryResult.isFetched);
+
+  return { allSettled, filterMap };
 }
 
 export function useCurrentChangeFileChanges(input: { projectId: string; files: GitStatusFile[] }) {

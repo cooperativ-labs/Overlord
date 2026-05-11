@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { resolveLinkedDirectory } from '../../../../lib/filesystem/project-file-tree';
 import { buildRepoOperationsProfile } from '../../../../lib/repo-profile/build-profile';
+import { installLocalVersionControl } from '../../../../lib/snapshot/install-local-version-control';
 import { LocalWorkspaceClient } from '../../../../lib/workspace/local';
 import type {
   CreatePullRequestOptions,
@@ -195,6 +196,27 @@ export function registerFilesystemIpc(): void {
       });
     }
   });
+
+  ipcMain.handle(
+    'filesystem:install-local-version-control',
+    async (_event, rawPayload?: unknown) => {
+      try {
+        const payload = safeParseWorkspace(rawPayload);
+        if (!payload?.directory?.trim()) {
+          return { ok: false, error: 'Local working directory is required.' };
+        }
+        return await installLocalVersionControl({
+          directory: payload.directory,
+          mode: 'jj'
+        });
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to install version control.'
+        };
+      }
+    }
+  );
 
   ipcMain.handle('filesystem:get-git-branches', async (_event, rawPayload?: unknown) => {
     try {

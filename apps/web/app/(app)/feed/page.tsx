@@ -15,7 +15,10 @@ export default async function FeedPage() {
     id: p.id,
     name: p.name,
     color: p.color,
-    localWorkingDirectory: p.localWorkingDirectory
+    organizationId: p.organizationId,
+    localWorkingDirectory: p.localWorkingDirectory,
+    sshCommand: p.sshCommand,
+    remoteWorkingDirectory: p.remoteWorkingDirectory
   }));
 
   return (

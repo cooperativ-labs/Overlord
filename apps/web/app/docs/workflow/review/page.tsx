@@ -42,6 +42,7 @@ The ticket should preserve:
 
 ## Related pages
 
+- [File changes & checkpoints](/docs/workflow/file-changes)
 - [Artifacts](/docs/protocol/artifacts)
 - [Deliver](/docs/protocol/deliver)
 - [Desktop app](/docs/surfaces/desktop-app)

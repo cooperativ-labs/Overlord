@@ -1,19 +1,19 @@
 # Jujutsu (jj) integration and change-tracking
 
-This document explains how Overlord uses **Jujutsu** (`jj`) for **managed snapshots** and how that ties to **change-tracking** (`file_changes` in the database). It is written so an agent can **diagnose and explain** change-tracking issues to a user without guessing.
+This document explains how Overlord uses **Jujutsu** (`jj`) for local versioning, delivery checkpoints, and **change-tracking** (`file_changes` in the database). It is written so an agent can **diagnose and explain** change-tracking issues to a user without guessing.
 
 For product-level research, tradeoffs, and future modes (colocation, user-native jj repos, and so on), see [`ai/feature-plans/jj-integration-research.md`](../ai/feature-plans/jj-integration-research.md).
 
 ## What problem jj solves here
 
-Overlord needs **durable, inspectable file state** per agent session: where work happened, what revision represents a checkpoint, and stable anchors to attach **file-change rationales** to. JJ provides:
+Overlord needs **durable, inspectable file state** per agent session: where work happened, what revision represents a checkpoint, and stable anchors to attach **file-change rationales** to. For plain local folders, users can opt in from Desktop with **Install version control in this folder**; Overlord initializes JJ in the original project folder and Current Changes reads that same folder. JJ provides:
 
 - **Shadow Git-backed repos** (`jj git clone --no-colocate`) so agent work stays out of the user’s project tree by default.
 - **Per-session workspaces** (`jj workspace add`) so parallel sessions do not share a single working tree.
 - **`change_id`** (logical line of work) and **`commit_id`** (immutable tree snapshot) after `jj util snapshot`.
 - **`operation_id`** from the operation log for **whole-repo timeline** evidence (useful for support and forensics).
 
-Git remains the interchange format users expect; JJ is the **internal snapshot engine** when the `jj` binary is available and healthy.
+Git remains the interchange format users expect; JJ is the **local checkpoint engine** when the `jj` binary is available and healthy. The hosted API only stores checkpoint metadata; JJ/Git commands run in Electron or the local CLI.
 
 ## How Overlord selects jj vs Git worktrees
 
@@ -99,18 +99,18 @@ These values are what agents should pass through to **`snapshot`** on protocol/M
 
 ## When Electron uses a managed workspace
 
-In `apps/web/app/api/protocol/context/[ticketId]/route.ts`, a **managed snapshot workspace** is prepared when **all** of the following hold:
+Managed snapshot workspaces are created **on the user’s machine** in `apps/desktop/electron/services/agent-launcher.ts` after the context markdown is fetched. `prepareManagedSnapshotWorkspace` (`lib/snapshot/prepare-managed-workspace.ts`) runs `jj` / git-worktree commands against `local_working_directory` — not the web API host.
 
-- Query `context=electron`
-- `workspace` query param is **not** `ssh`
-- `sessionId` is present
-- Ticket has a `project_id`
-- User has **`local_working_directory`** set for that project (project user local settings)
-- Ticket id parses to a valid `ticketSequence`
+Preparation runs when **all** of the following hold:
 
-If preparation **throws**, the handler logs a warning and **falls back** to `localWorkingDirectory` (or SSH remote path when `workspace=ssh`) so launches still work — without a managed path.
+- Launch is **not** remote SSH (`workspace=ssh` flow)
+- The web app passed a **`projectId`** into `terminal:launch-agent` (project-scoped ticket)
+- **`cwd`** is set to the project’s local working directory
+- The ticket resolves to a human-readable id (`{org}:{sequence}`) so `ticketSequence` is known (see `lib/overlord/human-ticket-id.ts`)
 
-**Agent guidance for “wrong directory” complaints:** verify whether the launch URL included `context=electron` and `sessionId`; verify `local_working_directory`; check server logs for `[protocol/context] snapshot workspace preparation failed`.
+If preparation **throws**, the launcher logs a warning and **falls back** to `cwd` / `X-Working-Directory` from the context response so the agent still opens.
+
+**Agent guidance for “wrong directory” complaints:** verify `local_working_directory` in project settings and Desktop Files & Folders access; confirm the ticket has a human `ticket_id` before launch (UUID-only ids skip managed workspace creation).
 
 ## Change-tracking: database and protocol
 

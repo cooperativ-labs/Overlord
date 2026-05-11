@@ -165,13 +165,25 @@ export const TOOLS = [
           properties: {
             backend: {
               type: 'string',
-              enum: ['git-worktree', 'jj']
+              enum: ['git-worktree', 'jj', 'git']
             },
             jjChangeId: { type: ['string', 'null'] },
             jjCommitId: { type: ['string', 'null'] },
             jjOperationId: { type: ['string', 'null'] },
+            gitCommitId: { type: ['string', 'null'] },
+            diffStat: { type: ['string', 'null'] },
             workspaceName: { type: ['string', 'null'] },
             workspacePath: { type: ['string', 'null'] }
+          }
+        },
+        checkpoint: {
+          type: 'object',
+          description:
+            'Optional checkpoint metadata. Local CLI delivery creates this automatically before calling the API.',
+          properties: {
+            kind: { type: 'string', enum: ['delivery', 'manual', 'objective'] },
+            summary: { type: ['string', 'null'] },
+            diffStat: { type: ['string', 'null'] }
           }
         },
         payload: {
@@ -249,11 +261,13 @@ export const TOOLS = [
           properties: {
             backend: {
               type: 'string',
-              enum: ['git-worktree', 'jj']
+              enum: ['git-worktree', 'jj', 'git']
             },
             jjChangeId: { type: ['string', 'null'] },
             jjCommitId: { type: ['string', 'null'] },
             jjOperationId: { type: ['string', 'null'] },
+            gitCommitId: { type: ['string', 'null'] },
+            diffStat: { type: ['string', 'null'] },
             workspaceName: { type: ['string', 'null'] },
             workspacePath: { type: ['string', 'null'] }
           }
@@ -521,13 +535,25 @@ export const TOOLS = [
           properties: {
             backend: {
               type: 'string',
-              enum: ['git-worktree', 'jj']
+              enum: ['git-worktree', 'jj', 'git']
             },
             jjChangeId: { type: ['string', 'null'] },
             jjCommitId: { type: ['string', 'null'] },
             jjOperationId: { type: ['string', 'null'] },
+            gitCommitId: { type: ['string', 'null'] },
+            diffStat: { type: ['string', 'null'] },
             workspaceName: { type: ['string', 'null'] },
             workspacePath: { type: ['string', 'null'] }
+          }
+        },
+        checkpoint: {
+          type: 'object',
+          description:
+            'Optional checkpoint metadata. Local CLI delivery creates this automatically before calling the API.',
+          properties: {
+            kind: { type: 'string', enum: ['delivery', 'manual', 'objective'] },
+            summary: { type: ['string', 'null'] },
+            diffStat: { type: ['string', 'null'] }
           }
         },
         artifacts: {

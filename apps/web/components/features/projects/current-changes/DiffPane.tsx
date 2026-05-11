@@ -119,12 +119,26 @@ function formatSnapshotSummary(
   if (!file) return null;
   const parts: string[] = [];
 
-  if (file.snapshot_backend) {
+  const backend = file.checkpoint?.backend ?? file.snapshot_backend;
+  const jjChangeId = file.checkpoint?.jj_change_id ?? file.jj_change_id;
+  const jjCommitId = file.checkpoint?.jj_commit_id ?? file.jj_commit_id;
+  const jjOperationId = file.checkpoint?.jj_operation_id ?? file.jj_operation_id;
+  const gitCommitId = file.checkpoint?.git_commit_id ?? null;
+
+  if (backend) {
+    parts.push(backend === 'jj' ? 'JJ' : backend);
+  }
+  if (file.checkpoint_id) {
+    parts.push('checkpointed');
+  }
+  if (jjChangeId) parts.push(`change ${jjChangeId.slice(0, 8)}`);
+  if (jjCommitId) parts.push(`commit ${jjCommitId.slice(0, 8)}`);
+  if (jjOperationId) parts.push(`op ${jjOperationId.slice(0, 8)}`);
+  if (gitCommitId) parts.push(`git ${gitCommitId.slice(0, 8)}`);
+
+  if (parts.length === 0 && file.snapshot_backend) {
     parts.push(file.snapshot_backend === 'jj' ? 'JJ' : file.snapshot_backend);
   }
-  if (file.jj_change_id) parts.push(`change ${file.jj_change_id.slice(0, 8)}`);
-  if (file.jj_commit_id) parts.push(`commit ${file.jj_commit_id.slice(0, 8)}`);
-  if (file.jj_operation_id) parts.push(`op ${file.jj_operation_id.slice(0, 8)}`);
 
   return parts.length > 0 ? parts.join(' · ') : null;
 }

@@ -40,7 +40,9 @@ That lets users keep planning, implementation, review, and follow-up passes toge
 ## Related pages
 
 - [Tickets](/docs/workflow/tickets)
+- [Objectives](/docs/workflow/objectives)
 - [Agent execution](/docs/workflow/agent-execution)
+- [File changes & checkpoints](/docs/workflow/file-changes)
 - [Updates & questions](/docs/workflow/updates)
 - [Review & delivery](/docs/workflow/review)
       `}

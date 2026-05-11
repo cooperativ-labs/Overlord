@@ -8,8 +8,21 @@ export const metadata: Metadata = {
 
 export default function TicketsPage() {
   return (
-    <DocsMarkdownPage title="Tickets" lead="Tickets are the unit of work in Overlord.">
+    <DocsMarkdownPage
+      title="Tickets"
+      lead="Tickets are the durable record for a thread of work. Each ticket holds one or more objectives—and objectives are the units of work the agent actually executes."
+    >
       {`
+## Tickets contain objectives
+
+The **ticket** is the container on the board: status, priority, project, history, reviewers, and delivery artifacts for that story.
+
+**Objectives** live inside the ticket. They are the scoped instructions the agent receives: what to do in this pass, with their own text, attachments, and execution settings.
+
+When you launch an agent, you are sending the **current objective**, not just a free-floating title. That is why objectives are the unit of work for agent execution, while the ticket stays the unit of record for humans and the system of record.
+
+You can chain stages such as plan, implement, and review on one ticket by adding objectives instead of starting new threads. See the [Objectives](/docs/workflow/objectives) page for the full model.
+
 ## What a ticket can hold
 
 A ticket can include:
@@ -22,18 +35,6 @@ A ticket can include:
 - project assignment
 - creator attribution
 - read / unread state per reviewer
-
-## How objectives relate to tickets
-
-The ticket is the durable record for the work. Objectives are the concrete instructions that move that work forward.
-
-In practice, that means:
-
-- the ticket keeps the title, history, review state, and delivery record
-- each objective captures the next task for the agent
-- users can add another objective later instead of starting a new thread
-
-This is useful when the work needs stages such as plan first, implement second, then review or cleanup.
 
 ## Attachments live on objectives
 
@@ -77,8 +78,10 @@ Keep the work specific enough that an agent can act on it without guessing, but 
 
 ## Related pages
 
+- [Objectives](/docs/workflow/objectives)
 - [Quick Start](/docs/quick-start)
 - [Agent execution](/docs/workflow/agent-execution)
+- [File changes & checkpoints](/docs/workflow/file-changes)
 - [Context & artifacts](/docs/for-agents/context-and-artifacts)
 - [Protocol attach](/docs/protocol/attach)
       `}

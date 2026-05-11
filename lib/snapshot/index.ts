@@ -19,6 +19,17 @@ export {
   type WorkspaceBinding
 } from './backend';
 export {
+  installLocalVersionControl,
+  type InstallLocalVersionControlInput,
+  type InstallLocalVersionControlResult
+} from './install-local-version-control';
+export {
+  createLocalCheckpoint,
+  type LocalCheckpointBackend,
+  type LocalCheckpointInput,
+  type LocalCheckpointResult
+} from './local-checkpoint';
+export {
   buildManagedBookmarkName,
   buildManagedShadowRepoPath,
   buildManagedSnapshotRoot,
@@ -26,5 +37,7 @@ export {
   buildManagedWorkspacePath,
   isManagedWorkspaceName
 } from './paths';
+export type { ManagedSnapshotContextPayload } from './prepare-managed-workspace';
+export { prepareManagedSnapshotWorkspace } from './prepare-managed-workspace';
 export { resolveManagedSnapshotBaseDirectory } from './root';
 export type { SnapshotBackend, SnapshotBinding, SnapshotIdentity } from './types';

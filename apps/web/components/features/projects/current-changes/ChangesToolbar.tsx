@@ -79,13 +79,13 @@ export function ChangesToolbar({
       <div className="ml-auto flex items-center gap-1">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs">
-              <GitBranch className="h-3.5 w-3.5" />
-              <span className="max-w-[160px] truncate">{branch ?? 'no branch'}</span>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            <Button variant="ghost" size="sm" className="h-8 min-w-0 max-w-72 gap-1.5 px-2 text-xs">
+              <GitBranch className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate text-left">{branch ?? 'no branch'}</span>
+              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-80">
+          <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)]">
             <GitBranchPanel
               branches={branchesResponse?.branches ?? []}
               currentBranch={branch}

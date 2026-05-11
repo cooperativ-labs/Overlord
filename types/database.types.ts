@@ -473,6 +473,7 @@ export type Database = {
         Row: {
           attribution_source: string;
           change_kind: string;
+          checkpoint_id: string | null;
           confidence: string;
           created_at: string;
           event_id: string;
@@ -497,6 +498,7 @@ export type Database = {
         Insert: {
           attribution_source?: string;
           change_kind?: string;
+          checkpoint_id?: string | null;
           confidence?: string;
           created_at?: string;
           event_id: string;
@@ -521,6 +523,7 @@ export type Database = {
         Update: {
           attribution_source?: string;
           change_kind?: string;
+          checkpoint_id?: string | null;
           confidence?: string;
           created_at?: string;
           event_id?: string;
@@ -543,6 +546,13 @@ export type Database = {
           workspace_path?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: 'file_changes_checkpoint_id_fkey';
+            columns: ['checkpoint_id'];
+            isOneToOne: false;
+            referencedRelation: 'project_checkpoints';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'file_changes_event_id_fkey';
             columns: ['event_id'];
@@ -890,6 +900,115 @@ export type Database = {
           }
         ];
       };
+      project_checkpoints: {
+        Row: {
+          backend: string;
+          checkpoint_kind: string;
+          created_at: string;
+          created_by: string | null;
+          diff_stat: string | null;
+          event_id: string | null;
+          git_commit_id: string | null;
+          id: string;
+          jj_change_id: string | null;
+          jj_commit_id: string | null;
+          jj_operation_id: string | null;
+          objective_id: string | null;
+          organization_id: number;
+          project_id: string;
+          session_id: string | null;
+          summary: string | null;
+          ticket_id: string | null;
+          workspace_name: string | null;
+          workspace_path: string | null;
+        };
+        Insert: {
+          backend: string;
+          checkpoint_kind?: string;
+          created_at?: string;
+          created_by?: string | null;
+          diff_stat?: string | null;
+          event_id?: string | null;
+          git_commit_id?: string | null;
+          id?: string;
+          jj_change_id?: string | null;
+          jj_commit_id?: string | null;
+          jj_operation_id?: string | null;
+          objective_id?: string | null;
+          organization_id: number;
+          project_id: string;
+          session_id?: string | null;
+          summary?: string | null;
+          ticket_id?: string | null;
+          workspace_name?: string | null;
+          workspace_path?: string | null;
+        };
+        Update: {
+          backend?: string;
+          checkpoint_kind?: string;
+          created_at?: string;
+          created_by?: string | null;
+          diff_stat?: string | null;
+          event_id?: string | null;
+          git_commit_id?: string | null;
+          id?: string;
+          jj_change_id?: string | null;
+          jj_commit_id?: string | null;
+          jj_operation_id?: string | null;
+          objective_id?: string | null;
+          organization_id?: number;
+          project_id?: string;
+          session_id?: string | null;
+          summary?: string | null;
+          ticket_id?: string | null;
+          workspace_name?: string | null;
+          workspace_path?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'project_checkpoints_event_id_fkey';
+            columns: ['event_id'];
+            isOneToOne: false;
+            referencedRelation: 'ticket_events';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_checkpoints_objective_id_fkey';
+            columns: ['objective_id'];
+            isOneToOne: false;
+            referencedRelation: 'objectives';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_checkpoints_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_checkpoints_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_checkpoints_session_id_fkey';
+            columns: ['session_id'];
+            isOneToOne: false;
+            referencedRelation: 'agent_sessions';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_checkpoints_ticket_id_fkey';
+            columns: ['ticket_id'];
+            isOneToOne: false;
+            referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       project_tag_definitions: {
         Row: {
           color: string | null;
@@ -938,6 +1057,9 @@ export type Database = {
         Row: {
           created_at: string | null;
           id: string;
+          local_version_control: string;
+          local_version_control_error: string | null;
+          local_version_control_installed_at: string | null;
           local_working_directory: string | null;
           preferences: Json;
           project_id: string;
@@ -956,6 +1078,9 @@ export type Database = {
         Insert: {
           created_at?: string | null;
           id?: string;
+          local_version_control?: string;
+          local_version_control_error?: string | null;
+          local_version_control_installed_at?: string | null;
           local_working_directory?: string | null;
           preferences?: Json;
           project_id: string;
@@ -974,6 +1099,9 @@ export type Database = {
         Update: {
           created_at?: string | null;
           id?: string;
+          local_version_control?: string;
+          local_version_control_error?: string | null;
+          local_version_control_installed_at?: string | null;
           local_working_directory?: string | null;
           preferences?: Json;
           project_id?: string;

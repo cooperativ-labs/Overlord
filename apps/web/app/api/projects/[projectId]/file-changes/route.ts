@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { assertOrgMembership } from '@/app/api/projects/_lib';
+import { assertOrgMembership, chunkUuidListForPostgrestNotIn } from '@/app/api/projects/_lib';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -67,7 +67,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     let fileChangeQuery = supabase
       .from('file_changes')
       .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,snapshot_backend,workspace_name,workspace_path,jj_change_id,jj_commit_id,jj_operation_id,tickets!inner(id,ticket_id,title,status,project_id)'
+        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,snapshot_backend,workspace_name,workspace_path,jj_change_id,jj_commit_id,jj_operation_id,tickets!inner(id,ticket_id,title,status,project_id)'
       )
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });
@@ -76,8 +76,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       fileChangeQuery = fileChangeQuery.in('file_path', filePaths);
     }
 
-    if (excludedTicketIds.length > 0) {
-      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
+    for (const chunk of chunkUuidListForPostgrestNotIn(excludedTicketIds)) {
+      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${chunk.join(',')})`);
     }
 
     const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;
@@ -87,8 +87,11 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const eventIds = [...new Set((fileChanges ?? []).map(row => row.event_id))];
     const sessionIds = [...new Set((fileChanges ?? []).map(row => row.session_id))];
+    const checkpointIds = [
+      ...new Set((fileChanges ?? []).map(row => row.checkpoint_id).filter(Boolean))
+    ];
 
-    const [eventsResult, sessionsResult] = await Promise.all([
+    const [eventsResult, sessionsResult, checkpointsResult] = await Promise.all([
       eventIds.length
         ? supabase
             .from('ticket_events')
@@ -105,12 +108,35 @@ export async function GET(request: Request, { params }: RouteContext) {
           }),
       sessionIds.length
         ? supabase.from('agent_sessions').select('id,agent_identifier').in('id', sessionIds)
-        : Promise.resolve({ data: [] as { id: string; agent_identifier: string }[], error: null })
+        : Promise.resolve({ data: [] as { id: string; agent_identifier: string }[], error: null }),
+      checkpointIds.length
+        ? supabase
+            .from('project_checkpoints')
+            .select(
+              'id,checkpoint_kind,backend,workspace_name,workspace_path,jj_change_id,jj_commit_id,jj_operation_id,git_commit_id,diff_stat,created_at'
+            )
+            .in('id', checkpointIds as string[])
+        : Promise.resolve({
+            data: [] as Array<{
+              id: string;
+              checkpoint_kind: string;
+              backend: string;
+              workspace_name: string | null;
+              workspace_path: string | null;
+              jj_change_id: string | null;
+              jj_commit_id: string | null;
+              jj_operation_id: string | null;
+              git_commit_id: string | null;
+              diff_stat: string | null;
+              created_at: string;
+            }>,
+            error: null
+          })
     ]);
 
-    if (eventsResult.error || sessionsResult.error) {
+    if (eventsResult.error || sessionsResult.error || checkpointsResult.error) {
       return NextResponse.json(
-        { error: 'Failed to load related event or session data.' },
+        { error: 'Failed to load related event, session, or checkpoint data.' },
         { status: 500 }
       );
     }
@@ -141,6 +167,9 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const eventsById = new Map((eventsResult.data ?? []).map(event => [event.id, event]));
     const sessionsById = new Map((sessionsResult.data ?? []).map(session => [session.id, session]));
+    const checkpointsById = new Map(
+      (checkpointsResult.data ?? []).map(checkpoint => [checkpoint.id, checkpoint])
+    );
 
     return NextResponse.json({
       fileChanges: [
@@ -150,6 +179,10 @@ export async function GET(request: Request, { params }: RouteContext) {
           confidence: fileChange.confidence,
           created_at: fileChange.created_at,
           event: eventsById.get(fileChange.event_id) ?? null,
+          checkpoint: fileChange.checkpoint_id
+            ? (checkpointsById.get(fileChange.checkpoint_id) ?? null)
+            : null,
+          checkpoint_id: fileChange.checkpoint_id,
           file_name: fileChange.file_name,
           file_path: fileChange.file_path,
           hunks: fileChange.hunks,

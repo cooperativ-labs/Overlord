@@ -1,4 +1,4 @@
-import type { ParsedDiffHunk } from '@/lib/git/unified-diff';
+import type { ParsedDiffHunk, ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import type { Json } from '@/types/database.types';
 
 import type { FileChangeRecord, GitStatusFile, RationaleHunk } from './types';
@@ -116,6 +116,18 @@ function hunkMatchesRationale(hunk: ParsedDiffHunk, rationale: FileChangeRecord)
     }
     return rangesOverlap(candidate.old_start, candidate.old_lines, hunk.oldStart, hunk.oldLines);
   });
+}
+
+/** True when stored rationale hunks overlap any hunk in the current working-tree unified diff. */
+export function rationaleIntersectsParsedDiff(
+  rationale: FileChangeRecord,
+  parsed: ParsedUnifiedDiff | null
+): boolean {
+  if (!parsed?.hunks.length) return false;
+  for (const hunk of parsed.hunks) {
+    if (hunkMatchesRationale(hunk, rationale)) return true;
+  }
+  return false;
 }
 
 export function buildHunkMatches(

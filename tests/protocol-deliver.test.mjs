@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { chmodSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, writeFileSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path, { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -77,6 +77,17 @@ function initGitRepo(repoDir) {
     cwd: repoDir,
     stdio: 'ignore'
   });
+}
+
+function commitFile(repoDir, fileName = 'tracked.txt', content = 'base\n') {
+  writeFileSync(join(repoDir, fileName), content);
+  execFileSync('git', ['add', fileName], { cwd: repoDir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoDir, stdio: 'ignore' });
+  return execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repoDir,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trim();
 }
 
 async function withProtocolEnv(callback) {
@@ -425,6 +436,51 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
   );
 
   test(
+    `${modulePath} deliver creates a local git checkpoint before submitting payload`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-git-checkpoint');
+      initGitRepo(repoDir);
+      const commitId = commitFile(repoDir);
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Done'
+            ]);
+          });
+        });
+
+        assert.equal(requestBody?.snapshot?.backend, 'git');
+        assert.equal(requestBody?.snapshot?.workspacePath, realpathSync(repoDir));
+        assert.equal(requestBody?.snapshot?.gitCommitId, commitId);
+        assert.equal(requestBody?.checkpoint?.kind, 'delivery');
+      } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test(
     `${modulePath} deliver preserves managed snapshot workspace after recording snapshot metadata`,
     { concurrency: false },
     async () => {
@@ -483,6 +539,94 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
       } finally {
         if (previousPath === undefined) delete process.env.PATH;
         else process.env.PATH = previousPath;
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test(
+    `${modulePath} deliver merges OVERLORD_SNAPSHOT_JSON with payload snapshot`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-snapshot-merge');
+      initGitRepo(repoDir);
+      writeFileSync(join(repoDir, 'a.ts'), 'export const x = 1;\n', 'utf8');
+
+      const payload = JSON.stringify({
+        summary: 'Done with jj ids in payload.',
+        changeRationales: [
+          {
+            label: 'Edit a',
+            file_path: 'a.ts',
+            summary: 'Change',
+            why: 'Test merge',
+            impact: 'Rows get jj provenance',
+            hunks: [{ header: '@@ -1 +1 @@' }]
+          }
+        ],
+        snapshot: {
+          jjChangeId: 'changeidfull123456789012345678901234567890',
+          jjCommitId: 'commitidfull123456789012345678901234567890',
+          jjOperationId: 'opidfull123456789012345678901234567890'
+        }
+      });
+
+      const shadowRepoDir = join(repoDir, 'shadow');
+      const workspaceDir = join(repoDir, 'workspace');
+      mkdirSync(shadowRepoDir, { recursive: true });
+      mkdirSync(workspaceDir, { recursive: true });
+
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.OVERLORD_URL = url;
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
+          process.env.OVERLORD_SNAPSHOT_JSON = JSON.stringify({
+            backend: 'jj',
+            shadowRepoPath: shadowRepoDir,
+            workspaceName: 'ovld-env',
+            workspacePath: workspaceDir
+          });
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedStdin(payload, async () => {
+            await withStubbedConsole(async () => {
+              await runProtocolCommand('deliver', [
+                '--session-key',
+                'sk',
+                '--ticket-id',
+                'tid',
+                '--payload-file',
+                '-',
+                '--skip-file-change-check'
+              ]);
+            });
+          });
+        });
+
+        assert.equal(requestBody?.snapshot?.workspacePath, workspaceDir);
+        assert.equal(requestBody?.snapshot?.workspaceName, 'ovld-env');
+        assert.equal(
+          requestBody?.snapshot?.jjChangeId,
+          'changeidfull123456789012345678901234567890'
+        );
+        assert.equal(
+          requestBody?.snapshot?.jjCommitId,
+          'commitidfull123456789012345678901234567890'
+        );
+        assert.equal(
+          requestBody?.snapshot?.jjOperationId,
+          'opidfull123456789012345678901234567890'
+        );
+      } finally {
         await close();
         rmSync(repoDir, { recursive: true, force: true });
       }

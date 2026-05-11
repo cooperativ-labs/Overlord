@@ -11,6 +11,9 @@ export type SidebarProject = {
   operationsProfileFingerprint?: string | null;
   operationsProfileGeneratedAt?: string | null;
   localWorkingDirectory: string | null;
+  localVersionControl: 'off' | 'jj';
+  localVersionControlInstalledAt: string | null;
+  localVersionControlError: string | null;
   /** @deprecated — retained for one release so legacy callers keep compiling. */
   sshCommand: string | null;
   remoteWorkingDirectory: string | null;
@@ -55,7 +58,13 @@ export type ProjectUserSshSettingsRow = Pick<
 
 export type ProjectUserLocalSettingsRow = Pick<
   ProjectUserRow,
-  'project_id' | 'local_working_directory' | 'remote_helper_installed_at' | 'remote_helper_version'
+  | 'project_id'
+  | 'local_working_directory'
+  | 'local_version_control'
+  | 'local_version_control_installed_at'
+  | 'local_version_control_error'
+  | 'remote_helper_installed_at'
+  | 'remote_helper_version'
 >;
 type ProjectSshSettings = Pick<
   SidebarProject,

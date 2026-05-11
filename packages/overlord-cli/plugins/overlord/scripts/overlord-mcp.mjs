@@ -49,22 +49,18 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string', description: 'Target ticket ID' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         agent: { type: 'string' },
-        model: { type: 'string' },
         method: { type: 'string' },
-        external_session_id: { type: ['string', 'null'] },
-        metadata: { type: 'object' }
+        external_session_id: { type: ['string', 'null'] }
       },
       required: ['ticket_id']
     },
     toCliFlags: args => ({
       'ticket-id': args.ticket_id,
       agent: args.agent,
-      model: args.model,
       method: args.method,
-      'external-session-id': args.external_session_id,
-      'metadata-json': args.metadata
+      'external-session-id': args.external_session_id
     }),
     subcommand: 'attach'
   },
@@ -74,7 +70,7 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         agent: { type: 'string' },
         method: { type: 'string' }
       },
@@ -103,8 +99,8 @@ const tools = [
     subcommand: 'load-context'
   },
   {
-    name: 'spawn_ticket',
-    description: 'Create a follow-up ticket and attach to it immediately.',
+    name: 'prompt_ticket',
+    description: 'Create a ticket and attach to it immediately.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -120,8 +116,6 @@ const tools = [
         parent_session_key: { type: 'string' },
         parent_ticket_id: { type: 'string' },
         agent: { type: 'string' },
-        model: { type: 'string' },
-        metadata: { type: 'object' },
         method: { type: 'string' }
       },
       required: ['objective']
@@ -139,11 +133,9 @@ const tools = [
       'parent-session-key': args.parent_session_key,
       'parent-ticket-id': args.parent_ticket_id,
       agent: args.agent,
-      model: args.model,
-      'metadata-json': args.metadata,
       method: args.method
     }),
-    subcommand: 'spawn'
+    subcommand: 'prompt'
   },
   {
     name: 'post_update',
@@ -152,7 +144,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         summary: { type: 'string' },
         phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
         event_type: { type: 'string', enum: ['update', 'user_follow_up', 'alert'] },
@@ -183,7 +175,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         summary: { type: 'string' },
         phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
         change_rationales: { type: 'array' }
@@ -206,7 +198,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         question: { type: 'string' },
         phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
         payload: { type: 'object' }
@@ -229,7 +221,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         query: { type: 'string' },
         limit: { type: 'number' }
       },
@@ -250,7 +242,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         key: { type: 'string' },
         value: {},
         tags: { type: 'array', items: { type: 'string' } }
@@ -274,10 +266,26 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         summary: { type: 'string' },
         artifacts: { type: 'array' },
         change_rationales: { type: 'array' },
+        snapshot: {
+          type: 'object',
+          description:
+            'Optional snapshot metadata (jj/git-worktree, workspace, jj ids). Merged with OVERLORD_SNAPSHOT_JSON when both are set.'
+        },
+        checkpoint: {
+          type: 'object',
+          description:
+            'Optional checkpoint metadata. The local CLI creates this automatically for JJ/Git workspaces during deliver.'
+        },
+        checkpoint_backend: {
+          type: 'string',
+          enum: ['auto', 'jj', 'git'],
+          description: 'Backend for automatic local checkpointing when routed through the CLI.'
+        },
+        skip_checkpoint: { type: 'boolean' },
         skip_file_change_check: { type: 'boolean' }
       },
       required: ['session_key', 'ticket_id', 'summary']
@@ -286,13 +294,18 @@ const tools = [
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
       'payload-file': '-',
+      'checkpoint-backend': args.checkpoint_backend,
+      'skip-checkpoint': args.skip_checkpoint,
       'skip-file-change-check': args.skip_file_change_check
     }),
-    toCliStdin: args => JSON.stringify({
-      summary: args.summary,
-      ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
-      ...(Array.isArray(args.change_rationales) ? { changeRationales: args.change_rationales } : {})
-    }),
+    toCliStdin: args =>
+      JSON.stringify({
+        summary: args.summary,
+        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+        ...(Array.isArray(args.change_rationales) ? { changeRationales: args.change_rationales } : {}),
+        ...(args.snapshot && typeof args.snapshot === 'object' ? { snapshot: args.snapshot } : {}),
+        ...(args.checkpoint && typeof args.checkpoint === 'object' ? { checkpoint: args.checkpoint } : {})
+      }),
     subcommand: 'deliver'
   },
   {
@@ -303,7 +316,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' }
       },
       required: ['session_key', 'ticket_id']
@@ -322,7 +335,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         file_name: { type: 'string' },
         label: { type: 'string' },
@@ -351,7 +364,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         storage_path: { type: 'string' },
         label: { type: 'string' },
@@ -380,7 +393,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         attachment_id: { type: 'string' },
         storage_path: { type: 'string' },
@@ -405,7 +418,7 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string' },
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         objective_id: { type: 'string' },
         file: { type: 'string' },
         file_name: { type: 'string' },
@@ -632,10 +645,10 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.2.1'
+        version: '0.1.2'
       },
       instructions:
-        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Most operations expect a session key from attach or connect. If the CLI reports that OVERLORD_URL is unreachable, request permission escalation or network access before retrying.'
+        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Most operations expect a session key from attach or connect.'
     });
     return;
   }

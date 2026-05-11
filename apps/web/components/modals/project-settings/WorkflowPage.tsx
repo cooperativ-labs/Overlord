@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import {
+  useUpdateProjectLocalVersionControlMutation,
   useUpdateProjectSshConfigMutation,
   useUpdateProjectWorkingDirectoryMutation
 } from '@/lib/client-data/projects/mutations';
@@ -33,6 +34,9 @@ type WorkflowPageProps = {
   projectId: string;
   organizationId: number;
   initialWorkingDirectory: string | null;
+  initialLocalVersionControl: 'off' | 'jj';
+  initialLocalVersionControlInstalledAt: string | null;
+  initialLocalVersionControlError: string | null;
   initialSshCommand: string | null;
   initialRemoteWorkingDirectory: string | null;
   initialSshHost: string | null;
@@ -52,6 +56,9 @@ export function WorkflowPage({
   projectId,
   organizationId,
   initialWorkingDirectory,
+  initialLocalVersionControl,
+  initialLocalVersionControlInstalledAt,
+  initialLocalVersionControlError,
   initialSshCommand: _initialSshCommand,
   initialRemoteWorkingDirectory,
   initialSshHost,
@@ -63,12 +70,23 @@ export function WorkflowPage({
 }: WorkflowPageProps) {
   const { api, isElectron } = useElectron();
   const updateWorkingDirectoryMutation = useUpdateProjectWorkingDirectoryMutation();
+  const updateLocalVersionControlMutation = useUpdateProjectLocalVersionControlMutation();
   const updateSshConfigMutation = useUpdateProjectSshConfigMutation();
   const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [workingDirectorySaveState, setWorkingDirectorySaveState] =
     useState<ButtonLoadingState>('default');
   const [workingDirectoryError, setWorkingDirectoryError] = useState<string | null>(null);
+  const [localVersionControl, setLocalVersionControl] = useState<'off' | 'jj'>(
+    initialLocalVersionControl
+  );
+  const [localVersionControlInstalledAt, setLocalVersionControlInstalledAt] = useState<
+    string | null
+  >(initialLocalVersionControlInstalledAt);
+  const [localVersionControlError, setLocalVersionControlError] = useState<string | null>(
+    initialLocalVersionControlError
+  );
+  const [installingVersionControl, setInstallingVersionControl] = useState(false);
   const directoryInputRef = useRef<HTMLInputElement>(null);
   const hasSavedWorkingDirectory =
     savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
@@ -123,6 +141,16 @@ export function WorkflowPage({
     setWorkingDirectory(next);
     setSavedWorkingDirectory(next);
   }, [initialWorkingDirectory]);
+
+  useEffect(() => {
+    setLocalVersionControl(initialLocalVersionControl);
+    setLocalVersionControlInstalledAt(initialLocalVersionControlInstalledAt);
+    setLocalVersionControlError(initialLocalVersionControlError);
+  }, [
+    initialLocalVersionControl,
+    initialLocalVersionControlError,
+    initialLocalVersionControlInstalledAt
+  ]);
 
   useEffect(() => {
     const host = initialSshHost ?? '';
@@ -278,6 +306,62 @@ export function WorkflowPage({
     }
   }
 
+  async function handleInstallVersionControl() {
+    if (!hasSavedWorkingDirectory || !savedWorkingDirectory.trim()) {
+      setLocalVersionControlError('A local working directory is required.');
+      return;
+    }
+    if (!isElectron || !api?.filesystem?.installLocalVersionControl) {
+      setLocalVersionControlError('Install version control from the Overlord desktop app.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Install version control in this folder?\n\nOverlord will initialize Jujutsu metadata in the project folder so agent changes can be checkpointed and reviewed.'
+    );
+    if (!confirmed) return;
+
+    setInstallingVersionControl(true);
+    setLocalVersionControlError(null);
+    try {
+      const result = await api.filesystem.installLocalVersionControl({
+        directory: savedWorkingDirectory,
+        mode: 'local'
+      });
+      if (!result.ok) {
+        setLocalVersionControlError(result.error);
+        await updateLocalVersionControlMutation.mutateAsync({
+          projectId,
+          mode: 'off',
+          installedAt: null,
+          error: result.error
+        });
+        return;
+      }
+      const installedAt = new Date().toISOString();
+      await updateLocalVersionControlMutation.mutateAsync({
+        projectId,
+        mode: 'jj',
+        installedAt,
+        error: null
+      });
+      setLocalVersionControl('jj');
+      setLocalVersionControlInstalledAt(installedAt);
+      toast.success(result.alreadyInstalled ? 'Jujutsu already enabled.' : 'Jujutsu enabled.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to install version control.';
+      setLocalVersionControlError(message);
+      await updateLocalVersionControlMutation.mutateAsync({
+        projectId,
+        mode: 'off',
+        installedAt: null,
+        error: message
+      });
+    } finally {
+      setInstallingVersionControl(false);
+    }
+  }
+
   async function handleSaveSshConfig() {
     const host = sshHost.trim();
     const user = sshUser.trim();
@@ -411,6 +495,62 @@ export function WorkflowPage({
           {workingDirectoryError ? (
             <p className="text-xs text-destructive">{workingDirectoryError}</p>
           ) : null}
+          <div className="mt-2 rounded-md border bg-muted/20 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium">Install version control in this folder</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Overlord uses{' '}
+                  <a
+                    className="underline underline-offset-2"
+                    href="/docs/workflow/file-changes"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    jujutsu
+                  </a>{' '}
+                  to let you clearly track and revert changes AI agents make in this folder.
+                </p>
+                {localVersionControl === 'jj' ? (
+                  <p className="mt-2 text-xs text-emerald-600">
+                    Jujutsu enabled
+                    {localVersionControlInstalledAt
+                      ? ` · ${new Date(localVersionControlInstalledAt).toLocaleString()}`
+                      : ''}
+                  </p>
+                ) : null}
+                {localVersionControlError ? (
+                  <p className="mt-2 text-xs text-destructive">{localVersionControlError}</p>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                variant={localVersionControl === 'jj' ? 'outline' : 'default'}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleInstallVersionControl}
+                disabled={
+                  installingVersionControl ||
+                  !hasSavedWorkingDirectory ||
+                  localVersionControl === 'jj'
+                }
+              >
+                {installingVersionControl ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Installing
+                  </>
+                ) : localVersionControl === 'jj' ? (
+                  'Enabled'
+                ) : (
+                  <>
+                    <Download className="h-3.5 w-3.5" />
+                    Install
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       ) : null}
 

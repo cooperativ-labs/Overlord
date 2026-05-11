@@ -13,13 +13,12 @@ import { cacheFeedPostsForOffline } from '@/lib/offline/offline-feed-cache';
 
 import { ExecutingTicketsSection } from './ExecutingTicketsSection';
 import { FeedCard } from './FeedCard';
+import type { FeedProjectWorkspace } from './FeedPostDiscussPanel';
 import { FeedProjectFilter } from './FeedProjectFilter';
 
-type Project = {
-  id: string;
+type Project = FeedProjectWorkspace & {
   name: string;
   color: string;
-  localWorkingDirectory: string | null;
 };
 
 type FeedListProps = {
@@ -104,6 +103,11 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
     [projects]
   );
 
+  const projectById = useMemo(
+    () => new Map(projects.map(project => [project.id, project])),
+    [projects]
+  );
+
   // Merge realtime posts with fetched posts, deduped and sorted newest first
   const allPosts = useMemo(() => {
     const serverIds = new Set(allFetchedPosts.map(p => p.id));
@@ -163,6 +167,7 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
                   post={post}
                   editorScheme={editorScheme}
                   workspaceRoot={workspaceRootByProjectId.get(post.project_id) ?? ''}
+                  project={projectById.get(post.project_id)}
                 />
               ))}
             </div>

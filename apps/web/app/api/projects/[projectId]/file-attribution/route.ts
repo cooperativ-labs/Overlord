@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { assertOrgMembership } from '@/app/api/projects/_lib';
+import { assertOrgMembership, chunkUuidListForPostgrestNotIn } from '@/app/api/projects/_lib';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -85,8 +85,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       .order('created_at', { ascending: false })
       .limit(500);
 
-    if (excludedTicketIds.length > 0) {
-      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${excludedTicketIds.join(',')})`);
+    for (const chunk of chunkUuidListForPostgrestNotIn(excludedTicketIds)) {
+      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${chunk.join(',')})`);
     }
 
     const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;

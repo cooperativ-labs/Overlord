@@ -65,7 +65,7 @@ ovld protocol deliver --session-key <sessionKey> \
   --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
 ```
 
-For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
+`ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
 
 ## Mode 2: Asked From Chat To Use Overlord
 
@@ -73,14 +73,15 @@ Use this mode when the conversation starts normally and the user asks Claude to 
 
 1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent claude-code --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
-   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to the caller's configured Overlord `project_user.local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new tickets. Only use `/overlord:spawn` or `ovld protocol spawn --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
-   `spawn` creates the ticket in `execute` status and attaches immediately.
+   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
+2. Default to `create` for new tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
+   `prompt` creates the ticket in `execute` status and attaches immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
-5. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or ask the user for the ticket ID if staying strictly inside chat is the better fit.
-6. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
-7. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
+5. If the user wants to establish a persistent session with a ticket by ID, use `/overlord:attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
+6. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or run `ovld protocol search-tickets --query "..." --status next-up,execute` and ask the user to confirm.
+7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
+8. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
 
 ## Change Rationales
 
@@ -108,7 +109,7 @@ Record only meaningful behavioral changes. Skip formatting-only noise.
 
 When creating tickets from within a repository:
 - Prefer `create` by default for draft ticket creation.
-- Use `spawn` only when the user explicitly asks to start execution immediately.
+- Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands can resolve the project from the current working directory; use `--working-directory` to override.
 
 ```bash
@@ -116,7 +117,7 @@ ovld protocol create --agent claude-code --objective "Capture follow-up work fro
 ```
 
 ```bash
-ovld protocol spawn --agent claude-code --objective "Implement feature X" --priority medium
+ovld protocol prompt --agent claude-code --objective "Implement feature X" --priority medium
 ```
 
 To inspect project resolution explicitly:
@@ -148,6 +149,14 @@ ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TI
 
 The `attach` and `load-context` responses already include `attachments` and `objectives` arrays — use those for `<attachment-id>` and `<objective-id>` values. Run `attachment-list` mid-session if new files have been uploaded since attach.
 
+## Defaults And Notes
+
+- API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `claude-code`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
+- `permission-request` is invoked by the Claude Code permission hook installed by the bundle. Agents do not normally call it directly.
+- `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the same `file_changes` table. The dedicated CLI route is `POST /api/protocol/record-change-rationales`.
+- Objective attachment tools follow the `<verb>_<noun>` MCP naming: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.
+- "Artifacts" in `deliver` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files. Files attached by users live on objectives via the attachment tools above.
+
 ## Rules
 
 - Always attach first and always deliver last once you are on a ticket.
@@ -155,10 +164,9 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - Use `write-context` for facts a future agent session should know.
-- If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.2.6 -->
+<!-- version: 0.4.5 -->

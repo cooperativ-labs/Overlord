@@ -272,8 +272,14 @@ Optional:
 --artifacts-file <path|->
 --change-rationales-file <path|->
 --payload-file <path|->            # full { summary, artifacts, changeRationales } JSON
+--checkpoint-backend <auto|jj|git> # local checkpoint backend, default auto
+--skip-checkpoint                  # bypass automatic local checkpoint creation
 --skip-file-change-check           # bypass local git vs changeRationales validation
 \`\`\`
+
+Before sending the API request, \`deliver\` creates a local checkpoint when the
+workspace is managed by JJ or Git and includes the resulting provenance in the
+payload. Use \`--skip-checkpoint\` only for intentional no-checkpoint delivery.
 
 In a git workspace, \`deliver\` validates that changed files are represented by
 \`changeRationales\` unless the check is skipped.

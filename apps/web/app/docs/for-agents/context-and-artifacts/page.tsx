@@ -63,6 +63,8 @@ Rules:
 
 - Cover every meaningful git-tracked change. Formatting-only noise can be skipped.
 - Never send \`file_changes\` as an artifact — use rationales instead.
+- \`deliver\` creates a local checkpoint automatically when the workspace is JJ-
+  or Git-managed, then links rationale rows to that checkpoint.
 - \`deliver\` validates rationale coverage against git status unless you pass
   \`--skip-file-change-check\`.
 
@@ -136,6 +138,7 @@ ovld protocol attachment-download-url \\
 
 ## Related pages
 
+- [File changes & checkpoints](/docs/workflow/file-changes)
 - [Ticket lifecycle](/docs/for-agents/lifecycle)
 - [CLI reference](/docs/for-agents/cli-reference)
 - [Rules for agents](/docs/for-agents/rules)

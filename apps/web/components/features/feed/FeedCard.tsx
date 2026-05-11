@@ -13,6 +13,10 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { ExternalLink } from '@/components/features/ExternalLink';
+import {
+  FeedPostDiscussPanel,
+  type FeedProjectWorkspace
+} from '@/components/features/feed/FeedPostDiscussPanel';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
 import type { FeedPost } from '@/lib/actions/feed';
@@ -38,9 +42,10 @@ type FeedCardProps = {
   post: FeedPost;
   editorScheme: string;
   workspaceRoot: string;
+  project?: FeedProjectWorkspace;
 };
 
-export function FeedCard({ post, editorScheme, workspaceRoot }: FeedCardProps) {
+export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCardProps) {
   const [expanded, setExpanded] = useState(false);
   const impact = impactConfig[post.impact_level] ?? impactConfig.notable;
   const agentType = getAgentTypeByIdentifier(post.agent_type);
@@ -230,6 +235,8 @@ export function FeedCard({ post, editorScheme, workspaceRoot }: FeedCardProps) {
                   </ul>
                 </div>
               )}
+
+              <FeedPostDiscussPanel post={post} project={project} />
             </div>
           )}
 

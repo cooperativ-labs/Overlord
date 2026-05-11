@@ -1,6 +1,8 @@
+import { rationaleIntersectsParsedDiff } from './helpers';
 import type {
   EnrichedCurrentChangeFile,
   FileChangeRecord,
+  GitDiffFilterEntry,
   GitStatusFile,
   TicketSummary
 } from './types';
@@ -45,17 +47,40 @@ function uniqueTickets(relatedRationales: FileChangeRecord[]): TicketSummary[] {
   return [...ticketMap.values()];
 }
 
+function resolveGitDiffEntry(
+  file: GitStatusFile,
+  gitDiffFilterByPath: Map<string, GitDiffFilterEntry> | undefined
+): GitDiffFilterEntry | null {
+  if (!gitDiffFilterByPath) return null;
+  const byPath = gitDiffFilterByPath.get(file.path);
+  if (byPath) return byPath;
+  if (file.originalPath) return gitDiffFilterByPath.get(file.originalPath) ?? null;
+  return null;
+}
+
 export function buildEnrichedCurrentChangeFiles(args: {
   files: GitStatusFile[];
+  gitDiffFilterByPath?: Map<string, GitDiffFilterEntry>;
   rationales: FileChangeRecord[];
 }): EnrichedCurrentChangeFile[] {
-  const { files, rationales } = args;
+  const { files, gitDiffFilterByPath, rationales } = args;
 
   return files.map(file => {
     const paths = new Set(candidatePaths(file));
-    const relatedRationales = rationales
+    let relatedRationales = rationales
       .filter(rationale => paths.has(rationale.file_path) && Boolean(rationale.ticket))
       .sort(compareNewestFirst);
+
+    const diffEntry = resolveGitDiffEntry(file, gitDiffFilterByPath);
+    if (gitDiffFilterByPath && gitDiffFilterByPath.size > 0) {
+      if (!diffEntry || diffEntry.kind === 'pending') {
+        relatedRationales = [];
+      } else if (diffEntry.kind === 'ready') {
+        relatedRationales = relatedRationales.filter(rationale =>
+          rationaleIntersectsParsedDiff(rationale, diffEntry.parsed)
+        );
+      }
+    }
     const tickets = uniqueTickets(relatedRationales);
     const primaryFileChange = relatedRationales[0] ?? null;
     const primaryTicket = primaryFileChange?.ticket ?? tickets[0] ?? null;

@@ -1,5 +1,6 @@
 import type {
   FileChangeRecord,
+  GitDiffFilterEntry,
   GitStatusFile
 } from '@/components/features/projects/current-changes/types';
 import {
@@ -9,6 +10,8 @@ import {
   ticketFilterSelectionsEqual,
   ticketIdsTouchingCurrentChanges
 } from '@/components/features/projects/current-changes/view-model';
+import { parseUnifiedDiff } from '@/lib/git/unified-diff';
+import type { Json } from '@/types/database.types';
 
 function makeFile(input: Partial<GitStatusFile> & { path: string }): GitStatusFile {
   return {
@@ -29,17 +32,20 @@ function makeRationale(input: {
   ticketStatus: string;
   ticketTitle?: string;
   createdAt: string;
+  hunks?: Json;
   summary?: string;
 }): FileChangeRecord {
   return {
     attribution_source: 'agent',
     change_kind: 'edit',
     confidence: 'high',
+    checkpoint: null,
+    checkpoint_id: null,
     created_at: input.createdAt,
     event: null,
     file_name: input.filePath.split('/').pop() ?? input.filePath,
     file_path: input.filePath,
-    hunks: [],
+    hunks: input.hunks ?? [],
     id: input.id,
     impact: '',
     jj_change_id: null,
@@ -203,5 +209,67 @@ describe('current-changes view-model', () => {
   it('detects equal ticket filter selections', () => {
     expect(ticketFilterSelectionsEqual(new Set(['a', 'b']), new Set(['b', 'a']))).toBe(true);
     expect(ticketFilterSelectionsEqual(new Set(['a']), new Set(['a', 'b']))).toBe(false);
+  });
+
+  it('hides rationales until git diff filter is ready (pending)', () => {
+    const files = [makeFile({ path: 'src/a.ts' })];
+    const rationales = [
+      makeRationale({
+        id: 'r1',
+        filePath: 'src/a.ts',
+        ticketId: 't1',
+        ticketStatus: 'execute',
+        createdAt: '2026-05-10T00:00:00Z'
+      })
+    ];
+    const map = new Map<string, GitDiffFilterEntry>([['src/a.ts', { kind: 'pending' }]]);
+    const [enriched] = buildEnrichedCurrentChangeFiles({
+      files,
+      gitDiffFilterByPath: map,
+      rationales
+    });
+    expect(enriched.rationales).toHaveLength(0);
+    expect(enriched.fileChangeCount).toBe(0);
+  });
+
+  it('keeps only rationales whose hunks intersect the current unified diff when ready', () => {
+    const files = [makeFile({ path: 'src/a.ts' })];
+    const diffText = `--- a/src/a.ts
++++ b/src/a.ts
+@@ -10,1 +10,2 @@
+ context
++inserted
+`;
+    const parsed = parseUnifiedDiff(diffText);
+    const map = new Map<string, GitDiffFilterEntry>([['src/a.ts', { kind: 'ready', parsed }]]);
+
+    const rationales = [
+      makeRationale({
+        id: 'r-hit',
+        filePath: 'src/a.ts',
+        ticketId: 't1',
+        ticketStatus: 'execute',
+        createdAt: '2026-05-11T00:00:00Z',
+        hunks: [{ new_start: 10, new_lines: 2, old_start: 10, old_lines: 1 }],
+        summary: 'overlaps'
+      }),
+      makeRationale({
+        id: 'r-miss',
+        filePath: 'src/a.ts',
+        ticketId: 't2',
+        ticketStatus: 'execute',
+        createdAt: '2026-05-10T00:00:00Z',
+        hunks: [{ new_start: 200, new_lines: 1, old_start: 200, old_lines: 1 }],
+        summary: 'no overlap'
+      })
+    ];
+
+    const [enriched] = buildEnrichedCurrentChangeFiles({
+      files,
+      gitDiffFilterByPath: map,
+      rationales
+    });
+    expect(enriched.rationales.map(r => r.id)).toEqual(['r-hit']);
+    expect(enriched.primaryFileChange?.id).toBe('r-hit');
   });
 });

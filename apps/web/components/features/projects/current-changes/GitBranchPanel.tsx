@@ -163,7 +163,7 @@ export function GitBranchPanel({
     <div className="space-y-3">
       <div>
         <p className="text-sm font-medium text-foreground">Branch</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="break-words text-xs text-muted-foreground">
           {currentBranch ? `On ${currentBranch}` : 'No active branch.'}
           {defaultBranch ? ` Base ${defaultBranch}.` : null}
         </p>
@@ -171,8 +171,11 @@ export function GitBranchPanel({
 
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose a branch" />
+          <SelectTrigger className="min-w-0 overflow-hidden">
+            <SelectValue
+              className="block min-w-0 truncate text-left"
+              placeholder="Choose a branch"
+            />
           </SelectTrigger>
           <SelectContent>
             {branches.map(branch => (
@@ -202,6 +205,7 @@ export function GitBranchPanel({
 
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <Input
+          className="min-w-0"
           placeholder="feature/branch-name"
           value={newBranchName}
           onChange={event => setNewBranchName(event.target.value)}

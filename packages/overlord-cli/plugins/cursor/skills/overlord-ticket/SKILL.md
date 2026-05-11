@@ -17,17 +17,99 @@ Use this skill whenever Cursor needs to work with Overlord, whether the session 
 6. If blocked, call `ovld protocol ask` and stop.
 7. Deliver last with `ovld protocol deliver`, including `changeRationales` for each meaningful behavioral file change.
 
+### Mode 1 Reference
+
+Attach:
+
+```bash
+ovld protocol attach --ticket-id $TICKET_ID
+```
+
+Update:
+
+```bash
+ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
+```
+
+Supported `--phase` values:
+- `draft`
+- `execute`
+- `review`
+- `deliver`
+- `complete`
+- `blocked`
+- `cancelled`
+
+Event types:
+- `update` for standard progress updates
+- `user_follow_up` for human follow-up messages after the initial ticket
+- `alert` for warnings or non-blocking issues
+
+Ask when blocked:
+
+```bash
+ovld protocol ask --session-key <sessionKey> --ticket-id $TICKET_ID --question "Specific question for the PM."
+```
+
+Deliver:
+
+```bash
+ovld protocol deliver --session-key <sessionKey> \
+  --ticket-id $TICKET_ID \
+  --summary "Narrative: what you did, next steps." \
+  --artifacts-json '[{"type":"next_steps","label":"Next steps","content":"..."}]' \
+  --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
+```
+
+`ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed.
+
 ## Mode 2: Asked From Chat To Use Overlord
 
 1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objective "..."`.
-2. Default to `create` for new tickets. Only use `/spawn` or `ovld protocol spawn --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately.
+   - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
+   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
+2. Default to `create` for new tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
-5. If the user wants to search for tickets by keyword or status, use the `search_tickets` MCP tool.
-6. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
-7. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
+5. If the user wants to establish a persistent session with a ticket by ID, use `/attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
+6. If the user wants to find a ticket by keyword/status/project/creator/date, run `ovld protocol search-tickets --query "..." --status next-up,execute`.
+7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
+8. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
 
-## Choosing `--execution-target` When Creating Tickets
+## Change Rationales
+
+Always include `changeRationales` when delivering. Optionally include them on updates during long-running work.
+
+Before delivering, make sure every meaningful git-tracked file change is represented in `changeRationales`; do not send `file_changes` as an artifact.
+
+```bash
+ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $TICKET_ID \
+  --summary "Recorded rationale details for the latest code changes." --phase execute \
+  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+```
+
+```bash
+ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \
+  --summary "Added retry logic." --phase execute \
+  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+```
+
+Record only meaningful behavioral changes. Skip formatting-only noise.
+
+## Project Discovery And Ticket Creation
+
+When creating tickets from within a repository:
+- Prefer `create` by default for draft ticket creation.
+- Use `prompt` only when the user explicitly asks to start execution immediately.
+- Both commands resolve the project from the current working directory; use `--working-directory` to override or `--project-id` to be explicit.
+
+```bash
+ovld protocol create --agent cursor --objective "Capture follow-up work from this repository"
+ovld protocol prompt --agent cursor --objective "Implement feature X" --priority medium
+ovld protocol discover-project
+```
+
+### Choosing `--execution-target`
 
 Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
 
@@ -36,14 +118,37 @@ Pass `--execution-target agent` or `--execution-target human` (default: `human`)
 
 When in doubt, ask yourself: *can this be done entirely inside a terminal or browser by an AI without human intervention?* If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
 
+## Context And Artifacts
+
+```bash
+ovld protocol read-context --session-key <sessionKey> --ticket-id $TICKET_ID
+ovld protocol write-context --session-key <sessionKey> --ticket-id $TICKET_ID --key "key" --value '"json-value"'
+ovld protocol attachment-list --session-key <sessionKey> --ticket-id $TICKET_ID
+ovld protocol attachment-upload-file --session-key <sessionKey> --ticket-id $TICKET_ID --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
+ovld protocol attachment-download-url --session-key <sessionKey> --ticket-id $TICKET_ID --attachment-id <attachment-id>
+```
+
+The `attach` and `load-context` responses already include `attachments` and `objectives` arrays — use those for `<attachment-id>` and `<objective-id>` values. Run `attachment-list` mid-session if new files have been uploaded since attach.
+
+Objective attachment uploads also expose two-step variants — `attachment-prepare-upload` and `attachment-finalize-upload` — for callers that need a signed URL directly. Prefer `attachment-upload-file` for one-shot uploads.
+
+"Artifacts" in `deliver` are the structured records an agent submits at delivery time (next_steps, test_results, migration, decision, note, url) — not user-uploaded files.
+
+## Defaults And Notes
+
+- The Overlord API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt, but the CLI defaults them to `cursor`/`cli` (override with `--agent` / `--method`). The MCP tools default to `mcp`.
+- `permission-request` is invoked by the installed permission hook; agents normally do not call it directly.
+- The `record_change_rationales` MCP tool and `ovld protocol record-change-rationales` CLI both write to the same `file_changes` table; pick whichever fits your runtime.
+
 ## Rules
 
 - Always attach first and always deliver last once you are on a ticket.
 - Use `ovld protocol` commands, the plugin commands, and the MCP tool instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
-- If `ovld` reports `OVERLORD_URL` is unreachable, request permission escalation or network access before retrying.
-- If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - Include at least one progress update before delivering.
-- When creating follow-up tickets, always set `--execution-target` explicitly using the `agent`/`human` rule above.
+- The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
+- If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
+- If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
+- Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.2.4 -->
+<!-- version: 0.4.5 -->

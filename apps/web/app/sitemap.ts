@@ -12,17 +12,20 @@ function isDynamicSegment(segment: string): boolean {
   return segment.startsWith('[') && segment.endsWith(']');
 }
 
-function toRoutePath(pageFile: string): string | null {
-  const relativePath = pageFile
-    .replace(APP_DIR, '')
-    .replace(/^\//, '')
-    .replace(/\/page\.tsx$/, '');
+function isAppPageFile({ fileName }: { fileName: string }): boolean {
+  return fileName === 'page.tsx' || fileName === 'page.ts';
+}
 
-  if (!relativePath) {
-    return '/';
+function toRoutePath(pageFile: string): string | null {
+  const relFromApp = path.relative(APP_DIR, pageFile);
+  const normalized = relFromApp.split(path.sep).join('/');
+
+  if (!/^\/?page\.(tsx|ts)$/.test(normalized) && !/\/page\.(tsx|ts)$/.test(normalized)) {
+    return null;
   }
 
-  const segments = relativePath.split('/');
+  const dirPart = normalized.replace(/\/?page\.(tsx|ts)$/, '');
+  const segments = dirPart === '' ? [] : dirPart.split('/').filter(Boolean);
 
   if (
     segments.some(
@@ -34,7 +37,7 @@ function toRoutePath(pageFile: string): string | null {
   }
 
   const cleanSegments = segments.filter(
-    segment => !segment.startsWith('(') || !segment.endsWith(')')
+    segment => !(segment.startsWith('(') && segment.endsWith(')'))
   );
 
   if (cleanSegments.length === 0) {
@@ -57,7 +60,7 @@ async function getPageFiles(dir: string): Promise<string[]> {
       continue;
     }
 
-    if (entry.isFile() && entry.name === 'page.tsx') {
+    if (entry.isFile() && isAppPageFile({ fileName: entry.name })) {
       pageFiles.push(entryPath);
     }
   }

@@ -31,6 +31,8 @@ Overlord is designed to coordinate Claude Code, Codex, Cursor, Gemini, and other
 
 ## Related pages
 
+- [Objectives](/docs/workflow/objectives)
+- [File changes & checkpoints](/docs/workflow/file-changes)
 - [CLI](/docs/surfaces/cli)
 - [MCP server](/docs/surfaces/mcp-server)
 - [Updates & questions](/docs/workflow/updates)

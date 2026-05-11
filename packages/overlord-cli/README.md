@@ -119,7 +119,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `permission-request` - notify Overlord that the agent is requesting tool permission
 - `read-context` - read shared persistent context for this ticket
 - `write-context` - write shared persistent context for future sessions
-- `deliver` - finish work, send artifacts, and move the ticket to review
+- `deliver` - create a local JJ/Git checkpoint when available, send artifacts/rationales, and move the ticket to review
 - `attachment-prepare-upload` - get a signed upload URL for an objective attachment
 - `attachment-finalize-upload` - finalize an uploaded objective attachment row after storage upload
 - `attachment-download-url` - get a signed download URL for an existing objective attachment

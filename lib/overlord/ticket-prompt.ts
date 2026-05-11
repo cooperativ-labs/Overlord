@@ -1,5 +1,5 @@
 import type { InstructionMode } from '@/lib/overlord/agent-capabilities';
-import { buildPromptContext } from '@/lib/overlord/prompt-context';
+import { buildPromptContext, renderPromptContextMarkdown } from '@/lib/overlord/prompt-context';
 import {
   generateAskPayloadExample,
   generateAttachPayloadExample,
@@ -27,6 +27,11 @@ export type PromptOptions = {
   agent?: PromptAgent;
   /** Instruction mode: 'bundle' emits a slim prompt, 'legacy' emits the full protocol walkthrough. */
   instructionMode?: InstructionMode;
+  /**
+   * When set, replaces the default ## Task body and clears ## History (feed discuss: layered
+   * intent → execution → interpretation → question).
+   */
+  feedDiscussTaskMarkdown?: string;
 };
 
 type Ticket = {
@@ -75,12 +80,20 @@ export function buildTicketPromptMarkdown({
       platformUrl.startsWith('http://127.0.0.1') ||
       platformUrl.startsWith('http://0.0.0.0');
 
-  const { promptContext } = buildPromptContext({
+  const built = buildPromptContext({
     ticket,
     customInstructions: options?.customInstructions,
     workingDirectory: options?.workingDirectory,
     launchMode
   });
+
+  let promptContext = built.promptContext;
+  if (options?.feedDiscussTaskMarkdown) {
+    const sections = { ...built.promptContextSections };
+    sections.task = options.feedDiscussTaskMarkdown;
+    sections.history = '';
+    promptContext = renderPromptContextMarkdown(sections);
+  }
 
   const protocolSection = isLocal
     ? buildLocalProtocolSectionByAgent({

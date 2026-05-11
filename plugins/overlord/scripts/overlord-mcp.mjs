@@ -270,6 +270,22 @@ const tools = [
         summary: { type: 'string' },
         artifacts: { type: 'array' },
         change_rationales: { type: 'array' },
+        snapshot: {
+          type: 'object',
+          description:
+            'Optional snapshot metadata (jj/git-worktree, workspace, jj ids). Merged with OVERLORD_SNAPSHOT_JSON when both are set.'
+        },
+        checkpoint: {
+          type: 'object',
+          description:
+            'Optional checkpoint metadata. The local CLI creates this automatically for JJ/Git workspaces during deliver.'
+        },
+        checkpoint_backend: {
+          type: 'string',
+          enum: ['auto', 'jj', 'git'],
+          description: 'Backend for automatic local checkpointing when routed through the CLI.'
+        },
+        skip_checkpoint: { type: 'boolean' },
         skip_file_change_check: { type: 'boolean' }
       },
       required: ['session_key', 'ticket_id', 'summary']
@@ -278,13 +294,18 @@ const tools = [
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
       'payload-file': '-',
+      'checkpoint-backend': args.checkpoint_backend,
+      'skip-checkpoint': args.skip_checkpoint,
       'skip-file-change-check': args.skip_file_change_check
     }),
-    toCliStdin: args => JSON.stringify({
-      summary: args.summary,
-      ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
-      ...(Array.isArray(args.change_rationales) ? { changeRationales: args.change_rationales } : {})
-    }),
+    toCliStdin: args =>
+      JSON.stringify({
+        summary: args.summary,
+        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+        ...(Array.isArray(args.change_rationales) ? { changeRationales: args.change_rationales } : {}),
+        ...(args.snapshot && typeof args.snapshot === 'object' ? { snapshot: args.snapshot } : {}),
+        ...(args.checkpoint && typeof args.checkpoint === 'object' ? { checkpoint: args.checkpoint } : {})
+      }),
     subcommand: 'deliver'
   },
   {

@@ -26,30 +26,21 @@ type ListFilesOptions = {
 
 const electronAPI = {
   terminal: {
-    launchAgent: (
-      ticketId: string,
-      agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
-      organizationId?: number,
-      cwd?: string,
-      launchMode?: 'run' | 'ask',
-      flags?: string[],
-      model?: string,
-      thinking?: string,
-      sshCommand?: string,
-      remoteWorkingDirectory?: string
-    ) =>
-      ipcRenderer.invoke('terminal:launch-agent', {
-        ticketId,
-        agent,
-        organizationId,
-        cwd,
-        launchMode,
-        flags,
-        model,
-        thinking,
-        sshCommand,
-        remoteWorkingDirectory
-      }),
+    launchAgent: (params: {
+      ticketId: string;
+      agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+      organizationId?: number;
+      cwd?: string;
+      launchMode?: 'run' | 'ask';
+      flags?: string[];
+      model?: string;
+      thinking?: string;
+      sshCommand?: string;
+      remoteWorkingDirectory?: string;
+      projectId?: string | null;
+      feedPostId?: string;
+      initialQuestion?: string;
+    }) => ipcRenderer.invoke('terminal:launch-agent', params),
     chooseDirectory: () => ipcRenderer.invoke('terminal:choose-directory')
   },
   filesystem: {
@@ -70,6 +61,8 @@ const electronAPI = {
     ) => ipcRenderer.invoke('filesystem:get-git-diff', options),
     getAggregateDiff: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-aggregate-diff', options),
+    installLocalVersionControl: (options: WorkspacePayload) =>
+      ipcRenderer.invoke('filesystem:install-local-version-control', options),
     getGitBranches: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-git-branches', options),
     gitCheckoutBranch: (options: WorkspacePayload & { options: { name: string } }) =>

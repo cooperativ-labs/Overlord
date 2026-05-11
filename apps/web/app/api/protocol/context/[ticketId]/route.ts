@@ -13,11 +13,14 @@ import {
 } from '@/lib/actions/projects';
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import type { InstructionMode } from '@/lib/overlord/agent-capabilities';
+import { organizationIdFromTicketId } from '@/lib/overlord/human-ticket-id';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
+import { loadFeedDiscussAppendMarkdown } from '@/lib/overlord/load-feed-discuss-append';
 import {
   resolveAgentToken,
   resolveProtocolOrganizationHintForTicketId
 } from '@/lib/overlord/protocol-auth';
+import { resolveProtocolObjectiveText } from '@/lib/overlord/protocol-context-objective';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import {
   buildTicketPromptMarkdown,
@@ -25,32 +28,9 @@ import {
   type PromptLaunchMode
 } from '@/lib/overlord/ticket-prompt';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
-import { createSnapshotBackend } from '@/lib/snapshot';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
 
 type RouteContext = { params: Promise<{ ticketId: string }> };
-
-function parseTicketIdParts(
-  ticketId: string
-): { organizationId: number; ticketSequence: number } | null {
-  const [organizationPart, ticketSequencePart, ...rest] = ticketId.trim().split(':');
-  if (rest.length > 0) return null;
-
-  const organizationId = Number.parseInt(organizationPart ?? '', 10);
-  const ticketSequence = Number.parseInt(ticketSequencePart ?? '', 10);
-  if (!Number.isInteger(organizationId) || organizationId <= 0) return null;
-  if (!Number.isInteger(ticketSequence) || ticketSequence <= 0) return null;
-
-  return { organizationId, ticketSequence };
-}
-
-function organizationIdFromTicketId(ticketId: string): number | null {
-  return parseTicketIdParts(ticketId)?.organizationId ?? null;
-}
-
-function ticketSequenceFromTicketId(ticketId: string): number | null {
-  return parseTicketIdParts(ticketId)?.ticketSequence ?? null;
-}
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
@@ -94,42 +74,13 @@ export async function GET(request: Request, { params }: RouteContext) {
     const sshSettings = resolveProjectUserSshSettings(projectUser);
     const projectUserLocal = ticket.project_id ? localByProject.get(ticket.project_id) : undefined;
     const localWorkingDirectory = projectUserLocal?.local_working_directory ?? null;
-    // Prefer the currently executing objective; fall back to submitted.
-    // Draft objectives are not exposed on modern schemas, but we keep them as
-    // a last resort for older databases that still reject the submitted state.
-    const { data: executingObjective } = await supabase
-      .from('objectives')
-      .select('objective')
-      .eq('ticket_id', ticketId)
-      .eq('state', 'executing')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const currentObjective =
-      executingObjective ??
-      (
-        await supabase
-          .from('objectives')
-          .select('objective')
-          .eq('ticket_id', ticketId)
-          .eq('state', 'submitted')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      ).data ??
-      (
-        await supabase
-          .from('objectives')
-          .select('objective')
-          .eq('ticket_id', ticketId)
-          .eq('state', 'draft')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      ).data;
-
     const { searchParams } = new URL(request.url);
+    const feedPostId = searchParams.get('feedPostId')?.trim() || null;
+    const rawInitialQuestion = searchParams.get('initialQuestion') ?? '';
+    const initialQuestion =
+      rawInitialQuestion.length > 6000
+        ? `${rawInitialQuestion.slice(0, 6000)}\n\n_(truncated)_`
+        : rawInitialQuestion;
     const context = (searchParams.get('context') ?? undefined) as PromptContext | undefined;
     const launchMode =
       searchParams.get('mode') === 'ask'
@@ -143,66 +94,27 @@ export async function GET(request: Request, { params }: RouteContext) {
       | 'opencode'
       | undefined;
     const instructionMode = (searchParams.get('instructionMode') ?? 'legacy') as InstructionMode;
-    const sessionId = searchParams.get('sessionId')?.trim() || null;
     const requestedWorkspace = searchParams.get('workspace')?.trim().toLowerCase();
     const requestOrigin = new URL(request.url).origin;
     const platformUrl = getPlatformUrl(requestOrigin);
-    const ticketSequence = ticketSequenceFromTicketId(ticket.ticket_id || ticket.id);
-    const shouldUseManagedSnapshot =
-      context === 'electron' &&
-      requestedWorkspace !== 'ssh' &&
-      Boolean(sessionId) &&
-      Boolean(ticket.project_id) &&
-      Boolean(localWorkingDirectory) &&
-      ticketSequence !== null;
-    let snapshotWorkspacePath: string | null = null;
-    let snapshotWorkspaceName: string | null = null;
-    let snapshotShadowRepoPath: string | null = null;
-    let snapshotBackendName: string | null = null;
+    const objectiveResolution = await resolveProtocolObjectiveText({
+      supabase,
+      ticketId,
+      organizationId,
+      feedPostId
+    });
 
-    if (
-      !currentObjective ||
-      !currentObjective.objective ||
-      currentObjective.objective.trim() === ''
-    ) {
-      return NextResponse.json({ error: 'No objective found for this ticket.' }, { status: 404 });
+    if (!objectiveResolution.ok) {
+      return NextResponse.json({ error: objectiveResolution.error }, { status: 404 });
     }
 
-    if (shouldUseManagedSnapshot && ticket.project_id && localWorkingDirectory && sessionId) {
-      try {
-        const snapshotBackend = await createSnapshotBackend({
-          projectId: ticket.project_id,
-          sourceDirectory: localWorkingDirectory,
-          prefer: 'jj'
-        });
-        const projectSnapshot = await snapshotBackend.prepareProject({
-          projectId: ticket.project_id,
-          sourceDirectory: localWorkingDirectory,
-          gitRemoteUrl: null
-        });
-        const workspace = await snapshotBackend.createWorkspace({
-          baseGitCommitId: null,
-          baseJjCommitId: null,
-          projectId: ticket.project_id,
-          sessionId,
-          sourceBinding: projectSnapshot,
-          ticketId: ticket.ticket_id || ticket.id,
-          ticketSequence: ticketSequence ?? 0
-        });
-        snapshotWorkspacePath = workspace.workspacePath;
-        snapshotWorkspaceName = workspace.workspaceName;
-        snapshotShadowRepoPath = workspace.shadowRepoPath;
-        snapshotBackendName = workspace.backend;
-      } catch (error) {
-        console.warn('[protocol/context] snapshot workspace preparation failed:', error);
-      }
-    }
+    // Managed JJ/git-worktree workspaces are prepared on the **client** (Electron / `ovld`)
+    // where `local_working_directory` exists. The API only returns configured paths.
 
     const resolvedWorkingDirectory =
-      snapshotWorkspacePath ??
-      (requestedWorkspace === 'ssh'
+      requestedWorkspace === 'ssh'
         ? (sshSettings?.remoteWorkingDirectory ?? localWorkingDirectory)
-        : localWorkingDirectory);
+        : localWorkingDirectory;
 
     // Use the configured MCP URL when available.
     let mcpUrl: string | undefined;
@@ -229,11 +141,33 @@ export async function GET(request: Request, { params }: RouteContext) {
       console.error('Failed to load agent configs for context prompt:', error);
     }
 
+    let feedDiscussTaskMarkdown: string | undefined;
+    if (feedPostId && objectiveResolution.feedPostId) {
+      const append = await loadFeedDiscussAppendMarkdown({
+        supabase,
+        ticketId,
+        feedPostId: objectiveResolution.feedPostId,
+        initialQuestion,
+        ticketIntent: {
+          humanTicketId: ticket.ticket_id || ticket.id,
+          ticketTitle: ticket.title,
+          sliceObjectiveText: objectiveResolution.objectiveText,
+          acceptanceCriteria: ticket.acceptance_criteria,
+          constraints: ticket.constraints,
+          executionTarget: ticket.execution_target
+        }
+      });
+      if (!append.ok) {
+        return NextResponse.json({ error: append.error }, { status: 404 });
+      }
+      feedDiscussTaskMarkdown = append.markdown;
+    }
+
     const markdown = buildTicketPromptMarkdown({
       ticket: {
         id: ticket.ticket_id || ticket.id,
         title: ticket.title,
-        objective: currentObjective?.objective,
+        objective: objectiveResolution.objectiveText,
         acceptance_criteria: ticket.acceptance_criteria,
         available_tools: ticket.available_tools,
         constraints: ticket.constraints,
@@ -252,7 +186,8 @@ export async function GET(request: Request, { params }: RouteContext) {
         launchMode,
         agentConfigs,
         agent,
-        instructionMode
+        instructionMode,
+        feedDiscussTaskMarkdown
       }
     });
 
@@ -262,22 +197,8 @@ export async function GET(request: Request, { params }: RouteContext) {
     if (resolvedWorkingDirectory) {
       headers['X-Working-Directory'] = resolvedWorkingDirectory;
     }
-    if (snapshotWorkspacePath) {
-      headers['X-Overlord-Snapshot-Workspace'] = snapshotWorkspacePath;
-    }
-    if (snapshotBackendName) {
-      headers['X-Overlord-Snapshot-Backend'] = snapshotBackendName;
-    }
-    if (snapshotWorkspacePath && ticket.project_id && localWorkingDirectory && sessionId) {
-      headers['X-Overlord-Snapshot-Context'] = JSON.stringify({
-        backend: snapshotBackendName ?? 'jj',
-        baseGitCommitId: null,
-        baseJjCommitId: null,
-        projectId: ticket.project_id,
-        shadowRepoPath: snapshotShadowRepoPath ?? localWorkingDirectory,
-        workspaceName: snapshotWorkspaceName ?? sessionId,
-        workspacePath: snapshotWorkspacePath
-      });
+    if (projectUserLocal?.local_version_control) {
+      headers['X-Local-Version-Control'] = projectUserLocal.local_version_control;
     }
     const humanTicketId = ticket.ticket_id || ticket.id;
     headers['X-Ticket-Id'] = humanTicketId;

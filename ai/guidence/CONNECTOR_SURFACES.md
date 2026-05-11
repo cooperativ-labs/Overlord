@@ -21,7 +21,7 @@ Bundle-backed agents get a slim ticket prompt; unbundled agents always receive t
 - **Bundle supported:** `claude`, `cursor`, `opencode`
 - **Legacy mode only:** `codex`, `gemini`
 
-Desktop local launches also propagate managed snapshot context through `OVERLORD_SNAPSHOT_JSON`; the CLI `attach` and `connect` flows persist that data on the session metadata row so the launch workspace can be recovered and cleaned up later.
+Desktop local launches run managed JJ workspace provisioning **in the Electron main process** (`prepareManagedSnapshotWorkspace` after `GET /api/protocol/context/...`) and set `OVERLORD_SNAPSHOT_JSON` from that result. When the user has enabled in-folder JJ version control (`project_user.local_version_control = jj`), Desktop launches in the original local working directory instead and sets `OVERLORD_SNAPSHOT_JSON` to that folder. The context API no longer runs `jj` on the server. The CLI `deliver` command creates a local checkpoint before the `/api/protocol/deliver` request for JJ/Git workspaces.
 
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
@@ -421,7 +421,7 @@ when one surface changes, check the others against this table.
 Notes:
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
-- `deliver` requires `artifacts` on every surface — empty array is allowed but the field must be present.
+- `deliver` accepts optional `snapshot` and `checkpoint` metadata. CLI delivery also supports local-only `--checkpoint-backend <auto|jj|git>` and `--skip-checkpoint` flags; the MCP local shim exposes matching `checkpoint_backend` and `skip_checkpoint` parameters when it routes through the CLI.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)

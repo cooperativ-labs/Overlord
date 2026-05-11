@@ -104,20 +104,25 @@ interface AppUpdateStatus {
   message?: string;
 }
 
+export type LaunchTerminalAgentParams = {
+  ticketId: string;
+  agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
+  organizationId?: number;
+  cwd?: string;
+  launchMode?: 'run' | 'ask';
+  flags?: string[];
+  model?: string;
+  thinking?: string;
+  sshCommand?: string;
+  remoteWorkingDirectory?: string;
+  projectId?: string | null;
+  feedPostId?: string;
+  initialQuestion?: string;
+};
+
 interface ElectronAPI {
   terminal: {
-    launchAgent: (
-      ticketId: string,
-      agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
-      organizationId?: number,
-      cwd?: string,
-      launchMode?: 'run' | 'ask',
-      flags?: string[],
-      model?: string,
-      thinking?: string,
-      sshCommand?: string,
-      remoteWorkingDirectory?: string
-    ) => Promise<void>;
+    launchAgent: (params: LaunchTerminalAgentParams) => Promise<void>;
     chooseDirectory: () => Promise<string | null>;
   };
   filesystem: {
@@ -187,6 +192,16 @@ interface ElectronAPI {
       status: string;
       error?: string;
     }>;
+    installLocalVersionControl: (options: WorkspacePayload) => Promise<
+      | {
+          ok: true;
+          backend: 'jj';
+          rootPath: string;
+          alreadyInstalled: boolean;
+          jjVersion: string | null;
+        }
+      | { ok: false; error: string }
+    >;
     gitCheckoutBranch: (
       options: WorkspacePayload & {
         options: { name: string };

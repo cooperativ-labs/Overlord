@@ -68,8 +68,16 @@ const data = {
           url: '/docs/workflow/tickets'
         },
         {
+          title: 'Objectives',
+          url: '/docs/workflow/objectives'
+        },
+        {
           title: 'Agent Execution',
           url: '/docs/workflow/agent-execution'
+        },
+        {
+          title: 'File changes & checkpoints',
+          url: '/docs/workflow/file-changes'
         },
         {
           title: 'Updates & Questions',

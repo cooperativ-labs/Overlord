@@ -2,22 +2,13 @@
 
 import { createContext, type ReactNode, useCallback, useContext } from 'react';
 
+import type { LaunchTerminalAgentParams } from '@/types/electron';
+
 import { useElectron } from './useElectron';
 
 type TerminalContextValue = {
   isElectron: boolean;
-  launchAgent: (
-    ticketId: string,
-    agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
-    organizationId?: number,
-    cwd?: string,
-    launchMode?: 'run' | 'ask',
-    flags?: string[],
-    model?: string,
-    thinking?: string,
-    sshCommand?: string,
-    remoteWorkingDirectory?: string
-  ) => Promise<void>;
+  launchAgent: (params: LaunchTerminalAgentParams) => Promise<void>;
 };
 
 const TerminalContext = createContext<TerminalContextValue | null>(null);
@@ -26,31 +17,9 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   const { api, isElectron } = useElectron();
 
   const launchAgent = useCallback(
-    async (
-      ticketId: string,
-      agent: 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode',
-      organizationId?: number,
-      cwd?: string,
-      launchMode: 'run' | 'ask' = 'run',
-      flags?: string[],
-      model?: string,
-      thinking?: string,
-      sshCommand?: string,
-      remoteWorkingDirectory?: string
-    ) => {
+    async (params: LaunchTerminalAgentParams) => {
       if (!api) return;
-      await api.terminal.launchAgent(
-        ticketId,
-        agent,
-        organizationId,
-        cwd,
-        launchMode,
-        flags,
-        model,
-        thinking,
-        sshCommand,
-        remoteWorkingDirectory
-      );
+      await api.terminal.launchAgent(params);
     },
     [api]
   );

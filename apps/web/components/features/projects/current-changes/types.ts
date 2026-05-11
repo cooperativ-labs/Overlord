@@ -97,6 +97,20 @@ export type FileChangeRecord = {
     id: string;
     summary: string | null;
   } | null;
+  checkpoint: {
+    backend: string;
+    checkpoint_kind: string;
+    created_at: string;
+    diff_stat: string | null;
+    git_commit_id: string | null;
+    id: string;
+    jj_change_id: string | null;
+    jj_commit_id: string | null;
+    jj_operation_id: string | null;
+    workspace_name: string | null;
+    workspace_path: string | null;
+  } | null;
+  checkpoint_id: string | null;
   file_name: string;
   file_path: string;
   hunks: Json;
@@ -128,6 +142,11 @@ export type DiffState = {
   isLoading: boolean;
   parsed: ParsedUnifiedDiff | null;
 };
+
+/** Per-path git diff readiness for filtering rationales against the working tree. */
+export type GitDiffFilterEntry =
+  | { kind: 'pending' }
+  | { kind: 'ready'; parsed: ParsedUnifiedDiff | null };
 
 export type TicketSummary = {
   id: string;

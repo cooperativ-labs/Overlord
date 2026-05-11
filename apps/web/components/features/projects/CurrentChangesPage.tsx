@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { FileCode2 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,6 +23,7 @@ import {
   useCurrentChangeFileChanges,
   useCurrentChangesRealtime,
   useGitBranchesQuery,
+  useGitDiffFilterMap,
   useGitDiffQuery,
   useGitStatusQuery
 } from '@/lib/client-data/current-changes/hooks';
@@ -45,6 +47,7 @@ export function CurrentChangesPage({
   initialFilePath,
   initialTicketIds
 }: CurrentChangesPageProps) {
+  const queryClient = useQueryClient();
   const { api, isElectron } = useElectron();
   const router = useRouter();
   const pathname = usePathname();
@@ -69,9 +72,17 @@ export function CurrentChangesPage({
     isElectron
   });
   const statusResponse = statusQuery.data ?? null;
+  const statusFiles = useMemo(() => statusResponse?.files ?? [], [statusResponse?.files]);
+  const { allSettled: allGitDiffsSettled, filterMap: gitDiffFilterByPath } = useGitDiffFilterMap({
+    api: api?.filesystem,
+    canInspectChanges,
+    directory: workingDirectory,
+    files: statusFiles,
+    isElectron
+  });
   const fileChangesQuery = useCurrentChangeFileChanges({
     projectId,
-    files: statusResponse?.files ?? []
+    files: statusFiles
   });
   useCurrentChangesRealtime({
     enabled: isElectron && canInspectChanges,
@@ -99,16 +110,23 @@ export function CurrentChangesPage({
     await branchesQuery.refetch();
     await statusQuery.refetch();
     await fileChangesQuery.refetch();
+    if (workingDirectory) {
+      await queryClient.invalidateQueries({
+        exact: false,
+        queryKey: ['current-changes', 'diff', workingDirectory]
+      });
+    }
     await diffQuery.refetch();
   }
 
   const enrichedFiles = useMemo(
     () =>
       buildEnrichedCurrentChangeFiles({
-        files: statusResponse?.files ?? [],
+        files: statusFiles,
+        ...(isElectron && canInspectChanges ? { gitDiffFilterByPath } : {}),
         rationales: fileChanges
       }),
-    [fileChanges, statusResponse?.files]
+    [canInspectChanges, fileChanges, gitDiffFilterByPath, isElectron, statusFiles]
   );
 
   const uniqueTickets = useMemo(() => {
@@ -130,13 +148,11 @@ export function CurrentChangesPage({
     [enrichedFiles]
   );
 
-  const rationalePathCount = useMemo(
-    () => getRationalePaths(statusResponse?.files ?? []).length,
-    [statusResponse?.files]
-  );
+  const rationalePathCount = useMemo(() => getRationalePaths(statusFiles).length, [statusFiles]);
 
   const canPruneStaleTicketFilters =
     (statusQuery.isFetched || statusQuery.isError) &&
+    allGitDiffsSettled &&
     (rationalePathCount === 0 ? true : fileChangesQuery.isFetched || fileChangesQuery.isError);
 
   const filteredFiles = useMemo(() => {

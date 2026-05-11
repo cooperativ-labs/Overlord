@@ -108,7 +108,7 @@ export function DraftObjective({
         field="objective"
         fileMentionPaths={fileMentionPaths}
         initialValue={initialValue}
-        inputClassName="text-base leading-relaxed max-h-[8lh] overflow-y-auto"
+        inputClassName="text-base leading-relaxed max-h-[450px] overflow-y-auto"
         multiline
         placeholder="Click to add an objective…"
         renderMarkdown

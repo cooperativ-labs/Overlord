@@ -6,7 +6,7 @@ export const PROJECT_SSH_PREFERENCE_SELECT =
  * collaboration was introduced.
  */
 export const PROJECT_USER_LOCAL_SELECT =
-  'project_id,local_working_directory,remote_helper_installed_at,remote_helper_version';
+  'project_id,local_working_directory,local_version_control,local_version_control_installed_at,local_version_control_error,remote_helper_installed_at,remote_helper_version';
 
 export const PROJECT_BASE_SELECT =
   'id,name,color,organization_id,everhour_project_id,operations_profile_fingerprint,operations_profile_generated_at';

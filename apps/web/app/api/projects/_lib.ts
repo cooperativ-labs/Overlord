@@ -19,3 +19,19 @@ export async function assertOrgMembership(
     .maybeSingle();
   return !!data;
 }
+
+/**
+ * PostgREST builds long `not.in.(uuid,...)` filters on the query string. Thousands of
+ * excluded ticket IDs can exceed URL limits and make `/file-changes` fail with 500.
+ * Split into chunks; Supabase appends each `.not('ticket_id','in',...)` as its own
+ * param and PostgREST ANDs them — equivalent to one large NOT IN across the union.
+ */
+const POSTGREST_NOT_IN_UUID_CHUNK_SIZE = 75;
+
+export function chunkUuidListForPostgrestNotIn(ids: string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += POSTGREST_NOT_IN_UUID_CHUNK_SIZE) {
+    out.push(ids.slice(i, i + POSTGREST_NOT_IN_UUID_CHUNK_SIZE));
+  }
+  return out;
+}
