@@ -45,6 +45,14 @@ function removeObjective(
   return objectives.filter(objective => objective.id !== objectiveId);
 }
 
+function buildTicketObjectivesChannelName(ticketId: string): string {
+  const channelSuffix =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  return `ticket-objectives-realtime:${ticketId}:${channelSuffix}`;
+}
+
 type UseTicketObjectivesRealtimeOptions = {
   ticketId: string;
   initialObjectives: ObjectiveRow[];
@@ -90,7 +98,7 @@ export function useTicketObjectivesRealtime({
     void syncObjectives();
 
     const channel = supabase
-      .channel(`ticket-objectives-realtime:${ticketId}`)
+      .channel(buildTicketObjectivesChannelName(ticketId))
       .on<ObjectiveRow>(
         'postgres_changes',
         {
