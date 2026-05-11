@@ -1,5 +1,6 @@
 import { app } from 'electron';
 import fs from 'fs';
+import crypto from 'node:crypto';
 import os from 'os';
 import path from 'path';
 
@@ -9,7 +10,6 @@ import { type AgentBundleAgent, isBundleInstalled } from './agent-bundle';
 import { loadElectronCredentials, saveElectronCredentials } from './electron-credentials';
 
 const OVERLORD_URL_DEFAULT = 'http://localhost:3000';
-const TICKET_ID_REGEX = /^(\d+):\d+$/;
 
 export type AgentType = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 type AgentLaunchMode = 'run' | 'ask';
@@ -63,6 +63,24 @@ type ContextCommandsResponse = {
   opencode: string;
 };
 
+export function buildAgentContextUrl(input: {
+  agent: AgentType;
+  connectorUrl: string;
+  instructionMode: string;
+  isRemote: boolean;
+  launchMode: AgentLaunchMode;
+  sessionId: string;
+  ticketId: string;
+}): string {
+  const workspaceParam = input.isRemote ? '&workspace=ssh' : '';
+  return (
+    `${input.connectorUrl}/api/protocol/context/${input.ticketId}` +
+    `?context=electron&agent=${input.agent}` +
+    `${input.launchMode === 'ask' ? '&mode=ask' : ''}` +
+    `&instructionMode=${input.instructionMode}${workspaceParam}&sessionId=${input.sessionId}`
+  );
+}
+
 function claudeSourcePluginDir(): string | null {
   const appPath = app.getAppPath();
   const bundledPath = path.join(appPath, 'plugins', 'claude');
@@ -91,6 +109,16 @@ function buildProtocolHeaders(
   return headers;
 }
 
+function parseSnapshotContextHeader(value: string | null): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseOrganizationId(value: unknown): number | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const parsed = Number.parseInt(String(value), 10);
@@ -98,8 +126,9 @@ function parseOrganizationId(value: unknown): number | null {
 }
 
 function organizationIdFromTicketId(ticketId: string): number | null {
-  const match = ticketId.trim().match(TICKET_ID_REGEX);
-  return match ? parseOrganizationId(match[1]) : null;
+  const [organizationPart, _ticketSequencePart, ...rest] = ticketId.trim().split(':');
+  if (rest.length > 0) return null;
+  return parseOrganizationId(organizationPart);
 }
 
 function getConnectorUrl(): string {
@@ -300,6 +329,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const isRemote = Boolean(input.sshCommand?.trim());
   const launchAuth = await resolveLaunchAuth(input);
   const launchMode = input.launchMode ?? 'run';
+  const launchSessionId = crypto.randomUUID();
   // Check if the Overlord local bundle is installed for this agent
   const bundleAgent =
     input.agent === 'claude' || input.agent === 'cursor' || input.agent === 'opencode'
@@ -314,8 +344,15 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
           ? isBundleInstalled(bundleAgent)
           : false;
   const instructionMode = bundleInstalled ? 'bundle' : 'legacy';
-  const workspaceParam = isRemote ? '&workspace=ssh' : '';
-  const contextUrl = `${connectorUrl}/api/protocol/context/${input.ticketId}?context=electron&agent=${input.agent}${launchMode === 'ask' ? '&mode=ask' : ''}&instructionMode=${instructionMode}${workspaceParam}`;
+  const contextUrl = buildAgentContextUrl({
+    agent: input.agent,
+    connectorUrl,
+    instructionMode,
+    isRemote,
+    launchMode,
+    sessionId: launchSessionId,
+    ticketId: input.ticketId
+  });
   const launchEnv: Record<string, string> = {
     OVERLORD_URL: connectorUrl,
     OVERLORD_CONNECTOR_URL: connectorUrl,
@@ -325,6 +362,7 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
     OVERLORD_MODEL_IDENTIFIER: input.model ?? '',
     MODEL_IDENTIFIER: input.model ?? '',
     OVERLORD_LOCAL_SECRET: process.env.OVERLORD_LOCAL_SECRET ?? '',
+    OVERLORD_LAUNCH_SESSION_ID: launchSessionId,
     ...(launchAuth.organizationId !== null
       ? { OVERLORD_ORGANIZATION_ID: String(launchAuth.organizationId) }
       : {})
@@ -377,6 +415,9 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // Use the project's working directory from the API if the caller didn't provide one
   const apiWorkingDirectory = response.headers.get('X-Working-Directory');
+  const apiSnapshotContext = parseSnapshotContextHeader(
+    response.headers.get('X-Overlord-Snapshot-Context')
+  );
   const resolvedCwd = input.cwd || apiWorkingDirectory || undefined;
 
   // Pre-flight check: if a local cwd is configured but missing, surface a clear
@@ -390,6 +431,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
         `Working directory ${resolvedCwd} ${cwdProblem}. Open the project's settings to update its directory, or grant Overlord access in System Settings → Privacy & Security → Files and Folders.`
       );
     }
+  }
+
+  if (apiSnapshotContext) {
+    launchEnv.OVERLORD_SNAPSHOT_JSON = JSON.stringify(apiSnapshotContext);
   }
 
   const contextMarkdown = await response.text();

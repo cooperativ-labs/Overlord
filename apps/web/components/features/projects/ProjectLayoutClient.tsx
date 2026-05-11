@@ -1,9 +1,10 @@
 'use client';
 
-import { usePathname, useRouter, useSelectedLayoutSegment } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams, useSelectedLayoutSegment } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo } from 'react';
 
+import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { ProjectSettingsProvider } from '@/components/features/projects/ProjectSettingsContext';
 import { ProjectSettingsSection } from '@/components/features/projects/ProjectSettingsSection';
 import { useElectron } from '@/components/features/terminal/useElectron';
@@ -11,6 +12,30 @@ import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import type { Database } from '@/types/database.types';
 
 type TicketStatusType = Database['public']['Enums']['ticket_status_type'];
+
+function ProjectSettingsUrlTrigger() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const projectSettings = useProjectSettings();
+
+  useEffect(() => {
+    if (!projectSettings || searchParams.get('projectSettings') !== '1') {
+      return;
+    }
+
+    projectSettings.openProjectSettings();
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete('projectSettings');
+    const nextHref = nextSearchParams.toString()
+      ? `${pathname}?${nextSearchParams.toString()}`
+      : pathname;
+    router.replace(nextHref, { scroll: false });
+  }, [pathname, projectSettings, router, searchParams]);
+
+  return null;
+}
 
 type ProjectLayoutClientProps = {
   board: ReactNode;
@@ -125,6 +150,7 @@ export function ProjectLayoutClient({
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}
     >
+      <ProjectSettingsUrlTrigger />
       <div className="flex flex-1 min-h-0 flex-col gap-5">
         <ProjectSettingsSection
           projectId={projectId}

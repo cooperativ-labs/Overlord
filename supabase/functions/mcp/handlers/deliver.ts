@@ -51,7 +51,8 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     ticketId: rawTicketId,
     summary,
     artifacts = [],
-    changeRationales = []
+    changeRationales = [],
+    snapshot
   } = args;
   const resolved = await resolveSession(
     supabase,
@@ -82,6 +83,7 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     const rationaleResult = await insertChangeRationales(supabase, {
       changeRationales,
       eventId: event.id,
+      snapshot,
       sessionId: resolved.session.id,
       ticketId
     });

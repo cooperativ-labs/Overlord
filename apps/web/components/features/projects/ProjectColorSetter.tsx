@@ -6,16 +6,30 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 export const PRESET_PROJECT_COLORS = [
-  '#d4d4d8',
-  '#f87171',
-  '#fb923c',
-  '#facc15',
-  '#4ade80',
+  '#fecdd3',
+  '#fed7aa',
+  '#fde68a',
+  '#bef264',
+  '#99f6e4',
+  '#bae6fd',
+  '#fda4af',
+  '#fdba74',
+  '#fcd34d',
+  '#a3e635',
+  '#5eead4',
+  '#7dd3fc',
+  '#fb7185',
+  '#f97316',
+  '#f59e0b',
+  '#84cc16',
   '#2dd4bf',
   '#38bdf8',
-  '#818cf8',
-  '#c084fc',
-  '#f472b6'
+  '#e11d48',
+  '#c2410c',
+  '#b45309',
+  '#4d7c0f',
+  '#0f766e',
+  '#0369a1'
 ];
 
 /** Default project color (first preset). Use for new projects and placeholders. */
@@ -48,8 +62,8 @@ export function ProjectColorSetter({ value, onSelect, className }: ProjectColorS
   }
 
   return (
-    <div className={cn('space-y-2 w-24', className)}>
-      <div className="grid grid-cols-5 gap-1">
+    <div className={cn('space-y-2 w-fit', className)}>
+      <div className="grid grid-cols-6 gap-1">
         {PRESET_PROJECT_COLORS.map(color => {
           const isActive = color.toLowerCase() === value.toLowerCase();
           return (

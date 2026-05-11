@@ -69,16 +69,6 @@ function dedupeStatuses(
     .sort((left, right) => left.position - right.position);
 }
 
-// Cross-org boards collapse statuses to one column per status_type so columns
-// stay coherent even when each org defines its own status names. Position
-// ordering matches the canonical workflow.
-const STATUS_TYPE_ORDER: Array<{ name: string; status_type: string; position: number }> = [
-  { name: 'draft', status_type: 'draft', position: 0 },
-  { name: 'execute', status_type: 'execute', position: 1 },
-  { name: 'review', status_type: 'review', position: 2 },
-  { name: 'complete', status_type: 'complete', position: 3 }
-];
-
 type TicketsBoardContentProps = {
   organizationId?: number;
   showOrganizationName?: boolean;
@@ -232,8 +222,8 @@ export default async function TicketsBoardContent({
     : 0;
   const scheduledWindow = getScheduledTicketVisibilityWindow(scheduledVisibilityDays);
 
-  // In cross-org mode (no org filter) we need (organization_id, name)→status_type
-  // so each ticket can be remapped to its synthetic status_type column.
+  // In cross-org mode (no org filter), we show the union of all status names
+  // across organizations so custom statuses remain visible on /u.
   const isCrossOrg = organizationId === undefined;
 
   let statusesQuery = supabase
@@ -253,32 +243,15 @@ export default async function TicketsBoardContent({
     status_type?: string;
   }>;
 
-  // Build a (organization_id, status_name) → status_type lookup used to remap
-  // ticket.status into a synthetic status_type column id when cross-org.
-  const statusTypeByOrgAndName = new Map<string, string>();
-  if (isCrossOrg) {
-    for (const row of rawStatusRows) {
-      if (row.status_type) {
-        statusTypeByOrgAndName.set(`${row.organization_id}:${row.name}`, row.status_type);
-      }
-    }
-  }
-
-  const allStatuses = isCrossOrg
-    ? STATUS_TYPE_ORDER.map(s => ({
-        name: s.name,
-        position: s.position,
-        status_type: s.status_type
-      }))
-    : dedupeStatuses(rawStatusRows);
+  const allStatuses = dedupeStatuses(rawStatusRows);
 
   const ticketSelectFields =
     'id,title,due_datetime,execution_target,status,priority,delegate,is_read,updated_at,board_position,organization_id,project_id,everhour_task_id,schedule_id,organization:organizations(name),project:projects(name,color,everhour_project_id)';
 
   // Always fetch board/list data (per-status). Calendar data is fetched
   // client-side on demand via TanStack Query prefetch in TicketsBoardClient.
-  // Cross-org boards bulk-fetch (no per-status filter) since status names
-  // differ across orgs; we group client-side after remapping to status_type.
+  // Cross-org boards bulk-fetch (no per-status filter) to avoid N×status
+  // queries when showing the union of status names across organizations.
   const ticketQueriesPromise = isCrossOrg
     ? Promise.all([
         (async () => {
@@ -287,7 +260,7 @@ export default async function TicketsBoardContent({
               .from('tickets')
               .select(ticketSelectFields)
               .order('updated_at', { ascending: false })
-              .limit(INITIAL_TICKETS_PER_STATUS * STATUS_TYPE_ORDER.length);
+              .limit(INITIAL_TICKETS_PER_STATUS * Math.max(allStatuses.length, 1));
 
             if (projectId !== undefined) {
               query = query.eq('project_id', projectId);
@@ -453,14 +426,9 @@ export default async function TicketsBoardContent({
     const isAttached = session?.session_state === 'attached';
     const runningAgent =
       objectiveAgentByTicket.get(ticket.id) ?? (isAttached ? session.agent_identifier : null);
-    // In cross-org mode, remap each ticket's raw per-org status to its
-    // status_type so the board groups by canonical workflow stage.
-    const remappedStatus = isCrossOrg
-      ? (statusTypeByOrgAndName.get(`${ticket.organization_id}:${ticket.status}`) ?? ticket.status)
-      : ticket.status;
     return {
       ...ticket,
-      status: remappedStatus,
+      status: ticket.status,
       assigned_agent: parseObjectiveAssignedAgent(
         latestObjectiveAssignedAgentByTicket.get(ticket.id) ?? null
       ),

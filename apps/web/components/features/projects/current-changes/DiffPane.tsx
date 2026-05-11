@@ -36,6 +36,22 @@ function formatAgentName(agent: string | null | undefined) {
   return 'Agent';
 }
 
+function formatSnapshotSummary(
+  file: EnrichedCurrentChangeFile['primaryFileChange']
+): string | null {
+  if (!file) return null;
+  const parts: string[] = [];
+
+  if (file.snapshot_backend) {
+    parts.push(file.snapshot_backend === 'jj' ? 'JJ' : file.snapshot_backend);
+  }
+  if (file.jj_change_id) parts.push(`change ${file.jj_change_id.slice(0, 8)}`);
+  if (file.jj_commit_id) parts.push(`commit ${file.jj_commit_id.slice(0, 8)}`);
+  if (file.jj_operation_id) parts.push(`op ${file.jj_operation_id.slice(0, 8)}`);
+
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 export function DiffPane({
   diff,
   diffError,
@@ -62,6 +78,7 @@ export function DiffPane({
     file.primaryTicket?.title?.trim() ||
     (file.primaryTicket ? `Ticket ${getTicketIdentifier(file.primaryTicket)}` : null);
   const changeLabel = file.primaryFileChange?.label || file.summary;
+  const snapshotSummary = formatSnapshotSummary(file.primaryFileChange);
   const hasRationale = Boolean(file.primaryFileChange || file.primaryTicket);
   const linesAdded = file.file.linesAdded;
   const linesRemoved = file.file.linesRemoved;
@@ -147,6 +164,12 @@ export function DiffPane({
               )}
               <span className="mx-1.5 text-muted-foreground/60">·</span>
               <span className="text-xs text-muted-foreground">{changeLabel}</span>
+              {snapshotSummary ? (
+                <>
+                  <span className="mx-1.5 text-muted-foreground/60">·</span>
+                  <span className="text-xs text-muted-foreground">{snapshotSummary}</span>
+                </>
+              ) : null}
             </div>
             {file.primaryTicket?.status ? (
               <Badge variant="outline" className="shrink-0 rounded-full text-[10px]">

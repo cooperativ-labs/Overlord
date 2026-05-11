@@ -481,12 +481,18 @@ export type Database = {
           hunks: Json;
           id: string;
           impact: string;
+          jj_change_id: string | null;
+          jj_commit_id: string | null;
+          jj_operation_id: string | null;
           label: string;
           session_id: string;
+          snapshot_backend: string | null;
           summary: string;
           ticket_id: string;
           updated_at: string;
           why: string;
+          workspace_name: string | null;
+          workspace_path: string | null;
         };
         Insert: {
           attribution_source?: string;
@@ -499,12 +505,18 @@ export type Database = {
           hunks?: Json;
           id?: string;
           impact: string;
+          jj_change_id?: string | null;
+          jj_commit_id?: string | null;
+          jj_operation_id?: string | null;
           label: string;
           session_id: string;
+          snapshot_backend?: string | null;
           summary: string;
           ticket_id: string;
           updated_at?: string;
           why: string;
+          workspace_name?: string | null;
+          workspace_path?: string | null;
         };
         Update: {
           attribution_source?: string;
@@ -517,12 +529,18 @@ export type Database = {
           hunks?: Json;
           id?: string;
           impact?: string;
+          jj_change_id?: string | null;
+          jj_commit_id?: string | null;
+          jj_operation_id?: string | null;
           label?: string;
           session_id?: string;
+          snapshot_backend?: string | null;
           summary?: string;
           ticket_id?: string;
           updated_at?: string;
           why?: string;
+          workspace_name?: string | null;
+          workspace_path?: string | null;
         };
         Relationships: [
           {

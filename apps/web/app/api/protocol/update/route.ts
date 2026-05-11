@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       externalUrl,
       payload,
       phase,
+      snapshot,
       sessionKey,
       summary,
       ticketId: rawTicketId
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
         changeRationales,
         eventId: event.id,
         sessionId: resolved.session.id,
+        snapshot,
         supabase: typedSupabase,
         ticketId
       });

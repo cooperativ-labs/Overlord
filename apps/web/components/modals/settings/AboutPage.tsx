@@ -63,10 +63,10 @@ export function AboutPage({ open }: { open: boolean }) {
 
   const isVersionSchemeTransition =
     updateStatus?.phase === 'not-available' &&
-    updateStatus.availableVersion != null &&
+    updateStatus.availableVersion !== null &&
     (() => {
       const currentMajor = parseInt(updateStatus.currentVersion.split('.')[0], 10);
-      const availableMajor = parseInt(updateStatus.availableVersion.split('.')[0], 10);
+      const availableMajor = parseInt(updateStatus.availableVersion?.split('.')[0] ?? '0', 10);
       return !isNaN(currentMajor) && !isNaN(availableMajor) && currentMajor > availableMajor;
     })();
 

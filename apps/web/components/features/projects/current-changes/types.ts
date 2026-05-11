@@ -88,6 +88,9 @@ export type FileChangeRecord = {
   change_kind: string;
   confidence: string;
   created_at: string;
+  jj_change_id: string | null;
+  jj_commit_id: string | null;
+  jj_operation_id: string | null;
   event: {
     created_at: string;
     event_type: string;
@@ -100,11 +103,14 @@ export type FileChangeRecord = {
   id: string;
   impact: string;
   label: string;
+  snapshot_backend: string | null;
   session: {
     agent_identifier: string;
     id: string;
   } | null;
   summary: string;
+  workspace_name: string | null;
+  workspace_path: string | null;
   ticket: {
     id: string;
     ticket_id?: string | null;

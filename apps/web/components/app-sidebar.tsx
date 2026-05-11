@@ -30,6 +30,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
@@ -97,8 +99,19 @@ function ProjectColorMenu({ projectId, color }: ProjectColorMenuProps) {
           <span className="sr-only">Project options</span>
         </SidebarMenuAction>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="right" align="start" className="w-auto rounded-lg p-2">
-        <ProjectColorSetter value={color} onSelect={handleChangeColor} />
+      <DropdownMenuContent side="right" align="start" className="w-auto rounded-lg">
+        <div className="p-1">
+          <ProjectColorSetter value={color} onSelect={handleChangeColor} />
+        </div>
+        <DropdownMenuSeparator className="my-1" />
+        <div className="p-1">
+          <DropdownMenuItem asChild className="text-xs p-1">
+            <Link href={`/projects/${projectId}?projectSettings=1`}>
+              <Settings size={16} />
+              <span>Project settings</span>
+            </Link>
+          </DropdownMenuItem>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

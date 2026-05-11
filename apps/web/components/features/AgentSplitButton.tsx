@@ -154,6 +154,7 @@ export function AgentSplitButton({
   const isDisabled =
     (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
+  const primaryActionLabel = isElectron ? 'Run' : 'CLI copy';
 
   const appliedStoredDefaultRef = useRef(false);
 
@@ -263,12 +264,12 @@ export function AgentSplitButton({
         )}
       >
         {copied
-          ? `${isCopySelectedAgent ? (selectedAgent === 'copy-local' ? 'Copy Local' : 'Copy Cloud') : 'Run'} ✓`
+          ? `${isCopySelectedAgent ? (selectedAgent === 'copy-local' ? 'Copy Local' : 'Copy Cloud') : primaryActionLabel} ✓`
           : isCopySelectedAgent
             ? selectedAgent === 'copy-local'
               ? 'Copy Local'
               : 'Copy Cloud'
-            : 'Run'}
+            : primaryActionLabel}
       </span>
     </button>
   );

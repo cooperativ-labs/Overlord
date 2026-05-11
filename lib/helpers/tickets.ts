@@ -40,7 +40,7 @@ export function getTicketIdentifier(ticket: TicketReferenceInput): string {
 
 /**
  * Derives a short title from an objective string.
- * Truncates to 60 characters with an ellipsis if needed.
+ * Truncates to 100 characters with an ellipsis if needed.
  */
 export function deriveTitleFromObjective(objective: string): string {
   const trimmed = normalizeObjectiveForTitle(objective);

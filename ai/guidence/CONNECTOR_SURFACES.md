@@ -21,6 +21,8 @@ Bundle-backed agents get a slim ticket prompt; unbundled agents always receive t
 - **Bundle supported:** `claude`, `cursor`, `opencode`
 - **Legacy mode only:** `codex`, `gemini`
 
+Desktop local launches also propagate managed snapshot context through `OVERLORD_SNAPSHOT_JSON`; the CLI `attach` and `connect` flows persist that data on the session metadata row so the launch workspace can be recovered and cleaned up later.
+
 Capability resolver:
 [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
 

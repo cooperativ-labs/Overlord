@@ -52,7 +52,8 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     externalSessionId,
     externalUrl,
     payload = {},
-    changeRationales = []
+    changeRationales = [],
+    snapshot
   } = args;
   const resolved = await resolveSession(
     supabase,
@@ -146,6 +147,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     const rationaleResult = await insertChangeRationales(supabase, {
       changeRationales,
       eventId: event.id,
+      snapshot,
       sessionId: resolved.session.id,
       ticketId
     });
