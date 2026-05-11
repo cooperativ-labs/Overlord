@@ -572,10 +572,11 @@ export const TOOLS = [
             },
             required: ['type', 'label']
           },
-          description: 'Artifact types: next_steps, test_results, migration, decision, note, url.'
+          description:
+            'Optional structured delivery records (next_steps, test_results, migration, decision, note, url). Matches POST /api/protocol/deliver — omit or pass [] when you only need summary and changeRationales.'
         }
       },
-      required: ['sessionKey', 'ticketId', 'summary', 'artifacts']
+      required: ['sessionKey', 'ticketId', 'summary']
     }
   },
   {
@@ -645,6 +646,69 @@ export const TOOLS = [
         }
       },
       required: ['sessionKey', 'ticketId', 'objective']
+    }
+  },
+  {
+    name: 'discover_project',
+    annotations: {
+      title: 'Discover Project By Working Directory',
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    },
+    description:
+      'Resolve the Overlord project whose local working directory matches the given path (same behavior as ovld protocol discover-project).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workingDirectory: {
+          type: 'string',
+          description:
+            'Absolute path of the repository root to match against project_user.local_working_directory.'
+        }
+      },
+      required: ['workingDirectory']
+    }
+  },
+  {
+    name: 'search_tickets',
+    annotations: {
+      title: 'Search Tickets',
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    },
+    description:
+      'Search tickets by keyword and filters (same fields as POST /api/protocol/search-tickets and ovld protocol search-tickets).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Keyword search in titles and objectives. Omit or empty to list by filters only.'
+        },
+        statuses: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by status names (e.g. next-up, execute).'
+        },
+        includeCompleted: {
+          type: 'boolean',
+          description: 'Include completed tickets. Default false.'
+        },
+        limit: { type: 'number', description: 'Max results (1–50, default 8).' },
+        projectId: { type: 'string', description: 'Optional project UUID filter.' },
+        createdBy: { type: 'string', description: 'Optional creator user UUID.' },
+        updatedAfter: {
+          type: 'string',
+          description: 'ISO datetime — tickets updated on or after.'
+        },
+        updatedBefore: {
+          type: 'string',
+          description: 'ISO datetime — tickets updated on or before.'
+        }
+      }
     }
   }
 ];

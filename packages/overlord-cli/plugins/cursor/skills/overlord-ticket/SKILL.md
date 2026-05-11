@@ -137,6 +137,7 @@ Objective attachment uploads also expose two-step variants — `attachment-prepa
 ## Defaults And Notes
 
 - The Overlord API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt, but the CLI defaults them to `cursor`/`cli` (override with `--agent` / `--method`). The MCP tools default to `mcp`.
+- The Cursor local MCP stub exposes `attach`, `update`, and `deliver` only (same names as the hosted Overlord MCP core set).
 - `permission-request` is invoked by the installed permission hook; agents normally do not call it directly.
 - The `record_change_rationales` MCP tool and `ovld protocol record-change-rationales` CLI both write to the same `file_changes` table; pick whichever fits your runtime.
 
@@ -151,4 +152,4 @@ Objective attachment uploads also expose two-step variants — `attachment-prepa
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.5 -->
+<!-- version: 0.4.7 -->

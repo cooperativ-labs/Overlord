@@ -44,7 +44,7 @@ const tools = [
     subcommand: 'discover-project'
   },
   {
-    name: 'attach_ticket',
+    name: 'attach',
     description: 'Attach an agent session to an existing Overlord ticket and return the working context.',
     inputSchema: {
       type: 'object',
@@ -52,7 +52,11 @@ const tools = [
         ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         agent: { type: 'string' },
         method: { type: 'string' },
-        external_session_id: { type: ['string', 'null'] }
+        external_session_id: { type: ['string', 'null'] },
+        metadata: {
+          type: 'object',
+          description: 'Optional extra metadata merged into the attach request (same as --metadata-json on the CLI).'
+        }
       },
       required: ['ticket_id']
     },
@@ -60,36 +64,47 @@ const tools = [
       'ticket-id': args.ticket_id,
       agent: args.agent,
       method: args.method,
-      'external-session-id': args.external_session_id
+      'external-session-id': args.external_session_id,
+      ...(args.metadata && typeof args.metadata === 'object' && !Array.isArray(args.metadata)
+        ? { 'metadata-json': args.metadata }
+        : {})
     }),
     subcommand: 'attach'
   },
   {
-    name: 'connect_ticket',
+    name: 'connect',
     description: 'Create a lightweight Overlord session without loading the full ticket context.',
     inputSchema: {
       type: 'object',
       properties: {
         ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
         agent: { type: 'string' },
-        method: { type: 'string' }
+        method: { type: 'string' },
+        metadata: {
+          type: 'object',
+          description: 'Optional extra metadata merged into the connect request (same as --metadata-json on the CLI).'
+        }
       },
       required: ['ticket_id']
     },
     toCliFlags: args => ({
       'ticket-id': args.ticket_id,
       agent: args.agent,
-      method: args.method
+      method: args.method,
+      ...(args.metadata && typeof args.metadata === 'object' && !Array.isArray(args.metadata)
+        ? { 'metadata-json': args.metadata }
+        : {})
     }),
     subcommand: 'connect'
   },
   {
     name: 'load_ticket_context',
-    description: 'Fetch Overlord ticket context without creating a session.',
+    description:
+      'Fetch Overlord ticket context without creating a session (maps to ovld protocol load-context; not the same as read_context).',
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string' }
+        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' }
       },
       required: ['ticket_id']
     },
@@ -99,8 +114,8 @@ const tools = [
     subcommand: 'load-context'
   },
   {
-    name: 'prompt_ticket',
-    description: 'Create a ticket and attach to it immediately.',
+    name: 'prompt',
+    description: 'Create a ticket and attach to it immediately (ovld protocol prompt).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -109,6 +124,7 @@ const tools = [
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         project_id: { type: 'string' },
         working_directory: { type: 'string' },
+        personal: { type: 'boolean', description: 'Create without assigning a project (private ticket).' },
         acceptance_criteria: { type: 'string' },
         available_tools: { type: 'string' },
         execution_target: { type: 'string', enum: ['agent', 'human'] },
@@ -126,6 +142,7 @@ const tools = [
       priority: args.priority,
       'project-id': args.project_id,
       'working-directory': args.working_directory,
+      personal: args.personal === true ? true : undefined,
       'acceptance-criteria': args.acceptance_criteria,
       'available-tools': args.available_tools,
       'execution-target': args.execution_target,
@@ -138,7 +155,7 @@ const tools = [
     subcommand: 'prompt'
   },
   {
-    name: 'post_update',
+    name: 'update',
     description: 'Post an Overlord progress update or activity event.',
     inputSchema: {
       type: 'object',
@@ -192,7 +209,7 @@ const tools = [
     subcommand: 'record-change-rationales'
   },
   {
-    name: 'ask_blocking_question',
+    name: 'ask',
     description: 'Send a blocking question to the human reviewer or PM.',
     inputSchema: {
       type: 'object',
@@ -215,7 +232,7 @@ const tools = [
     subcommand: 'ask'
   },
   {
-    name: 'read_shared_context',
+    name: 'read_context',
     description: 'Read persistent shared context entries for a ticket.',
     inputSchema: {
       type: 'object',
@@ -236,7 +253,7 @@ const tools = [
     subcommand: 'read-context'
   },
   {
-    name: 'write_shared_context',
+    name: 'write_context',
     description: 'Write a persistent shared context entry for future Overlord sessions.',
     inputSchema: {
       type: 'object',
@@ -259,9 +276,9 @@ const tools = [
     subcommand: 'write-context'
   },
   {
-    name: 'deliver_ticket',
+    name: 'deliver',
     description:
-      'Deliver final work back into Overlord with summary, artifacts, and change rationales. Large payloads are streamed to the CLI through stdin, so this tool does not create delivery scratch files.',
+      'Deliver final work back into Overlord with summary, optional artifacts, and optional change rationales (matches POST /api/protocol/deliver). Large payloads are streamed to the CLI through stdin, so this tool does not create delivery scratch files.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -466,7 +483,7 @@ const searchTicketsTool = {
       },
       limit: {
         type: 'number',
-        description: 'Maximum number of results to return (1–20, default 8).'
+        description: 'Maximum number of results to return (1–50, default 8).'
       }
     }
   },
@@ -479,10 +496,9 @@ const searchTicketsTool = {
   subcommand: 'search-tickets'
 };
 
-const toolMap = new Map([
-  ...tools.map(tool => [tool.name, tool]),
-  [searchTicketsTool.name, searchTicketsTool]
-]);
+const allListedTools = [...tools, searchTicketsTool];
+
+const toolMap = new Map(allListedTools.map(tool => [tool.name, tool]));
 let buffer = Buffer.alloc(0);
 
 function serializeMessage(message) {
@@ -645,10 +661,10 @@ async function handleRequest(message) {
       },
       serverInfo: {
         name: 'overlord',
-        version: '0.1.2'
+        version: '0.1.4'
       },
       instructions:
-        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Most operations expect a session key from attach or connect.'
+        'Use these tools to drive Overlord ticket workflows through the installed ovld CLI. Tool names match the hosted Overlord MCP server (attach, update, deliver, …). Most operations expect a session key from attach or connect.'
     });
     return;
   }
@@ -660,7 +676,7 @@ async function handleRequest(message) {
 
   if (method === 'tools/list') {
     success(id, {
-      tools: [...tools, searchTicketsTool].map(tool => ({
+      tools: allListedTools.map(tool => ({
         name: tool.name,
         description: tool.description,
         inputSchema: tool.inputSchema

@@ -19,11 +19,13 @@ personal marketplace entry at `~/.agents/plugins/marketplace.json`.
 
 ## Tool coverage
 
+Tool names match the hosted Overlord MCP server (`supabase/functions/mcp/tools.ts`) where the operation exists on both surfaces.
+
 - Project resolution: `discover_project`
-- Ticket search: `search_tickets` — keyword search + status/filter (direct API call)
-- Ticket session flow: `attach_ticket`, `connect_ticket`, `load_ticket_context`, `prompt_ticket`
-- Progress and review flow: `post_update`, `record_change_rationales`, `ask_blocking_question`, `deliver_ticket`
-- Shared context: `read_shared_context`, `write_shared_context`
+- Ticket search: `search_tickets` — keyword search + status/filter (same filters as `ovld protocol search-tickets`)
+- Ticket session flow: `attach`, `connect`, `load_ticket_context` (CLI `load-context` only; not on hosted MCP), `prompt`
+- Progress and review flow: `update`, `record_change_rationales`, `ask`, `deliver`
+- Shared context: `read_context`, `write_context`
 - Objective attachments: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`
 
 The MCP server shells into the installed `ovld` binary so the plugin stays aligned with the shipped CLI behavior instead of depending on this repository checkout.

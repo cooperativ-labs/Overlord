@@ -129,8 +129,10 @@ async function resolveJjRepo(directory: string): Promise<{ repoRoot: string }> {
 }
 
 async function isJjWorkspace(directory: string): Promise<boolean> {
-  const dotJj = await fs.stat(path.join(directory, '.jj')).catch(() => null);
-  if (dotJj) return true;
+  // Always verify the jj binary is executable, even if a .jj directory is present.
+  // Without this check, a repo with a .jj folder on a machine without jj installed
+  // would pass the stat check and then crash with "spawn jj ENOENT" when the code
+  // tries to run jj commands without allowFailure.
   const root = await runJj(directory, ['--repository', directory, 'root'], { allowFailure: true });
   return root.ok && root.output.trim().length > 0;
 }
@@ -615,10 +617,15 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     try {
       if (await isJjWorkspace(this.workingDirectory)) {
         const { repoRoot } = await resolveJjRepo(this.workingDirectory);
+        // For jj+git colocated repos, try to surface the git branch as well.
+        const gitInfo = await resolveRepo(repoRoot).catch(() => null);
+        const defaultBranch = gitInfo
+          ? await resolveDefaultBranch(repoRoot).catch(() => null)
+          : null;
         return {
           branches: [],
-          currentBranch: null,
-          defaultBranch: null,
+          currentBranch: gitInfo?.branch ?? null,
+          defaultBranch,
           repoRoot
         };
       }

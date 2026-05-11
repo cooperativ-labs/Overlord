@@ -21,7 +21,7 @@ Overlord exposes its protocol through six parallel surfaces:
 |---------|----------|------------|
 | **API routes** | `apps/web/app/api/protocol/*/route.ts` | REST endpoints, kebab-case paths |
 | **CLI commands** | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <subcommand>`, `--kebab-case` flags |
-| **MCP tools** | `plugins/overlord/scripts/overlord-mcp.mjs` | `snake_case` tool names, `snake_case` parameters |
+| **MCP tools** | `supabase/functions/mcp/tools.ts` (hosted) + `plugins/overlord/scripts/overlord-mcp.mjs` (local MCP shim used by the Codex plugin path) | Hosted: `snake_case` tool names, **camelCase** parameters matching API JSON. Local shim: `snake_case` parameters mapping to CLI flags. |
 | **Agent plugins** | `plugins/{claude,cursor,overlord}/skills/overlord-ticket/` | Skill instructions referencing CLI/MCP |
 | **Public docs for agents** | `docs/public/` | AI-agent-facing explainers that help agents explain Overlord to end users |
 | **CLI README** | `packages/overlord-cli/README.md` | User-facing CLI documentation and examples |
@@ -51,10 +51,13 @@ Read `packages/overlord-cli/bin/_cli/protocol.mjs`. Extract:
 If the task changes human launch commands, also read `packages/overlord-cli/bin/_cli/launcher.mjs` and `lib/overlord/launch-commands.ts` so you can compare `ovld launch` / `ovld restart` help, aliases, and emitted copy commands against Desktop and product copy.
 
 #### 3. MCP Tools
-Read `plugins/overlord/scripts/overlord-mcp.mjs`. Extract:
-- Each tool object in the `tools` array and `searchTicketsTool`
+Read both:
+- `supabase/functions/mcp/tools.ts` — hosted MCP tool definitions (`TOOLS` array) and `supabase/functions/mcp/index.ts` dispatch
+- `plugins/overlord/scripts/overlord-mcp.mjs` — local MCP shim (`tools` array + `searchTicketsTool`) and CLI flag mapping
+
+Extract for each tool:
 - `name`, `inputSchema.properties`, `inputSchema.required`
-- The `subcommand` it maps to and the `toCliFlags` mapping
+- For the shim: the `subcommand` and `toCliFlags` / `toCliStdin` mapping
 
 #### 4. Agent Plugin Skills
 Read the `overlord-ticket` skill in each plugin directory:
@@ -81,7 +84,7 @@ Create a matrix comparing operations across all six surfaces:
 ```
 | Operation         | API Route              | CLI Subcommand         | MCP Tool               | Plugin Docs | Public Docs | CLI README |
 |-------------------|------------------------|------------------------|------------------------|-------------|-------------|------------|
-| Attach            | POST /protocol/attach  | ovld protocol attach   | attach_ticket          | Y / N       | Y / N       | Y / N      |
+| Attach            | POST /protocol/attach  | ovld protocol attach   | attach                 | Y / N       | Y / N       | Y / N      |
 | Discover Project  | POST /protocol/disc... | ovld protocol disc...  | discover_project       | Y / N       | Y / N       | Y / N      |
 | ...               | ...                    | ...                    | ...                    | ...         | ...         | ...        |
 ```
@@ -162,13 +165,15 @@ Produce a structured report:
 
 When comparing names across surfaces, these are the expected transformations (not drift):
 
-| Concept | API Route Path | CLI Flag | MCP Parameter |
-|---------|---------------|----------|---------------|
-| Ticket ID | `ticket_id` in body | `--ticket-id` | `ticket_id` |
-| Session Key | `session_key` in body | `--session-key` | `session_key` |
-| Working Dir | `working_directory` | `--working-directory` | `working_directory` |
+| Concept | API JSON body | CLI Flag | Hosted MCP args | Local MCP shim args |
+|---------|---------------|----------|-----------------|----------------------|
+| Ticket ID | `ticketId` | `--ticket-id` | `ticketId` | `ticket_id` |
+| Session Key | `sessionKey` | `--session-key` | `sessionKey` | `session_key` |
+| Working Dir | `workingDirectory` | `--working-directory` | `workingDirectory` | `working_directory` |
 
-Flag any naming that deviates from this pattern.
+Hosted MCP uses camelCase to match `POST /api/protocol/*` bodies. The local shim uses snake_case because it shells to `ovld protocol` kebab-case flags.
+
+Flag any naming that deviates from this pattern for the surface you are auditing.
 
 ## Output
 
@@ -178,4 +183,4 @@ If no drift is found, confirm alignment and note the operation count.
 
 </drift-review>
 
-<!-- version: 1.0.4 -->
+<!-- version: 1.0.5 -->

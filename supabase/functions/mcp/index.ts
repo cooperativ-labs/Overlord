@@ -22,9 +22,11 @@ import { handleAttachmentPrepareUpload } from './handlers/attachment-prepare-upl
 import { handleCreateTicket } from './handlers/create-ticket.ts';
 import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
 import { handleDeliver } from './handlers/deliver.ts';
+import { handleDiscoverProject } from './handlers/discover-project.ts';
 import { handleReadContext } from './handlers/read-context.ts';
 import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
 import { handleSaveTicketDraft } from './handlers/save-ticket-draft.ts';
+import { handleSearchTickets } from './handlers/search-tickets.ts';
 import { handleUpdate } from './handlers/update.ts';
 import { handleWriteContext } from './handlers/write-context.ts';
 import { getUiResourceByUri, listUiResources } from './ui/resources.ts';
@@ -160,7 +162,7 @@ Deno.serve(async (req: Request) => {
         result: {
           protocolVersion,
           capabilities: { tools: {}, resources: {} },
-          serverInfo: { name: 'overlord', version: '1.0.0' }
+          serverInfo: { name: 'overlord', version: '1.0.1' }
         }
       }),
       {
@@ -257,6 +259,10 @@ Deno.serve(async (req: Request) => {
         result = await handleDeliver(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket') {
         result = await handleCreateTicket(supabase, toolArgs, requestContext);
+      } else if (toolName === 'discover_project') {
+        result = await handleDiscoverProject(supabase, toolArgs, requestContext);
+      } else if (toolName === 'search_tickets') {
+        result = await handleSearchTickets(supabase, toolArgs, requestContext);
       } else {
         return rpcError(id, -32601, `Unknown tool: ${toolName}`);
       }

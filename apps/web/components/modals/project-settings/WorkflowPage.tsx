@@ -544,8 +544,9 @@ export function WorkflowPage({
                 <p className="mt-1 text-xs text-muted-foreground">
                   This stays{' '}
                   <span className="font-medium text-foreground">off unless you turn it on</span>.
-                  Overlord does not run jj against your folder until you initialize it here, so copied
-                  or imported repos are not tracked in the background. When enabled, Overlord uses{' '}
+                  Overlord does not run jj against your folder until you initialize it here, so
+                  copied or imported repos are not tracked in the background. When enabled, Overlord
+                  uses{' '}
                   <a
                     className="underline underline-offset-2"
                     href="/docs/workflow/file-changes"
@@ -564,7 +565,8 @@ export function WorkflowPage({
                     ).
                   </li>
                   <li>
-                    Choose <span className="font-medium text-foreground">Initialize in this folder</span>{' '}
+                    Choose{' '}
+                    <span className="font-medium text-foreground">Initialize in this folder</span>{' '}
                     so jj metadata exists directly in that directory (or adopt an existing jj repo
                     there).
                   </li>

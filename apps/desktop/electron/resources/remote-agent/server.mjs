@@ -159,8 +159,6 @@ async function resolveJjRepo(directory) {
   return { repoRoot };
 }
 async function isJjWorkspace(directory) {
-  const dotJj = await fs.stat(path.join(directory, ".jj")).catch(() => null);
-  if (dotJj) return true;
   const root = await runJj(directory, ["--repository", directory, "root"], { allowFailure: true });
   return root.ok && root.output.trim().length > 0;
 }
@@ -577,10 +575,12 @@ ${untrackedDiff}` : ""),
     try {
       if (await isJjWorkspace(this.workingDirectory)) {
         const { repoRoot: repoRoot2 } = await resolveJjRepo(this.workingDirectory);
+        const gitInfo = await resolveRepo(repoRoot2).catch(() => null);
+        const defaultBranch2 = gitInfo ? await resolveDefaultBranch(repoRoot2).catch(() => null) : null;
         return {
           branches: [],
-          currentBranch: null,
-          defaultBranch: null,
+          currentBranch: gitInfo?.branch ?? null,
+          defaultBranch: defaultBranch2,
           repoRoot: repoRoot2
         };
       }

@@ -138,7 +138,8 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 
 ## Defaults And Notes
 
-- API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `codex`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
+- API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `codex`/`cli`; the hosted MCP defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
+- Hosted MCP and the local `overlord-mcp.mjs` shim use the same **tool names** (\`attach\`, \`update\`, \`deliver\`, …). The shim uses **snake_case** JSON keys (\`ticket_id\`, \`session_key\`) that map to CLI flags; hosted MCP uses **camelCase** (\`ticketId\`, \`sessionKey\`) matching REST bodies.
 - `permission-request` is invoked by the local Codex plugin's permission rules; agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the `file_changes` table; the dedicated route is `POST /api/protocol/record-change-rationales`.
 - Objective attachment MCP tools use `<verb>_<noun>` names — `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.
@@ -154,4 +155,4 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 
-<!-- version: 0.4.5 -->
+<!-- version: 0.4.7 -->

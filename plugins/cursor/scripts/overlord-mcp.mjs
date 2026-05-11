@@ -69,7 +69,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-cursor', version: '0.1.0' }
+          serverInfo: { name: 'overlord-cursor', version: '0.1.2' }
         }
       });
       continue;
@@ -81,21 +81,26 @@ process.stdin.on('data', async chunk => {
         result: {
           tools: [
             {
-              name: 'attach_ticket',
+              name: 'attach',
               description: 'Attach to an Overlord ticket.',
               inputSchema: { type: 'object', properties: { ticket_id: { type: 'string' } }, required: ['ticket_id'] }
             },
             {
-              name: 'post_update',
+              name: 'update',
               description: 'Post a progress update.',
               inputSchema: {
                 type: 'object',
-                properties: { session_key: { type: 'string' }, ticket_id: { type: 'string' }, summary: { type: 'string' } },
+                properties: {
+                  session_key: { type: 'string' },
+                  ticket_id: { type: 'string' },
+                  summary: { type: 'string' },
+                  phase: { type: 'string' }
+                },
                 required: ['session_key', 'ticket_id', 'summary']
               }
             },
             {
-              name: 'deliver_ticket',
+              name: 'deliver',
               description: 'Deliver completed work.',
               inputSchema: {
                 type: 'object',
@@ -111,9 +116,9 @@ process.stdin.on('data', async chunk => {
     if (message.method === 'tools/call') {
       const toolName = message.params?.name;
       const args = message.params?.arguments ?? {};
-      if (toolName === 'attach_ticket') {
+      if (toolName === 'attach') {
         send({ jsonrpc: '2.0', id: message.id, result: await runProtocol('attach', { 'ticket-id': args.ticket_id }) });
-      } else if (toolName === 'post_update') {
+      } else if (toolName === 'update') {
         send({
           jsonrpc: '2.0',
           id: message.id,
@@ -121,10 +126,10 @@ process.stdin.on('data', async chunk => {
             'session-key': args.session_key,
             'ticket-id': args.ticket_id,
             summary: args.summary,
-            phase: 'execute'
+            phase: args.phase && String(args.phase).trim() ? String(args.phase).trim() : 'execute'
           })
         });
-      } else if (toolName === 'deliver_ticket') {
+      } else if (toolName === 'deliver') {
         send({
           jsonrpc: '2.0',
           id: message.id,

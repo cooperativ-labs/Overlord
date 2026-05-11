@@ -469,6 +469,8 @@ ${settingsJson}
 
 **Step 2** — Available MCP tools:
 - \`attach\` — attach to this ticket first (use ticketId: \`${ticketId}\`)
+- \`discover_project\` — resolve project from a working directory path (same as \`ovld protocol discover-project\`)
+- \`search_tickets\` — search or list tickets by keyword and status filters (same as \`ovld protocol search-tickets\`)
 - \`list_attachments\` — discover objective attachments (returns attachment IDs needed below)
 - \`prepare_attachment_upload\` / \`finalize_attachment_upload\` — upload a file as an objective attachment
 - \`get_attachment_download_url\` — signed read URL for an existing attachment (CLI: \`attachment-download-url\`)

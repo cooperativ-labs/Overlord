@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605112131.0] - 2026-05-11:21:31
+
+### Added
+- Hosted Overlord MCP **`discover_project`** and **`search_tickets`** tools (parity with `ovld protocol discover-project` / `search-tickets`), including full-text search with title/id fallback and shared filters (project, status, dates, creator).
+- Local MCP shim support for **`metadata`** on **`attach`** and **`connect`** (maps to `--metadata-json`) and **`personal`** on **`prompt`**.
+
+### Fixed
+- Treat a repo as a Jujutsu workspace only after **`jj` runs successfully**, so a stray `.jj` directory no longer implies JJ when the CLI is missing (avoids **`spawn jj ENOENT`** downstream).
+
+### Changed
+- Hosted MCP **`deliver`** schema: **`artifacts`** is optional (omit or pass `[]` when only **`summary`** / rationales matter), matching **`POST /api/protocol/deliver`**.
+- Local **`overlord-mcp`** tool names align with the hosted server (**`attach`**, **`connect`**, **`update`**, **`ask`**, **`deliver`**, **`read_context`**, **`write_context`**, **`prompt`**); raise listing **`serverInfo.version`** to **`0.1.4`** and document **`search_tickets`** limits **`1–50`**.
+- **JJ + Git colocated** repos: resolve Git **`currentBranch`** / **`defaultBranch`** when listing workspace branches so Desktop remote-agent and **`LocalWorkspaceClient`** stay consistent.
+
+### Security
+- None.
+
+### Documentation
+- Refresh **connector surfaces**, **drift-review** skill, **`overlord-ticket`** agent skills, and plugin **README** for MCP tool naming and hosted vs local behavior; extend generated ticket prompts with **`discover_project`** / **`search_tickets`**.
+
+### Chore
+- Bump MCP **`initialize`** **`serverInfo.version`** to **`1.0.1`**; bump workspace and **`overlord-cli`** versions to **`5.2605112131.0`**.
+
 ## [5.2605111412.0] - 2026-05-11:14:12
 
 ### Added

@@ -398,8 +398,8 @@ when one surface changes, check the others against this table.
 | auth-status | — | `ovld protocol auth-status` | — (CLI/human-only) |
 | discover-project | `POST /api/protocol/discover-project` | `discover-project` | `discover_project` |
 | attach | `POST /api/protocol/attach` | `attach` | `attach` |
-| connect | `POST /api/protocol/connect` | `connect` | — |
-| load-context | `POST /api/protocol/load-context` | `load-context` | — |
+| connect | `POST /api/protocol/connect` | `connect` | `connect` (local `overlord-mcp.mjs` shim only) |
+| load-context | `POST /api/protocol/load-context` | `load-context` | `load_ticket_context` (local shim only) |
 | search-tickets | `POST /api/protocol/search-tickets` | `search-tickets` | `search_tickets` |
 | create (follow-up) | `POST /api/protocol/create-ticket` | `create` (with session flags) | `create_ticket` |
 | create (standalone) | `POST /api/protocol/tickets` | `create` (no session flags) | — |
@@ -419,9 +419,10 @@ when one surface changes, check the others against this table.
 | projects (list) | `GET /api/protocol/projects` | — | — (UI-private) |
 
 Notes:
+- **Parameter naming:** Supabase Edge MCP (`/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts`) uses **camelCase** tool arguments that match `POST /api/protocol/*` JSON bodies (`ticketId`, `sessionKey`, `changeRationales`, …). The local Codex MCP shim (`/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs`) uses **snake_case** keys that map to `ovld protocol` kebab-case flags (`ticket_id` → `--ticket-id`). Prefer camelCase when calling the hosted MCP endpoint and snake_case when calling the shim.
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
-- `deliver` accepts optional `snapshot` and `checkpoint` metadata. CLI delivery also supports local-only `--checkpoint-backend <auto|jj|git>` and `--skip-checkpoint` flags; the MCP local shim exposes matching `checkpoint_backend` and `skip_checkpoint` parameters when it routes through the CLI.
+- `deliver` accepts optional `artifacts` (defaults to `[]`), `changeRationales`, `snapshot`, and `checkpoint` metadata — same as `deliverSchema` in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/validation.ts`. CLI delivery also supports local-only `--checkpoint-backend <auto|jj|git>` and `--skip-checkpoint` flags; the MCP local shim exposes matching `checkpoint_backend` and `skip_checkpoint` parameters when it routes through the CLI.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)
