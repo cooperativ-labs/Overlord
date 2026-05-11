@@ -12,7 +12,14 @@ export async function handleRecordChangeRationales(
   args: any,
   ctx: TokenContext
 ) {
-  const { sessionKey, ticketId: rawTicketId, summary, phase, changeRationales = [] } = args;
+  const {
+    sessionKey,
+    ticketId: rawTicketId,
+    summary,
+    phase,
+    changeRationales = [],
+    snapshot
+  } = args;
   const resolved = await resolveSession(
     supabase,
     sessionKey,
@@ -54,6 +61,7 @@ export async function handleRecordChangeRationales(
   const rationaleResult = await insertChangeRationales(supabase, {
     changeRationales,
     eventId: event.id,
+    snapshot,
     sessionId: resolved.session.id,
     ticketId
   });

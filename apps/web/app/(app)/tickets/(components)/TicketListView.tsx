@@ -12,11 +12,13 @@ import { useDefaultProject } from '@/components/features/projects/DefaultProject
 import { Card, CardContent } from '@/components/ui/card';
 import { upsertGlobalListViewPreferencesAction } from '@/lib/actions/global-list-view-preferences';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
+import { loadMoreTicketsAction } from '@/lib/actions/tickets';
 import { useTicketTagsBatch } from '@/lib/client-data/tags/hooks';
 import {
   parseUpdatedAtMsForSort,
   selectAllTickets
 } from '@/lib/client-data/tickets/board-selectors';
+import { mergeTicketsIntoBoards } from '@/lib/client-data/tickets/cache';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
   useCreateTicketMutation,
@@ -61,6 +63,7 @@ const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
 const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
 const PERSONAL_PROJECT_FILTER_ID = '__personal__';
+const TICKETS_PAGE_SIZE = 20;
 /** Sentinel for "drop after last status" - not a real status name. */
 const STATUS_REORDER_DROP_END = '__overlord_status_reorder_end__';
 
@@ -243,6 +246,10 @@ export default function TicketListView({
   const [customStatusOrder, setCustomStatusOrder] = useState<string[] | null>(() =>
     initialStatusOrder && initialStatusOrder.length > 0 ? [...initialStatusOrder] : null
   );
+  type StatusLoadMoreState = { cutoff: string; hasMore: boolean; isLoading: boolean };
+  const [statusLoadMoreStates, setStatusLoadMoreStates] = useState<
+    Map<string, StatusLoadMoreState>
+  >(() => new Map());
 
   const [draggedTicketId, setDraggedTicketId] = useState<string | null>(null);
   const [dropTargetStatus, setDropTargetStatus] = useState<string | null>(null);
@@ -256,7 +263,8 @@ export default function TicketListView({
     ticketIdsRef,
     ticketsByIdRef,
     setOpenedWaitingTimestamps,
-    setWaitingRaisedWhileOpen
+    setWaitingRaisedWhileOpen,
+    mergeWaitingFromLoadedTickets
   } = useTicketBoardRealtime({
     tickets,
     organizationId,
@@ -472,6 +480,62 @@ export default function TicketListView({
     }
     return groups;
   }, [orderedStatuses, filteredSortedTickets]);
+
+  const initialHasMoreByStatus = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const ticket of initialTickets) {
+      counts.set(ticket.status, (counts.get(ticket.status) ?? 0) + 1);
+    }
+    return counts;
+  }, [initialTickets]);
+
+  async function handleLoadMore(statusName: string) {
+    const state = statusLoadMoreStates.get(statusName);
+    if (state?.isLoading || state?.hasMore === false) return;
+
+    const statusTickets = groupedTickets.get(statusName) ?? [];
+    const oldestUpdatedAt =
+      statusTickets
+        .map(ticket => ticket.updated_at)
+        .filter(Boolean)
+        .sort()[0] ?? new Date().toISOString();
+    const cutoff = state?.cutoff ?? oldestUpdatedAt;
+
+    setStatusLoadMoreStates(prev => {
+      const next = new Map(prev);
+      next.set(statusName, { cutoff, hasMore: true, isLoading: true });
+      return next;
+    });
+
+    try {
+      const { tickets: loaded } = await loadMoreTicketsAction({
+        status: statusName,
+        organizationId,
+        projectId,
+        beforeDate: cutoff
+      });
+      const newCutoff =
+        loaded.length > 0 ? (loaded[loaded.length - 1].updated_at ?? cutoff) : cutoff;
+
+      mergeTicketsIntoBoards(queryClient, (loaded as Ticket[]).map(toBoardTicket), 'server-poll');
+      mergeWaitingFromLoadedTickets(loaded as Ticket[]);
+      setStatusLoadMoreStates(prev => {
+        const next = new Map(prev);
+        next.set(statusName, {
+          cutoff: newCutoff,
+          hasMore: loaded.length === TICKETS_PAGE_SIZE,
+          isLoading: false
+        });
+        return next;
+      });
+    } catch {
+      setStatusLoadMoreStates(prev => {
+        const next = new Map(prev);
+        next.set(statusName, { cutoff, hasMore: true, isLoading: false });
+        return next;
+      });
+    }
+  }
 
   const completeStatusName = useMemo(
     () =>
@@ -890,6 +954,11 @@ export default function TicketListView({
               const isDropTarget = !draggedStatusName && dropTargetStatus === status.name;
               const isReorderTarget =
                 draggedStatusName && dropTargetStatusForReorder === status.name;
+              const loadMoreState = statusLoadMoreStates.get(status.name);
+              const hasMore =
+                loadMoreState?.hasMore ??
+                (initialHasMoreByStatus.get(status.name) ?? 0) >= TICKETS_PAGE_SIZE;
+              const isLoadingMore = loadMoreState?.isLoading ?? false;
 
               return (
                 <TicketListStatusGroup
@@ -924,6 +993,9 @@ export default function TicketListView({
                   onMarkUnread={handleMarkUnread}
                   onCreateTicket={handleCreateTicket}
                   onCreateAndOpenTicket={handleCreateAndOpenTicket}
+                  hasMore={hasMore}
+                  isLoadingMore={isLoadingMore}
+                  onLoadMore={() => void handleLoadMore(status.name)}
                 />
               );
             })}

@@ -74,6 +74,19 @@ const changeRationaleHunkSchema = z
     }
   );
 
+const snapshotContextSchema = z.object({
+  backend: z.enum(['git-worktree', 'jj']).optional(),
+  baseGitCommitId: z.string().trim().min(1).max(160).optional(),
+  baseJjCommitId: z.string().trim().min(1).max(160).optional(),
+  projectId: z.string().trim().min(1).max(160).optional(),
+  shadowRepoPath: z.string().trim().min(1).max(1024).optional(),
+  jjChangeId: z.string().trim().min(1).max(160).optional(),
+  jjCommitId: z.string().trim().min(1).max(160).optional(),
+  jjOperationId: z.string().trim().min(1).max(160).optional(),
+  workspaceName: z.string().trim().min(1).max(240).optional(),
+  workspacePath: z.string().trim().min(1).max(1024).optional()
+});
+
 export const changeRationaleSchema = z.object({
   attribution_source: z.string().trim().min(1).max(40).optional().default('explicit'),
   change_kind: z.string().trim().min(1).max(40).optional().default('modify'),
@@ -91,6 +104,7 @@ export const updateSchema = z.object({
   externalSessionId: z.string().trim().max(2_048).nullable().optional(),
   externalUrl: z.string().trim().max(2_048).pipe(z.url()).nullable().optional(),
   sessionKey: z.string().uuid(),
+  snapshot: snapshotContextSchema.optional(),
   ticketId: ticketIdSchema,
   summary: z.string().trim().min(1).max(20_000),
   phase: ticketStatusSchema.optional(),
@@ -116,6 +130,7 @@ export const writeContextSchema = z.object({
 export const deliverSchema = z.object({
   changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
   sessionKey: z.string().uuid(),
+  snapshot: snapshotContextSchema.optional(),
   ticketId: ticketIdSchema,
   summary: z.string().trim().min(1).max(20_000),
   artifacts: z
@@ -137,6 +152,7 @@ export const deliverSchema = z.object({
 export const recordChangeRationalesSchema = z.object({
   changeRationales: z.array(changeRationaleSchema).min(1).max(50),
   sessionKey: z.string().uuid(),
+  snapshot: snapshotContextSchema.optional(),
   ticketId: ticketIdSchema,
   summary: z.string().trim().min(1).max(20_000).optional(),
   phase: ticketStatusSchema.optional()

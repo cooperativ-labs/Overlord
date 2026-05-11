@@ -61,8 +61,8 @@ export function DeleteTicketButton({ ticketId, ticketLabel, className }: DeleteT
           variant={'ghost'}
           size="icon"
           className={cn(
-            className,
-            'text-red-600 border-red-600/30 hover:text-white hover:bg-red-600 w-8 h-8'
+            'text-red-600 border-red-600/30 hover:text-white hover:bg-red-600 w-8 h-8',
+            className
           )}
           aria-label="Delete ticket"
           onClick={e => e.stopPropagation()}

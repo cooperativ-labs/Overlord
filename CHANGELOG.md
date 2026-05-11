@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605111015.0] - 2026-05-11:10:15
+
+### Added
+- Introduce an internal `SnapshotBackend` abstraction with `JjCliSnapshotBackend` and `GitWorktreeSnapshotBackend` implementations under `lib/snapshot/`, plus managed snapshot root resolution per OS so Overlord can run agents in private shadow workspaces.
+- Persist JJ provenance on file changes — `snapshot_backend`, `workspace_name`, `workspace_path`, `jj_change_id`, `jj_commit_id`, `jj_operation_id` — and propagate snapshot context through the protocol `context`, `update`, `deliver`, and `record-change-rationales` routes, the MCP `update`/`deliver`/`record_change_rationales` tools, the desktop agent launcher, and the `ovld protocol` CLI (`--snapshot-json`, `--snapshot-file`, `OVERLORD_SNAPSHOT_JSON`).
+- Surface snapshot/JJ provenance in the live file-change card and the project current-changes diff pane.
+- Add a Kanban hover footer that exposes the Everhour timer, execution-target toggle, and delete-ticket action without opening the card.
+- Add `ExecutionTargetToggle` so an agent/human assignment can be flipped directly from the Kanban card.
+- Add `TicketTitleField` with an inline AI title-generation button that uses the current draft objective and falls back to the ticket context.
+- Add a "Load more" control to each ticket-list status group so older tickets per status load on demand in pages of 20.
+- Expose a "Project settings" shortcut in the sidebar project color menu and honor `?projectSettings=1` to deep-link into the project settings drawer.
+- Add a JJ integration research feature plan describing the shadow-backend architecture, MVP scope, ownership rules, and rollout gates.
+
+### Fixed
+- Guard `AboutPage` version-scheme transition detection against a nullable `availableVersion` so the update banner no longer throws when no upgrade is offered.
+- Replace the brittle `(\d+):\d+` ticket-id regex with a tolerant `split(':')` parser across protocol routes, the MCP edge function, the desktop agent launcher, and the CLI so longer organization IDs and richer ticket identifiers parse consistently.
+
+### Changed
+- Refresh the project color palette to 24 preset swatches arranged in 6 columns and let the picker size to its content.
+- Re-layout the Kanban card so the execution-target badge and schedule badge share a row with the project name, hiding the action row behind hover/focus.
+- Show a spinner on the Quick Task send button while a submission is in flight and announce the submitting state to assistive tech.
+- Label the agent split-button primary action as "Run" on desktop and "CLI copy" elsewhere so the affordance matches what actually happens on click.
+- Animate submitted draft objectives with a subtle shimmer and cap their height with internal scrolling so long objectives no longer stretch the ticket panel.
+- Allow mentionable textareas to scroll vertically instead of clipping overflow.
+- Extend `deriveTitleFromObjective` to 100 characters before truncation so generated and fallback titles are less aggressively shortened.
+
+### Security
+- None.
+
+### Refactor
+- Extract `buildAgentContextUrl` in the Electron agent launcher and generate a per-launch `OVERLORD_LAUNCH_SESSION_ID` so the context request can opt into a managed snapshot workspace.
+- Make `resolveProtocolMetadata` async so CLI metadata can include resolved snapshot context.
+
+### Test
+- Add `tests/lib/snapshot/` coverage for managed snapshot path, root, and backend behaviour.
+- Add a `protocol deliver` test that asserts snapshot metadata is forwarded and the managed snapshot workspace is preserved through delivery.
+
+### Documentation
+- Document snapshot context propagation through `OVERLORD_SNAPSHOT_JSON` and session metadata in `CONNECTOR_SURFACES.md`.
+
+### Chore
+- Bump workspace version to `5.2605111015.0` and `overlord-cli` to `0.2605111015.1`.
+- Add migration `20260510190000_add_jj_provenance_to_file_changes.sql` to introduce snapshot/JJ provenance columns on `file_changes`, and regenerate `types/database.types.ts`.
+
 ## [0.2605101237.0] - 2026-05-10:12:37
 
 ### Added

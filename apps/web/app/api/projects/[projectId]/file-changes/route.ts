@@ -65,7 +65,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     let fileChangeQuery = supabase
       .from('file_changes')
       .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,tickets!inner(id,ticket_id,title,status,project_id)'
+        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,snapshot_backend,workspace_name,workspace_path,jj_change_id,jj_commit_id,jj_operation_id,tickets!inner(id,ticket_id,title,status,project_id)'
       )
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });
@@ -154,6 +154,10 @@ export async function GET(request: Request, { params }: RouteContext) {
           id: fileChange.id,
           impact: fileChange.impact,
           label: fileChange.label,
+          jj_change_id: fileChange.jj_change_id,
+          jj_commit_id: fileChange.jj_commit_id,
+          jj_operation_id: fileChange.jj_operation_id,
+          snapshot_backend: fileChange.snapshot_backend,
           session: sessionsById.get(fileChange.session_id) ?? null,
           summary: fileChange.summary,
           ticket: fileChange.tickets
@@ -163,6 +167,8 @@ export async function GET(request: Request, { params }: RouteContext) {
                   latestObjectiveAgentByTicket.get(fileChange.ticket_id) ?? null
               }
             : null,
+          workspace_name: fileChange.workspace_name,
+          workspace_path: fileChange.workspace_path,
           updated_at: fileChange.updated_at,
           why: fileChange.why
         }))

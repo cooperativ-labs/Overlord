@@ -1383,3 +1383,33 @@ Success criteria before making JJ default:
 - Fallback backend can take over new attempts if JJ fails.
 
 If these pass, JJ can become the default internal substrate while Git remains the public contract.
+
+## Execution Checklist
+
+This checklist turns the research above into concrete product and engineering decisions that can be acted on now. Items are marked complete when this document already resolves them well enough to guide implementation.
+
+- [x] Confirm the adoption stance.
+  Outcome: JJ should be introduced as a shadow execution backend, not as an irreversible core dependency or a user-visible requirement.
+- [x] Decide the repository ownership model.
+  Outcome: default to private non-colocated shadow repos under Overlord-managed storage; do not mutate a user's existing `.jj` repo by default.
+- [x] Define agent isolation rules.
+  Outcome: one Overlord agent session gets one Overlord-owned JJ workspace, with writes limited to that workspace path and Overlord-owned `ovld/` bookmarks only.
+- [x] Define the snapshot identity model.
+  Outcome: treat `change_id` as attempt lineage, `commit_id` as snapshot identity, and `operation_id` as repo-timeline evidence, while keeping Overlord event IDs as the product timeline.
+- [x] Decide how file changes and rationales should work.
+  Outcome: keep file-change rationales as Overlord-native metadata attached to events/checkpoints; JJ supplies durable snapshots and provenance anchors, but the user-facing file-change record remains semantic rather than JJ-native.
+- [x] Decide whether non-JJ workflows still benefit.
+  Outcome: yes. Git remains the public/export contract, so GitHub PR flows and other Git-based workflows can benefit from cleaner internal checkpointing and provenance without needing to understand JJ.
+- [x] Decide the user compatibility policy for existing JJ users.
+  Outcome: ship a safe shadow mode by default, add an explicit advanced `user-jj-native` mode later, and enforce strict ownership boundaries before allowing Overlord to touch a user's real JJ repo.
+- [x] Define concurrency constraints for multiple agents.
+  Outcome: allow parallel JJ workspaces, but add Overlord locks for workspace mutation, repo-wide ref/export operations, and acceptance selection to avoid confusing product-level races.
+- [x] Decide what UX should expose.
+  Outcome: expose attempts, checkpoints, restore points, compare/accept/reject flows, and conflicts; hide JJ mechanics like revsets, bookmarks, working-copy commits, and operation DAG details by default.
+- [x] Define the MVP integration surface.
+  Outcome: implement a `SnapshotBackend` abstraction with `JjCliSnapshotBackend` plus a fallback `GitWorktreeSnapshotBackend`, using a pinned bundled JJ binary and CLI shell-out rather than `jj-lib`.
+- [x] Define safety, fallback, and retention rules.
+  Outcome: freeze unhealthy workspaces, emit Overlord alerts on JJ failures, fall back to Git worktrees for new attempts if needed, and delay destructive JJ cleanup until retention/export requirements are satisfied.
+- [x] Define the go/no-go gate for broader rollout.
+  Outcome: only consider JJ the default internal substrate after real-world validation across many repos, parallel sessions, cleanup flows, export paths, and existing-JJ-user compatibility.
+

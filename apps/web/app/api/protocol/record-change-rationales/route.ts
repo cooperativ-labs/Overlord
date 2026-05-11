@@ -13,7 +13,14 @@ export async function POST(request: Request) {
   if (!parsed.ok) return parsed.errorResponse;
 
   try {
-    const { changeRationales, phase, sessionKey, summary, ticketId: rawTicketId } = parsed.data;
+    const {
+      changeRationales,
+      phase,
+      sessionKey,
+      snapshot,
+      summary,
+      ticketId: rawTicketId
+    } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
@@ -56,6 +63,7 @@ export async function POST(request: Request) {
       changeRationales,
       eventId: event.id,
       sessionId: resolved.session.id,
+      snapshot,
       supabase: typedSupabase,
       ticketId
     });

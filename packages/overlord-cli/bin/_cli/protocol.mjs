@@ -7,7 +7,6 @@ import path from 'node:path';
 
 import { buildAuthHeaders, getAuthStatus, resolveAuth } from './credentials.mjs';
 
-const TICKET_ID_REGEX = /^(\d+):\d+$/;
 
 /**
  * Parse simple CLI flags: --key value or --key=value
@@ -71,7 +70,7 @@ export function resolveProtocolModelIdentifier(flags = {}) {
   return envModel || null;
 }
 
-function resolveProtocolMetadata(flags = {}, base = {}) {
+async function resolveProtocolMetadata(flags = {}, base = {}) {
   const metadata = { ...base };
 
   if (flags['metadata-json']) {
@@ -85,6 +84,11 @@ function resolveProtocolMetadata(flags = {}, base = {}) {
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
   if (modelIdentifier) {
     metadata.model = modelIdentifier;
+  }
+
+  const snapshot = await resolveSnapshotContext(flags);
+  if (snapshot) {
+    metadata.snapshot = snapshot;
   }
 
   return metadata;
@@ -242,8 +246,11 @@ function parseOrganizationId(value) {
 }
 
 function organizationIdFromTicketId(ticketId) {
-  const match = String(ticketId ?? '').trim().match(TICKET_ID_REGEX);
-  return match ? parseOrganizationId(match[1]) : null;
+  const [organizationPart, _ticketSequencePart, ...rest] = String(ticketId ?? '')
+    .trim()
+    .split(':');
+  if (rest.length > 0) return null;
+  return parseOrganizationId(organizationPart);
 }
 
 function resolveOrganizationIdHint(flags, ticketId) {
@@ -337,6 +344,19 @@ async function resolveChangeRationales(flags) {
     return parseJsonFlag('--change-rationales-json', flags['change-rationales-json']);
   }
   return [];
+}
+
+async function resolveSnapshotContext(flags) {
+  if (flags['snapshot-file']) {
+    return await readJsonFileOrStdin(String(flags['snapshot-file']), '--snapshot-file');
+  }
+  if (flags['snapshot-json']) {
+    return parseJsonFlag('--snapshot-json', flags['snapshot-json']);
+  }
+  if (process.env.OVERLORD_SNAPSHOT_JSON?.trim()) {
+    return parseJsonFlag('--snapshot-json', process.env.OVERLORD_SNAPSHOT_JSON);
+  }
+  return null;
 }
 
 function normalizeRepoRelativeFilePath(filePath, repoRoot) {
@@ -524,7 +544,7 @@ async function protocolAttach(args) {
     agentIdentifier: resolveProtocolAgentIdentifier(flags),
     connectionMethod: String(flags.method ?? 'cli'),
     ...(externalSessionId !== undefined ? { externalSessionId } : {}),
-    metadata: resolveProtocolMetadata(flags, { cwd: process.cwd() })
+    metadata: await resolveProtocolMetadata(flags, { cwd: process.cwd() })
   };
 
   const data = await apiPost(
@@ -564,6 +584,7 @@ async function protocolUpdate(args) {
   const timeoutMs = resolveTimeout(flags);
   const changeRationales = await resolveChangeRationales(flags);
   const externalSessionId = resolveExternalSessionId(flags);
+  const snapshot = await resolveSnapshotContext(flags);
 
   const body = {
     sessionKey,
@@ -583,6 +604,7 @@ async function protocolUpdate(args) {
     ...(flags['payload-json']
       ? { payload: parseJsonFlag('--payload-json', flags['payload-json']) }
       : {}),
+    ...(snapshot ? { snapshot } : {}),
     ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
 
@@ -617,6 +639,7 @@ async function protocolRecordChangeRationales(args) {
 
   const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
+  const snapshot = await resolveSnapshotContext(flags);
 
   const body = {
     sessionKey,
@@ -627,7 +650,8 @@ async function protocolRecordChangeRationales(args) {
       : flags.summary
         ? { summary: String(flags.summary) }
         : {}),
-    ...(flags.phase ? { phase: String(flags.phase) } : {})
+    ...(flags.phase ? { phase: String(flags.phase) } : {}),
+    ...(snapshot ? { snapshot } : {})
   };
 
   const data = await apiPost(
@@ -829,6 +853,7 @@ async function protocolDeliver(args) {
 
   const changeRationales =
     deliverPayload?.changeRationales ?? (await resolveChangeRationales(flags));
+  const snapshot = (await resolveSnapshotContext(flags)) ?? deliverPayload?.snapshot ?? null;
   validateDeliverFileChanges(flags, changeRationales);
 
   const body = {
@@ -836,6 +861,7 @@ async function protocolDeliver(args) {
     ticketId,
     summary,
     artifacts,
+    ...(snapshot ? { snapshot } : {}),
     ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
 
@@ -1106,7 +1132,7 @@ async function protocolConnect(args) {
     ticketId,
     agentIdentifier: resolveProtocolAgentIdentifier(flags),
     connectionMethod: String(flags.method ?? 'cli'),
-    metadata: resolveProtocolMetadata(flags, { cwd: process.cwd() })
+    metadata: await resolveProtocolMetadata(flags, { cwd: process.cwd() })
   };
 
   const data = await apiPost(
@@ -1179,7 +1205,7 @@ async function protocolPrompt(args) {
     objective,
     agentIdentifier,
     connectionMethod: String(flags.method ?? 'cli'),
-    metadata: resolveProtocolMetadata(flags, { cwd: process.cwd() }),
+    metadata: await resolveProtocolMetadata(flags, { cwd: process.cwd() }),
     ...(flags.title ? { title: String(flags.title) } : {}),
     ...(flags.priority ? { priority: String(flags.priority) } : {}),
     ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
@@ -1438,6 +1464,8 @@ Common flags:
   --agent <identifier>        Agent identifier sent to Overlord (default: AGENT_IDENTIFIER or claude-code)
   --model <identifier>        Model identifier to snapshot on executing objectives
   --method <connectionMethod> Connection method sent to Overlord (default: cli)
+  --snapshot-json <json>      Snapshot metadata to attach to sessions/file changes
+  --snapshot-file <path|->    Read snapshot metadata JSON from a file or stdin
 
 auth-status:
   Purpose:

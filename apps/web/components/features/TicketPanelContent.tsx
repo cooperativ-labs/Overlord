@@ -3,7 +3,6 @@ import { headers } from 'next/headers';
 import fs from 'node:fs/promises';
 
 import { TimerWithTimeEntries } from '@/components/features/everhour/TimerWithTimeEntries';
-import { InlineEditField } from '@/components/features/InlineEditField';
 import { DueDateEditor } from '@/components/features/scheduling/DueDateEditor';
 import { ScheduleEditor } from '@/components/features/scheduling/ScheduleEditor';
 import { TicketExecutionTargetSelect } from '@/components/features/TicketExecutionTargetSelect';
@@ -13,6 +12,7 @@ import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
 import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
 import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
+import { TicketTitleField } from '@/components/features/TicketTitleField';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { listObjectiveAttachmentsAction } from '@/lib/actions/attachments';
@@ -337,13 +337,11 @@ export async function TicketPanelContent({
                 </div>
               ) : null}
               <div className="mb-4">
-                <InlineEditField
-                  displayClassName="text-xl font-bold tracking-tight"
-                  field="title"
-                  initialValue={ticket.title ?? ''}
-                  inputClassName="text-xl font-bold tracking-tight"
-                  placeholder="Untitled — click to add a title"
+                <TicketTitleField
                   ticketId={ticketId}
+                  initialTitle={ticket.title ?? ''}
+                  fallbackObjective={ticket.context ?? ''}
+                  initialObjectives={objectives ?? []}
                 />
               </div>
 

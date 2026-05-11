@@ -82,10 +82,13 @@ export function DraftObjective({
   return (
     <div
       className={cn(
-        'w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40',
-        isSubmitted && 'border-sky-400/45 bg-sky-500/[0.03] focus-within:ring-sky-400/30'
+        'relative w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40',
+        isSubmitted && 'border-sky-400/45 bg-sky-500/3 focus-within:ring-sky-400/30'
       )}
     >
+      {isSubmitted ? (
+        <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_6s_linear_infinite] bg-linear-to-r from-transparent via-sky-400/10 to-transparent" />
+      ) : null}
       {/* {workingDirectory ? (
         <div className="px-3 pt-3 pb-1">
           <button
@@ -105,7 +108,7 @@ export function DraftObjective({
         field="objective"
         fileMentionPaths={fileMentionPaths}
         initialValue={initialValue}
-        inputClassName="text-base leading-relaxed"
+        inputClassName="text-base leading-relaxed max-h-[8lh] overflow-y-auto"
         multiline
         placeholder="Click to add an objective…"
         renderMarkdown

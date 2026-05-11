@@ -268,7 +268,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
         <textarea
           ref={setRefs}
           className={cn(
-            'relative z-10 w-full resize-none overflow-hidden focus:outline-none focus-visible:ring-0',
+            'relative z-10 w-full resize-none overflow-y-auto focus:outline-none focus-visible:ring-0',
             className
           )}
           value={value}

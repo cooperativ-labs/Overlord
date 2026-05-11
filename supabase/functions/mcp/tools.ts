@@ -158,6 +158,22 @@ export const TOOLS = [
             required: ['label', 'file_path', 'summary', 'why', 'impact', 'hunks']
           }
         },
+        snapshot: {
+          type: 'object',
+          description:
+            'Optional JJ or Git snapshot metadata to attach to persisted file-change records.',
+          properties: {
+            backend: {
+              type: 'string',
+              enum: ['git-worktree', 'jj']
+            },
+            jjChangeId: { type: ['string', 'null'] },
+            jjCommitId: { type: ['string', 'null'] },
+            jjOperationId: { type: ['string', 'null'] },
+            workspaceName: { type: ['string', 'null'] },
+            workspacePath: { type: ['string', 'null'] }
+          }
+        },
         payload: {
           type: 'object',
           description: 'Optional payload. Include notifications array to surface events in the UI.'
@@ -224,6 +240,22 @@ export const TOOLS = [
               }
             },
             required: ['label', 'file_path', 'summary', 'why', 'impact', 'hunks']
+          }
+        },
+        snapshot: {
+          type: 'object',
+          description:
+            'Optional JJ or Git snapshot metadata to attach to persisted file-change records.',
+          properties: {
+            backend: {
+              type: 'string',
+              enum: ['git-worktree', 'jj']
+            },
+            jjChangeId: { type: ['string', 'null'] },
+            jjCommitId: { type: ['string', 'null'] },
+            jjOperationId: { type: ['string', 'null'] },
+            workspaceName: { type: ['string', 'null'] },
+            workspacePath: { type: ['string', 'null'] }
           }
         }
       },
@@ -480,6 +512,22 @@ export const TOOLS = [
               }
             },
             required: ['label', 'file_path', 'summary', 'why', 'impact', 'hunks']
+          }
+        },
+        snapshot: {
+          type: 'object',
+          description:
+            'Optional JJ or Git snapshot metadata to attach to persisted file-change records.',
+          properties: {
+            backend: {
+              type: 'string',
+              enum: ['git-worktree', 'jj']
+            },
+            jjChangeId: { type: ['string', 'null'] },
+            jjCommitId: { type: ['string', 'null'] },
+            jjOperationId: { type: ['string', 'null'] },
+            workspaceName: { type: ['string', 'null'] },
+            workspacePath: { type: ['string', 'null'] }
           }
         },
         artifacts: {

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUp, Bot, Plus, User, X } from 'lucide-react';
+import { ArrowUp, Bot, Loader2, Plus, User, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -477,7 +477,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
           {/* Send */}
           <button
             type="button"
-            aria-label="Send"
+            aria-label={isSubmitting ? 'Submitting' : 'Send'}
             onClick={() => void handleSubmit()}
             disabled={!canSubmit}
             className={cn(
@@ -487,7 +487,11 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
                 : 'bg-muted text-muted-foreground/60'
             )}
           >
-            <ArrowUp className="h-4 w-4" />
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
           </button>
         </div>
       </div>

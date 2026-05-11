@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Bot } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 
+import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
 import { KanbanTimerButton } from '@/components/features/everhour/KanbanTimerButton';
 import { ScheduleBadge } from '@/components/features/scheduling/ScheduleBadge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils';
 import type { Database } from '@/types/database.types';
 
 import { ExecutionTargetBadge } from './ExecutionTargetBadge';
+import { ExecutionTargetToggle } from './ExecutionTargetToggle';
 import {
   AttentionIndicators,
   ProjectColorDot,
@@ -117,7 +119,7 @@ export default function KanbanCard({
           ref={setNodeRef}
           aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
           className={cn(
-            'relative cursor-grab border-gray-300/60 dark:border-gray-700/40 bg-linear-to-br from-gray-300/5 to-transparent overflow-hidden transition-all hover:shadow-md rounded-md',
+            'group relative cursor-grab border-gray-300/60 dark:border-gray-700/40 bg-linear-to-br from-gray-300/5 to-transparent overflow-hidden transition-all hover:shadow-md rounded-md',
             isDragging ? 'opacity-40' : '',
             isAgentRunning && 'animate-pulse border-emerald-500/40',
             isSelected &&
@@ -175,31 +177,25 @@ function KanbanCardBody({
       <div className="px-3">
         <div className="min-w-0">
           <h4 className="text-sm leading-snug font-semibold">{getDisplayTitle(ticket)}</h4>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
-            {ticket.project_id ? (
-              <span className="truncate text-xs text-muted-foreground">{ticket.project_name}</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">Personal</span>
-            )}
+          <div className="mt-3.5 flex items-start justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
+              {ticket.project_id ? (
+                <span className="truncate text-xs text-muted-foreground">
+                  {ticket.project_name}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">Personal</span>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
+              {ticket.schedule_id ? <ScheduleBadge /> : null}
+            </div>
           </div>
           {showOrganizationName && ticket.organization_name ? (
             <p className="mt-0.5 text-xs text-muted-foreground">{ticket.organization_name}</p>
           ) : null}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
-          {ticket.schedule_id ? <ScheduleBadge /> : null}
-        </div>
-        <div className="mt-auto flex items-center gap-2 pt-2">
-          <div className="flex min-w-0 items-center">
-            {ticket.project_everhour_project_id ? (
-              <KanbanTimerButton
-                initialTaskId={ticket.everhour_task_id ?? null}
-                ticketId={ticket.id}
-              />
-            ) : null}
-          </div>
         </div>
       </div>
       {ticket.delegate ? (
@@ -210,6 +206,46 @@ function KanbanCardBody({
       ) : (
         <div className="h-2" />
       )}
+      <KanbanCardHoverFooter ticket={ticket} />
     </CardContent>
+  );
+}
+
+function KanbanCardHoverFooter({ ticket }: { ticket: Ticket }) {
+  const stopPropagation = (event: React.MouseEvent | React.PointerEvent) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <div
+      className={cn(
+        'grid grid-rows-[0fr] opacity-0 transition-all duration-150 ease-out',
+        'group-hover:grid-rows-[1fr] group-hover:opacity-100',
+        'focus-within:grid-rows-[1fr] focus-within:opacity-100'
+      )}
+      onClick={stopPropagation}
+      onPointerDown={stopPropagation}
+    >
+      <div className="overflow-hidden">
+        <div className="flex items-center gap-1.5 border-t border-border/60 bg-muted/80 px-2 py-1">
+          {ticket.project_everhour_project_id ? (
+            <KanbanTimerButton
+              initialTaskId={ticket.everhour_task_id ?? null}
+              ticketId={ticket.id}
+            />
+          ) : null}
+
+          <ExecutionTargetToggle ticketId={ticket.id} executionTarget={ticket.execution_target} />
+
+          <div className="ml-auto">
+            <DeleteTicketButton
+              ticketId={ticket.id}
+              ticketLabel={getDisplayTitle(ticket)}
+              className="h-6 w-6 border-0 bg-transparent text-muted-foreground hover:bg-transparent hover:text-red-500 [&_svg]:h-3.5 [&_svg]:w-3.5"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,9 +1,11 @@
 'use client';
 
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, GripVertical, Loader2, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import type { ButtonLoadingState } from '@/components/ui/loading-button';
+import { LoadingButton } from '@/components/ui/loading-button';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +58,9 @@ type TicketListStatusGroupProps = {
     objective: string,
     position: 'top' | 'bottom'
   ) => Promise<void> | void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 };
 
 export function TicketListStatusGroup({
@@ -88,7 +93,10 @@ export function TicketListStatusGroup({
   onCompleteTicket,
   onMarkUnread,
   onCreateTicket,
-  onCreateAndOpenTicket
+  onCreateAndOpenTicket,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore
 }: TicketListStatusGroupProps) {
   const StatusIcon = style.icon;
   const hasRunning = groupTickets.some(ticket => ticket.has_executing_objective === true);
@@ -101,6 +109,7 @@ export function TicketListStatusGroup({
       ? groupTickets
       : groupTickets.slice(0, SHOW_MORE_THRESHOLD);
   const hiddenCount = groupTickets.length - SHOW_MORE_THRESHOLD;
+  const loadMoreButtonState: ButtonLoadingState = isLoadingMore ? 'loading' : 'default';
 
   return (
     <div
@@ -284,6 +293,27 @@ export function TicketListStatusGroup({
                     <ChevronUp className="h-3 w-3" />
                     Show less
                   </button>
+                ) : null}
+                {(hasMore || isLoadingMore) && onLoadMore && (isExpanded || hiddenCount <= 0) ? (
+                  <LoadingButton
+                    variant="ghost"
+                    size="sm"
+                    className="mt-0.5 h-7 justify-start gap-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                    buttonState={loadMoreButtonState}
+                    text={
+                      <>
+                        <ChevronDown className="h-3 w-3" />
+                        Load more
+                      </>
+                    }
+                    loadingText={
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Loading
+                      </>
+                    }
+                    onClick={onLoadMore}
+                  />
                 ) : null}
               </div>
             </SortableContext>

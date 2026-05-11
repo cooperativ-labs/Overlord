@@ -72,7 +72,6 @@ const agentIdentifierMap = {
 };
 
 const supportedAgents = ['claude', 'codex', 'cursor', 'gemini', 'opencode'];
-const TICKET_ID_REGEX = /^(\d+):\d+$/;
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -112,8 +111,11 @@ function parseOrganizationId(value) {
 }
 
 function organizationIdFromTicketId(ticketId) {
-  const match = String(ticketId ?? '').trim().match(TICKET_ID_REGEX);
-  return match ? parseOrganizationId(match[1]) : null;
+  const [organizationPart, _ticketSequencePart, ...rest] = String(ticketId ?? '')
+    .trim()
+    .split(':');
+  if (rest.length > 0) return null;
+  return parseOrganizationId(organizationPart);
 }
 
 function resolveLaunchOrganizationId(ticketId, optionsOrganizationId, authOrganizationId) {

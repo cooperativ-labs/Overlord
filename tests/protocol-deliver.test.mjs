@@ -17,7 +17,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path, { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -87,6 +87,7 @@ async function withProtocolEnv(callback) {
   const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
   const previousTicketId = process.env.TICKET_ID;
   const previousSessionKey = process.env.SESSION_KEY;
+  const previousSnapshotJson = process.env.OVERLORD_SNAPSHOT_JSON;
   const previousHome = process.env.HOME;
   const previousCwd = process.cwd();
 
@@ -114,6 +115,9 @@ async function withProtocolEnv(callback) {
 
     if (previousSessionKey === undefined) delete process.env.SESSION_KEY;
     else process.env.SESSION_KEY = previousSessionKey;
+
+    if (previousSnapshotJson === undefined) delete process.env.OVERLORD_SNAPSHOT_JSON;
+    else process.env.OVERLORD_SNAPSHOT_JSON = previousSnapshotJson;
 
     if (previousHome === undefined) delete process.env.HOME;
     else process.env.HOME = previousHome;
@@ -414,6 +418,71 @@ for (const modulePath of ['packages/overlord-cli/bin/_cli/protocol.mjs']) {
           artifacts: []
         });
       } finally {
+        await close();
+        rmSync(repoDir, { recursive: true, force: true });
+      }
+    }
+  );
+
+  test(
+    `${modulePath} deliver preserves managed snapshot workspace after recording snapshot metadata`,
+    { concurrency: false },
+    async () => {
+      const repoDir = createTempDir('ovld-deliver-snapshot-preserve');
+      const shadowRepoDir = join(repoDir, 'shadow');
+      const workspaceDir = join(repoDir, 'workspace');
+      const fakeBinDir = join(repoDir, 'bin');
+      mkdirSync(shadowRepoDir, { recursive: true });
+      mkdirSync(workspaceDir, { recursive: true });
+      mkdirSync(fakeBinDir, { recursive: true });
+      const fakeJjPath = join(fakeBinDir, 'jj');
+      writeFileSync(fakeJjPath, '#!/bin/sh\nexit 0\n', 'utf8');
+      chmodSync(fakeJjPath, 0o755);
+
+      const previousPath = process.env.PATH;
+      let requestBody = null;
+      const { url, close } = await startServer(async (req, res) => {
+        requestBody = JSON.parse(await readBody(req));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+
+      try {
+        await withProtocolEnv(async () => {
+          process.chdir(repoDir);
+          process.env.PATH = `${fakeBinDir}${path.delimiter}${previousPath ?? ''}`;
+          process.env.OVERLORD_URL = url;
+          process.env.OVERLORD_ACCESS_TOKEN = 'test-token';
+          process.env.OVERLORD_SNAPSHOT_JSON = JSON.stringify({
+            backend: 'jj',
+            shadowRepoPath: shadowRepoDir,
+            workspaceName: 'ovld-test',
+            workspacePath: workspaceDir
+          });
+
+          const { runProtocolCommand } = await importFresh(modulePath);
+          await withStubbedConsole(async () => {
+            await runProtocolCommand('deliver', [
+              '--session-key',
+              'sk',
+              '--ticket-id',
+              'tid',
+              '--summary',
+              'Done',
+              '--skip-file-change-check'
+            ]);
+          });
+        });
+
+        assert.equal(requestBody?.snapshot?.workspacePath, workspaceDir);
+        assert.equal(
+          existsSync(workspaceDir),
+          true,
+          'deliver must not delete managed snapshot work before an accepted/export path preserves it'
+        );
+      } finally {
+        if (previousPath === undefined) delete process.env.PATH;
+        else process.env.PATH = previousPath;
         await close();
         rmSync(repoDir, { recursive: true, force: true });
       }

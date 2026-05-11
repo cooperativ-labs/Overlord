@@ -23,12 +23,10 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
  *
  * Auth: Bearer <OAuth access token>.
  */
-const TICKET_ID_REGEX = /^(\d+):\d+$/;
-
 function organizationIdFromTicketId(ticketId: string): number | null {
-  const match = ticketId.trim().match(TICKET_ID_REGEX);
-  if (!match) return null;
-  const parsed = Number.parseInt(match[1] ?? '', 10);
+  const [organizationPart, _ticketSequencePart, ...rest] = ticketId.trim().split(':');
+  if (rest.length > 0) return null;
+  const parsed = Number.parseInt(organizationPart ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
