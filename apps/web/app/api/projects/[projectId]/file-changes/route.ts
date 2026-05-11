@@ -43,22 +43,24 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     let excludedTicketIds: string[] = [];
     if (!includeCompleted && project.organization_id) {
-      const { data: completeStatuses } = await supabase
+      const { data: terminalStatuses } = await supabase
         .from('ticket_statuses')
         .select('name')
         .eq('organization_id', project.organization_id)
-        .eq('status_type', 'complete');
+        .or('status_type.eq.complete,name.ilike.cancelled');
 
-      const completeStatusNames = (completeStatuses ?? []).map((s: { name: string }) => s.name);
+      const terminalStatusNames = [
+        ...new Set((terminalStatuses ?? []).map((s: { name: string }) => s.name))
+      ];
 
-      if (completeStatusNames.length > 0) {
-        const { data: completedTickets } = await supabase
+      if (terminalStatusNames.length > 0) {
+        const { data: excludedTickets } = await supabase
           .from('tickets')
           .select('id')
           .eq('project_id', projectId)
-          .in('status', completeStatusNames);
+          .in('status', terminalStatusNames);
 
-        excludedTicketIds = (completedTickets ?? []).map((ticket: { id: string }) => ticket.id);
+        excludedTicketIds = (excludedTickets ?? []).map((ticket: { id: string }) => ticket.id);
       }
     }
 

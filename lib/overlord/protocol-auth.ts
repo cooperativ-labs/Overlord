@@ -10,6 +10,49 @@ const LOCAL_DEV_TOKEN = 'overlord-local-dev-token';
 const LOCAL_DEV_USER_ID = '11111111-1111-4111-8111-111111111111';
 const LOCAL_DEV_ORGANIZATION_ID = 1;
 
+const TICKET_UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseHumanReadableTicketOrganizationId(ticketId: string): number | null {
+  const trimmed = ticketId.trim();
+  const [organizationPart, ticketSequencePart, ...rest] = trimmed.split(':');
+  if (rest.length > 0) return null;
+
+  const organizationId = Number.parseInt(organizationPart ?? '', 10);
+  const ticketSequence = Number.parseInt(ticketSequencePart ?? '', 10);
+  if (!Number.isInteger(organizationId) || organizationId <= 0) return null;
+  if (!Number.isInteger(ticketSequence) || ticketSequence <= 0) return null;
+
+  return organizationId;
+}
+
+/**
+ * Resolves the organization scope for a protocol ticket id before OAuth membership checks.
+ * - Human ids (`org:sequence`) take org from the prefix (no DB).
+ * - UUID ids load `organization_id` from `tickets` so clients are not dependent on a
+ *   correct `x-organization-id` header (fixes stale Desktop credential org vs ticket org).
+ */
+export async function resolveProtocolOrganizationHintForTicketId({
+  ticketId
+}: {
+  ticketId: string;
+}): Promise<number | null> {
+  const trimmed = ticketId.trim();
+  const fromHuman = parseHumanReadableTicketOrganizationId(trimmed);
+  if (fromHuman !== null) return fromHuman;
+
+  if (!TICKET_UUID_REGEX.test(trimmed)) return null;
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('organization_id')
+    .eq('id', trimmed)
+    .maybeSingle();
+
+  if (error || !data || typeof data.organization_id !== 'number') return null;
+  return data.organization_id;
+}
+
 let cachedJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 let cachedIssuer: string | null = null;
 

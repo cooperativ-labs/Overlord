@@ -1,10 +1,12 @@
-import { Bot, ChevronDown, Columns2, Info, Loader2 } from 'lucide-react';
+import { Bot, ChevronDown, Columns2, Filter, Info, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
@@ -14,7 +16,7 @@ import type { DiffViewMode } from '../CurrentChangesPage';
 
 import { buildHunkMatches, formatStatus, lineNumber } from './helpers';
 import { HunkPopoverContent } from './HunkPopoverContent';
-import type { EnrichedCurrentChangeFile } from './types';
+import type { EnrichedCurrentChangeFile, TicketSummary } from './types';
 
 type DiffPaneProps = {
   diff: ParsedUnifiedDiff | null;
@@ -23,7 +25,10 @@ type DiffPaneProps = {
   isLoading: boolean;
   projectId: string;
   selectedFilePath: string | null;
+  selectedTicketIds: Set<string>;
   viewMode: DiffViewMode;
+  onFilterByTicket: (ticketId: string) => void;
+  onToggleTicketFilter: (ticketId: string) => void;
   onViewModeChange: (mode: DiffViewMode) => void;
 };
 
@@ -34,6 +39,78 @@ function formatAgentName(agent: string | null | undefined) {
   if (agent === 'cursor') return 'Cursor';
   if (agent === 'gemini') return 'Gemini';
   return 'Agent';
+}
+
+function SecondaryTicketBadge({
+  isSelected,
+  projectId,
+  ticket,
+  onFilter,
+  onToggle
+}: {
+  isSelected: boolean;
+  projectId: string;
+  ticket: TicketSummary;
+  onFilter: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[10px] hover:bg-muted',
+            isSelected
+              ? 'border-primary bg-primary/10 text-primary'
+              : 'bg-background text-foreground'
+          )}
+          aria-pressed={isSelected}
+        >
+          <span className="truncate">
+            {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
+          </span>
+          {ticket.status ? <span className="text-muted-foreground">· {ticket.status}</span> : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80">
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Link
+              className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+              href={buildTicketPath({ projectId, ticketId: ticket.id })}
+            >
+              {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
+            </Link>
+            <p className="text-xs text-muted-foreground">
+              {ticket.objective?.trim() || 'No ticket objective yet.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[11px]"
+              onClick={onFilter}
+            >
+              <Filter className="h-3 w-3" />
+              Show only this ticket
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={onToggle}
+            >
+              {isSelected ? 'Remove from filter' : 'Add to filter'}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function formatSnapshotSummary(
@@ -59,11 +136,15 @@ export function DiffPane({
   isLoading,
   projectId,
   selectedFilePath,
+  selectedTicketIds,
   viewMode,
+  onFilterByTicket,
+  onToggleTicketFilter,
   onViewModeChange
 }: DiffPaneProps) {
   const [openPopoverKey, setOpenPopoverKey] = useState<string | null>(null);
   const [rationaleOpen, setRationaleOpen] = useState(true);
+  const isFiltering = selectedTicketIds.size > 0;
 
   const secondaryTickets = useMemo(() => {
     if (!file.primaryTicket) return file.tickets;
@@ -181,6 +262,23 @@ export function DiffPane({
                 +{secondaryTickets.length}
               </Badge>
             ) : null}
+            {file.primaryTicket ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => onFilterByTicket(file.primaryTicket!.id)}
+                    aria-label="Show only files for this ticket"
+                  >
+                    <Filter className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Filter list to this ticket</TooltipContent>
+              </Tooltip>
+            ) : null}
             <CollapsibleTrigger asChild>
               <button
                 type="button"
@@ -229,37 +327,23 @@ export function DiffPane({
                 </p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {secondaryTickets.map(ticket => (
-                    <Popover key={ticket.id}>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border bg-background px-2 py-0.5 text-[10px] text-foreground hover:bg-muted"
-                        >
-                          <span className="truncate">
-                            {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
-                          </span>
-                          {ticket.status ? (
-                            <span className="text-muted-foreground">· {ticket.status}</span>
-                          ) : null}
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="w-80">
-                        <div className="space-y-2">
-                          <Link
-                            className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-                            href={buildTicketPath({ projectId, ticketId: ticket.id })}
-                          >
-                            {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
-                          </Link>
-                          <p className="text-xs text-muted-foreground">
-                            {ticket.objective?.trim() || 'No ticket objective yet.'}
-                          </p>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                    <SecondaryTicketBadge
+                      key={ticket.id}
+                      isSelected={selectedTicketIds.has(ticket.id)}
+                      projectId={projectId}
+                      ticket={ticket}
+                      onFilter={() => onFilterByTicket(ticket.id)}
+                      onToggle={() => onToggleTicketFilter(ticket.id)}
+                    />
                   ))}
                 </div>
               </div>
+            ) : null}
+            {file.primaryTicket && file.tickets.length > 0 && !isFiltering ? (
+              <p className="text-[10px] text-muted-foreground">
+                Tip: use the filter icon to scope the file list to this ticket, or open the toolbar
+                filter to combine tickets.
+              </p>
             ) : null}
           </CollapsibleContent>
         </Collapsible>
@@ -374,6 +458,7 @@ export function DiffPane({
                                     fileTickets={file.tickets}
                                     matches={matches}
                                     projectId={projectId}
+                                    onFilterByTicket={onFilterByTicket}
                                   />
                                 </PopoverContent>
                               </Popover>
@@ -431,6 +516,7 @@ export function DiffPane({
                                 fileTickets={file.tickets}
                                 matches={matches}
                                 projectId={projectId}
+                                onFilterByTicket={onFilterByTicket}
                               />
                             </PopoverContent>
                           </Popover>

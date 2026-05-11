@@ -1,6 +1,8 @@
+import { Filter } from 'lucide-react';
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 
@@ -10,9 +12,15 @@ type HunkPopoverContentProps = {
   fileTickets?: TicketSummary[];
   matches: FileChangeRecord[];
   projectId: string;
+  onFilterByTicket?: (ticketId: string) => void;
 };
 
-export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopoverContentProps) {
+export function HunkPopoverContent({
+  fileTickets,
+  matches,
+  projectId,
+  onFilterByTicket
+}: HunkPopoverContentProps) {
   const matchedTickets = Array.from(
     new Map(
       matches
@@ -27,7 +35,7 @@ export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopo
       <div className="space-y-1">
         <p className="text-sm font-medium">No linked ticket yet</p>
         <p className="text-xs text-muted-foreground">
-          This changed line does not map to a review ticket yet.
+          No agent has recorded a rationale for this line yet.
         </p>
       </div>
     );
@@ -47,8 +55,8 @@ export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopo
         </p>
         <p className="text-xs text-muted-foreground">
           {matchedTickets.length > 0
-            ? 'This changed line falls within a review ticket-linked change.'
-            : 'This line has no direct match, so showing the file-level review tickets instead.'}
+            ? 'An agent attributed this hunk to the ticket below.'
+            : 'No rationale targets this exact hunk, so showing the file-level tickets instead.'}
         </p>
       </div>
 
@@ -66,6 +74,18 @@ export function HunkPopoverContent({ fileTickets, matches, projectId }: HunkPopo
                 <Badge variant="outline" className="rounded-full text-[10px]">
                   {ticket.status}
                 </Badge>
+              ) : null}
+              {onFilterByTicket ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-6 gap-1 px-2 text-[10px]"
+                  onClick={() => onFilterByTicket(ticket.id)}
+                >
+                  <Filter className="h-3 w-3" />
+                  Filter list
+                </Button>
               ) : null}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">

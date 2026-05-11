@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605111118.0] - 2026-05-11:11:18
+
+### Added
+- Deep-link **Current Changes** with repeatable `?ticket=` query params (alongside `?file=`) and keep multi-ticket filters in sync with the URL.
+- Add **View in Current Changes** and per-file **Open diff** links from the ticket live file-change list so you can jump straight to the project diff with the ticket (and file path) pre-selected.
+- Show per-ticket **file counts** in the Current Changes filter chips and add **filter-from-diff** controls on the diff header, secondary ticket badges, and hunk attribution popovers.
+- Set Next.js `metadataBase` from **`NEXT_PUBLIC_SITE_URL`**, then **`VERCEL_URL`**, then localhost via **`getSiteMetadataBaseUrl`** so absolute Open Graph and metadata URLs resolve correctly per deployment.
+
+### Fixed
+- Resolve protocol OAuth **organization scope from the ticket row** for UUID ticket ids (with stricter `org:sequence` parsing) so launches are not rejected when a cached credential targets a different organization than the ticket’s org.
+- When the launch context response includes a human-readable ticket id, set **`OVERLORD_ORGANIZATION_ID`** in the Electron agent environment so child processes align with that ticket’s organization.
+- Treat organization **cancelled** statuses like completed when **excluding finished tickets** from file-attribution and file-changes responses so cancelled work does not appear in active-change views.
+
+### Changed
+- Show file-change rationales for tickets in **any status** on Current Changes (not only review), with hunk popover copy that describes attribution instead of review-only language.
+- Automatically **prune stale ticket filter selections** after status and rationale queries settle so orphan filters cannot empty the file list after navigation or refresh.
+- Use **308 Permanent Redirect** for canonical host normalization in the Supabase session proxy so clients treat the canonical URL consistently.
+
+### Security
+- None.
+
+### Test
+- Add coverage for **`getSiteMetadataBaseUrl`** and Current Changes **view-model** helpers; extend Supabase proxy session tests for canonical redirect behavior.
+
+### Documentation
+- Add **`docs/jujustu-integration.md`** describing managed Jujutsu snapshots, on-disk layout, and how change-tracking maps to `file_changes`.
+
+### Chore
+- Bump workspace version to **`5.2605111118.0`** and **`overlord-cli`** to **`0.2605111118.0`**; refresh iOS Xcode project metadata for the release cycle.
+
 ## [5.2605111015.0] - 2026-05-11:10:15
 
 ### Added

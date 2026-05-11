@@ -2,7 +2,10 @@ import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
-import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import {
+  resolveAgentToken,
+  resolveProtocolOrganizationHintForTicketId
+} from '@/lib/overlord/protocol-auth';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -23,20 +26,14 @@ import { createServiceRoleClient } from '@/supabase/utils/service-role';
  *
  * Auth: Bearer <OAuth access token>.
  */
-function organizationIdFromTicketId(ticketId: string): number | null {
-  const [organizationPart, _ticketSequencePart, ...rest] = ticketId.trim().split(':');
-  if (rest.length > 0) return null;
-  const parsed = Number.parseInt(organizationPart ?? '', 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
 export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawTicketId = searchParams.get('ticketId');
-  const authResult = await resolveAgentToken(
-    request,
-    rawTicketId ? organizationIdFromTicketId(rawTicketId) : null
-  );
+  const organizationHint =
+    rawTicketId && rawTicketId.trim().length > 0
+      ? await resolveProtocolOrganizationHintForTicketId({ ticketId: rawTicketId.trim() })
+      : null;
+  const authResult = await resolveAgentToken(request, organizationHint);
   if (authResult.error) return authResult.error;
 
   const { organizationId, userId } = authResult.context;

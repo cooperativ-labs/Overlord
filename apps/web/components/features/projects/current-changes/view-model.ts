@@ -45,10 +45,6 @@ function uniqueTickets(relatedRationales: FileChangeRecord[]): TicketSummary[] {
   return [...ticketMap.values()];
 }
 
-function isReviewTicket(rationale: FileChangeRecord): boolean {
-  return rationale.ticket?.status === 'review';
-}
-
 export function buildEnrichedCurrentChangeFiles(args: {
   files: GitStatusFile[];
   rationales: FileChangeRecord[];
@@ -58,7 +54,7 @@ export function buildEnrichedCurrentChangeFiles(args: {
   return files.map(file => {
     const paths = new Set(candidatePaths(file));
     const relatedRationales = rationales
-      .filter(rationale => paths.has(rationale.file_path) && isReviewTicket(rationale))
+      .filter(rationale => paths.has(rationale.file_path) && Boolean(rationale.ticket))
       .sort(compareNewestFirst);
     const tickets = uniqueTickets(relatedRationales);
     const primaryFileChange = relatedRationales[0] ?? null;
@@ -75,4 +71,55 @@ export function buildEnrichedCurrentChangeFiles(args: {
       tickets
     };
   });
+}
+
+export function countFilesPerTicket(
+  enrichedFiles: EnrichedCurrentChangeFile[]
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const enriched of enrichedFiles) {
+    const seenForFile = new Set<string>();
+    for (const ticket of enriched.tickets) {
+      if (seenForFile.has(ticket.id)) continue;
+      seenForFile.add(ticket.id);
+      counts.set(ticket.id, (counts.get(ticket.id) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+export function ticketIdsTouchingCurrentChanges(
+  enrichedFiles: EnrichedCurrentChangeFile[]
+): Set<string> {
+  const ids = new Set<string>();
+  for (const file of enrichedFiles) {
+    for (const ticket of file.tickets) {
+      ids.add(ticket.id);
+    }
+  }
+  return ids;
+}
+
+export function ticketFilterSelectionsEqual(
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const id of left) {
+    if (!right.has(id)) return false;
+  }
+  return true;
+}
+
+export function pruneTicketFilterSelection(args: {
+  selectedTicketIds: ReadonlySet<string>;
+  validTicketIds: ReadonlySet<string>;
+}): Set<string> {
+  const next = new Set<string>();
+  for (const id of args.selectedTicketIds) {
+    if (args.validTicketIds.has(id)) {
+      next.add(id);
+    }
+  }
+  return next;
 }

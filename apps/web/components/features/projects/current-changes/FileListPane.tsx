@@ -8,6 +8,7 @@ import { FileListItem } from './FileListItem';
 import type { EnrichedCurrentChangeFile, GitStatusResponse, TicketSummary } from './types';
 
 type FileListPaneProps = {
+  fileCountsByTicketId: Map<string, number>;
   filteredFiles: EnrichedCurrentChangeFile[];
   selectedPath: string | null;
   selectedTicketIds: Set<string>;
@@ -20,6 +21,7 @@ type FileListPaneProps = {
 };
 
 export function FileListPane({
+  fileCountsByTicketId,
   filteredFiles,
   selectedPath,
   selectedTicketIds,
@@ -57,16 +59,22 @@ export function FileListPane({
 
       {filterActive ? (
         <div className="flex flex-wrap items-center gap-1 border-b bg-muted/30 px-2 py-1.5">
-          {activeFilterTickets.map(ticket => (
-            <span
-              key={ticket.id}
-              className="inline-flex max-w-[180px] items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary"
-            >
-              <span className="truncate">
-                {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
+          {activeFilterTickets.map(ticket => {
+            const fileCount = fileCountsByTicketId.get(ticket.id) ?? 0;
+            return (
+              <span
+                key={ticket.id}
+                className="inline-flex max-w-[200px] items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary"
+              >
+                <span className="truncate">
+                  {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}
+                </span>
+                <span className="shrink-0 text-muted-foreground">
+                  {fileCount} {fileCount === 1 ? 'file' : 'files'}
+                </span>
               </span>
-            </span>
-          ))}
+            );
+          })}
           <Button
             type="button"
             variant="ghost"

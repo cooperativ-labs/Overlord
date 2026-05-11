@@ -1,5 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
-import type { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 
 import { getElectronUserFromRequest } from '@/lib/auth/get-electron-user';
 import {
@@ -106,6 +106,38 @@ describe('Electron proxy bearer enforcement', () => {
     expect(response.status).toBe(401);
     expect(response.headers.get('WWW-Authenticate')).toBe('Bearer error="invalid_token"');
     expect(createServerClientMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('apex to www canonical redirect', () => {
+  const originalSite = process.env.NEXT_PUBLIC_SITE_URL;
+  const originalOverlord = process.env.OVERLORD_URL;
+
+  beforeEach(() => {
+    delete process.env.OVERLORD_URL;
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://www.ovld.ai';
+  });
+
+  afterEach(() => {
+    if (originalSite === undefined) {
+      delete process.env.NEXT_PUBLIC_SITE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_SITE_URL = originalSite;
+    }
+    if (originalOverlord === undefined) {
+      delete process.env.OVERLORD_URL;
+    } else {
+      process.env.OVERLORD_URL = originalOverlord;
+    }
+  });
+
+  it('returns a permanent redirect to www preserving path and query', async () => {
+    const request = new NextRequest(new URL('https://ovld.ai/docs/quick-start?x=1'));
+
+    const response = await updateSession(request);
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe('https://www.ovld.ai/docs/quick-start?x=1');
   });
 });
 

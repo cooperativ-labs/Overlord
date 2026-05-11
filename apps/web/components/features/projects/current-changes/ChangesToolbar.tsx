@@ -32,6 +32,7 @@ type ChangesToolbarProps = {
   projectName: string;
   tickets: TicketSummary[];
   selectedTicketIds: Set<string>;
+  fileCountsByTicketId: Map<string, number>;
   onRefresh: () => void;
   onToggleTicketFilter: (ticketId: string) => void;
   onClearTicketFilter: () => void;
@@ -45,6 +46,7 @@ export function ChangesToolbar({
   projectName,
   tickets,
   selectedTicketIds,
+  fileCountsByTicketId,
   onRefresh,
   onToggleTicketFilter,
   onClearTicketFilter
@@ -95,6 +97,7 @@ export function ChangesToolbar({
         </Popover>
 
         <TicketFilterPopover
+          fileCountsByTicketId={fileCountsByTicketId}
           selectedTicketIds={selectedTicketIds}
           tickets={tickets}
           onClear={onClearTicketFilter}

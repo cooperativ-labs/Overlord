@@ -14,7 +14,10 @@ import {
 import { getOverlordMcpUrl, getPlatformUrl } from '@/lib/env';
 import type { InstructionMode } from '@/lib/overlord/agent-capabilities';
 import { buildLaunchCommands } from '@/lib/overlord/launch-commands';
-import { resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import {
+  resolveAgentToken,
+  resolveProtocolOrganizationHintForTicketId
+} from '@/lib/overlord/protocol-auth';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import {
   buildTicketPromptMarkdown,
@@ -52,7 +55,13 @@ function ticketSequenceFromTicketId(ticketId: string): number | null {
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const { ticketId: rawTicketId } = await params;
-    const authResult = await resolveAgentToken(request, organizationIdFromTicketId(rawTicketId));
+    const organizationHint = await resolveProtocolOrganizationHintForTicketId({
+      ticketId: rawTicketId
+    });
+    const authResult = await resolveAgentToken(
+      request,
+      organizationHint ?? organizationIdFromTicketId(rawTicketId)
+    );
     if (authResult.error) return authResult.error;
 
     const { organizationId } = authResult.context;
@@ -282,7 +291,13 @@ export async function GET(request: Request, { params }: RouteContext) {
 // Convenience: also expose the launch commands so the UI can fetch them
 export async function POST(request: Request, { params }: RouteContext) {
   const { ticketId: rawTicketId } = await params;
-  const authResult = await resolveAgentToken(request, organizationIdFromTicketId(rawTicketId));
+  const organizationHint = await resolveProtocolOrganizationHintForTicketId({
+    ticketId: rawTicketId
+  });
+  const authResult = await resolveAgentToken(
+    request,
+    organizationHint ?? organizationIdFromTicketId(rawTicketId)
+  );
   if (authResult.error) return authResult.error;
 
   const { organizationId } = authResult.context;

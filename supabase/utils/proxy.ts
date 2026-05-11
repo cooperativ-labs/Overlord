@@ -93,7 +93,7 @@ export async function updateSession(request: NextRequest) {
     const canonical = new URL(getPlatformUrl());
     url.protocol = canonical.protocol;
     url.hostname = CANONICAL_HOST;
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, 308);
   }
 
   const pathname = request.nextUrl.pathname;

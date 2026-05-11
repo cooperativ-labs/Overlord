@@ -1,14 +1,22 @@
 'use client';
 
 import { FileCode2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ChangesToolbar } from '@/components/features/projects/current-changes/ChangesToolbar';
 import { DiffPane } from '@/components/features/projects/current-changes/DiffPane';
 import { FileListPane } from '@/components/features/projects/current-changes/FileListPane';
+import { getRationalePaths } from '@/components/features/projects/current-changes/helpers';
 import type { EnrichedCurrentChangeFile } from '@/components/features/projects/current-changes/types';
 import { UnavailableStateCard } from '@/components/features/projects/current-changes/UnavailableStateCard';
-import { buildEnrichedCurrentChangeFiles } from '@/components/features/projects/current-changes/view-model';
+import {
+  buildEnrichedCurrentChangeFiles,
+  countFilesPerTicket,
+  pruneTicketFilterSelection,
+  ticketFilterSelectionsEqual,
+  ticketIdsTouchingCurrentChanges
+} from '@/components/features/projects/current-changes/view-model';
 import { useElectron } from '@/components/features/terminal/useElectron';
 import {
   useCurrentChangeFileChanges,
@@ -25,6 +33,7 @@ type CurrentChangesPageProps = {
   projectName: string;
   workingDirectory: string | null;
   initialFilePath?: string | null;
+  initialTicketIds?: string[];
 };
 
 export type DiffViewMode = 'inline' | 'side-by-side';
@@ -33,11 +42,17 @@ export function CurrentChangesPage({
   projectId,
   projectName,
   workingDirectory,
-  initialFilePath
+  initialFilePath,
+  initialTicketIds
 }: CurrentChangesPageProps) {
   const { api, isElectron } = useElectron();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(new Set());
+  const [selectedTicketIds, setSelectedTicketIds] = useState<Set<string>>(
+    () => new Set(initialTicketIds ?? [])
+  );
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('inline');
   const hasLocalDirectory = !!workingDirectory && !isWorkingDirectoryNone(workingDirectory);
   const canInspectChanges = hasLocalDirectory;
@@ -108,6 +123,22 @@ export function CurrentChangesPage({
     return [...ticketMap.values()].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
   }, [enrichedFiles]);
 
+  const fileCountsByTicketId = useMemo(() => countFilesPerTicket(enrichedFiles), [enrichedFiles]);
+
+  const ticketIdsTouchingChanges = useMemo(
+    () => ticketIdsTouchingCurrentChanges(enrichedFiles),
+    [enrichedFiles]
+  );
+
+  const rationalePathCount = useMemo(
+    () => getRationalePaths(statusResponse?.files ?? []).length,
+    [statusResponse?.files]
+  );
+
+  const canPruneStaleTicketFilters =
+    (statusQuery.isFetched || statusQuery.isError) &&
+    (rationalePathCount === 0 ? true : fileChangesQuery.isFetched || fileChangesQuery.isError);
+
   const filteredFiles = useMemo(() => {
     if (selectedTicketIds.size === 0) return enrichedFiles;
     return enrichedFiles.filter(file =>
@@ -115,21 +146,72 @@ export function CurrentChangesPage({
     );
   }, [enrichedFiles, selectedTicketIds]);
 
-  function toggleTicketFilter(ticketId: string) {
-    setSelectedTicketIds(prev => {
-      const next = new Set(prev);
-      if (next.has(ticketId)) {
-        next.delete(ticketId);
-      } else {
-        next.add(ticketId);
+  const syncTicketSelectionToUrl = useCallback(
+    (next: Set<string>) => {
+      if (!pathname) return;
+      const nextParams = new URLSearchParams(searchParams?.toString() ?? '');
+      nextParams.delete('ticket');
+      for (const ticketId of next) {
+        nextParams.append('ticket', ticketId);
+      }
+      const queryString = nextParams.toString();
+      const nextHref = queryString ? `${pathname}?${queryString}` : pathname;
+      router.replace(nextHref, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  const setTicketSelection = useCallback(
+    (updater: (current: Set<string>) => Set<string>) => {
+      setSelectedTicketIds(previous => {
+        const next = updater(previous);
+        syncTicketSelectionToUrl(next);
+        return next;
+      });
+    },
+    [syncTicketSelectionToUrl]
+  );
+
+  const toggleTicketFilter = useCallback(
+    (ticketId: string) => {
+      setTicketSelection(previous => {
+        const next = new Set(previous);
+        if (next.has(ticketId)) {
+          next.delete(ticketId);
+        } else {
+          next.add(ticketId);
+        }
+        return next;
+      });
+    },
+    [setTicketSelection]
+  );
+
+  const clearTicketFilter = useCallback(() => {
+    setTicketSelection(() => new Set());
+  }, [setTicketSelection]);
+
+  const focusTicketFilter = useCallback(
+    (ticketId: string) => {
+      setTicketSelection(() => new Set([ticketId]));
+    },
+    [setTicketSelection]
+  );
+
+  useEffect(() => {
+    if (!canPruneStaleTicketFilters) return;
+
+    setTicketSelection(current => {
+      const next = pruneTicketFilterSelection({
+        selectedTicketIds: current,
+        validTicketIds: ticketIdsTouchingChanges
+      });
+      if (ticketFilterSelectionsEqual(current, next)) {
+        return current;
       }
       return next;
     });
-  }
-
-  function clearTicketFilter() {
-    setSelectedTicketIds(new Set());
-  }
+  }, [canPruneStaleTicketFilters, setTicketSelection, ticketIdsTouchingChanges]);
 
   useEffect(() => {
     const result = statusResponse;
@@ -190,6 +272,7 @@ export function CurrentChangesPage({
         projectName={projectName}
         tickets={uniqueTickets}
         selectedTicketIds={selectedTicketIds}
+        fileCountsByTicketId={fileCountsByTicketId}
         onRefresh={() => void refreshAll()}
         onToggleTicketFilter={toggleTicketFilter}
         onClearTicketFilter={clearTicketFilter}
@@ -203,6 +286,7 @@ export function CurrentChangesPage({
 
       <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)]">
         <FileListPane
+          fileCountsByTicketId={fileCountsByTicketId}
           filteredFiles={filteredFiles}
           selectedPath={selectedPath}
           selectedTicketIds={selectedTicketIds}
@@ -223,7 +307,10 @@ export function CurrentChangesPage({
               isLoading={diffState.isLoading}
               projectId={projectId}
               selectedFilePath={selectedFile.path}
+              selectedTicketIds={selectedTicketIds}
               viewMode={diffViewMode}
+              onFilterByTicket={focusTicketFilter}
+              onToggleTicketFilter={toggleTicketFilter}
               onViewModeChange={setDiffViewMode}
             />
           ) : (

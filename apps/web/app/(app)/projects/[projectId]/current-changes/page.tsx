@@ -5,13 +5,20 @@ import { createClientForRequest } from '@/supabase/utils/server';
 
 type PageProps = {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ file?: string | string[] }>;
+  searchParams: Promise<{ file?: string | string[]; ticket?: string | string[] }>;
 };
+
+function toStringList(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : [value];
+  return [...new Set(list.map(item => item.trim()).filter(Boolean))];
+}
 
 export default async function ProjectCurrentChangesPage({ params, searchParams }: PageProps) {
   const { projectId } = await params;
-  const { file } = await searchParams;
+  const { file, ticket } = await searchParams;
   const initialFilePath = Array.isArray(file) ? file[0] : file;
+  const initialTicketIds = toStringList(ticket);
   const supabase = await createClientForRequest();
   const {
     data: { user }
@@ -44,6 +51,7 @@ export default async function ProjectCurrentChangesPage({ params, searchParams }
       projectName={project.name}
       workingDirectory={workingDirectory}
       initialFilePath={initialFilePath ?? null}
+      initialTicketIds={initialTicketIds}
     />
   );
 }

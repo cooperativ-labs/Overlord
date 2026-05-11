@@ -2,19 +2,15 @@ import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 import { ZodType } from 'zod';
 
-import { type ProtocolAuthContext, resolveAgentToken } from '@/lib/overlord/protocol-auth';
+import {
+  type ProtocolAuthContext,
+  resolveAgentToken,
+  resolveProtocolOrganizationHintForTicketId
+} from '@/lib/overlord/protocol-auth';
 
 type ParseOk<T> = { ok: true; data: T; tokenContext: ProtocolAuthContext };
 type ParseError = { ok: false; errorResponse: NextResponse };
 export type ParseResult<T> = ParseOk<T> | ParseError;
-
-function organizationIdFromTicketId(ticketId: unknown): number | null {
-  if (typeof ticketId !== 'string') return null;
-  const [organizationPart, _ticketSequencePart, ...rest] = ticketId.trim().split(':');
-  if (rest.length > 0) return null;
-  const parsed = Number.parseInt(organizationPart ?? '', 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 export async function parseProtocolBody<T>(
   request: Request,
@@ -22,7 +18,12 @@ export async function parseProtocolBody<T>(
 ): Promise<ParseResult<T>> {
   try {
     const body = await request.json();
-    const authResult = await resolveAgentToken(request, organizationIdFromTicketId(body?.ticketId));
+    const rawTicketId = typeof body?.ticketId === 'string' ? body.ticketId.trim() : '';
+    const organizationHint =
+      rawTicketId.length > 0
+        ? await resolveProtocolOrganizationHintForTicketId({ ticketId: rawTicketId })
+        : null;
+    const authResult = await resolveAgentToken(request, organizationHint);
     if (authResult.error) {
       return { ok: false, errorResponse: authResult.error };
     }

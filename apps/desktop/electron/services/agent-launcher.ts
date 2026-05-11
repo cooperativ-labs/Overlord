@@ -411,6 +411,10 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
   const humanTicketId = response.headers.get('X-Ticket-Id');
   if (humanTicketId) {
     launchEnv.TICKET_ID = humanTicketId;
+    const orgFromHumanTicketId = organizationIdFromTicketId(humanTicketId);
+    if (orgFromHumanTicketId !== null) {
+      launchEnv.OVERLORD_ORGANIZATION_ID = String(orgFromHumanTicketId);
+    }
   }
 
   // Use the project's working directory from the API if the caller didn't provide one

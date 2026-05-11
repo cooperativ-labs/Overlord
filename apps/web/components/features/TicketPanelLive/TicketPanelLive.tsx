@@ -44,6 +44,7 @@ type TicketPanelLiveProps = {
 
 export function TicketPanelLive({
   ticketId,
+  projectId,
   editorScheme,
   workspaceRoot,
   claudeCommand: _claudeCommand,
@@ -156,6 +157,8 @@ export function TicketPanelLive({
             <LiveFileChanges
               editorScheme={editorScheme}
               fileChanges={fileChanges}
+              projectId={projectId}
+              ticketId={ticketId}
               workspaceRoot={workspaceRoot}
             />
             <LiveArtifacts

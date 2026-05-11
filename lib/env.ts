@@ -37,6 +37,25 @@ export function getPlatformUrl(providedURL?: string | null): string {
   return value;
 }
 
+/**
+ * Public site origin for Next.js metadataBase and other SEO absolutization.
+ * Prefer NEXT_PUBLIC_SITE_URL, then the Vercel deployment host, then local dev.
+ */
+export function getSiteMetadataBaseUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (explicit) {
+    return new URL(explicit).origin;
+  }
+
+  const vercelHost = process.env.VERCEL_URL?.trim();
+  if (vercelHost) {
+    const host = vercelHost.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    return `https://${host}`;
+  }
+
+  return 'http://localhost:3000';
+}
+
 export function getSupabaseCookieOptions(providedURL?: string | null): CookieOptions {
   const platformUrl = new URL(getPlatformUrl(providedURL));
   const isOvldHost = platformUrl.hostname === 'ovld.ai' || platformUrl.hostname === 'www.ovld.ai';

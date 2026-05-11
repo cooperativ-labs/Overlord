@@ -6,9 +6,11 @@ import { Toaster } from 'sonner';
 
 import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
 import { ThemeProvider } from '@/components/theme-provider';
+import { getSiteMetadataBaseUrl } from '@/lib/env';
 import { displayFont, monoFont } from '@/lib/fonts';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteMetadataBaseUrl()),
   title: 'Overlord AI',
   description: 'Stop juggling AI agents. Organize and launch agent work with Overlord.',
   icons: {
