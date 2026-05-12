@@ -7,7 +7,7 @@
  * delivery or review-status transitions.
  */
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
 import {
@@ -317,25 +317,107 @@ function repairJsonText(text: string): string {
     .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_-]*)(\s*:)/g, '$1"$2"$3');
 }
 
-function parseGeminiJson(text: string): unknown | null {
-  const candidates = [
-    text,
-    stripJsonFences(text),
-    extractJsonObject(text),
-    repairJsonText(stripJsonFences(extractJsonObject(text))),
-    repairJsonText(text)
+type ParseAttempt = { strategy: string; error: string };
+
+function parseGeminiJson(text: string): {
+  value: unknown | null;
+  strategy: string | null;
+  attempts: ParseAttempt[];
+} {
+  const candidates: Array<{ strategy: string; text: string }> = [
+    { strategy: 'raw', text },
+    { strategy: 'strip-fences', text: stripJsonFences(text) },
+    { strategy: 'extract-object', text: extractJsonObject(text) },
+    {
+      strategy: 'repair-stripped-extracted',
+      text: repairJsonText(stripJsonFences(extractJsonObject(text)))
+    },
+    { strategy: 'repair-raw', text: repairJsonText(text) }
   ];
 
+  const attempts: ParseAttempt[] = [];
   for (const candidate of candidates) {
     try {
-      return JSON.parse(candidate);
-    } catch {
-      // Try the next candidate.
+      return { value: JSON.parse(candidate.text), strategy: candidate.strategy, attempts };
+    } catch (err) {
+      attempts.push({
+        strategy: candidate.strategy,
+        error: err instanceof Error ? err.message : String(err)
+      });
     }
   }
 
-  return null;
+  return { value: null, strategy: null, attempts };
 }
+
+function truncate(text: string, max = 2_000): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}…[${text.length - max} more chars]`;
+}
+
+const FEED_POST_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    summary: { type: Type.STRING },
+    body: { type: Type.STRING },
+    tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+    impact_level: { type: Type.STRING, enum: ['minor', 'notable', 'significant'] },
+    tradeoffs: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          decision: { type: Type.STRING },
+          alternatives_considered: { type: Type.STRING },
+          rationale: { type: Type.STRING }
+        },
+        required: ['decision', 'alternatives_considered', 'rationale']
+      }
+    },
+    human_actions: { type: Type.ARRAY, items: { type: Type.STRING } },
+    files_touched: { type: Type.ARRAY, items: { type: Type.STRING } },
+    tickets_created: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          sequence: { type: Type.NUMBER },
+          title: { type: Type.STRING }
+        },
+        required: ['id', 'sequence', 'title']
+      }
+    },
+    objective_sections: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          objective_id: { type: Type.STRING },
+          title: { type: Type.STRING },
+          takeaway: { type: Type.STRING },
+          body: { type: Type.ARRAY, items: { type: Type.STRING } },
+          action_required: { type: Type.ARRAY, items: { type: Type.STRING } },
+          tradeoffs: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                decision: { type: Type.STRING },
+                alternatives_considered: { type: Type.STRING },
+                rationale: { type: Type.STRING }
+              },
+              required: ['decision', 'alternatives_considered', 'rationale']
+            }
+          }
+        },
+        required: ['objective_id', 'body']
+      }
+    }
+  },
+  required: ['title', 'summary', 'tags', 'impact_level', 'objective_sections']
+} as const;
 
 async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
   if (!gemini) {
@@ -343,6 +425,7 @@ async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
     return null;
   }
 
+  const startedAt = Date.now();
   try {
     const response = await gemini.models.generateContent({
       model: GEMINI_MODEL,
@@ -350,26 +433,81 @@ async function callGemini(prompt: string): Promise<FeedPostPayload | null> {
       config: {
         systemInstruction: FEED_POST_SYSTEM_INSTRUCTION,
         responseMimeType: 'application/json',
+        responseSchema: FEED_POST_RESPONSE_SCHEMA,
         temperature: 0.3,
-        maxOutputTokens: 2048
+        maxOutputTokens: 8192
       }
     });
 
+    const elapsedMs = Date.now() - startedAt;
     const text = response.text ?? '';
+    const candidate = response.candidates?.[0];
+    const finishReason = candidate?.finishReason ?? null;
+    const safetyRatings = candidate?.safetyRatings ?? null;
+    const promptFeedback = response.promptFeedback ?? null;
+    const usage = response.usageMetadata ?? null;
+
     if (!text) {
-      console.error('[generate-feed-post] No text in Gemini response');
+      console.error('[generate-feed-post] Empty Gemini response', {
+        model: GEMINI_MODEL,
+        elapsedMs,
+        finishReason,
+        promptFeedback,
+        safetyRatings,
+        usage
+      });
       return null;
     }
 
-    const parsed = parseGeminiJson(text);
+    const { value: parsed, strategy, attempts } = parseGeminiJson(text);
     if (!parsed) {
-      console.error('[generate-feed-post] Gemini response could not be parsed as JSON');
+      console.error('[generate-feed-post] Gemini response could not be parsed as JSON', {
+        model: GEMINI_MODEL,
+        elapsedMs,
+        finishReason,
+        textLength: text.length,
+        textPreview: truncate(text),
+        attempts,
+        usage
+      });
       return null;
     }
 
-    return normalizeFeedPostPayload(parsed);
+    if (strategy && strategy !== 'raw') {
+      console.warn('[generate-feed-post] Parsed Gemini JSON via fallback strategy', {
+        strategy,
+        textLength: text.length,
+        finishReason
+      });
+    }
+
+    const normalized = normalizeFeedPostPayload(parsed);
+    if (!normalized) {
+      console.error('[generate-feed-post] Gemini JSON parsed but failed validation', {
+        model: GEMINI_MODEL,
+        finishReason,
+        textLength: text.length,
+        textPreview: truncate(text)
+      });
+      return null;
+    }
+
+    console.log('[generate-feed-post] Gemini synthesis complete', {
+      model: GEMINI_MODEL,
+      elapsedMs,
+      finishReason,
+      textLength: text.length,
+      objectiveSections: normalized.objective_sections.length,
+      usage
+    });
+
+    return normalized;
   } catch (err) {
-    console.error('[generate-feed-post] Gemini generation failed:', err);
+    console.error('[generate-feed-post] Gemini generation failed', {
+      model: GEMINI_MODEL,
+      elapsedMs: Date.now() - startedAt,
+      error: err instanceof Error ? { message: err.message, stack: err.stack } : String(err)
+    });
     return null;
   }
 }
