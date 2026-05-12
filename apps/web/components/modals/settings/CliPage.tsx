@@ -206,22 +206,20 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     agentKey: 'claude',
     label: 'Claude plugin',
     description:
-      'Prepares the Overlord v4 Claude plugin. Overlord launches Claude with the plugin loaded, and this migration removes v3.25 home-directory skill and hook files.',
+      'Gives Claude Code access to Overlord tickets, workflow skills, and mid-session slash commands so it can receive and deliver tickets directly from your terminal.',
     kind: 'bundle',
     bundleAgent: 'claude',
-    supportNote:
-      'Migration is needed when upgrading from desktop app v3.25.0 to v4.0.0 or later. The plugin is loaded by `ovld launch claude` and desktop launches with `claude --plugin-dir`.'
+    supportNote: 'https://www.ovld.ai/docs/surfaces/agent-plugins?tab=claude-desktop'
   },
   {
     key: 'codex:overlord-plugin',
     agentKey: 'codex',
     label: 'Chat plugin',
     description:
-      'Installs the Overlord chat plugin into your home-local Codex plugin directories, bundles the Codex workflow skill, migrates legacy Codex bundle config if present, and manages the local permission rules Codex needs for Overlord protocol commands.',
+      'Gives Codex CLI access to Overlord tickets, workflow skills, and permission rules so it can receive and deliver tickets directly from your terminal.',
     kind: 'service',
     serviceKey: 'overlord-plugin',
-    supportNote:
-      'Managed by the desktop app in ~/.agents/plugins, ~/.codex/plugins, and ~/.codex/rules/default.rules. Requires ovld to be installed on PATH.'
+    supportNote: 'https://www.ovld.ai/docs/surfaces/agent-plugins?tab=codex-desktop'
   },
   {
     key: 'cursor:bundle',
@@ -1125,7 +1123,18 @@ export function CliPage({ open }: { open: boolean }) {
                               <p className="text-xs text-muted-foreground">{option.description}</p>
                               {option.supportNote ? (
                                 <p className="text-xs text-muted-foreground">
-                                  {option.supportNote}
+                                  {option.supportNote.startsWith('http') ? (
+                                    <Link
+                                      href={option.supportNote}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="underline underline-offset-4"
+                                    >
+                                      Learn more
+                                    </Link>
+                                  ) : (
+                                    option.supportNote
+                                  )}
                                 </p>
                               ) : null}
                               {details ? (
