@@ -146,7 +146,7 @@ export default function TicketListCard({
           aria-label={`Open ticket: ${getDisplayTitle(ticket)}`}
           style={sortableStyle}
           className={cn(
-            'group relative flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors hover:bg-muted/40 hover:border-border',
+            'group relative flex cursor-pointer items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left transition-colors hover:bg-muted/40 hover:border-border overflow-hidden',
             isAgentRunning && 'animate-pulse',
             isDragging && 'opacity-40',
             isSelected && 'bg-muted/50 border-border',
