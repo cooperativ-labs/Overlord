@@ -25,6 +25,17 @@ function normalizeAgentText(value: string) {
   return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\0/g, '');
 }
 
+/** Same contract as `lib/overlord/is-overlord-agent-launch-prompt.ts` (kept in sync for Deno). */
+function isLikelyOverlordAgentLaunchPrompt(prompt: string): boolean {
+  const p = prompt.trim();
+  if (p.length < 80) return false;
+  if (p.includes('# Overlord Agent Instructions')) return true;
+  if (p.includes('You are an AI coding agent working on ticket') && p.includes('## Task')) {
+    return true;
+  }
+  return false;
+}
+
 export async function handleRecordHookEvent(
   supabase: SupabaseClient,
   args: any,
@@ -33,6 +44,18 @@ export async function handleRecordHookEvent(
   const { hookType, prompt, ticketId: rawTicketId, turnIndex } = args;
 
   if (hookType === 'UserPromptSubmit' && turnIndex === 0) {
+    return toolOk({ ok: true });
+  }
+
+  // Both the Claude Code and legacy Cursor hooks send the initial injected ticket/objective
+  // prompt as turnIndex 0 (filtered above) but older Cursor builds sent it at turnIndex 1.
+  // This catches that legacy case to prevent mis-recording the launch prompt as user_follow_up.
+  if (
+    hookType === 'UserPromptSubmit' &&
+    turnIndex === 1 &&
+    typeof prompt === 'string' &&
+    isLikelyOverlordAgentLaunchPrompt(prompt)
+  ) {
     return toolOk({ ok: true });
   }
 

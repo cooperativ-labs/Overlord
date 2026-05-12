@@ -24,6 +24,12 @@ type ObjectiveRow = Pick<
   | 'assigned_agent'
 >;
 
+type ObjectiveCheckpoint = {
+  git_ref_name: string | null;
+  git_commit_id: string | null;
+  checkpoint_kind: string;
+};
+
 type TicketObjectivesSectionProps = {
   ticketId: string;
   organizationId?: number;
@@ -38,6 +44,7 @@ type TicketObjectivesSectionProps = {
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
   hasProjectWorkingDirectory?: boolean;
+  checkpointsByObjectiveId?: Record<string, ObjectiveCheckpoint>;
 };
 
 export function TicketObjectivesSection({
@@ -53,7 +60,8 @@ export function TicketObjectivesSection({
   agentCommands,
   sshCommand,
   remoteWorkingDirectory,
-  hasProjectWorkingDirectory
+  hasProjectWorkingDirectory,
+  checkpointsByObjectiveId
 }: TicketObjectivesSectionProps) {
   const objectives = useTicketObjectivesRealtime({
     ticketId,
@@ -90,6 +98,7 @@ export function TicketObjectivesSection({
                 attachments={objectiveAttachments.filter(
                   attachment => attachment.objectiveId === objective.id
                 )}
+                checkpoint={checkpointsByObjectiveId?.[objective.id] ?? null}
               />
             ))}
           </div>

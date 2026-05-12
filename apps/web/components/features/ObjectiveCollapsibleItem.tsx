@@ -21,18 +21,26 @@ type ObjectiveRow = Pick<
   'id' | 'objective' | 'created_at' | 'title' | 'state' | 'agent_identifier' | 'model_identifier'
 >;
 
+type ObjectiveCheckpoint = {
+  git_ref_name: string | null;
+  git_commit_id: string | null;
+  checkpoint_kind: string;
+};
+
 type ObjectiveCollapsibleItemProps = {
   objective: ObjectiveRow;
   index: number;
   ticketId: string;
   attachments: ObjectiveAttachment[];
+  checkpoint?: ObjectiveCheckpoint | null;
 };
 
 export function ObjectiveCollapsibleItem({
   objective,
   index,
   ticketId,
-  attachments
+  attachments,
+  checkpoint
 }: ObjectiveCollapsibleItemProps) {
   const objectiveTimestamp = new Date(objective.created_at).toLocaleString();
   const isExecuting = objective.state === 'executing';
@@ -124,6 +132,11 @@ export function ObjectiveCollapsibleItem({
             onDelete={handleDelete}
             onDismissUploadingItem={dismissUploadingItem}
           />
+          {checkpoint?.git_ref_name ? (
+            <p className="mt-2 font-mono text-[10px] text-muted-foreground/60 select-all">
+              {checkpoint.git_ref_name}
+            </p>
+          ) : null}
         </CollapsibleContent>
       </div>
     </Collapsible>

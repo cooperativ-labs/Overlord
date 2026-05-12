@@ -47,8 +47,8 @@ Priorities:
 - Emphasize tradeoffs, risks, and reviewer-relevant context.
 - Keep content concise and useful for humans scanning many updates. Use bullet points instead of long paragraphs.
 - Return only valid JSON that matches the requested shape.
-- Include human follow-up items ONLY for proactive tasks the human must do — e.g. creating an account, setting an API key, running a migration, deploying a function, adding an env variable, or configuring a service. Do NOT include instructions to manually test, verify, review code, or check that things work — those are implied.
-- When the prompt includes a CANDIDATE FOLLOW-UP ACTIONS block, treat those as deterministically-derived seeds for human_actions: include the relevant ones (rephrasing freely), drop any that are clearly not applicable to the actual changes, and only add new actions if the candidate list is missing something the human must proactively do.`;
+- Include human follow-up items ONLY for proactive tasks the human must do — e.g. creating an account, setting an API key, running a migration, deploying a function, adding an env variable, or configuring a service. Do NOT include instructions to manually test, verify, review code, or check that things work — those are implied. Put those items only under the matching objective's action_required array, not at ticket level.
+- When the prompt includes a CANDIDATE FOLLOW-UP ACTIONS block, treat those as deterministically-derived seeds for objective_sections[].action_required: place each relevant line on the objective it applies to (rephrase freely), drop any that clearly do not apply, and only add new actions if something the human must proactively do is missing.`;
 
 type GeneratedObjectiveSection = {
   objective_id: string;
@@ -156,30 +156,6 @@ function sanitizeStringArray(value: unknown, limit: number): string[] {
     .map(item => String(item).trim())
     .filter(Boolean)
     .slice(0, limit);
-}
-
-function sanitizeTradeoffs(value: unknown): FeedPostPayload['tradeoffs'] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map(item => {
-      if (!item || typeof item !== 'object') return null;
-
-      const tradeoff = item as Record<string, unknown>;
-      const decision = String(tradeoff.decision ?? '').trim();
-      const alternativesConsidered = String(tradeoff.alternatives_considered ?? '').trim();
-      const rationale = String(tradeoff.rationale ?? '').trim();
-
-      if (!decision || !alternativesConsidered || !rationale) return null;
-
-      return {
-        decision,
-        alternatives_considered: alternativesConsidered,
-        rationale
-      };
-    })
-    .filter((tradeoff): tradeoff is FeedPostPayload['tradeoffs'][number] => tradeoff !== null)
-    .slice(0, 10);
 }
 
 function sanitizeTicketsCreated(value: unknown): FeedPostPayload['tickets_created'] {
@@ -294,8 +270,8 @@ function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
     impact_level: ['minor', 'notable', 'significant'].includes(impactLevel)
       ? impactLevel
       : 'notable',
-    tradeoffs: sanitizeTradeoffs(parsed.tradeoffs),
-    human_actions: sanitizeStringArray(parsed.human_actions, 20),
+    tradeoffs: [],
+    human_actions: [],
     files_touched: sanitizeStringArray(parsed.files_touched, 50),
     tickets_created: sanitizeTicketsCreated(parsed.tickets_created),
     objective_sections: objectiveSections
@@ -374,19 +350,6 @@ const FEED_POST_RESPONSE_SCHEMA = {
     body: { type: Type.STRING },
     tags: { type: Type.ARRAY, items: { type: Type.STRING } },
     impact_level: { type: Type.STRING, enum: ['minor', 'notable', 'significant'] },
-    tradeoffs: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          decision: { type: Type.STRING },
-          alternatives_considered: { type: Type.STRING },
-          rationale: { type: Type.STRING }
-        },
-        required: ['decision', 'alternatives_considered', 'rationale']
-      }
-    },
-    human_actions: { type: Type.ARRAY, items: { type: Type.STRING } },
     files_touched: { type: Type.ARRAY, items: { type: Type.STRING } },
     tickets_created: {
       type: Type.ARRAY,
@@ -655,16 +618,14 @@ Respond with a single JSON object:
   "body": "Legacy compatibility field. You may repeat summary here; server code renders the final body.",
   "tags": ["array of tags like: bugfix, refactor, new-feature, tradeoff, blocker-resolved, test, docs, config, dependency, performance, action-required"],
   "impact_level": "minor or notable or significant",
-  "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}],
-  "human_actions": ["ONLY proactive tasks the human must do — e.g. create an account, set an API key, run a migration, add an env variable, deploy a function, repackage or recompile an app, configure a third-party service. Return an empty array if none."],
-      "files_touched": ["list/of/files.ts"],
-      "tickets_created": [{"id": "uuid", "sequence": 123, "title": "Ticket title"}],
+  "files_touched": ["list/of/files.ts"],
+  "tickets_created": [{"id": "uuid", "sequence": 123, "title": "Ticket title"}],
   "objective_sections": [{
     "objective_id": "uuid from OBJECTIVES",
     "title": "Short objective row title",
     "takeaway": "One-sentence scan summary for this objective row",
     "body": ["Detailed bullet for the drawer"],
-    "action_required": ["Objective-scoped proactive human task"],
+    "action_required": ["ONLY proactive tasks for this objective — e.g. create an account, set an API key, run a migration, add an env variable, deploy a function, configure a third-party service. Empty array if none for this objective."],
     "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}]
   }]
 }
@@ -672,10 +633,10 @@ Respond with a single JSON object:
 IMPORTANT INSTRUCTIONS:
 - Keep summary and each objective section under 300 words. Use bullet points, not paragraphs.
 - Return one objective_sections entry for each meaningful objective listed above, keyed by objective_id. Do not invent objective IDs.
-- Put human action items and tradeoffs under the objective they belong to. Also include them in the top-level human_actions/tradeoffs arrays for compatibility.
-- Surface tradeoffs prominently — they are the most valuable part. Be clear about which direction was chosen and which was not. If there are no tradeoffs, return an empty array.
+- Put ALL human action items and ALL tradeoffs only under the objective they belong to (objective_sections[].action_required and objective_sections[].tradeoffs). Do NOT use any ticket-level human_actions or tradeoffs fields — they are not part of the response shape.
+- Surface tradeoffs prominently inside each objective — they are the most valuable part. Be clear about which direction was chosen and which was not. If an objective has no tradeoffs, use an empty tradeoffs array for that objective.
 - Follow any PROJECT-USER FEED INSTRUCTIONS when they are provided, unless they conflict with the required JSON shape or the source facts.
-- "human_actions" is ONLY for proactive tasks the human must perform — things like creating accounts, setting API keys, running migrations, adding env variables, deploying functions, or configuring external services. Do NOT include: testing the code, verifying behavior, reviewing files, checking that things work, or any other validation/QA tasks. Those are implied and clutter the feed. If there are no proactive tasks, return an empty array.
+- action_required is ONLY for proactive tasks the human must perform for that objective — things like creating accounts, setting API keys, running migrations, adding env variables, deploying functions, or configuring external services. Do NOT include: testing the code, verifying behavior, reviewing files, checking that things work, or any other validation/QA tasks. Those are implied and clutter the feed.
 - "tickets_created" should list any tickets that were spawned/created during this session. Return an empty array if none.
 - Do not wrap the JSON in Markdown fences or any explanatory text.`;
 }
@@ -1071,9 +1032,10 @@ Deno.serve(async (req: Request) => {
             (rationales ?? []).map(rationale => rationale.file_path),
             50
           );
-    const pendingActions =
-      objectiveSections.reduce((count, section) => count + section.action_required.length, 0) ||
-      generated.human_actions.length;
+    const pendingActions = objectiveSections.reduce(
+      (count, section) => count + section.action_required.length,
+      0
+    );
 
     // Compute event window
     const allEvents = events ?? [];

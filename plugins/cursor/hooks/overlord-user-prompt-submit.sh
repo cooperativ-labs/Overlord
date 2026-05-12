@@ -1,7 +1,8 @@
 #!/bin/bash
 # Overlord Cursor beforeSubmitPrompt hook — posts user composer prompts to the ticket activity feed.
-# Cursor does not expose Claude's turn_number; we send a monotonic turnIndex per conversation (always >= 1)
-# so POST /api/protocol/hook-event records the event (the API skips only turnIndex === 0).
+# Cursor does not expose Claude's turn_number; we persist the last posted turnIndex per conversation_id
+# and send (last + 1). The first submit is turnIndex 0 (initial injected ticket/objective prompt), which
+# POST /api/protocol/hook-event skips — same contract as Claude's turn_number 0.
 
 BODY=$(cat -)
 
@@ -31,17 +32,21 @@ cid = body.get('conversation_id') or 'unknown'
 state_dir = os.path.join(os.path.expanduser('~'), '.ovld', 'cursor-user-prompt-hook')
 os.makedirs(state_dir, exist_ok=True)
 path = os.path.join(state_dir, hashlib.sha256(cid.encode()).hexdigest())
+last_posted = -1
 try:
     with open(path, encoding='utf-8') as handle:
-        n = int((handle.read() or '0').strip() or '0')
+        raw = (handle.read() or '').strip()
+        if raw != '':
+            last_posted = int(raw)
 except Exception:
-    n = 0
-n += 1
+    last_posted = -1
+
+turn_index = last_posted + 1
 with open(path, 'w', encoding='utf-8') as handle:
-    handle.write(str(n))
+    handle.write(str(turn_index))
 
 tid = os.environ.get('TICKET_ID', '')
-print(json.dumps({'hookType': 'UserPromptSubmit', 'ticketId': tid, 'prompt': text, 'turnIndex': n}))
+print(json.dumps({'hookType': 'UserPromptSubmit', 'ticketId': tid, 'prompt': text, 'turnIndex': turn_index}))
 " 2>/dev/null
   )
   if [ -n "$PAYLOAD" ]; then

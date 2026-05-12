@@ -2,6 +2,7 @@ import * as Sentry from '@sentry/nextjs';
 import { NextResponse } from 'next/server';
 
 import { parseProtocolBody } from '@/app/api/protocol/_lib';
+import { isLikelyOverlordAgentLaunchPrompt } from '@/lib/overlord/is-overlord-agent-launch-prompt';
 import { resolveTicketId } from '@/lib/overlord/protocol-db';
 import { hookEventSchema } from '@/lib/overlord/validation';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -19,6 +20,18 @@ export async function POST(request: Request) {
     const { organizationId, userId } = parsed.tokenContext;
 
     if (hookType === 'UserPromptSubmit' && turnIndex === 0) {
+      return okResponse();
+    }
+
+    // Both the Claude Code and legacy Cursor hooks send the initial injected ticket/objective
+    // prompt as turnIndex 0 (filtered above) but older Cursor builds sent it at turnIndex 1.
+    // This catches that legacy case to prevent mis-recording the launch prompt as user_follow_up.
+    if (
+      hookType === 'UserPromptSubmit' &&
+      turnIndex === 1 &&
+      prompt &&
+      isLikelyOverlordAgentLaunchPrompt(prompt)
+    ) {
       return okResponse();
     }
 

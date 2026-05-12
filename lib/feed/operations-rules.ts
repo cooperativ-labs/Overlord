@@ -329,5 +329,5 @@ export function deriveCandidateActions(
 export function formatCandidatesForPrompt(candidates: CandidateAction[]): string {
   if (candidates.length === 0) return '';
   const lines = candidates.map(c => `- [${c.id}] ${c.text}`);
-  return `CANDIDATE FOLLOW-UP ACTIONS (deterministically derived from repo structure — include relevant ones in human_actions, rephrase as needed, drop any that don't apply, and add others only if genuinely missing):\n${lines.join('\n')}`;
+  return `CANDIDATE FOLLOW-UP ACTIONS (deterministically derived from repo structure — place relevant ones on the appropriate objective's action_required, rephrase if needed, drop any that don't apply, and add others only if genuinely missing):\n${lines.join('\n')}`;
 }

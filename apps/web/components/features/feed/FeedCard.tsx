@@ -198,14 +198,6 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
     () => (Array.isArray(post.human_actions) ? post.human_actions : []),
     [post.human_actions]
   );
-  const allActionsRequired = useMemo(
-    () => [...actionsRequiredFromObjectives, ...humanActions],
-    [actionsRequiredFromObjectives, humanActions]
-  );
-  const allTradeoffsMerged = useMemo(
-    () => [...tradeoffsFromObjectives, ...tradeoffs],
-    [tradeoffsFromObjectives, tradeoffs]
-  );
   const filesTouched = Array.isArray(post.files_touched) ? post.files_touched : [];
   const ticketsCreated = Array.isArray(post.tickets_created) ? post.tickets_created : [];
 
@@ -426,12 +418,12 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                 ) : null}
               </div>
 
-              {/* Actions, tradeoffs, and tickets (objective-level items aggregated here) */}
-              {allActionsRequired.length > 0 ||
-                allTradeoffsMerged.length > 0 ||
-                ticketsCreated.length > 0 ? (
+              {/* Actions, tradeoffs, and tickets (rollup: from objectives only) */}
+              {actionsRequiredFromObjectives.length > 0 ||
+              tradeoffsFromObjectives.length > 0 ||
+              ticketsCreated.length > 0 ? (
                 <div className="space-y-3 border-t border-border/60 px-5 py-4">
-                  {allActionsRequired.length > 0 ? (
+                  {actionsRequiredFromObjectives.length > 0 ? (
                     <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/20">
                       <div className="mb-1.5 flex items-center gap-1.5">
                         <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -440,7 +432,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                         </span>
                       </div>
                       <ul className="space-y-1">
-                        {allActionsRequired.map((action, i) => (
+                        {actionsRequiredFromObjectives.map((action, i) => (
                           <li
                             key={i}
                             className="flex gap-2 text-[13px] text-blue-800 dark:text-blue-300"
@@ -452,9 +444,9 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                       </ul>
                     </div>
                   ) : null}
-                  {allTradeoffsMerged.length > 0 ? (
+                  {tradeoffsFromObjectives.length > 0 ? (
                     <div className="space-y-2">
-                      {allTradeoffsMerged.map((t, i) => (
+                      {tradeoffsFromObjectives.map((t, i) => (
                         <div
                           key={i}
                           className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/40 dark:bg-amber-950/20"
@@ -520,7 +512,8 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                 >
                   <div className="flex items-center gap-2">
                     <MessageSquareText className="h-4 w-4 text-muted-foreground" size={16} />
-                    <span className="font-medium text-foreground/80">Discuss this update</span></div>
+                    <span className="font-medium text-foreground/80">Discuss this update</span>
+                  </div>
                   <ChevronDown
                     className={cn(
                       'h-3.5 w-3.5 text-muted-foreground transition-transform',

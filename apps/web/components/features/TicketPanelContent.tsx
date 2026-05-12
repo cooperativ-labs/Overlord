@@ -107,7 +107,8 @@ export async function TicketPanelContent({
     projectsResult,
     scheduleResult,
     agentSessionResult,
-    objectivesResult
+    objectivesResult,
+    checkpointsResult
   ] = await Promise.all([
     supabase
       .from('ticket_events')
@@ -170,7 +171,11 @@ export async function TicketPanelContent({
         'id,objective,created_at,title,state,agent_identifier,model_identifier,assigned_agent'
       )
       .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('project_checkpoints')
+      .select('objective_id,git_ref_name,git_commit_id,checkpoint_kind')
+      .eq('ticket_id', ticketId)
   ]);
 
   const events = eventsResult.data;
@@ -183,6 +188,9 @@ export async function TicketPanelContent({
   const schedule = scheduleResult.data;
   const agentSession = agentSessionResult.data;
   const objectives = objectivesResult.data;
+  const checkpointsByObjectiveId = Object.fromEntries(
+    (checkpointsResult.data ?? []).map(cp => [cp.objective_id, cp])
+  );
   const editableObjective =
     objectives?.find(objective => objective.state === 'draft') ??
     objectives?.find(objective => objective.state === 'submitted') ??
@@ -405,6 +413,7 @@ export async function TicketPanelContent({
                 sshCommand={projectSshCommand}
                 remoteWorkingDirectory={projectRemoteWorkingDirectory}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
+                checkpointsByObjectiveId={checkpointsByObjectiveId}
               />
 
               {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
