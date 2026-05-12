@@ -156,7 +156,7 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
   const copyDisabled = isBusy;
 
   return (
-    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+    <div className="mt-5 border-t border-border/40">
       <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
         <MessageSquareText className="h-4 w-4 text-muted-foreground" />
         <span>Discuss this update</span>
@@ -170,7 +170,7 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
           'border-border/60 bg-background'
         )}
       />
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/40 pt-3">
+      <div className="mt-3 flex items-center justify-end gap-2">
         <AgentModelChooserButton
           ticketId={post.ticket_id}
           objectiveId={null}
