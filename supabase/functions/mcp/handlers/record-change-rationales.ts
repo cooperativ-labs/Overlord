@@ -6,6 +6,7 @@ import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
 import { insertChangeRationales } from './_change-rationales.ts';
+import { upsertObjectiveCheckpoint } from './_checkpoints.ts';
 
 export async function handleRecordChangeRationales(
   supabase: SupabaseClient,
@@ -58,10 +59,37 @@ export async function handleRecordChangeRationales(
 
   if (eventErr || !event) return toolErr(eventErr?.message ?? 'Failed to create event.');
 
+  let checkpointId: string | null = null;
+  if (snapshot?.gitCommitId) {
+    const { data: ticketProject } = await supabase
+      .from('tickets')
+      .select('project_id')
+      .eq('id', ticketId)
+      .eq('organization_id', ctx.organizationId)
+      .single();
+    const projectId = (ticketProject as { project_id: string | null } | null)?.project_id;
+    if (projectId) {
+      const result = await upsertObjectiveCheckpoint({
+        supabase,
+        organizationId: ctx.organizationId,
+        projectId,
+        ticketId,
+        sessionId: resolved.session.id,
+        eventId: event.id,
+        userId: ctx.userId,
+        snapshot,
+        checkpoint: { kind: 'objective' },
+        fallbackSummary: eventSummary
+      });
+      if (result.error) return toolErr(result.error);
+      checkpointId = result.checkpointId;
+    }
+  }
+
   const rationaleResult = await insertChangeRationales(supabase, {
     changeRationales,
+    checkpointId,
     eventId: event.id,
-    snapshot,
     sessionId: resolved.session.id,
     ticketId
   });

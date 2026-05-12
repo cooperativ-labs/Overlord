@@ -48,7 +48,6 @@ const MAX_UNTRACKED_FILE_BYTES_FOR_AGGREGATE_DIFF = 512 * 1024;
 
 const IGNORED_DIRECTORY_NAMES = new Set([
   '.git',
-  '.jj',
   '.next',
   'node_modules',
   'dist',
@@ -95,75 +94,6 @@ async function resolveRepo(
     branch: branch.ok ? branch.output.trim() || null : null,
     repoRoot
   };
-}
-
-async function runJj(
-  cwd: string,
-  args: string[],
-  options: { allowFailure?: boolean } = {}
-): Promise<{ ok: boolean; output: string }> {
-  try {
-    const { stdout } = await execFileAsync('jj', args, {
-      cwd,
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: DEFAULT_GIT_TIMEOUT_MS
-    });
-    return { ok: true, output: stdout };
-  } catch (error) {
-    if (options.allowFailure) {
-      const output =
-        error instanceof Error && 'stdout' in error && typeof error.stdout === 'string'
-          ? error.stdout
-          : '';
-      return { ok: false, output };
-    }
-    throw error;
-  }
-}
-
-async function resolveJjRepo(directory: string): Promise<{ repoRoot: string }> {
-  const root = await runJj(directory, ['--repository', directory, 'root']);
-  const repoRoot = root.output.trim();
-  if (!repoRoot) throw new Error('Directory is not inside a JJ repository.');
-  return { repoRoot };
-}
-
-async function isJjWorkspace(directory: string): Promise<boolean> {
-  // Always verify the jj binary is executable, even if a .jj directory is present.
-  // Without this check, a repo with a .jj folder on a machine without jj installed
-  // would pass the stat check and then crash with "spawn jj ENOENT" when the code
-  // tries to run jj commands without allowFailure.
-  const root = await runJj(directory, ['--repository', directory, 'root'], { allowFailure: true });
-  return root.ok && root.output.trim().length > 0;
-}
-
-function parseJjStatus(output: string): GitStatusFile[] {
-  return output
-    .split('\n')
-    .map(line => line.trimEnd())
-    .filter(Boolean)
-    .filter(line => /^[A-Z?] /.test(line))
-    .map(line => {
-      const code = line.slice(0, 1);
-      const filePath = line.slice(2).trim();
-      const status =
-        code === 'A' || code === '?'
-          ? 'untracked'
-          : code === 'D'
-            ? 'deleted'
-            : code === 'R'
-              ? 'renamed'
-              : 'modified';
-      return {
-        linesAdded: null,
-        linesRemoved: null,
-        originalPath: null,
-        path: toPosixPath(filePath),
-        stagedStatus: ' ',
-        status,
-        unstagedStatus: code
-      };
-    });
 }
 
 function normalizeGitOutput(output: string): string {
@@ -402,17 +332,6 @@ export class LocalWorkspaceClient implements WorkspaceClient {
 
   async getGitStatus(): Promise<GitStatusResult> {
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot } = await resolveJjRepo(this.workingDirectory);
-        const statusResult = await runJj(repoRoot, ['--repository', repoRoot, 'status']);
-        return {
-          branch: null,
-          files: parseJjStatus(statusResult.output),
-          linkedDirectory: this.workingDirectory,
-          repoRoot
-        };
-      }
-
       const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
       const statusResult = await runGit(repoRoot, [
         'status',
@@ -458,25 +377,6 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       };
     }
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot } = await resolveJjRepo(this.workingDirectory);
-        const normalizedPath = toPosixPath(relativePath);
-        const result = await runJj(repoRoot, [
-          '--repository',
-          repoRoot,
-          'diff',
-          '--git',
-          '--',
-          normalizedPath
-        ]);
-        return {
-          diff: result.output,
-          path: relativePath,
-          repoRoot,
-          status: options.status ?? null
-        };
-      }
-
       const { repoRoot } = await resolveRepo(this.workingDirectory);
       const normalizedPath = toPosixPath(relativePath);
       const normalizedOriginal = options.originalPath?.trim()
@@ -539,22 +439,6 @@ export class LocalWorkspaceClient implements WorkspaceClient {
 
   async getAggregateDiff(): Promise<AggregateDiffResult> {
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot } = await resolveJjRepo(this.workingDirectory);
-        const [statusResult, diffResult] = await Promise.all([
-          runJj(repoRoot, ['--repository', repoRoot, 'status'], { allowFailure: true }),
-          runJj(repoRoot, ['--repository', repoRoot, 'diff', '--git'], { allowFailure: true })
-        ]);
-        const files = parseJjStatus(statusResult.output);
-        return {
-          branch: null,
-          diff: diffResult.output,
-          filesChanged: files.length,
-          repoRoot,
-          status: statusResult.output
-        };
-      }
-
       const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
       const statusResult = await runGit(repoRoot, ['status', '--short']);
       const trackedDiff = await runGit(
@@ -615,21 +499,6 @@ export class LocalWorkspaceClient implements WorkspaceClient {
 
   async getGitBranches(): Promise<GitBranchesResult> {
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot } = await resolveJjRepo(this.workingDirectory);
-        // For jj+git colocated repos, try to surface the git branch as well.
-        const gitInfo = await resolveRepo(repoRoot).catch(() => null);
-        const defaultBranch = gitInfo
-          ? await resolveDefaultBranch(repoRoot).catch(() => null)
-          : null;
-        return {
-          branches: [],
-          currentBranch: gitInfo?.branch ?? null,
-          defaultBranch,
-          repoRoot
-        };
-      }
-
       const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
       const defaultBranch = await resolveDefaultBranch(repoRoot);
       const refs = await runGit(repoRoot, [

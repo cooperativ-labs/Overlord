@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
+import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { recordChangeRationalesSchema } from '@/lib/overlord/validation';
@@ -27,6 +28,11 @@ export async function POST(request: Request) {
 
     const supabase = createServiceRoleClient();
     const typedSupabase = supabase as SupabaseClient<Database>;
+    const { data: ticket } = await supabase
+      .from('tickets')
+      .select('id,project_id')
+      .eq('id', ticketId)
+      .maybeSingle();
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
@@ -59,11 +65,31 @@ export async function POST(request: Request) {
       );
     }
 
+    let checkpointId: string | null = null;
+    if (snapshot?.gitCommitId && ticket?.project_id) {
+      const result = await upsertObjectiveCheckpoint({
+        supabase: typedSupabase,
+        organizationId,
+        projectId: ticket.project_id,
+        ticketId,
+        sessionId: resolved.session.id,
+        eventId: event.id,
+        userId,
+        snapshot,
+        checkpoint: { kind: 'objective' },
+        fallbackSummary: eventSummary
+      });
+      if (result.error) {
+        return NextResponse.json({ error: result.error }, { status: 500 });
+      }
+      checkpointId = result.checkpointId;
+    }
+
     const rationaleResult = await insertFileChanges({
       changeRationales,
+      checkpointId,
       eventId: event.id,
       sessionId: resolved.session.id,
-      snapshot,
       supabase: typedSupabase,
       ticketId
     });

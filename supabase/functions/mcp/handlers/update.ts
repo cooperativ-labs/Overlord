@@ -2,11 +2,12 @@
 import { type SupabaseClient } from '@supabase/supabase-js';
 
 import { type TokenContext } from '../auth.ts';
+import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
-import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
+import { upsertObjectiveCheckpoint } from './_checkpoints.ts';
 import {
   resolvePreferredStatusNameByType,
   resolveStatusNameForPhase,
@@ -144,11 +145,38 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
 
   if (eventErr || !event) return toolErr(eventErr?.message ?? 'Failed to create event.');
 
+  let updateCheckpointId: string | null = null;
+  if (snapshot?.gitCommitId) {
+    const { data: ticketProject } = await supabase
+      .from('tickets')
+      .select('project_id')
+      .eq('id', ticketId)
+      .eq('organization_id', ctx.organizationId)
+      .single();
+    const projectId = (ticketProject as { project_id: string | null } | null)?.project_id;
+    if (projectId) {
+      const result = await upsertObjectiveCheckpoint({
+        supabase,
+        organizationId: ctx.organizationId,
+        projectId,
+        ticketId,
+        sessionId: resolved.session.id,
+        eventId: event.id,
+        userId: ctx.userId,
+        snapshot,
+        checkpoint: { kind: 'objective' },
+        fallbackSummary: summary
+      });
+      if (result.error) return toolErr(result.error);
+      updateCheckpointId = result.checkpointId;
+    }
+  }
+
   if (Array.isArray(changeRationales) && changeRationales.length > 0) {
     const rationaleResult = await insertChangeRationales(supabase, {
       changeRationales,
+      checkpointId: updateCheckpointId,
       eventId: event.id,
-      snapshot,
       sessionId: resolved.session.id,
       ticketId
     });

@@ -88,9 +88,6 @@ export type FileChangeRecord = {
   change_kind: string;
   confidence: string;
   created_at: string;
-  jj_change_id: string | null;
-  jj_commit_id: string | null;
-  jj_operation_id: string | null;
   event: {
     created_at: string;
     event_type: string;
@@ -98,33 +95,30 @@ export type FileChangeRecord = {
     summary: string | null;
   } | null;
   checkpoint: {
-    backend: string;
     checkpoint_kind: string;
     created_at: string;
     diff_stat: string | null;
     git_commit_id: string | null;
+    git_ref_name: string | null;
+    head_sha: string | null;
     id: string;
-    jj_change_id: string | null;
-    jj_commit_id: string | null;
-    jj_operation_id: string | null;
-    workspace_name: string | null;
-    workspace_path: string | null;
   } | null;
   checkpoint_id: string | null;
+  objective: {
+    id: string;
+    objective: string | null;
+  } | null;
   file_name: string;
   file_path: string;
   hunks: Json;
   id: string;
   impact: string;
   label: string;
-  snapshot_backend: string | null;
   session: {
     agent_identifier: string;
     id: string;
   } | null;
   summary: string;
-  workspace_name: string | null;
-  workspace_path: string | null;
   ticket: {
     id: string;
     ticket_id?: string | null;

@@ -7,7 +7,6 @@ import path from 'node:path';
 
 import { buildAuthHeaders, getAuthStatus, resolveAuth } from './credentials.mjs';
 
-
 /**
  * Parse simple CLI flags: --key value or --key=value
  * @param {string[]} args
@@ -361,8 +360,8 @@ async function resolveSnapshotContext(flags) {
 
 /**
  * Shallow-merge snapshot metadata: launch/env context first, then deliver payload
- * (payload wins on duplicate keys) so agents can add jj ids without losing workspace
- * paths from OVERLORD_SNAPSHOT_JSON.
+ * (payload wins on duplicate keys) so agents can add provenance details without
+ * losing launch context from OVERLORD_SNAPSHOT_JSON.
  * @param {Record<string, unknown> | null | undefined} fromEnvOrFlags
  * @param {Record<string, unknown> | null | undefined} fromPayload
  * @returns {Record<string, unknown> | null}
@@ -390,131 +389,205 @@ function runLocalCommand(command, args, options = {}) {
   });
 }
 
-function commandSucceeds(command, args, cwd) {
+function resolveGitRepoRoot(workspacePath) {
   try {
-    runLocalCommand(command, args, { cwd, timeoutMs: 15000 });
-    return true;
+    return runLocalCommand('git', ['-C', workspacePath, 'rev-parse', '--show-toplevel'], {
+      cwd: workspacePath,
+      timeoutMs: 15000
+    }).trim();
   } catch {
-    return false;
+    return null;
   }
 }
 
-function detectLocalCheckpointBackend(workspacePath, preference) {
-  if (!workspacePath || !fs.existsSync(workspacePath)) return null;
-  if (preference === 'jj') return 'jj';
-  if (preference === 'git') return 'git';
-  if (
-    fs.existsSync(path.join(workspacePath, '.jj')) ||
-    commandSucceeds('jj', ['--repository', workspacePath, 'root'], workspacePath)
-  ) {
-    return 'jj';
-  }
-  if (commandSucceeds('git', ['-C', workspacePath, 'rev-parse', '--show-toplevel'], workspacePath)) {
-    return 'git';
-  }
-  return null;
-}
-
-function createLocalDeliveryCheckpoint(flags, snapshot) {
+/**
+ * Snapshot the working tree to a hidden ref refs/overlord/checkpoints/<objectiveId>.
+ * Captures tracked + untracked + staged + unstaged in one commit-tree object.
+ * Idempotent: if the ref already exists, returns the existing sha.
+ * Returns null when not in a git repo or when no objectiveId is available.
+ */
+function createLocalCheckpoint({ flags, kind = 'objective', objectiveId, snapshot = null }) {
   if (flags['skip-checkpoint']) return null;
-
-  const preference = String(flags['checkpoint-backend'] ?? 'auto').trim();
-  if (!['auto', 'jj', 'git'].includes(preference)) {
-    throw new Error('--checkpoint-backend must be one of: auto, jj, git');
-  }
 
   const workspacePath = path.resolve(
     String(snapshot?.workspacePath ?? process.env.OVERLORD_WORKSPACE_PATH ?? process.cwd())
   );
-  if (!fs.existsSync(workspacePath)) return null;
+  const repoRoot = fs.existsSync(workspacePath) ? resolveGitRepoRoot(workspacePath) : null;
+  if (!repoRoot) return null;
 
-  const backend = detectLocalCheckpointBackend(workspacePath, preference);
-  if (!backend) return null;
-
-  if (backend === 'jj') {
+  const resolvedObjectiveId =
+    objectiveId ?? snapshot?.objectiveId ?? process.env.OVERLORD_OBJECTIVE_ID ?? null;
+  if (!resolvedObjectiveId || !/^[A-Za-z0-9_-]+$/.test(String(resolvedObjectiveId))) {
+    // Without an objective id we cannot name the ref deterministically.
+    // Fall back to recording HEAD only so the protocol still has provenance.
     try {
-      runLocalCommand('jj', ['--repository', workspacePath, 'util', 'snapshot'], {
-        cwd: workspacePath
-      });
-      const commit = runLocalCommand(
-        'jj',
-        ['--repository', workspacePath, 'log', '-r', '@', '-T', 'change_id ++ " " ++ commit_id'],
-        { cwd: workspacePath }
-      );
-      const operation = runLocalCommand(
-        'jj',
-        [
-          '--repository',
-          workspacePath,
-          'op',
-          'log',
-          '--at-op=@',
-          '--ignore-working-copy',
-          '-n',
-          '1',
-          '-T',
-          'id'
-        ],
-        { cwd: workspacePath }
-      );
-      const diffStat = runLocalCommand('jj', ['--repository', workspacePath, 'diff', '--stat'], {
-        cwd: workspacePath
-      });
-      const [jjChangeId = null, jjCommitId = null] = commit.trim().split(/\s+/, 2);
+      const gitCommitId = runLocalCommand('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], {
+        cwd: repoRoot
+      }).trim();
+      const diffStat = runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', 'HEAD'], {
+        cwd: repoRoot
+      }).trim();
       return {
-        checkpoint: {
-          diffStat: diffStat.trim() || null,
-          kind: 'delivery'
-        },
+        checkpoint: { diffStat: diffStat || null, kind },
         snapshot: {
-          backend: 'jj',
-          workspacePath,
-          workspaceName: snapshot?.workspaceName ?? path.basename(workspacePath),
-          jjChangeId,
-          jjCommitId,
-          jjOperationId: operation.trim() || null,
-          diffStat: diffStat.trim() || null
+          gitCommitId: gitCommitId || null,
+          headSha: gitCommitId || null,
+          diffStat: diffStat || null
         }
       };
-    } catch (error) {
-      throw new Error(
-        `Failed to create JJ delivery checkpoint in ${workspacePath}: ${
-          error instanceof Error ? error.message : String(error)
-        }\nRe-run with --skip-checkpoint only if you intentionally want to deliver without local JJ provenance.`
-      );
+    } catch {
+      return null;
     }
   }
 
-  if (preference === 'jj') {
-    throw new Error(`JJ checkpoint requested, but ${workspacePath} is not a JJ repository.`);
+  const ref = `refs/overlord/checkpoints/${resolvedObjectiveId}`;
+  const headSha = runLocalCommand('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], {
+    cwd: repoRoot
+  }).trim();
+
+  // If the ref already exists, return the existing snapshot.
+  let existingSha = '';
+  try {
+    existingSha = runLocalCommand('git', ['-C', repoRoot, 'rev-parse', '--verify', ref], {
+      cwd: repoRoot
+    }).trim();
+  } catch {
+    /* not present */
   }
 
-  try {
-    const gitCommitId = runLocalCommand('git', ['-C', workspacePath, 'rev-parse', 'HEAD'], {
-      cwd: workspacePath
-    }).trim();
-    const diffStat = runLocalCommand('git', ['-C', workspacePath, 'diff', '--stat', 'HEAD'], {
-      cwd: workspacePath
-    }).trim();
+  if (existingSha) {
+    let diffStat = '';
+    try {
+      diffStat = runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', `${existingSha}^!`], {
+        cwd: repoRoot
+      }).trim();
+    } catch {
+      /* ignore */
+    }
     return {
-      checkpoint: {
-        diffStat: diffStat || null,
-        kind: 'delivery'
-      },
+      checkpoint: { diffStat: diffStat || null, kind },
       snapshot: {
-        backend: 'git',
-        workspacePath,
-        workspaceName: snapshot?.workspaceName ?? path.basename(workspacePath),
-        gitCommitId: gitCommitId || null,
+        gitCommitId: existingSha,
+        gitRefName: ref,
+        headSha,
+        objectiveId: String(resolvedObjectiveId),
         diffStat: diffStat || null
       }
     };
-  } catch {
-    if (preference === 'git') {
-      throw new Error(`Git checkpoint requested, but metadata could not be read in ${workspacePath}.`);
-    }
-    return null;
   }
+
+  // Build a tree from the current working copy without polluting the user's
+  // index by writing to a temporary index file.
+  const tempIndex = path.join(repoRoot, '.git', `overlord-snap-index-${Date.now()}`);
+  const env = { ...process.env, NO_COLOR: '1', GIT_INDEX_FILE: tempIndex };
+  try {
+    execFileSync('git', ['-C', repoRoot, 'read-tree', 'HEAD'], { cwd: repoRoot, env });
+    execFileSync('git', ['-C', repoRoot, 'add', '-A'], { cwd: repoRoot, env });
+    const tree = execFileSync('git', ['-C', repoRoot, 'write-tree'], {
+      cwd: repoRoot,
+      env,
+      encoding: 'utf8'
+    }).trim();
+    if (!tree) throw new Error('git write-tree produced no output.');
+    const commit = execFileSync(
+      'git',
+      [
+        '-C',
+        repoRoot,
+        'commit-tree',
+        tree,
+        '-p',
+        headSha,
+        '-m',
+        `overlord checkpoint ${resolvedObjectiveId}`
+      ],
+      { cwd: repoRoot, env: { ...process.env, NO_COLOR: '1' }, encoding: 'utf8' }
+    ).trim();
+    if (!commit) throw new Error('git commit-tree produced no output.');
+    execFileSync('git', ['-C', repoRoot, 'update-ref', ref, commit], {
+      cwd: repoRoot
+    });
+    let diffStat = '';
+    try {
+      diffStat = runLocalCommand('git', ['-C', repoRoot, 'diff', '--stat', `${commit}^!`], {
+        cwd: repoRoot
+      }).trim();
+    } catch {
+      /* ignore */
+    }
+    return {
+      checkpoint: { diffStat: diffStat || null, kind },
+      snapshot: {
+        gitCommitId: commit,
+        gitRefName: ref,
+        headSha,
+        objectiveId: String(resolvedObjectiveId),
+        diffStat: diffStat || null
+      }
+    };
+  } catch (error) {
+    throw new Error(
+      `Failed to create git checkpoint in ${repoRoot}: ${
+        error instanceof Error ? error.message : String(error)
+      }\nRe-run attach with --skip-checkpoint to proceed without local provenance.`
+    );
+  } finally {
+    try {
+      fs.unlinkSync(tempIndex);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+async function createAndRecordPendingCheckpoints({
+  attachData,
+  bearerToken,
+  flags,
+  localSecret,
+  organizationId,
+  platformUrl,
+  ticketId,
+  timeoutMs
+}) {
+  const pendingObjectiveIds = Array.isArray(attachData.pendingCheckpointObjectiveIds)
+    ? attachData.pendingCheckpointObjectiveIds.filter(id => typeof id === 'string' && id.trim())
+    : [];
+  const sessionKey = attachData.session?.sessionKey;
+  if (!sessionKey || pendingObjectiveIds.length === 0) return [];
+
+  const recorded = [];
+  for (const objectiveId of pendingObjectiveIds) {
+    const checkpointResult = createLocalCheckpoint({
+      flags,
+      kind: 'objective',
+      objectiveId: objectiveId.trim()
+    });
+    if (!checkpointResult?.snapshot) {
+      process.stderr.write(
+        `[protocol] Skipped checkpoint for objective ${objectiveId}: no git repository found at ${process.cwd()}.\n`
+      );
+      continue;
+    }
+
+    await apiPost(
+      platformUrl,
+      bearerToken,
+      localSecret,
+      organizationId,
+      '/api/protocol/update',
+      {
+        sessionKey,
+        ticketId,
+        summary: `Created local git checkpoint for objective ${objectiveId}.`,
+        phase: 'execute',
+        snapshot: checkpointResult.snapshot
+      },
+      timeoutMs
+    );
+    recorded.push(objectiveId);
+  }
+  return recorded;
 }
 
 function normalizeRepoRelativeFilePath(filePath, repoRoot) {
@@ -692,7 +765,8 @@ function resolveExternalSessionId(flags) {
 async function protocolAttach(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const externalSessionId = resolveExternalSessionId(flags);
@@ -714,6 +788,20 @@ async function protocolAttach(args) {
     body,
     timeoutMs
   );
+
+  const recordedCheckpointObjectiveIds = await createAndRecordPendingCheckpoints({
+    attachData: data,
+    bearerToken,
+    flags,
+    localSecret,
+    organizationId,
+    platformUrl,
+    ticketId,
+    timeoutMs
+  });
+  if (recordedCheckpointObjectiveIds.length > 0) {
+    data.recordedCheckpointObjectiveIds = recordedCheckpointObjectiveIds;
+  }
 
   const sessionKey = data.session?.sessionKey;
   console.log(JSON.stringify(data, null, 2));
@@ -738,7 +826,8 @@ async function protocolUpdate(args) {
     ? readTextFile(String(flags['summary-file']), '--summary-file')
     : requireFlag(flags, 'summary', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
   const changeRationales = await resolveChangeRationales(flags);
   const externalSessionId = resolveExternalSessionId(flags);
@@ -795,7 +884,8 @@ async function protocolRecordChangeRationales(args) {
     );
   }
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
   const snapshot = await resolveSnapshotContext(flags);
 
@@ -837,7 +927,8 @@ async function protocolAsk(args) {
     ? readTextFile(String(flags['question-file']), '--question-file')
     : requireFlag(flags, 'question', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -873,7 +964,8 @@ async function protocolPermissionRequest(args) {
     ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
     : {};
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const data = await apiPost(
@@ -898,7 +990,8 @@ async function protocolReadContext(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -942,7 +1035,8 @@ async function protocolWriteContext(args) {
     value = String(flags.value);
   }
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -989,7 +1083,8 @@ async function protocolDeliver(args) {
       ? readTextFile(String(flags['summary-file']), '--summary-file')
       : requireFlag(flags, 'summary', undefined));
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   let artifacts = deliverPayload?.artifacts ?? [];
@@ -1011,14 +1106,10 @@ async function protocolDeliver(args) {
 
   const changeRationales =
     deliverPayload?.changeRationales ?? (await resolveChangeRationales(flags));
-  let snapshot = mergeDeliverSnapshot(
+  const snapshot = mergeDeliverSnapshot(
     await resolveSnapshotContext(flags),
     deliverPayload?.snapshot ?? null
   );
-  const checkpointResult = createLocalDeliveryCheckpoint(flags, snapshot);
-  if (checkpointResult) {
-    snapshot = mergeDeliverSnapshot(snapshot, checkpointResult.snapshot);
-  }
   validateDeliverFileChanges(flags, changeRationales);
 
   const body = {
@@ -1026,9 +1117,6 @@ async function protocolDeliver(args) {
     ticketId,
     summary,
     artifacts,
-    ...(checkpointResult?.checkpoint
-      ? { checkpoint: { ...checkpointResult.checkpoint, summary } }
-      : {}),
     ...(snapshot ? { snapshot } : {}),
     ...(changeRationales.length > 0 ? { changeRationales } : {})
   };
@@ -1055,7 +1143,8 @@ async function protocolAttachmentList(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -1084,7 +1173,8 @@ async function protocolAttachmentPrepareUpload(args) {
   const objectiveId = requireFlag(flags, 'objective-id', undefined);
   const fileName = requireFlag(flags, 'file-name', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -1121,7 +1211,8 @@ async function protocolAttachmentFinalizeUpload(args) {
   const storagePath = requireFlag(flags, 'storage-path', undefined);
   const label = requireFlag(flags, 'label', undefined);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -1161,7 +1252,8 @@ async function protocolAttachmentGetDownloadUrl(args) {
     throw new Error('--objective-id is required when using --storage-path');
   }
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -1202,7 +1294,8 @@ async function protocolAttachmentUploadFile(args) {
   const fileStats = await stat(filePath);
   const fileBytes = await readFile(filePath);
 
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const metadata = flags['metadata-json']
@@ -1293,7 +1386,8 @@ async function protocolDiscoverProject(args) {
 async function protocolConnect(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = {
@@ -1328,7 +1422,8 @@ async function protocolConnect(args) {
 async function protocolLoadContext(args) {
   const flags = parseFlags(args);
   const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
 
   const body = { ticketId };
@@ -1421,7 +1516,8 @@ async function protocolCreateTicket(args) {
   const flags = parseFlags(args);
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   const objective = requireFlag(flags, 'objective', undefined);
-  const { platformUrl, bearerToken, localSecret, organizationId } = await resolveProtocolAuthForFlags(flags, ticketId);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
   const timeoutMs = resolveTimeout(flags);
   const agentIdentifier = resolveProtocolAgentIdentifier(flags);
   const modelIdentifier = resolveProtocolModelIdentifier(flags);
@@ -1664,10 +1760,12 @@ attach:
     --method <connectionMethod>
     --external-session-id <id|null>  Store the native agent thread/session id, or clear it with null
     --metadata-json <json>     Extra session metadata object
+    --skip-checkpoint          Bypass automatic objective-start git checkpoint creation
   Returns:
     Full JSON including session.sessionKey, ticket, history, artifacts, sharedState, and promptContext
   Notes:
     If --external-session-id is omitted, the CLI may auto-detect Codex or Claude session ids
+    Attach creates and records missing local git checkpoints for executing objectives before work starts.
 
 connect:
   Purpose:
@@ -1789,13 +1887,10 @@ deliver:
     --artifacts-file <path|->
     --change-rationales-json <json>
     --change-rationales-file <path|->
-    --checkpoint-backend <auto|jj|git>  Backend for the local delivery checkpoint (default: auto)
-    --skip-checkpoint       Bypass automatic local checkpoint creation
     --skip-file-change-check  Bypass local git vs changeRationales validation
   Notes:
     Use --payload-file - to read the full delivery JSON from stdin without creating a scratch file.
     Do not combine --payload-file with --artifacts-json/--artifacts-file or change-rationale flags.
-    Deliver creates a local checkpoint before the API request when the current workspace is JJ- or Git-managed.
     In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
 
 prompt:
@@ -1932,7 +2027,6 @@ Examples:
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file ./deliver.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
-  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --checkpoint-backend jj
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000
 `);

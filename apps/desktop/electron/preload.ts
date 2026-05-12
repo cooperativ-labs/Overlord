@@ -62,8 +62,10 @@ const electronAPI = {
     ) => ipcRenderer.invoke('filesystem:get-git-diff', options),
     getAggregateDiff: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-aggregate-diff', options),
-    installLocalVersionControl: (options: WorkspacePayload) =>
-      ipcRenderer.invoke('filesystem:install-local-version-control', options),
+    createCheckpoint: (options: { directory: string; objectiveId: string }) =>
+      ipcRenderer.invoke('filesystem:create-checkpoint', options),
+    restoreCheckpoint: (options: { directory: string; objectiveId: string }) =>
+      ipcRenderer.invoke('filesystem:restore-checkpoint', options),
     getGitBranches: (options?: WorkspacePayload) =>
       ipcRenderer.invoke('filesystem:get-git-branches', options),
     gitCheckoutBranch: (options: WorkspacePayload & { options: { name: string } }) =>

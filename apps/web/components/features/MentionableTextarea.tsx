@@ -4,6 +4,11 @@ import * as React from 'react';
 import { createPortal } from 'react-dom';
 
 import { findFileMentionAtCursor, getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
+import {
+  applyMarkdownListContinuation,
+  type AutoListContinuationMode,
+  matchesListContinuationKey
+} from '@/lib/helpers/list-continuation';
 import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +27,8 @@ type MentionableTextareaProps = Omit<
   onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
   onMentionMenuOpenChange?: (open: boolean) => void;
   onMentionSelect?: (filePath: string) => void;
+  /** Continue `1. ` / `- ` lists on newline; use `shift-enter` when plain Enter is reserved (e.g. submit). */
+  autoListContinuation?: AutoListContinuationMode | false;
 };
 
 export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, MentionableTextareaProps>(
@@ -41,6 +48,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       onChange,
       onMentionMenuOpenChange,
       onMentionSelect,
+      autoListContinuation = false,
       ...props
     },
     forwardedRef
@@ -318,6 +326,36 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
 
             if (event.key === 'Backspace' && handleCollapsedMentionBackspace(event)) {
               return;
+            }
+
+            if (
+              autoListContinuation &&
+              !event.nativeEvent.isComposing &&
+              matchesListContinuationKey({
+                mode: autoListContinuation,
+                key: event.key,
+                shiftKey: event.shiftKey
+              })
+            ) {
+              const start = event.currentTarget.selectionStart ?? value.length;
+              const end = event.currentTarget.selectionEnd ?? value.length;
+              const result = applyMarkdownListContinuation({
+                value,
+                selectionStart: start,
+                selectionEnd: end
+              });
+              if (result.applied) {
+                event.preventDefault();
+                onValueChange(result.nextValue);
+                updateMentionState(result.nextValue, result.nextSelection);
+                requestAnimationFrame(() => {
+                  const textArea = textareaRef.current as TextareaHandle | null;
+                  if (!textArea) return;
+                  textArea.focus();
+                  textArea.setSelectionRange(result.nextSelection, result.nextSelection);
+                });
+                return;
+              }
             }
 
             onKeyDown?.(event);

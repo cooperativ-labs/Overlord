@@ -161,19 +161,13 @@ export const TOOLS = [
         snapshot: {
           type: 'object',
           description:
-            'Optional JJ or Git snapshot metadata to attach to persisted file-change records.',
+            'Optional git checkpoint metadata. The local CLI fills this in from a hidden refs/overlord/checkpoints/<objectiveId> ref it creates before calling the API.',
           properties: {
-            backend: {
-              type: 'string',
-              enum: ['git-worktree', 'jj', 'git']
-            },
-            jjChangeId: { type: ['string', 'null'] },
-            jjCommitId: { type: ['string', 'null'] },
-            jjOperationId: { type: ['string', 'null'] },
             gitCommitId: { type: ['string', 'null'] },
-            diffStat: { type: ['string', 'null'] },
-            workspaceName: { type: ['string', 'null'] },
-            workspacePath: { type: ['string', 'null'] }
+            gitRefName: { type: 'string' },
+            headSha: { type: 'string' },
+            objectiveId: { type: 'string' },
+            diffStat: { type: ['string', 'null'] }
           }
         },
         checkpoint: {
@@ -257,19 +251,13 @@ export const TOOLS = [
         snapshot: {
           type: 'object',
           description:
-            'Optional JJ or Git snapshot metadata to attach to persisted file-change records.',
+            'Optional git checkpoint metadata. The local CLI fills this in from a hidden refs/overlord/checkpoints/<objectiveId> ref it creates before calling the API.',
           properties: {
-            backend: {
-              type: 'string',
-              enum: ['git-worktree', 'jj', 'git']
-            },
-            jjChangeId: { type: ['string', 'null'] },
-            jjCommitId: { type: ['string', 'null'] },
-            jjOperationId: { type: ['string', 'null'] },
             gitCommitId: { type: ['string', 'null'] },
-            diffStat: { type: ['string', 'null'] },
-            workspaceName: { type: ['string', 'null'] },
-            workspacePath: { type: ['string', 'null'] }
+            gitRefName: { type: 'string' },
+            headSha: { type: 'string' },
+            objectiveId: { type: 'string' },
+            diffStat: { type: ['string', 'null'] }
           }
         }
       },
@@ -531,19 +519,13 @@ export const TOOLS = [
         snapshot: {
           type: 'object',
           description:
-            'Optional JJ or Git snapshot metadata to attach to persisted file-change records.',
+            'Optional git checkpoint metadata. The local CLI fills this in from a hidden refs/overlord/checkpoints/<objectiveId> ref it creates before calling the API.',
           properties: {
-            backend: {
-              type: 'string',
-              enum: ['git-worktree', 'jj', 'git']
-            },
-            jjChangeId: { type: ['string', 'null'] },
-            jjCommitId: { type: ['string', 'null'] },
-            jjOperationId: { type: ['string', 'null'] },
             gitCommitId: { type: ['string', 'null'] },
-            diffStat: { type: ['string', 'null'] },
-            workspaceName: { type: ['string', 'null'] },
-            workspacePath: { type: ['string', 'null'] }
+            gitRefName: { type: 'string' },
+            headSha: { type: 'string' },
+            objectiveId: { type: 'string' },
+            diffStat: { type: ['string', 'null'] }
           }
         },
         checkpoint: {

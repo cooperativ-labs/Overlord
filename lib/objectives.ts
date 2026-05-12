@@ -138,9 +138,18 @@ export async function submitDraftObjective(supabase: ObjectiveClient, ticketId: 
     throw new Error(draftError.message);
   }
 
-  const normalizedObjective = normalizeObjectiveText(draft?.objective);
-  if (!draft || !normalizedObjective) {
-    return { didSubmit: false, submittedObjective: null, submittedObjectiveId: null };
+  if (!draft) {
+    return { error: null, didSubmit: false, submittedObjective: null, submittedObjectiveId: null };
+  }
+
+  const normalizedObjective = normalizeObjectiveText(draft.objective);
+  if (!normalizedObjective) {
+    return {
+      error: 'Objective cannot be empty.',
+      didSubmit: false,
+      submittedObjective: null,
+      submittedObjectiveId: null
+    };
   }
 
   const { error: submitError } = await supabase
@@ -152,6 +161,7 @@ export async function submitDraftObjective(supabase: ObjectiveClient, ticketId: 
   }
 
   return {
+    error: null,
     didSubmit: true,
     submittedObjective: normalizedObjective,
     submittedObjectiveId: draft.id

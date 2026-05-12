@@ -104,6 +104,7 @@ export function DraftObjective({
       <InlineEditField
         ref={editFieldRef}
         alwaysEditing
+        autoListContinuation="enter"
         displayClassName="text-base leading-relaxed"
         field="objective"
         fileMentionPaths={fileMentionPaths}

@@ -193,13 +193,25 @@ interface ElectronAPI {
       status: string;
       error?: string;
     }>;
-    installLocalVersionControl: (options: WorkspacePayload) => Promise<
+    createCheckpoint: (options: { directory: string; objectiveId: string }) => Promise<
       | {
           ok: true;
-          backend: 'jj';
-          rootPath: string;
-          alreadyInstalled: boolean;
-          jjVersion: string | null;
+          workspacePath: string;
+          objectiveId: string;
+          ref: string;
+          gitCommitId: string;
+          headSha: string;
+          diffStat: string | null;
+        }
+      | { ok: false; error: string }
+    >;
+    restoreCheckpoint: (options: { directory: string; objectiveId: string }) => Promise<
+      | {
+          ok: true;
+          ref: string;
+          gitCommitId: string;
+          safetyRef: string | null;
+          safetySha: string | null;
         }
       | { ok: false; error: string }
     >;

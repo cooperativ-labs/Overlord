@@ -9,6 +9,7 @@ import {
   buildAgentNotificationSummary,
   extractAgentNotifications
 } from '@/lib/overlord/agent-notifications';
+import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
@@ -42,12 +43,12 @@ export async function POST(request: Request) {
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) return NextResponse.json({ error: 'Ticket not found.' }, { status: 404 });
     const supabase = createServiceRoleClient();
-    const { data: ticketReferenceRow } = await supabase
+    const { data: ticket } = await supabase
       .from('tickets')
-      .select('id,ticket_id')
+      .select('id,ticket_id,project_id')
       .eq('id', ticketId)
       .maybeSingle();
-    const ticketReference = getTicketIdentifier(ticketReferenceRow ?? ticketId);
+    const ticketReference = getTicketIdentifier(ticket ?? ticketId);
     const typedSupabase = supabase as SupabaseClient<Database>;
     const resolved = await resolveSession(sessionKey, ticketId, organizationId);
     if (!resolved.session) {
@@ -139,12 +140,32 @@ export async function POST(request: Request) {
       );
     }
 
+    let updateCheckpointId: string | null = null;
+    if (snapshot?.gitCommitId && ticket?.project_id) {
+      const result = await upsertObjectiveCheckpoint({
+        supabase: typedSupabase,
+        organizationId,
+        projectId: ticket.project_id,
+        ticketId,
+        sessionId: resolved.session.id,
+        eventId: event.id,
+        userId,
+        snapshot,
+        checkpoint: { kind: 'objective' },
+        fallbackSummary: summary
+      });
+      if (result.error) {
+        return NextResponse.json({ error: result.error }, { status: 500 });
+      }
+      updateCheckpointId = result.checkpointId;
+    }
+
     if (Array.isArray(changeRationales) && changeRationales.length > 0) {
       const rationaleResult = await insertFileChanges({
         changeRationales,
+        checkpointId: updateCheckpointId,
         eventId: event.id,
         sessionId: resolved.session.id,
-        snapshot,
         supabase: typedSupabase,
         ticketId
       });

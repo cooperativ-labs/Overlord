@@ -1,11 +1,12 @@
 export {
-  installLocalVersionControl,
-  type InstallLocalVersionControlInput,
-  type InstallLocalVersionControlResult
-} from './install-local-version-control';
-export {
-  createLocalCheckpoint,
-  type LocalCheckpointBackend,
-  type LocalCheckpointInput,
-  type LocalCheckpointResult
-} from './local-checkpoint';
+  type CheckpointKind,
+  type CheckpointSummary,
+  createCheckpoint,
+  type CreateCheckpointInput,
+  type CreateCheckpointResult,
+  listCheckpoints,
+  pruneCheckpoints,
+  restoreCheckpoint,
+  type RestoreCheckpointInput,
+  type RestoreCheckpointResult
+} from './git-checkpoint';

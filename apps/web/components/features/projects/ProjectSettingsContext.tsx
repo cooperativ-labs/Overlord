@@ -67,9 +67,6 @@ type ProjectSettingsProviderProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
-  initialLocalVersionControl: 'off' | 'jj';
-  initialLocalVersionControlInstalledAt: string | null;
-  initialLocalVersionControlError: string | null;
   initialSshCommand: string | null;
   initialRemoteWorkingDirectory: string | null;
   initialSshHost?: string | null;
@@ -94,9 +91,6 @@ export function ProjectSettingsProvider({
   initialName,
   initialColor,
   initialWorkingDirectory,
-  initialLocalVersionControl,
-  initialLocalVersionControlInstalledAt,
-  initialLocalVersionControlError,
   initialSshCommand,
   initialRemoteWorkingDirectory,
   initialSshHost,
@@ -246,9 +240,6 @@ export function ProjectSettingsProvider({
         initialName={initialName}
         initialColor={initialColor}
         initialWorkingDirectory={initialWorkingDirectory}
-        initialLocalVersionControl={initialLocalVersionControl}
-        initialLocalVersionControlInstalledAt={initialLocalVersionControlInstalledAt}
-        initialLocalVersionControlError={initialLocalVersionControlError}
         initialSshCommand={initialSshCommand}
         initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
         initialSshHost={initialSshHost ?? null}

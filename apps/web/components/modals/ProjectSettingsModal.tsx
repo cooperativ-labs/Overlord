@@ -67,9 +67,6 @@ type ProjectSettingsModalProps = {
   initialName: string;
   initialColor: string;
   initialWorkingDirectory: string | null;
-  initialLocalVersionControl: 'off' | 'jj';
-  initialLocalVersionControlInstalledAt: string | null;
-  initialLocalVersionControlError: string | null;
   initialSshCommand: string | null;
   initialRemoteWorkingDirectory: string | null;
   initialSshHost: string | null;
@@ -96,9 +93,6 @@ export function ProjectSettingsModal({
   initialName,
   initialColor,
   initialWorkingDirectory,
-  initialLocalVersionControl,
-  initialLocalVersionControlInstalledAt,
-  initialLocalVersionControlError,
   initialSshCommand,
   initialRemoteWorkingDirectory,
   initialSshHost,
@@ -203,9 +197,6 @@ export function ProjectSettingsModal({
                   projectId={projectId}
                   organizationId={organizationId}
                   initialWorkingDirectory={initialWorkingDirectory}
-                  initialLocalVersionControl={initialLocalVersionControl}
-                  initialLocalVersionControlInstalledAt={initialLocalVersionControlInstalledAt}
-                  initialLocalVersionControlError={initialLocalVersionControlError}
                   initialSshCommand={initialSshCommand}
                   initialRemoteWorkingDirectory={initialRemoteWorkingDirectory}
                   initialSshHost={initialSshHost}

@@ -3,12 +3,13 @@
 import { type SupabaseClient } from '@supabase/supabase-js';
 
 import { type TokenContext } from '../auth.ts';
+import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { getPublicMcpUrl } from '../helpers/public-url.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
-import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
+import { upsertObjectiveCheckpoint } from './_checkpoints.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -82,7 +83,8 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
   if (eventErr || !event) return toolErr(eventErr?.message ?? 'Failed to write delivery event.');
 
   let checkpointId: string | null = null;
-  if (snapshot?.backend || checkpoint) {
+  const hasCheckpoint = Boolean(snapshot?.gitCommitId || checkpoint);
+  if (hasCheckpoint) {
     const { data: ticket } = await supabase
       .from('tickets')
       .select('project_id')
@@ -90,46 +92,25 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
       .eq('organization_id', ctx.organizationId)
       .single();
 
-    if (!ticket?.project_id)
+    if (!(ticket as { project_id: string | null } | null)?.project_id)
       return toolErr('Cannot persist a checkpoint for a ticket without a project.');
 
-    const { data: objective } = await supabase
-      .from('objectives')
-      .select('id')
-      .eq('ticket_id', ticketId)
-      .eq('state', 'executing')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const { data: checkpointRow, error: checkpointErr } = await supabase
-      .from('project_checkpoints')
-      .insert({
-        organization_id: ctx.organizationId,
-        project_id: ticket.project_id,
-        ticket_id: ticketId,
-        objective_id: objective?.id ?? null,
-        session_id: resolved.session.id,
-        event_id: event.id,
-        checkpoint_kind: checkpoint?.kind ?? 'delivery',
-        backend: snapshot?.backend ?? 'unknown',
-        workspace_path: snapshot?.workspacePath ?? null,
-        workspace_name: snapshot?.workspaceName ?? null,
-        jj_change_id: snapshot?.jjChangeId ?? null,
-        jj_commit_id: snapshot?.jjCommitId ?? null,
-        jj_operation_id: snapshot?.jjOperationId ?? null,
-        git_commit_id: snapshot?.gitCommitId ?? snapshot?.baseGitCommitId ?? null,
-        summary: checkpoint?.summary ?? summary,
-        diff_stat: checkpoint?.diffStat ?? snapshot?.diffStat ?? null,
-        created_by: ctx.userId
-      })
-      .select('id')
-      .single();
-
-    if (checkpointErr || !checkpointRow) {
-      return toolErr(checkpointErr?.message ?? 'Failed to write delivery checkpoint.');
-    }
-    checkpointId = checkpointRow.id;
+    const result = await upsertObjectiveCheckpoint({
+      supabase,
+      organizationId: ctx.organizationId,
+      projectId: (ticket as { project_id: string }).project_id,
+      ticketId,
+      sessionId: resolved.session.id,
+      eventId: event.id,
+      userId: ctx.userId,
+      snapshot,
+      checkpoint: checkpoint
+        ? { ...checkpoint, kind: checkpoint.kind ?? 'delivery' }
+        : { kind: 'delivery' },
+      fallbackSummary: summary
+    });
+    if (result.error) return toolErr(result.error);
+    checkpointId = result.checkpointId;
   }
 
   if (Array.isArray(changeRationales) && changeRationales.length > 0) {
@@ -137,7 +118,6 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
       changeRationales,
       checkpointId,
       eventId: event.id,
-      snapshot,
       sessionId: resolved.session.id,
       ticketId
     });

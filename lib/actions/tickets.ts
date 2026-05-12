@@ -443,6 +443,10 @@ export async function submitTicketObjectiveAction(ticketId: string): Promise<voi
   await assertTicketAccess(supabase, ticketId);
   const submission = await submitDraftObjective(supabase, ticketId);
 
+  if (submission.error) {
+    throw new Error(submission.error);
+  }
+
   if (!submission.didSubmit) {
     return;
   }

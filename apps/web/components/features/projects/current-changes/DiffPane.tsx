@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Columns2, Filter, Info, Loader2 } from 'lucide-react';
+import { Bot, ChevronDown, Columns2, Filter, Info, Loader2, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -16,7 +16,7 @@ import type { DiffViewMode } from '../CurrentChangesPage';
 
 import { buildHunkMatches, formatStatus, lineNumber } from './helpers';
 import { HunkPopoverContent } from './HunkPopoverContent';
-import type { EnrichedCurrentChangeFile, TicketSummary } from './types';
+import type { EnrichedCurrentChangeFile, FileChangeRecord, TicketSummary } from './types';
 
 type DiffPaneProps = {
   diff: ParsedUnifiedDiff | null;
@@ -27,6 +27,7 @@ type DiffPaneProps = {
   selectedFilePath: string | null;
   selectedTicketIds: Set<string>;
   viewMode: DiffViewMode;
+  workingDirectory: string | null;
   onFilterByTicket: (ticketId: string) => void;
   onToggleTicketFilter: (ticketId: string) => void;
   onViewModeChange: (mode: DiffViewMode) => void;
@@ -113,33 +114,103 @@ function SecondaryTicketBadge({
   );
 }
 
+type ObjectiveGroup = {
+  objectiveId: string | null;
+  objectiveText: string | null;
+  hasCheckpoint: boolean;
+  rationales: FileChangeRecord[];
+};
+
+function groupRationalesByObjective(rationales: FileChangeRecord[]): ObjectiveGroup[] {
+  const groups = new Map<string, ObjectiveGroup>();
+  for (const rationale of rationales) {
+    const key = rationale.objective?.id ?? '__none__';
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        objectiveId: rationale.objective?.id ?? null,
+        objectiveText: rationale.objective?.objective ?? null,
+        hasCheckpoint: false,
+        rationales: []
+      };
+      groups.set(key, group);
+    }
+    group.rationales.push(rationale);
+    if (rationale.checkpoint?.git_commit_id) group.hasCheckpoint = true;
+  }
+  return [...groups.values()];
+}
+
+function ObjectiveRationaleGroups({
+  groups,
+  onRevert
+}: {
+  groups: ObjectiveGroup[];
+  onRevert: (objectiveId: string) => void;
+}) {
+  if (groups.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Rationales by objective
+      </p>
+      {groups.map((group, index) => (
+        <div
+          key={group.objectiveId ?? `none-${index}`}
+          className="rounded-md border bg-muted/20 p-2"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 flex-1 text-xs text-foreground">
+              {group.objectiveText?.trim() || (group.objectiveId ? 'Objective' : 'No objective')}
+            </p>
+            {group.objectiveId && group.hasCheckpoint ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 shrink-0 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => onRevert(group.objectiveId!)}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Revert
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  Restore the working tree to this objective&apos;s checkpoint
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+          <ul className="mt-1.5 space-y-1.5">
+            {group.rationales.map(rationale => (
+              <li key={rationale.id} className="text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">{rationale.label}</span>
+                {rationale.summary ? <> — {rationale.summary}</> : null}
+                {rationale.why || rationale.impact ? (
+                  <span className="mt-0.5 block">
+                    {rationale.why ? <em>Why: {rationale.why}. </em> : null}
+                    {rationale.impact ? <em>Impact: {rationale.impact}.</em> : null}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function formatSnapshotSummary(
   file: EnrichedCurrentChangeFile['primaryFileChange']
 ): string | null {
   if (!file) return null;
   const parts: string[] = [];
-
-  const backend = file.checkpoint?.backend ?? file.snapshot_backend;
-  const jjChangeId = file.checkpoint?.jj_change_id ?? file.jj_change_id;
-  const jjCommitId = file.checkpoint?.jj_commit_id ?? file.jj_commit_id;
-  const jjOperationId = file.checkpoint?.jj_operation_id ?? file.jj_operation_id;
   const gitCommitId = file.checkpoint?.git_commit_id ?? null;
-
-  if (backend) {
-    parts.push(backend === 'jj' ? 'JJ' : backend);
-  }
-  if (file.checkpoint_id) {
-    parts.push('checkpointed');
-  }
-  if (jjChangeId) parts.push(`change ${jjChangeId.slice(0, 8)}`);
-  if (jjCommitId) parts.push(`commit ${jjCommitId.slice(0, 8)}`);
-  if (jjOperationId) parts.push(`op ${jjOperationId.slice(0, 8)}`);
+  if (file.checkpoint_id) parts.push('checkpointed');
   if (gitCommitId) parts.push(`git ${gitCommitId.slice(0, 8)}`);
-
-  if (parts.length === 0 && file.snapshot_backend) {
-    parts.push(file.snapshot_backend === 'jj' ? 'JJ' : file.snapshot_backend);
-  }
-
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
@@ -152,6 +223,7 @@ export function DiffPane({
   selectedFilePath,
   selectedTicketIds,
   viewMode,
+  workingDirectory,
   onFilterByTicket,
   onToggleTicketFilter,
   onViewModeChange
@@ -159,6 +231,49 @@ export function DiffPane({
   const [openPopoverKey, setOpenPopoverKey] = useState<string | null>(null);
   const [rationaleOpen, setRationaleOpen] = useState(true);
   const isFiltering = selectedTicketIds.size > 0;
+
+  const objectiveGroups = useMemo(
+    () => groupRationalesByObjective(file.rationales),
+    [file.rationales]
+  );
+
+  const handleRevertObjective = async (objectiveId: string) => {
+    const w =
+      typeof window !== 'undefined'
+        ? (window as Window & {
+            api?: {
+              filesystem?: {
+                restoreCheckpoint?: (input: {
+                  directory: string;
+                  objectiveId: string;
+                }) => Promise<{ ok: boolean; error?: string }>;
+              };
+            };
+          })
+        : null;
+    const restore = w?.api?.filesystem?.restoreCheckpoint;
+    if (!restore) {
+      alert('Reverting checkpoints is only available in the Overlord desktop app.');
+      return;
+    }
+    const directory = workingDirectory;
+    if (!directory) {
+      alert('No working directory is configured for this project.');
+      return;
+    }
+    const confirmed = window.confirm(
+      'Revert the working tree to this objective’s checkpoint?\n\nA safety snapshot of your current uncommitted changes will be saved to refs/overlord/safety/ before reverting.'
+    );
+    if (!confirmed) return;
+    try {
+      const result = await restore({ directory, objectiveId });
+      if (!result.ok) {
+        alert(result.error ?? 'Failed to revert checkpoint.');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to revert checkpoint.');
+    }
+  };
 
   const secondaryTickets = useMemo(() => {
     if (!file.primaryTicket) return file.tickets;
@@ -310,6 +425,11 @@ export function DiffPane({
             {file.primaryTicket?.objective?.trim() ? (
               <p className="text-xs text-muted-foreground">{file.primaryTicket.objective}</p>
             ) : null}
+
+            <ObjectiveRationaleGroups
+              groups={objectiveGroups}
+              onRevert={objectiveId => void handleRevertObjective(objectiveId)}
+            />
 
             {file.primaryFileChange?.why || file.primaryFileChange?.impact ? (
               <div className="grid gap-3 md:grid-cols-2">

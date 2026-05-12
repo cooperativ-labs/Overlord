@@ -325,6 +325,7 @@ export function CurrentChangesPage({
               selectedFilePath={selectedFile.path}
               selectedTicketIds={selectedTicketIds}
               viewMode={diffViewMode}
+              workingDirectory={workingDirectory}
               onFilterByTicket={focusTicketFilter}
               onToggleTicketFilter={toggleTicketFilter}
               onViewModeChange={setDiffViewMode}

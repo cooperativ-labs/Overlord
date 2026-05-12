@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 import { resolveLinkedDirectory } from '../../../../lib/filesystem/project-file-tree';
 import { buildRepoOperationsProfile } from '../../../../lib/repo-profile/build-profile';
-import { installLocalVersionControl } from '../../../../lib/snapshot/install-local-version-control';
+import { createCheckpoint, restoreCheckpoint } from '../../../../lib/snapshot/git-checkpoint';
 import { LocalWorkspaceClient } from '../../../../lib/workspace/local';
 import type {
   CreatePullRequestOptions,
@@ -197,26 +197,39 @@ export function registerFilesystemIpc(): void {
     }
   });
 
-  ipcMain.handle(
-    'filesystem:install-local-version-control',
-    async (_event, rawPayload?: unknown) => {
-      try {
-        const payload = safeParseWorkspace(rawPayload);
-        if (!payload?.directory?.trim()) {
-          return { ok: false, error: 'Local working directory is required.' };
-        }
-        return await installLocalVersionControl({
-          directory: payload.directory,
-          mode: 'jj'
-        });
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : 'Failed to install version control.'
-        };
-      }
+  ipcMain.handle('filesystem:create-checkpoint', async (_event, rawPayload?: unknown) => {
+    try {
+      const raw = (rawPayload ?? {}) as { directory?: unknown; objectiveId?: unknown };
+      const directory = typeof raw.directory === 'string' ? raw.directory.trim() : '';
+      const objectiveId = typeof raw.objectiveId === 'string' ? raw.objectiveId.trim() : '';
+      if (!directory) return { ok: false, error: 'Local working directory is required.' };
+      if (!objectiveId) return { ok: false, error: 'objectiveId is required.' };
+      const result = await createCheckpoint({ workspacePath: directory, objectiveId });
+      return { ok: true, ...result };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to create checkpoint.'
+      };
     }
-  );
+  });
+
+  ipcMain.handle('filesystem:restore-checkpoint', async (_event, rawPayload?: unknown) => {
+    try {
+      const raw = (rawPayload ?? {}) as { directory?: unknown; objectiveId?: unknown };
+      const directory = typeof raw.directory === 'string' ? raw.directory.trim() : '';
+      const objectiveId = typeof raw.objectiveId === 'string' ? raw.objectiveId.trim() : '';
+      if (!directory) return { ok: false, error: 'Local working directory is required.' };
+      if (!objectiveId) return { ok: false, error: 'objectiveId is required.' };
+      const result = await restoreCheckpoint({ workspacePath: directory, objectiveId });
+      return { ok: true, ...result };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to restore checkpoint.'
+      };
+    }
+  });
 
   ipcMain.handle('filesystem:get-git-branches', async (_event, rawPayload?: unknown) => {
     try {

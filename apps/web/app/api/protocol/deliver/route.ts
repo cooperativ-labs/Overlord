@@ -4,6 +4,7 @@ import { after, NextResponse } from 'next/server';
 
 import { internalErrorResponse, parseProtocolBody } from '@/app/api/protocol/_lib';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { upsertObjectiveCheckpoint } from '@/lib/overlord/checkpoints';
 import { insertFileChanges } from '@/lib/overlord/file-changes';
 import { resolveSession, resolveTicketId } from '@/lib/overlord/protocol-db';
 import { sendPushNotification } from '@/lib/overlord/push-notifications';
@@ -44,7 +45,8 @@ export async function POST(request: Request) {
     if (!resolved.session) {
       return NextResponse.json({ error: resolved.error }, { status: 404 });
     }
-    if ((snapshot?.backend || checkpoint) && !ticket?.project_id) {
+    const hasCheckpoint = Boolean(snapshot?.gitCommitId || checkpoint);
+    if (hasCheckpoint && !ticket?.project_id) {
       return NextResponse.json(
         { error: 'Cannot persist a checkpoint for a ticket without a project.' },
         { status: 400 }
@@ -73,48 +75,28 @@ export async function POST(request: Request) {
     }
 
     let checkpointId: string | null = null;
-    if (snapshot?.backend || checkpoint) {
-      const { data: objective } = await supabase
-        .from('objectives')
-        .select('id')
-        .eq('ticket_id', ticketId)
-        .eq('state', 'executing')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const { data: checkpointRow, error: checkpointError } = await supabase
-        .from('project_checkpoints')
-        .insert({
-          organization_id: organizationId,
-          project_id: ticket!.project_id!,
-          ticket_id: ticketId,
-          objective_id: objective?.id ?? null,
-          session_id: resolved.session.id,
-          event_id: event.id,
-          checkpoint_kind: checkpoint?.kind ?? 'delivery',
-          backend: snapshot?.backend ?? 'unknown',
-          workspace_path: snapshot?.workspacePath ?? null,
-          workspace_name: snapshot?.workspaceName ?? null,
-          jj_change_id: snapshot?.jjChangeId ?? null,
-          jj_commit_id: snapshot?.jjCommitId ?? null,
-          jj_operation_id: snapshot?.jjOperationId ?? null,
-          git_commit_id: snapshot?.gitCommitId ?? snapshot?.baseGitCommitId ?? null,
-          summary: checkpoint?.summary ?? summary,
-          diff_stat: checkpoint?.diffStat ?? snapshot?.diffStat ?? null,
-          created_by: userId
-        })
-        .select('id')
-        .single();
-
-      if (checkpointError || !checkpointRow) {
-        console.error('[protocol:deliver] checkpoint insert error:', checkpointError?.message);
-        Sentry.captureException(checkpointError ?? new Error('Failed to write checkpoint.'), {
+    if (hasCheckpoint) {
+      const result = await upsertObjectiveCheckpoint({
+        supabase: typedSupabase,
+        organizationId,
+        projectId: ticket!.project_id!,
+        ticketId,
+        sessionId: resolved.session.id,
+        eventId: event.id,
+        userId,
+        snapshot,
+        checkpoint: checkpoint
+          ? { ...checkpoint, kind: checkpoint.kind ?? 'delivery' }
+          : { kind: 'delivery' },
+        fallbackSummary: summary
+      });
+      if (result.error) {
+        console.error('[protocol:deliver] checkpoint insert error:', result.error);
+        Sentry.captureException(new Error(result.error), {
           extra: { ticketId, sessionId: resolved.session.id, eventId: event.id }
         });
-      } else {
-        checkpointId = checkpointRow.id;
       }
+      checkpointId = result.checkpointId;
     }
 
     if (Array.isArray(changeRationales) && changeRationales.length > 0) {
@@ -123,7 +105,6 @@ export async function POST(request: Request) {
         checkpointId,
         eventId: event.id,
         sessionId: resolved.session.id,
-        snapshot,
         supabase: typedSupabase,
         ticketId
       });

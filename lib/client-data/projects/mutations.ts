@@ -9,7 +9,6 @@ import {
   disconnectProjectFromEverhourAction,
   moveProjectToOrganizationAction,
   updateProjectColorAction,
-  updateProjectLocalVersionControlAction,
   updateProjectNameAction,
   updateProjectSshConfigAction,
   updateProjectWorkingDirectoryAction
@@ -88,9 +87,6 @@ function emptySshFields() {
     localWorkingDirectory: null,
     sshCommand: null,
     remoteWorkingDirectory: null,
-    localVersionControl: 'off',
-    localVersionControlInstalledAt: null,
-    localVersionControlError: null,
     sshHost: null,
     sshPort: null,
     sshUser: null,
@@ -107,9 +103,6 @@ const updateProjectColorWithRetry = withElectronActionRetry(updateProjectColorAc
 const updateProjectNameWithRetry = withElectronActionRetry(updateProjectNameAction);
 const updateProjectWorkingDirectoryWithRetry = withElectronActionRetry(
   updateProjectWorkingDirectoryAction
-);
-const updateProjectLocalVersionControlWithRetry = withElectronActionRetry(
-  updateProjectLocalVersionControlAction
 );
 const updateProjectSshConfigWithRetry = withElectronActionRetry(updateProjectSshConfigAction);
 const disconnectProjectFromEverhourWithRetry = withElectronActionRetry(
@@ -259,25 +252,6 @@ export function useUpdateProjectWorkingDirectoryMutation() {
           typeof input.workingDirectory === 'string' && input.workingDirectory.trim().length > 0
             ? input.workingDirectory.trim()
             : null
-      });
-      return snapshot;
-    },
-    onError: (_error, _input, snapshot) => {
-      if (snapshot) restoreProjectState(queryClient, snapshot);
-    }
-  });
-}
-
-export function useUpdateProjectLocalVersionControlMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: updateProjectLocalVersionControlWithRetry,
-    onMutate: input => {
-      const snapshot = snapshotProjectState(queryClient);
-      patchProjectCache(queryClient, input.projectId, {
-        localVersionControl: input.mode,
-        localVersionControlInstalledAt: input.installedAt ?? null,
-        localVersionControlError: input.error ?? null
       });
       return snapshot;
     },

@@ -15,6 +15,10 @@ import type { Database, Json } from '@/types/database.types';
 
 type AttachClient = SupabaseClient<Database>;
 type ConnectionMethod = (typeof connectionMethods)[number];
+type ObjectiveForCheckpoint = {
+  id: string;
+  state: string | null;
+};
 
 function normalizeDirectoryForComparison(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -66,6 +70,28 @@ function resolveSessionWorkingDirectory(input: {
   }
 
   return localWorkingDirectory ?? remoteWorkingDirectory;
+}
+
+async function resolvePendingCheckpointObjectiveIds(input: {
+  supabase: AttachClient;
+  projectId: string | null;
+  objectives: ObjectiveForCheckpoint[];
+}): Promise<string[]> {
+  const executingObjectiveIds = input.objectives
+    .filter(objective => objective.state === 'executing')
+    .map(objective => objective.id);
+  if (!input.projectId || executingObjectiveIds.length === 0) return [];
+
+  const { data: checkpoints } = await input.supabase
+    .from('project_checkpoints')
+    .select('objective_id')
+    .eq('project_id', input.projectId)
+    .in('objective_id', executingObjectiveIds);
+
+  const checkpointedObjectiveIds = new Set(
+    (checkpoints ?? []).map(checkpoint => checkpoint.objective_id)
+  );
+  return executingObjectiveIds.filter(objectiveId => !checkpointedObjectiveIds.has(objectiveId));
 }
 
 /**
@@ -284,6 +310,11 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
     ? resolveProjectUserSshSettings(sshPreferencesByProjectId.get(project.id))
     : null;
   const localSettings = project ? localSettingsByProjectId.get(project.id) : null;
+  const pendingCheckpointObjectiveIds = await resolvePendingCheckpointObjectiveIds({
+    supabase,
+    projectId: ticket.project_id,
+    objectives: objectives ?? []
+  });
 
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: {
@@ -319,6 +350,7 @@ export async function runAttachProtocol(supabase: AttachClient, params: AttachPa
       sharedState: sharedState ?? [],
       promptContext,
       promptContextSections,
+      pendingCheckpointObjectiveIds,
       ticket: {
         ...ticket,
         objective: objectiveExecution.executedObjective ?? undefined

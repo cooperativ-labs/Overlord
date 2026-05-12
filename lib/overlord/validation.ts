@@ -75,18 +75,12 @@ const changeRationaleHunkSchema = z
   );
 
 const snapshotContextSchema = z.object({
-  backend: z.enum(['git-worktree', 'jj', 'git']).optional(),
-  baseGitCommitId: z.string().trim().min(1).max(160).optional(),
-  baseJjCommitId: z.string().trim().min(1).max(160).optional(),
   diffStat: z.string().trim().max(20_000).nullable().optional(),
   gitCommitId: z.string().trim().min(1).max(160).nullable().optional(),
-  projectId: z.string().trim().min(1).max(160).optional(),
-  shadowRepoPath: z.string().trim().min(1).max(1024).optional(),
-  jjChangeId: z.string().trim().min(1).max(160).optional(),
-  jjCommitId: z.string().trim().min(1).max(160).optional(),
-  jjOperationId: z.string().trim().min(1).max(160).optional(),
-  workspaceName: z.string().trim().min(1).max(240).optional(),
-  workspacePath: z.string().trim().min(1).max(1024).optional()
+  gitRefName: z.string().trim().min(1).max(256).optional(),
+  headSha: z.string().trim().min(1).max(160).optional(),
+  objectiveId: z.string().trim().min(1).max(64).optional(),
+  projectId: z.string().trim().min(1).max(160).optional()
 });
 
 const checkpointSchema = z.object({
@@ -102,15 +96,9 @@ export const changeRationaleSchema = z.object({
   file_path: z.string().trim().min(1).max(1024),
   hunks: z.array(changeRationaleHunkSchema).max(20).optional().default([]),
   impact: z.string().trim().min(1).max(2_000),
-  jj_change_id: z.string().trim().min(1).max(160).nullable().optional(),
-  jj_commit_id: z.string().trim().min(1).max(160).nullable().optional(),
-  jj_operation_id: z.string().trim().min(1).max(160).nullable().optional(),
   label: z.string().trim().min(1).max(160),
-  snapshot_backend: z.string().trim().min(1).max(40).nullable().optional(),
   summary: z.string().trim().min(1).max(2_000),
-  why: z.string().trim().min(1).max(2_000),
-  workspace_name: z.string().trim().min(1).max(240).nullable().optional(),
-  workspace_path: z.string().trim().min(1).max(1024).nullable().optional()
+  why: z.string().trim().min(1).max(2_000)
 });
 
 export const updateSchema = z.object({

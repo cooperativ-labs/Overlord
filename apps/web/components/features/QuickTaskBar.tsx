@@ -341,6 +341,7 @@ export function QuickTaskBar({ defaultProjectId, projects }: QuickTaskBarProps) 
       >
         <MentionableTextarea
           ref={textareaRef}
+          autoListContinuation="shift-enter"
           value={objective}
           onValueChange={nextValue => {
             setObjective(nextValue);

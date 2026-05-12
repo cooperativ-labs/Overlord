@@ -235,8 +235,6 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                   </ul>
                 </div>
               )}
-
-
             </div>
           )}
 

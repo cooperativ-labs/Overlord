@@ -46,8 +46,6 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
   const sshSettings = resolveProjectUserSshSettings(projectUser);
   const projectUserLocal = localByProject.get(project.id);
   const projectWorkingDirectory = projectUserLocal?.local_working_directory ?? null;
-  const projectLocalVersionControl =
-    projectUserLocal?.local_version_control === 'jj' ? 'jj' : 'off';
 
   const [{ data: everhourIntegration }, { data: statuses }] = await Promise.all([
     supabase
@@ -81,11 +79,6 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         projectName={project.name}
         projectColor={project.color}
         projectWorkingDirectory={projectWorkingDirectory}
-        projectLocalVersionControl={projectLocalVersionControl}
-        projectLocalVersionControlInstalledAt={
-          projectUserLocal?.local_version_control_installed_at ?? null
-        }
-        projectLocalVersionControlError={projectUserLocal?.local_version_control_error ?? null}
         projectSshCommand={sshSettings.sshCommand}
         projectRemoteWorkingDirectory={sshSettings.remoteWorkingDirectory}
         projectSshHost={sshSettings.sshHost}

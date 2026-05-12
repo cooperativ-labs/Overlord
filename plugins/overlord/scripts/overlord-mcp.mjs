@@ -297,11 +297,6 @@ const tools = [
           description:
             'Optional checkpoint metadata. The local CLI creates this automatically for JJ/Git workspaces during deliver.'
         },
-        checkpoint_backend: {
-          type: 'string',
-          enum: ['auto', 'jj', 'git'],
-          description: 'Backend for automatic local checkpointing when routed through the CLI.'
-        },
         skip_checkpoint: { type: 'boolean' },
         skip_file_change_check: { type: 'boolean' }
       },
@@ -311,7 +306,6 @@ const tools = [
       'session-key': args.session_key,
       'ticket-id': args.ticket_id,
       'payload-file': '-',
-      'checkpoint-backend': args.checkpoint_backend,
       'skip-checkpoint': args.skip_checkpoint,
       'skip-file-change-check': args.skip_file_change_check
     }),

@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605120852.0] - 2026-05-12:08:52
+
+### Added
+- Record **Git-backed delivery checkpoints** with a stable ref namespace and **`head_sha`**, so local tooling and the product agree on one checkpoint shape per **project + objective**.
+
+### Fixed
+- Make **objective checkpoint upserts** reliable for PostgREST by backfilling **`objective_id`**, clearing orphan **`file_changes.checkpoint_id`** links, and replacing the partial unique index with a normal **`(project_id, objective_id)`** constraint.
+- Reject objectives that leave **draft** with a missing or whitespace-only **`objective`** text at the database layer.
+
+### Changed
+- **Simplify checkpoints to Git-only**: drop JJ-specific and workspace-path columns from **`project_checkpoints`** and **`file_changes`**, and remove per-member **local version control** columns from **`project_user`** so checkpoints no longer depend on JJ metadata or opt-in toggles stored in Postgres.
+- Align **protocol deliver/update**, **MCP handlers**, **Current Changes**, and **Desktop** launch paths with the Git checkpoint model and updated validation.
+
+### Security
+- None.
+
+### Removed
+- Retire the old **local snapshot install** and **non-Git checkpoint** helpers from **`lib/snapshot`** in favor of the shared **Git ref** checkpoint implementation.
+
+### Test
+- Add coverage for **list continuation** helpers; refresh **Current Changes** diff and view-model tests for the streamlined checkpoint and file-change behavior.
+
+### Chore
+- Add migrations **`20260512074633_simplify_checkpoints_to_git_only.sql`**, **`20260512080000_enforce_non_null_objective_for_non_draft_state.sql`**, and **`20260512103000_fix_checkpoint_objective_upsert.sql`**; regenerate **`types/database.types.ts`**; bump workspace and **`overlord-cli`** to **`5.2605120852.0`** / **`0.2605120852.0`**.
+
 ## [5.2605112131.0] - 2026-05-11:21:31
 
 ### Added

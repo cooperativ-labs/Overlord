@@ -482,18 +482,12 @@ export type Database = {
           hunks: Json;
           id: string;
           impact: string;
-          jj_change_id: string | null;
-          jj_commit_id: string | null;
-          jj_operation_id: string | null;
           label: string;
           session_id: string;
-          snapshot_backend: string | null;
           summary: string;
           ticket_id: string;
           updated_at: string;
           why: string;
-          workspace_name: string | null;
-          workspace_path: string | null;
         };
         Insert: {
           attribution_source?: string;
@@ -507,18 +501,12 @@ export type Database = {
           hunks?: Json;
           id?: string;
           impact: string;
-          jj_change_id?: string | null;
-          jj_commit_id?: string | null;
-          jj_operation_id?: string | null;
           label: string;
           session_id: string;
-          snapshot_backend?: string | null;
           summary: string;
           ticket_id: string;
           updated_at?: string;
           why: string;
-          workspace_name?: string | null;
-          workspace_path?: string | null;
         };
         Update: {
           attribution_source?: string;
@@ -532,18 +520,12 @@ export type Database = {
           hunks?: Json;
           id?: string;
           impact?: string;
-          jj_change_id?: string | null;
-          jj_commit_id?: string | null;
-          jj_operation_id?: string | null;
           label?: string;
           session_id?: string;
-          snapshot_backend?: string | null;
           summary?: string;
           ticket_id?: string;
           updated_at?: string;
           why?: string;
-          workspace_name?: string | null;
-          workspace_path?: string | null;
         };
         Relationships: [
           {
@@ -902,67 +884,55 @@ export type Database = {
       };
       project_checkpoints: {
         Row: {
-          backend: string;
           checkpoint_kind: string;
           created_at: string;
           created_by: string | null;
           diff_stat: string | null;
           event_id: string | null;
           git_commit_id: string | null;
+          git_ref_name: string | null;
+          head_sha: string | null;
           id: string;
-          jj_change_id: string | null;
-          jj_commit_id: string | null;
-          jj_operation_id: string | null;
-          objective_id: string | null;
+          objective_id: string;
           organization_id: number;
           project_id: string;
           session_id: string | null;
           summary: string | null;
           ticket_id: string | null;
-          workspace_name: string | null;
-          workspace_path: string | null;
         };
         Insert: {
-          backend: string;
           checkpoint_kind?: string;
           created_at?: string;
           created_by?: string | null;
           diff_stat?: string | null;
           event_id?: string | null;
           git_commit_id?: string | null;
+          git_ref_name?: string | null;
+          head_sha?: string | null;
           id?: string;
-          jj_change_id?: string | null;
-          jj_commit_id?: string | null;
-          jj_operation_id?: string | null;
-          objective_id?: string | null;
+          objective_id: string;
           organization_id: number;
           project_id: string;
           session_id?: string | null;
           summary?: string | null;
           ticket_id?: string | null;
-          workspace_name?: string | null;
-          workspace_path?: string | null;
         };
         Update: {
-          backend?: string;
           checkpoint_kind?: string;
           created_at?: string;
           created_by?: string | null;
           diff_stat?: string | null;
           event_id?: string | null;
           git_commit_id?: string | null;
+          git_ref_name?: string | null;
+          head_sha?: string | null;
           id?: string;
-          jj_change_id?: string | null;
-          jj_commit_id?: string | null;
-          jj_operation_id?: string | null;
-          objective_id?: string | null;
+          objective_id?: string;
           organization_id?: number;
           project_id?: string;
           session_id?: string | null;
           summary?: string | null;
           ticket_id?: string | null;
-          workspace_name?: string | null;
-          workspace_path?: string | null;
         };
         Relationships: [
           {
@@ -1057,9 +1027,6 @@ export type Database = {
         Row: {
           created_at: string | null;
           id: string;
-          local_version_control: string;
-          local_version_control_error: string | null;
-          local_version_control_installed_at: string | null;
           local_working_directory: string | null;
           preferences: Json;
           project_id: string;
@@ -1078,9 +1045,6 @@ export type Database = {
         Insert: {
           created_at?: string | null;
           id?: string;
-          local_version_control?: string;
-          local_version_control_error?: string | null;
-          local_version_control_installed_at?: string | null;
           local_working_directory?: string | null;
           preferences?: Json;
           project_id: string;
@@ -1099,9 +1063,6 @@ export type Database = {
         Update: {
           created_at?: string | null;
           id?: string;
-          local_version_control?: string;
-          local_version_control_error?: string | null;
-          local_version_control_installed_at?: string | null;
           local_working_directory?: string | null;
           preferences?: Json;
           project_id?: string;

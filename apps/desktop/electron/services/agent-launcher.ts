@@ -424,23 +424,8 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
 
   // Use the project's working directory from the API if the caller didn't provide one
   const apiWorkingDirectory = response.headers.get('X-Working-Directory');
-  const localVersionControl = response.headers.get('X-Local-Version-Control');
 
-  let clientSnapshotContext: Record<string, unknown> | null = null;
-  if (!isRemote && localVersionControl === 'jj' && input.cwd?.trim()) {
-    clientSnapshotContext = {
-      backend: 'jj',
-      projectId: input.projectId ?? null,
-      workspacePath: input.cwd.trim(),
-      workspaceName: path.basename(input.cwd.trim())
-    };
-  }
-
-  const resolvedCwd =
-    (clientSnapshotContext?.workspacePath as string | undefined) ||
-    input.cwd ||
-    apiWorkingDirectory ||
-    undefined;
+  const resolvedCwd = input.cwd || apiWorkingDirectory || undefined;
 
   // Pre-flight check: if a local cwd is configured but missing, surface a clear
   // error to the renderer instead of opening a terminal where `cd` silently
@@ -453,10 +438,6 @@ export async function prepareAgentLaunch(input: LaunchAgentInput): Promise<Launc
         `Working directory ${resolvedCwd} ${cwdProblem}. Open the project's settings to update its directory, or grant Overlord access in System Settings → Privacy & Security → Files and Folders.`
       );
     }
-  }
-
-  if (clientSnapshotContext) {
-    launchEnv.OVERLORD_SNAPSHOT_JSON = JSON.stringify(clientSnapshotContext);
   }
 
   const contextMarkdown = await response.text();

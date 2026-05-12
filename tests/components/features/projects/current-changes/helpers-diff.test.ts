@@ -16,12 +16,9 @@ function makeRationale(
     file_name: overrides.file_path.split('/').pop() ?? overrides.file_path,
     hunks: [],
     impact: '',
-    jj_change_id: null,
-    jj_commit_id: null,
-    jj_operation_id: null,
     label: '',
+    objective: null,
     session: null,
-    snapshot_backend: null,
     summary: 's',
     ticket: {
       id: 't1',
@@ -33,8 +30,6 @@ function makeRationale(
     },
     updated_at: '2026-05-10T00:00:00Z',
     why: '',
-    workspace_name: null,
-    workspace_path: null,
     ...overrides
   };
 }

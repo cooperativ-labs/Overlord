@@ -197,9 +197,6 @@ export async function GET(request: Request, { params }: RouteContext) {
     if (resolvedWorkingDirectory) {
       headers['X-Working-Directory'] = resolvedWorkingDirectory;
     }
-    if (projectUserLocal?.local_version_control) {
-      headers['X-Local-Version-Control'] = projectUserLocal.local_version_control;
-    }
     const humanTicketId = ticket.ticket_id || ticket.id;
     headers['X-Ticket-Id'] = humanTicketId;
 

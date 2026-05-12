@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, Download, Folder, Loader2, Terminal } from 'lucide-react';
+import { Download, Folder, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/select';
 import type { ProjectSshAuthMethod } from '@/lib/actions/project-types';
 import {
-  useUpdateProjectLocalVersionControlMutation,
   useUpdateProjectSshConfigMutation,
   useUpdateProjectWorkingDirectoryMutation
 } from '@/lib/client-data/projects/mutations';
@@ -34,9 +33,6 @@ type WorkflowPageProps = {
   projectId: string;
   organizationId: number;
   initialWorkingDirectory: string | null;
-  initialLocalVersionControl: 'off' | 'jj';
-  initialLocalVersionControlInstalledAt: string | null;
-  initialLocalVersionControlError: string | null;
   initialSshCommand: string | null;
   initialRemoteWorkingDirectory: string | null;
   initialSshHost: string | null;
@@ -56,9 +52,6 @@ export function WorkflowPage({
   projectId,
   organizationId,
   initialWorkingDirectory,
-  initialLocalVersionControl,
-  initialLocalVersionControlInstalledAt,
-  initialLocalVersionControlError,
   initialSshCommand: _initialSshCommand,
   initialRemoteWorkingDirectory,
   initialSshHost,
@@ -70,24 +63,12 @@ export function WorkflowPage({
 }: WorkflowPageProps) {
   const { api, isElectron } = useElectron();
   const updateWorkingDirectoryMutation = useUpdateProjectWorkingDirectoryMutation();
-  const updateLocalVersionControlMutation = useUpdateProjectLocalVersionControlMutation();
   const updateSshConfigMutation = useUpdateProjectSshConfigMutation();
   const [workingDirectory, setWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [savedWorkingDirectory, setSavedWorkingDirectory] = useState(initialWorkingDirectory ?? '');
   const [workingDirectorySaveState, setWorkingDirectorySaveState] =
     useState<ButtonLoadingState>('default');
   const [workingDirectoryError, setWorkingDirectoryError] = useState<string | null>(null);
-  const [localVersionControl, setLocalVersionControl] = useState<'off' | 'jj'>(
-    initialLocalVersionControl
-  );
-  const [localVersionControlInstalledAt, setLocalVersionControlInstalledAt] = useState<
-    string | null
-  >(initialLocalVersionControlInstalledAt);
-  const [localVersionControlError, setLocalVersionControlError] = useState<string | null>(
-    initialLocalVersionControlError
-  );
-  const [installingVersionControl, setInstallingVersionControl] = useState(false);
-  const [openingHomebrewJjInstall, setOpeningHomebrewJjInstall] = useState(false);
   const directoryInputRef = useRef<HTMLInputElement>(null);
   const hasSavedWorkingDirectory =
     savedWorkingDirectory.trim().length > 0 && !isWorkingDirectoryNone(savedWorkingDirectory);
@@ -124,14 +105,6 @@ export function WorkflowPage({
   const [sshError, setSshError] = useState<string | null>(null);
   const hasSshConfig = savedSshHost.trim().length > 0 && savedSshUser.trim().length > 0;
 
-  const isDarwinDesktop = useMemo(
-    () =>
-      isElectron &&
-      typeof navigator !== 'undefined' &&
-      /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent),
-    [isElectron]
-  );
-
   // Remote helper state
   const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
   const [helperNeedsUpdate, setHelperNeedsUpdate] = useState(false);
@@ -150,16 +123,6 @@ export function WorkflowPage({
     setWorkingDirectory(next);
     setSavedWorkingDirectory(next);
   }, [initialWorkingDirectory]);
-
-  useEffect(() => {
-    setLocalVersionControl(initialLocalVersionControl);
-    setLocalVersionControlInstalledAt(initialLocalVersionControlInstalledAt);
-    setLocalVersionControlError(initialLocalVersionControlError);
-  }, [
-    initialLocalVersionControl,
-    initialLocalVersionControlError,
-    initialLocalVersionControlInstalledAt
-  ]);
 
   useEffect(() => {
     const host = initialSshHost ?? '';
@@ -315,95 +278,6 @@ export function WorkflowPage({
     }
   }
 
-  async function handleInstallVersionControl() {
-    if (!hasSavedWorkingDirectory || !savedWorkingDirectory.trim()) {
-      setLocalVersionControlError('A local working directory is required.');
-      return;
-    }
-    if (!isElectron || !api?.filesystem?.installLocalVersionControl) {
-      setLocalVersionControlError('Install version control from the Overlord desktop app.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      'Initialize Jujutsu (jj) in this folder?\n\nOverlord will run jj in your working directory so agent changes can be checkpointed. This only applies when jj is installed on your Mac.'
-    );
-    if (!confirmed) return;
-
-    setInstallingVersionControl(true);
-    setLocalVersionControlError(null);
-    try {
-      const result = await api.filesystem.installLocalVersionControl({
-        directory: savedWorkingDirectory,
-        mode: 'local'
-      });
-      if (!result.ok) {
-        setLocalVersionControlError(result.error);
-        await updateLocalVersionControlMutation.mutateAsync({
-          projectId,
-          mode: 'off',
-          installedAt: null,
-          error: result.error
-        });
-        return;
-      }
-      const installedAt = new Date().toISOString();
-      await updateLocalVersionControlMutation.mutateAsync({
-        projectId,
-        mode: 'jj',
-        installedAt,
-        error: null
-      });
-      setLocalVersionControl('jj');
-      setLocalVersionControlInstalledAt(installedAt);
-      toast.success(
-        result.alreadyInstalled ? 'Jujutsu already initialized here.' : 'Jujutsu initialized.'
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to install version control.';
-      setLocalVersionControlError(message);
-      await updateLocalVersionControlMutation.mutateAsync({
-        projectId,
-        mode: 'off',
-        installedAt: null,
-        error: message
-      });
-    } finally {
-      setInstallingVersionControl(false);
-    }
-  }
-
-  async function handleOpenJjInstallGuide() {
-    const url = 'https://docs.jj-vcs.dev/latest/install/';
-    if (api?.app?.openExternal) {
-      await api.app.openExternal(url);
-      return;
-    }
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
-
-  async function handleOpenHomebrewJjInstall() {
-    if (!api?.terminal?.openHomebrewJjInstall) {
-      toast.error('Update the Overlord desktop app, or use the install guide.');
-      return;
-    }
-    setOpeningHomebrewJjInstall(true);
-    try {
-      const result = await api.terminal.openHomebrewJjInstall();
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.message(
-        'A terminal window should open. When jj is installed, click Initialize in this folder.'
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to open terminal.');
-    } finally {
-      setOpeningHomebrewJjInstall(false);
-    }
-  }
-
   async function handleSaveSshConfig() {
     const host = sshHost.trim();
     const user = sshUser.trim();
@@ -537,114 +411,6 @@ export function WorkflowPage({
           {workingDirectoryError ? (
             <p className="text-xs text-destructive">{workingDirectoryError}</p>
           ) : null}
-          <div className="mt-2 rounded-md border bg-muted/20 p-3">
-            <div className="flex flex-col gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-medium">Local checkpoints (Jujutsu / jj)</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  This stays{' '}
-                  <span className="font-medium text-foreground">off unless you turn it on</span>.
-                  Overlord does not run jj against your folder until you initialize it here, so
-                  copied or imported repos are not tracked in the background. When enabled, Overlord
-                  uses{' '}
-                  <a
-                    className="underline underline-offset-2"
-                    href="/docs/workflow/file-changes"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Jujutsu
-                  </a>{' '}
-                  in the working directory above for checkpoints and clearer file-change metadata.
-                </p>
-                <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-muted-foreground">
-                  <li>
-                    Install the <code className="rounded bg-muted px-1">jj</code> CLI on this
-                    machine (the desktop app uses the same PATH as other GUI apps; Homebrew installs
-                    usually land in <code className="rounded bg-muted px-1">/opt/homebrew/bin</code>
-                    ).
-                  </li>
-                  <li>
-                    Choose{' '}
-                    <span className="font-medium text-foreground">Initialize in this folder</span>{' '}
-                    so jj metadata exists directly in that directory (or adopt an existing jj repo
-                    there).
-                  </li>
-                </ol>
-                {localVersionControl === 'jj' ? (
-                  <p className="mt-2 text-xs text-emerald-600">
-                    Jujutsu active for this project
-                    {localVersionControlInstalledAt
-                      ? ` · ${new Date(localVersionControlInstalledAt).toLocaleString()}`
-                      : ''}
-                  </p>
-                ) : null}
-                {localVersionControlError ? (
-                  <p className="mt-2 text-xs text-destructive">{localVersionControlError}</p>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {isDarwinDesktop ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={() => void handleOpenHomebrewJjInstall()}
-                    disabled={openingHomebrewJjInstall}
-                  >
-                    {openingHomebrewJjInstall ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Opening…
-                      </>
-                    ) : (
-                      <>
-                        <Terminal className="h-3.5 w-3.5" />
-                        Install jj (Homebrew)
-                      </>
-                    )}
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={() => void handleOpenJjInstallGuide()}
-                >
-                  <BookOpen className="h-3.5 w-3.5" />
-                  Install guide
-                </Button>
-                <Button
-                  type="button"
-                  variant={localVersionControl === 'jj' ? 'outline' : 'default'}
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={handleInstallVersionControl}
-                  disabled={
-                    installingVersionControl ||
-                    !hasSavedWorkingDirectory ||
-                    localVersionControl === 'jj'
-                  }
-                >
-                  {installingVersionControl ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Initializing…
-                    </>
-                  ) : localVersionControl === 'jj' ? (
-                    'Initialized'
-                  ) : (
-                    <>
-                      <Download className="h-3.5 w-3.5" />
-                      Initialize in this folder
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
         </div>
       ) : null}
 

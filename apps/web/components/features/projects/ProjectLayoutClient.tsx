@@ -45,9 +45,6 @@ type ProjectLayoutClientProps = {
   projectName: string;
   projectColor: string;
   projectWorkingDirectory: string | null;
-  projectLocalVersionControl: 'off' | 'jj';
-  projectLocalVersionControlInstalledAt: string | null;
-  projectLocalVersionControlError: string | null;
   projectSshCommand: string | null;
   projectRemoteWorkingDirectory: string | null;
   projectSshHost: string | null;
@@ -73,9 +70,6 @@ export function ProjectLayoutClient({
   projectName,
   projectColor,
   projectWorkingDirectory,
-  projectLocalVersionControl,
-  projectLocalVersionControlInstalledAt,
-  projectLocalVersionControlError,
   projectSshCommand,
   projectRemoteWorkingDirectory,
   projectSshHost,
@@ -145,9 +139,6 @@ export function ProjectLayoutClient({
       initialName={projectName}
       initialColor={projectColor}
       initialWorkingDirectory={projectWorkingDirectory}
-      initialLocalVersionControl={projectLocalVersionControl}
-      initialLocalVersionControlInstalledAt={projectLocalVersionControlInstalledAt}
-      initialLocalVersionControlError={projectLocalVersionControlError}
       initialSshCommand={projectSshCommand}
       initialRemoteWorkingDirectory={projectRemoteWorkingDirectory}
       initialSshHost={projectSshHost}

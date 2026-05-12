@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { assertOrgMembership, chunkUuidListForPostgrestNotIn } from '@/app/api/projects/_lib';
+import { assertOrgMembership } from '@/app/api/projects/_lib';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -22,8 +22,6 @@ export async function GET(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
-    const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
-
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .select('id,organization_id')
@@ -41,43 +39,16 @@ export async function GET(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
-    let excludedTicketIds: string[] = [];
-    if (!includeCompleted && project.organization_id) {
-      const { data: terminalStatuses } = await supabase
-        .from('ticket_statuses')
-        .select('name')
-        .eq('organization_id', project.organization_id)
-        .or('status_type.eq.complete,name.ilike.cancelled');
-
-      const terminalStatusNames = [
-        ...new Set((terminalStatuses ?? []).map((s: { name: string }) => s.name))
-      ];
-
-      if (terminalStatusNames.length > 0) {
-        const { data: excludedTickets } = await supabase
-          .from('tickets')
-          .select('id')
-          .eq('project_id', projectId)
-          .in('status', terminalStatusNames);
-
-        excludedTicketIds = (excludedTickets ?? []).map((ticket: { id: string }) => ticket.id);
-      }
-    }
-
     let fileChangeQuery = supabase
       .from('file_changes')
       .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,snapshot_backend,workspace_name,workspace_path,jj_change_id,jj_commit_id,jj_operation_id,tickets!inner(id,ticket_id,title,status,project_id)'
+        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,tickets!inner(id,ticket_id,title,status,project_id)'
       )
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });
 
     if (filePaths.length > 0) {
       fileChangeQuery = fileChangeQuery.in('file_path', filePaths);
-    }
-
-    for (const chunk of chunkUuidListForPostgrestNotIn(excludedTicketIds)) {
-      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${chunk.join(',')})`);
     }
 
     const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;
@@ -113,22 +84,19 @@ export async function GET(request: Request, { params }: RouteContext) {
         ? supabase
             .from('project_checkpoints')
             .select(
-              'id,checkpoint_kind,backend,workspace_name,workspace_path,jj_change_id,jj_commit_id,jj_operation_id,git_commit_id,diff_stat,created_at'
+              'id,checkpoint_kind,git_commit_id,git_ref_name,head_sha,diff_stat,created_at,objective_id'
             )
             .in('id', checkpointIds as string[])
         : Promise.resolve({
             data: [] as Array<{
               id: string;
               checkpoint_kind: string;
-              backend: string;
-              workspace_name: string | null;
-              workspace_path: string | null;
-              jj_change_id: string | null;
-              jj_commit_id: string | null;
-              jj_operation_id: string | null;
               git_commit_id: string | null;
+              git_ref_name: string | null;
+              head_sha: string | null;
               diff_stat: string | null;
               created_at: string;
+              objective_id: string | null;
             }>,
             error: null
           })
@@ -171,42 +139,75 @@ export async function GET(request: Request, { params }: RouteContext) {
       (checkpointsResult.data ?? []).map(checkpoint => [checkpoint.id, checkpoint])
     );
 
+    // Resolve objective text for any objective_id we surfaced via checkpoints.
+    const objectiveIds = new Set<string>();
+    for (const checkpoint of checkpointsResult.data ?? []) {
+      if (checkpoint.objective_id) objectiveIds.add(checkpoint.objective_id);
+    }
+    let objectivesById = new Map<string, { id: string; objective: string | null }>();
+    if (objectiveIds.size) {
+      const { data: objectiveRows } = await supabase
+        .from('objectives')
+        .select('id,objective')
+        .in('id', [...objectiveIds]);
+      objectivesById = new Map(
+        (objectiveRows ?? []).map(row => [row.id, { id: row.id, objective: row.objective ?? null }])
+      );
+    }
+
     return NextResponse.json({
       fileChanges: [
-        ...(fileChanges ?? []).map(fileChange => ({
-          attribution_source: fileChange.attribution_source,
-          change_kind: fileChange.change_kind,
-          confidence: fileChange.confidence,
-          created_at: fileChange.created_at,
-          event: eventsById.get(fileChange.event_id) ?? null,
-          checkpoint: fileChange.checkpoint_id
+        ...(fileChanges ?? []).map(fileChange => {
+          const eventRecord = eventsById.get(fileChange.event_id) ?? null;
+          const checkpointRecord = fileChange.checkpoint_id
             ? (checkpointsById.get(fileChange.checkpoint_id) ?? null)
-            : null,
-          checkpoint_id: fileChange.checkpoint_id,
-          file_name: fileChange.file_name,
-          file_path: fileChange.file_path,
-          hunks: fileChange.hunks,
-          id: fileChange.id,
-          impact: fileChange.impact,
-          label: fileChange.label,
-          jj_change_id: fileChange.jj_change_id,
-          jj_commit_id: fileChange.jj_commit_id,
-          jj_operation_id: fileChange.jj_operation_id,
-          snapshot_backend: fileChange.snapshot_backend,
-          session: sessionsById.get(fileChange.session_id) ?? null,
-          summary: fileChange.summary,
-          ticket: fileChange.tickets
-            ? {
-                ...fileChange.tickets,
-                latest_objective_agent:
-                  latestObjectiveAgentByTicket.get(fileChange.ticket_id) ?? null
-              }
-            : null,
-          workspace_name: fileChange.workspace_name,
-          workspace_path: fileChange.workspace_path,
-          updated_at: fileChange.updated_at,
-          why: fileChange.why
-        }))
+            : null;
+          const objectiveId = checkpointRecord?.objective_id ?? null;
+          return {
+            attribution_source: fileChange.attribution_source,
+            change_kind: fileChange.change_kind,
+            confidence: fileChange.confidence,
+            created_at: fileChange.created_at,
+            event: eventRecord
+              ? {
+                  id: eventRecord.id,
+                  event_type: eventRecord.event_type,
+                  summary: eventRecord.summary,
+                  created_at: eventRecord.created_at
+                }
+              : null,
+            checkpoint: checkpointRecord
+              ? {
+                  id: checkpointRecord.id,
+                  checkpoint_kind: checkpointRecord.checkpoint_kind,
+                  created_at: checkpointRecord.created_at,
+                  diff_stat: checkpointRecord.diff_stat,
+                  git_commit_id: checkpointRecord.git_commit_id,
+                  git_ref_name: checkpointRecord.git_ref_name,
+                  head_sha: checkpointRecord.head_sha
+                }
+              : null,
+            checkpoint_id: fileChange.checkpoint_id,
+            objective: objectiveId ? (objectivesById.get(objectiveId) ?? null) : null,
+            file_name: fileChange.file_name,
+            file_path: fileChange.file_path,
+            hunks: fileChange.hunks,
+            id: fileChange.id,
+            impact: fileChange.impact,
+            label: fileChange.label,
+            session: sessionsById.get(fileChange.session_id) ?? null,
+            summary: fileChange.summary,
+            ticket: fileChange.tickets
+              ? {
+                  ...fileChange.tickets,
+                  latest_objective_agent:
+                    latestObjectiveAgentByTicket.get(fileChange.ticket_id) ?? null
+                }
+              : null,
+            updated_at: fileChange.updated_at,
+            why: fileChange.why
+          };
+        })
       ]
     });
   } catch (error) {

@@ -100,7 +100,6 @@ var MAX_UNTRACKED_FILES_FOR_AGGREGATE_DIFF = 25;
 var MAX_UNTRACKED_FILE_BYTES_FOR_AGGREGATE_DIFF = 512 * 1024;
 var IGNORED_DIRECTORY_NAMES = /* @__PURE__ */ new Set([
   ".git",
-  ".jj",
   ".next",
   "node_modules",
   "dist",
@@ -135,48 +134,6 @@ async function resolveRepo(directory) {
     branch: branch.ok ? branch.output.trim() || null : null,
     repoRoot
   };
-}
-async function runJj(cwd, args, options = {}) {
-  try {
-    const { stdout } = await execFileAsync("jj", args, {
-      cwd,
-      maxBuffer: 10 * 1024 * 1024,
-      timeout: DEFAULT_GIT_TIMEOUT_MS
-    });
-    return { ok: true, output: stdout };
-  } catch (error) {
-    if (options.allowFailure) {
-      const output = error instanceof Error && "stdout" in error && typeof error.stdout === "string" ? error.stdout : "";
-      return { ok: false, output };
-    }
-    throw error;
-  }
-}
-async function resolveJjRepo(directory) {
-  const root = await runJj(directory, ["--repository", directory, "root"]);
-  const repoRoot = root.output.trim();
-  if (!repoRoot) throw new Error("Directory is not inside a JJ repository.");
-  return { repoRoot };
-}
-async function isJjWorkspace(directory) {
-  const root = await runJj(directory, ["--repository", directory, "root"], { allowFailure: true });
-  return root.ok && root.output.trim().length > 0;
-}
-function parseJjStatus(output) {
-  return output.split("\n").map((line) => line.trimEnd()).filter(Boolean).filter((line) => /^[A-Z?] /.test(line)).map((line) => {
-    const code = line.slice(0, 1);
-    const filePath = line.slice(2).trim();
-    const status = code === "A" || code === "?" ? "untracked" : code === "D" ? "deleted" : code === "R" ? "renamed" : "modified";
-    return {
-      linesAdded: null,
-      linesRemoved: null,
-      originalPath: null,
-      path: toPosixPath(filePath),
-      stagedStatus: " ",
-      status,
-      unstagedStatus: code
-    };
-  });
 }
 function normalizeGitOutput(output) {
   return output.trim();
@@ -367,16 +324,6 @@ var LocalWorkspaceClient = class {
   }
   async getGitStatus() {
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot: repoRoot2 } = await resolveJjRepo(this.workingDirectory);
-        const statusResult2 = await runJj(repoRoot2, ["--repository", repoRoot2, "status"]);
-        return {
-          branch: null,
-          files: parseJjStatus(statusResult2.output),
-          linkedDirectory: this.workingDirectory,
-          repoRoot: repoRoot2
-        };
-      }
       const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
       const statusResult = await runGit(repoRoot, [
         "status",
@@ -421,24 +368,6 @@ var LocalWorkspaceClient = class {
       };
     }
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot: repoRoot2 } = await resolveJjRepo(this.workingDirectory);
-        const normalizedPath2 = toPosixPath(relativePath);
-        const result2 = await runJj(repoRoot2, [
-          "--repository",
-          repoRoot2,
-          "diff",
-          "--git",
-          "--",
-          normalizedPath2
-        ]);
-        return {
-          diff: result2.output,
-          path: relativePath,
-          repoRoot: repoRoot2,
-          status: options.status ?? null
-        };
-      }
       const { repoRoot } = await resolveRepo(this.workingDirectory);
       const normalizedPath = toPosixPath(relativePath);
       const normalizedOriginal = options.originalPath?.trim() ? toPosixPath(options.originalPath.trim()) : null;
@@ -495,21 +424,6 @@ var LocalWorkspaceClient = class {
   }
   async getAggregateDiff() {
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot: repoRoot2 } = await resolveJjRepo(this.workingDirectory);
-        const [statusResult2, diffResult] = await Promise.all([
-          runJj(repoRoot2, ["--repository", repoRoot2, "status"], { allowFailure: true }),
-          runJj(repoRoot2, ["--repository", repoRoot2, "diff", "--git"], { allowFailure: true })
-        ]);
-        const files = parseJjStatus(statusResult2.output);
-        return {
-          branch: null,
-          diff: diffResult.output,
-          filesChanged: files.length,
-          repoRoot: repoRoot2,
-          status: statusResult2.output
-        };
-      }
       const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
       const statusResult = await runGit(repoRoot, ["status", "--short"]);
       const trackedDiff = await runGit(
@@ -573,17 +487,6 @@ ${untrackedDiff}` : ""),
   }
   async getGitBranches() {
     try {
-      if (await isJjWorkspace(this.workingDirectory)) {
-        const { repoRoot: repoRoot2 } = await resolveJjRepo(this.workingDirectory);
-        const gitInfo = await resolveRepo(repoRoot2).catch(() => null);
-        const defaultBranch2 = gitInfo ? await resolveDefaultBranch(repoRoot2).catch(() => null) : null;
-        return {
-          branches: [],
-          currentBranch: gitInfo?.branch ?? null,
-          defaultBranch: defaultBranch2,
-          repoRoot: repoRoot2
-        };
-      }
       const { branch, repoRoot } = await resolveRepo(this.workingDirectory);
       const defaultBranch = await resolveDefaultBranch(repoRoot);
       const refs = await runGit(repoRoot, [

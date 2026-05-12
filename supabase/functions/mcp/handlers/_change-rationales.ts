@@ -15,14 +15,6 @@ export async function insertChangeRationales(
     changeRationales: any[];
     checkpointId?: string | null;
     eventId: string;
-    snapshot?: {
-      backend?: string;
-      jjChangeId?: string | null;
-      jjCommitId?: string | null;
-      jjOperationId?: string | null;
-      workspaceName?: string | null;
-      workspacePath?: string | null;
-    };
     sessionId: string;
     ticketId: string;
   }
@@ -38,20 +30,14 @@ export async function insertChangeRationales(
       confidence: rationale.confidence ?? 'explicit',
       checkpoint_id: input.checkpointId ?? null,
       event_id: input.eventId,
-      jj_change_id: rationale.jj_change_id ?? input.snapshot?.jjChangeId ?? null,
-      jj_commit_id: rationale.jj_commit_id ?? input.snapshot?.jjCommitId ?? null,
-      jj_operation_id: rationale.jj_operation_id ?? input.snapshot?.jjOperationId ?? null,
       file_name: deriveFileName(rationale.file_path),
       file_path: rationale.file_path,
       hunks: Array.isArray(rationale.hunks) ? rationale.hunks : [],
       impact: rationale.impact,
       label: rationale.label,
-      snapshot_backend: rationale.snapshot_backend ?? input.snapshot?.backend ?? null,
       session_id: input.sessionId,
       summary: rationale.summary,
       ticket_id: input.ticketId,
-      workspace_name: rationale.workspace_name ?? input.snapshot?.workspaceName ?? null,
-      workspace_path: rationale.workspace_path ?? input.snapshot?.workspacePath ?? null,
       why: rationale.why
     }))
   );

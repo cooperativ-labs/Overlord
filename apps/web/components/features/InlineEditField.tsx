@@ -16,6 +16,7 @@ import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
 import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutations';
 import { convertInlineFileMentionsToMarkdown } from '@/lib/helpers/file-mentions';
+import type { AutoListContinuationMode } from '@/lib/helpers/list-continuation';
 import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
@@ -46,6 +47,8 @@ type Props = {
   variant?: 'default' | 'textarea';
   /** Remove the component's own border/bg so a parent container can provide the visual boundary */
   seamless?: boolean;
+  /** Ordered / bullet list continuation on Enter (multiline only). */
+  autoListContinuation?: AutoListContinuationMode | false;
   children?: React.ReactNode;
 };
 
@@ -64,6 +67,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     workingDirectory,
     variant = 'default',
     seamless = false,
+    autoListContinuation = false,
     children
   }: Props,
   ref
@@ -221,6 +225,7 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
             <MentionableTextarea
               ref={inputRef as React.Ref<HTMLTextAreaElement>}
               autoFocus
+              autoListContinuation={autoListContinuation}
               className={cn('w-full focus:outline-none border-none', children && 'pr-3')}
               disabled={pending}
               value={value}

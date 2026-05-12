@@ -17,6 +17,30 @@ import {
 const TICKET_AGENT_FIELDS =
   'id,title,ticket_id,status,priority,board_position,organization_id,project_id,execution_target,context,constraints,available_tools,acceptance_criteria,output_format,created_at,updated_at,ticket_sequence,everhour_task_id,created_by';
 
+async function resolvePendingCheckpointObjectiveIds(input: {
+  supabase: SupabaseClient;
+  projectId: string | null;
+  objectives: Array<{ id: string; state: string | null }>;
+}): Promise<string[]> {
+  const executingObjectiveIds = input.objectives
+    .filter(objective => objective.state === 'executing')
+    .map(objective => objective.id);
+  if (!input.projectId || executingObjectiveIds.length === 0) return [];
+
+  const { data: checkpoints } = await input.supabase
+    .from('project_checkpoints')
+    .select('objective_id')
+    .eq('project_id', input.projectId)
+    .in('objective_id', executingObjectiveIds);
+
+  const checkpointedObjectiveIds = new Set(
+    ((checkpoints ?? []) as Array<{ objective_id: string }>).map(
+      checkpoint => checkpoint.objective_id
+    )
+  );
+  return executingObjectiveIds.filter(objectiveId => !checkpointedObjectiveIds.has(objectiveId));
+}
+
 export async function handleAttach(supabase: SupabaseClient, args: any, ctx: TokenContext) {
   const {
     ticketId: rawTicketId,
@@ -255,6 +279,12 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     supabase.from('profiles').select('custom_agent_instructions').eq('id', ctx.userId).maybeSingle()
   ]);
 
+  const pendingCheckpointObjectiveIds = await resolvePendingCheckpointObjectiveIds({
+    supabase,
+    projectId: (ticket as { project_id: string | null }).project_id,
+    objectives: (objectives ?? []) as Array<{ id: string; state: string | null }>
+  });
+
   const resolvedTicket = { ...ticket, objective: executedObjective ?? null };
   const { promptContext, promptContextSections } = buildPromptContext({
     ticket: resolvedTicket,
@@ -276,6 +306,7 @@ export async function handleAttach(supabase: SupabaseClient, args: any, ctx: Tok
     sharedState: sharedState ?? [],
     promptContext,
     promptContextSections,
+    pendingCheckpointObjectiveIds,
     ticket: resolvedTicket
   });
 }

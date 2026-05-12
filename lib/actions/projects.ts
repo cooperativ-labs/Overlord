@@ -140,9 +140,6 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
       operationsProfileFingerprint: project.operations_profile_fingerprint ?? null,
       operationsProfileGeneratedAt: project.operations_profile_generated_at ?? null,
       localWorkingDirectory: localSettings?.local_working_directory ?? null,
-      localVersionControl: localSettings?.local_version_control === 'jj' ? 'jj' : 'off',
-      localVersionControlInstalledAt: localSettings?.local_version_control_installed_at ?? null,
-      localVersionControlError: localSettings?.local_version_control_error ?? null,
       remoteHelperInstalledAt: localSettings?.remote_helper_installed_at ?? null,
       remoteHelperVersion: localSettings?.remote_helper_version ?? null
     };
@@ -226,40 +223,6 @@ export async function updateProjectWorkingDirectoryAction(input: {
   if (error) {
     console.error('updateProjectWorkingDirectoryAction', error ?? 'no error message');
     throw new Error(error.message ?? 'Failed to update project working directory.');
-  }
-
-  revalidateProjectPaths(input.projectId);
-}
-
-export async function updateProjectLocalVersionControlAction(input: {
-  projectId: string;
-  mode: 'off' | 'jj';
-  installedAt?: string | null;
-  error?: string | null;
-}): Promise<void> {
-  const supabase = await createClientForRequest();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error('You must be signed in to update project version control.');
-  }
-
-  const { error } = await supabase.from('project_user').upsert(
-    {
-      user_id: user.id,
-      project_id: input.projectId,
-      local_version_control: input.mode,
-      local_version_control_installed_at: input.installedAt ?? null,
-      local_version_control_error: input.error ?? null,
-      updated_at: new Date().toISOString()
-    },
-    { onConflict: 'user_id,project_id' }
-  );
-
-  if (error) {
-    throw new Error(error.message ?? 'Failed to update project version control.');
   }
 
   revalidateProjectPaths(input.projectId);

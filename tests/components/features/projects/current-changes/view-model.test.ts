@@ -48,12 +48,9 @@ function makeRationale(input: {
     hunks: input.hunks ?? [],
     id: input.id,
     impact: '',
-    jj_change_id: null,
-    jj_commit_id: null,
-    jj_operation_id: null,
     label: '',
+    objective: null,
     session: null,
-    snapshot_backend: null,
     summary: input.summary ?? 'rationale summary',
     ticket: {
       id: input.ticketId,
@@ -64,9 +61,7 @@ function makeRationale(input: {
       title: input.ticketTitle ?? `Ticket ${input.ticketId}`
     },
     updated_at: input.createdAt,
-    why: '',
-    workspace_name: null,
-    workspace_path: null
+    why: ''
   };
 }
 
