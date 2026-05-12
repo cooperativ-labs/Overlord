@@ -3,6 +3,59 @@ import type { Json } from '@/types/database.types';
 
 import type { FileChangeRecord, GitStatusFile, RationaleHunk } from './types';
 
+function normalizeRoot(value: string): string {
+  return value.replace(/\\/g, '/').replace(/\/+$/g, '');
+}
+
+export function normalizeCurrentChangePath(
+  value: string | null | undefined,
+  roots: Array<string | null | undefined> = []
+): string | null {
+  if (!value) return null;
+
+  let normalized = value.replace(/\\/g, '/').trim();
+  if (!normalized) return null;
+
+  normalized = normalized.replace(/^file:\/\//, '');
+
+  for (const root of roots) {
+    if (!root) continue;
+    const normalizedRoot = normalizeRoot(root);
+    if (!normalizedRoot) continue;
+    if (normalized === normalizedRoot) return '';
+    if (normalized.startsWith(`${normalizedRoot}/`)) {
+      normalized = normalized.slice(normalizedRoot.length + 1);
+      break;
+    }
+  }
+
+  normalized = normalized.replace(/^\.\/+/, '');
+  normalized = normalized.replace(/\/{2,}/g, '/');
+  return normalized || null;
+}
+
+export function buildCurrentChangePathVariants(
+  value: string,
+  roots: Array<string | null | undefined> = []
+): string[] {
+  const variants = new Set<string>();
+  const normalized = normalizeCurrentChangePath(value, roots);
+  const raw = value.replace(/\\/g, '/').trim();
+
+  if (raw) variants.add(raw);
+  if (normalized) {
+    variants.add(normalized);
+    variants.add(`./${normalized}`);
+    for (const root of roots) {
+      if (!root) continue;
+      const normalizedRoot = normalizeRoot(root);
+      if (normalizedRoot) variants.add(`${normalizedRoot}/${normalized}`);
+    }
+  }
+
+  return [...variants].filter(Boolean);
+}
+
 export function formatStatus(status: string): string {
   switch (status) {
     case 'added':
@@ -135,13 +188,17 @@ export function buildHunkMatches(
   file: GitStatusFile,
   hunk: ParsedDiffHunk
 ): FileChangeRecord[] {
-  const candidatePaths = new Set([file.path, file.originalPath].filter(Boolean));
-  return rationales.filter(
-    rationale => candidatePaths.has(rationale.file_path) && hunkMatchesRationale(hunk, rationale)
-  );
+  void file;
+  return rationales.filter(rationale => hunkMatchesRationale(hunk, rationale));
 }
 
 export function countFileRationales(file: GitStatusFile, rationales: FileChangeRecord[]): number {
-  const candidatePaths = new Set([file.path, file.originalPath].filter(Boolean));
-  return rationales.filter(rationale => candidatePaths.has(rationale.file_path)).length;
+  const candidatePaths = new Set(
+    [file.path, file.originalPath]
+      .map(value => normalizeCurrentChangePath(value))
+      .filter((value): value is string => Boolean(value))
+  );
+  return rationales.filter(rationale =>
+    candidatePaths.has(normalizeCurrentChangePath(rationale.file_path) ?? '')
+  ).length;
 }

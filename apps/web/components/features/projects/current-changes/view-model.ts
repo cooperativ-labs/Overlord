@@ -1,4 +1,4 @@
-import { rationaleIntersectsParsedDiff } from './helpers';
+import { normalizeCurrentChangePath } from './helpers';
 import type {
   EnrichedCurrentChangeFile,
   FileChangeRecord,
@@ -15,7 +15,9 @@ function compareNewestFirst(
 }
 
 function candidatePaths(file: Pick<GitStatusFile, 'originalPath' | 'path'>): string[] {
-  return [file.path, file.originalPath].filter((value): value is string => Boolean(value));
+  return [file.path, file.originalPath]
+    .map(value => normalizeCurrentChangePath(value))
+    .filter((value): value is string => Boolean(value));
 }
 
 function fallbackSummary(file: GitStatusFile): string {
@@ -61,24 +63,26 @@ function resolveGitDiffEntry(
 export function buildEnrichedCurrentChangeFiles(args: {
   files: GitStatusFile[];
   gitDiffFilterByPath?: Map<string, GitDiffFilterEntry>;
+  pathRoots?: Array<string | null | undefined>;
   rationales: FileChangeRecord[];
 }): EnrichedCurrentChangeFile[] {
-  const { files, gitDiffFilterByPath, rationales } = args;
+  const { files, gitDiffFilterByPath, pathRoots = [], rationales } = args;
 
   return files.map(file => {
     const paths = new Set(candidatePaths(file));
     let relatedRationales = rationales
-      .filter(rationale => paths.has(rationale.file_path) && Boolean(rationale.ticket))
+      .filter(rationale => {
+        const normalizedRationalePath = normalizeCurrentChangePath(rationale.file_path, pathRoots);
+        return Boolean(
+          normalizedRationalePath && paths.has(normalizedRationalePath) && rationale.ticket
+        );
+      })
       .sort(compareNewestFirst);
 
     const diffEntry = resolveGitDiffEntry(file, gitDiffFilterByPath);
     if (gitDiffFilterByPath && gitDiffFilterByPath.size > 0) {
       if (!diffEntry || diffEntry.kind === 'pending') {
         relatedRationales = [];
-      } else if (diffEntry.kind === 'ready') {
-        relatedRationales = relatedRationales.filter(rationale =>
-          rationaleIntersectsParsedDiff(rationale, diffEntry.parsed)
-        );
       }
     }
     const tickets = uniqueTickets(relatedRationales);

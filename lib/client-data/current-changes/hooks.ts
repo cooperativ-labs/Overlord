@@ -32,8 +32,12 @@ export const currentChangesQueryKeys = {
   all: ['current-changes'] as const,
   branches: (directory: string | null) => ['current-changes', 'branches', directory] as const,
   status: (directory: string | null) => ['current-changes', 'status', directory] as const,
-  fileChanges: (projectId: string, filePaths: string[]) =>
-    ['current-changes', 'file-changes', projectId, filePaths] as const,
+  fileChanges: (
+    projectId: string,
+    filePaths: string[],
+    repoRoot: string | null,
+    workingDirectory: string | null
+  ) => ['current-changes', 'file-changes', projectId, filePaths, repoRoot, workingDirectory] as const,
   diff: (
     directory: string | null,
     file?: Pick<GitStatusFile, 'path' | 'originalPath' | 'status'> | null
@@ -169,10 +173,20 @@ export function useGitDiffFilterMap(input: {
   return { allSettled, filterMap };
 }
 
-export function useCurrentChangeFileChanges(input: { projectId: string; files: GitStatusFile[] }) {
+export function useCurrentChangeFileChanges(input: {
+  files: GitStatusFile[];
+  projectId: string;
+  repoRoot?: string | null;
+  workingDirectory?: string | null;
+}) {
   const filePaths = getRationalePaths(input.files);
   return useQuery<FileChangeRecord[], Error>({
-    queryKey: currentChangesQueryKeys.fileChanges(input.projectId, filePaths),
+    queryKey: currentChangesQueryKeys.fileChanges(
+      input.projectId,
+      filePaths,
+      input.repoRoot ?? null,
+      input.workingDirectory ?? null
+    ),
     queryFn: async () => {
       if (filePaths.length === 0) return [];
 
@@ -180,6 +194,8 @@ export function useCurrentChangeFileChanges(input: { projectId: string; files: G
       for (const filePath of filePaths) {
         searchParams.append('filePath', filePath);
       }
+      if (input.repoRoot) searchParams.set('repoRoot', input.repoRoot);
+      if (input.workingDirectory) searchParams.set('workingDirectory', input.workingDirectory);
 
       const response = await fetchWithElectronRetry(
         `/api/projects/${input.projectId}/file-changes?${searchParams}`,

@@ -127,6 +127,39 @@ describe('current-changes view-model', () => {
     expect(enriched.tickets.map(ticket => ticket.id)).toEqual(['t1']);
   });
 
+  it('matches rationales whose paths include common relative or absolute prefixes', () => {
+    const files = [makeFile({ path: 'src/a.ts' })];
+    const rationales = [
+      makeRationale({
+        id: 'r-dot',
+        filePath: './src/a.ts',
+        ticketId: 't-dot',
+        ticketStatus: 'execute',
+        createdAt: '2026-05-09T00:00:00Z'
+      }),
+      makeRationale({
+        id: 'r-abs',
+        filePath: '/repo/src/a.ts',
+        ticketId: 't-abs',
+        ticketStatus: 'execute',
+        createdAt: '2026-05-10T00:00:00Z'
+      })
+    ];
+
+    const [relativeOnly] = buildEnrichedCurrentChangeFiles({
+      files,
+      rationales: [rationales[0]!]
+    });
+    const [absoluteWithRoot] = buildEnrichedCurrentChangeFiles({
+      files,
+      pathRoots: ['/repo'],
+      rationales: [rationales[1]!]
+    });
+
+    expect(relativeOnly.tickets.map(ticket => ticket.id)).toEqual(['t-dot']);
+    expect(absoluteWithRoot.tickets.map(ticket => ticket.id)).toEqual(['t-abs']);
+  });
+
   it('counts each file once per ticket', () => {
     const files = [makeFile({ path: 'src/a.ts' }), makeFile({ path: 'src/b.ts' })];
     const rationales = [
@@ -227,7 +260,7 @@ describe('current-changes view-model', () => {
     expect(enriched.fileChangeCount).toBe(0);
   });
 
-  it('keeps only rationales whose hunks intersect the current unified diff when ready', () => {
+  it('keeps file-level rationales even when stored hunks no longer intersect the current diff', () => {
     const files = [makeFile({ path: 'src/a.ts' })];
     const diffText = `--- a/src/a.ts
 +++ b/src/a.ts
@@ -264,7 +297,7 @@ describe('current-changes view-model', () => {
       gitDiffFilterByPath: map,
       rationales
     });
-    expect(enriched.rationales.map(r => r.id)).toEqual(['r-hit']);
+    expect(enriched.rationales.map(r => r.id)).toEqual(['r-hit', 'r-miss']);
     expect(enriched.primaryFileChange?.id).toBe('r-hit');
   });
 });

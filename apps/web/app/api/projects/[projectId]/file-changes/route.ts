@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { assertOrgMembership } from '@/app/api/projects/_lib';
+import { buildCurrentChangePathVariants } from '@/components/features/projects/current-changes/helpers';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
@@ -12,6 +13,12 @@ export async function GET(request: Request, { params }: RouteContext) {
     const filePaths = [...new Set(url.searchParams.getAll('filePath').map(value => value.trim()))]
       .filter(Boolean)
       .slice(0, 200);
+    const roots = [url.searchParams.get('repoRoot'), url.searchParams.get('workingDirectory')]
+      .map(value => value?.trim())
+      .filter((value): value is string => Boolean(value));
+    const filePathVariants = [
+      ...new Set(filePaths.flatMap(filePath => buildCurrentChangePathVariants(filePath, roots)))
+    ].slice(0, 1000);
 
     const supabase = await createClientForRequest();
     const {
@@ -47,8 +54,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });
 
-    if (filePaths.length > 0) {
-      fileChangeQuery = fileChangeQuery.in('file_path', filePaths);
+    if (filePathVariants.length > 0) {
+      fileChangeQuery = fileChangeQuery.in('file_path', filePathVariants);
     }
 
     const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;

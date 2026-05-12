@@ -82,7 +82,9 @@ export function CurrentChangesPage({
   });
   const fileChangesQuery = useCurrentChangeFileChanges({
     projectId,
-    files: statusFiles
+    files: statusFiles,
+    repoRoot: statusResponse?.repoRoot ?? null,
+    workingDirectory
   });
   useCurrentChangesRealtime({
     enabled: isElectron && canInspectChanges,
@@ -124,9 +126,10 @@ export function CurrentChangesPage({
       buildEnrichedCurrentChangeFiles({
         files: statusFiles,
         ...(isElectron && canInspectChanges ? { gitDiffFilterByPath } : {}),
+        pathRoots: [statusResponse?.repoRoot ?? null, workingDirectory],
         rationales: fileChanges
       }),
-    [canInspectChanges, fileChanges, gitDiffFilterByPath, isElectron, statusFiles]
+    [canInspectChanges, fileChanges, gitDiffFilterByPath, isElectron, statusFiles, statusResponse?.repoRoot, workingDirectory]
   );
 
   const uniqueTickets = useMemo(() => {

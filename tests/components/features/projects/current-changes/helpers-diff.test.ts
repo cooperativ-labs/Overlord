@@ -1,4 +1,8 @@
-import { rationaleIntersectsParsedDiff } from '@/components/features/projects/current-changes/helpers';
+import {
+  buildCurrentChangePathVariants,
+  normalizeCurrentChangePath,
+  rationaleIntersectsParsedDiff
+} from '@/components/features/projects/current-changes/helpers';
 import type { FileChangeRecord } from '@/components/features/projects/current-changes/types';
 import { parseUnifiedDiff } from '@/lib/git/unified-diff';
 
@@ -78,5 +82,21 @@ describe('rationaleIntersectsParsedDiff', () => {
     expect(
       rationaleIntersectsParsedDiff(rationale, { hunks: [], newPath: null, oldPath: null, raw: '' })
     ).toBe(false);
+  });
+});
+
+describe('current change path helpers', () => {
+  it('normalizes common rationale path forms to repo-relative paths', () => {
+    expect(normalizeCurrentChangePath('./src/a.ts')).toBe('src/a.ts');
+    expect(normalizeCurrentChangePath('/repo/src/a.ts', ['/repo'])).toBe('src/a.ts');
+    expect(normalizeCurrentChangePath('src\\a.ts')).toBe('src/a.ts');
+  });
+
+  it('builds lookup variants for recorded relative and absolute paths', () => {
+    expect(buildCurrentChangePathVariants('src/a.ts', ['/repo'])).toEqual([
+      'src/a.ts',
+      './src/a.ts',
+      '/repo/src/a.ts'
+    ]);
   });
 });
