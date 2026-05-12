@@ -33,7 +33,7 @@ AGENT_IDENTIFIER=<name>  # falls back to --agent (default: claude-code)
 --ticket-id <ticket_id>            Ticket this call operates on
 --session-key <key>         Session key returned by attach/connect/prompt
 --agent <identifier>        Agent identifier (default: AGENT_IDENTIFIER or claude-code)
---model <identifier>        Model identifier to snapshot on executing objectives
+--model <identifier>        Model identifier to use when executing objectives
 --method <connectionMethod> Connection method (default: cli)
 \`\`\`
 
@@ -284,13 +284,12 @@ Optional:
 --artifacts-file <path|->
 --change-rationales-file <path|->
 --payload-file <path|->            # full { summary, artifacts, changeRationales } JSON
---checkpoint-backend <auto|jj|git> # local checkpoint backend, default auto
 --skip-checkpoint                  # bypass automatic local checkpoint creation
 --skip-file-change-check           # bypass local git vs changeRationales validation
 \`\`\`
 
 Before sending the API request, \`deliver\` creates a local checkpoint when the
-workspace is managed by JJ or Git and includes the resulting provenance in the
+workspace has a git snapshot and includes the resulting provenance in the
 payload. Use \`--skip-checkpoint\` only for intentional no-checkpoint delivery.
 
 In a git workspace, \`deliver\` validates that changed files are represented by

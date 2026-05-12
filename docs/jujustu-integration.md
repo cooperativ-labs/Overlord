@@ -1,77 +1,67 @@
-# Jujutsu (jj) integration and change-tracking
+# Checkpoints and change-tracking
 
-This document explains how Overlord uses **Jujutsu** (`jj`) for local versioning, delivery checkpoints, and **change-tracking** (`file_changes` in the database). It is written so an agent can **diagnose and explain** change-tracking issues to a user without guessing.
+This document explains how Overlord registers checkpoints for file-change records and how those checkpoints tie back to tickets, objectives, and review history.
 
-For product-level research and tradeoffs, see [`ai/feature-plans/jj-integration-research.md`](../ai/feature-plans/jj-integration-research.md).
+For product-level background and workflows, see the web docs page for [File changes & checkpoints](../apps/web/app/docs/workflow/file-changes/page.tsx) and [Context & artifacts](../apps/web/app/docs/for-agents/context-and-artifacts/page.tsx).
 
-## What problem jj solves here
+## What problem checkpoints solve here
 
-Overlord needs **durable, inspectable file state** per session: stable anchors to attach **file-change rationales** and checkpoints. For local Desktop projects, users opt in under **Workflow → Initialize in this folder**; Overlord runs `jj` in the **real** project working directory (no shadow clone or managed workspace under Application Support). JJ then provides:
+Overlord needs durable, inspectable file state per session: stable anchors to attach file-change rationales and checkpoints. Checkpoints give the system a git-backed reference point for the workspace that was current when the rationale or delivery was recorded.
 
-- **`change_id`** (logical line of work) and **`commit_id`** (immutable tree snapshot) after `jj util snapshot`.
-- **`operation_id`** from the operation log for timeline evidence.
+## How checkpoints are registered
 
-The hosted API stores checkpoint metadata; `jj` runs on the user’s machine (Electron or CLI). Version control for snapshots is **off by default** until the user enables it for that project.
+Checkpoint registration happens in the protocol layer:
 
-## How checkpoints run in code
+- The client captures snapshot metadata from git, including `gitCommitId`, `headSha`, and optional `diffStat`.
+- `update`, `deliver`, and `record_change_rationales` can send that snapshot to the API.
+- The server writes or updates a `project_checkpoints` row keyed by `project_id` and `objective_id`.
+- File-change rows link to that checkpoint so review can show the exact tree that was current when the rationale was recorded.
 
-- **`installLocalVersionControl`** (`lib/snapshot/install-local-version-control.ts`) — ensures `jj` is available, initializes or adopts a repo in the chosen directory, runs an initial snapshot.
-- **`createLocalCheckpoint`** (`lib/snapshot/local-checkpoint.ts`) — runs `jj util snapshot` (or Git fallback) in **`workspacePath`** and collects ids + diff stat for delivery / persistence.
+Delivery can also include explicit checkpoint metadata. When present, Overlord stores the checkpoint kind alongside the git commit and links the rationale rows to the same checkpoint record.
 
-Desktop sets `OVERLORD_SNAPSHOT_JSON` when the API sends `X-Local-Version-Control: jj` so the agent’s cwd matches the folder where jj was initialized (`apps/desktop/electron/services/agent-launcher.ts`).
+## Change-tracking data model
 
-## Change-tracking: database and protocol
+Relevant checkpoint fields stored in the database:
 
-### `file_changes` row model
+| Column | Meaning |
+| --- | --- |
+| `checkpoint_kind` | `objective`, `delivery`, or `manual`. |
+| `git_commit_id` | Git commit recorded for the checkpoint. |
+| `git_ref_name` | Hidden ref used to store the checkpoint commit. |
+| `head_sha` | Repository HEAD at the time the checkpoint was created. |
+| `summary` | Human-readable summary of the checkpoint. |
+| `diff_stat` | Optional diff stat captured with the checkpoint. |
 
-Relevant columns (see `types/database.types.ts` and insert helpers in `lib/overlord/file-changes.ts` / `supabase/functions/mcp/handlers/_change-rationales.ts`):
+Semantic change-rationale fields such as `label`, `summary`, `why`, and `impact` are Overlord-native. The checkpoint fields are provenance anchors for the workspace state.
 
-| Column             | Meaning |
-| ------------------ | ------- |
-| `snapshot_backend` | `jj` or `git-worktree` (or null if not supplied). |
-| `workspace_name` | Optional label for the tree that was snapshotted. |
-| `workspace_path`   | Absolute path to that workspace (usually the project working directory). |
-| `jj_change_id`     | JJ change id when backend is jj. |
-| `jj_commit_id`     | JJ commit id at time of recording. |
-| `jj_operation_id`  | JJ operation id at time of recording. |
-
-Semantic fields (`label`, `summary`, `why`, …) are **Overlord-native**; JJ fields are **anchors** for provenance.
-
-### How snapshot metadata gets attached
-
-Protocol validation (`lib/overlord/validation.ts`) allows an optional **`snapshot`** object on `update`, `deliver`, `record_change_rationales` (and MCP equivalents). Shape includes `backend`, `workspaceName`, `workspacePath`, and optional `jjChangeId`, `jjCommitId`, `jjOperationId`.
-
-**Agent rule:** after a local `jj util snapshot`, pass **`jjChangeId`**, **`jjCommitId`**, **`jjOperationId`**, plus **`workspacePath`** / **`workspaceName`** and **`backend: 'jj'`** so DB rows match the tree that was snapshotted.
-
-## Troubleshooting (short)
-
-### No `jj_change_id` / `jj_operation_id`
-
-- **Expected** if `snapshot_backend` is `git-worktree` or null — Git fallback or no jj repo in `workspacePath`.
-- **Check:** is `jj` on `PATH` for the process (GUI apps on macOS often need Homebrew paths; Overlord prepends common bin dirs for install/checkpoint helpers)?
-- **Check:** did the protocol **`snapshot`** block omit JJ fields?
-
-### Wrong or empty diff / stats
-
-- Confirm **`workspacePath`** in `snapshot` matches the directory where edits and `jj util snapshot` ran.
-- Take a snapshot **after** meaningful edits and before recording rationales.
-
-## Code map
+## Where it is implemented
 
 | Area | Location |
-| ---- | -------- |
-| Initialize jj in project folder | `lib/snapshot/install-local-version-control.ts` |
-| Local checkpoint (jj + Git fallback) | `lib/snapshot/local-checkpoint.ts` |
-| Public exports | `lib/snapshot/index.ts` |
-| Protocol context header | `apps/web/app/api/protocol/context/[ticketId]/route.ts` (`X-Local-Version-Control`) |
-| Desktop launch + `OVERLORD_SNAPSHOT_JSON` | `apps/desktop/electron/services/agent-launcher.ts` |
-| Rationale inserts (app) | `lib/overlord/file-changes.ts` |
-| Rationale inserts (MCP) | `supabase/functions/mcp/handlers/_change-rationales.ts` |
+| --- | --- |
+| Checkpoint upsert helper | `lib/overlord/checkpoints.ts` |
 | Snapshot validation | `lib/overlord/validation.ts` |
-| Tests | `tests/lib/snapshot/local-version-control.test.ts` |
+| Deliver protocol route | `apps/web/app/api/protocol/deliver/route.ts` |
+| Update protocol route | `apps/web/app/api/protocol/update/route.ts` |
+| Change-rationale protocol route | `apps/web/app/api/protocol/record-change-rationales/route.ts` |
+| Git checkpoint creation | `lib/snapshot/git-checkpoint.ts` |
+| File-change inserts | `lib/overlord/file-changes.ts` |
 
-## References (external)
+## Troubleshooting
 
-- JJ operation log: [https://docs.jj-vcs.dev/latest/operation-log/](https://docs.jj-vcs.dev/latest/operation-log/)
-- JJ Git compatibility: [https://docs.jj-vcs.dev/latest/git-compatibility/](https://docs.jj-vcs.dev/latest/git-compatibility/)
-- JJ working copy / workspaces: [https://docs.jj-vcs.dev/latest/working-copy/](https://docs.jj-vcs.dev/latest/working-copy/)
+### No checkpoint was registered
+
+- Check that the protocol payload included a `snapshot.gitCommitId`.
+- Confirm the ticket belongs to a project, because checkpoint rows require a `project_id`.
+- On `deliver`, confirm the payload included either a snapshot or explicit checkpoint metadata.
+
+### Checkpoint metadata looks incomplete
+
+- Confirm `workspacePath` points at the repository that was edited.
+- Capture the snapshot after meaningful edits and before recording rationales.
+- If the snapshot lacks `gitCommitId`, the server will not upsert a checkpoint row.
+
+## Related pages
+
+- [File changes & checkpoints](../apps/web/app/docs/workflow/file-changes/page.tsx)
+- [Context & artifacts](../apps/web/app/docs/for-agents/context-and-artifacts/page.tsx)
+- [CLI reference](../apps/web/app/docs/for-agents/cli-reference/page.tsx)

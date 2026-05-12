@@ -62,9 +62,9 @@ Required shape per rationale:
 Rules:
 
 - Cover every meaningful git-tracked change. Formatting-only noise can be skipped.
-- Never send \`file_changes\` as an artifact — use rationales instead.
-- \`deliver\` creates a local checkpoint automatically when the workspace is JJ-
-  or Git-managed, then links rationale rows to that checkpoint.
+- Never send \`file_changes\` as an artifact - use rationales instead.
+- \`deliver\` creates or updates a checkpoint automatically when it has a git snapshot, then
+  links rationale rows to that checkpoint.
 - \`deliver\` validates rationale coverage against git status unless you pass
   \`--skip-file-change-check\`.
 
@@ -118,7 +118,7 @@ Pass these as part of the \`deliver\` payload. Supported types:
 
 User-uploaded files are attached to a specific objective on the ticket, not the ticket itself.
 
-The \`attach\` and \`load-context\` responses include \`attachments\` and \`objectives\` arrays — these surface the \`<attachment-id>\` and \`<objective-id>\` values agents need below. The same data is rendered in the \`Attachments\` and \`Objective IDs\` sections of the assembled prompt context. Use \`attachment-list\` (CLI) / \`list_attachments\` (MCP) to refresh this list mid-session.
+The \`attach\` and \`load-context\` responses include \`attachments\` and \`objectives\` arrays - these surface the \`<attachment-id>\` and \`<objective-id>\` values agents need below. The same data is rendered in the \`Attachments\` and \`Objective IDs\` sections of the assembled prompt context. Use \`attachment-list\` (CLI) / \`list_attachments\` (MCP) to refresh this list mid-session.
 
 \`\`\`bash
 # Discover attachments
