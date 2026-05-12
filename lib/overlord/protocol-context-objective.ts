@@ -10,8 +10,8 @@ export type ResolveProtocolObjectiveResult =
 
 /**
  * Resolves the objective text shown in agent context prompts.
- * When `feedPostId` is set, prefer the objective row linked from that feed post
- * (the work the post summarizes) instead of a newer draft on the ticket.
+ * When `feedPostId` is set, prefer the latest objective pointer linked from that
+ * ticket-level feed post rollup instead of a newer draft on the ticket.
  */
 export async function resolveProtocolObjectiveText(input: {
   supabase: ServerSupabase;

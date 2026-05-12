@@ -13,6 +13,7 @@ export type FeedPost = {
   objective_id: string | null;
   agent_type: string | null;
   title: string;
+  summary: string;
   body: string;
   tags: string[];
   impact_level: string;
@@ -25,7 +26,13 @@ export type FeedPost = {
     sequence: number;
     title: string;
   }>;
+  objective_sections: unknown[];
+  orphan_file_changes: unknown[];
+  total_events: number;
+  total_files: number;
+  pending_actions: number;
   source_event_ids: string[];
+  source_session_ids: string[];
   source_window_start: string | null;
   source_window_end: string | null;
   created_at: string;
@@ -75,13 +82,13 @@ export async function getFeedPostsAction(options?: {
       objectives(objective)
     `
     )
-    .order('created_at', { ascending: false })
+    .order('updated_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (options?.daysBack !== undefined) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - options.daysBack);
-    query = query.gte('created_at', cutoff.toISOString());
+    query = query.gte('updated_at', cutoff.toISOString());
   }
 
   if (options?.projectId) {
@@ -180,6 +187,7 @@ export async function getFeedPostsAction(options?: {
       objective_id: (row.objective_id as string | null) ?? null,
       agent_type: row.agent_type as string | null,
       title: row.title as string,
+      summary: (row.summary as string | null) ?? '',
       body: row.body as string,
       tags: row.tags as string[],
       impact_level: row.impact_level as string,
@@ -187,7 +195,19 @@ export async function getFeedPostsAction(options?: {
       tradeoffs: row.tradeoffs as FeedPost['tradeoffs'],
       human_actions: (row.human_actions as string[]) ?? [],
       tickets_created: (row.tickets_created as FeedPost['tickets_created']) ?? [],
+      objective_sections: Array.isArray(row.objective_sections)
+        ? (row.objective_sections as unknown[])
+        : [],
+      orphan_file_changes: Array.isArray(row.orphan_file_changes)
+        ? (row.orphan_file_changes as unknown[])
+        : [],
+      total_events: (row.total_events as number | null) ?? 0,
+      total_files: (row.total_files as number | null) ?? changedFiles.length,
+      pending_actions: (row.pending_actions as number | null) ?? 0,
       source_event_ids: row.source_event_ids as string[],
+      source_session_ids: Array.isArray(row.source_session_ids)
+        ? (row.source_session_ids as string[])
+        : [],
       source_window_start: row.source_window_start as string | null,
       source_window_end: row.source_window_end as string | null,
       created_at: row.created_at as string,

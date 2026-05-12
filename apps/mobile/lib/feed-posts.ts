@@ -10,6 +10,7 @@ export type FeedPostRow = {
   objective_id: string | null;
   agent_type: string | null;
   title: string;
+  summary: string | null;
   body: string;
   tags: string[] | null;
   impact_level: string | null;
@@ -17,7 +18,13 @@ export type FeedPostRow = {
   tradeoffs: FeedPost['tradeoffs'] | null;
   human_actions: string[] | null;
   tickets_created: FeedPost['tickets_created'] | null;
+  objective_sections: unknown[] | null;
+  orphan_file_changes: unknown[] | null;
+  total_events: number | null;
+  total_files: number | null;
+  pending_actions: number | null;
   source_event_ids: string[] | null;
+  source_session_ids: string[] | null;
   source_window_start: string | null;
   source_window_end: string | null;
   created_at: string;
@@ -38,6 +45,7 @@ export type FeedPostInsertRow = {
   objective_id: string | null;
   agent_type: string | null;
   title: string;
+  summary: string | null;
   body: string;
   tags: string[] | null;
   impact_level: string | null;
@@ -45,7 +53,13 @@ export type FeedPostInsertRow = {
   tradeoffs: FeedPost['tradeoffs'] | null;
   human_actions: string[] | null;
   tickets_created: FeedPost['tickets_created'] | null;
+  objective_sections: unknown[] | null;
+  orphan_file_changes: unknown[] | null;
+  total_events: number | null;
+  total_files: number | null;
+  pending_actions: number | null;
   source_event_ids: string[] | null;
+  source_session_ids: string[] | null;
   source_window_start: string | null;
   source_window_end: string | null;
   created_at: string;
@@ -53,7 +67,7 @@ export type FeedPostInsertRow = {
 };
 
 export const FEED_POST_SELECT =
-  'id, organization_id, project_id, ticket_id, session_id, objective_id, agent_type, title, body, tags, impact_level, files_touched, tradeoffs, human_actions, tickets_created, source_event_ids, source_window_start, source_window_end, created_at, updated_at, projects!inner(name, color), tickets!inner(title, ticket_sequence)';
+  'id, organization_id, project_id, ticket_id, session_id, objective_id, agent_type, title, summary, body, tags, impact_level, files_touched, tradeoffs, human_actions, tickets_created, objective_sections, orphan_file_changes, total_events, total_files, pending_actions, source_event_ids, source_session_ids, source_window_start, source_window_end, created_at, updated_at, projects!inner(name, color), tickets!inner(title, ticket_sequence)';
 
 function normalizeTradeoffs(value: unknown): FeedPost['tradeoffs'] {
   return Array.isArray(value)
@@ -99,6 +113,7 @@ export function normalizeFeedPostRow(row: FeedPostRow): FeedPost {
     id: row.id,
     project_id: row.project_id,
     title: row.title,
+    summary: row.summary ?? '',
     body: row.body,
     impact_level: row.impact_level ?? 'notable',
     agent_type: row.agent_type,
@@ -107,12 +122,18 @@ export function normalizeFeedPostRow(row: FeedPostRow): FeedPost {
     human_actions: Array.isArray(row.human_actions) ? row.human_actions.filter(Boolean) : [],
     tradeoffs: normalizeTradeoffs(row.tradeoffs),
     tickets_created: normalizeTicketsCreated(row.tickets_created),
+    objective_sections: Array.isArray(row.objective_sections) ? row.objective_sections : [],
+    orphan_file_changes: Array.isArray(row.orphan_file_changes) ? row.orphan_file_changes : [],
+    total_events: row.total_events ?? 0,
+    total_files: row.total_files ?? 0,
+    pending_actions: row.pending_actions ?? 0,
     ticket_title: ticket?.title ?? null,
     ticket_sequence: ticket?.ticket_sequence ?? null,
     project_name: project?.name ?? 'Unknown',
     project_color: project?.color ?? '#6b7280',
     ticket_id: row.ticket_id,
-    created_at: row.created_at
+    created_at: row.created_at,
+    updated_at: row.updated_at
   };
 }
 
@@ -121,7 +142,7 @@ export async function loadFeedPosts(projectId: string | null): Promise<FeedPost[
   let query = supabase
     .from('feed_posts')
     .select(FEED_POST_SELECT)
-    .order('created_at', { ascending: false })
+    .order('updated_at', { ascending: false })
     .limit(50);
 
   if (projectId) {

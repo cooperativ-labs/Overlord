@@ -110,9 +110,12 @@ export function FeedList({ projects, editorScheme, initialExecutingTickets = [] 
 
   // Merge realtime posts with fetched posts, deduped and sorted newest first
   const allPosts = useMemo(() => {
-    const serverIds = new Set(allFetchedPosts.map(p => p.id));
-    const realtimeOnly = newPosts.filter(p => !serverIds.has(p.id));
-    return [...realtimeOnly, ...allFetchedPosts];
+    const byId = new Map<string, (typeof allFetchedPosts)[number]>();
+    for (const post of allFetchedPosts) byId.set(post.id, post);
+    for (const post of newPosts) byId.set(post.id, post);
+    return [...byId.values()].sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
   }, [allFetchedPosts, newPosts]);
 
   const filteredPosts = useMemo(() => {

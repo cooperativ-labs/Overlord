@@ -155,12 +155,16 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
   },
   cursor: {
     label: 'Cursor',
-    description: 'Installs global slash commands for mid-session Overlord ticket operations.',
-    supportNote: 'Creates `/connect`, `/load`, and `/spawn` in `~/.cursor/commands/`.',
+    description:
+      'Slash commands ship inside the Overlord Cursor plugin under ~/.cursor/plugins/local/overlord/commands (legacy ~/.cursor/commands files are removed on install).',
+    supportNote:
+      'Uses /connect, /load, /spawn, /create, and /prompt from the plugin directory when the Overlord plugin is enabled.',
     filePaths: [
-      '~/.cursor/commands/connect.md',
-      '~/.cursor/commands/load.md',
-      '~/.cursor/commands/spawn.md'
+      '~/.cursor/plugins/local/overlord/commands/connect.md',
+      '~/.cursor/plugins/local/overlord/commands/load.md',
+      '~/.cursor/plugins/local/overlord/commands/spawn.md',
+      '~/.cursor/plugins/local/overlord/commands/create.md',
+      '~/.cursor/plugins/local/overlord/commands/prompt.md'
     ]
   },
   gemini: {
@@ -188,7 +192,11 @@ const SLASH_COMMAND_CONFIGS: Record<string, SlashCommandConfig> = {
 
 const BUNDLE_FILE_PATHS: Record<BundleAgent, string[]> = {
   claude: ['~/.ovld/bundle-manifest.json'],
-  cursor: ['~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json'],
+  cursor: [
+    '~/.ovld/bundle-manifest.json',
+    '~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json',
+    '~/.cursor/hooks.json'
+  ],
   opencode: ['~/.config/opencode/AGENTS.md', '~/.config/opencode/opencode.json']
 };
 
@@ -220,11 +228,11 @@ const AGENT_PLUGIN_OPTIONS: AgentPluginInstallOption[] = [
     agentKey: 'cursor',
     label: 'Cursor plugin',
     description:
-      'Installs the Overlord Cursor local plugin in ~/.cursor/plugins/local/overlord so terminal cursor-agent sessions get durable workflow rules, skills, MCP bridge, and slash commands.',
+      'Installs the Overlord Cursor local plugin in ~/.cursor/plugins/local/overlord, merges a beforeSubmitPrompt hook into ~/.cursor/hooks.json for activity-feed follow-ups, and permission allow rules so terminal cursor-agent sessions get durable workflow rules, skills, MCP bridge, and slash commands.',
     kind: 'bundle',
     bundleAgent: 'cursor',
     supportNote:
-      'Managed by the desktop app in ~/.cursor/plugins/local/overlord. Legacy ~/.cursor/rules and ~/.cursor/commands files are removed during install.'
+      'Managed by the desktop app or `ovld setup cursor` in ~/.cursor/plugins/local/overlord, ~/.cursor/hooks.json, and ~/.cursor/settings.json. Legacy ~/.cursor/rules and ~/.cursor/commands files are removed during install.'
   },
   {
     key: 'gemini:slash',

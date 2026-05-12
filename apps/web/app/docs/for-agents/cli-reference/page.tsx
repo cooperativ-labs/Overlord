@@ -233,7 +233,8 @@ ovld protocol permission-request --ticket-id <ticket_id> --payload-file -
 ## hook-event
 
 Record a lifecycle hook event without requiring a session key. This is primarily used by
-installed \`UserPromptSubmit\` hooks to capture follow-up user messages automatically.
+installed \`UserPromptSubmit\` hooks (Claude Code, Codex) and Cursor IDE \`beforeSubmitPrompt\` hooks
+to capture follow-up user messages automatically.
 
 \`\`\`bash
 ovld protocol hook-event --hook-type UserPromptSubmit --ticket-id <ticket_id> \\

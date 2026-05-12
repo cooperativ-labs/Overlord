@@ -37,6 +37,8 @@ yarn-error.log*
 .env.staging
 .env.branch-deploy
 
+/design-files
+
 # vercel
 .vercel
 

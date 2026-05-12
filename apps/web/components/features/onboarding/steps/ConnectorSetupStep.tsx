@@ -61,6 +61,7 @@ const AGENT_CONNECTOR_FEATURES: Record<
     details: [
       'Cursor local plugin in ~/.cursor/plugins/local/overlord',
       'Plugin-bundled rules, workflow skill, MCP bridge, and slash commands',
+      'beforeSubmitPrompt hook merged into ~/.cursor/hooks.json for activity-feed follow-ups',
       'Permission rules for ovld protocol & curl'
     ]
   },

@@ -118,6 +118,51 @@ function openCodePaths() {
   };
 }
 
+const CURSOR_USER_PROMPT_HOOK_RELATIVE =
+  'plugins/local/overlord/hooks/overlord-user-prompt-submit.sh';
+
+function isOverlordCursorBeforeSubmitHook(entry: unknown): boolean {
+  if (!entry || typeof entry !== 'object') return false;
+  const cmd = (entry as { command?: string }).command ?? '';
+  return cmd.includes('overlord-user-prompt-submit');
+}
+
+function mergeCursorBeforeSubmitHook({ hooksFile }: { hooksFile: string }): void {
+  const base = fs.existsSync(hooksFile)
+    ? (readJsonFile(hooksFile) as Record<string, unknown>)
+    : { version: 1, hooks: {} };
+  const hooks = (base.hooks ?? {}) as Record<string, unknown[]>;
+  const existing = Array.isArray(hooks.beforeSubmitPrompt) ? hooks.beforeSubmitPrompt : [];
+  hooks.beforeSubmitPrompt = [
+    ...existing.filter(entry => !isOverlordCursorBeforeSubmitHook(entry)),
+    { command: CURSOR_USER_PROMPT_HOOK_RELATIVE }
+  ];
+  writeJsonFile(hooksFile, {
+    ...base,
+    version: typeof base.version === 'number' ? base.version : 1,
+    hooks
+  });
+}
+
+function removeCursorBeforeSubmitHook({ hooksFile }: { hooksFile: string }): void {
+  if (!fs.existsSync(hooksFile)) return;
+  const base = readJsonFile(hooksFile) as Record<string, unknown>;
+  const hooks = (base.hooks ?? {}) as Record<string, unknown[]>;
+  if (!Array.isArray(hooks.beforeSubmitPrompt)) return;
+  hooks.beforeSubmitPrompt = hooks.beforeSubmitPrompt.filter(
+    entry => !isOverlordCursorBeforeSubmitHook(entry)
+  );
+  if (hooks.beforeSubmitPrompt.length === 0) {
+    delete hooks.beforeSubmitPrompt;
+  }
+  if (Object.keys(hooks).length === 0) {
+    delete base.hooks;
+  } else {
+    base.hooks = hooks;
+  }
+  writeJsonFile(hooksFile, base);
+}
+
 function cursorPaths() {
   const base = path.join(os.homedir(), '.cursor');
   return {
@@ -131,7 +176,8 @@ function cursorPaths() {
       'plugin.json'
     ),
     rulesFile: path.join(base, 'rules', 'overlord-local.mdc'),
-    settingsFile: path.join(base, 'settings.json')
+    settingsFile: path.join(base, 'settings.json'),
+    hooksFile: path.join(base, 'hooks.json')
   };
 }
 
@@ -637,7 +683,6 @@ function installCursor(): InstallResult {
 
   try {
     const sourceDir = cursorSourcePluginDir();
-    // TODO: add UserPromptSubmit hook when Cursor CLI supports lifecycle hooks.
     fs.mkdirSync(path.dirname(paths.pluginDir), { recursive: true });
     fs.rmSync(paths.pluginDir, { recursive: true, force: true });
     fs.cpSync(sourceDir, paths.pluginDir, { recursive: true });
@@ -647,6 +692,10 @@ function installCursor(): InstallResult {
       fs.rmSync(paths.rulesFile, { force: true });
     }
     uninstallSlashCommands('cursor');
+
+    const hooksBackup = backupFile(paths.hooksFile);
+    if (hooksBackup) backups.push(hooksBackup);
+    mergeCursorBeforeSubmitHook({ hooksFile: paths.hooksFile });
 
     const settingsBackup = backupFile(paths.settingsFile);
     if (settingsBackup) backups.push(settingsBackup);
@@ -672,7 +721,7 @@ function installCursor(): InstallResult {
       version: pluginVersion(paths.pluginManifest) ?? '0.0.0',
       contentHash: contentHashForDirectory(sourceDir),
       installedAt: new Date().toISOString(),
-      files: [...listFilesRecursive(paths.pluginDir), paths.settingsFile]
+      files: [...listFilesRecursive(paths.pluginDir), paths.settingsFile, paths.hooksFile]
     };
     writeManifest(manifest);
 
@@ -776,6 +825,7 @@ export function uninstallAgentBundle(agent: AgentBundleAgent): { ok: boolean; er
       if (fs.existsSync(paths.rulesFile)) {
         fs.rmSync(paths.rulesFile, { force: true });
       }
+      removeCursorBeforeSubmitHook({ hooksFile: paths.hooksFile });
 
       const slashUninstall = uninstallSlashCommands('cursor');
       if (!slashUninstall.ok) {

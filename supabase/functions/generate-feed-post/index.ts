@@ -43,16 +43,59 @@ Priorities:
 - Include human follow-up items ONLY for proactive tasks the human must do — e.g. creating an account, setting an API key, running a migration, deploying a function, adding an env variable, or configuring a service. Do NOT include instructions to manually test, verify, review code, or check that things work — those are implied.
 - When the prompt includes a CANDIDATE FOLLOW-UP ACTIONS block, treat those as deterministically-derived seeds for human_actions: include the relevant ones (rephrasing freely), drop any that are clearly not applicable to the actual changes, and only add new actions if the candidate list is missing something the human must proactively do.`;
 
+type GeneratedObjectiveSection = {
+  objective_id: string;
+  title?: string;
+  takeaway?: string;
+  body: string | string[];
+  action_required: string[];
+  tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
+};
+
 type FeedPostPayload = {
   title: string;
+  summary: string;
   body: string;
   tags: string[];
   impact_level: string;
   tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
   human_actions: string[];
   files_touched: string[];
-  tickets_created: Array<{ id: string; sequence: number; title: string }>;
+  tickets_created: Array<{
+    id: string;
+    reference?: string | null;
+    sequence: number;
+    title: string;
+  }>;
+  objective_sections: GeneratedObjectiveSection[];
 };
+
+type ObjectiveSection = {
+  id: string;
+  objective_id: string;
+  index: number;
+  title: string;
+  state: string;
+  position: number;
+  time: string | null;
+  duration: string | null;
+  events: number;
+  takeaway: string;
+  body: string;
+  file_changes: Array<{
+    path: string;
+    status: string;
+    additions: number | null;
+    deletions: number | null;
+    note?: string;
+  }>;
+  action_required: string[];
+  tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
+  event_ids: string[];
+  updated_at: string | null;
+};
+
+type StructuredFileChange = ObjectiveSection['file_changes'][number];
 
 type FeedPostContext = {
   projectName: string;
@@ -61,12 +104,29 @@ type FeedPostContext = {
   acceptanceCriteria: string | null;
   constraints: string | null;
   feedPostInstructions: string | null;
-  events: Array<{ created_at: string; event_type: string; summary: string | null }>;
+  objectives: Array<{
+    id: string;
+    objective: string;
+    state: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+  events: Array<{
+    id: string;
+    created_at: string;
+    event_type: string;
+    summary: string | null;
+    objective_id: string | null;
+    session_id: string | null;
+  }>;
   rationales: Array<{
     file_path: string;
     summary: string;
     why: string;
     impact: string;
+    change_kind: string | null;
+    hunks: unknown;
+    objective_id: string | null;
   }>;
   spawnedTickets: Array<{
     id: string;
@@ -75,7 +135,7 @@ type FeedPostContext = {
     ticket_sequence: number;
     delegate: string | null;
   }>;
-  existingPost?: { title: string; body: string } | null;
+  existingPost?: { title: string; body: string; summary: string } | null;
   candidateActions?: CandidateAction[];
 };
 
@@ -128,6 +188,65 @@ function sanitizeTicketsCreated(value: unknown): FeedPostPayload['tickets_create
     .slice(0, 20);
 }
 
+function sanitizeObjectiveSections(value: unknown): FeedPostPayload['objective_sections'] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const section = item as Record<string, unknown>;
+      const objectiveId = String(section.objective_id ?? '').trim();
+      const rawBody = Array.isArray(section.body)
+        ? section.body.map(item => String(item).trim()).filter(Boolean)
+        : String(section.body ?? '').trim();
+      const body = Array.isArray(rawBody) ? rawBody.slice(0, 8) : rawBody.slice(0, 3_000);
+      if (!objectiveId || !body) return null;
+      const title = String(section.title ?? '')
+        .trim()
+        .slice(0, 160);
+      const takeaway = String(section.takeaway ?? '')
+        .trim()
+        .slice(0, 1_000);
+      return {
+        objective_id: objectiveId,
+        ...(title ? { title } : {}),
+        ...(takeaway ? { takeaway } : {}),
+        body,
+        action_required: sanitizeStringArray(section.action_required, 20),
+        tradeoffs: Array.isArray(section.tradeoffs)
+          ? section.tradeoffs
+              .map(item => {
+                if (!item || typeof item !== 'object') return null;
+                const tradeoff = item as Record<string, unknown>;
+                const decision = String(tradeoff.decision ?? '').trim();
+                const alternatives = String(
+                  tradeoff.alternatives_considered ?? tradeoff.alternatives ?? ''
+                ).trim();
+                const rationale = String(tradeoff.rationale ?? '').trim();
+                if (!decision || !rationale) return null;
+                return {
+                  decision,
+                  alternatives_considered: alternatives,
+                  rationale
+                };
+              })
+              .filter(
+                (
+                  tradeoff
+                ): tradeoff is {
+                  decision: string;
+                  alternatives_considered: string;
+                  rationale: string;
+                } => tradeoff !== null
+              )
+              .slice(0, 10)
+          : []
+      };
+    })
+    .filter((section): section is FeedPostPayload['objective_sections'][number] => section !== null)
+    .slice(0, 25);
+}
+
 function sanitizeOptionalInstruction(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -141,12 +260,16 @@ function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
   const title = String(parsed.title ?? '')
     .trim()
     .slice(0, 200);
+  const summary = String(parsed.summary ?? parsed.body ?? '')
+    .trim()
+    .slice(0, 4_000);
   const body = String(parsed.body ?? '')
     .trim()
     .slice(0, 10_000);
+  const objectiveSections = sanitizeObjectiveSections(parsed.objective_sections);
 
-  if (!title || !body) {
-    console.error('[generate-feed-post] Gemini response missing title or body');
+  if (!title || (!summary && !body && objectiveSections.length === 0)) {
+    console.error('[generate-feed-post] Gemini response missing title or content');
     return null;
   }
 
@@ -154,6 +277,7 @@ function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
 
   return {
     title,
+    summary,
     body,
     tags: sanitizeStringArray(parsed.tags, 10),
     impact_level: ['minor', 'notable', 'significant'].includes(impactLevel)
@@ -162,7 +286,8 @@ function normalizeFeedPostPayload(value: unknown): FeedPostPayload | null {
     tradeoffs: sanitizeTradeoffs(parsed.tradeoffs),
     human_actions: sanitizeStringArray(parsed.human_actions, 20),
     files_touched: sanitizeStringArray(parsed.files_touched, 50),
-    tickets_created: sanitizeTicketsCreated(parsed.tickets_created)
+    tickets_created: sanitizeTicketsCreated(parsed.tickets_created),
+    objective_sections: objectiveSections
   };
 }
 
@@ -262,22 +387,21 @@ function buildFallbackFeedPost(context: FeedPostContext): FeedPostPayload {
   const completedObjective = context.events.find(
     e => e.event_type === 'update' && e.summary
   )?.summary;
+  const summary = [
+    `- ${completedObjective ?? `Updated ${objectiveSummary}`}.`,
+    `- ${eventCount} ticket event${eventCount === 1 ? '' : 's'} and ${rationaleCount} file change${rationaleCount === 1 ? '' : 's'} are represented in this rollup.`,
+    spawnedCount > 0
+      ? `- ${spawnedCount} spawned ticket${spawnedCount === 1 ? '' : 's'} were linked to this work.`
+      : '- No follow-up tickets were spawned.',
+    context.existingPost
+      ? '- Gemini was unavailable, so this post was refreshed with a deterministic summary.'
+      : '- Gemini was unavailable, so this post was created with a deterministic summary.'
+  ].join('\n');
 
   return {
     title: `Progress update: ${primaryObjective.slice(0, 60)}`,
-    body: [
-      `- ${completedObjective ?? `Updated ${objectiveSummary}`}.`,
-      `- ${eventCount} ticket event${eventCount === 1 ? '' : 's'} were recorded.`,
-      rationaleCount > 0
-        ? `- Code changes were captured for ${rationaleCount} file change${rationaleCount === 1 ? '' : 's'}.`
-        : '- No code changes were recorded in this session.',
-      spawnedCount > 0
-        ? `- ${spawnedCount} spawned ticket${spawnedCount === 1 ? '' : 's'} were linked to this work.`
-        : '- No follow-up tickets were spawned.',
-      context.existingPost
-        ? '- Gemini was unavailable, so this post was refreshed with a deterministic summary.'
-        : '- Gemini was unavailable, so this post was created with a deterministic summary.'
-    ].join('\n'),
+    summary,
+    body: summary,
     tags: ['fallback', 'bugfix', 'feed'],
     impact_level: eventCount > 0 || rationaleCount > 0 ? 'notable' : 'minor',
     tradeoffs: [],
@@ -288,17 +412,53 @@ function buildFallbackFeedPost(context: FeedPostContext): FeedPostPayload {
       reference: t.ticket_id,
       sequence: t.ticket_sequence,
       title: t.title ?? 'Untitled'
-    }))
+    })),
+    objective_sections: context.objectives.map(objective => {
+      const objectiveEvents = context.events.filter(event => event.objective_id === objective.id);
+      const objectiveFiles = context.rationales.filter(
+        rationale => rationale.objective_id === objective.id
+      );
+      return {
+        objective_id: objective.id,
+        title: objective.objective.slice(0, 120),
+        takeaway:
+          objectiveEvents.find(event => event.summary)?.summary ??
+          `Recorded ${objectiveEvents.length} event${objectiveEvents.length === 1 ? '' : 's'} for this objective.`,
+        body: [
+          objectiveEvents.length > 0
+            ? `- Recorded ${objectiveEvents.length} event${objectiveEvents.length === 1 ? '' : 's'} for this objective.`
+            : '- No objective-specific events were recorded.',
+          objectiveFiles.length > 0
+            ? `- Captured file changes for ${objectiveFiles.length} path${objectiveFiles.length === 1 ? '' : 's'}.`
+            : '- No objective-specific file changes were recorded.'
+        ].join('\n'),
+        action_required: [],
+        tradeoffs: []
+      };
+    })
   };
 }
 
 function buildPrompt(context: FeedPostContext): string {
+  const objectiveLines = context.objectives
+    .map(
+      (objective, index) =>
+        `${index + 1}. ${objective.id} [${objective.state}]: ${objective.objective}`
+    )
+    .join('\n');
+
   const eventLines = context.events
-    .map(e => `[${e.created_at}] ${e.event_type}: ${e.summary ?? '(no summary)'}`)
+    .map(
+      e =>
+        `[${e.created_at}] ${e.event_type}${e.objective_id ? ` objective=${e.objective_id}` : ' ticket-wide'}: ${e.summary ?? '(no summary)'}`
+    )
     .join('\n');
 
   const rationaleLines = context.rationales
-    .map(r => `- ${r.file_path}: ${r.summary} (why: ${r.why}, impact: ${r.impact})`)
+    .map(
+      r =>
+        `- ${r.objective_id ? `objective=${r.objective_id}` : 'ticket-wide'} ${r.file_path}: ${r.summary} (why: ${r.why}, impact: ${r.impact})`
+    )
     .join('\n');
 
   const spawnedLines = context.spawnedTickets
@@ -330,6 +490,9 @@ ${appendSection}
 CHRONOLOGICAL EVENTS (${context.events.length} total):
 ${eventLines || '(no events)'}
 
+OBJECTIVES (${context.objectives.length} total, ascending):
+${objectiveLines || '(no objectives)'}
+
 CODE CHANGES:
 ${rationaleLines || '(no code changes recorded)'}
 
@@ -339,22 +502,168 @@ ${spawnedLines || '(none)'}
 Respond with a single JSON object:
 {
   "title": "One-line action-oriented summary, max 80 characters",
-  "body": "Concise Markdown summary using bullet points. Cover: what was done and why; any tradeoffs or deviations from the objective; what the human should be aware of. If tickets were created during this session, list them clearly. Do NOT repeat the title. Prefer bullet lists over paragraphs. Keep it scannable.",
+  "summary": "Concise mutable ticket-level Markdown summary using bullet points.",
+  "body": "Legacy compatibility field. You may repeat summary here; server code renders the final body.",
   "tags": ["array of tags like: bugfix, refactor, new-feature, tradeoff, blocker-resolved, test, docs, config, dependency, performance, action-required"],
   "impact_level": "minor or notable or significant",
   "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}],
   "human_actions": ["ONLY proactive tasks the human must do — e.g. create an account, set an API key, run a migration, add an env variable, deploy a function, repackage or recompile an app, configure a third-party service. Return an empty array if none."],
-  "files_touched": ["list/of/files.ts"],
-  "tickets_created": [{"id": "uuid", "sequence": 123, "title": "Ticket title"}]
+      "files_touched": ["list/of/files.ts"],
+      "tickets_created": [{"id": "uuid", "sequence": 123, "title": "Ticket title"}],
+  "objective_sections": [{
+    "objective_id": "uuid from OBJECTIVES",
+    "title": "Short objective row title",
+    "takeaway": "One-sentence scan summary for this objective row",
+    "body": ["Detailed bullet for the drawer"],
+    "action_required": ["Objective-scoped proactive human task"],
+    "tradeoffs": [{"decision": "what was decided", "alternatives_considered": "what else was possible", "rationale": "why this choice"}]
+  }]
 }
 
 IMPORTANT INSTRUCTIONS:
-- Keep the body under 300 words. Use bullet points, not paragraphs.
+- Keep summary and each objective section under 300 words. Use bullet points, not paragraphs.
+- Return one objective_sections entry for each meaningful objective listed above, keyed by objective_id. Do not invent objective IDs.
+- Put human action items and tradeoffs under the objective they belong to. Also include them in the top-level human_actions/tradeoffs arrays for compatibility.
 - Surface tradeoffs prominently — they are the most valuable part. Be clear about which direction was chosen and which was not. If there are no tradeoffs, return an empty array.
 - Follow any PROJECT-USER FEED INSTRUCTIONS when they are provided, unless they conflict with the required JSON shape or the source facts.
 - "human_actions" is ONLY for proactive tasks the human must perform — things like creating accounts, setting API keys, running migrations, adding env variables, deploying functions, or configuring external services. Do NOT include: testing the code, verifying behavior, reviewing files, checking that things work, or any other validation/QA tasks. Those are implied and clutter the feed. If there are no proactive tasks, return an empty array.
 - "tickets_created" should list any tickets that were spawned/created during this session. Return an empty array if none.
 - Do not wrap the JSON in Markdown fences or any explanatory text.`;
+}
+
+function uniqueStrings(values: Array<string | null | undefined>, limit = 100): string[] {
+  return [
+    ...new Set(values.map(value => value?.trim()).filter((value): value is string => !!value))
+  ].slice(0, limit);
+}
+
+function formatTime(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new Date(value).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  } catch {
+    return null;
+  }
+}
+
+function normalizeFileChangeStatus(value: string | null | undefined): string {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'added' || normalized === 'created') return 'added';
+  if (normalized === 'deleted' || normalized === 'removed') return 'deleted';
+  if (normalized === 'renamed' || normalized === 'moved') return 'renamed';
+  return 'modified';
+}
+
+function normalizeObjectiveState(value: string): string {
+  if (value === 'complete') return 'completed';
+  if (value === 'blocked') return 'abandoned';
+  return value;
+}
+
+function buildStructuredFileChanges(
+  rationales: FeedPostContext['rationales'],
+  orphan = false
+): StructuredFileChange[] {
+  return rationales.map(rationale => ({
+    path: rationale.file_path,
+    status: normalizeFileChangeStatus(rationale.change_kind),
+    additions: null,
+    deletions: null,
+    ...(orphan ? { note: 'Not linked to an objective' } : {})
+  }));
+}
+
+function buildObjectiveSections(
+  context: FeedPostContext,
+  generatedSections: FeedPostPayload['objective_sections']
+): ObjectiveSection[] {
+  const generatedByObjectiveId = new Map(
+    generatedSections.map(section => [section.objective_id, section])
+  );
+
+  return context.objectives.map((objective, index) => {
+    const generated = generatedByObjectiveId.get(objective.id);
+    const objectiveEvents = context.events.filter(event => event.objective_id === objective.id);
+    const objectiveRationales = context.rationales.filter(
+      rationale => rationale.objective_id === objective.id
+    );
+    const latestEventAt = objectiveEvents
+      .map(event => event.created_at)
+      .sort()
+      .at(-1);
+    const body = generated?.body
+      ? Array.isArray(generated.body)
+        ? generated.body.map(item => `- ${item.replace(/^[-*]\s*/, '')}`).join('\n')
+        : generated.body
+      : [
+          objectiveEvents.length > 0
+            ? `- Recorded ${objectiveEvents.length} event${objectiveEvents.length === 1 ? '' : 's'} for this objective.`
+            : '- No objective-specific events were recorded.',
+          objectiveRationales.length > 0
+            ? `- Captured ${objectiveRationales.length} file change${objectiveRationales.length === 1 ? '' : 's'} for this objective.`
+            : '- No objective-specific file changes were recorded.'
+        ].join('\n');
+
+    return {
+      id: objective.id,
+      objective_id: objective.id,
+      index: index + 1,
+      title: generated?.title ?? objective.objective.slice(0, 120),
+      state: normalizeObjectiveState(objective.state),
+      position: index,
+      time: formatTime(objective.created_at),
+      duration: objective.state === 'executing' ? 'ongoing' : null,
+      events: objectiveEvents.length,
+      takeaway:
+        generated?.takeaway ??
+        body
+          .replace(/^[-*]\s*/, '')
+          .split('\n')[0]
+          ?.slice(0, 500) ??
+        '',
+      body,
+      file_changes: buildStructuredFileChanges(objectiveRationales),
+      action_required: generated?.action_required ?? [],
+      tradeoffs: generated?.tradeoffs ?? [],
+      event_ids: uniqueStrings(
+        objectiveEvents.map(event => event.id),
+        100
+      ),
+      updated_at: latestEventAt ?? objective.updated_at ?? objective.created_at ?? null
+    };
+  });
+}
+
+function renderFeedBody(
+  summary: string,
+  sections: ObjectiveSection[],
+  orphanFileChanges: StructuredFileChange[]
+): string {
+  const chunks: string[] = [];
+  const cleanedSummary = summary.trim();
+  if (cleanedSummary) {
+    chunks.push(`## Summary\n${cleanedSummary}`);
+  }
+
+  if (orphanFileChanges.length > 0) {
+    chunks.push(
+      ['## Ticket-wide changes', ...orphanFileChanges.map(change => `- ${change.path}`)].join('\n')
+    );
+  }
+
+  for (const section of sections) {
+    const heading = `## Objective ${section.index}: ${section.title}`;
+    const files =
+      section.file_changes.length > 0
+        ? ['', 'Files:', ...section.file_changes.map(change => `- ${change.path}`)].join('\n')
+        : '';
+    chunks.push(`${heading}\n${section.body.trim()}${files}`);
+  }
+
+  return chunks.join('\n\n').trim();
 }
 
 Deno.serve(async (req: Request) => {
@@ -379,27 +688,24 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Check for existing post for this objective or session (dedup / append).
-    // Prefer objective-based dedup when available; fall back to session-based for legacy rows.
+    // Feed posts are ticket-level rollups: resolve the canonical row by ticket_id.
     let existingPost: {
       id: string;
       title: string;
       body: string;
+      summary: string;
       source_event_ids: string[];
+      source_session_ids: string[];
     } | null = null;
 
-    // We'll resolve objective later, but try session-based dedup first as a baseline
-    if (sessionId) {
-      const { data } = await supabase
-        .from('feed_posts')
-        .select('id, title, body, source_event_ids')
-        .eq('session_id', sessionId)
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      existingPost = data;
-    }
+    const { data: existingPostRow } = await supabase
+      .from('feed_posts')
+      .select('id, title, body, summary, source_event_ids, source_session_ids')
+      .eq('ticket_id', ticketId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    existingPost = existingPostRow;
 
     // Fetch ticket details
     const { data: ticket } = await supabase
@@ -422,8 +728,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Fetch the most recent executed objective (the one being delivered/completed).
-    // Prefer the executing/complete objective over the draft.
+    // Fetch all objectives for the ticket; the rendered feed body presents them as an ascending timeline.
+    const { data: objectives } = await supabase
+      .from('objectives')
+      .select('id, objective, state, created_at, updated_at')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: true });
+
+    // Fetch the most recent executed objective for the rollup's lightweight latest pointer.
     const { data: executedObjective } = await supabase
       .from('objectives')
       .select('id, objective')
@@ -465,30 +777,19 @@ Deno.serve(async (req: Request) => {
         ?.feed_post_instructions
     );
 
-    // Fetch events for this session (or all recent events for ticket)
+    // Fetch ticket-wide events so every regeneration rebuilds the canonical rollup from source facts.
     const eventsQuery = supabase
       .from('ticket_events')
-      .select('id, created_at, event_type, summary')
+      .select('id, created_at, event_type, summary, objective_id, session_id')
       .eq('ticket_id', ticketId)
       .neq('event_type', 'system')
       .order('created_at', { ascending: true })
-      .limit(50);
-
-    if (sessionId) {
-      eventsQuery.eq('session_id', sessionId);
-    }
+      .limit(100);
 
     const { data: events } = await eventsQuery;
 
-    // If appending, only get events not already in the post
-    let filteredEvents = events ?? [];
-    if (existingPost && existingPost.source_event_ids?.length) {
-      const existingIds = new Set(existingPost.source_event_ids);
-      filteredEvents = filteredEvents.filter(e => !existingIds.has(e.id));
-    }
-
-    // Skip if no new events to synthesize
-    if (filteredEvents.length === 0 && !existingPost) {
+    // Skip if there is nothing to synthesize.
+    if ((events ?? []).length === 0 && !existingPost) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'no events' }), {
         status: 200,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }
@@ -496,17 +797,12 @@ Deno.serve(async (req: Request) => {
     }
 
     // Fetch file changes
-    const rationalesQuery = supabase
+    const { data: rationales } = await supabase
       .from('file_changes')
-      .select('file_path, summary, why, impact')
+      .select('file_path, summary, why, impact, change_kind, hunks, objective_id')
       .eq('ticket_id', ticketId)
-      .limit(30);
-
-    if (sessionId) {
-      rationalesQuery.eq('session_id', sessionId);
-    }
-
-    const { data: rationales } = await rationalesQuery;
+      .order('created_at', { ascending: true })
+      .limit(100);
 
     // Fetch agent type from session
     let agentType: string | null = null;
@@ -580,10 +876,13 @@ Deno.serve(async (req: Request) => {
       acceptanceCriteria: ticket.acceptance_criteria,
       constraints: ticket.constraints,
       feedPostInstructions,
-      events: filteredEvents,
+      objectives: objectives ?? [],
+      events: events ?? [],
       rationales: rationales ?? [],
       spawnedTickets,
-      existingPost: existingPost ? { title: existingPost.title, body: existingPost.body } : null,
+      existingPost: existingPost
+        ? { title: existingPost.title, body: existingPost.body, summary: existingPost.summary }
+        : null,
       candidateActions
     };
 
@@ -591,10 +890,31 @@ Deno.serve(async (req: Request) => {
 
     // Fall back to a deterministic post so feed visibility does not depend on Gemini availability.
     const generated = (await callGemini(prompt)) ?? buildFallbackFeedPost(feedContext);
+    const objectiveSections = buildObjectiveSections(feedContext, generated.objective_sections);
+    const summary = generated.summary || generated.body;
+    const orphanFileChanges = buildStructuredFileChanges(
+      (rationales ?? []).filter(rationale => !rationale.objective_id),
+      true
+    );
+    const renderedBody = renderFeedBody(summary, objectiveSections, orphanFileChanges);
+    const filesTouched =
+      generated.files_touched.length > 0
+        ? generated.files_touched
+        : uniqueStrings(
+            (rationales ?? []).map(rationale => rationale.file_path),
+            50
+          );
+    const pendingActions =
+      objectiveSections.reduce((count, section) => count + section.action_required.length, 0) ||
+      generated.human_actions.length;
 
     // Compute event window
     const allEvents = events ?? [];
     const eventIds = allEvents.map(e => e.id);
+    const sourceSessionIds = uniqueStrings(
+      [...allEvents.map(e => e.session_id), sessionId ?? null],
+      100
+    );
     const timestamps = allEvents.map(e => e.created_at).sort();
     const windowStart = timestamps[0] ?? new Date().toISOString();
     const windowEnd = timestamps[timestamps.length - 1] ?? new Date().toISOString();
@@ -614,16 +934,27 @@ Deno.serve(async (req: Request) => {
       const { error: updateError } = await supabase
         .from('feed_posts')
         .update({
+          session_id: sessionId ?? null,
           title: generated.title,
-          body: generated.body,
+          summary,
+          body: renderedBody,
           tags: generated.tags,
           impact_level: generated.impact_level,
           tradeoffs: generated.tradeoffs,
           human_actions: generated.human_actions,
-          files_touched: generated.files_touched,
+          files_touched: filesTouched,
           tickets_created: ticketsCreatedPayload,
           objective_id: latestObjective?.id ?? null,
+          objective_sections: objectiveSections,
+          orphan_file_changes: orphanFileChanges,
+          total_events: allEvents.length,
+          total_files: filesTouched.length,
+          pending_actions: pendingActions,
           source_event_ids: mergedEventIds,
+          source_session_ids: uniqueStrings([
+            ...(existingPost.source_session_ids ?? []),
+            ...sourceSessionIds
+          ]),
           source_window_end: windowEnd,
           updated_at: new Date().toISOString()
         })
@@ -660,14 +991,21 @@ Deno.serve(async (req: Request) => {
           objective_id: latestObjective?.id ?? null,
           agent_type: agentType,
           title: generated.title,
-          body: generated.body,
+          summary,
+          body: renderedBody,
           tags: generated.tags,
           impact_level: generated.impact_level,
-          files_touched: generated.files_touched,
+          files_touched: filesTouched,
           tradeoffs: generated.tradeoffs,
           human_actions: generated.human_actions,
           tickets_created: ticketsCreatedPayload,
+          objective_sections: objectiveSections,
+          orphan_file_changes: orphanFileChanges,
+          total_events: allEvents.length,
+          total_files: filesTouched.length,
+          pending_actions: pendingActions,
           source_event_ids: eventIds,
+          source_session_ids: sourceSessionIds,
           source_window_start: windowStart,
           source_window_end: windowEnd,
           created_by: ticket.created_by ?? null

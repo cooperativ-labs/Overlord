@@ -345,7 +345,7 @@ Supported activity event types are:
 - `user_follow_up` for a human message sent after the initial ticket
 - `alert` for a warning or non-blocking issue
 
-On connectors that support lifecycle hooks, follow-up user messages after the initial ticket are captured automatically and appear as `user_follow_up` events in the activity feed. If a connector does not support that hook yet, the agent should publish the message verbatim before continuing:
+On connectors that support lifecycle hooks (Claude Code and Codex `UserPromptSubmit`, Cursor IDE `beforeSubmitPrompt` via `~/.cursor/hooks.json` after `ovld setup cursor` / desktop bundle install), follow-up user messages after the initial ticket are captured automatically and appear as `user_follow_up` events in the activity feed. If hooks are unavailable or misconfigured, the agent should publish the message verbatim before continuing:
 
 ```bash
 ovld protocol update \

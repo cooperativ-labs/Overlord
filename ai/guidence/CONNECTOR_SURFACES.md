@@ -246,12 +246,14 @@ Checklist:
 Managed files:
 
 - `~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json`
+- `~/.cursor/plugins/local/overlord/hooks/overlord-user-prompt-submit.sh`
 - `~/.cursor/plugins/local/overlord/rules/overlord-local.mdc`
 - `~/.cursor/plugins/local/overlord/commands/connect.md` — requires `--ticket-id`
 - `~/.cursor/plugins/local/overlord/commands/load.md` — requires `--ticket-id`
-- `~/.cursor/plugins/local/overlord/commands/attach.md` — requires `--ticket-id`
+- `~/.cursor/plugins/local/overlord/commands/spawn.md`
 - `~/.cursor/plugins/local/overlord/commands/create.md`
 - `~/.cursor/plugins/local/overlord/commands/prompt.md`
+- `~/.cursor/hooks.json` — merged `beforeSubmitPrompt` entry pointing at the plugin hook script
 - `~/.cursor/settings.json` permission allow rules for `ovld protocol` and `curl -sS -X POST`
 
 ### 2. Local launch path
@@ -273,7 +275,7 @@ Checklist:
 
 - Bundle support via local Cursor plugin — slim workflow prompt can be used in `instructionMode=bundle`
 - No permission hook
-- No lifecycle follow-up hook yet; manual `user_follow_up` guidance remains until Cursor CLI supports it
+- `beforeSubmitPrompt` hook (Cursor IDE hooks) calls `POST /api/protocol/hook-event` when `TICKET_ID`, `OVERLORD_ACCESS_TOKEN`, and `OVERLORD_URL` / `OVERLORD_CONNECTOR_URL` are present in the agent environment (same contract as Claude/Codex `UserPromptSubmit`)
 - Model flag: `--model` (no thinking/effort flag for Cursor)
 
 ### 3. Onboarding

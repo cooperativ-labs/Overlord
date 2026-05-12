@@ -46,7 +46,7 @@ const AGENT_INSTALL_INFO: Record<AgentTypeValue, AgentInstallInfo> = {
     installLabel: 'Download Cursor',
     overlordSetupCommand: 'ovld setup cursor',
     overlordSetupDescription:
-      'Installs the Overlord Cursor rule bundle, slash commands, and permission allow rules used for ticket lifecycle commands.'
+      'Installs the Overlord Cursor plugin, merges a beforeSubmitPrompt hook into ~/.cursor/hooks.json for activity-feed follow-ups, and permission allow rules for ticket lifecycle commands.'
   },
   gemini: {
     installCommand: 'npm install -g @google/gemini-cli',

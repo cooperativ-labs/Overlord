@@ -13,7 +13,7 @@ Use this skill whenever Cursor needs to work with Overlord, whether the session 
 2. Keep the returned `session.sessionKey` for all follow-up calls.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working with `ovld protocol update --phase execute`.
-5. If the user sends a follow-up message after the initial ticket, publish it immediately with `--event-type user_follow_up`.
+5. Follow-up messages after the initial ticket are captured automatically by the installed Cursor `beforeSubmitPrompt` hook (see `~/.cursor/hooks.json`). Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked, call `ovld protocol ask` and stop.
 7. Deliver last with `ovld protocol deliver`, including `changeRationales` for each meaningful behavioral file change.
 
@@ -42,7 +42,7 @@ Supported `--phase` values:
 
 Event types:
 - `update` for standard progress updates
-- `user_follow_up` for human follow-up messages after the initial ticket
+- `user_follow_up` — only when the Cursor `beforeSubmitPrompt` hook is unavailable; the hook normally posts follow-ups to the activity feed
 - `alert` for warnings or non-blocking issues
 
 Ask when blocked:
@@ -152,4 +152,4 @@ Objective attachment uploads also expose two-step variants — `attachment-prepa
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.7 -->
+<!-- version: 0.4.8 -->

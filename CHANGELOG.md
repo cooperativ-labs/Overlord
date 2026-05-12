@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605121205.0] - 2026-05-12:12:05
+
+### Added
+- **Ticket-rollup feed posts**: one canonical **`feed_posts`** row per ticket carrying a mutable **`summary`**, structured **`objective_sections`** (per-objective title, takeaway, body, files, action items, tradeoffs), ticket-level **`orphan_file_changes`**, and aggregate **`total_events`** / **`total_files`** / **`pending_actions`** counts plus full **`source_session_ids`** provenance.
+- **Cursor `beforeSubmitPrompt` hook** (**`plugins/cursor/hooks/overlord-user-prompt-submit.sh`**) that posts Cursor IDE composer follow-ups to **`POST /api/protocol/hook-event`** — installed and removed by both **`ovld setup cursor`** and the Desktop agent bundle installer, with a merged entry in **`~/.cursor/hooks.json`**.
+- Onboarding, settings, demo, and connector-surfaces UI now describe the Cursor plugin + **`beforeSubmitPrompt`** hook (managed files include **`~/.cursor/hooks.json`** alongside the plugin directory and **`settings.json`**).
+
+### Fixed
+- **Feed realtime** subscribers now listen for **`UPDATE`** events and re-sort by **`updated_at`**, so ticket-rollup posts mutate in place instead of appearing as duplicates when later activity arrives.
+- **`FeedList`** and the mobile feed dedupe by **`id`** when merging realtime and fetched posts, so a refreshed rollup replaces the prior copy in the visible list.
+
+### Changed
+- **Feed queries and UI order by `updated_at`** (web action, mobile loader, in-memory merges, and **`FeedCard`** timestamp) so the freshest ticket activity rises to the top; cards show an **"Updated"** prefix when **`updated_at`** differs from **`created_at`**.
+- **Cursor `overlord-ticket` skill** stops instructing agents to post **`user_follow_up`** manually — the **`beforeSubmitPrompt`** hook captures follow-ups, with a manual fallback only if the hook is unavailable.
+- **Ticket-scoped feed/objective context** (**`load-feed-discuss-append`** and **`protocol-context-objective`**) no longer narrows to a single **`session_id`** when a ticket-level feed post exists, so discussion prompts and resolved objectives reflect the full ticket rollup.
+- **Current Changes** project view wires file-change loading, helpers, and the view-model into the live page more directly; the **`file-changes`** API and helpers return richer per-change metadata for the new layout.
+- **`TicketListCard`** contains its loading shimmer to the card surface to prevent stray overflow during fetches.
+
+### Security
+- None.
+
+### Test
+- Extend **`tests/lib/overlord/feed-discuss-layered.test.ts`** for the new rollup fields and refresh **Current Changes** **`helpers-diff`** / **`view-model`** tests for the updated file-change shape.
+
+### Documentation
+- Refresh **CLI reference**, **`overlord-cli` README**, **connector surfaces**, **`docs/public/overlord-new-user-guide.md`**, **`docs/jujustu-integration.md`**, **`apps/web/app/docs/workflow/file-changes`**, and **`for-agents/context-and-artifacts`** for the Cursor **`beforeSubmitPrompt`** hook and the updated **`hook-event`** coverage across Claude Code, Codex, and Cursor.
+
+### Chore
+- Add migration **`20260512133013_feed_posts_ticket_rollup.sql`** (new rollup columns, **`(organization_id, updated_at)`** and **`(project_id, updated_at)`** indexes, dedupe-by-ticket, unique index on **`feed_posts.ticket_id`**); regenerate **`types/database.types.ts`**; bump workspace and **`overlord-cli`** to **`5.2605121205.0`** / **`0.2605121205.0`**; bump Cursor plugin to **`0.1.1`** and **`overlord-ticket`** skill to **`0.4.8`**; ignore the local **`design-files/`** drop folder.
+
 ## [5.2605121033.0] - 2026-05-12:10:33
 
 ### Added

@@ -162,12 +162,12 @@ export function LiveActivityFeed({
                     'text-sm',
                     isUserFollowUp
                       ? [
-                        'text-sky-700 dark:text-sky-300',
-                        'prose-p:text-sky-700 dark:prose-p:text-sky-300',
-                        'prose-li:text-sky-700 dark:prose-li:text-sky-300',
-                        'prose-strong:text-sky-800 dark:prose-strong:text-sky-200',
-                        'prose-code:text-sky-800 dark:prose-code:text-sky-200'
-                      ]
+                          'text-sky-700 dark:text-sky-300',
+                          'prose-p:text-sky-700 dark:prose-p:text-sky-300',
+                          'prose-li:text-sky-700 dark:prose-li:text-sky-300',
+                          'prose-strong:text-sky-800 dark:prose-strong:text-sky-200',
+                          'prose-code:text-sky-800 dark:prose-code:text-sky-200'
+                        ]
                       : 'text-muted-foreground'
                   )}
                   editorScheme={editorScheme}

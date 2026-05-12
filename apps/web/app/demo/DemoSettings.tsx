@@ -335,12 +335,14 @@ function DemoCliSettings() {
       label: 'Cursor',
       plugins: [
         {
-          label: '/connect /load /prompt',
-          description: 'Installs global slash commands for mid-session Overlord ticket operations.',
-          supportNote: 'Creates `/connect`, `/load`, and `/prompt` in `~/.cursor/commands/`.',
+          label: 'Chat plugin + hooks',
+          description:
+            'Installs the Overlord Cursor plugin (skill, rules, MCP, commands) and merges a beforeSubmitPrompt hook into ~/.cursor/hooks.json so user follow-ups reach the ticket activity feed.',
+          supportNote:
+            'Managed by the desktop app or `ovld setup cursor` under ~/.cursor/plugins/local/overlord, ~/.cursor/hooks.json, and ~/.cursor/settings.json.',
           status: 'not_installed' as const,
           installFiles:
-            '~/.cursor/commands/connect.md, ~/.cursor/commands/load.md, ~/.cursor/commands/prompt.md'
+            '~/.cursor/plugins/local/overlord/**, ~/.cursor/hooks.json, ~/.cursor/settings.json'
         }
       ]
     },

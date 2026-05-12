@@ -59,7 +59,8 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
     href: workspaceRoot ? buildEditorHref(path, workspaceRoot, editorScheme) : null
   }));
 
-  const timestamp = new Date(post.created_at);
+  const timestamp = new Date(post.updated_at);
+  const wasUpdated = post.updated_at !== post.created_at;
   const timeStr = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = timestamp.toLocaleDateString([], {
     month: 'short',
@@ -77,7 +78,10 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
       <div className="flex-1 min-w-0 pb-6">
         {/* Meta line */}
         <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
-          <span>{timeStr}</span>
+          <span>
+            {wasUpdated ? 'Updated ' : ''}
+            {timeStr}
+          </span>
           <span className="text-muted-foreground/40">&middot;</span>
           <span>{dateStr}</span>
           <span className="text-muted-foreground/40">&middot;</span>

@@ -11,9 +11,9 @@ import type { Database } from '@/types/database.types';
 type FeedPostRow = Database['public']['Tables']['feed_posts']['Row'];
 
 /**
- * Subscribes to new feed_posts via Supabase Realtime and returns them.
- * The caller merges these into its displayed list so new posts appear
- * instantly without a full page reload.
+ * Subscribes to feed_posts inserts and updates via Supabase Realtime.
+ * Ticket rollup posts mutate in place, so updates replace existing cached
+ * items and are re-sorted by updated_at.
  */
 export function useFeedRealtime() {
   const queryClient = useQueryClient();
@@ -93,6 +93,7 @@ export function useFeedRealtime() {
         objective_id: row.objective_id ?? null,
         agent_type: row.agent_type,
         title: row.title,
+        summary: row.summary ?? '',
         body: row.body,
         tags: row.tags ?? [],
         impact_level: row.impact_level ?? 'notable',
@@ -100,7 +101,17 @@ export function useFeedRealtime() {
         tradeoffs: (row.tradeoffs as FeedPost['tradeoffs']) ?? [],
         human_actions: (row.human_actions as string[]) ?? [],
         tickets_created: (row.tickets_created as FeedPost['tickets_created']) ?? [],
+        objective_sections: Array.isArray(row.objective_sections)
+          ? (row.objective_sections as unknown[])
+          : [],
+        orphan_file_changes: Array.isArray(row.orphan_file_changes)
+          ? (row.orphan_file_changes as unknown[])
+          : [],
+        total_events: row.total_events ?? 0,
+        total_files: row.total_files ?? changedFiles.length,
+        pending_actions: row.pending_actions ?? 0,
         source_event_ids: row.source_event_ids ?? [],
+        source_session_ids: row.source_session_ids ?? [],
         source_window_start: row.source_window_start,
         source_window_end: row.source_window_end,
         created_at: row.created_at,
@@ -114,6 +125,38 @@ export function useFeedRealtime() {
       };
     }
 
+    async function handleChangedRow(row: FeedPostRow, announceIfNew: boolean) {
+      const wasKnown = knownIdsRef.current.has(row.id);
+      knownIdsRef.current.add(row.id);
+
+      const enriched = await enrichPost(row);
+      if (!enriched) return;
+
+      queryClient.setQueryData<InfiniteData<FeedPost[], number>>(feedQueryKeys.posts(), current => {
+        if (!current) {
+          return { pageParams: [0], pages: [[enriched]] };
+        }
+
+        const pages = current.pages.map(page => page.filter(post => post.id !== enriched.id));
+        const [firstPage = [], ...restPages] = pages;
+        const nextFirstPage = [enriched, ...firstPage].sort(
+          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        );
+
+        return {
+          ...current,
+          pages: [nextFirstPage, ...restPages]
+        };
+      });
+
+      setNewPosts(prev => {
+        const next = [enriched, ...prev.filter(post => post.id !== enriched.id)].sort(
+          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        );
+        return announceIfNew && !wasKnown ? next : next.filter(post => post.id !== enriched.id);
+      });
+    }
+
     const channel = supabase
       .channel('feed-realtime')
       .on<FeedPostRow>(
@@ -124,35 +167,18 @@ export function useFeedRealtime() {
           table: 'feed_posts'
         },
         async payload => {
-          const row = payload.new;
-          if (knownIdsRef.current.has(row.id)) return;
-          knownIdsRef.current.add(row.id);
-
-          const enriched = await enrichPost(row);
-          if (!enriched) return;
-
-          queryClient.setQueryData<InfiniteData<FeedPost[], number>>(
-            feedQueryKeys.posts(),
-            current => {
-              if (!current) {
-                return { pageParams: [0], pages: [[enriched]] };
-              }
-              if (current.pages.some(page => page.some(post => post.id === enriched.id))) {
-                return current;
-              }
-              const [firstPage = [], ...restPages] = current.pages;
-              return {
-                ...current,
-                pages: [[enriched, ...firstPage], ...restPages]
-              };
-            }
-          );
-
-          setNewPosts(prev => {
-            // Avoid duplicates
-            if (prev.some(p => p.id === enriched.id)) return prev;
-            return [enriched, ...prev];
-          });
+          await handleChangedRow(payload.new, true);
+        }
+      )
+      .on<FeedPostRow>(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'feed_posts'
+        },
+        async payload => {
+          await handleChangedRow(payload.new, false);
         }
       )
       .subscribe();

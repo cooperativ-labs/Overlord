@@ -28,30 +28,20 @@ export async function loadFeedDiscussAppendMarkdown(input: {
     return { ok: false, error: 'Feed post not found for this ticket.' };
   }
 
-  const sessionId = feedPostRow.session_id?.trim() || null;
-
-  let fileQuery = supabase
+  const fileQuery = supabase
     .from('file_changes')
     .select('file_path,summary,why,impact')
     .eq('ticket_id', ticketId)
     .order('created_at', { ascending: true })
-    .limit(sessionId ? 80 : 120);
+    .limit(150);
 
-  if (sessionId) {
-    fileQuery = fileQuery.eq('session_id', sessionId);
-  }
-
-  let eventQuery = supabase
+  const eventQuery = supabase
     .from('ticket_events')
     .select('created_at,event_type,summary')
     .eq('ticket_id', ticketId)
     .neq('event_type', 'system')
     .order('created_at', { ascending: true })
-    .limit(sessionId ? 80 : 150);
-
-  if (sessionId) {
-    eventQuery = eventQuery.eq('session_id', sessionId);
-  }
+    .limit(150);
 
   const [{ data: fc }, { data: ev }] = await Promise.all([fileQuery, eventQuery]);
 

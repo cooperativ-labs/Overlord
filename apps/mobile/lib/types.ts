@@ -49,6 +49,7 @@ export interface FeedPost {
   id: string;
   project_id: string;
   title: string;
+  summary: string;
   body: string;
   impact_level: string;
   agent_type: string | null;
@@ -62,15 +63,22 @@ export interface FeedPost {
   }>;
   tickets_created: Array<{
     id: string;
+    reference?: string | null;
     sequence: number;
     title: string;
   }>;
+  objective_sections: unknown[];
+  orphan_file_changes: unknown[];
+  total_events: number;
+  total_files: number;
+  pending_actions: number;
   ticket_title: string | null;
   ticket_sequence: number | null;
   project_name: string;
   project_color: string;
   ticket_id: string;
   created_at: string;
+  updated_at: string;
 }
 
 /** Subset of tickets used in the tickets list. */

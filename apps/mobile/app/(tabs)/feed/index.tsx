@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -135,20 +135,18 @@ export default function FeedScreen() {
 
   // Merge realtime posts with fetched posts
   const allPosts = useMemo(() => {
-    const fetchedIds = new Set(posts.map(p => p.id));
-    const realtimeOnly = newPosts.filter(p => !fetchedIds.has(p.id));
-    return [...realtimeOnly, ...posts];
+    const byId = new Map<string, FeedPost>();
+    for (const post of posts) byId.set(post.id, post);
+    for (const post of newPosts) byId.set(post.id, post);
+    return [...byId.values()].sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
   }, [posts, newPosts]);
 
   const filteredPosts = useMemo(() => {
     if (selectedProjectId === 'all') return allPosts;
     return allPosts.filter(post => post.project_id === selectedProjectId);
   }, [allPosts, selectedProjectId]);
-
-  const selectedProject = useMemo(
-    () => projects.find(project => project.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId]
-  );
 
   if (loadingPosts || loadingProjects) {
     return (
@@ -280,7 +278,7 @@ export default function FeedScreen() {
                 </View>
                 <View style={styles.headerRight}>
                   <Text style={styles.timestamp}>
-                    {new Date(item.created_at).toLocaleDateString()}
+                    {new Date(item.updated_at).toLocaleDateString()}
                   </Text>
                   <Ionicons
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}

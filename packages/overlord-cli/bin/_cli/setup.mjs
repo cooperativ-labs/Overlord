@@ -809,8 +809,55 @@ function cursorPaths() {
       'plugin.json'
     ),
     rulesFile: path.join(base, 'rules', 'overlord-local.mdc'),
-    settingsFile: path.join(base, 'settings.json')
+    settingsFile: path.join(base, 'settings.json'),
+    hooksFile: path.join(base, 'hooks.json')
   };
+}
+
+const CURSOR_USER_PROMPT_HOOK_RELATIVE = 'plugins/local/overlord/hooks/overlord-user-prompt-submit.sh';
+
+function isOverlordCursorBeforeSubmitHook(entry) {
+  if (!entry || typeof entry !== 'object') return false;
+  const cmd = typeof entry.command === 'string' ? entry.command : '';
+  return cmd.includes('overlord-user-prompt-submit');
+}
+
+function mergeCursorBeforeSubmitHook(paths) {
+  const hooksFile = paths.hooksFile;
+  const base = fs.existsSync(hooksFile)
+    ? readJsonFile(hooksFile)
+    : { version: 1, hooks: {} };
+  const hooks = base.hooks && typeof base.hooks === 'object' && !Array.isArray(base.hooks) ? base.hooks : {};
+  const existing = Array.isArray(hooks.beforeSubmitPrompt) ? hooks.beforeSubmitPrompt : [];
+  hooks.beforeSubmitPrompt = [
+    ...existing.filter(entry => !isOverlordCursorBeforeSubmitHook(entry)),
+    { command: CURSOR_USER_PROMPT_HOOK_RELATIVE }
+  ];
+  writeJsonFile(hooksFile, {
+    ...base,
+    version: typeof base.version === 'number' ? base.version : 1,
+    hooks
+  });
+}
+
+function removeCursorBeforeSubmitHook(paths) {
+  const hooksFile = paths.hooksFile;
+  if (!fs.existsSync(hooksFile)) return;
+  const base = readJsonFile(hooksFile);
+  const hooks = base.hooks && typeof base.hooks === 'object' && !Array.isArray(base.hooks) ? base.hooks : {};
+  if (!Array.isArray(hooks.beforeSubmitPrompt)) return;
+  hooks.beforeSubmitPrompt = hooks.beforeSubmitPrompt.filter(
+    entry => !isOverlordCursorBeforeSubmitHook(entry)
+  );
+  if (hooks.beforeSubmitPrompt.length === 0) {
+    delete hooks.beforeSubmitPrompt;
+  }
+  if (Object.keys(hooks).length === 0) {
+    delete base.hooks;
+  } else {
+    base.hooks = hooks;
+  }
+  writeJsonFile(hooksFile, base);
 }
 
 function geminiPaths() {
@@ -945,6 +992,7 @@ function installCodex() {
 
 function installCursor() {
   const paths = cursorPaths();
+  const backups = [];
   const sourceDir = cursorSourcePluginDir();
   fs.mkdirSync(path.dirname(paths.pluginDir), { recursive: true });
   fs.rmSync(paths.pluginDir, { recursive: true, force: true });
@@ -960,6 +1008,14 @@ function installCursor() {
     console.log('  ✓ Removed legacy slash commands:');
     for (const filePath of removedLegacySlash.removedFiles) console.log(`      ${filePath}`);
   }
+
+  const hooksBackup = backupFile(paths.hooksFile);
+  if (hooksBackup) {
+    backups.push(hooksBackup);
+    console.log(`  ✓ Backed up: ${paths.hooksFile} → ${path.basename(hooksBackup)}`);
+  }
+  mergeCursorBeforeSubmitHook(paths);
+  console.log(`  ✓ Registered Cursor beforeSubmitPrompt hook: ${paths.hooksFile}`);
 
   const existingSettings = readJsonFile(paths.settingsFile);
   const permissions =
@@ -983,11 +1039,11 @@ function installCursor() {
     version: pluginVersion(paths.pluginManifest) ?? '0.0.0',
     contentHash: currentContentHashForAgent('cursor'),
     installedAt: new Date().toISOString(),
-    files: [...listFilesRecursive(paths.pluginDir), paths.settingsFile]
+    files: [...listFilesRecursive(paths.pluginDir), paths.settingsFile, paths.hooksFile]
   };
   writeManifest(manifest);
 
-  return { ok: true };
+  return { ok: true, backups };
 }
 
 function installGemini() {
