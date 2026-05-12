@@ -7,6 +7,7 @@ import { getPublicMcpUrl } from '../helpers/public-url.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
 import { resolvePreferredStatusNameByType } from './_status-resolution.ts';
 
@@ -230,6 +231,14 @@ export async function handleDeliver(supabase: SupabaseClient, args: any, ctx: To
     session_id: resolved.session.id,
     ticket_id: ticketId,
     created_by: ctx.userId
+  });
+
+  scheduleGenerateFeedPost({
+    supabase,
+    ticketId,
+    sessionId: resolved.session.id,
+    organizationId: ctx.organizationId,
+    logPrefix: '[mcp:deliver]'
   });
 
   return toolOk({ artifacts: artifactsToPersist.length, ok: true, status: reviewStatusName });

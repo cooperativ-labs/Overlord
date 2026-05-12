@@ -5,6 +5,7 @@ import { type TokenContext } from '../auth.ts';
 import { toolErr, toolOk } from '../rpc.ts';
 import { resolveSession } from '../session.ts';
 
+import { scheduleGenerateFeedPost } from '../helpers/invoke-generate-feed-post.ts';
 import { insertChangeRationales } from './_change-rationales.ts';
 import {
   resolvePreferredStatusNameByType,
@@ -213,6 +214,7 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
         .limit(1);
       ticketUpdate.board_position =
         ((headTickets as { board_position: number }[] | null)?.[0]?.board_position ?? 0) - 1;
+      ticketUpdate.is_read = false;
     }
 
     if (statusType === 'complete') {
@@ -224,6 +226,16 @@ export async function handleUpdate(supabase: SupabaseClient, args: any, ctx: Tok
     }
 
     await supabase.from('tickets').update(ticketUpdate).eq('id', ticketId);
+
+    if (statusType === 'review') {
+      scheduleGenerateFeedPost({
+        supabase,
+        ticketId,
+        sessionId: resolved.session.id,
+        organizationId: ctx.organizationId,
+        logPrefix: '[mcp:update]'
+      });
+    }
   }
 
   return toolOk({ ok: true });

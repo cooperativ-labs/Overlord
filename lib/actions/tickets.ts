@@ -1250,16 +1250,8 @@ export async function markObjectiveExecutedAction(
     ticket_id: ticketId
   });
 
-  try {
-    await supabase.functions.invoke('generate-feed-post', {
-      body: { ticketId, organizationId: ticket.organization_id }
-    });
-  } catch (feedError) {
-    console.error('[markObjectiveExecuted] feed post generation failed:', feedError);
-    Sentry.captureException(feedError, {
-      extra: { ticketId, objectiveId, organizationId: ticket.organization_id }
-    });
-  }
+  // Feed posts are generated from protocol flows (deliver / review transitions), not
+  // from manual objective completion in the UI.
 
   revalidateTicketBoards();
   revalidatePath(

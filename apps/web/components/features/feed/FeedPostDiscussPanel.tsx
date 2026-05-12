@@ -4,10 +4,8 @@ import { ChevronDown, Copy, MessageSquareText } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import {
-  AgentModelSelector,
-  useAgentModelPreference
-} from '@/components/features/AgentModelSelector';
+import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
+import { useAgentModelPreference } from '@/components/features/AgentModelSelector';
 import { useWorkspacePreference } from '@/components/features/projects/useWorkspacePreference';
 import { useTerminal } from '@/components/features/terminal/TerminalProvider';
 import { useLocalDirectoryAccess } from '@/components/features/terminal/useLocalDirectoryAccess';
@@ -21,7 +19,6 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { FeedPost } from '@/lib/actions/feed';
 import { getFeedDiscussPromptForCopy } from '@/lib/actions/tickets';
-import type { AgentModelSelection } from '@/lib/helpers/agent-model-preference';
 import { cn } from '@/lib/utils';
 
 export type FeedProjectWorkspace = {
@@ -59,10 +56,8 @@ async function copyDiscussPrompt(input: {
 export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProps) {
   const [question, setQuestion] = useState('');
   const [isBusy, setIsBusy] = useState(false);
-  const { selection: preferenceSelection, loaded: preferenceLoaded } = useAgentModelPreference();
-  const [localSelection, setLocalSelection] = useState<AgentModelSelection | null>(null);
-  const effectiveSelection = localSelection ?? preferenceSelection;
-  const hasResolvedModel = localSelection !== null || preferenceLoaded;
+  const { selection: agentModelSelection, loaded: preferenceLoaded } = useAgentModelPreference();
+  const hasResolvedModel = preferenceLoaded;
 
   const { isElectron, launchAgent } = useTerminal();
 
@@ -133,12 +128,12 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
     try {
       await launchAgent({
         ticketId: post.ticket_id,
-        agent: effectiveSelection.agent,
+        agent: agentModelSelection.agent,
         organizationId: post.organization_id,
         cwd: effectiveWorkingDirectory ?? undefined,
         launchMode: 'ask',
-        model: effectiveSelection.model ?? undefined,
-        thinking: effectiveSelection.thinking ?? undefined,
+        model: agentModelSelection.model ?? undefined,
+        thinking: agentModelSelection.thinking ?? undefined,
         sshCommand: effectiveSshCommand ?? undefined,
         remoteWorkingDirectory: effectiveRemoteWorkingDirectory ?? undefined,
         projectId: post.project_id,
@@ -176,10 +171,11 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
         )}
       />
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/40 pt-3">
-        <AgentModelSelector
-          value={effectiveSelection}
-          onChange={next => setLocalSelection(next)}
-          inline
+        <AgentModelChooserButton
+          ticketId={post.ticket_id}
+          objectiveId={null}
+          initialSelection={null}
+          persistSelection={false}
         />
         <div className="ml-auto flex items-stretch gap-0">
           {isElectron ? (
