@@ -7,7 +7,7 @@
  */
 
 /** Current bundle version — bump when template content changes materially. */
-export const BUNDLE_VERSION = '1.11.0';
+export const BUNDLE_VERSION = '1.12.0';
 
 /** Markers used to delimit Overlord-owned sections in user-managed files. */
 export const MD_MARKER_START = '<!-- overlord:managed:start -->';
@@ -46,7 +46,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
 
    Pass \`--event-type <type>\` to publish a specific activity event (default: \`update\`):
    - \`update\` — standard progress update (default)
-   - \`user_follow_up\` — a message or question from the human user (EXCLUDING THE INITIAL TICKET)
+   - \`user_follow_up\` — a message or question from the human user when the automatic hook is unavailable
    - \`alert\` — surface a warning or non-blocking alert
 
 3. **Ask when blocked** — Stop working after calling:
@@ -161,7 +161,7 @@ _ Always communicate with Overlord using the ovld protocol cli commands.
 - If blocked on human-only work, call \`ask\` and request a follow-up human ticket.
 - The \`summary\` in deliver is what the PM reads first — write it as a narrative, not a command list.
 - Use \`write-context\` for facts a future agent session should know.
-- **If the user sends you a message during your session, immediately publish a \`user_follow_up\` activity event with the user's message recorded verbatim in the summary before doing anything else. This DOES NOT apply to the initial ticket.**
+- **Follow-up messages after the initial ticket are captured automatically by the installed \`UserPromptSubmit\` hook. Do not post \`user_follow_up\` manually unless the hook is unavailable.**
 - **Do not add or commit changes (git commit) unless the user explicitly asks you to commit.**
 - **Delivery is the concluding step.** After delivering, stop working. Do not continue unless the user follows up or the ticket is reopened.
 `;

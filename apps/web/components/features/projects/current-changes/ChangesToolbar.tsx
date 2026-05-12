@@ -75,6 +75,15 @@ export function ChangesToolbar({
       </span>
       <span className="mx-1 text-muted-foreground/60">/</span>
       <span className="truncate text-sm text-muted-foreground">Changes</span>
+      <div className="mx-1">
+        <TicketFilterPopover
+          fileCountsByTicketId={fileCountsByTicketId}
+          selectedTicketIds={selectedTicketIds}
+          tickets={tickets}
+          onClear={onClearTicketFilter}
+          onToggle={onToggleTicketFilter}
+        />
+      </div>
 
       <div className="ml-auto flex items-center gap-1">
         <Popover>
@@ -95,14 +104,6 @@ export function ChangesToolbar({
             />
           </PopoverContent>
         </Popover>
-
-        <TicketFilterPopover
-          fileCountsByTicketId={fileCountsByTicketId}
-          selectedTicketIds={selectedTicketIds}
-          tickets={tickets}
-          onClear={onClearTicketFilter}
-          onToggle={onToggleTicketFilter}
-        />
 
         <Tooltip>
           <TooltipTrigger asChild>

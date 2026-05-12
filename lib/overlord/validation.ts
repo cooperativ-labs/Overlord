@@ -2,9 +2,25 @@ import { z } from 'zod';
 
 import { connectionMethods, ticketExecutionTargets, ticketStatuses } from '@/lib/overlord/types';
 
+/**
+ * Normalize free-form agent text before storage.
+ * - Normalizes line endings to \n so DB content is consistent regardless of agent OS.
+ * - Strips null bytes, which PostgreSQL rejects in text columns.
+ * Content is never removed or truncated — this is purely structural.
+ */
+export function normalizeAgentText(s: string): string {
+  return s.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\x00').join('');
+}
+
 const ticketStatusSchema = z.enum(ticketStatuses);
 const connectionMethodSchema = z.enum(connectionMethods);
 const ticketExecutionTargetSchema = z.enum(ticketExecutionTargets);
+
+/** Required agent-authored text field with normalization applied after trim. */
+const agentText = (max: number) => z.string().trim().min(1).max(max).transform(normalizeAgentText);
+
+/** Optional agent-authored text field with normalization applied after trim. */
+const agentTextOptional = (max: number) => z.string().trim().max(max).transform(normalizeAgentText);
 
 /** Accepts a full UUID or a human-readable ticket_id (e.g. "1:899"). */
 const ticketIdSchema = z
@@ -18,9 +34,9 @@ const ticketIdSchema = z
 
 export const createTicketSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
-  description: z.string().trim().min(1).max(20_000),
-  availableTools: z.string().trim().max(20_000).optional().default(''),
-  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
+  description: agentText(20_000),
+  availableTools: agentTextOptional(20_000).optional().default(''),
+  acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('agent')
 });
 
@@ -46,7 +62,7 @@ export const attachSchema = z.object({
 export const askSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: ticketIdSchema,
-  question: z.string().trim().min(1).max(20_000),
+  question: agentText(20_000),
   phase: ticketStatusSchema.optional(),
   payload: z.record(z.string(), z.unknown()).optional().default({})
 });
@@ -95,10 +111,11 @@ export const changeRationaleSchema = z.object({
   confidence: z.string().trim().min(1).max(40).optional().default('explicit'),
   file_path: z.string().trim().min(1).max(1024),
   hunks: z.array(changeRationaleHunkSchema).max(20).optional().default([]),
-  impact: z.string().trim().min(1).max(2_000),
+  impact: agentText(2_000),
   label: z.string().trim().min(1).max(160),
-  summary: z.string().trim().min(1).max(2_000),
-  why: z.string().trim().min(1).max(2_000)
+  objective_id: z.string().uuid().optional(),
+  summary: agentText(2_000),
+  why: agentText(2_000)
 });
 
 export const updateSchema = z.object({
@@ -108,10 +125,17 @@ export const updateSchema = z.object({
   sessionKey: z.string().uuid(),
   snapshot: snapshotContextSchema.optional(),
   ticketId: ticketIdSchema,
-  summary: z.string().trim().min(1).max(20_000),
+  summary: agentText(20_000),
   phase: ticketStatusSchema.optional(),
   eventType: updateEventTypeSchema,
   payload: z.record(z.string(), z.unknown()).optional().default({})
+});
+
+export const hookEventSchema = z.object({
+  hookType: z.enum(['UserPromptSubmit', 'Stop']),
+  ticketId: ticketIdSchema,
+  prompt: agentTextOptional(20_000).optional(),
+  turnIndex: z.number().int().min(0).optional()
 });
 
 export const readContextSchema = z.object({
@@ -135,7 +159,7 @@ export const deliverSchema = z.object({
   sessionKey: z.string().uuid(),
   snapshot: snapshotContextSchema.optional(),
   ticketId: ticketIdSchema,
-  summary: z.string().trim().min(1).max(20_000),
+  summary: agentText(20_000),
   artifacts: z
     .array(
       z.object({
@@ -144,7 +168,7 @@ export const deliverSchema = z.object({
           .describe('Artifact type'),
         label: z.string().trim().min(1).max(160),
         uri: z.string().trim().max(1_024).optional(),
-        content: z.string().trim().max(100_000).optional(),
+        content: agentTextOptional(100_000).optional(),
         metadata: z.record(z.string(), z.unknown()).optional().default({})
       })
     )
@@ -157,15 +181,15 @@ export const recordChangeRationalesSchema = z.object({
   sessionKey: z.string().uuid(),
   snapshot: snapshotContextSchema.optional(),
   ticketId: ticketIdSchema,
-  summary: z.string().trim().min(1).max(20_000).optional(),
+  summary: agentText(20_000).optional(),
   phase: ticketStatusSchema.optional()
 });
 
 export const createStandaloneTicketSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
-  objective: z.string().trim().min(1).max(20_000),
-  availableTools: z.string().trim().max(20_000).optional().default(''),
-  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
+  objective: agentText(20_000),
+  availableTools: agentTextOptional(20_000).optional().default(''),
+  acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),
@@ -178,9 +202,9 @@ export const createFollowUpTicketSchema = z.object({
   sessionKey: z.string().uuid(),
   ticketId: ticketIdSchema,
   title: z.string().trim().max(180).optional().default(''),
-  objective: z.string().trim().min(1).max(20_000),
-  availableTools: z.string().trim().max(20_000).optional().default(''),
-  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
+  objective: agentText(20_000),
+  availableTools: agentTextOptional(20_000).optional().default(''),
+  acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('human'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   delegate: z.string().trim().max(120).optional()
@@ -202,9 +226,9 @@ export const loadContextSchema = z.object({
 /** spawn: create a new ticket and immediately connect to it */
 export const spawnSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),
-  objective: z.string().trim().min(1).max(20_000),
-  acceptanceCriteria: z.string().trim().max(20_000).optional().default(''),
-  availableTools: z.string().trim().max(20_000).optional().default(''),
+  objective: agentText(20_000),
+  acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
+  availableTools: agentTextOptional(20_000).optional().default(''),
   executionTarget: ticketExecutionTargetSchema.default('agent'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   projectId: z.string().optional(),

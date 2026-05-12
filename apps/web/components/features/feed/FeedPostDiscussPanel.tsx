@@ -206,7 +206,6 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
                 <DropdownMenuContent align="end" className="min-w-[200px]">
                   <DropdownMenuItem
                     className="gap-2 text-xs"
-
                     disabled={copyDisabled}
                     onClick={() => void handleCopyPrompt()}
                   >
@@ -230,7 +229,6 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
           )}
         </div>
       </div>
-
     </div>
   );
 }

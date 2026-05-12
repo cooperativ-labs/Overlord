@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605121033.0] - 2026-05-12:10:33
+
+### Added
+- **`POST /api/protocol/hook-event`** with **`ovld protocol hook-event`** and hosted MCP **`record_hook_event`**, so lifecycle hooks (notably **`UserPromptSubmit`**) can append **ticket events** without a **`sessionKey`**.
+- **Claude Code** and **Codex** plugin **`UserPromptSubmit`** hooks plus Desktop **agent bundle** wiring that calls **`hook-event`** for follow-up prompts.
+- **`ticket_events.objective_id`** and **`file_changes.objective_id`**, with insert-time triggers that resolve the ticket’s **in-progress** objective or the **latest completed** one when omitted.
+- **Live activity feed**: show **user follow-up** events with **author avatars** and distinguish **hook-captured** **`UserPromptSubmit`** activity.
+
+### Fixed
+- None.
+
+### Changed
+- **Current Changes** project **file-changes** API selects **`objective_id`** alongside existing ticket and checkpoint metadata.
+
+### Security
+- None.
+
+### Test
+- Add **`tests/lib/overlord/validation-normalize.test.ts`**, **`tests/supabase/ticket-events-objective-id-trigger.test.ts`**, and **`tests/supabase/file-changes-objective-id-trigger.test.ts`**.
+
+### Documentation
+- Refresh **connector surfaces**, **CLI reference**, **`overlord-cli` README**, **agent skills**, and **`docs/public/overlord-new-user-guide.md`** for **`hook-event`** and hook behavior.
+
+### Chore
+- Add migrations **`20260512140000_ticket_events_objective_id.sql`**, **`20260512153000_ticket_events_objective_id_auto_association.sql`**, and **`20260512170000_file_changes_objective_id_auto_association.sql`**; regenerate **`types/database.types.ts`**; bump workspace and **`overlord-cli`** to **`5.2605121033.0`** / **`0.2605121033.0`**; bump Desktop agent **bundle** version for template updates.
+
 ## [5.2605120852.0] - 2026-05-12:08:52
 
 ### Added

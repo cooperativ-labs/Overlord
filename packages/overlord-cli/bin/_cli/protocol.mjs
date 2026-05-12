@@ -279,6 +279,14 @@ function readTextFile(filePath, label) {
   }
 }
 
+/** Like readTextFile but accepts "-" to read from stdin. */
+async function readTextFileOrStdin(filePath, label) {
+  if (filePath === '-') {
+    return readTextFromStdin(label);
+  }
+  return readTextFile(filePath, label);
+}
+
 function readJsonFile(filePath, label) {
   try {
     return JSON.parse(readTextFile(filePath, label));
@@ -823,7 +831,7 @@ async function protocolUpdate(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   const summary = flags['summary-file']
-    ? readTextFile(String(flags['summary-file']), '--summary-file')
+    ? await readTextFileOrStdin(String(flags['summary-file']), '--summary-file')
     : requireFlag(flags, 'summary', undefined);
 
   const { platformUrl, bearerToken, localSecret, organizationId } =
@@ -894,7 +902,7 @@ async function protocolRecordChangeRationales(args) {
     ticketId,
     changeRationales,
     ...(flags['summary-file']
-      ? { summary: readTextFile(String(flags['summary-file']), '--summary-file') }
+      ? { summary: await readTextFileOrStdin(String(flags['summary-file']), '--summary-file') }
       : flags.summary
         ? { summary: String(flags.summary) }
         : {}),
@@ -924,7 +932,7 @@ async function protocolAsk(args) {
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
   const question = flags['question-file']
-    ? readTextFile(String(flags['question-file']), '--question-file')
+    ? await readTextFileOrStdin(String(flags['question-file']), '--question-file')
     : requireFlag(flags, 'question', undefined);
 
   const { platformUrl, bearerToken, localSecret, organizationId } =
@@ -978,6 +986,46 @@ async function protocolPermissionRequest(args) {
     timeoutMs
   );
   console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// hook-event
+// ---------------------------------------------------------------------------
+
+async function protocolHookEvent(args) {
+  const flags = parseFlags(args);
+  const ticketId = requireFlag(flags, 'ticket-id', 'TICKET_ID');
+  const hookType = requireFlag(flags, 'hook-type', undefined);
+
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    hookType,
+    ticketId,
+    ...(flags.prompt !== undefined ? { prompt: String(flags.prompt) } : {}),
+    ...(flags['turn-index'] !== undefined
+      ? { turnIndex: parseInt(String(flags['turn-index']), 10) }
+      : {})
+  };
+
+  try {
+    const data = await apiPost(
+      platformUrl,
+      bearerToken,
+      localSecret,
+      organizationId,
+      '/api/protocol/hook-event',
+      body,
+      timeoutMs
+    );
+    console.log(JSON.stringify(data, null, 2));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`[protocol] hook-event skipped: ${message}\n`);
+    console.log(JSON.stringify({ ok: false, error: message }, null, 2));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1080,7 +1128,7 @@ async function protocolDeliver(args) {
   const summary =
     deliverPayload?.summary ??
     (flags['summary-file']
-      ? readTextFile(String(flags['summary-file']), '--summary-file')
+      ? await readTextFileOrStdin(String(flags['summary-file']), '--summary-file')
       : requireFlag(flags, 'summary', undefined));
 
   const { platformUrl, bearerToken, localSecret, organizationId } =
@@ -1705,6 +1753,7 @@ Subcommands:
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
   permission-request        Notify Overlord that the agent is requesting tool permission
+  hook-event                Record a lifecycle hook event without a session key
   read-context              Read shared persistent context for this ticket
   write-context             Write shared persistent context for future sessions
   deliver                     Finish work, send artifacts, and move the ticket to review
@@ -1808,7 +1857,7 @@ update:
   Required:
     --session-key <key>
     --ticket-id <ticket_id>
-    --summary <text> or --summary-file <path>
+    --summary <text> or --summary-file <path|->
   Optional:
     --phase <status>          draft | execute | review | deliver | complete | blocked | cancelled
     --event-type <type>       update | user_follow_up | alert
@@ -1819,6 +1868,8 @@ update:
     --change-rationales-file <path>
   Notes:
     Use phase=execute while actively working. user_follow_up is for verbatim human follow-up messages.
+    Pass --summary-file - to read the summary from stdin — avoids shell interpretation of backticks,
+    quotes, or other special characters in the summary text.
 
 record-change-rationales:
   Purpose:
@@ -1828,7 +1879,7 @@ record-change-rationales:
     --ticket-id <ticket_id>
     --change-rationales-json <json> or --change-rationales-file <path>
   Optional:
-    --summary <text> or --summary-file <path>
+    --summary <text> or --summary-file <path|->
     --phase <status>
 
 ask:
@@ -1837,7 +1888,7 @@ ask:
   Required:
     --session-key <key>
     --ticket-id <ticket_id>
-    --question <text> or --question-file <path>
+    --question <text> or --question-file <path|->
   Optional:
     --phase <status>
     --payload-json <json>
@@ -1852,6 +1903,17 @@ permission-request:
     --ticket-id <ticket_id>
   Optional:
     --payload-file <path|->   Hook JSON payload, or stdin when "-"
+
+hook-event:
+  Purpose:
+    Record a lifecycle hook event for a ticket without requiring a session key.
+    This is primarily used by installed UserPromptSubmit hooks. Stop is reserved for future lifecycle hooks.
+  Required:
+    --hook-type <UserPromptSubmit|Stop>
+    --ticket-id <ticket_id>
+  Optional:
+    --prompt <text>
+    --turn-index <n>
 
 read-context:
   Purpose:
@@ -1880,7 +1942,7 @@ deliver:
   Required:
     --session-key <key>
     --ticket-id <ticket_id>
-    --summary <text> or --summary-file <path>
+    --summary <text> or --summary-file <path|->
     or: --payload-file <path|-> containing { summary, artifacts, changeRationales }
   Optional:
     --artifacts-json <json>
@@ -1890,6 +1952,7 @@ deliver:
     --skip-file-change-check  Bypass local git vs changeRationales validation
   Notes:
     Use --payload-file - to read the full delivery JSON from stdin without creating a scratch file.
+    Use --summary-file - to pipe just the summary text via stdin (avoids shell special-char issues).
     Do not combine --payload-file with --artifacts-json/--artifacts-file or change-rationale flags.
     In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
 
@@ -2017,6 +2080,7 @@ Examples:
   ovld protocol update --session-key <key> --ticket-id <ticket_id> --summary-file ./update.txt --event-type user_follow_up
   ovld protocol record-change-rationales --session-key <key> --ticket-id <ticket_id> --change-rationales-json '[{"label":"...","file_path":"...","summary":"...","why":"...","impact":"...","hunks":[{"header":"@@ ... @@"}]}]'
   ovld protocol ask --session-key <key> --ticket-id <ticket_id> --question-file ./question.txt
+  ovld protocol hook-event --hook-type UserPromptSubmit --ticket-id <ticket_id> --prompt "User follow-up" --turn-index 1
   ovld protocol read-context --session-key <key> --ticket-id <ticket_id> --query arch --limit 5
   ovld protocol write-context --session-key <key> --ticket-id <ticket_id> --key "arch" --value '"monorepo"' --tags repo,agent
   ovld protocol attachment-list --session-key <key> --ticket-id <ticket_id>
@@ -2099,6 +2163,10 @@ Examples:
   }
   if (subcommand === 'permission-request') {
     await protocolPermissionRequest(args);
+    return;
+  }
+  if (subcommand === 'hook-event') {
+    await protocolHookEvent(args);
     return;
   }
   if (subcommand === 'read-context') {

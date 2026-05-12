@@ -483,6 +483,7 @@ export type Database = {
           id: string;
           impact: string;
           label: string;
+          objective_id: string | null;
           session_id: string;
           summary: string;
           ticket_id: string;
@@ -502,6 +503,7 @@ export type Database = {
           id?: string;
           impact: string;
           label: string;
+          objective_id?: string | null;
           session_id: string;
           summary: string;
           ticket_id: string;
@@ -521,6 +523,7 @@ export type Database = {
           id?: string;
           impact?: string;
           label?: string;
+          objective_id?: string | null;
           session_id?: string;
           summary?: string;
           ticket_id?: string;
@@ -540,6 +543,13 @@ export type Database = {
             columns: ['event_id'];
             isOneToOne: false;
             referencedRelation: 'ticket_events';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'file_changes_objective_id_fkey';
+            columns: ['objective_id'];
+            isOneToOne: false;
+            referencedRelation: 'objectives';
             referencedColumns: ['id'];
           },
           {
@@ -1419,6 +1429,7 @@ export type Database = {
           event_type: Database['public']['Enums']['ticket_event_type'];
           id: string;
           is_blocking: boolean;
+          objective_id: string | null;
           payload: Json;
           phase: string | null;
           session_id: string | null;
@@ -1431,6 +1442,7 @@ export type Database = {
           event_type?: Database['public']['Enums']['ticket_event_type'];
           id?: string;
           is_blocking?: boolean;
+          objective_id?: string | null;
           payload?: Json;
           phase?: string | null;
           session_id?: string | null;
@@ -1443,6 +1455,7 @@ export type Database = {
           event_type?: Database['public']['Enums']['ticket_event_type'];
           id?: string;
           is_blocking?: boolean;
+          objective_id?: string | null;
           payload?: Json;
           phase?: string | null;
           session_id?: string | null;
@@ -1450,6 +1463,13 @@ export type Database = {
           ticket_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: 'ticket_events_objective_id_fkey';
+            columns: ['objective_id'];
+            isOneToOne: false;
+            referencedRelation: 'objectives';
+            referencedColumns: ['id'];
+          },
           {
             foreignKeyName: 'ticket_events_session_id_fkey';
             columns: ['session_id'];
@@ -1858,6 +1878,14 @@ export type Database = {
         Returns: boolean;
       };
       is_ticket_org_member: { Args: { p_ticket_id: string }; Returns: boolean };
+      resolve_ticket_event_objective_id: {
+        Args: { p_ticket_id: string };
+        Returns: string;
+      };
+      resolve_ticket_objective_id: {
+        Args: { p_ticket_id: string };
+        Returns: string;
+      };
       schedule_days_of_week_is_valid: {
         Args: { payload: Json };
         Returns: boolean;

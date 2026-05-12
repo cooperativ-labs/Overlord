@@ -35,7 +35,10 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        working_directory: { type: 'string', description: 'Directory to match. Defaults to the current workspace.' }
+        working_directory: {
+          type: 'string',
+          description: 'Directory to match. Defaults to the current workspace.'
+        }
       }
     },
     toCliFlags: args => ({
@@ -45,17 +48,22 @@ const tools = [
   },
   {
     name: 'attach',
-    description: 'Attach an agent session to an existing Overlord ticket and return the working context.',
+    description:
+      'Attach an agent session to an existing Overlord ticket and return the working context.',
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         agent: { type: 'string' },
         method: { type: 'string' },
         external_session_id: { type: ['string', 'null'] },
         metadata: {
           type: 'object',
-          description: 'Optional extra metadata merged into the attach request (same as --metadata-json on the CLI).'
+          description:
+            'Optional extra metadata merged into the attach request (same as --metadata-json on the CLI).'
         }
       },
       required: ['ticket_id']
@@ -77,12 +85,16 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         agent: { type: 'string' },
         method: { type: 'string' },
         metadata: {
           type: 'object',
-          description: 'Optional extra metadata merged into the connect request (same as --metadata-json on the CLI).'
+          description:
+            'Optional extra metadata merged into the connect request (same as --metadata-json on the CLI).'
         }
       },
       required: ['ticket_id']
@@ -104,7 +116,10 @@ const tools = [
     inputSchema: {
       type: 'object',
       properties: {
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' }
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        }
       },
       required: ['ticket_id']
     },
@@ -124,7 +139,10 @@ const tools = [
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         project_id: { type: 'string' },
         working_directory: { type: 'string' },
-        personal: { type: 'boolean', description: 'Create without assigning a project (private ticket).' },
+        personal: {
+          type: 'boolean',
+          description: 'Create without assigning a project (private ticket).'
+        },
         acceptance_criteria: { type: 'string' },
         available_tools: { type: 'string' },
         execution_target: { type: 'string', enum: ['agent', 'human'] },
@@ -161,9 +179,15 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         summary: { type: 'string' },
-        phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
         event_type: { type: 'string', enum: ['update', 'user_follow_up', 'alert'] },
         external_url: { type: ['string', 'null'] },
         external_session_id: { type: ['string', 'null'] },
@@ -192,9 +216,15 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         summary: { type: 'string' },
-        phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
         change_rationales: { type: 'array' }
       },
       required: ['session_key', 'ticket_id', 'change_rationales']
@@ -209,15 +239,46 @@ const tools = [
     subcommand: 'record-change-rationales'
   },
   {
+    name: 'record_hook_event',
+    description:
+      'Record a hook lifecycle event for a ticket without requiring a session key. Stop is reserved for future lifecycle hooks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hook_type: { type: 'string', enum: ['UserPromptSubmit', 'Stop'] },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        prompt: { type: 'string' },
+        turn_index: { type: 'number' }
+      },
+      required: ['hook_type', 'ticket_id']
+    },
+    toCliFlags: args => ({
+      'hook-type': args.hook_type,
+      'ticket-id': args.ticket_id,
+      prompt: args.prompt,
+      'turn-index': args.turn_index
+    }),
+    subcommand: 'hook-event'
+  },
+  {
     name: 'ask',
     description: 'Send a blocking question to the human reviewer or PM.',
     inputSchema: {
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         question: { type: 'string' },
-        phase: { type: 'string', enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled'] },
+        phase: {
+          type: 'string',
+          enum: ['draft', 'execute', 'review', 'deliver', 'complete', 'blocked', 'cancelled']
+        },
         payload: { type: 'object' }
       },
       required: ['session_key', 'ticket_id', 'question']
@@ -238,7 +299,10 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         query: { type: 'string' },
         limit: { type: 'number' }
       },
@@ -259,7 +323,10 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         key: { type: 'string' },
         value: {},
         tags: { type: 'array', items: { type: 'string' } }
@@ -283,7 +350,10 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         summary: { type: 'string' },
         artifacts: { type: 'array' },
         change_rationales: { type: 'array' },
@@ -313,9 +383,13 @@ const tools = [
       JSON.stringify({
         summary: args.summary,
         ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
-        ...(Array.isArray(args.change_rationales) ? { changeRationales: args.change_rationales } : {}),
+        ...(Array.isArray(args.change_rationales)
+          ? { changeRationales: args.change_rationales }
+          : {}),
         ...(args.snapshot && typeof args.snapshot === 'object' ? { snapshot: args.snapshot } : {}),
-        ...(args.checkpoint && typeof args.checkpoint === 'object' ? { checkpoint: args.checkpoint } : {})
+        ...(args.checkpoint && typeof args.checkpoint === 'object'
+          ? { checkpoint: args.checkpoint }
+          : {})
       }),
     subcommand: 'deliver'
   },
@@ -327,7 +401,10 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objective_id: { type: 'string' }
       },
       required: ['session_key', 'ticket_id']
@@ -346,7 +423,10 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objective_id: { type: 'string' },
         file_name: { type: 'string' },
         label: { type: 'string' },
@@ -370,12 +450,16 @@ const tools = [
   },
   {
     name: 'finalize_attachment_upload',
-    description: 'Finalize an objective attachment after uploading bytes to the signed storage URL.',
+    description:
+      'Finalize an objective attachment after uploading bytes to the signed storage URL.',
     inputSchema: {
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objective_id: { type: 'string' },
         storage_path: { type: 'string' },
         label: { type: 'string' },
@@ -404,7 +488,10 @@ const tools = [
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objective_id: { type: 'string' },
         attachment_id: { type: 'string' },
         storage_path: { type: 'string' },
@@ -424,12 +511,16 @@ const tools = [
   },
   {
     name: 'upload_attachment_file',
-    description: 'Prepare, upload, and finalize a local file as an objective attachment in one step.',
+    description:
+      'Prepare, upload, and finalize a local file as an objective attachment in one step.',
     inputSchema: {
       type: 'object',
       properties: {
         session_key: { type: 'string' },
-        ticket_id: { type: 'string', description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.' },
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
         objective_id: { type: 'string' },
         file: { type: 'string' },
         file_name: { type: 'string' },
@@ -516,12 +607,13 @@ function parseMessages(chunk) {
 
     const headerText = buffer.subarray(0, headerEnd).toString('utf8');
     const headers = Object.fromEntries(
-      headerText
-        .split('\r\n')
-        .map(line => {
-          const separatorIndex = line.indexOf(':');
-          return [line.slice(0, separatorIndex).trim().toLowerCase(), line.slice(separatorIndex + 1).trim()];
-        })
+      headerText.split('\r\n').map(line => {
+        const separatorIndex = line.indexOf(':');
+        return [
+          line.slice(0, separatorIndex).trim().toLowerCase(),
+          line.slice(separatorIndex + 1).trim()
+        ];
+      })
     );
 
     const contentLength = Number(headers['content-length']);
@@ -560,7 +652,9 @@ function cliArgsFromFlags(flags) {
     }
 
     const serialized =
-      typeof value === 'string' || typeof value === 'number' ? String(value) : JSON.stringify(value);
+      typeof value === 'string' || typeof value === 'number'
+        ? String(value)
+        : JSON.stringify(value);
     args.push(`--${key}`, serialized);
   }
 

@@ -11,14 +11,19 @@ import {
   Package,
   Paperclip,
   PenLine,
-  RotateCcw
+  RotateCcw,
+  Zap
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { getEventDisplaySummary, isUserFollowUpEvent } from '@/lib/overlord/conversation';
+import {
+  getEventDisplaySummary,
+  getEventPayload,
+  isUserFollowUpEvent
+} from '@/lib/overlord/conversation';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/supabase/utils/client';
 import type { Database } from '@/types/database.types';
@@ -100,6 +105,8 @@ export function LiveActivityFeed({
     <div className="grid gap-3">
       {visibleEvents.map(event => {
         const isUserFollowUp = isUserFollowUpEvent(event);
+        const isHookCaptured =
+          isUserFollowUp && getEventPayload(event).hook_type === 'UserPromptSubmit';
         const summary = getEventDisplaySummary(event);
         const profile = isUserFollowUp && event.created_by ? profiles[event.created_by] : null;
         const Icon = EVENT_ICONS[event.event_type];
@@ -140,6 +147,13 @@ export function LiveActivityFeed({
                 <span className="text-xs text-muted-foreground">
                   {new Date(event.created_at).toLocaleString()}
                 </span>
+                {isHookCaptured ? (
+                  <Zap
+                    aria-label="Captured automatically by hook"
+                    className="h-3 w-3 text-muted-foreground/60"
+                    name="Captured automatically by hook"
+                  />
+                ) : null}
               </div>
               {summary ? (
                 <MarkdownContent
@@ -148,12 +162,12 @@ export function LiveActivityFeed({
                     'text-sm',
                     isUserFollowUp
                       ? [
-                          'text-sky-700 dark:text-sky-300',
-                          'prose-p:text-sky-700 dark:prose-p:text-sky-300',
-                          'prose-li:text-sky-700 dark:prose-li:text-sky-300',
-                          'prose-strong:text-sky-800 dark:prose-strong:text-sky-200',
-                          'prose-code:text-sky-800 dark:prose-code:text-sky-200'
-                        ]
+                        'text-sky-700 dark:text-sky-300',
+                        'prose-p:text-sky-700 dark:prose-p:text-sky-300',
+                        'prose-li:text-sky-700 dark:prose-li:text-sky-300',
+                        'prose-strong:text-sky-800 dark:prose-strong:text-sky-200',
+                        'prose-code:text-sky-800 dark:prose-code:text-sky-200'
+                      ]
                       : 'text-muted-foreground'
                   )}
                   editorScheme={editorScheme}

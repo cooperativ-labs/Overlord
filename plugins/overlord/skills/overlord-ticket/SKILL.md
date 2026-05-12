@@ -13,7 +13,7 @@ Use this skill when Codex needs to work with Overlord, whether the session was l
 2. Store the returned `SESSION_KEY` or `session.sessionKey`.
 3. Treat the Overlord ticket prompt as authoritative for the specific objective and ticket-level constraints.
 4. While working, publish meaningful progress with `ovld protocol update --session-key <sessionKey> --ticket-id <ticket_id> --phase execute --summary "..."`.
-5. If a later user message arrives during the ticket session, publish it immediately with `--event-type user_follow_up` before doing anything else.
+5. Follow-up messages after the initial ticket are captured automatically by the installed `UserPromptSubmit` hook. Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked on a human-only action, ask a precise blocking question with `ovld protocol ask` and stop.
 7. Deliver last with `ovld protocol deliver`, including meaningful `changeRationales` for every behavioral git-tracked change.
 
@@ -32,6 +32,7 @@ ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary
 ```
 
 Supported `--phase` values:
+
 - `draft`
 - `execute`
 - `review`
@@ -43,8 +44,9 @@ Supported `--phase` values:
 These are hardcoded CLI-supported values for the `--phase` flag. They are not user-defined phase types.
 
 Event types:
+
 - `update` for standard progress updates
-- `user_follow_up` for human follow-up messages after the initial ticket
+- `user_follow_up` for human follow-up messages after the initial ticket when the automatic hook is unavailable
 - `alert` for warnings or non-blocking issues
 
 Ask when blocked:
@@ -81,6 +83,7 @@ ovld protocol deliver --session-key <sessionKey> \
 ## Project Discovery And Ticket Creation
 
 When creating tickets from within a repository:
+
 - Prefer `create` by default for draft ticket creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands can resolve the project from the current working directory; use `--working-directory` to override.
@@ -100,7 +103,7 @@ Pass `--execution-target agent` or `--execution-target human` (default: `human`)
 - **`agent`** — any task an AI agent can complete in a computer environment: coding, internet research, document editing, data analysis, automated testing, etc.
 - **`human`** — any task requiring human presence or judgment: setting credentials or tokens in a third-party UI (e.g. Vercel, AWS), sending physical mail, making a product or business decision, physical-world actions.
 
-When in doubt, ask yourself: *can this be done entirely inside a terminal or browser by an AI without human intervention?* If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
+When in doubt, ask yourself: _can this be done entirely inside a terminal or browser by an AI without human intervention?_ If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
 
 ## Change Rationales
 
@@ -155,4 +158,4 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 
-<!-- version: 0.4.7 -->
+<!-- version: 0.4.8 -->

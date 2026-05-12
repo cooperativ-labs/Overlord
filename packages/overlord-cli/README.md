@@ -13,7 +13,7 @@ Install it globally so the `ovld` and `overlord` commands are available on your 
 ```bash
 npm install -g overlord-cli
 
-#After installing, run 
+#After installing, run
 ovld setup all #to configure every supported connector (`ovld setup` alone is interactive)
 
 #for individual connectors, run `ovld setup <connector>`.
@@ -27,6 +27,7 @@ ovld setup all
 # To update the CLI to the latest release, run:
 ovld update
 ```
+
 ## Usage
 
 ```bash
@@ -35,6 +36,7 @@ overlord help
 ```
 
 ### Auth
+
 ```bash
 # Repair shared credentials first when a session already exists
 ovld auth repair # mirror and chmod shared Desktop/CLI credentials when possible
@@ -47,6 +49,7 @@ ovld auth logout # remove stored credentials
 
 Desktop-installed wrappers default `OVERLORD_URL` to `https://www.ovld.ai` unless you override it explicitly.
 For local dev against the web app on port 3000, export the override before running auth or protocol commands:
+
 ```bash
 export OVERLORD_URL=http://localhost:3000
 ```
@@ -101,6 +104,7 @@ Top-level commands (see `ovld help`):
 - `version` - print the installed CLI version
 
 ## Commands for agents
+
 Agents can find docs here: https://www.ovld.ai/docs/for-agents
 
 `ovld protocol <subcommand>` is the surface agents and hooks use for ticket lifecycle work. Run `ovld protocol help` for flags, env fallbacks, and examples.
@@ -117,6 +121,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `record-change-rationales` - persist structured change rationales without a normal progress update
 - `ask` - post a blocking question and move the ticket to review
 - `permission-request` - notify Overlord that the agent is requesting tool permission
+- `hook-event` - record lifecycle hook events such as `UserPromptSubmit` without a session key
 - `read-context` - read shared persistent context for this ticket
 - `write-context` - write shared persistent context for future sessions
 - `deliver` - create a local JJ/Git checkpoint when available, send artifacts/rationales, and move the ticket to review

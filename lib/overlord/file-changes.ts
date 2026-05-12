@@ -10,6 +10,7 @@ export type FileChangeInput = {
   hunks?: Json;
   impact: string;
   label: string;
+  objective_id?: string | null;
   summary: string;
   why: string;
 };
@@ -53,6 +54,7 @@ export async function insertFileChanges({
       hunks: rationale.hunks ?? [],
       impact: rationale.impact,
       label: rationale.label,
+      objective_id: rationale.objective_id ?? null,
       session_id: sessionId,
       summary: rationale.summary,
       ticket_id: ticketId,

@@ -25,6 +25,7 @@ import { handleDeliver } from './handlers/deliver.ts';
 import { handleDiscoverProject } from './handlers/discover-project.ts';
 import { handleReadContext } from './handlers/read-context.ts';
 import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
+import { handleRecordHookEvent } from './handlers/record-hook-event.ts';
 import { handleSaveTicketDraft } from './handlers/save-ticket-draft.ts';
 import { handleSearchTickets } from './handlers/search-tickets.ts';
 import { handleUpdate } from './handlers/update.ts';
@@ -40,7 +41,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 function organizationIdFromTicketId(ticketId: unknown): number | null {
   if (typeof ticketId !== 'string') return null;
-  const [organizationPart, _ticketSequencePart, ...rest] = ticketId.trim().split(':');
+  const [organizationPart, , ...rest] = ticketId.trim().split(':');
   if (rest.length > 0) return null;
   const parsed = Number.parseInt(organizationPart ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
@@ -253,6 +254,8 @@ Deno.serve(async (req: Request) => {
         result = await handleReadContext(supabase, toolArgs, requestContext);
       } else if (toolName === 'record_change_rationales') {
         result = await handleRecordChangeRationales(supabase, toolArgs, requestContext);
+      } else if (toolName === 'record_hook_event') {
+        result = await handleRecordHookEvent(supabase, toolArgs, requestContext);
       } else if (toolName === 'write_context') {
         result = await handleWriteContext(supabase, toolArgs, requestContext);
       } else if (toolName === 'deliver') {

@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: RouteContext) {
     let fileChangeQuery = supabase
       .from('file_changes')
       .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,tickets!inner(id,ticket_id,title,status,project_id)'
+        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,objective_id,tickets!inner(id,ticket_id,title,status,project_id)'
       )
       .eq('tickets.project_id', projectId)
       .order('created_at', { ascending: false });
@@ -144,6 +144,9 @@ export async function GET(request: Request, { params }: RouteContext) {
     for (const checkpoint of checkpointsResult.data ?? []) {
       if (checkpoint.objective_id) objectiveIds.add(checkpoint.objective_id);
     }
+    for (const fileChange of fileChanges ?? []) {
+      if (fileChange.objective_id) objectiveIds.add(fileChange.objective_id);
+    }
     let objectivesById = new Map<string, { id: string; objective: string | null }>();
     if (objectiveIds.size) {
       const { data: objectiveRows } = await supabase
@@ -162,7 +165,7 @@ export async function GET(request: Request, { params }: RouteContext) {
           const checkpointRecord = fileChange.checkpoint_id
             ? (checkpointsById.get(fileChange.checkpoint_id) ?? null)
             : null;
-          const objectiveId = checkpointRecord?.objective_id ?? null;
+          const objectiveId = fileChange.objective_id ?? checkpointRecord?.objective_id ?? null;
           return {
             attribution_source: fileChange.attribution_source,
             change_kind: fileChange.change_kind,
@@ -188,6 +191,7 @@ export async function GET(request: Request, { params }: RouteContext) {
                 }
               : null,
             checkpoint_id: fileChange.checkpoint_id,
+            objective_id: objectiveId,
             objective: objectiveId ? (objectivesById.get(objectiveId) ?? null) : null,
             file_name: fileChange.file_name,
             file_path: fileChange.file_path,

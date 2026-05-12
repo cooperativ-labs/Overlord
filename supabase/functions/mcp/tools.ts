@@ -138,6 +138,11 @@ export const TOOLS = [
               summary: { type: 'string' },
               why: { type: 'string' },
               impact: { type: 'string' },
+              objective_id: {
+                type: 'string',
+                description:
+                  'Optional explicit objective UUID override. When omitted, Overlord auto-associates the latest executing objective for the ticket, else the latest completed objective.'
+              },
               change_kind: { type: 'string' },
               attribution_source: { type: 'string' },
               confidence: { type: 'string' },
@@ -228,6 +233,11 @@ export const TOOLS = [
               summary: { type: 'string' },
               why: { type: 'string' },
               impact: { type: 'string' },
+              objective_id: {
+                type: 'string',
+                description:
+                  'Optional explicit objective UUID override. When omitted, Overlord auto-associates the latest executing objective for the ticket, else the latest completed objective.'
+              },
               change_kind: { type: 'string' },
               attribution_source: { type: 'string' },
               confidence: { type: 'string' },
@@ -262,6 +272,38 @@ export const TOOLS = [
         }
       },
       required: ['sessionKey', 'ticketId', 'changeRationales']
+    }
+  },
+  {
+    name: 'record_hook_event',
+    annotations: {
+      title: 'Record Hook Event',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
+    description:
+      "Record a hook lifecycle event for a ticket. Use hookType='UserPromptSubmit' to capture follow-up user messages without requiring a session key. Stop is reserved for future lifecycle hooks.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hookType: { type: 'string', enum: ['UserPromptSubmit', 'Stop'] },
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        prompt: {
+          type: 'string',
+          description: 'Optional verbatim user prompt for UserPromptSubmit hook events.'
+        },
+        turnIndex: {
+          type: 'number',
+          description:
+            'Optional turn index. UserPromptSubmit skips turn 0 (the initial ticket prompt).'
+        }
+      },
+      required: ['hookType', 'ticketId']
     }
   },
   {
@@ -496,6 +538,11 @@ export const TOOLS = [
               summary: { type: 'string' },
               why: { type: 'string' },
               impact: { type: 'string' },
+              objective_id: {
+                type: 'string',
+                description:
+                  'Optional explicit objective UUID override. When omitted, Overlord auto-associates the latest executing objective for the ticket, else the latest completed objective.'
+              },
               change_kind: { type: 'string' },
               attribution_source: { type: 'string' },
               confidence: { type: 'string' },

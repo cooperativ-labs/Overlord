@@ -637,6 +637,7 @@ function installCursor(): InstallResult {
 
   try {
     const sourceDir = cursorSourcePluginDir();
+    // TODO: add UserPromptSubmit hook when Cursor CLI supports lifecycle hooks.
     fs.mkdirSync(path.dirname(paths.pluginDir), { recursive: true });
     fs.rmSync(paths.pluginDir, { recursive: true, force: true });
     fs.cpSync(sourceDir, paths.pluginDir, { recursive: true });

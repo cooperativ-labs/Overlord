@@ -15,6 +15,11 @@ export const ChangeRationaleSchema = z.object({
   summary: z.string().describe('What changed'),
   why: z.string().describe('Why it changed'),
   impact: z.string().describe('Behavioral or review impact'),
+  objective_id: z
+    .string()
+    .uuid()
+    .optional()
+    .describe('Optional explicit objective UUID override for this file change'),
   hunks: z
     .array(
       z.object({

@@ -15,7 +15,7 @@ Use this mode when the prompt already contains a ticket ID or explicitly says th
 2. Keep the returned `session.sessionKey` for all follow-up calls.
 3. Treat the Overlord ticket prompt as authoritative for the objective, constraints, and delivery target.
 4. Post updates while working with `ovld protocol update --phase execute`.
-5. If the user sends a follow-up message after the initial ticket, publish it immediately with `--event-type user_follow_up`.
+5. Follow-up messages after the initial ticket are captured automatically by the installed `UserPromptSubmit` hook. Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked, call `ovld protocol ask` and stop.
 7. Deliver last with `ovld protocol deliver`, including `changeRationales` for each meaningful behavioral file change.
 
@@ -33,7 +33,16 @@ Update:
 ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary "What you did and why." --phase execute
 ```
 
+When the summary contains backticks, quotes, or other special shell characters, pipe it via stdin to prevent shell interpretation:
+
+```bash
+ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID --summary-file - --phase execute <<'EOF'
+What you did and why — including `backticks`, "quotes", and $variables are all safe here.
+EOF
+```
+
 Supported `--phase` values:
+
 - `draft`
 - `execute`
 - `review`
@@ -45,8 +54,9 @@ Supported `--phase` values:
 These are hardcoded CLI-supported values for the `--phase` flag. They are not user-defined phase types.
 
 Event types:
+
 - `update` for standard progress updates
-- `user_follow_up` for human follow-up messages after the initial ticket
+- `user_follow_up` for human follow-up messages after the initial ticket when the automatic hook is unavailable
 - `alert` for warnings or non-blocking issues
 
 Ask when blocked:
@@ -65,7 +75,7 @@ ovld protocol deliver --session-key <sessionKey> \
   --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
 ```
 
-`ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
+`ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If the summary contains special characters, use `--summary-file -` and pipe via a single-quoted heredoc (`<<'EOF'`) to prevent shell expansion. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
 
 ## Mode 2: Asked From Chat To Use Overlord
 
@@ -108,6 +118,7 @@ Record only meaningful behavioral changes. Skip formatting-only noise.
 ## Project Discovery And Ticket Creation
 
 When creating tickets from within a repository:
+
 - Prefer `create` by default for draft ticket creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
 - Both commands can resolve the project from the current working directory; use `--working-directory` to override.
@@ -135,7 +146,7 @@ Pass `--execution-target agent` or `--execution-target human` (default: `human`)
 - **`agent`** — any task an AI agent can complete in a computer environment: coding, internet research, document editing, data analysis, automated testing, etc.
 - **`human`** — any task requiring human presence or judgment: setting credentials or tokens in a third-party UI (e.g. Vercel, AWS), sending physical mail, making a product or business decision, physical-world actions.
 
-When in doubt, ask yourself: *can this be done entirely inside a terminal or browser by an AI without human intervention?* If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
+When in doubt, ask yourself: _can this be done entirely inside a terminal or browser by an AI without human intervention?_ If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
 
 ## Context And Artifacts
 
@@ -164,10 +175,11 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 - Use `ovld protocol` commands and the plugin's slash commands instead of ad hoc scripts.
 - Do not invent protocol subcommands. Use `ovld protocol help` when unsure.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
+- When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead.
 - Use `write-context` for facts a future agent session should know.
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.7 -->
+<!-- version: 0.4.8 -->

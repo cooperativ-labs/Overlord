@@ -218,7 +218,7 @@ function buildCodexBundledLocalProtocolSection({
   const discussionGuidance =
     launchMode === 'ask'
       ? '- This is Ask mode: discuss the ticket, do not implement, and do not publish `user_follow_up` events for normal discussion turns.'
-      : '- If the user sends a follow-up message after the initial ticket, immediately publish it with `--event-type user_follow_up` before doing anything else.';
+      : '- Follow-up messages after the initial ticket are captured automatically by the installed Codex plugin hook. Do not publish `user_follow_up` manually unless the hook is unavailable.';
 
   return `## Overlord Protocol
 
@@ -251,7 +251,7 @@ function buildCodexLocalProtocolSection({
   const eventTypeHelp =
     launchMode === 'ask'
       ? 'Use `--event-type alert` only for non-blocking warnings. Do not publish `user_follow_up` during normal Ask-mode discussion.'
-      : 'When the user sends a follow-up message after the initial ticket, immediately publish it with `--event-type user_follow_up` before doing anything else.';
+      : 'Follow-up messages after the initial ticket are captured automatically by the installed Codex plugin hook. Do not publish `user_follow_up` manually unless the hook is unavailable.';
 
   return `## Overlord Protocol
 
@@ -565,13 +565,13 @@ function buildLocalLaunchNote(context?: PromptContext): string {
 function buildLocalEventTypeHelp(launchMode: PromptLaunchMode): string {
   return launchMode === 'ask'
     ? 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types: `update`, `alert`. Do not post `user_follow_up` events during normal Ask-mode discussion.'
-    : 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types:\n- `update` — standard progress update (default)\n- `user_follow_up` — a message or question from the human user\n- `alert` — surface a warning or non-blocking alert';
+    : 'Pass `--event-type <type>` to publish a specific activity event (default: `update`). Available event types:\n- `update` — standard progress update (default)\n- `user_follow_up` — a message or question from the human user when automatic hook capture is unavailable\n- `alert` — surface a warning or non-blocking alert';
 }
 
 function buildAskModeRules(launchMode: PromptLaunchMode): string {
   return launchMode === 'ask'
     ? '- Do not publish `user_follow_up` activity events for normal Ask-mode conversation turns.\n- **Before doing anything else**, present your current working directory to the user and ask them to confirm it is correct. Do NOT read, write, or modify any files until the user confirms.\n- **You MUST ask the user for explicit confirmation before creating, editing, or deleting any files.** Always present the intended changes and wait for approval.\n- Only save notes when the user explicitly asks. Save those notes as artifacts (Markdown files only when requested).\n- Do not implement or change code unless the user explicitly asks for implementation.'
-    : "- **If the user sends you a message during your session, immediately publish a `user_follow_up` activity event with the user's message recorded verbatim in the summary before doing anything else.**";
+    : "- **If your connector does not capture follow-up messages automatically, immediately publish a `user_follow_up` activity event with the user's message recorded verbatim in the summary before doing anything else.**";
 }
 
 function buildLocalCoreRules(launchMode: PromptLaunchMode): string {

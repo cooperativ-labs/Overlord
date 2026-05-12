@@ -14,6 +14,7 @@ function makeEvent(overrides: Partial<TicketEvent> = {}): TicketEvent {
     event_type: 'update',
     id: 'event-1',
     is_blocking: false,
+    objective_id: null,
     payload: {},
     phase: 'execute',
     session_id: null,

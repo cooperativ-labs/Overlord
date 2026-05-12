@@ -1,7 +1,7 @@
 {
   "name": "overlord",
-  "version": "0.1.2",
-  "description": "Chat-driven access to Overlord ticket protocol workflows.",
+  "version": "0.2.2",
+  "description": "Chat-driven access to Overlord ticket protocol workflows with hook-driven activity capture.",
   "author": {
     "name": "Cooperativ",
     "url": "https://github.com/cooperativ"
@@ -11,6 +11,7 @@
   "license": "UNLICENSED",
   "keywords": ["overlord", "tickets", "agents", "workflow", "protocol", "mcp", "codex-plugin"],
   "skills": "./skills/",
+  "hooks": "./.codex-plugin/hooks.json",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Overlord",

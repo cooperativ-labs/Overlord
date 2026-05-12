@@ -6,13 +6,13 @@ Use it before shipping any connector-related change. If one surface changes, che
 
 ## Agents and connector models
 
-| Agent | Local connector | Cloud/headless connector |
-|-------|-----------------|--------------------------|
-| Claude Code | Overlord bundle (skill + permission hook) via `ovld setup claude` | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override |
-| Codex | Home-local chat plugin via Desktop app Settings → CLI | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override (`~/.codex/config.toml`) |
-| Cursor | Local Cursor plugin via `ovld setup cursor` | — |
-| Gemini CLI | TOML slash commands via `ovld setup gemini` | — |
-| OpenCode | Overlord bundle (AGENTS.md + config) via `ovld setup opencode` | — |
+| Agent       | Local connector                                                                             | Cloud/headless connector                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code | Overlord bundle (skill + permission hook + `UserPromptSubmit` hook) via `ovld setup claude` | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override                          |
+| Codex       | Home-local chat plugin via Desktop app Settings → CLI                                       | `/api/mcp` with shared OAuth credentials or explicit `OVERLORD_ACCESS_TOKEN` + `OVERLORD_ORGANIZATION_ID` override (`~/.codex/config.toml`) |
+| Cursor      | Local Cursor plugin via `ovld setup cursor`                                                 | —                                                                                                                                           |
+| Gemini CLI  | TOML slash commands via `ovld setup gemini`                                                 | —                                                                                                                                           |
+| OpenCode    | Overlord bundle (AGENTS.md + config) via `ovld setup opencode`                              | —                                                                                                                                           |
 
 ## Bundle support
 
@@ -40,13 +40,17 @@ Capability resolver:
   [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup claude`
 
 Managed files:
+
 - `~/.claude/skills/overlord-local/SKILL.md` — durable workflow skill
-- `~/.claude/overlord-permission-hook.sh` — permission notification hook (mode 0755)
-- `~/.claude/settings.json` — hook merged into `hooks.PermissionRequest`; `Bash(ovld protocol:*)` and `Bash(curl -sS -X POST:*)` added to `permissions.allow`
+- `~/.claude/overlord-permission-hook.sh` — legacy permission notification hook (mode 0755) removed during migration cleanup
+- Claude local marketplace plugin copy under `~/.claude/plugins/cache/overlord-local/overlord/<version>/` — includes `hooks/hooks.json`, `scripts/permission-hook.sh`, and `scripts/user-prompt-submit-hook.sh`
+- `~/.claude/settings.json` — existing user settings preserved; durable hooks now come from the installed plugin manifest rather than a temp settings merge
 
 Checklist:
+
 - Skill file is the canonical workflow instructions for bundle mode
 - Hook script calls `$OVERLORD_URL/api/protocol/permission-request` when Claude awaits tool permission
+- `UserPromptSubmit` hook calls `POST /api/protocol/hook-event` to capture follow-up messages without a session key
 - Settings merge preserves user's existing hooks and permissions (no clobber)
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
 - Skill text tells the agent to run `ovld auth repair` itself on protocol/MCP auth failures before asking the user to log in again or proceed without Overlord updates
@@ -60,6 +64,7 @@ Checklist:
   [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
 
 Managed files (Markdown format):
+
 - `~/.claude/commands/connect.md` — requires `--ticket-id`
 - `~/.claude/commands/load.md` — requires `--ticket-id`
 - `~/.claude/commands/attach.md` — requires `--ticket-id`
@@ -76,6 +81,7 @@ Managed files (Markdown format):
   [launch-commands.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/launch-commands.ts)
 
 Command pattern:
+
 ```
 claude --append-system-prompt "$(cat <context-file>)" [--settings <temp-settings>] [--model <model>] [--effort <level>] <start-prompt>
 
@@ -83,6 +89,7 @@ ovld launch claude --ticket-id <ticket_id> [--working-directory <path>] [--model
 ```
 
 Checklist:
+
 - Bundle installed → `--settings` arg is omitted (durable hook already in `~/.claude/settings.json`)
 - Bundle not installed → temp settings file with per-session hook is passed via `--settings`
 - `instructionMode=bundle` is passed to context route when bundle is installed
@@ -101,6 +108,7 @@ Checklist:
   [ConfigureAgentPermissionsStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConfigureAgentPermissionsStep.tsx)
 
 Checklist:
+
 - Onboarding advertises `ovld setup claude` as the connector setup command
 - Connector features list includes: skill (workflow protocol), permission hook, settings merge, slash commands, permission rules
 
@@ -120,15 +128,17 @@ Checklist:
   [electron.d.ts](/Users/jake/Development/Cooperativ/Overlord/types/electron.d.ts)
 
 Managed files:
+
 - `~/.codex/plugins/overlord/` — plugin directory (copied from app bundle)
 - `~/.agents/plugins/marketplace.json` — Codex local plugin registry entry
 - `~/.codex/rules/default.rules` — Overlord permission prefix rules (`ovld protocol`, `curl -sS -X POST`)
 - Plugin install manifest: `~/.ovld/overlord-plugin-manifest.json`
 
 Checklist:
+
 - Plugin install writes `~/.agents/plugins/marketplace.json`
 - Plugin install writes `~/.codex/plugins/overlord`
-- Plugin bundle includes `skills/` plus install-surface assets in `assets/`
+- Plugin bundle includes `skills/`, `.codex-plugin/hooks.json`, `scripts/user-prompt-submit-hook.sh`, and install-surface assets in `assets/`
 - Plugin install manages `~/.codex/rules/default.rules`
 - Plugin install removes any legacy Overlord-managed Codex `AGENTS.md` section
 - Plugin install removes any legacy Codex bundle manifest entry from `~/.ovld/bundle-manifest.json`
@@ -150,6 +160,7 @@ Checklist:
   [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
 
 Command pattern:
+
 ```
 codex [--model <model>] [-c model_reasoning_effort="<level>"] "$(cat <context-file>)"
 
@@ -157,9 +168,11 @@ ovld launch codex --ticket-id <ticket_id> [--working-directory <path>] [--model 
 ```
 
 Checklist:
+
 - Local Codex launches pass `agent=codex` into the context route
 - Local Codex does not request `bundle` instruction mode (`bundleAgent = null` for Codex)
 - Prompt text explicitly includes the Codex ticket workflow instructions
+- Local Codex plugin installs a `UserPromptSubmit` hook that records follow-up activity through `/api/protocol/hook-event`
 - Prompt text does not tell Codex to look for `overlord-local` or a local Codex bundle
 - Prompt text tells Codex to run `ovld auth repair` itself on protocol auth failures before asking the user to log in again or proceed without Overlord updates
 - Prompt text tells Codex to try `ovld auth repair` before `ovld auth login --organization-id <id>` when shared credentials look stale; `--organization-id` is required in non-TTY environments with multiple organizations
@@ -176,6 +189,7 @@ Checklist:
   [route.ts](/Users/jake/Development/Cooperativ/Overlord/app/api/mcp/route.ts)
 
 Checklist:
+
 - Codex cloud instructions point to `~/.codex/config.toml`
 - Codex cloud instructions use `/api/mcp`
 - Codex cloud instructions use shared OAuth credentials where supported; manual overrides use `OVERLORD_ACCESS_TOKEN` plus `OVERLORD_ORGANIZATION_ID`
@@ -189,6 +203,7 @@ Checklist:
   [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
 
 Checklist:
+
 - Onboarding tells CLI users they can run `ovld setup codex`
 - Codex onboarding points CLI users to `ovld setup codex`
 - Codex is not presented as a bundle-backed agent
@@ -202,6 +217,7 @@ Checklist:
   [index.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/index.mjs)
 
 Checklist:
+
 - `ovld launch codex` is the documented primary launch command
 - `ovld connect codex` remains a compatibility alias for one-command launches
 - `ovld launch` infers organization scope from human-readable ticket ids like `1:899`; `--organization-id` remains a legacy compatibility flag for UUID ticket ids. It also supports Desktop-parity shell flags: `--working-directory`, `--launch-mode`, `--model`, `--thinking`, repeated `--flag`, `--ssh-command`, `--remote-working-directory`, `--server-multiplexer`, and `--tmux-command`
@@ -212,6 +228,7 @@ Checklist:
   [DemoSettings.tsx](/Users/jake/Development/Cooperativ/Overlord/app/demo/DemoSettings.tsx)
 
 Checklist:
+
 - Demo copy describes the Codex chat plugin, not a prompt/skills bundle
 - Demo managed-file list matches the real installer outputs
 
@@ -227,6 +244,7 @@ Checklist:
   [installer.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/installer.ts)
 
 Managed files:
+
 - `~/.cursor/plugins/local/overlord/.cursor-plugin/plugin.json`
 - `~/.cursor/plugins/local/overlord/rules/overlord-local.mdc`
 - `~/.cursor/plugins/local/overlord/commands/connect.md` — requires `--ticket-id`
@@ -244,6 +262,7 @@ Managed files:
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 
 Command pattern:
+
 ```
 agent [--model <model>] "$(cat <context-file>)"
 
@@ -251,8 +270,10 @@ ovld launch cursor --ticket-id <ticket_id> [--working-directory <path>] [--model
 ```
 
 Checklist:
+
 - Bundle support via local Cursor plugin — slim workflow prompt can be used in `instructionMode=bundle`
 - No permission hook
+- No lifecycle follow-up hook yet; manual `user_follow_up` guidance remains until Cursor CLI supports it
 - Model flag: `--model` (no thinking/effort flag for Cursor)
 
 ### 3. Onboarding
@@ -263,6 +284,7 @@ Checklist:
   [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
 
 Checklist:
+
 - Onboarding advertises `ovld setup cursor` as the connector setup command
 - Connector features list includes: local Cursor plugin install and permission rules for ovld protocol & curl
 - Skill text tells the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
@@ -280,6 +302,7 @@ Checklist:
   [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup gemini`
 
 Managed files (**TOML format**, not Markdown):
+
 - `~/.gemini/commands/connect.toml` — requires `--ticket-id`
 - `~/.gemini/commands/load.toml` — requires `--ticket-id`
 - `~/.gemini/commands/attach.toml` — requires `--ticket-id`
@@ -296,6 +319,7 @@ Note: Gemini uses `{{args}}` for argument interpolation (vs `$ARGUMENTS` for Cla
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 
 Command pattern:
+
 ```
 gemini [--model <model>] [--thinking-level <level>] "$(cat <context-file>)"
 
@@ -303,6 +327,7 @@ ovld launch gemini --ticket-id <ticket_id> [--working-directory <path>] [--model
 ```
 
 Checklist:
+
 - No bundle support — full workflow instructions always included in the prompt (`instructionMode=legacy`)
 - No permission hook
 - Thinking/effort flag: `--thinking-level` (unique to Gemini)
@@ -315,6 +340,7 @@ Checklist:
   [ConnectorSetupStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/ConnectorSetupStep.tsx)
 
 Checklist:
+
 - Onboarding advertises `ovld setup gemini` as the connector setup command
 - Connector features list includes: TOML slash commands and TOML policy rules for ovld protocol & curl
 
@@ -332,10 +358,12 @@ Checklist:
   [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs) — `ovld setup opencode`
 
 Managed files:
+
 - `~/.config/opencode/AGENTS.md` — Overlord workflow instructions merged in as a delimited section
 - `~/.config/opencode/opencode.json` — `instructions` array and `permission.bash` map merged (allows `ovld protocol *`, `curl -sS -X POST *`, `curl -s -X POST *`)
 
 Checklist:
+
 - AGENTS.md section is wrapped in `<!-- overlord:managed:start -->` / `<!-- overlord:managed:end -->` markers
 - opencode.json merge preserves user's existing instructions and bash permission entries
 - Manifest entry written to `~/.ovld/bundle-manifest.json`
@@ -347,6 +375,7 @@ Checklist:
   [slash-commands.ts](/Users/jake/Development/Cooperativ/Overlord/electron/services/agent-bundle/slash-commands.ts)
 
 Managed files (Markdown with `agent: build` frontmatter):
+
 - `~/.config/opencode/commands/connect.md` — requires `--ticket-id`
 - `~/.config/opencode/commands/load.md` — requires `--ticket-id`
 - `~/.config/opencode/commands/attach.md` — requires `--ticket-id`
@@ -361,6 +390,7 @@ Managed files (Markdown with `agent: build` frontmatter):
   [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
 
 Command pattern:
+
 ```
 opencode [--model <model>] --prompt "$(cat <context-file>)"
 
@@ -368,6 +398,7 @@ ovld launch opencode --ticket-id <ticket_id> [--working-directory <path>] [--mod
 ```
 
 Checklist:
+
 - Bundle supported — when installed, `instructionMode=bundle` is passed and slim prompt is used
 - Model flag: `--model` (no thinking/effort flag for OpenCode)
 - `--prompt` flag is required (unlike other agents that take the prompt as a positional argument)
@@ -382,6 +413,7 @@ Checklist:
   [InstallAgentBundlesStep.tsx](/Users/jake/Development/Cooperativ/Overlord/components/features/onboarding/steps/InstallAgentBundlesStep.tsx)
 
 Checklist:
+
 - Onboarding advertises `ovld setup opencode` as the connector setup command
 - Connector features list includes: AGENTS.md workflow instructions, slash commands, opencode.json config merge
 - Workflow instructions tell the agent to request permission escalation or network access before retrying if `OVERLORD_URL` is unreachable
@@ -393,42 +425,46 @@ Checklist:
 The Overlord protocol is exposed across three call surfaces. Keep them aligned —
 when one surface changes, check the others against this table.
 
-| Operation | API route | CLI subcommand | MCP tool |
-|---|---|---|---|
-| auth-status | — | `ovld protocol auth-status` | — (CLI/human-only) |
-| discover-project | `POST /api/protocol/discover-project` | `discover-project` | `discover_project` |
-| attach | `POST /api/protocol/attach` | `attach` | `attach` |
-| connect | `POST /api/protocol/connect` | `connect` | `connect` (local `overlord-mcp.mjs` shim only) |
-| load-context | `POST /api/protocol/load-context` | `load-context` | `load_ticket_context` (local shim only) |
-| search-tickets | `POST /api/protocol/search-tickets` | `search-tickets` | `search_tickets` |
-| create (follow-up) | `POST /api/protocol/create-ticket` | `create` (with session flags) | `create_ticket` |
-| create (standalone) | `POST /api/protocol/tickets` | `create` (no session flags) | — |
-| prompt | `POST /api/protocol/prompt` | `prompt` | — |
-| update | `POST /api/protocol/update` | `update` | `update` |
-| record-change-rationales | `POST /api/protocol/record-change-rationales` | `record-change-rationales` | `record_change_rationales` |
-| ask | `POST /api/protocol/ask` | `ask` | `ask` |
-| permission-request | `POST /api/protocol/permission-request` | `permission-request` (hook-only) | — |
-| read-context | `POST /api/protocol/read-context` | `read-context` | `read_context` |
-| write-context | `POST /api/protocol/write-context` | `write-context` | `write_context` |
-| deliver | `POST /api/protocol/deliver` | `deliver` | `deliver` |
-| attachment prepare | `POST /api/protocol/attachments/prepare-upload` | `attachment-prepare-upload` | `prepare_attachment_upload` |
-| attachment finalize | `POST /api/protocol/attachments/finalize-upload` | `attachment-finalize-upload` | `finalize_attachment_upload` |
-| attachment upload (composite) | — (client-side) | `attachment-upload-file` | `upload_attachment_file` |
-| attachment download URL | `POST /api/protocol/attachments/get-download-url` | `attachment-download-url` | `get_attachment_download_url` |
-| context fetch | `GET/POST /api/protocol/context/[ticketId]` | — | — (UI-private) |
-| projects (list) | `GET /api/protocol/projects` | — | — (UI-private) |
+| Operation                     | API route                                         | CLI subcommand                   | MCP tool                                       |
+| ----------------------------- | ------------------------------------------------- | -------------------------------- | ---------------------------------------------- |
+| auth-status                   | —                                                 | `ovld protocol auth-status`      | — (CLI/human-only)                             |
+| discover-project              | `POST /api/protocol/discover-project`             | `discover-project`               | `discover_project`                             |
+| attach                        | `POST /api/protocol/attach`                       | `attach`                         | `attach`                                       |
+| connect                       | `POST /api/protocol/connect`                      | `connect`                        | `connect` (local `overlord-mcp.mjs` shim only) |
+| load-context                  | `POST /api/protocol/load-context`                 | `load-context`                   | `load_ticket_context` (local shim only)        |
+| search-tickets                | `POST /api/protocol/search-tickets`               | `search-tickets`                 | `search_tickets`                               |
+| create (follow-up)            | `POST /api/protocol/create-ticket`                | `create` (with session flags)    | `create_ticket`                                |
+| create (standalone)           | `POST /api/protocol/tickets`                      | `create` (no session flags)      | —                                              |
+| prompt                        | `POST /api/protocol/prompt`                       | `prompt`                         | —                                              |
+| update                        | `POST /api/protocol/update`                       | `update`                         | `update`                                       |
+| hook-event                    | `POST /api/protocol/hook-event`                   | `hook-event`                     | `record_hook_event`                            |
+| record-change-rationales      | `POST /api/protocol/record-change-rationales`     | `record-change-rationales`       | `record_change_rationales`                     |
+| ask                           | `POST /api/protocol/ask`                          | `ask`                            | `ask`                                          |
+| permission-request            | `POST /api/protocol/permission-request`           | `permission-request` (hook-only) | —                                              |
+| read-context                  | `POST /api/protocol/read-context`                 | `read-context`                   | `read_context`                                 |
+| write-context                 | `POST /api/protocol/write-context`                | `write-context`                  | `write_context`                                |
+| deliver                       | `POST /api/protocol/deliver`                      | `deliver`                        | `deliver`                                      |
+| attachment prepare            | `POST /api/protocol/attachments/prepare-upload`   | `attachment-prepare-upload`      | `prepare_attachment_upload`                    |
+| attachment finalize           | `POST /api/protocol/attachments/finalize-upload`  | `attachment-finalize-upload`     | `finalize_attachment_upload`                   |
+| attachment upload (composite) | — (client-side)                                   | `attachment-upload-file`         | `upload_attachment_file`                       |
+| attachment download URL       | `POST /api/protocol/attachments/get-download-url` | `attachment-download-url`        | `get_attachment_download_url`                  |
+| context fetch                 | `GET/POST /api/protocol/context/[ticketId]`       | —                                | — (UI-private)                                 |
+| projects (list)               | `GET /api/protocol/projects`                      | —                                | — (UI-private)                                 |
 
 Notes:
+
 - **Parameter naming:** Supabase Edge MCP (`/Users/jake/Development/Cooperativ/Overlord/supabase/functions/mcp/tools.ts`) uses **camelCase** tool arguments that match `POST /api/protocol/*` JSON bodies (`ticketId`, `sessionKey`, `changeRationales`, …). The local Codex MCP shim (`/Users/jake/Development/Cooperativ/Overlord/plugins/overlord/scripts/overlord-mcp.mjs`) uses **snake_case** keys that map to `ovld protocol` kebab-case flags (`ticket_id` → `--ticket-id`). Prefer camelCase when calling the hosted MCP endpoint and snake_case when calling the shim.
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
 - `deliver` accepts optional `artifacts` (defaults to `[]`), `changeRationales`, `snapshot`, and `checkpoint` metadata — same as `deliverSchema` in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/validation.ts`. CLI delivery also supports local-only `--checkpoint-backend <auto|jj|git>` and `--skip-checkpoint` flags; the MCP local shim exposes matching `checkpoint_backend` and `skip_checkpoint` parameters when it routes through the CLI.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
+- `hook-event` is invoked by installed lifecycle hooks (`UserPromptSubmit` today; `Stop` reserved for future use) and intentionally does not require `sessionKey`.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)
 - `GET /context/[ticketId]` and `GET /projects` are intentionally UI-only (Overlord desktop/web). They are marked `// UI-private — not exposed via CLI/MCP by design` in code so future drift audits don't re-flag them.
 
 Source-of-truth files:
+
 - API routes: [apps/web/app/api/protocol/](/Users/jake/Development/Cooperativ/Overlord/apps/web/app/api/protocol)
 - CLI dispatcher: [protocol.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/protocol.mjs)
 - Human CLI launcher: [launcher.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/launcher.mjs)
@@ -449,6 +485,7 @@ Source-of-truth files:
   [agent-capabilities.ts](/Users/jake/Development/Cooperativ/Overlord/lib/overlord/agent-capabilities.ts)
 
 Checklist:
+
 - Context route accepts `agent=` query param for all 5 agents: `claude`, `codex`, `cursor`, `gemini`, `opencode`
 - `instructionMode=bundle` is sent for `claude`, `cursor`, and `opencode` when their bundle/plugin is installed
 - `instructionMode=legacy` is used for `codex`, `gemini`, and for `claude`/`cursor`/`opencode` when bundle/plugin is not installed
@@ -460,6 +497,7 @@ Checklist:
   [setup.mjs](/Users/jake/Development/Cooperativ/Overlord/packages/overlord-cli/bin/_cli/setup.mjs)
 
 Checklist:
+
 - `ovld setup claude` installs bundle for Claude Code
 - `ovld setup codex` installs the local Codex plugin bundle
 - `ovld setup opencode` installs bundle for OpenCode
@@ -477,7 +515,7 @@ Checklist:
 - Ticket copy surfaces:
   [CliQuickstart.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/CliQuickstart.tsx)
   [TicketPanelHeader.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/web/components/features/TicketPanelHeader.tsx)
-  [TicketDetailScreen.tsx](/Users/jake/Development/Cooperativ/Overlord/apps/mobile/app/(tabs)/tickets/[ticketId]/components/TicketDetailScreen.tsx)
+  [TicketDetailScreen.tsx](</Users/jake/Development/Cooperativ/Overlord/apps/mobile/app/(tabs)/tickets/[ticketId]/components/TicketDetailScreen.tsx>)
 
 ### IPC (Electron)
 
@@ -493,6 +531,7 @@ Checklist:
 When changing connector integration, verify the relevant agent(s):
 
 **Claude Code**
+
 - Bundle status in Settings reflects skill file, hook script, and settings.json
 - Installing bundle merges hook and permissions without clobbering user settings
 - Launching Claude from Overlord produces the correct prompt (slim for bundle mode, full for legacy)
@@ -500,6 +539,7 @@ When changing connector integration, verify the relevant agent(s):
 - No user-facing page references `ovld setup claude` for Codex
 
 **Codex**
+
 - Plugin install status in Settings reflects plugin files and `default.rules`
 - Installing the plugin cleans up legacy Codex bundle remnants
 - Launching Codex from Overlord produces Codex-specific workflow instructions in the prompt
@@ -508,15 +548,18 @@ When changing connector integration, verify the relevant agent(s):
 - User-facing pages advertise `ovld setup codex` as the CLI install path and do not reference `~/.codex/AGENTS.md` as the local Codex path
 
 **Cursor**
+
 - Cursor plugin installed at `~/.cursor/plugins/local/overlord/`
 - Launching Cursor from Overlord uses bundled/slim workflow prompt when plugin is installed
 
 **Gemini CLI**
+
 - Slash commands written to `~/.gemini/commands/` (TOML format, not Markdown)
 - `{{args}}` interpolation is used in TOML content (not `$ARGUMENTS`)
 - Launching Gemini from Overlord always includes full legacy workflow instructions in the prompt
 
 **OpenCode**
+
 - Bundle status in Settings reflects AGENTS.md section and opencode.json merge
 - Launching OpenCode from Overlord produces correct prompt (slim for bundle mode, full for legacy)
 - Slash commands written to `~/.config/opencode/commands/` (Markdown with `agent: build` frontmatter)
@@ -649,6 +692,7 @@ File: `apps/desktop/electron/services/agent-bundle/templates.ts`
 ### Layer 13 — Plugin skill docs
 
 Files:
+
 - `plugins/claude/skills/overlord-ticket/SKILL.md`
 - `plugins/cursor/skills/overlord-ticket/SKILL.md`
 - `plugins/overlord/skills/overlord-ticket/SKILL.md`
@@ -672,6 +716,7 @@ File: `ai/guidence/CONNECTOR_SURFACES.md`
 ### Layer 15 — Ticket copy/quickstart UI surfaces
 
 Files:
+
 - `apps/web/components/features/CliQuickstart.tsx`
 - `apps/web/components/features/TicketPanelHeader.tsx`
 - `apps/mobile/app/(tabs)/tickets/[ticketId]/components/TicketDetailScreen.tsx`

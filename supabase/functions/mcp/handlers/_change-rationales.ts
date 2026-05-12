@@ -35,6 +35,7 @@ export async function insertChangeRationales(
       hunks: Array.isArray(rationale.hunks) ? rationale.hunks : [],
       impact: rationale.impact,
       label: rationale.label,
+      objective_id: rationale.objective_id ?? null,
       session_id: input.sessionId,
       summary: rationale.summary,
       ticket_id: input.ticketId,
