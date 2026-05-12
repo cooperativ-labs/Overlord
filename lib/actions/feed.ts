@@ -11,7 +11,6 @@ export type FeedPost = {
   ticket_id: string;
   session_id: string | null;
   objective_id: string | null;
-  agent_type: string | null;
   title: string;
   summary: string;
   body: string;
@@ -185,7 +184,6 @@ export async function getFeedPostsAction(options?: {
       ticket_id: row.ticket_id as string,
       session_id: row.session_id as string | null,
       objective_id: (row.objective_id as string | null) ?? null,
-      agent_type: row.agent_type as string | null,
       title: row.title as string,
       summary: (row.summary as string | null) ?? '',
       body: row.body as string,

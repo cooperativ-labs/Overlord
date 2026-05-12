@@ -52,7 +52,6 @@ export interface FeedPost {
   summary: string;
   body: string;
   impact_level: string;
-  agent_type: string | null;
   tags: string[];
   files_touched: string[];
   human_actions: string[];

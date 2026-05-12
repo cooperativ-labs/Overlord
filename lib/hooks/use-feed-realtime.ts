@@ -91,7 +91,6 @@ export function useFeedRealtime() {
         ticket_id: row.ticket_id,
         session_id: row.session_id,
         objective_id: row.objective_id ?? null,
-        agent_type: row.agent_type,
         title: row.title,
         summary: row.summary ?? '',
         body: row.body,

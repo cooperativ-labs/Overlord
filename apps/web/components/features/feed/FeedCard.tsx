@@ -1,6 +1,12 @@
 'use client';
 
-import { AlertTriangle, CheckCircle2, ChevronDown, TicketPlus } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  MessageSquareText,
+  TicketPlus
+} from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
@@ -13,12 +19,12 @@ import {
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
 import type { FeedPost } from '@/lib/actions/feed';
+import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import {
   type FeedRollupFileChange,
   normalizeFeedRollupObjectiveSections,
   normalizeFeedRollupOrphanFiles
 } from '@/lib/helpers/feed-post-rollup';
-import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { buildEditorHref } from '@/lib/helpers/file-changes';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { cn } from '@/lib/utils';
@@ -93,7 +99,7 @@ function FileChip({ change, href }: FileChipProps) {
     </>
   );
   const className =
-    'inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background px-2 py-1 text-[12px] hover:bg-muted/60 transition-colors';
+    'inline-flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-[12px] hover:bg-muted/60 transition-colors';
   if (href) {
     return (
       <ExternalLink href={href} title={change.path} className={className}>
@@ -108,7 +114,28 @@ function FileChip({ change, href }: FileChipProps) {
   );
 }
 
-function StatusBadge({ state }: { state: string }) {
+function AgentBadge({ agentIdentifier, state }: { agentIdentifier: string | null; state: string }) {
+  const agentType = getAgentTypeByIdentifier(agentIdentifier);
+  const isExecuting = state.toLowerCase() === 'executing';
+
+  if (agentType) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+        <Image
+          src={agentType.icon}
+          alt={agentType.label}
+          width={10}
+          height={10}
+          className={agentType.invertDark ? 'dark:invert' : ''}
+        />
+        {agentType.label}
+        {isExecuting ? (
+          <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+        ) : null}
+      </span>
+    );
+  }
+
   const lower = state.toLowerCase();
   if (lower === 'executing') {
     return (
@@ -162,10 +189,15 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
   );
   const useRollupUi = rollupSections.length > 0;
   const impact = impactConfig[post.impact_level] ?? impactConfig.notable;
-  const agentType = getAgentTypeByIdentifier(post.agent_type);
   const ticketPath = buildTicketPath({ projectId: post.project_id, ticketId: post.ticket_id });
-  const tradeoffs = Array.isArray(post.tradeoffs) ? post.tradeoffs : [];
-  const humanActions = Array.isArray(post.human_actions) ? post.human_actions : [];
+  const tradeoffs = useMemo(
+    () => (Array.isArray(post.tradeoffs) ? post.tradeoffs : []),
+    [post.tradeoffs]
+  );
+  const humanActions = useMemo(
+    () => (Array.isArray(post.human_actions) ? post.human_actions : []),
+    [post.human_actions]
+  );
   const allActionsRequired = useMemo(
     () => [...actionsRequiredFromObjectives, ...humanActions],
     [actionsRequiredFromObjectives, humanActions]
@@ -231,10 +263,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                   {post.title}
                 </h3>
                 <Badge
-                  className={cn(
-                    'shrink-0 rounded-full px-2 text-xs font-medium',
-                    impact.className
-                  )}
+                  className={cn('shrink-0 rounded-full px-2 text-xs font-medium', impact.className)}
                   variant="secondary"
                 >
                   {impact.label}
@@ -246,10 +275,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                 <div className="border-b border-border/60 px-5 pb-4 pt-4">
                   <div className="mb-1.5 flex items-center gap-2">
                     <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground/80">
-                      Summary
-                    </div>
-                    <div className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                      live
+                      Ticket summary
                     </div>
                   </div>
                   <MarkdownContent
@@ -260,7 +286,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                   >
                     {post.summary}
                   </MarkdownContent>
-                  {(totalEvents > 0 || totalFiles > 0 || pendingActions > 0 || post.tags?.length) ? (
+                  {totalEvents > 0 || totalFiles > 0 || pendingActions > 0 || post.tags?.length ? (
                     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                       {totalEvents > 0 ? (
                         <span className="rounded-full border border-border/60 px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground">
@@ -320,7 +346,10 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                             <span className="truncate text-[13.5px] font-medium leading-snug text-foreground">
                               {section.title}
                             </span>
-                            <StatusBadge state={section.state} />
+                            <AgentBadge
+                              agentIdentifier={section.agent_identifier}
+                              state={section.state}
+                            />
                           </div>
                           {section.takeaway ? (
                             <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
@@ -390,11 +419,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {orphanFiles.map(change => (
-                        <FileChip
-                          key={change.path}
-                          change={change}
-                          href={hrefFor(change.path)}
-                        />
+                        <FileChip key={change.path} change={change} href={hrefFor(change.path)} />
                       ))}
                     </div>
                   </div>
@@ -486,16 +511,6 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                 </div>
               ) : null}
 
-              {/* Agent footer */}
-              <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-5 py-2 text-[12.5px] text-muted-foreground">
-                {agentType ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Image src={agentType.icon} alt={agentType.label} width={14} height={14} />
-                    {agentType.label}
-                  </span>
-                ) : null}
-              </div>
-
               {/* Discuss accordion */}
               <div className="border-t border-border/60">
                 <button
@@ -503,6 +518,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                   onClick={() => setDiscussOpen(prev => !prev)}
                   className="flex w-full items-center justify-between px-5 py-2.5 text-[12.5px] hover:bg-muted/40"
                 >
+                  <MessageSquareText className="h-4 w-4 text-muted-foreground" size={16} />
                   <span className="font-medium text-foreground/80">Discuss this update</span>
                   <ChevronDown
                     className={cn(
@@ -525,7 +541,6 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
               tradeoffs={tradeoffs}
               ticketsCreated={ticketsCreated}
               filesTouched={filesTouched}
-              agentType={agentType}
             />
           )}
         </div>
@@ -544,7 +559,6 @@ type LegacyFeedBodyProps = {
   tradeoffs: Array<{ decision: string; alternatives_considered?: string; rationale?: string }>;
   ticketsCreated: FeedPost['tickets_created'];
   filesTouched: string[];
-  agentType: ReturnType<typeof getAgentTypeByIdentifier>;
 };
 
 function LegacyFeedBody({
@@ -556,8 +570,7 @@ function LegacyFeedBody({
   humanActions,
   tradeoffs,
   ticketsCreated,
-  filesTouched,
-  agentType
+  filesTouched
 }: LegacyFeedBodyProps) {
   const [expanded, setExpanded] = useState(false);
   const fileLinks = filesTouched.map(path => ({
@@ -631,10 +644,7 @@ function LegacyFeedBody({
               </div>
               <ul className="space-y-1.5">
                 {humanActions.map((action, i) => (
-                  <li
-                    key={i}
-                    className="flex gap-2 text-[13px] text-blue-800 dark:text-blue-300"
-                  >
+                  <li key={i} className="flex gap-2 text-[13px] text-blue-800 dark:text-blue-300">
                     <span className="mt-0.5 shrink-0">&#8226;</span>
                     <span>{action}</span>
                   </li>
@@ -728,12 +738,6 @@ function LegacyFeedBody({
       ) : null}
 
       <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
-        {agentType ? (
-          <span className="inline-flex items-center gap-1">
-            <Image src={agentType.icon} alt={agentType.label} width={14} height={14} />
-            {agentType.label}
-          </span>
-        ) : null}
         {post.tags?.length ? (
           <>
             <span className="text-muted-foreground/40">&middot;</span>

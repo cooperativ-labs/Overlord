@@ -33,6 +33,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 const gemini = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
+/** Objectives in these states are never listed, sectioned, or pointed to for feed synthesis. */
+const OBJECTIVE_STATES_EXCLUDED_FROM_FEED_GENERATION = new Set(['draft', 'submitted']);
+
+function isObjectiveIncludedInFeedGeneration({ state }: { state: string }): boolean {
+  return !OBJECTIVE_STATES_EXCLUDED_FROM_FEED_GENERATION.has(state);
+}
+
 const FEED_POST_SYSTEM_INSTRUCTION = `You write concise, high-signal feed posts for a developer dashboard tracking AI agent work on code projects.
 
 Priorities:
@@ -93,6 +100,8 @@ type ObjectiveSection = {
   tradeoffs: Array<{ decision: string; alternatives_considered: string; rationale: string }>;
   event_ids: string[];
   updated_at: string | null;
+  agent_identifier: string | null;
+  model_identifier: string | null;
 };
 
 type StructuredFileChange = ObjectiveSection['file_changes'][number];
@@ -110,6 +119,8 @@ type FeedPostContext = {
     state: string;
     created_at: string;
     updated_at: string;
+    agent_identifier: string | null;
+    model_identifier: string | null;
   }>;
   events: Array<{
     id: string;
@@ -770,7 +781,9 @@ function buildObjectiveSections(
         objectiveEvents.map(event => event.id),
         100
       ),
-      updated_at: latestEventAt ?? objective.updated_at ?? objective.created_at ?? null
+      updated_at: latestEventAt ?? objective.updated_at ?? objective.created_at ?? null,
+      agent_identifier: objective.agent_identifier ?? null,
+      model_identifier: objective.model_identifier ?? null
     };
   });
 }
@@ -869,32 +882,38 @@ Deno.serve(async (req: Request) => {
     // Fetch all objectives for the ticket; the rendered feed body presents them as an ascending timeline.
     const { data: objectives } = await supabase
       .from('objectives')
-      .select('id, objective, state, created_at, updated_at')
+      .select('id, objective, state, created_at, updated_at, agent_identifier, model_identifier')
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true });
+
+    const excludedObjectiveIds = new Set(
+      (objectives ?? [])
+        .filter(o => !isObjectiveIncludedInFeedGeneration({ state: o.state }))
+        .map(o => o.id)
+    );
+
+    const objectivesForFeed = (objectives ?? []).filter(o =>
+      isObjectiveIncludedInFeedGeneration({ state: o.state })
+    );
 
     // Fetch the most recent executed objective for the rollup's lightweight latest pointer.
     const { data: executedObjective } = await supabase
       .from('objectives')
-      .select('id, objective')
+      .select('id, objective, agent_identifier, model_identifier')
       .eq('ticket_id', ticketId)
       .in('state', ['executing', 'complete'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    // Fallback to latest objective if no executed one found
+    // Fallback to the newest feed-eligible objective (never draft/submitted).
     const latestObjective =
       executedObjective ??
-      (
-        await supabase
-          .from('objectives')
-          .select('id, objective')
-          .eq('ticket_id', ticketId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      ).data;
+      (objectivesForFeed.length > 0
+        ? objectivesForFeed.reduce((latest, o) =>
+            new Date(o.created_at).getTime() >= new Date(latest.created_at).getTime() ? o : latest
+          )
+        : null);
 
     // Fetch project name
     const { data: project } = await supabase
@@ -926,6 +945,10 @@ Deno.serve(async (req: Request) => {
 
     const { data: events } = await eventsQuery;
 
+    const eventsForFeed = (events ?? []).filter(
+      e => !e.objective_id || !excludedObjectiveIds.has(e.objective_id)
+    );
+
     // Skip if there is nothing to synthesize.
     if ((events ?? []).length === 0 && !existingPost) {
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'no events' }), {
@@ -941,6 +964,12 @@ Deno.serve(async (req: Request) => {
       .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true })
       .limit(100);
+
+    const rationalesForFeed = (rationales ?? []).map(r => ({
+      ...r,
+      objective_id:
+        r.objective_id && excludedObjectiveIds.has(r.objective_id) ? null : r.objective_id
+    }));
 
     // Fetch agent type from session
     let agentType: string | null = null;
@@ -1014,9 +1043,9 @@ Deno.serve(async (req: Request) => {
       acceptanceCriteria: ticket.acceptance_criteria,
       constraints: ticket.constraints,
       feedPostInstructions,
-      objectives: objectives ?? [],
-      events: events ?? [],
-      rationales: rationales ?? [],
+      objectives: objectivesForFeed,
+      events: eventsForFeed,
+      rationales: rationalesForFeed,
       spawnedTickets,
       existingPost: existingPost
         ? { title: existingPost.title, body: existingPost.body, summary: existingPost.summary }
@@ -1031,7 +1060,7 @@ Deno.serve(async (req: Request) => {
     const objectiveSections = buildObjectiveSections(feedContext, generated.objective_sections);
     const summary = generated.summary || generated.body;
     const orphanFileChanges = buildStructuredFileChanges(
-      (rationales ?? []).filter(rationale => !rationale.objective_id),
+      rationalesForFeed.filter(rationale => !rationale.objective_id),
       true
     );
     const renderedBody = renderFeedBody(summary, objectiveSections, orphanFileChanges);

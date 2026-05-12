@@ -156,11 +156,7 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
   const copyDisabled = isBusy;
 
   return (
-    <div className="rounded-lg flex flex-col gap-3 mt-5 bg-muted border border-border/40 p-3 ">
-      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
-        <MessageSquareText className="h-4 w-4 text-muted-foreground" />
-        <span>Discuss this update</span>
-      </div>
+    <div className="flex flex-col gap-3 mt-5 p-3 ">
       <Textarea
         value={question}
         onChange={e => setQuestion(e.target.value)}

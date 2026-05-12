@@ -34,6 +34,8 @@ export type FeedRollupObjectiveSection = {
   tradeoffs: FeedRollupTradeoff[];
   event_ids: string[];
   updated_at: string | null;
+  agent_identifier: string | null;
+  model_identifier: string | null;
 };
 
 function numOrNull(value: unknown): number | null {
@@ -132,7 +134,9 @@ export function normalizeFeedRollupObjectiveSections(raw: unknown): FeedRollupOb
       action_required: sanitizeStringList(row.action_required, 50),
       tradeoffs: sanitizeTradeoffs(row.tradeoffs),
       event_ids: sanitizeStringList(row.event_ids, 200),
-      updated_at: optionalTrimmedString(row.updated_at)
+      updated_at: optionalTrimmedString(row.updated_at),
+      agent_identifier: optionalTrimmedString(row.agent_identifier),
+      model_identifier: optionalTrimmedString(row.model_identifier)
     });
   }
 

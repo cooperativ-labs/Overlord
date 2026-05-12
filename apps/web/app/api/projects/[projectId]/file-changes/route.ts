@@ -82,26 +82,59 @@ export async function GET(request: Request, { params }: RouteContext) {
       }
     }
 
-    let fileChangeQuery = supabase
-      .from('file_changes')
-      .select(
-        'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,objective_id,tickets!inner(id,ticket_id,title,status,project_id)'
-      )
-      .eq('tickets.project_id', projectId)
-      .order('created_at', { ascending: false });
+    const FILE_CHANGE_SELECT =
+      'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,objective_id,tickets!inner(id,ticket_id,title,status,project_id)';
 
-    if (filePathVariants.length > 0) {
-      fileChangeQuery = fileChangeQuery.in('file_path', filePathVariants);
+    // PostgREST serialises .in() as a query-string param. With many long paths the URL can
+    // exceed the server limit and PostgREST returns 400 "Bad Request". Chunk to ~100 paths
+    // per request and union the results (same fix as chunkUuidListForPostgrestNotIn).
+    const FILE_PATH_CHUNK_SIZE = 100;
+
+    function buildBaseQuery(pathChunk: string[] | null) {
+      let q = supabase
+        .from('file_changes')
+        .select(FILE_CHANGE_SELECT)
+        .eq('tickets.project_id', projectId)
+        .order('created_at', { ascending: false });
+      if (pathChunk) q = q.in('file_path', pathChunk);
+      for (const notInChunk of chunkUuidListForPostgrestNotIn(excludedTicketIds)) {
+        q = q.not('ticket_id', 'in', `(${notInChunk.join(',')})`);
+      }
+      return q;
     }
 
-    for (const chunk of chunkUuidListForPostgrestNotIn(excludedTicketIds)) {
-      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${chunk.join(',')})`);
-    }
+    const pathChunks: Array<string[] | null> =
+      filePathVariants.length === 0
+        ? [null]
+        : Array.from(
+            { length: Math.ceil(filePathVariants.length / FILE_PATH_CHUNK_SIZE) },
+            (_, i) =>
+              filePathVariants.slice(i * FILE_PATH_CHUNK_SIZE, (i + 1) * FILE_PATH_CHUNK_SIZE)
+          );
 
-    const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;
+    const chunkResults = await Promise.all(pathChunks.map(chunk => buildBaseQuery(chunk)));
+
+    const fileChangeError = chunkResults.find(r => r.error)?.error ?? null;
     if (fileChangeError) {
+      console.error('[file-changes] supabase query error', {
+        projectId,
+        filePathCount: filePaths.length,
+        filePathVariantCount: filePathVariants.length,
+        chunkCount: pathChunks.length,
+        code: fileChangeError.code,
+        message: fileChangeError.message
+      });
       return NextResponse.json({ error: fileChangeError.message }, { status: 500 });
     }
+
+    const seenIds = new Set<string>();
+    const fileChanges = chunkResults
+      .flatMap(r => r.data ?? [])
+      .filter(row => {
+        if (seenIds.has(row.id)) return false;
+        seenIds.add(row.id);
+        return true;
+      });
 
     const eventIds = [...new Set((fileChanges ?? []).map(row => row.event_id))];
     const sessionIds = [...new Set((fileChanges ?? []).map(row => row.session_id))];

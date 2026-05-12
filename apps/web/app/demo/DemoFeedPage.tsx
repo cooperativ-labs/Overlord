@@ -8,13 +8,11 @@ import {
   FileCode2,
   Newspaper
 } from 'lucide-react';
-import Image from 'next/image';
 import { useMemo, useState } from 'react';
 
 import { FeedProjectFilter } from '@/components/features/feed/FeedProjectFilter';
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { Badge } from '@/components/ui/badge';
-import { getAgentTypeByIdentifier } from '@/lib/helpers/agent-types';
 import { getCollapsedFileMentionLabel } from '@/lib/helpers/file-mentions';
 import { cn } from '@/lib/utils';
 
@@ -59,7 +57,6 @@ function WindowFrame({
 function DemoFeedCard({ post }: { post: DemoFeedPost }) {
   const [expanded, setExpanded] = useState(false);
   const impact = impactConfig[post.impact_level] ?? impactConfig.notable;
-  const agentType = getAgentTypeByIdentifier(post.agent_type);
   const tradeoffs = Array.isArray(post.tradeoffs) ? post.tradeoffs : [];
   const humanActions = Array.isArray(post.human_actions) ? post.human_actions : [];
   const filesTouched = Array.isArray(post.files_touched) ? post.files_touched : [];
@@ -227,12 +224,6 @@ function DemoFeedCard({ post }: { post: DemoFeedPost }) {
           )}
 
           <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
-            {agentType && (
-              <span className="inline-flex items-center gap-1">
-                <Image src={agentType.icon} alt={agentType.label} width={14} height={14} />
-                {agentType.label}
-              </span>
-            )}
             {post.tags?.length > 0 && (
               <>
                 <span className="text-muted-foreground/40">&middot;</span>

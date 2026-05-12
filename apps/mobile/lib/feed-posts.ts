@@ -8,7 +8,6 @@ export type FeedPostRow = {
   ticket_id: string;
   session_id: string | null;
   objective_id: string | null;
-  agent_type: string | null;
   title: string;
   summary: string | null;
   body: string;
@@ -43,7 +42,6 @@ export type FeedPostInsertRow = {
   ticket_id: string;
   session_id: string | null;
   objective_id: string | null;
-  agent_type: string | null;
   title: string;
   summary: string | null;
   body: string;
@@ -67,7 +65,7 @@ export type FeedPostInsertRow = {
 };
 
 export const FEED_POST_SELECT =
-  'id, organization_id, project_id, ticket_id, session_id, objective_id, agent_type, title, summary, body, tags, impact_level, files_touched, tradeoffs, human_actions, tickets_created, objective_sections, orphan_file_changes, total_events, total_files, pending_actions, source_event_ids, source_session_ids, source_window_start, source_window_end, created_at, updated_at, projects!inner(name, color), tickets!inner(title, ticket_sequence)';
+  'id, organization_id, project_id, ticket_id, session_id, objective_id, title, summary, body, tags, impact_level, files_touched, tradeoffs, human_actions, tickets_created, objective_sections, orphan_file_changes, total_events, total_files, pending_actions, source_event_ids, source_session_ids, source_window_start, source_window_end, created_at, updated_at, projects!inner(name, color), tickets!inner(title, ticket_sequence)';
 
 function normalizeTradeoffs(value: unknown): FeedPost['tradeoffs'] {
   return Array.isArray(value)
@@ -116,7 +114,6 @@ export function normalizeFeedPostRow(row: FeedPostRow): FeedPost {
     summary: row.summary ?? '',
     body: row.body,
     impact_level: row.impact_level ?? 'notable',
-    agent_type: row.agent_type,
     tags: Array.isArray(row.tags) ? row.tags.filter(Boolean) : [],
     files_touched: Array.isArray(row.files_touched) ? row.files_touched.filter(Boolean) : [],
     human_actions: Array.isArray(row.human_actions) ? row.human_actions.filter(Boolean) : [],

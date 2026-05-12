@@ -198,18 +198,21 @@ export function useCurrentChangeFileChanges(input: {
       if (input.repoRoot) searchParams.set('repoRoot', input.repoRoot);
       if (input.workingDirectory) searchParams.set('workingDirectory', input.workingDirectory);
 
-      const response = await fetchWithElectronRetry(
-        `/api/projects/${input.projectId}/file-changes?${searchParams}`,
-        {
-          cache: 'no-store'
-        }
-      );
+      const url = `/api/projects/${input.projectId}/file-changes?${searchParams}`;
+      const response = await fetchWithElectronRetry(url, { cache: 'no-store' });
       const payload = (await response.json()) as {
         error?: string;
         fileChanges?: FileChangeRecord[];
       };
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to load file changes.');
+        const message = payload.error ?? 'Failed to load file changes.';
+        console.error('[file-changes] fetch failed', {
+          status: response.status,
+          message,
+          filePathCount: filePaths.length,
+          urlLength: url.length
+        });
+        throw new Error(message);
       }
       return payload.fileChanges ?? [];
     },
