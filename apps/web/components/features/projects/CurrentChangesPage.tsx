@@ -149,7 +149,12 @@ export function CurrentChangesPage({
         }
       }
     }
-    return [...ticketMap.values()].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    return [...ticketMap.values()].sort((a, b) => {
+      const ra = a.status_type === 'review' ? 0 : 1;
+      const rb = b.status_type === 'review' ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      return (a.title ?? '').localeCompare(b.title ?? '');
+    });
   }, [enrichedFiles]);
 
   const fileCountsByTicketId = useMemo(() => countFilesPerTicket(enrichedFiles), [enrichedFiles]);

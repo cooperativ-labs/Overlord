@@ -14,7 +14,12 @@ import { cn } from '@/lib/utils';
 
 import type { DiffViewMode } from '../CurrentChangesPage';
 
-import { buildHunkMatches, formatStatus, lineNumber } from './helpers';
+import {
+  buildHunkMatches,
+  formatStatus,
+  lineNumber,
+  ticketReviewHighlightClasses
+} from './helpers';
 import { HunkPopoverContent } from './HunkPopoverContent';
 import type { EnrichedCurrentChangeFile, FileChangeRecord, TicketSummary } from './types';
 
@@ -62,6 +67,7 @@ function SecondaryTicketBadge({
           type="button"
           className={cn(
             'inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border px-2 py-0.5 text-[10px] hover:bg-muted',
+            ticketReviewHighlightClasses(ticket.status_type),
             isSelected
               ? 'border-primary bg-primary/10 text-primary'
               : 'bg-background text-foreground'

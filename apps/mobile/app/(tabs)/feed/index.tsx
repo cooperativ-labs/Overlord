@@ -22,6 +22,24 @@ import { Ionicons } from '@/lib/icons';
 import { loadProjectSummaries, type ProjectSummary } from '@/lib/projects';
 import type { FeedPost } from '@/lib/types';
 
+import {
+  normalizeFeedRollupObjectiveSections,
+  normalizeFeedRollupOrphanFiles
+} from '../../../../../lib/helpers/feed-post-rollup';
+
+function plainPreviewFromMarkdown(value: string, maxLen: number): string {
+  if (!value.trim()) return '';
+  const stripped = value
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/#+\s*/g, '')
+    .replace(/\*{1,2}|_{1,2}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return stripped.length > maxLen ? `${stripped.slice(0, maxLen - 1)}…` : stripped;
+}
+
 function getImpactConfig(
   colors: ThemeColors
 ): Record<string, { label: string; color: string; backgroundColor: string }> {
@@ -52,6 +70,9 @@ export default function FeedScreen() {
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedPostIds, setExpandedPostIds] = useState<Set<string>>(new Set());
+  const [openObjectiveDetailKeys, setOpenObjectiveDetailKeys] = useState<Record<string, boolean>>(
+    {}
+  );
   const [selectedProjectId, setSelectedProjectId] = useState<string | 'all'>('all');
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -250,6 +271,9 @@ export default function FeedScreen() {
         }
         renderItem={({ item }) => {
           const isExpanded = expandedPostIds.has(item.id);
+          const rollupSections = normalizeFeedRollupObjectiveSections(item.objective_sections);
+          const orphanFiles = normalizeFeedRollupOrphanFiles(item.orphan_file_changes);
+          const useRollupUi = rollupSections.length > 0;
           const impact = impactConfig[item.impact_level] ?? impactConfig.notable;
           const humanActions = Array.isArray(item.human_actions) ? item.human_actions : [];
           const tradeoffs = Array.isArray(item.tradeoffs) ? item.tradeoffs : [];
@@ -308,9 +332,167 @@ export default function FeedScreen() {
               <Text style={styles.title} numberOfLines={isExpanded ? undefined : 2}>
                 {item.title}
               </Text>
-              <Text style={styles.body} numberOfLines={isExpanded ? undefined : 3}>
-                {item.body}
-              </Text>
+              {useRollupUi &&
+              (item.total_events > 0 || item.total_files > 0 || item.pending_actions > 0) ? (
+                <View style={styles.rollupChipRow}>
+                  {item.total_events > 0 ? (
+                    <View style={styles.rollupChip}>
+                      <Text style={styles.rollupChipText}>
+                        {item.total_events} event{item.total_events === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {item.total_files > 0 ? (
+                    <View style={styles.rollupChip}>
+                      <Text style={styles.rollupChipText}>
+                        {item.total_files} file{item.total_files === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {item.pending_actions > 0 ? (
+                    <View style={styles.rollupChip}>
+                      <Text style={styles.rollupChipText}>
+                        {item.pending_actions} action{item.pending_actions === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+              {useRollupUi && item.summary.trim() && !isExpanded ? (
+                <Text style={styles.summaryPreview} numberOfLines={4}>
+                  {plainPreviewFromMarkdown(item.summary, 400)}
+                </Text>
+              ) : null}
+              {!useRollupUi ? (
+                <Text style={styles.body} numberOfLines={isExpanded ? undefined : 3}>
+                  {item.body}
+                </Text>
+              ) : null}
+
+              {isExpanded && useRollupUi && item.summary.trim() ? (
+                <View style={styles.rollupBlock}>
+                  <Text style={styles.rollupHeading}>Summary</Text>
+                  <Text style={styles.rollupBodyText}>
+                    {plainPreviewFromMarkdown(item.summary, 12000)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {isExpanded && useRollupUi && orphanFiles.length > 0 ? (
+                <View style={styles.rollupBlock}>
+                  <Text style={styles.rollupHeading}>Ticket-wide changes</Text>
+                  {orphanFiles.map(change => (
+                    <Text key={change.path} style={styles.rollupListLine} numberOfLines={2}>
+                      {'\u2022'} {change.path} ({change.status})
+                      {change.note ? ` — ${change.note}` : ''}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+
+              {isExpanded && useRollupUi
+                ? rollupSections.map(section => {
+                    const detailKey = `${item.id}:${section.id}`;
+                    const showDetail = !!openObjectiveDetailKeys[detailKey];
+                    return (
+                      <View key={section.id} style={styles.rollupObjective}>
+                        <Text style={styles.rollupObjectiveMeta}>
+                          Objective {section.index} · {section.state}
+                          {section.time ? ` · ${section.time}` : ''}
+                          {section.duration ? ` · ${section.duration}` : ''}
+                          {section.events > 0
+                            ? ` · ${section.events} event${section.events === 1 ? '' : 's'}`
+                            : ''}
+                        </Text>
+                        <Text style={styles.rollupObjectiveTitle}>{section.title}</Text>
+                        {section.takeaway ? (
+                          <Text style={styles.rollupTakeaway}>{section.takeaway}</Text>
+                        ) : null}
+                        <Pressable
+                          onPress={() =>
+                            setOpenObjectiveDetailKeys(prev => ({
+                              ...prev,
+                              [detailKey]: !prev[detailKey]
+                            }))
+                          }
+                          style={({ pressed }) => [
+                            styles.rollupDetailToggle,
+                            pressed && styles.pressed
+                          ]}
+                        >
+                          <Ionicons
+                            name={showDetail ? 'chevron-up' : 'chevron-down'}
+                            size={14}
+                            color={colors.primary}
+                          />
+                          <Text style={styles.rollupDetailToggleText}>
+                            {showDetail ? 'Hide detail' : 'Show detail'}
+                          </Text>
+                        </Pressable>
+                        {showDetail ? (
+                          <View style={styles.rollupDetailBody}>
+                            {section.body.trim() ? (
+                              <Text style={styles.rollupBodyText}>
+                                {plainPreviewFromMarkdown(section.body, 12000)}
+                              </Text>
+                            ) : null}
+                            {section.file_changes.length > 0 ? (
+                              <View style={styles.rollupFileBlock}>
+                                <Text style={styles.rollupSubheading}>Files</Text>
+                                {section.file_changes.map(fc => (
+                                  <Text
+                                    key={fc.path}
+                                    style={styles.rollupListLine}
+                                    numberOfLines={2}
+                                  >
+                                    {'\u2022'} {fc.path}
+                                  </Text>
+                                ))}
+                              </View>
+                            ) : null}
+                            {section.action_required.length > 0 ? (
+                              <View style={styles.calloutBlue}>
+                                <Text style={styles.calloutBlueTitle}>
+                                  Action required (objective)
+                                </Text>
+                                {section.action_required.map((action, index) => (
+                                  <View key={`${section.id}-ar-${index}`} style={styles.listRow}>
+                                    <Text style={styles.listBullet}>{'\u2022'}</Text>
+                                    <Text style={styles.calloutBlueText}>{action}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            ) : null}
+                            {section.tradeoffs.length > 0 ? (
+                              <View style={styles.sectionStack}>
+                                {section.tradeoffs.map((tradeoff, index) => (
+                                  <View
+                                    key={`${section.id}-to-${index}`}
+                                    style={styles.calloutAmber}
+                                  >
+                                    <Text style={styles.calloutAmberTitle}>
+                                      {tradeoff.decision}
+                                    </Text>
+                                    {tradeoff.alternatives_considered ? (
+                                      <Text style={styles.calloutAmberText}>
+                                        Alternatives: {tradeoff.alternatives_considered}
+                                      </Text>
+                                    ) : null}
+                                    {tradeoff.rationale ? (
+                                      <Text style={styles.calloutAmberText}>
+                                        Rationale: {tradeoff.rationale}
+                                      </Text>
+                                    ) : null}
+                                  </View>
+                                ))}
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })
+                : null}
 
               {!isExpanded && humanActions.length > 0 && (
                 <View style={styles.humanActionsPreview}>
@@ -404,7 +586,7 @@ export default function FeedScreen() {
                 </View>
               )}
 
-              {filesTouched.length > 0 && (
+              {filesTouched.length > 0 && !useRollupUi && (
                 <View style={styles.filesBlock}>
                   <View style={styles.filesSummaryRow}>
                     <Ionicons name="document-outline" size={12} color={colors.mutedForeground} />
@@ -610,6 +792,104 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.secondaryForeground,
       fontSize: 14,
       lineHeight: 20
+    },
+    rollupChipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 8,
+      marginBottom: 4
+    },
+    rollupChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      backgroundColor: colors.background
+    },
+    rollupChipText: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      fontWeight: '500'
+    },
+    summaryPreview: {
+      color: colors.secondaryForeground,
+      fontSize: 14,
+      lineHeight: 20,
+      marginTop: 8
+    },
+    rollupBlock: {
+      marginTop: 12,
+      gap: 6
+    },
+    rollupHeading: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.6,
+      textTransform: 'uppercase' as const
+    },
+    rollupBodyText: {
+      color: colors.secondaryForeground,
+      fontSize: 14,
+      lineHeight: 20
+    },
+    rollupListLine: {
+      color: colors.secondaryForeground,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 4
+    },
+    rollupObjective: {
+      marginTop: 14,
+      paddingLeft: 10,
+      borderLeftWidth: 2,
+      borderLeftColor: colors.primary
+    },
+    rollupObjectiveMeta: {
+      color: colors.mutedForeground,
+      fontSize: 11,
+      lineHeight: 16
+    },
+    rollupObjectiveTitle: {
+      color: colors.foreground,
+      fontSize: 15,
+      fontWeight: '600',
+      marginTop: 4,
+      lineHeight: 20
+    },
+    rollupTakeaway: {
+      color: colors.secondaryForeground,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 6
+    },
+    rollupDetailToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8,
+      alignSelf: 'flex-start'
+    },
+    rollupDetailToggleText: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '600'
+    },
+    rollupDetailBody: {
+      marginTop: 8,
+      gap: 8
+    },
+    rollupFileBlock: {
+      marginTop: 8,
+      gap: 4
+    },
+    rollupSubheading: {
+      color: colors.mutedForeground,
+      fontSize: 12,
+      fontWeight: '600',
+      marginBottom: 4
     },
     humanActionsPreview: {
       marginTop: 12,

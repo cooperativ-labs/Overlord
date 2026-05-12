@@ -3,8 +3,10 @@ import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { cn } from '@/lib/utils';
 
 import { FileListItem } from './FileListItem';
+import { ticketReviewHighlightClasses } from './helpers';
 import type { EnrichedCurrentChangeFile, GitStatusResponse, TicketSummary } from './types';
 
 type FileListPaneProps = {
@@ -64,7 +66,10 @@ export function FileListPane({
             return (
               <span
                 key={ticket.id}
-                className="inline-flex max-w-[200px] items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary"
+                className={cn(
+                  'inline-flex max-w-[200px] items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary',
+                  ticketReviewHighlightClasses(ticket.status_type)
+                )}
               >
                 <span className="truncate">
                   {ticket.title?.trim() || `Ticket ${getTicketIdentifier(ticket)}`}

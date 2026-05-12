@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { assertOrgMembership } from '@/app/api/projects/_lib';
+import { assertOrgMembership, chunkUuidListForPostgrestNotIn } from '@/app/api/projects/_lib';
 import { buildCurrentChangePathVariants } from '@/components/features/projects/current-changes/helpers';
 import { createClientForRequest } from '@/supabase/utils/server';
 
@@ -46,6 +46,42 @@ export async function GET(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
     }
 
+    const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
+
+    const { data: orgStatusRows, error: orgStatusesError } = await supabase
+      .from('ticket_statuses')
+      .select('name,status_type')
+      .eq('organization_id', project.organization_id);
+
+    if (orgStatusesError) {
+      return NextResponse.json({ error: orgStatusesError.message }, { status: 500 });
+    }
+
+    const statusTypeByName = new Map((orgStatusRows ?? []).map(row => [row.name, row.status_type]));
+
+    let excludedTicketIds: string[] = [];
+    if (!includeCompleted && project.organization_id) {
+      const { data: terminalStatuses } = await supabase
+        .from('ticket_statuses')
+        .select('name')
+        .eq('organization_id', project.organization_id)
+        .or('status_type.eq.complete,name.ilike.cancelled');
+
+      const terminalStatusNames = [
+        ...new Set((terminalStatuses ?? []).map((s: { name: string }) => s.name))
+      ];
+
+      if (terminalStatusNames.length > 0) {
+        const { data: excludedTickets } = await supabase
+          .from('tickets')
+          .select('id')
+          .eq('project_id', projectId)
+          .in('status', terminalStatusNames);
+
+        excludedTicketIds = (excludedTickets ?? []).map((ticket: { id: string }) => ticket.id);
+      }
+    }
+
     let fileChangeQuery = supabase
       .from('file_changes')
       .select(
@@ -56,6 +92,10 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     if (filePathVariants.length > 0) {
       fileChangeQuery = fileChangeQuery.in('file_path', filePathVariants);
+    }
+
+    for (const chunk of chunkUuidListForPostgrestNotIn(excludedTicketIds)) {
+      fileChangeQuery = fileChangeQuery.not('ticket_id', 'in', `(${chunk.join(',')})`);
     }
 
     const { data: fileChanges, error: fileChangeError } = await fileChangeQuery;
@@ -173,6 +213,8 @@ export async function GET(request: Request, { params }: RouteContext) {
             ? (checkpointsById.get(fileChange.checkpoint_id) ?? null)
             : null;
           const objectiveId = fileChange.objective_id ?? checkpointRecord?.objective_id ?? null;
+          const rawTickets = fileChange.tickets;
+          const ticketRow = Array.isArray(rawTickets) ? rawTickets[0] : rawTickets;
           return {
             attribution_source: fileChange.attribution_source,
             change_kind: fileChange.change_kind,
@@ -208,9 +250,10 @@ export async function GET(request: Request, { params }: RouteContext) {
             label: fileChange.label,
             session: sessionsById.get(fileChange.session_id) ?? null,
             summary: fileChange.summary,
-            ticket: fileChange.tickets
+            ticket: ticketRow
               ? {
-                  ...fileChange.tickets,
+                  ...ticketRow,
+                  status_type: statusTypeByName.get(ticketRow.status) ?? null,
                   latest_objective_agent:
                     latestObjectiveAgentByTicket.get(fileChange.ticket_id) ?? null
                 }

@@ -98,6 +98,10 @@ export function getStatusTooltipLabel(status: string): string {
   return formatStatus(status);
 }
 
+export function ticketReviewHighlightClasses(statusType: string | null | undefined): string {
+  return statusType === 'review' ? 'ring-1 ring-amber-500/50 bg-amber-500/[0.06]' : '';
+}
+
 export function getStatusClasses(status: string): string {
   switch (status) {
     case 'added':

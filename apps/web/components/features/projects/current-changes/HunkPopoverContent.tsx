@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
+import { cn } from '@/lib/utils';
 
+import { ticketReviewHighlightClasses } from './helpers';
 import type { FileChangeRecord, TicketSummary } from './types';
 
 type HunkPopoverContentProps = {
@@ -62,7 +64,13 @@ export function HunkPopoverContent({
 
       <div className="max-h-96 space-y-2 overflow-auto">
         {tickets.map(ticket => (
-          <div key={ticket.id} className="rounded-lg border p-3">
+          <div
+            key={ticket.id}
+            className={cn(
+              'rounded-lg border p-3',
+              ticketReviewHighlightClasses(ticket.status_type)
+            )}
+          >
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 className="text-sm font-medium text-primary underline-offset-4 hover:underline"

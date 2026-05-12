@@ -1,5 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import {
+  lastRollupObjectiveId,
+  normalizeFeedRollupObjectiveSections
+} from '@/lib/helpers/feed-post-rollup';
 import type { Database } from '@/types/database.types';
 
 type ServerSupabase = SupabaseClient<Database>;
@@ -24,7 +28,7 @@ export async function resolveProtocolObjectiveText(input: {
   if (feedPostId?.trim()) {
     const { data: feedPost, error: feedError } = await supabase
       .from('feed_posts')
-      .select('id, ticket_id, organization_id, objective_id')
+      .select('id, ticket_id, organization_id, objective_id, objective_sections')
       .eq('id', feedPostId.trim())
       .maybeSingle();
 
@@ -36,11 +40,19 @@ export async function resolveProtocolObjectiveText(input: {
       return { ok: false, error: 'Feed post does not match this ticket.' };
     }
 
-    if (feedPost.objective_id) {
+    let pointerObjectiveId = feedPost.objective_id?.trim() || null;
+    if (!pointerObjectiveId) {
+      const fromRollup = lastRollupObjectiveId(
+        normalizeFeedRollupObjectiveSections(feedPost.objective_sections)
+      );
+      if (fromRollup) pointerObjectiveId = fromRollup;
+    }
+
+    if (pointerObjectiveId) {
       const { data: linkedObjective } = await supabase
         .from('objectives')
         .select('objective')
-        .eq('id', feedPost.objective_id)
+        .eq('id', pointerObjectiveId)
         .maybeSingle();
 
       const text = linkedObjective?.objective?.trim();

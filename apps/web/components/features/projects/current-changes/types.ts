@@ -1,5 +1,7 @@
 import type { ParsedUnifiedDiff } from '@/lib/git/unified-diff';
-import type { Json } from '@/types/database.types';
+import type { Database, Json } from '@/types/database.types';
+
+export type TicketStatusTypeEnum = Database['public']['Enums']['ticket_status_type'];
 
 export type GitStatusFile = {
   linesAdded?: number | null;
@@ -125,6 +127,7 @@ export type FileChangeRecord = {
     objective?: string | null;
     latest_objective_agent?: string | null;
     status: string;
+    status_type?: TicketStatusTypeEnum | null;
     title: string | null;
   } | null;
   updated_at: string;
@@ -148,6 +151,7 @@ export type TicketSummary = {
   objective?: string | null;
   latest_objective_agent?: string | null;
   status: string | null;
+  status_type?: TicketStatusTypeEnum | null;
   title: string | null;
 };
 

@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
+import { ticketReviewHighlightClasses } from './helpers';
 import type { TicketSummary } from './types';
 
 type TicketFilterPopoverProps = {
@@ -91,6 +92,7 @@ export function TicketFilterPopover({
                 onClick={() => onToggle(ticket.id)}
                 className={cn(
                   'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-xs transition',
+                  ticketReviewHighlightClasses(ticket.status_type),
                   isSelected ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
                 )}
               >
@@ -125,7 +127,13 @@ export function TicketFilterPopover({
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
                     {ticket.status ? (
-                      <span className="rounded-full border px-1.5 py-0.5 leading-none">
+                      <span
+                        className={cn(
+                          'rounded-full border px-1.5 py-0.5 leading-none',
+                          ticket.status_type === 'review' &&
+                            'border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100'
+                        )}
+                      >
                         {ticket.status}
                       </span>
                     ) : null}
