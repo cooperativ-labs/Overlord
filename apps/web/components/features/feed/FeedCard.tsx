@@ -428,8 +428,8 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
 
               {/* Actions, tradeoffs, and tickets (objective-level items aggregated here) */}
               {allActionsRequired.length > 0 ||
-              allTradeoffsMerged.length > 0 ||
-              ticketsCreated.length > 0 ? (
+                allTradeoffsMerged.length > 0 ||
+                ticketsCreated.length > 0 ? (
                 <div className="space-y-3 border-t border-border/60 px-5 py-4">
                   {allActionsRequired.length > 0 ? (
                     <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/20">
@@ -518,8 +518,9 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                   onClick={() => setDiscussOpen(prev => !prev)}
                   className="flex w-full items-center justify-between px-5 py-2.5 text-[12.5px] hover:bg-muted/40"
                 >
-                  <MessageSquareText className="h-4 w-4 text-muted-foreground" size={16} />
-                  <span className="font-medium text-foreground/80">Discuss this update</span>
+                  <div className="flex items-center gap-2">
+                    <MessageSquareText className="h-4 w-4 text-muted-foreground" size={16} />
+                    <span className="font-medium text-foreground/80">Discuss this update</span></div>
                   <ChevronDown
                     className={cn(
                       'h-3.5 w-3.5 text-muted-foreground transition-transform',
