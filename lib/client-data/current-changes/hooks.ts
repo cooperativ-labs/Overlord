@@ -37,7 +37,8 @@ export const currentChangesQueryKeys = {
     filePaths: string[],
     repoRoot: string | null,
     workingDirectory: string | null
-  ) => ['current-changes', 'file-changes', projectId, filePaths, repoRoot, workingDirectory] as const,
+  ) =>
+    ['current-changes', 'file-changes', projectId, filePaths, repoRoot, workingDirectory] as const,
   diff: (
     directory: string | null,
     file?: Pick<GitStatusFile, 'path' | 'originalPath' | 'status'> | null

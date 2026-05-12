@@ -129,7 +129,15 @@ export function CurrentChangesPage({
         pathRoots: [statusResponse?.repoRoot ?? null, workingDirectory],
         rationales: fileChanges
       }),
-    [canInspectChanges, fileChanges, gitDiffFilterByPath, isElectron, statusFiles, statusResponse?.repoRoot, workingDirectory]
+    [
+      canInspectChanges,
+      fileChanges,
+      gitDiffFilterByPath,
+      isElectron,
+      statusFiles,
+      statusResponse?.repoRoot,
+      workingDirectory
+    ]
   );
 
   const uniqueTickets = useMemo(() => {
