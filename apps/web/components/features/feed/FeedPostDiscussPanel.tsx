@@ -156,7 +156,7 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
   const copyDisabled = isBusy;
 
   return (
-    <div className="mt-5 border-t border-border/40">
+    <div className="rounded-lg flex flex-col gap-3 mt-5 bg-muted border border-border/40 p-3 ">
       <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
         <MessageSquareText className="h-4 w-4 text-muted-foreground" />
         <span>Discuss this update</span>
@@ -170,21 +170,21 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
           'border-border/60 bg-background'
         )}
       />
-      <div className="mt-3 flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
         <AgentModelChooserButton
           ticketId={post.ticket_id}
           objectiveId={null}
           initialSelection={null}
           persistSelection={false}
         />
-        <div className="ml-auto flex items-stretch gap-0">
+        <div className="flex gap-0">
           {isElectron ? (
-            <div className="inline-flex items-stretch rounded-md border border-input bg-background text-sm shadow-sm">
+            <div className="inline-flex rounded-md border border-input bg-background text-sm shadow-sm">
               <Button
                 type="button"
                 size="sm"
-                variant="ghost"
-                className="rounded-r-none border-0 shadow-none hover:bg-accent"
+                variant="outline"
+                className="rounded-r-none border-r-0"
                 disabled={discussDisabled}
                 onClick={() => void handleDiscussTerminal()}
               >
@@ -195,7 +195,7 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
                   <Button
                     type="button"
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     className="rounded-l-none border-l border-input px-2 shadow-none hover:bg-accent"
                     disabled={isBusy}
                     aria-label="More discuss actions"
@@ -206,6 +206,7 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
                 <DropdownMenuContent align="end" className="min-w-[200px]">
                   <DropdownMenuItem
                     className="gap-2 text-xs"
+
                     disabled={copyDisabled}
                     onClick={() => void handleCopyPrompt()}
                   >
@@ -219,23 +220,17 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
             <Button
               type="button"
               size="sm"
+              variant="outline"
               disabled={copyDisabled}
               onClick={() => void handleCopyPrompt()}
             >
+              <Copy className="h-3.5 w-3.5" />
               {isBusy ? 'Working…' : 'Copy full prompt'}
             </Button>
           )}
         </div>
       </div>
-      {!isElectron ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Paste the prompt into your chosen chat client.
-        </p>
-      ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
-          The conversation will open in your terminal
-        </p>
-      )}
+
     </div>
   );
 }
