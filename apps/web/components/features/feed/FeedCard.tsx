@@ -15,7 +15,6 @@ import { Badge } from '@/components/ui/badge';
 import type { FeedPost } from '@/lib/actions/feed';
 import {
   type FeedRollupFileChange,
-  type FeedRollupObjectiveSection,
   normalizeFeedRollupObjectiveSections,
   normalizeFeedRollupOrphanFiles
 } from '@/lib/helpers/feed-post-rollup';
@@ -135,61 +134,6 @@ function StatusBadge({ state }: { state: string }) {
   );
 }
 
-type ObjectiveCalloutsProps = {
-  section: FeedRollupObjectiveSection;
-};
-
-function ObjectiveCallouts({ section }: ObjectiveCalloutsProps) {
-  if (section.action_required.length === 0 && section.tradeoffs.length === 0) return null;
-  return (
-    <div className="ml-[3.25rem] mr-5 mb-3 -mt-1 space-y-2">
-      {section.action_required.length > 0 ? (
-        <div className="rounded-md border border-blue-200 bg-blue-50/80 px-3 py-2 dark:border-blue-800/40 dark:bg-blue-950/20">
-          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300">
-            <CheckCircle2 className="h-3 w-3" />
-            Action required
-          </div>
-          <ul className="space-y-0.5">
-            {section.action_required.map((action, i) => (
-              <li
-                key={i}
-                className="flex gap-2 text-[12.5px] text-blue-900 dark:text-blue-200"
-              >
-                <span className="shrink-0 text-blue-400">&#8226;</span>
-                <span>{action}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {section.tradeoffs.map((t, i) => (
-        <div
-          key={i}
-          className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 dark:border-amber-800/40 dark:bg-amber-950/20"
-        >
-          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
-            <AlertTriangle className="h-3 w-3" />
-            Tradeoff
-          </div>
-          <div className="text-[12.5px] font-medium text-amber-900 dark:text-amber-200">
-            {t.decision}
-          </div>
-          {t.alternatives_considered ? (
-            <div className="mt-0.5 text-[11.5px] text-amber-900/80 dark:text-amber-300/80">
-              <span className="font-medium">Alternatives:</span> {t.alternatives_considered}
-            </div>
-          ) : null}
-          {t.rationale ? (
-            <div className="text-[11.5px] text-amber-900/80 dark:text-amber-300/80">
-              <span className="font-medium">Rationale:</span> {t.rationale}
-            </div>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 type FeedCardProps = {
   post: FeedPost;
   editorScheme: string;
@@ -208,12 +152,28 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
     () => normalizeFeedRollupOrphanFiles(post.orphan_file_changes),
     [post.orphan_file_changes]
   );
+  const actionsRequiredFromObjectives = useMemo(
+    () => rollupSections.flatMap(s => s.action_required),
+    [rollupSections]
+  );
+  const tradeoffsFromObjectives = useMemo(
+    () => rollupSections.flatMap(s => s.tradeoffs),
+    [rollupSections]
+  );
   const useRollupUi = rollupSections.length > 0;
   const impact = impactConfig[post.impact_level] ?? impactConfig.notable;
   const agentType = getAgentTypeByIdentifier(post.agent_type);
   const ticketPath = buildTicketPath({ projectId: post.project_id, ticketId: post.ticket_id });
   const tradeoffs = Array.isArray(post.tradeoffs) ? post.tradeoffs : [];
   const humanActions = Array.isArray(post.human_actions) ? post.human_actions : [];
+  const allActionsRequired = useMemo(
+    () => [...actionsRequiredFromObjectives, ...humanActions],
+    [actionsRequiredFromObjectives, humanActions]
+  );
+  const allTradeoffsMerged = useMemo(
+    () => [...tradeoffsFromObjectives, ...tradeoffs],
+    [tradeoffsFromObjectives, tradeoffs]
+  );
   const filesTouched = Array.isArray(post.files_touched) ? post.files_touched : [];
   const ticketsCreated = Array.isArray(post.tickets_created) ? post.tickets_created : [];
 
@@ -343,8 +303,6 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                 {rollupSections.map((section, idx) => {
                   const isOpen = openObjectiveId === section.id;
                   const isLast = idx === rollupSections.length - 1;
-                  const hasCallouts =
-                    section.action_required.length > 0 || section.tradeoffs.length > 0;
                   return (
                     <div key={section.id}>
                       <button
@@ -377,8 +335,6 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                           {section.time ?? ''}
                         </div>
                       </button>
-
-                      <ObjectiveCallouts section={section} />
 
                       {isOpen ? (
                         <div
@@ -423,9 +379,6 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                       ) : null}
 
                       {!isLast && !isOpen ? <div className="border-b border-border/60" /> : null}
-                      {isLast && !isOpen && hasCallouts ? (
-                        <div className="border-b border-border/60" />
-                      ) : null}
                     </div>
                   );
                 })}
@@ -448,10 +401,12 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                 ) : null}
               </div>
 
-              {/* Ticket-level human actions, tradeoffs, tickets created (only render if present and not already at objective level) */}
-              {humanActions.length > 0 || tradeoffs.length > 0 || ticketsCreated.length > 0 ? (
+              {/* Actions, tradeoffs, and tickets (objective-level items aggregated here) */}
+              {allActionsRequired.length > 0 ||
+              allTradeoffsMerged.length > 0 ||
+              ticketsCreated.length > 0 ? (
                 <div className="space-y-3 border-t border-border/60 px-5 py-4">
-                  {humanActions.length > 0 ? (
+                  {allActionsRequired.length > 0 ? (
                     <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/20">
                       <div className="mb-1.5 flex items-center gap-1.5">
                         <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -460,7 +415,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                         </span>
                       </div>
                       <ul className="space-y-1">
-                        {humanActions.map((action, i) => (
+                        {allActionsRequired.map((action, i) => (
                           <li
                             key={i}
                             className="flex gap-2 text-[13px] text-blue-800 dark:text-blue-300"
@@ -472,9 +427,9 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                       </ul>
                     </div>
                   ) : null}
-                  {tradeoffs.length > 0 ? (
+                  {allTradeoffsMerged.length > 0 ? (
                     <div className="space-y-2">
-                      {tradeoffs.map((t, i) => (
+                      {allTradeoffsMerged.map((t, i) => (
                         <div
                           key={i}
                           className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/40 dark:bg-amber-950/20"
