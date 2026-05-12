@@ -236,7 +236,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
                 </div>
               )}
 
-              <FeedPostDiscussPanel post={post} project={project} />
+
             </div>
           )}
 
@@ -296,6 +296,7 @@ export function FeedCard({ post, editorScheme, workspaceRoot, project }: FeedCar
               </>
             )}
           </div>
+          <FeedPostDiscussPanel post={post} project={project} />
         </div>
       </div>
     </article>

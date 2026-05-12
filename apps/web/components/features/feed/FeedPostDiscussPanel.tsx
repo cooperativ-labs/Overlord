@@ -229,14 +229,11 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
       </div>
       {!isElectron ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          Overlord copies the full ask-mode prompt (ticket intent, execution facts, feed synthesis,
-          and your question). Use the desktop app to open your agent in the project directory with
-          one click.
+          Paste the prompt into your chosen chat client.
         </p>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">
-          Terminal opens in this project&apos;s configured working directory (same as opening a
-          ticket). Use the menu to copy the same prompt instead.
+          The conversation will open in your terminal
         </p>
       )}
     </div>
