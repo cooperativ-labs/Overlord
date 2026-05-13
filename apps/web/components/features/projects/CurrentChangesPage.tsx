@@ -19,6 +19,7 @@ import {
   ticketIdsTouchingCurrentChanges
 } from '@/components/features/projects/current-changes/view-model';
 import { useElectron } from '@/components/features/terminal/useElectron';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import {
   useCurrentChangeFileChanges,
   useCurrentChangesRealtime,
@@ -316,44 +317,56 @@ export function CurrentChangesPage({
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)]">
-        <FileListPane
-          fileCountsByTicketId={fileCountsByTicketId}
-          filteredFiles={filteredFiles}
-          selectedPath={selectedPath}
-          selectedTicketIds={selectedTicketIds}
-          statusLoading={statusLoading}
-          statusResponse={statusResponse}
-          tickets={uniqueTickets}
-          workingDirectory={displayDirectory}
-          onClearTicketFilter={clearTicketFilter}
-          onSelectFile={setSelectedPath}
-        />
+      <ResizablePanelGroup className="min-h-0 flex-1" orientation="horizontal">
+        <ResizablePanel
+          className="min-h-0 min-w-0"
+          defaultSize="280px"
+          id="current-changes-file-list"
+          maxSize="70%"
+          minSize="12%"
+        >
+          <FileListPane
+            fileCountsByTicketId={fileCountsByTicketId}
+            filteredFiles={filteredFiles}
+            selectedPath={selectedPath}
+            selectedTicketIds={selectedTicketIds}
+            statusLoading={statusLoading}
+            statusResponse={statusResponse}
+            tickets={uniqueTickets}
+            workingDirectory={displayDirectory}
+            onClearTicketFilter={clearTicketFilter}
+            onSelectFile={setSelectedPath}
+          />
+        </ResizablePanel>
 
-        <div className="min-h-0">
-          {selectedFile ? (
-            <DiffPane
-              diff={diffState.parsed}
-              diffError={diffState.error}
-              file={selectedFile}
-              isLoading={diffState.isLoading}
-              projectId={projectId}
-              selectedFilePath={selectedFile.path}
-              selectedTicketIds={selectedTicketIds}
-              viewMode={diffViewMode}
-              workingDirectory={workingDirectory}
-              onFilterByTicket={focusTicketFilter}
-              onToggleTicketFilter={toggleTicketFilter}
-              onViewModeChange={setDiffViewMode}
-            />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
-              <FileCode2 className="h-8 w-8 opacity-40" />
-              <p>Select a file to inspect its diff.</p>
-            </div>
-          )}
-        </div>
-      </div>
+        <ResizableHandle withHandle />
+
+        <ResizablePanel className="min-h-0 min-w-0" id="current-changes-diff" minSize="28%">
+          <div className="flex min-h-0 h-full flex-col">
+            {selectedFile ? (
+              <DiffPane
+                diff={diffState.parsed}
+                diffError={diffState.error}
+                file={selectedFile}
+                isLoading={diffState.isLoading}
+                projectId={projectId}
+                selectedFilePath={selectedFile.path}
+                selectedTicketIds={selectedTicketIds}
+                viewMode={diffViewMode}
+                workingDirectory={workingDirectory}
+                onFilterByTicket={focusTicketFilter}
+                onToggleTicketFilter={toggleTicketFilter}
+                onViewModeChange={setDiffViewMode}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
+                <FileCode2 className="h-8 w-8 opacity-40" />
+                <p>Select a file to inspect its diff.</p>
+              </div>
+            )}
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

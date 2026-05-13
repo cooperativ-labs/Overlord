@@ -639,6 +639,33 @@ export const TOOLS = [
     }
   },
   {
+    name: 'discuss_objective',
+    annotations: {
+      title: 'Discuss Objective',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false
+    },
+    description:
+      'Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent but not yet being executed. Call this when a ticket is opened or discussed in conversation — it does NOT start execution. Use `attach` to begin execution only when the user explicitly orders it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objectiveId: {
+          type: 'string',
+          description:
+            'Optional UUID of a specific draft objective to submit. Defaults to the latest draft.'
+        }
+      },
+      required: ['ticketId']
+    }
+  },
+  {
     name: 'create_ticket',
     annotations: {
       title: 'Create Follow-Up Ticket',

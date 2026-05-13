@@ -77,6 +77,26 @@ ovld protocol deliver --session-key <sessionKey> \
 
 `ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed. If the summary contains special characters, use `--summary-file -` and pipe via a single-quoted heredoc (`<<'EOF'`) to prevent shell expansion. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data outside the repository and remove it after delivery.
 
+## Objective Submission vs Execution
+
+Discussing or otherwise opening a ticket from within a chat should cause the draft objective to be marked **submitted** — this signals the ticket is in active discussion with an agent, but not yet being executed. Only an explicit order to execute (e.g. "execute this", "do this", "start working on it") should cause you to **attach** to the ticket and trigger execution.
+
+- **Discussing / opening a ticket** → submit the objective:
+  ```bash
+  ovld protocol discuss-objective --ticket-id $TICKET_ID
+  ```
+  This transitions the objective from `draft` to `submitted`. No session is created.
+
+- **Creating a ticket** via `ovld protocol create` keeps the objective in `draft` state.
+
+- **Explicitly ordered to execute** → attach to the ticket:
+  ```bash
+  ovld protocol attach --ticket-id $TICKET_ID
+  ```
+  This transitions the objective from `submitted` (or `draft`) to `executing` and begins a session.
+
+Do not attach to a ticket just because it was mentioned or opened in conversation. Only attach when the user clearly asks you to execute the work.
+
 ## Mode 2: Asked From Chat To Use Overlord
 
 Use this mode when the conversation starts normally and the user asks Claude to create, inspect, connect to, or otherwise use Overlord.
@@ -87,6 +107,7 @@ Use this mode when the conversation starts normally and the user asks Claude to 
 2. Default to `create` for new tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
    `prompt` creates the ticket in `execute` status and attaches immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
+   When you open or discuss an existing ticket that has a draft objective, submit it with `ovld protocol discuss-objective --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
 5. If the user wants to establish a persistent session with a ticket by ID, use `/overlord:attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
 6. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or run `ovld protocol search-tickets --query "..." --status next-up,execute` and ask the user to confirm.
@@ -182,4 +203,4 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.9 -->
+<!-- version: 0.5.0 -->

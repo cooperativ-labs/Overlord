@@ -62,16 +62,16 @@ export function HunkPopoverContent({
         </p>
       </div>
 
-      <div className="max-h-96 space-y-2 overflow-auto">
+      <div className="max-h-96 gap-2 overflow-auto">
         {tickets.map(ticket => (
           <div
             key={ticket.id}
             className={cn(
-              'rounded-lg border p-3',
+              'rounded-lg border p-3 m-1',
               ticketReviewHighlightClasses(ticket.status_type)
             )}
           >
-            <div className="flex flex-wrap items-center gap-2 m-1">
+            <div className="flex flex-wrap items-center gap-2 ">
               <Link
                 className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                 href={buildTicketPath({ projectId, ticketId: ticket.id })}

@@ -129,6 +129,31 @@ const tools = [
     subcommand: 'load-context'
   },
   {
+    name: 'discuss_objective',
+    description:
+      'Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent but not yet being executed. Does NOT start execution — use attach for that.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticket_id: {
+          type: 'string',
+          description: 'Ticket identifier (e.g. 1:899). Also accepts UUID.'
+        },
+        objective_id: {
+          type: 'string',
+          description:
+            'Optional UUID of a specific draft objective to submit. Defaults to the latest draft.'
+        }
+      },
+      required: ['ticket_id']
+    },
+    toCliFlags: args => ({
+      'ticket-id': args.ticket_id,
+      'objective-id': args.objective_id
+    }),
+    subcommand: 'discuss-objective'
+  },
+  {
     name: 'prompt',
     description: 'Create a ticket and attach to it immediately (ovld protocol prompt).',
     inputSchema: {

@@ -92,6 +92,7 @@ export default function TicketDetailScreen() {
   const [titleDraft, setTitleDraft] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
   const [hasEverhourApiKey, setHasEverhourApiKey] = useState(false);
+  const [futureObjectivesEnabled, setFutureObjectivesEnabled] = useState(false);
   const [eventProfiles, setEventProfiles] = useState<
     Record<string, { name: string; image_url: string }>
   >({});
@@ -117,6 +118,7 @@ export default function TicketDetailScreen() {
         setStatusDefinitions([]);
         setObjectiveAttachments([]);
         setEventProfiles({});
+        setFutureObjectivesEnabled(false);
       }
 
       const supabase = getSupabase();
@@ -127,7 +129,8 @@ export default function TicketDetailScreen() {
         projectsRes,
         statusDefinitionsRes,
         documentsRes,
-        everhourRes
+        everhourRes,
+        futureObjectivesFeatureRes
       ] = await Promise.all([
         supabase
           .from('tickets')
@@ -167,7 +170,12 @@ export default function TicketDetailScreen() {
               .eq('provider', 'everhour')
               .limit(1)
               .maybeSingle()
-          : Promise.resolve({ data: null, error: null })
+          : Promise.resolve({ data: null, error: null }),
+        supabase
+          .from('app_features')
+          .select('is_enabled')
+          .eq('key', 'future-objectives')
+          .maybeSingle()
       ]);
 
       if (loadSequenceRef.current !== loadSequence) {
@@ -242,6 +250,17 @@ export default function TicketDetailScreen() {
         setObjectiveAttachments([]);
       }
       setHasEverhourApiKey(Boolean(everhourRes.data));
+      if (futureObjectivesFeatureRes.error) {
+        console.warn(
+          'Failed to load future-objectives app feature:',
+          futureObjectivesFeatureRes.error.message
+        );
+        setFutureObjectivesEnabled(false);
+      } else if (typeof futureObjectivesFeatureRes.data?.is_enabled === 'boolean') {
+        setFutureObjectivesEnabled(futureObjectivesFeatureRes.data.is_enabled);
+      } else {
+        setFutureObjectivesEnabled(false);
+      }
       if (
         ticketRes.error &&
         !(suppressTransientNetworkAlert && isTransientNetworkError(ticketRes.error))
@@ -270,13 +289,16 @@ export default function TicketDetailScreen() {
   const draftObjectives = useMemo(
     () =>
       objectives
-        .filter(objective => objective.state === 'draft' || objective.state === 'future')
+        .filter(
+          objective =>
+            objective.state === 'draft' || (futureObjectivesEnabled && objective.state === 'future')
+        )
         .slice()
         .sort(
           (left, right) =>
             new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
         ),
-    [objectives]
+    [futureObjectivesEnabled, objectives]
   );
 
   const activeDraftObjective = useMemo(() => {
@@ -404,14 +426,15 @@ export default function TicketDetailScreen() {
         .filter(
           objective =>
             objective.state !== 'draft' &&
-            objective.state !== 'future' &&
-            objective.state !== 'submitted'
+            (!futureObjectivesEnabled || objective.state !== 'future') &&
+            objective.state !== 'submitted' &&
+            objective.objective.trim().length > 0
         )
         .slice()
         .sort((left, right) => {
           return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
         }),
-    [objectives]
+    [futureObjectivesEnabled, objectives]
   );
 
   useEffect(() => {
@@ -515,7 +538,7 @@ export default function TicketDetailScreen() {
   }
 
   async function handleAddDraftObjective() {
-    if (!ticket || addingDraftObjective) return;
+    if (!ticket || addingDraftObjective || !futureObjectivesEnabled) return;
     const lastDraft = draftObjectives[draftObjectives.length - 1];
     if (lastDraft && lastDraft.objective.trim() === '') {
       Alert.alert('Add objective', 'Fill or save the empty objective before adding another.');
@@ -1424,6 +1447,7 @@ export default function TicketDetailScreen() {
         onAddDraftObjective={() => {
           void handleAddDraftObjective();
         }}
+        futureObjectivesEnabled={futureObjectivesEnabled}
         addDraftObjectiveDisabled={addDraftObjectiveDisabled}
         addingDraftObjective={addingDraftObjective}
         executedObjectives={executedObjectives}

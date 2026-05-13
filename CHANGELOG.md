@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605131312.0] - 2026-05-13:13:12
+
+### Added
+- **`POST /api/protocol/discuss-objective`** with **`ovld protocol discuss-objective`** (optional **`--objective-id`**), hosted MCP **`discuss_objective`**, Desktop slash commands, and **Codex** local MCP registration — submit the ticket’s **draft** objective to **submitted** when discussing a ticket with an agent (distinct from **`attach`** / execution start).
+
+### Fixed
+- **Mobile** reads **`app_features`** (including **`future-objectives`**) under the signed-in Supabase session via a new **`authenticated`** **`SELECT`** RLS policy, so feature toggles match web instead of silently behaving as off.
+- **Mobile ticket objectives** treat **`future`** rows like drafts only when **Future objectives** is enabled, hide the **+** draft tab when it is off, and drop blank **non-draft** rows from the executed list.
+
+### Changed
+- **Current Changes** uses a horizontal **resizable** split between the file list and diff (replacing the fixed **`280px`** column layout).
+- **`hook-event`** logs structured **`console.warn`** diagnostics for inbound hooks, intentional skips, unresolved ticket IDs, and successful inserts to simplify tracing IDE hook traffic.
+
+### Security
+- None.
+
+### Documentation
+- Extend **connector surfaces** and **`overlord-ticket`** skills (**Claude Code**, **Codex**, **Cursor**) for **`discuss-objective`** / **`discuss_objective`** and when agents should call it.
+
+### Chore
+- Add migration **`20260513160000_app_features_authenticated_select.sql`**; refresh **Claude** / **Codex** **`UserPromptSubmit`** hook scripts and plugin metadata; regenerate **`types/database.types.ts`**; bump workspace and **`overlord-cli`** to **`5.2605131312.0`** / **`0.2605131312.0`**.
+
 ## [5.2605131058.0] - 2026-05-13:10:58
 
 ### Added

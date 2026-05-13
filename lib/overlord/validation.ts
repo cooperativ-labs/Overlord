@@ -51,6 +51,11 @@ export const searchTicketsSchema = z.object({
   updatedBefore: z.string().datetime({ offset: true }).optional()
 });
 
+export const discussObjectiveSchema = z.object({
+  ticketId: ticketIdSchema,
+  objectiveId: z.string().uuid().optional()
+});
+
 export const attachSchema = z.object({
   ticketId: ticketIdSchema,
   agentIdentifier: z.string().trim().min(1).max(120),

@@ -1911,6 +1911,34 @@ export type Database = {
         Args: { p_organization_id: number };
         Returns: string;
       };
+      get_project_file_changes: {
+        Args: {
+          p_file_paths: string[];
+          p_include_completed?: boolean;
+          p_project_id: string;
+        };
+        Returns: {
+          attribution_source: string;
+          change_kind: string;
+          checkpoint_id: string;
+          confidence: string;
+          created_at: string;
+          event_id: string;
+          file_name: string;
+          file_path: string;
+          hunks: Json;
+          id: string;
+          impact: string;
+          label: string;
+          objective_id: string;
+          session_id: string;
+          summary: string;
+          ticket_data: Json;
+          ticket_id: string;
+          updated_at: string;
+          why: string;
+        }[];
+      };
       has_org_role: {
         Args: {
           allowed_roles: Database['public']['Enums']['organization_role'][];

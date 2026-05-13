@@ -65,6 +65,7 @@ export function TicketDetailContent({
   highlightedDraftObjectiveId,
   onSelectDraftObjective,
   onAddDraftObjective,
+  futureObjectivesEnabled,
   addDraftObjectiveDisabled,
   addingDraftObjective,
   executedObjectives,
@@ -133,6 +134,7 @@ export function TicketDetailContent({
   highlightedDraftObjectiveId: string | null;
   onSelectDraftObjective: (objectiveId: string) => void;
   onAddDraftObjective: () => void;
+  futureObjectivesEnabled: boolean;
   addDraftObjectiveDisabled: boolean;
   addingDraftObjective: boolean;
   executedObjectives: Objective[];
@@ -389,23 +391,25 @@ export function TicketDetailContent({
                     </Pressable>
                   );
                 })}
-                <Pressable
-                  onPress={onAddDraftObjective}
-                  disabled={addDraftObjectiveDisabled || addingDraftObjective}
-                  style={({ pressed }) => [
-                    styles.draftTab,
-                    styles.draftTabAdd,
-                    (addDraftObjectiveDisabled || addingDraftObjective) &&
-                      styles.draftTabAddDisabled,
-                    pressed && styles.pressed
-                  ]}
-                >
-                  {addingDraftObjective ? (
-                    <ActivityIndicator size="small" color={colors.mutedForeground} />
-                  ) : (
-                    <Text style={styles.draftTabAddLabel}>+</Text>
-                  )}
-                </Pressable>
+                {futureObjectivesEnabled ? (
+                  <Pressable
+                    onPress={onAddDraftObjective}
+                    disabled={addDraftObjectiveDisabled || addingDraftObjective}
+                    style={({ pressed }) => [
+                      styles.draftTab,
+                      styles.draftTabAdd,
+                      (addDraftObjectiveDisabled || addingDraftObjective) &&
+                        styles.draftTabAddDisabled,
+                      pressed && styles.pressed
+                    ]}
+                  >
+                    {addingDraftObjective ? (
+                      <ActivityIndicator size="small" color={colors.mutedForeground} />
+                    ) : (
+                      <Text style={styles.draftTabAddLabel}>+</Text>
+                    )}
+                  </Pressable>
+                ) : null}
               </ScrollView>
             ) : null}
             <TextInput

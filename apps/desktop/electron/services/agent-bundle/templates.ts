@@ -86,6 +86,26 @@ ovld protocol update --session-key <sessionKey> --ticket-id $TICKET_ID \\
 
 Record only meaningful behavioral changes — skip formatting-only noise. Prefer 1–5 concise rationales per ticket, each tied to a specific file and diff hunk.
 
+## Objective Submission vs Execution
+
+Discussing or otherwise opening a ticket from within a chat should cause the draft objective to be marked **submitted** — this signals the ticket is in active discussion with an agent, but not yet being executed. Only an explicit order to execute (e.g. "execute this", "do this", "start working on it") should cause you to **attach** to the ticket and trigger execution.
+
+- **Discussing / opening a ticket** → submit the objective:
+  \`\`\`bash
+  ovld protocol discuss-objective --ticket-id $TICKET_ID
+  \`\`\`
+  This transitions the objective from \`draft\` to \`submitted\`. No session is created.
+
+- **Creating a ticket** via \`ovld protocol create\` keeps the objective in \`draft\` state.
+
+- **Explicitly ordered to execute** → attach to the ticket:
+  \`\`\`bash
+  ovld protocol attach --ticket-id $TICKET_ID
+  \`\`\`
+  This transitions the objective from \`submitted\` (or \`draft\`) to \`executing\` and begins a session.
+
+Do not attach to a ticket just because it was mentioned or opened in conversation. Only attach when the user clearly asks you to execute the work.
+
 ## Finding And Connecting To Tickets
 
 If the user references a ticket but does not give an ID, search by keyword/status:
@@ -99,6 +119,12 @@ Use \`connect\` instead of \`attach\` when you only need a session key without t
 \`\`\`bash
 ovld protocol connect --ticket-id $TICKET_ID
 ovld protocol load-context --ticket-id $TICKET_ID
+\`\`\`
+
+When you open or discuss an existing ticket that has a draft objective, submit it:
+
+\`\`\`bash
+ovld protocol discuss-objective --ticket-id $TICKET_ID
 \`\`\`
 
 ## Project Discovery & Ticket Creation
@@ -212,25 +238,24 @@ ovld protocol record-change-rationales --session-key <sessionKey> --ticket-id $T
   --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 \`\`\`
 
-## Finding And Connecting To Tickets
+## Objective Submission vs Execution
 
-If the user references a ticket but does not give an ID, search by keyword/status:
+When discussing or opening a ticket, the draft objective should be marked **submitted** — this signals it has been reviewed but does NOT start execution. Only when the user explicitly orders execution (e.g. "execute this", "do this", "start working on it") should you **attach** to the ticket, which triggers execution.
 
-\`\`\`bash
-ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
-\`\`\`
+- **Discussing / opening a ticket** → submit the objective:
+  \`\`\`bash
+  ovld protocol discuss-objective --ticket-id $TICKET_ID
+  \`\`\`
 
-If you need a session key but not the full prompt payload, use \`connect\` instead of \`attach\`:
+- **Creating a ticket** via \`ovld protocol create\` keeps the objective in \`draft\` state.
 
-\`\`\`bash
-ovld protocol connect --ticket-id $TICKET_ID
-\`\`\`
+- **Explicitly ordered to execute** → attach to the ticket:
+  \`\`\`bash
+  ovld protocol attach --ticket-id $TICKET_ID
+  \`\`\`
+  This transitions the objective from \`submitted\` (or \`draft\`) to \`executing\` and begins a session.
 
-\`load-context\` reads ticket details without creating a session at all:
-
-\`\`\`bash
-ovld protocol load-context --ticket-id $TICKET_ID
-\`\`\`
+Do not attach to a ticket just because it was mentioned or opened in conversation. Only attach when the user clearly asks you to execute the work.
 
 ## Finding And Connecting To Tickets
 
@@ -245,6 +270,12 @@ Use \`connect\` instead of \`attach\` when you only need a session key without t
 \`\`\`bash
 ovld protocol connect --ticket-id $TICKET_ID
 ovld protocol load-context --ticket-id $TICKET_ID
+\`\`\`
+
+When you open or discuss an existing ticket that has a draft objective, submit it:
+
+\`\`\`bash
+ovld protocol discuss-objective --ticket-id $TICKET_ID
 \`\`\`
 
 ## Project Discovery & Ticket Creation

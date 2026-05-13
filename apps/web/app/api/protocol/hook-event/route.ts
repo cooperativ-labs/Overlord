@@ -18,8 +18,22 @@ export async function POST(request: Request) {
   try {
     const { hookType, prompt, ticketId: rawTicketId, turnIndex } = parsed.data;
     const { organizationId, userId } = parsed.tokenContext;
+    const promptLength = prompt?.trim().length ?? 0;
+
+    console.warn('[protocol:hook-event] received hook event', {
+      hookType,
+      rawTicketId,
+      turnIndex: turnIndex ?? null,
+      organizationId,
+      userId,
+      promptLength
+    });
 
     if (hookType === 'UserPromptSubmit' && turnIndex === 0) {
+      console.warn('[protocol:hook-event] skipping initial submit event', {
+        rawTicketId,
+        turnIndex
+      });
       return okResponse();
     }
 
@@ -32,11 +46,20 @@ export async function POST(request: Request) {
       prompt &&
       isLikelyOverlordAgentLaunchPrompt(prompt)
     ) {
+      console.warn('[protocol:hook-event] skipping legacy launch prompt submit', {
+        rawTicketId,
+        turnIndex,
+        promptLength
+      });
       return okResponse();
     }
 
     const ticketId = await resolveTicketId(rawTicketId, organizationId);
     if (!ticketId) {
+      console.warn('[protocol:hook-event] could not resolve ticket id', {
+        rawTicketId,
+        organizationId
+      });
       return okResponse();
     }
 
@@ -45,6 +68,10 @@ export async function POST(request: Request) {
     if (hookType === 'UserPromptSubmit') {
       const summary = prompt?.trim();
       if (!summary) {
+        console.warn('[protocol:hook-event] skipping empty submit prompt', {
+          ticketId,
+          turnIndex: turnIndex ?? null
+        });
         return okResponse();
       }
 
@@ -62,6 +89,12 @@ export async function POST(request: Request) {
 
       if (error) {
         console.error('[protocol:hook-event] failed to insert user follow-up:', error);
+      } else {
+        console.warn('[protocol:hook-event] inserted user follow-up event', {
+          ticketId,
+          turnIndex: turnIndex ?? null,
+          promptLength
+        });
       }
 
       return okResponse();
@@ -81,6 +114,12 @@ export async function POST(request: Request) {
 
     if (error) {
       console.error('[protocol:hook-event] failed to insert hook event:', error);
+    } else {
+      console.warn('[protocol:hook-event] inserted non-submit hook event', {
+        ticketId,
+        hookType,
+        turnIndex: turnIndex ?? null
+      });
     }
 
     return okResponse();

@@ -23,6 +23,7 @@ import { handleCreateTicket } from './handlers/create-ticket.ts';
 import { handleCreateTicketDraft } from './handlers/create-ticket-draft.ts';
 import { handleDeliver } from './handlers/deliver.ts';
 import { handleDiscoverProject } from './handlers/discover-project.ts';
+import { handleDiscussObjective } from './handlers/discuss-objective.ts';
 import { handleReadContext } from './handlers/read-context.ts';
 import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
 import { handleRecordHookEvent } from './handlers/record-hook-event.ts';
@@ -246,6 +247,8 @@ Deno.serve(async (req: Request) => {
         result = await handleAttachmentGetDownloadUrl(supabase, toolArgs, requestContext);
       } else if (toolName === 'save_ticket_draft') {
         result = await handleSaveTicketDraft(supabase, toolArgs, requestContext);
+      } else if (toolName === 'discuss_objective') {
+        result = await handleDiscussObjective(supabase, toolArgs, requestContext);
       } else if (toolName === 'update') {
         result = await handleUpdate(supabase, toolArgs, requestContext);
       } else if (toolName === 'ask') {

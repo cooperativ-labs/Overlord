@@ -44,6 +44,7 @@ Managed files:
 - `~/.claude/skills/overlord-local/SKILL.md` — durable workflow skill
 - `~/.claude/overlord-permission-hook.sh` — legacy permission notification hook (mode 0755) removed during migration cleanup
 - Claude local marketplace plugin copy under `~/.claude/plugins/cache/overlord-local/overlord/<version>/` — includes `hooks/hooks.json`, `scripts/permission-hook.sh`, and `scripts/user-prompt-submit-hook.sh`
+- Runtime diagnostics: `~/.ovld/logs/user-prompt-submit-hook.log` — append-only hook trace for Claude/Codex follow-up submission attempts
 - `~/.claude/settings.json` — existing user settings preserved; durable hooks now come from the installed plugin manifest rather than a temp settings merge
 
 Checklist:
@@ -68,6 +69,7 @@ Managed files (Markdown format):
 - `~/.claude/commands/connect.md` — requires `--ticket-id`
 - `~/.claude/commands/load.md` — requires `--ticket-id`
 - `~/.claude/commands/attach.md` — requires `--ticket-id`
+- `~/.claude/commands/discuss-objective.md` — requires `--ticket-id`
 - `~/.claude/commands/create.md`
 - `~/.claude/commands/prompt.md`
 
@@ -132,6 +134,7 @@ Managed files:
 - `~/.codex/plugins/overlord/` — plugin directory (copied from app bundle)
 - `~/.agents/plugins/marketplace.json` — Codex local plugin registry entry
 - `~/.codex/rules/default.rules` — Overlord permission prefix rules (`ovld protocol`, `curl -sS -X POST`)
+- Runtime diagnostics: `~/.ovld/logs/user-prompt-submit-hook.log` — append-only hook trace for Claude/Codex follow-up submission attempts
 - Plugin install manifest: `~/.ovld/overlord-plugin-manifest.json`
 
 Checklist:
@@ -435,6 +438,7 @@ when one surface changes, check the others against this table.
 | connect                       | `POST /api/protocol/connect`                      | `connect`                        | `connect` (local `overlord-mcp.mjs` shim only) |
 | load-context                  | `POST /api/protocol/load-context`                 | `load-context`                   | `load_ticket_context` (local shim only)        |
 | search-tickets                | `POST /api/protocol/search-tickets`               | `search-tickets`                 | `search_tickets`                               |
+| discuss-objective              | `POST /api/protocol/discuss-objective`             | `discuss-objective`               | `discuss_objective`                             |
 | create (follow-up)            | `POST /api/protocol/create-ticket`                | `create` (with session flags)    | `create_ticket`                                |
 | create (standalone)           | `POST /api/protocol/tickets`                      | `create` (no session flags)      | —                                              |
 | prompt                        | `POST /api/protocol/prompt`                       | `prompt`                         | —                                              |
@@ -464,6 +468,7 @@ Notes:
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.
 - MCP objective attachment tools follow `<verb>_<noun>` naming. CLI subcommands keep the `attachment-*` shape for terminal ergonomics. (`artifacts` is reserved for the structured records agents submit via `deliver`, not user-uploaded files.)
 - `GET /context/[ticketId]` and `GET /projects` are intentionally UI-only (Overlord desktop/web). They are marked `// UI-private — not exposed via CLI/MCP by design` in code so future drift audits don't re-flag them.
+- `discuss-objective` transitions a draft objective to `submitted` state, indicating the ticket is in active discussion with an agent. It does NOT create a session or start execution — that requires `attach`. Agents should call it when discussing or opening a ticket, not when the user orders execution.
 
 Source-of-truth files:
 

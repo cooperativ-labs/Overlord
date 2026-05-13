@@ -1571,6 +1571,34 @@ async function protocolPrompt(args) {
 }
 
 // ---------------------------------------------------------------------------
+// discuss-objective (mark a draft objective as submitted)
+// ---------------------------------------------------------------------------
+
+async function protocolDiscussObjective(args) {
+  const flags = parseFlags(args);
+  const ticketId = requireFlag(flags, 'ticket-id', process.env.TICKET_ID);
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags, ticketId);
+  const timeoutMs = resolveTimeout(flags);
+
+  const body = {
+    ticketId,
+    ...(flags['objective-id'] ? { objectiveId: String(flags['objective-id']) } : {})
+  };
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/discuss-objective',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+}
+
+// ---------------------------------------------------------------------------
 // create (create follow-up ticket draft only)
 // ---------------------------------------------------------------------------
 
@@ -1761,6 +1789,7 @@ Subcommands:
   connect                   Start a lightweight session without full context
   load-context              Read ticket context without creating a session
   search-tickets            Find tickets by keyword, status, project, creator, or update date
+  discuss-objective          Mark a draft objective as submitted (ready for review/execution)
   create                    Create a draft ticket without attaching (follow-up or standalone)
   prompt                    Create a ticket and attach to it immediately
   update                    Post progress, activity events, and optional change rationales
@@ -1998,6 +2027,16 @@ prompt:
   Returns:
     New ticket/session JSON plus SESSION_KEY and TICKET_ID on stderr when available
 
+discuss-objective:
+  Purpose:
+    Mark the latest draft objective on a ticket as "submitted", indicating the objective
+    has been discussed and is ready for review or execution. Does NOT start execution —
+    use \`attach\` to begin execution.
+  Required:
+    --ticket-id <ticket_id>
+  Optional:
+    --objective-id <id>       Target a specific draft objective by UUID
+
 create:
   Purpose:
     Create a draft ticket without attaching to it.
@@ -2089,6 +2128,8 @@ Examples:
   ovld protocol connect --ticket-id 1:899
   ovld protocol load-context --ticket-id 1:899
   ovld protocol search-tickets --query "auth refactor" --status next-up,execute --limit 10
+  ovld protocol discuss-objective --ticket-id 1:899
+  ovld protocol discuss-objective --ticket-id 1:899 --objective-id <objective-uuid>
   ovld protocol create --agent codex --objective "Capture follow-up work from this repo"
   ovld protocol create --agent codex --session-key <key> --ticket-id <ticket_id> --objective "Capture follow-up work"
   ovld protocol prompt --agent codex --objective "Implement user auth" --priority high
@@ -2136,6 +2177,10 @@ Examples:
   }
   if (subcommand === 'search-tickets') {
     await protocolSearchTickets(args);
+    return;
+  }
+  if (subcommand === 'discuss-objective') {
+    await protocolDiscussObjective(args);
     return;
   }
   if (subcommand === 'create' || subcommand === 'create-ticket') {

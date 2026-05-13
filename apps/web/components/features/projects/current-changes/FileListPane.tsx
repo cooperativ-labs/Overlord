@@ -39,7 +39,7 @@ export function FileListPane({
   const activeFilterTickets = tickets.filter(ticket => selectedTicketIds.has(ticket.id));
 
   return (
-    <div className="flex min-h-0 flex-col border-r">
+    <div className="flex min-h-0 flex-col">
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="min-w-0">
           <p className="text-xs font-medium text-foreground">

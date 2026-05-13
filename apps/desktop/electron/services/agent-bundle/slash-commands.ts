@@ -103,6 +103,26 @@ Rules:
 - After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
     },
     {
+      path: path.join(base, 'discuss-objective.md'),
+      content: `---
+description: Mark a ticket's draft objective as submitted (in discussion)
+argument-hint: <ticket_id> [--objective-id <uuid>]
+disable-model-invocation: true
+---
+
+Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent.
+
+Treat \`$ARGUMENTS\` as the target ticket ID (optionally followed by \`--objective-id <uuid>\`).
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol discuss-objective --ticket-id <ticket_id>\`
+
+Rules:
+- This does NOT start execution. Use \`attach\` for that.
+- After the command succeeds, confirm the objective was submitted.`
+    },
+    {
       path: path.join(base, 'create.md'),
       content: `---
 description: Create a draft Overlord ticket from the current conversation
@@ -189,6 +209,20 @@ Run:
 Rules:
 - Use \`attach\` to establish a persistent session with a ticket.
 - After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
+    },
+    {
+      path: path.join(base, 'discuss-objective.md'),
+      content: `Mark a ticket's draft objective as "submitted", indicating the ticket is in active discussion with an agent.
+
+The text after \`/discuss-objective\` is the target ticket ID (optionally followed by \`--objective-id <uuid>\`).
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol discuss-objective --ticket-id <ticket_id>\`
+
+Rules:
+- This does NOT start execution. Use \`attach\` for that.
+- After the command succeeds, confirm the objective was submitted.`
     },
     {
       path: path.join(base, 'create.md'),
@@ -308,6 +342,30 @@ Rules:
 - After the command succeeds, report the returned ` +
         '`SESSION_KEY`' +
         ` and confirm that future updates should use that ticket.
+"""`
+    },
+    {
+      path: path.join(base, 'discuss-objective.toml'),
+      content:
+        `description = "Mark a ticket's draft objective as submitted (in discussion)."
+prompt = """
+Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent.
+
+Treat ` +
+        '`{{args}}`' +
+        ` as the target ticket ID.
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+` +
+        '`ovld protocol discuss-objective --ticket-id <ticket_id>`' +
+        `
+
+Rules:
+- This does NOT start execution. Use ` +
+        '`attach`' +
+        ` for that.
+- After the command succeeds, confirm the objective was submitted.
 """`
     },
     {
@@ -446,6 +504,25 @@ Run:
 Rules:
 - Use \`attach\` to establish a persistent session with a ticket.
 - After the command succeeds, report the returned \`SESSION_KEY\` and confirm that future updates should use that ticket.`
+    },
+    {
+      path: path.join(base, 'discuss-objective.md'),
+      content: `---
+description: Mark a ticket's draft objective as submitted (in discussion)
+agent: build
+---
+
+Mark a draft objective as "submitted", indicating the ticket is in active discussion with an agent.
+
+Treat \`$ARGUMENTS\` as the target ticket ID (optionally followed by \`--objective-id <uuid>\`).
+If no ticket ID was provided, ask the user for one and stop.
+
+Run:
+\`ovld protocol discuss-objective --ticket-id <ticket_id>\`
+
+Rules:
+- This does NOT start execution. Use \`attach\` for that.
+- After the command succeeds, confirm the objective was submitted.`
     },
     {
       path: path.join(base, 'create.md'),

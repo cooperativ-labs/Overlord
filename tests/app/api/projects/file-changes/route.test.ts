@@ -102,10 +102,7 @@ function makeRequest(params: Record<string, string | string[]> = {}) {
   return new Request(url.toString());
 }
 
-async function callRoute(
-  request: Request,
-  supabaseMock: ReturnType<typeof buildSupabaseMock>
-) {
+async function callRoute(request: Request, supabaseMock: ReturnType<typeof buildSupabaseMock>) {
   const { createClientForRequest } = jest.requireMock('@/supabase/utils/server');
   const { assertOrgMembership } = jest.requireMock('@/app/api/projects/_lib');
   createClientForRequest.mockResolvedValue(supabaseMock);

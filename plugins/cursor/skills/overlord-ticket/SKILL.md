@@ -63,6 +63,26 @@ ovld protocol deliver --session-key <sessionKey> \
 
 `ovld protocol deliver` automatically creates a local checkpoint before the API request when the workspace is JJ- or Git-managed; use `--skip-checkpoint` only when intentionally bypassing local provenance. Use `--payload-json` when the full delivery object fits comfortably inline. For larger delivery payloads, prefer `--payload-file -` and stream the full JSON on stdin so no scratch file needs to be created or removed.
 
+## Objective Submission vs Execution
+
+Discussing or otherwise opening a ticket from within a chat should cause the draft objective to be marked **submitted** — this signals the ticket is in active discussion with an agent, but not yet being executed. Only an explicit order to execute (e.g. "execute this", "do this", "start working on it") should cause you to **attach** to the ticket and trigger execution.
+
+- **Discussing / opening a ticket** → submit the objective:
+  ```bash
+  ovld protocol discuss-objective --ticket-id $TICKET_ID
+  ```
+  This transitions the objective from `draft` to `submitted`. No session is created.
+
+- **Creating a ticket** via `ovld protocol create` keeps the objective in `draft` state.
+
+- **Explicitly ordered to execute** → attach to the ticket:
+  ```bash
+  ovld protocol attach --ticket-id $TICKET_ID
+  ```
+  This transitions the objective from `submitted` (or `draft`) to `executing` and begins a session.
+
+Do not attach to a ticket just because it was mentioned or opened in conversation. Only attach when the user clearly asks you to execute the work.
+
 ## Mode 2: Asked From Chat To Use Overlord
 
 1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objective "..."`.
@@ -70,6 +90,7 @@ ovld protocol deliver --session-key <sessionKey> \
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
 2. Default to `create` for new tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
+   When you open or discuss an existing ticket that has a draft objective, submit it with `ovld protocol discuss-objective --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
 5. If the user wants to establish a persistent session with a ticket by ID, use `/attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
 6. If the user wants to find a ticket by keyword/status/project/creator/date, run `ovld protocol search-tickets --query "..." --status next-up,execute`.
@@ -152,4 +173,4 @@ Objective attachment uploads also expose two-step variants — `attachment-prepa
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.9 -->
+<!-- version: 0.5.0 -->
