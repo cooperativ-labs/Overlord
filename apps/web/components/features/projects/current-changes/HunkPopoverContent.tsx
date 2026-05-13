@@ -71,7 +71,7 @@ export function HunkPopoverContent({
               ticketReviewHighlightClasses(ticket.status_type)
             )}
           >
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 m-1">
               <Link
                 className="text-sm font-medium text-primary underline-offset-4 hover:underline"
                 href={buildTicketPath({ projectId, ticketId: ticket.id })}
