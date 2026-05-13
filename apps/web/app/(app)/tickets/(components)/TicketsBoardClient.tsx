@@ -142,6 +142,7 @@ export default function TicketsBoardClient({
               projectId={projectId}
               organizationId={organizationId}
               ticketUrlBase={ticketUrlBase}
+              initialListFilters={initialListFilters}
             />
           </div>
         ) : showBoard ? (
@@ -155,6 +156,7 @@ export default function TicketsBoardClient({
             workingDirectory={workingDirectory}
             initialView={activeView}
             initialHiddenColumns={initialHiddenColumns}
+            initialListFilters={initialListFilters}
             scheduledVisibilityDays={scheduledVisibilityDays}
           />
         ) : (

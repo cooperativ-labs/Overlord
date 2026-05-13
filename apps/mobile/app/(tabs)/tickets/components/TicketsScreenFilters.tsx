@@ -7,9 +7,11 @@ import { FilterChip } from './FilterChip';
 import {
   ALL_PROJECTS_LABEL,
   formatStatusName,
+  formatTagFilterLabel,
   sortLabels,
   type SortMode,
   type StatusFilter,
+  type TagFilterOption,
   type ViewMode
 } from './shared';
 import { createTicketsScreenStyles } from './TicketsScreenStyles';
@@ -24,22 +26,28 @@ type TicketsScreenFiltersProps = {
   projectMenuOpen: boolean;
   sortMenuOpen: boolean;
   statusMenuOpen: boolean;
+  tagMenuOpen: boolean;
   sortMode: SortMode;
   statusFilter: StatusFilter;
   statusFilterLabel: string;
   statusFilterOptions: string[];
+  selectedTagIds: string[];
+  tagOptions: TagFilterOption[];
   projects: { id: string; name: string; color: string }[];
   filterProjectId: string | null;
   allStatusesSelected: boolean;
   onToggleProjectMenu: () => void;
   onToggleSortMenu: () => void;
   onToggleStatusMenu: () => void;
+  onToggleTagMenu: () => void;
   onToggleViewMenu: () => void;
   onSelectView: (mode: ViewMode) => void;
   onSelectProject: (projectId: string | null) => void;
   onSelectSort: (mode: SortMode) => void;
   onSelectStatus: (status: string) => void;
   onSelectAllStatuses: () => void;
+  onSelectTag: (tagId: string) => void;
+  onSelectAllTags: () => void;
 };
 
 export function TicketsScreenFilters({
@@ -51,22 +59,28 @@ export function TicketsScreenFilters({
   projectMenuOpen,
   sortMenuOpen,
   statusMenuOpen,
+  tagMenuOpen,
   sortMode,
   statusFilter,
   statusFilterLabel,
   statusFilterOptions,
+  selectedTagIds,
+  tagOptions,
   projects,
   filterProjectId,
   allStatusesSelected,
   onToggleProjectMenu,
   onToggleSortMenu,
   onToggleStatusMenu,
+  onToggleTagMenu,
   onToggleViewMenu,
   onSelectView,
   onSelectProject,
   onSelectSort,
   onSelectStatus,
-  onSelectAllStatuses
+  onSelectAllStatuses,
+  onSelectTag,
+  onSelectAllTags
 }: TicketsScreenFiltersProps) {
   const colors = useThemeColors();
   const styles = useThemedStyles(createTicketsScreenStyles);
@@ -126,6 +140,12 @@ export function TicketsScreenFilters({
             onPress={onToggleStatusMenu}
             active={statusMenuOpen}
           />
+          <FilterChip
+            icon="pricetag-outline"
+            label={formatTagFilterLabel(selectedTagIds, tagOptions)}
+            onPress={onToggleTagMenu}
+            active={tagMenuOpen}
+          />
         </View>
         {showViewMenu && (
           <View style={styles.viewMenuWrap}>
@@ -165,6 +185,31 @@ export function TicketsScreenFilters({
                 onPress={() => onSelectStatus(status)}
               >
                 <Text style={styles.menuItemText}>{formatStatusName(status)}</Text>
+                {selected && <Ionicons name="checkmark" size={14} color={colors.primary} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {tagMenuOpen && (
+        <View style={styles.menu}>
+          <Pressable style={styles.menuItem} onPress={onSelectAllTags}>
+            <Text style={styles.menuItemText}>All tags</Text>
+            {selectedTagIds.length === 0 && (
+              <Ionicons name="checkmark" size={14} color={colors.primary} />
+            )}
+          </Pressable>
+          {tagOptions.map(tag => {
+            const selected = selectedTagIds.includes(tag.id);
+            return (
+              <Pressable key={tag.id} style={styles.menuItem} onPress={() => onSelectTag(tag.id)}>
+                <View style={styles.projectMenuLabel}>
+                  {tag.color ? (
+                    <View style={[styles.projectMenuDot, { backgroundColor: tag.color }]} />
+                  ) : null}
+                  <Text style={styles.menuItemText}>{tag.label}</Text>
+                </View>
                 {selected && <Ionicons name="checkmark" size={14} color={colors.primary} />}
               </Pressable>
             );

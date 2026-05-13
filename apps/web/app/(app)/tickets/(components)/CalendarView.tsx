@@ -30,6 +30,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 
 import { useDefaultProject } from '@/components/features/projects/DefaultProjectContext';
 import { Button } from '@/components/ui/button';
+import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
+import { useTicketTagsBatch } from '@/lib/client-data/tags/hooks';
 import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
 import {
@@ -37,7 +39,17 @@ import {
   useUpdateTicketDueDateMutation,
   useUpdateTicketStatusMutation
 } from '@/lib/client-data/tickets/mutations';
+import {
+  normalizeTicketListFilters,
+  type TicketListFilters
+} from '@/lib/helpers/ticket-list-filters';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import {
+  areFilterIdsEqual,
+  buildTagFilterOptions,
+  readStoredListFilters,
+  writeStoredListFilters
+} from '@/lib/helpers/ticket-tag-filters';
 import { deriveTitleFromObjective, getDisplayTitle } from '@/lib/helpers/tickets';
 import { cn } from '@/lib/utils';
 
@@ -50,6 +62,7 @@ import {
   toViewTicket
 } from './ticket-view-helpers';
 import TicketsViewControls from './TicketsViewControls';
+import { TicketTagFilterDropdown } from './TicketTagFilterDropdown';
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -125,6 +138,7 @@ type CalendarViewProps = {
   projectId?: string;
   organizationId?: number;
   ticketUrlBase?: string;
+  initialListFilters?: TicketListFilters | null;
 };
 
 export default function CalendarView({
@@ -135,7 +149,8 @@ export default function CalendarView({
   showViewToggle = true,
   projectId,
   organizationId,
-  ticketUrlBase = '/u'
+  ticketUrlBase = '/u',
+  initialListFilters
 }: CalendarViewProps) {
   const router = useRouter();
   const boardScope = useMemo(
@@ -151,7 +166,27 @@ export default function CalendarView({
     () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
     [boardQuery.data, initialTickets]
   );
+  const visibleTicketIds = useMemo(() => tickets.map(ticket => ticket.id), [tickets]);
+  const { data: tagsByTicketId } = useTicketTagsBatch(visibleTicketIds);
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
+  const [storedListFilters] = useState<TicketListFilters | null>(() =>
+    projectId ? null : readStoredListFilters()
+  );
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => {
+    const fromInitial = initialListFilters?.filter_tag_ids;
+    if (fromInitial && fromInitial.length > 0) return [...fromInitial];
+    const fromStored = storedListFilters?.filter_tag_ids;
+    if (fromStored && fromStored.length > 0) return [...fromStored];
+    return [];
+  });
+  const persistedSelectedStatuses = useMemo(
+    () => initialListFilters?.selected_statuses ?? storedListFilters?.selected_statuses ?? [],
+    [initialListFilters?.selected_statuses, storedListFilters?.selected_statuses]
+  );
+  const persistedProjectIds = useMemo(
+    () => initialListFilters?.filter_project_ids ?? storedListFilters?.filter_project_ids ?? [],
+    [initialListFilters?.filter_project_ids, storedListFilters?.filter_project_ids]
+  );
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
   const [completingTicketId, setCompletingTicketId] = useState<string | null>(null);
   const [creatingOnDateKey, setCreatingOnDateKey] = useState<string | null>(null);
@@ -160,6 +195,34 @@ export default function CalendarView({
   const updateDueDateMutation = useUpdateTicketDueDateMutation();
   const updateStatusMutation = useUpdateTicketStatusMutation();
   const { defaultProject } = useDefaultProject();
+  const tagOptions = useMemo(
+    () => buildTagFilterOptions(tagsByTicketId as Record<string, Ticket['tags']> | undefined),
+    [tagsByTicketId]
+  );
+
+  const saveListFilters = useCallback(
+    (nextTagIds: string[]) => {
+      const nextFilters = normalizeTicketListFilters({
+        selected_statuses: persistedSelectedStatuses,
+        filter_project_ids: persistedProjectIds,
+        filter_tag_ids: nextTagIds
+      });
+
+      if (projectId) {
+        startTransition(() => {
+          void upsertProjectUserPreferencesAction(projectId, { list_filters: nextFilters });
+        });
+        return;
+      }
+
+      try {
+        writeStoredListFilters(nextFilters);
+      } catch {
+        // ignore localStorage errors
+      }
+    },
+    [persistedProjectIds, persistedSelectedStatuses, projectId, startTransition]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -180,6 +243,14 @@ export default function CalendarView({
   const ticketsByDate = useMemo(() => {
     const map = new Map<string, Ticket[]>();
     for (const ticket of tickets) {
+      if (
+        selectedTagIds.length > 0 &&
+        !(tagsByTicketId?.[ticket.id] ?? []).some(tag =>
+          selectedTagIds.includes(tag.tagDefinitionId)
+        )
+      ) {
+        continue;
+      }
       if (!ticket.due_datetime) continue;
       const dateKey = format(parseISO(ticket.due_datetime), 'yyyy-MM-dd');
       const existing = map.get(dateKey) ?? [];
@@ -187,7 +258,16 @@ export default function CalendarView({
       map.set(dateKey, existing);
     }
     return map;
-  }, [tickets]);
+  }, [selectedTagIds, tagsByTicketId, tickets]);
+
+  useEffect(() => {
+    if (selectedTagIds.length === 0) return;
+    const validIds = new Set(tagOptions.map(tag => tag.id));
+    const next = selectedTagIds.filter(id => validIds.has(id));
+    if (areFilterIdsEqual(next, selectedTagIds)) return;
+    saveListFilters(next);
+    setSelectedTagIds(next);
+  }, [saveListFilters, selectedTagIds, tagOptions]);
 
   const handlePrevMonth = useCallback(() => {
     setCurrentMonth(prev => subMonths(prev, 1));
@@ -335,6 +415,25 @@ export default function CalendarView({
           {showViewToggle && (
             <TicketsViewControls initialView={initialView} projectId={projectId} />
           )}
+          <TicketTagFilterDropdown
+            tagOptions={tagOptions}
+            selectedTagIds={selectedTagIds}
+            onToggle={tagId => {
+              setSelectedTagIds(prev => {
+                const next = prev.includes(tagId)
+                  ? prev.filter(currentTagId => currentTagId !== tagId)
+                  : [...prev, tagId];
+                queueMicrotask(() => {
+                  saveListFilters(next);
+                });
+                return next;
+              });
+            }}
+            onClear={() => {
+              setSelectedTagIds([]);
+              saveListFilters([]);
+            }}
+          />
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleToday}>

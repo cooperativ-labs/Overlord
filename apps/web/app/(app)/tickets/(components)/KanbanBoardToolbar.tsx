@@ -14,7 +14,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import ScheduledTicketVisibilityControl from './ScheduledTicketVisibilityControl';
+import type { TicketTagFilterOption } from './TicketListView.types';
 import TicketsViewControls from './TicketsViewControls';
+import { TicketTagFilterDropdown } from './TicketTagFilterDropdown';
 
 type ProjectOption = {
   id: string;
@@ -48,8 +50,12 @@ export default function KanbanBoardToolbar({
   projectId,
   projectOptions,
   filteredProjectIds,
+  tagOptions,
+  selectedTagIds,
   onToggleFilterProject,
   onClearProjectFilter,
+  onToggleTag,
+  onClearTagFilter,
   columns,
   visibleSlugs,
   showUncategorized,
@@ -61,8 +67,12 @@ export default function KanbanBoardToolbar({
   projectId?: string;
   projectOptions: ProjectOption[];
   filteredProjectIds: string[];
+  tagOptions: TicketTagFilterOption[];
+  selectedTagIds: string[];
   onToggleFilterProject: (projectId: string) => void;
   onClearProjectFilter: () => void;
+  onToggleTag: (tagId: string) => void;
+  onClearTagFilter: () => void;
   columns: ToolbarColumn[];
   visibleSlugs: Set<string>;
   showUncategorized: boolean;
@@ -113,6 +123,12 @@ export default function KanbanBoardToolbar({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        <TicketTagFilterDropdown
+          tagOptions={tagOptions}
+          selectedTagIds={selectedTagIds}
+          onToggle={onToggleTag}
+          onClear={onClearTagFilter}
+        />
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -29,10 +29,14 @@ import {
 import {
   normalizeStringList,
   normalizeTicketListFilters,
-  parseTicketListFilters,
   type TicketListFilters
 } from '@/lib/helpers/ticket-list-filters';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import {
+  buildTagFilterOptions,
+  readStoredListFilters,
+  writeStoredListFilters
+} from '@/lib/helpers/ticket-tag-filters';
 import {
   getWaitingRaisedWhileOpenMap,
   markTicketWaitingOpened
@@ -55,13 +59,13 @@ import { TicketListToolbar } from './TicketListToolbar';
 import type {
   SortKey,
   TicketListProjectOption,
-  TicketListStatusStyle
+  TicketListStatusStyle,
+  TicketTagFilterOption
 } from './TicketListView.types';
 import { useTicketBoardRealtime } from './useTicketBoardRealtime';
 
 const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const DEFAULT_SELECTED_STATUSES = ['draft', 'execute', 'review'] as const;
-const USER_LIST_FILTERS_KEY = 'overlord:user-ticket-list-filters';
 const PERSONAL_PROJECT_FILTER_ID = '__personal__';
 const TICKETS_PAGE_SIZE = 20;
 /** Sentinel for "drop after last status" - not a real status name. */
@@ -95,18 +99,6 @@ function buildStatusFilterOptions(availableStatuses: string[]): string[] {
   }
 
   return next;
-}
-
-function readStoredListFilters(): TicketListFilters | null {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const stored = localStorage.getItem(USER_LIST_FILTERS_KEY);
-    if (!stored) return null;
-    return parseTicketListFilters(JSON.parse(stored));
-  } catch {
-    return null;
-  }
 }
 
 function sanitizeSelectedStatuses(current: string[], availableStatuses: string[]): string[] {
@@ -218,7 +210,7 @@ export default function TicketListView({
   const { defaultProject } = useDefaultProject();
 
   const visibleTicketIds = useMemo(() => tickets.map(t => t.id), [tickets]);
-  const { data: tagsByTicketId } = useTicketTagsBatch(projectId ? visibleTicketIds : []);
+  const { data: tagsByTicketId } = useTicketTagsBatch(visibleTicketIds);
 
   const [storedListFilters] = useState<TicketListFilters | null>(() =>
     projectId ? null : readStoredListFilters()
@@ -235,6 +227,13 @@ export default function TicketListView({
     const fromInitial = initialListFilters?.filter_project_ids;
     if (fromInitial && fromInitial.length > 0) return [...fromInitial];
     const fromStored = storedListFilters?.filter_project_ids;
+    if (fromStored && fromStored.length > 0) return [...fromStored];
+    return [];
+  });
+  const [filterTagIds, setFilterTagIds] = useState<string[]>(() => {
+    const fromInitial = initialListFilters?.filter_tag_ids;
+    if (fromInitial && fromInitial.length > 0) return [...fromInitial];
+    const fromStored = storedListFilters?.filter_tag_ids;
     if (fromStored && fromStored.length > 0) return [...fromStored];
     return [];
   });
@@ -329,12 +328,21 @@ export default function TicketListView({
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [tickets]);
+  const tagOptions = useMemo(
+    () => buildTagFilterOptions(tagsByTicketId as Record<string, Ticket['tags']> | undefined),
+    [tagsByTicketId]
+  );
 
   const saveListFilters = useCallback(
-    (nextSelectedStatuses: string[], nextFilterProjectIds: string[]) => {
+    (
+      nextSelectedStatuses: string[],
+      nextFilterProjectIds: string[],
+      nextFilterTagIds: string[]
+    ) => {
       const nextFilters = normalizeTicketListFilters({
         selected_statuses: nextSelectedStatuses,
-        filter_project_ids: projectId ? [] : nextFilterProjectIds
+        filter_project_ids: projectId ? [] : nextFilterProjectIds,
+        filter_tag_ids: nextFilterTagIds
       });
 
       if (projectId) {
@@ -345,7 +353,7 @@ export default function TicketListView({
       }
 
       try {
-        localStorage.setItem(USER_LIST_FILTERS_KEY, JSON.stringify(nextFilters));
+        writeStoredListFilters(nextFilters);
       } catch {
         // ignore localStorage errors (quota, private browsing)
       }
@@ -379,11 +387,11 @@ export default function TicketListView({
     selectedStatusesSet.has(status)
   );
   const statusFilterLabel = useMemo(() => {
-    if (selectedStatuses.length === 0) return 'All statuses';
-    if (areAllStatusesSelected || statusFilterOptions.length === 0) return 'All statuses';
+    if (selectedStatuses.length === 0) return 'All';
+    if (areAllStatusesSelected || statusFilterOptions.length === 0) return 'All';
     if (selectedStatuses.length === 1) return formatStatusLabel(selectedStatuses[0] ?? '');
     if (selectedStatuses.length <= 2) return selectedStatuses.map(formatStatusLabel).join(', ');
-    return `${selectedStatuses.length} statuses`;
+    return `${selectedStatuses.length}`;
   }, [areAllStatusesSelected, selectedStatuses, statusFilterOptions.length]);
 
   function toggleStatus(status: string) {
@@ -395,7 +403,20 @@ export default function TicketListView({
       return next;
     });
     queueMicrotask(() => {
-      saveListFilters(next, filterProjectIds);
+      saveListFilters(next, filterProjectIds, filterTagIds);
+    });
+  }
+
+  function toggleTag(tagId: string) {
+    let next: string[] = [];
+    setFilterTagIds(current => {
+      next = current.includes(tagId)
+        ? current.filter(currentTagId => currentTagId !== tagId)
+        : [...current, tagId];
+      return next;
+    });
+    queueMicrotask(() => {
+      saveListFilters(selectedStatuses, filterProjectIds, next);
     });
   }
 
@@ -410,6 +431,11 @@ export default function TicketListView({
         const optionId = t.project_id ?? PERSONAL_PROJECT_FILTER_ID;
         return filterProjectIds.includes(optionId);
       });
+    }
+    if (filterTagIds.length > 0) {
+      filtered = filtered.filter(ticket =>
+        (tagsByTicketId?.[ticket.id] ?? []).some(tag => filterTagIds.includes(tag.tagDefinitionId))
+      );
     }
 
     return [...filtered].sort((a, b) => {
@@ -429,7 +455,9 @@ export default function TicketListView({
     selectedStatusesSet,
     selectedStatuses.length,
     areAllStatusesSelected,
-    filterProjectIds
+    filterProjectIds,
+    filterTagIds,
+    tagsByTicketId
   ]);
 
   // Group tickets by status, in the configured status order (with custom order applied).
@@ -559,10 +587,10 @@ export default function TicketListView({
     if (next) {
       const toSave = next;
       queueMicrotask(() => {
-        saveListFilters(toSave, filterProjectIds);
+        saveListFilters(toSave, filterProjectIds, filterTagIds);
       });
     }
-  }, [filterProjectIds, saveListFilters, statusFilterOptions]);
+  }, [filterProjectIds, filterTagIds, saveListFilters, statusFilterOptions]);
 
   useEffect(() => {
     if (projectId) return;
@@ -570,9 +598,25 @@ export default function TicketListView({
     const validIds = new Set(projectOptions.map(project => project.id));
     const next = filterProjectIds.filter(id => validIds.has(id));
     if (areProjectFilterIdsEqual(next, filterProjectIds)) return;
-    saveListFilters(selectedStatuses, next);
+    saveListFilters(selectedStatuses, next, filterTagIds);
     setFilterProjectIds(next);
-  }, [filterProjectIds, projectId, projectOptions, saveListFilters, selectedStatuses]);
+  }, [
+    filterProjectIds,
+    filterTagIds,
+    projectId,
+    projectOptions,
+    saveListFilters,
+    selectedStatuses
+  ]);
+
+  useEffect(() => {
+    if (filterTagIds.length === 0) return;
+    const validIds = new Set(tagOptions.map(tag => tag.id));
+    const next = filterTagIds.filter(id => validIds.has(id));
+    if (areProjectFilterIdsEqual(next, filterTagIds)) return;
+    saveListFilters(selectedStatuses, filterProjectIds, next);
+    setFilterTagIds(next);
+  }, [filterProjectIds, filterTagIds, saveListFilters, selectedStatuses, tagOptions]);
 
   function toggleExpand(statusName: string) {
     setExpandedStatuses(prev => ({ ...prev, [statusName]: !prev[statusName] }));
@@ -916,11 +960,13 @@ export default function TicketListView({
           selectedStatusesSet={selectedStatusesSet}
           projectOptions={projectOptions}
           filterProjectIds={filterProjectIds}
+          tagOptions={tagOptions}
+          selectedTagIds={filterTagIds}
           scheduledVisibilityDays={scheduledVisibilityDays}
           onSortKeyChange={setSortKey}
           onSelectAllStatuses={() => {
             setSelectedStatuses(statusFilterOptions);
-            saveListFilters(statusFilterOptions, filterProjectIds);
+            saveListFilters(statusFilterOptions, filterProjectIds, filterTagIds);
           }}
           onToggleStatus={toggleStatus}
           onToggleFilterProject={projectFilterId => {
@@ -929,14 +975,19 @@ export default function TicketListView({
                 ? prev.filter(id => id !== projectFilterId)
                 : [...prev, projectFilterId];
               queueMicrotask(() => {
-                saveListFilters(selectedStatuses, next);
+                saveListFilters(selectedStatuses, next, filterTagIds);
               });
               return next;
             });
           }}
           onClearProjectFilters={() => {
             setFilterProjectIds([]);
-            saveListFilters(selectedStatuses, []);
+            saveListFilters(selectedStatuses, [], filterTagIds);
+          }}
+          onToggleTag={toggleTag}
+          onClearTagFilters={() => {
+            setFilterTagIds([]);
+            saveListFilters(selectedStatuses, filterProjectIds, []);
           }}
         />
       ) : null}

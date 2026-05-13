@@ -8,6 +8,12 @@ import type { AssignedAgent, TicketListItem } from '@/lib/types';
 export type SortMode = 'updated' | 'created' | 'priority';
 export type StatusFilter = string[];
 export type ViewMode = 'list' | 'calendar';
+export type TicketTagSummary = {
+  id: string;
+  label: string;
+  color: string | null;
+};
+export type TagFilterOption = TicketTagSummary;
 export type TicketStatusType =
   | 'draft'
   | 'next-up'
@@ -59,6 +65,7 @@ export type TicketWithProject = TicketListItem & {
   project_id: string | null;
   board_position: number;
   has_unread?: boolean;
+  tags?: TicketTagSummary[];
 };
 
 export type SectionItem =
@@ -157,6 +164,22 @@ export function formatStatusName(status: string): string {
     .split('-')
     .map(part => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+export function formatTagFilterLabel(
+  selectedTagIds: string[],
+  tagOptions: TagFilterOption[]
+): string {
+  if (selectedTagIds.length === 0) return 'All tags';
+  if (selectedTagIds.length === 1) {
+    return tagOptions.find(tag => tag.id === selectedTagIds[0])?.label ?? 'Tag';
+  }
+  if (selectedTagIds.length <= 2) {
+    return selectedTagIds
+      .map(tagId => tagOptions.find(tag => tag.id === tagId)?.label ?? 'Tag')
+      .join(', ');
+  }
+  return `${selectedTagIds.length} tags`;
 }
 
 function normalizeStatusName(status: string): string {

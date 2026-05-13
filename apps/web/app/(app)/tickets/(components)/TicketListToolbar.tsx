@@ -14,8 +14,13 @@ import {
 
 import ScheduledTicketVisibilityControl from './ScheduledTicketVisibilityControl';
 import { formatStatusLabel } from './ticket-view-helpers';
-import type { SortKey, TicketListProjectOption } from './TicketListView.types';
+import type {
+  SortKey,
+  TicketListProjectOption,
+  TicketTagFilterOption
+} from './TicketListView.types';
 import TicketsViewControls from './TicketsViewControls';
+import { TicketTagFilterDropdown } from './TicketTagFilterDropdown';
 
 function listProjectFilterTriggerLabel({
   filterProjectIds,
@@ -43,12 +48,16 @@ type TicketListToolbarProps = {
   selectedStatusesSet: Set<string>;
   projectOptions: TicketListProjectOption[];
   filterProjectIds: string[];
+  tagOptions: TicketTagFilterOption[];
+  selectedTagIds: string[];
   scheduledVisibilityDays: number;
   onSortKeyChange: (key: SortKey) => void;
   onSelectAllStatuses: () => void;
   onToggleStatus: (status: string) => void;
   onToggleFilterProject: (projectFilterId: string) => void;
   onClearProjectFilters: () => void;
+  onToggleTag: (tagId: string) => void;
+  onClearTagFilters: () => void;
 };
 
 export function TicketListToolbar({
@@ -63,12 +72,16 @@ export function TicketListToolbar({
   selectedStatusesSet,
   projectOptions,
   filterProjectIds,
+  tagOptions,
+  selectedTagIds,
   scheduledVisibilityDays,
   onSortKeyChange: _onSortKeyChange,
   onSelectAllStatuses,
   onToggleStatus,
   onToggleFilterProject,
-  onClearProjectFilters
+  onClearProjectFilters,
+  onToggleTag,
+  onClearTagFilters
 }: TicketListToolbarProps) {
   return (
     <div className="flex w-full flex-wrap items-start justify-between gap-2">
@@ -169,6 +182,12 @@ export function TicketListToolbar({
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
+            <TicketTagFilterDropdown
+              tagOptions={tagOptions}
+              selectedTagIds={selectedTagIds}
+              onToggle={onToggleTag}
+              onClear={onClearTagFilters}
+            />
           </>
         ) : null}
       </div>

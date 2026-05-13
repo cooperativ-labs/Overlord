@@ -20,6 +20,7 @@ import { useDefaultProject } from '@/components/features/projects/DefaultProject
 import { useProjectSettings } from '@/components/features/projects/ProjectSettingsContext';
 import { upsertProjectUserPreferencesAction } from '@/lib/actions/project-user-preferences';
 import { loadMoreTicketsAction, markTicketsReadAction } from '@/lib/actions/tickets';
+import { useTicketTagsBatch } from '@/lib/client-data/tags/hooks';
 import { selectAllTickets } from '@/lib/client-data/tickets/board-selectors';
 import { mergeTicketsIntoBoards, updateTicketInBoards } from '@/lib/client-data/tickets/cache';
 import { useTicketBoard } from '@/lib/client-data/tickets/hooks';
@@ -28,7 +29,17 @@ import {
   useMarkTicketReadMutation,
   useReorderTicketsMutation
 } from '@/lib/client-data/tickets/mutations';
+import {
+  normalizeTicketListFilters,
+  type TicketListFilters
+} from '@/lib/helpers/ticket-list-filters';
 import { buildTicketPath } from '@/lib/helpers/ticket-path';
+import {
+  areFilterIdsEqual,
+  buildTagFilterOptions,
+  readStoredListFilters,
+  writeStoredListFilters
+} from '@/lib/helpers/ticket-tag-filters';
 import {
   getOpenedWaitingTimestamps,
   getWaitingRaisedWhileOpenMap,
@@ -73,6 +84,7 @@ export default function KanbanBoard({
   workingDirectory = null,
   initialView,
   initialHiddenColumns = [],
+  initialListFilters,
   scheduledVisibilityDays
 }: {
   tickets: Ticket[];
@@ -84,6 +96,7 @@ export default function KanbanBoard({
   workingDirectory?: string | null;
   initialView: string;
   initialHiddenColumns?: string[];
+  initialListFilters?: TicketListFilters | null;
   scheduledVisibilityDays: number;
 }) {
   const pathname = usePathname();
@@ -107,11 +120,34 @@ export default function KanbanBoard({
     () => (boardQuery.data ? selectAllTickets(boardQuery.data).map(toViewTicket) : initialTickets),
     [boardQuery.data, initialTickets]
   );
+  const visibleTicketIds = useMemo(() => tickets.map(ticket => ticket.id), [tickets]);
+  const { data: tagsByTicketId } = useTicketTagsBatch(visibleTicketIds);
   const createTicketMutation = useCreateTicketMutation();
   const reorderTicketsMutation = useReorderTicketsMutation();
   const { mutate: markTicketRead } = useMarkTicketReadMutation();
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
-  const [filteredProjectIds, setFilteredProjectIds] = useState<string[]>([]);
+  const [storedListFilters] = useState<TicketListFilters | null>(() =>
+    projectId ? null : readStoredListFilters()
+  );
+  const [filteredProjectIds, setFilteredProjectIds] = useState<string[]>(() => {
+    if (projectId) return [];
+    const fromInitial = initialListFilters?.filter_project_ids;
+    if (fromInitial && fromInitial.length > 0) return [...fromInitial];
+    const fromStored = storedListFilters?.filter_project_ids;
+    if (fromStored && fromStored.length > 0) return [...fromStored];
+    return [];
+  });
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => {
+    const fromInitial = initialListFilters?.filter_tag_ids;
+    if (fromInitial && fromInitial.length > 0) return [...fromInitial];
+    const fromStored = storedListFilters?.filter_tag_ids;
+    if (fromStored && fromStored.length > 0) return [...fromStored];
+    return [];
+  });
+  const persistedSelectedStatuses = useMemo(
+    () => initialListFilters?.selected_statuses ?? storedListFilters?.selected_statuses ?? [],
+    [initialListFilters?.selected_statuses, storedListFilters?.selected_statuses]
+  );
 
   // Tracks the column a card is being dragged into, for immediate synchronous
   // re-render of SortableContext items (shows the insertion gap in the target column).
@@ -209,29 +245,114 @@ export default function KanbanBoard({
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [projectId, tickets]);
+  const tagOptions = useMemo(
+    () => buildTagFilterOptions(tagsByTicketId as Record<string, Ticket['tags']> | undefined),
+    [tagsByTicketId]
+  );
 
-  const toggleFilteredProject = useCallback((projectFilterId: string) => {
-    setFilteredProjectIds(prev =>
-      prev.includes(projectFilterId)
-        ? prev.filter(id => id !== projectFilterId)
-        : [...prev, projectFilterId]
-    );
-  }, []);
+  const saveListFilters = useCallback(
+    (nextProjectIds: string[], nextTagIds: string[]) => {
+      const nextFilters = normalizeTicketListFilters({
+        selected_statuses: persistedSelectedStatuses,
+        filter_project_ids: projectId ? [] : nextProjectIds,
+        filter_tag_ids: nextTagIds
+      });
+
+      if (projectId) {
+        startTransition(() => {
+          void upsertProjectUserPreferencesAction(projectId, { list_filters: nextFilters });
+        });
+        return;
+      }
+
+      try {
+        writeStoredListFilters(nextFilters);
+      } catch {
+        // ignore localStorage errors
+      }
+    },
+    [persistedSelectedStatuses, projectId, startTransition]
+  );
+
+  const toggleFilteredProject = useCallback(
+    (projectFilterId: string) => {
+      setFilteredProjectIds(prev => {
+        const next = prev.includes(projectFilterId)
+          ? prev.filter(id => id !== projectFilterId)
+          : [...prev, projectFilterId];
+        queueMicrotask(() => {
+          saveListFilters(next, selectedTagIds);
+        });
+        return next;
+      });
+    },
+    [saveListFilters, selectedTagIds]
+  );
 
   const clearProjectFilter = useCallback(() => {
     setFilteredProjectIds([]);
-  }, []);
+    saveListFilters([], selectedTagIds);
+  }, [saveListFilters, selectedTagIds]);
+
+  const toggleTagFilter = useCallback(
+    (tagId: string) => {
+      setSelectedTagIds(prev => {
+        const next = prev.includes(tagId)
+          ? prev.filter(currentTagId => currentTagId !== tagId)
+          : [...prev, tagId];
+        queueMicrotask(() => {
+          saveListFilters(filteredProjectIds, next);
+        });
+        return next;
+      });
+    },
+    [filteredProjectIds, saveListFilters]
+  );
+
+  const clearTagFilter = useCallback(() => {
+    setSelectedTagIds([]);
+    saveListFilters(filteredProjectIds, []);
+  }, [filteredProjectIds, saveListFilters]);
 
   const displayedTickets = useMemo(
     () =>
-      filteredProjectIds.length === 0
-        ? ticketsWithIndicators
-        : ticketsWithIndicators.filter(t => {
-            const optionId = t.project_id ?? PERSONAL_PROJECT_FILTER_ID;
-            return filteredProjectIds.includes(optionId);
-          }),
-    [filteredProjectIds, ticketsWithIndicators]
+      ticketsWithIndicators
+        .filter(t => {
+          const matchesProject =
+            filteredProjectIds.length === 0 ||
+            filteredProjectIds.includes(t.project_id ?? PERSONAL_PROJECT_FILTER_ID);
+          const matchesTag =
+            selectedTagIds.length === 0 ||
+            (tagsByTicketId?.[t.id] ?? []).some(tag =>
+              selectedTagIds.includes(tag.tagDefinitionId)
+            );
+          return matchesProject && matchesTag;
+        })
+        .map(ticket => ({
+          ...ticket,
+          tags: tagsByTicketId?.[ticket.id] ?? []
+        })),
+    [filteredProjectIds, selectedTagIds, tagsByTicketId, ticketsWithIndicators]
   );
+
+  useEffect(() => {
+    if (projectId) return;
+    if (filteredProjectIds.length === 0) return;
+    const validIds = new Set(projectOptions.map(project => project.id));
+    const next = filteredProjectIds.filter(id => validIds.has(id));
+    if (areFilterIdsEqual(next, filteredProjectIds)) return;
+    saveListFilters(next, selectedTagIds);
+    setFilteredProjectIds(next);
+  }, [filteredProjectIds, projectId, projectOptions, saveListFilters, selectedTagIds]);
+
+  useEffect(() => {
+    if (selectedTagIds.length === 0) return;
+    const validIds = new Set(tagOptions.map(tag => tag.id));
+    const next = selectedTagIds.filter(id => validIds.has(id));
+    if (areFilterIdsEqual(next, selectedTagIds)) return;
+    saveListFilters(filteredProjectIds, next);
+    setSelectedTagIds(next);
+  }, [filteredProjectIds, saveListFilters, selectedTagIds, tagOptions]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -640,8 +761,12 @@ export default function KanbanBoard({
             projectId={projectId}
             projectOptions={projectOptions}
             filteredProjectIds={filteredProjectIds}
+            tagOptions={tagOptions}
+            selectedTagIds={selectedTagIds}
             onToggleFilterProject={toggleFilteredProject}
             onClearProjectFilter={clearProjectFilter}
+            onToggleTag={toggleTagFilter}
+            onClearTagFilter={clearTagFilter}
             columns={sortedColumns}
             visibleSlugs={visibleSlugs}
             showUncategorized={uncategorized.length > 0}

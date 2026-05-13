@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { saveScheduledTicketVisibilityDaysAction } from '@/lib/actions/scheduled-ticket-visibility-preference';
 import { ticketQueryKeys } from '@/lib/client-data/tickets/query-keys';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -38,10 +39,6 @@ function formatDaysLabel(days: number): string {
   return `${days} days ahead`;
 }
 
-function formatTriggerLabel(days: number): string {
-  return days <= 0 ? 'Upcoming: due now' : `Upcoming: ${days}d`;
-}
-
 export default function ScheduledTicketVisibilityControl({
   scheduledVisibilityDays
 }: {
@@ -61,12 +58,23 @@ export default function ScheduledTicketVisibilityControl({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Clock3 className="h-4 w-4" />
-          {formatTriggerLabel(selectedDays)}
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              aria-label={`Scheduled ticket visibility: ${formatDaysLabel(selectedDays)}`}
+            >
+              <Clock3 className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {`Choose how far ahead scheduled tickets appear. Current: ${formatDaysLabel(selectedDays)}.`}
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" className="w-44">
         <DropdownMenuLabel>Show scheduled tickets</DropdownMenuLabel>
         <DropdownMenuSeparator />

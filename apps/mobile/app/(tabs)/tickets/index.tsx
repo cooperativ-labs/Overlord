@@ -1,5 +1,6 @@
 import { GlassView } from 'expo-glass-effect';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,13 +22,73 @@ import {
   resolvePreferredStatusNameByType,
   type SortMode,
   type StatusFilter,
+  type TagFilterOption,
   type TicketStatusDefinition,
+  type TicketTagSummary,
   type TicketWithProject,
   type ViewMode
 } from './components/shared';
 import { TicketsResults } from './components/TicketsResults';
 import { TicketsScreenFilters } from './components/TicketsScreenFilters';
 import { createTicketsScreenStyles } from './components/TicketsScreenStyles';
+
+const TICKETS_FILTER_PREFERENCES_KEY = 'mobile-ticket-screen-filters';
+
+type TicketFilterPreferences = {
+  sortMode: SortMode;
+  statusFilter: StatusFilter;
+  viewMode: ViewMode;
+  selectedTagIds: string[];
+};
+
+function parseTicketFilterPreferences(raw: string | null): TicketFilterPreferences | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      sortMode:
+        parsed.sortMode === 'created' || parsed.sortMode === 'priority'
+          ? parsed.sortMode
+          : 'updated',
+      statusFilter: Array.isArray(parsed.statusFilter)
+        ? parsed.statusFilter.filter((value): value is string => typeof value === 'string')
+        : [],
+      viewMode: parsed.viewMode === 'calendar' ? 'calendar' : 'list',
+      selectedTagIds: Array.isArray(parsed.selectedTagIds)
+        ? parsed.selectedTagIds.filter((value): value is string => typeof value === 'string')
+        : []
+    };
+  } catch {
+    return null;
+  }
+}
+
+function loadTicketFilterPreferences(): TicketFilterPreferences | null {
+  try {
+    return parseTicketFilterPreferences(SecureStore.getItem(TICKETS_FILTER_PREFERENCES_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function saveTicketFilterPreferences(preferences: TicketFilterPreferences) {
+  void SecureStore.setItemAsync(TICKETS_FILTER_PREFERENCES_KEY, JSON.stringify(preferences), {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
+  }).catch(() => undefined);
+}
+
+function buildTagOptions(tickets: TicketWithProject[]): TagFilterOption[] {
+  const byId = new Map<string, TicketTagSummary>();
+  for (const ticket of tickets) {
+    for (const tag of ticket.tags ?? []) {
+      if (!byId.has(tag.id)) {
+        byId.set(tag.id, tag);
+      }
+    }
+  }
+  return [...byId.values()].sort((left, right) => left.label.localeCompare(right.label));
+}
 
 export default function TicketsScreen() {
   const router = useRouter();
@@ -38,6 +99,9 @@ export default function TicketsScreen() {
   const colors = useThemeColors();
   const styles = useThemedStyles(createTicketsScreenStyles);
   const glassAvailable = useGlassAvailable();
+  const [storedPreferences] = useState<TicketFilterPreferences | null>(() =>
+    loadTicketFilterPreferences()
+  );
 
   useEffect(() => {
     if (projectIdParam) selectProject(projectIdParam);
@@ -50,13 +114,19 @@ export default function TicketsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [sortMode, setSortMode] = useState<SortMode>('updated');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>([]);
+  const [sortMode, setSortMode] = useState<SortMode>(storedPreferences?.sortMode ?? 'updated');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    storedPreferences?.statusFilter ?? []
+  );
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(
+    storedPreferences?.selectedTagIds ?? []
+  );
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [viewMode, setViewMode] = useState<ViewMode>(storedPreferences?.viewMode ?? 'list');
   const [collapsedStatuses, setCollapsedStatuses] = useState<Set<string>>(new Set());
   const [statusDefinitions, setStatusDefinitions] = useState<TicketStatusDefinition[]>([]);
 
@@ -124,12 +194,51 @@ export default function TicketsScreen() {
               assignedByTicket.set(objective.ticket_id, objective.assigned_agent);
             }
           }
+          const ticketIds = (data ?? []).map(ticket => ticket.id);
+          const tagMap = new Map<string, Map<string, TicketTagSummary>>();
+          if (ticketIds.length > 0) {
+            const { data: tagRows, error: tagError } = await supabase
+              .from('ticket_tag_assignments')
+              .select(
+                'ticket_id, tag_definition_id, project_tag_definitions(label,color,is_active)'
+              )
+              .in('ticket_id', ticketIds);
+
+            if (tagError) {
+              Alert.alert('Unable to load ticket tags', tagError.message);
+              return;
+            }
+
+            for (const row of tagRows ?? []) {
+              const definition = (
+                row as unknown as {
+                  project_tag_definitions:
+                    | Array<{ label: string; color: string | null; is_active: boolean }>
+                    | { label: string; color: string | null; is_active: boolean }
+                    | null;
+                }
+              ).project_tag_definitions;
+              const tagDefinition = Array.isArray(definition) ? definition[0] : definition;
+              if (!tagDefinition?.is_active) continue;
+              if (!tagMap.has(row.ticket_id)) {
+                tagMap.set(row.ticket_id, new Map());
+              }
+              tagMap.get(row.ticket_id)!.set(row.tag_definition_id, {
+                id: row.tag_definition_id,
+                label: tagDefinition.label,
+                color: tagDefinition.color
+              });
+            }
+          }
           setStatusDefinitions((statusRows ?? []) as TicketStatusDefinition[]);
           setTickets(
             data.map(t => ({
               ...t,
               assigned_agent: assignedByTicket.get(t.id) ?? null,
-              has_executing_objective: executingTicketIds.has(t.id)
+              has_executing_objective: executingTicketIds.has(t.id),
+              tags: [...(tagMap.get(t.id)?.values() ?? [])].sort((a, b) =>
+                a.label.localeCompare(b.label)
+              )
             })) as TicketWithProject[]
           );
           return;
@@ -235,6 +344,12 @@ export default function TicketsScreen() {
       });
     }
 
+    if (selectedTagIds.length > 0) {
+      result = result.filter(ticket =>
+        (ticket.tags ?? []).some(tag => selectedTagIds.includes(tag.id))
+      );
+    }
+
     const priorityWeight: Record<string, number> = {
       urgent: 0,
       high: 1,
@@ -255,7 +370,8 @@ export default function TicketsScreen() {
     }
 
     return result;
-  }, [tickets, statusFilter, search, sortMode]);
+  }, [tickets, statusFilter, search, selectedTagIds, sortMode]);
+  const tagOptions = useMemo(() => buildTagOptions(tickets), [tickets]);
 
   const statusFilterOptions = useMemo(
     () => buildStatusFilterOptions(statusDefinitions, tickets),
@@ -287,6 +403,24 @@ export default function TicketsScreen() {
       return next.length > 0 ? next : [];
     });
   }, [statusFilter.length, statusFilterOptions]);
+
+  useEffect(() => {
+    saveTicketFilterPreferences({
+      sortMode,
+      statusFilter,
+      viewMode,
+      selectedTagIds
+    });
+  }, [selectedTagIds, sortMode, statusFilter, viewMode]);
+
+  useEffect(() => {
+    if (selectedTagIds.length === 0) return;
+    const validIds = new Set(tagOptions.map(tag => tag.id));
+    setSelectedTagIds(current => {
+      const next = current.filter(id => validIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [selectedTagIds.length, tagOptions]);
 
   const persistReorder = useCallback(
     async (
@@ -478,35 +612,49 @@ export default function TicketsScreen() {
         projectMenuOpen={projectMenuOpen}
         sortMenuOpen={sortMenuOpen}
         statusMenuOpen={statusMenuOpen}
+        tagMenuOpen={tagMenuOpen}
         sortMode={sortMode}
         statusFilter={statusFilter}
         statusFilterLabel={statusFilterLabel}
         statusFilterOptions={statusFilterOptions}
+        selectedTagIds={selectedTagIds}
+        tagOptions={tagOptions}
         projects={projects}
         filterProjectId={filterProjectId}
         allStatusesSelected={allStatusesSelected}
         onToggleProjectMenu={() => {
           setSortMenuOpen(false);
           setStatusMenuOpen(false);
+          setTagMenuOpen(false);
           setViewMenuOpen(false);
           setProjectMenuOpen(open => !open);
         }}
         onToggleSortMenu={() => {
           setProjectMenuOpen(false);
           setStatusMenuOpen(false);
+          setTagMenuOpen(false);
           setViewMenuOpen(false);
           setSortMenuOpen(open => !open);
         }}
         onToggleStatusMenu={() => {
           setProjectMenuOpen(false);
           setSortMenuOpen(false);
+          setTagMenuOpen(false);
           setViewMenuOpen(false);
           setStatusMenuOpen(open => !open);
+        }}
+        onToggleTagMenu={() => {
+          setProjectMenuOpen(false);
+          setSortMenuOpen(false);
+          setStatusMenuOpen(false);
+          setViewMenuOpen(false);
+          setTagMenuOpen(open => !open);
         }}
         onToggleViewMenu={() => {
           setProjectMenuOpen(false);
           setSortMenuOpen(false);
           setStatusMenuOpen(false);
+          setTagMenuOpen(false);
           setViewMenuOpen(open => !open);
         }}
         onSelectView={mode => {
@@ -532,6 +680,14 @@ export default function TicketsScreen() {
           });
         }}
         onSelectAllStatuses={() => setStatusFilter([])}
+        onSelectTag={tagId => {
+          setSelectedTagIds(current =>
+            current.includes(tagId)
+              ? current.filter(currentTagId => currentTagId !== tagId)
+              : [...current, tagId]
+          );
+        }}
+        onSelectAllTags={() => setSelectedTagIds([])}
       />
       <TicketsResults
         loading={loading}

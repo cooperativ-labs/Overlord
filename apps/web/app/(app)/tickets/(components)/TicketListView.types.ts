@@ -1,5 +1,7 @@
 import type { ComponentType } from 'react';
 
+export type { TicketTagFilterOption } from '@/lib/helpers/ticket-tag-filters';
+
 export type SortKey = 'updated_at' | 'status' | 'priority';
 
 export const SORT_LABELS: Record<SortKey, string> = {
