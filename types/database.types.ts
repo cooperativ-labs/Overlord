@@ -726,7 +726,7 @@ export type Database = {
           id: string;
           model_identifier: string | null;
           objective: string;
-          state: string;
+          state: Database['public']['Enums']['objective_state'];
           ticket_id: string;
           title: string | null;
           updated_at: string;
@@ -740,7 +740,7 @@ export type Database = {
           id?: string;
           model_identifier?: string | null;
           objective?: string;
-          state?: string;
+          state?: Database['public']['Enums']['objective_state'];
           ticket_id: string;
           title?: string | null;
           updated_at?: string;
@@ -754,7 +754,7 @@ export type Database = {
           id?: string;
           model_identifier?: string | null;
           objective?: string;
-          state?: string;
+          state?: Database['public']['Enums']['objective_state'];
           ticket_id?: string;
           title?: string | null;
           updated_at?: string;
@@ -1959,6 +1959,7 @@ export type Database = {
         | 'claude_app'
         | 'claude_code'
         | 'other';
+      objective_state: 'future' | 'draft' | 'submitted' | 'executing' | 'complete';
       organization_role: 'VIEWER' | 'AGENT' | 'MANAGER' | 'ADMIN';
       session_state: 'attached' | 'idle' | 'blocked' | 'completed' | 'disconnected';
       ticket_event_type:
@@ -2106,6 +2107,7 @@ export const Constants = {
   public: {
     Enums: {
       connection_method: ['mcp', 'cli', 'rest', 'chatgpt', 'claude_app', 'claude_code', 'other'],
+      objective_state: ['future', 'draft', 'submitted', 'executing', 'complete'],
       organization_role: ['VIEWER', 'AGENT', 'MANAGER', 'ADMIN'],
       session_state: ['attached', 'idle', 'blocked', 'completed', 'disconnected'],
       ticket_event_type: [

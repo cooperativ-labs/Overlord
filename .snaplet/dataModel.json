@@ -619,6 +619,92 @@
         }
       ]
     },
+    "app_features": {
+      "id": "public.app_features",
+      "schemaName": "public",
+      "tableName": "app_features",
+      "fields": [
+        {
+          "id": "public.app_features.key",
+          "name": "key",
+          "columnName": "key",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.app_features.name",
+          "name": "name",
+          "columnName": "name",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.app_features.description",
+          "name": "description",
+          "columnName": "description",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.app_features.is_enabled",
+          "name": "is_enabled",
+          "columnName": "is_enabled",
+          "type": "bool",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.app_features.updated_at",
+          "name": "updated_at",
+          "columnName": "updated_at",
+          "type": "timestamptz",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "app_features_pkey",
+          "fields": [
+            "key"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
     "artifacts": {
       "id": "public.artifacts",
       "schemaName": "public",
@@ -6772,7 +6858,7 @@
           "id": "public.objectives.state",
           "name": "state",
           "columnName": "state",
-          "type": "text",
+          "type": "objective_state",
           "isRequired": true,
           "kind": "scalar",
           "isList": false,
@@ -6985,6 +7071,13 @@
           "name": "objectives_id_ticket_id_key",
           "fields": [
             "id",
+            "ticket_id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "objectives_one_draft_per_ticket_idx",
+          "fields": [
             "ticket_id"
           ],
           "nullNotDistinct": false
@@ -8772,8 +8865,7 @@
         {
           "name": "project_tag_definitions_project_id_label_key",
           "fields": [
-            "project_id",
-            "label"
+            "project_id"
           ],
           "nullNotDistinct": false
         }
@@ -10824,6 +10916,50 @@
           "name": "secrets_name_idx",
           "fields": [
             "name"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "seed_files": {
+      "id": "supabase_migrations.seed_files",
+      "schemaName": "supabase_migrations",
+      "tableName": "seed_files",
+      "fields": [
+        {
+          "id": "supabase_migrations.seed_files.path",
+          "name": "path",
+          "columnName": "path",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "supabase_migrations.seed_files.hash",
+          "name": "hash",
+          "columnName": "hash",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "seed_files_pkey",
+          "fields": [
+            "path"
           ],
           "nullNotDistinct": false
         }
@@ -16181,6 +16317,26 @@
         },
         {
           "name": "rest"
+        }
+      ]
+    },
+    "objective_state": {
+      "schemaName": "public",
+      "values": [
+        {
+          "name": "complete"
+        },
+        {
+          "name": "draft"
+        },
+        {
+          "name": "executing"
+        },
+        {
+          "name": "future"
+        },
+        {
+          "name": "submitted"
         }
       ]
     },

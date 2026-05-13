@@ -19,7 +19,7 @@ import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutatio
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { convertInlineFileMentionsToMarkdown } from '@/lib/helpers/file-mentions';
 import type { AutoListContinuationMode } from '@/lib/helpers/list-continuation';
-import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
+import type { TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
 
 const updateObjectiveBodyActionWithRetry = withElectronActionRetry(updateObjectiveBodyAction);
@@ -56,6 +56,10 @@ type Props = {
   children?: React.ReactNode;
   /** When set with field objective, edits persist to this objectives row instead of upserting the latest draft. */
   objectiveRowId?: string | null;
+  /** Row state for `objectives` when editing an objective body (used for empty-future blur cleanup). */
+  objectiveState?: string | null;
+  /** Caps multiline editor height (pixels); scroll stays on the textarea. */
+  textareaMaxHeightPx?: number;
 };
 
 export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function InlineEditField(
@@ -75,7 +79,9 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     seamless = false,
     autoListContinuation = false,
     children,
-    objectiveRowId
+    objectiveRowId,
+    objectiveState,
+    textareaMaxHeightPx
   }: Props,
   ref
 ) {
@@ -129,24 +135,6 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
   });
   const effectiveMentionPaths = canMentionFiles ? workspaceFiles : [];
 
-  const autoResize = useCallback(() => {
-    if (!multiline) return;
-    const el = inputRef.current as EditableTextareaHandle | null;
-    if (!el) return;
-    // Preserve scroll position: setting height to 'auto' briefly collapses the
-    // textarea, which triggers a browser auto-scroll to keep the cursor visible.
-    const scrollY = window.scrollY;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-    window.scrollTo(0, scrollY);
-  }, [multiline]);
-
-  useEffect(() => {
-    if (editing && multiline) {
-      autoResize();
-    }
-  }, [editing, multiline, value, autoResize]);
-
   useEffect(() => {
     if (searchParams.get('focus') === field) {
       setEditing(true);
@@ -175,7 +163,17 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
   }
 
   function save() {
-    if (value === savedValue) {
+    const trimmed = value.trim();
+    const isNoop = value === savedValue;
+    const shouldSyncEmptyFutureOnNoopBlur =
+      isNoop &&
+      alwaysEditing &&
+      field === 'objective' &&
+      Boolean(objectiveRowId) &&
+      objectiveState === 'future' &&
+      trimmed === '';
+
+    if (isNoop && !shouldSyncEmptyFutureOnNoopBlur) {
       if (!alwaysEditing) {
         setEditing(false);
       }
@@ -243,11 +241,11 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
               autoListContinuation={autoListContinuation}
               className={cn('w-full focus:outline-none border-none', children && 'pr-3')}
               disabled={pending}
+              maxHeightPx={textareaMaxHeightPx}
               value={value}
               onValueChange={setValue}
               mentionPaths={effectiveMentionPaths}
               onBlur={save}
-              onChange={autoResize}
               onKeyDown={handleKeyDown}
             />
             {children ? (

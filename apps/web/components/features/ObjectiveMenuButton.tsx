@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -10,11 +10,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { markObjectiveDraftAction, markObjectiveExecutedAction } from '@/lib/actions/tickets';
+import {
+  deleteFutureObjectiveAction,
+  markObjectiveDraftAction,
+  markObjectiveExecutedAction
+} from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 
 const markObjectiveDraftActionWithRetry = withElectronActionRetry(markObjectiveDraftAction);
 const markObjectiveExecutedActionWithRetry = withElectronActionRetry(markObjectiveExecutedAction);
+const deleteFutureObjectiveActionWithRetry = withElectronActionRetry(deleteFutureObjectiveAction);
 
 type ObjectiveMenuButtonProps = {
   ticketId: string;
@@ -43,8 +48,15 @@ export function ObjectiveMenuButton({
     });
   }
 
+  function handleDeleteFuture() {
+    startTransition(async () => {
+      await deleteFutureObjectiveActionWithRetry({ ticketId, objectiveId });
+    });
+  }
+
   const canShowMarkComplete = state !== 'complete' && state !== 'future';
   const canShowMarkDraft = state !== 'draft' && state !== 'future';
+  const canShowDeleteFuture = state === 'future';
 
   return (
     <DropdownMenu>
@@ -80,6 +92,19 @@ export function ObjectiveMenuButton({
             }}
           >
             Mark draft
+          </DropdownMenuItem>
+        ) : null}
+        {canShowDeleteFuture ? (
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            disabled={pending}
+            onSelect={event => {
+              event.preventDefault();
+              handleDeleteFuture();
+            }}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>

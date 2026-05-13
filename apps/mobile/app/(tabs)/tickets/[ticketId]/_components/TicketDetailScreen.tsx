@@ -359,7 +359,7 @@ export default function TicketDetailScreen() {
       })
     );
     Alert.alert('Copied', 'Launch command copied.');
-  }, [assignedSelection, resolvedAssignedSelection, ticket]);
+  }, [assignedSelection, cliTicketId, resolvedAssignedSelection, ticket]);
 
   const handleCopyTicketId = useCallback(async () => {
     if (!ticket) return;

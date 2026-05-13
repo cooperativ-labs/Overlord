@@ -1,13 +1,11 @@
 'use client';
 
-import { useMemo, useTransition } from 'react';
+import { useMemo } from 'react';
 
+import { AddTicketObjectiveButton } from '@/components/features/AddTicketObjectiveButton';
 import { DraftObjective } from '@/components/features/DraftObjective';
 import { ObjectiveCollapsibleItem } from '@/components/features/ObjectiveCollapsibleItem';
-import { Button } from '@/components/ui/button';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
-import { createEmptyDraftObjectiveAction } from '@/lib/actions/tickets';
-import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import {
   parseObjectiveAssignedAgent,
@@ -17,10 +15,6 @@ import { useTicketObjectivesRealtime } from '@/lib/hooks/use-ticket-objectives-r
 import { sortObjectivesByCreatedAtAscending } from '@/lib/objectives';
 import type { AgentCommands } from '@/lib/overlord/launch-commands';
 import type { Database } from '@/types/database.types';
-
-const createEmptyDraftObjectiveActionWithRetry = withElectronActionRetry(
-  createEmptyDraftObjectiveAction
-);
 
 type ObjectiveRow = Pick<
   Database['public']['Tables']['objectives']['Row'],
@@ -99,7 +93,10 @@ export function TicketObjectivesSection({
       (futureObjectivesEnabled && lastEditable?.state === 'future')) &&
     lastEditable.objective.trim() === '';
 
-  const [addingObjective, startAddObjective] = useTransition();
+  const hasAnyDraftObjective = useMemo(
+    () => objectives.some(objective => objective.state === 'draft'),
+    [objectives]
+  );
 
   const executedObjectives = objectives.filter(
     objective =>
@@ -133,17 +130,10 @@ export function TicketObjectivesSection({
         {editableObjectives.length === 0 ? (
           <div className="mt-2 space-y-2">
             <p className="text-sm text-muted-foreground">No objectives yet.</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={addingObjective}
-              onClick={() =>
-                startAddObjective(() => void createEmptyDraftObjectiveActionWithRetry({ ticketId }))
-              }
-            >
-              Add objective
-            </Button>
+            <AddTicketObjectiveButton
+              ticketId={ticketId}
+              futureObjectivesEnabled={futureObjectivesEnabled}
+            />
           </div>
         ) : (
           <>
@@ -175,19 +165,11 @@ export function TicketObjectivesSection({
               ))}
             </div>
             <div className="mt-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={addingObjective || hasTrailingEmptyDraft}
-                onClick={() =>
-                  startAddObjective(
-                    () => void createEmptyDraftObjectiveActionWithRetry({ ticketId })
-                  )
-                }
-              >
-                Add objective
-              </Button>
+              <AddTicketObjectiveButton
+                futureObjectivesEnabled={futureObjectivesEnabled}
+                disabled={hasTrailingEmptyDraft || hasAnyDraftObjective}
+                ticketId={ticketId}
+              />
             </div>
           </>
         )}

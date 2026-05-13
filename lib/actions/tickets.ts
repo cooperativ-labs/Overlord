@@ -1394,13 +1394,26 @@ export async function updateObjectiveBodyAction({
   }
 
   const normalized = body.trim();
-  const { error: updateError } = await supabase
-    .from('objectives')
-    .update({ objective: normalized })
-    .eq('id', objectiveId);
 
-  if (updateError) {
-    throw new Error(updateError.message);
+  if (row.state === 'future' && normalized === '') {
+    const { error: deleteError } = await supabase
+      .from('objectives')
+      .delete()
+      .eq('id', objectiveId)
+      .eq('ticket_id', ticketId);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+  } else {
+    const { error: updateError } = await supabase
+      .from('objectives')
+      .update({ objective: normalized })
+      .eq('id', objectiveId);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
   }
 
   const { data: ticket, error: ticketError } = await supabase
@@ -1444,7 +1457,15 @@ export async function createEmptyDraftObjectiveAction({
 
   const hasDraft = editableObjectives?.some(objective => objective.state === 'draft') ?? false;
   const lastEditable = editableObjectives?.[editableObjectives.length - 1] ?? null;
-  if (hasDraft && lastEditable && lastEditable.objective.trim() === '') {
+  const lastObjectiveText = lastEditable?.objective?.trim() ?? '';
+
+  if (futureObjectivesEnabled) {
+    if (hasDraft && lastObjectiveText === '') {
+      return;
+    }
+  } else if (hasDraft) {
+    // objectives_one_draft_per_ticket_idx allows only one draft per ticket; empty text is
+    // handled by the check above path only when future objectives can queue another row.
     return;
   }
 
@@ -1535,6 +1556,63 @@ export async function promoteFutureObjectiveAction({
   await supabase.from('ticket_events').insert({
     event_type: 'system',
     summary: 'Future objective promoted to draft.',
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
+export async function deleteFutureObjectiveAction({
+  ticketId,
+  objectiveId
+}: {
+  ticketId: string;
+  objectiveId: string;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const ticket = await assertTicketAccess(supabase, ticketId);
+  const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
+
+  if (!futureObjectivesEnabled) {
+    throw new Error('Future objectives are disabled.');
+  }
+
+  const { data: objective, error: objectiveError } = await supabase
+    .from('objectives')
+    .select('id,state')
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId)
+    .maybeSingle();
+
+  if (objectiveError) {
+    throw new Error(objectiveError.message);
+  }
+  if (!objective) {
+    throw new Error('Objective not found.');
+  }
+  if (objective.state !== 'future') {
+    throw new Error('Only future objectives can be deleted here.');
+  }
+
+  const { error: deleteError } = await supabase
+    .from('objectives')
+    .delete()
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId);
+
+  if (deleteError) {
+    throw new Error(deleteError.message);
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: 'Future objective deleted.',
     ticket_id: ticketId
   });
 

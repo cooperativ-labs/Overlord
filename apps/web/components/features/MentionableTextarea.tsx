@@ -29,6 +29,8 @@ type MentionableTextareaProps = Omit<
   onMentionSelect?: (filePath: string) => void;
   /** Continue `1. ` / `- ` lists on newline; use `shift-enter` when plain Enter is reserved (e.g. submit). */
   autoListContinuation?: AutoListContinuationMode | false;
+  /** When set, caps auto-grown height so the textarea scrolls internally instead of expanding past this pixel height. */
+  maxHeightPx?: number;
 };
 
 export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, MentionableTextareaProps>(
@@ -49,6 +51,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       onMentionMenuOpenChange,
       onMentionSelect,
       autoListContinuation = false,
+      maxHeightPx,
       ...props
     },
     forwardedRef
@@ -195,9 +198,16 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
     React.useEffect(() => {
       const textarea = textareaRef.current;
       if (!textarea) return;
+      const prevWindowScrollY = window.scrollY;
+      const prevTextareaScrollTop = textarea.scrollTop;
       textarea.style.height = 'auto';
-      textarea.style.height = `${textarea.scrollHeight}px`;
-    }, [value]);
+      const cap = maxHeightPx ?? Number.POSITIVE_INFINITY;
+      const nextHeight = Math.min(textarea.scrollHeight, cap);
+      textarea.style.height = `${nextHeight}px`;
+      window.scrollTo(0, prevWindowScrollY);
+      const maxScrollTop = Math.max(0, textarea.scrollHeight - textarea.clientHeight);
+      textarea.scrollTop = Math.min(prevTextareaScrollTop, maxScrollTop);
+    }, [value, maxHeightPx]);
 
     const handleCollapsedMentionBackspace = React.useCallback(
       (event: React.KeyboardEvent<HTMLTextAreaElement>) => {

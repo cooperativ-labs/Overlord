@@ -5,6 +5,8 @@ import { parseTicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { deriveTitleFromObjective } from '@/lib/helpers/tickets';
 import type { Database, Json } from '@/types/database.types';
 
+export type ObjectiveState = Database['public']['Enums']['objective_state'];
+
 type ObjectiveClient = SupabaseClient<Database>;
 
 type DraftObjective = Pick<
@@ -23,7 +25,12 @@ type ObjectiveExecutionSnapshot = {
 };
 
 function isObjectiveStateConstraintError(error: { code?: string; message?: string } | null) {
-  return error?.code === '23514' || error?.message?.includes('objectives_state_check') === true;
+  const message = error?.message ?? '';
+  return (
+    error?.code === '23514' ||
+    message.includes('objectives_state_check') ||
+    message.includes('objectives_non_draft_requires_objective')
+  );
 }
 
 function normalizeObjectiveText(value: string | null | undefined): string {

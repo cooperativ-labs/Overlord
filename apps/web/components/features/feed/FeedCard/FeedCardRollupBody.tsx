@@ -68,7 +68,6 @@ export function FeedCardRollupBody({
   const hrefFor = (path: string) =>
     workspaceRoot ? buildEditorHref(path, workspaceRoot, editorScheme) : null;
 
-
   return (
     <>
       <div className="flex items-start gap-2.5 border-b border-border/60 px-5 pb-3 pt-4">
@@ -242,8 +241,8 @@ export function FeedCardRollupBody({
       </div>
 
       {actionsRequiredFromObjectives.length > 0 ||
-        tradeoffsFromObjectives.length > 0 ||
-        ticketsCreated.length > 0 ? (
+      tradeoffsFromObjectives.length > 0 ||
+      ticketsCreated.length > 0 ? (
         <div className="space-y-3 border-t border-border/60 px-5 py-4">
           {actionsRequiredFromObjectives.length > 0 ? (
             <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800/40 dark:bg-blue-950/20">

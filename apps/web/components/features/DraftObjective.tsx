@@ -28,6 +28,9 @@ import { cn } from '@/lib/utils';
 
 const promoteFutureObjectiveActionWithRetry = withElectronActionRetry(promoteFutureObjectiveAction);
 
+/** Max height for the draft objective editor; overflow scrolls inside the textarea. */
+const DRAFT_OBJECTIVE_EDITOR_MAX_HEIGHT_PX = 450;
+
 type DraftObjectiveProps = {
   ticketId: string;
   organizationId?: number;
@@ -139,12 +142,14 @@ export function DraftObjective({
         field="objective"
         fileMentionPaths={fileMentionPaths}
         initialValue={initialValue}
-        inputClassName="text-base leading-relaxed max-h-[450px] overflow-y-auto"
+        inputClassName="text-base leading-relaxed"
         multiline
         objectiveRowId={objectiveId || undefined}
+        objectiveState={objectiveState}
         placeholder="Click to add an objective…"
         renderMarkdown
         seamless
+        textareaMaxHeightPx={DRAFT_OBJECTIVE_EDITOR_MAX_HEIGHT_PX}
         ticketId={ticketId}
         variant="textarea"
         workingDirectory={workingDirectory}

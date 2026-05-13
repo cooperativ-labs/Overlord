@@ -27,10 +27,11 @@ export function LoadingButton({
   errorText,
   reset = false,
   onClick,
+  disabled: disabledFromProps,
   ...props
 }: LoadingButtonProps) {
   const isLoading = buttonState === 'loading';
-  const isDisabled = buttonState === 'disabled' || isLoading;
+  const isDisabled = buttonState === 'disabled' || isLoading || Boolean(disabledFromProps);
 
   async function handleClick() {
     if (isDisabled || !onClick) return;
