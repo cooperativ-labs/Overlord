@@ -308,6 +308,7 @@ export default function TicketDetailScreen() {
     }
     return events;
   }, [events, activityFilter]);
+  const cliTicketId = ticket?.ticket_id ?? ticketId;
 
   const handleCopyPrompt = useCallback(
     async (context: 'cli' | 'web') => {
@@ -317,8 +318,7 @@ export default function TicketDetailScreen() {
       try {
         const { accessToken, organizationId } = await resolveLaunchOAuthSession();
         const platformUrl = resolvePlatformUrl();
-        const promptTicketId = ticket.ticket_id ?? ticket.id;
-        const url = new URL(`/api/protocol/context/${promptTicketId}`, `${platformUrl}/`);
+        const url = new URL(`/api/protocol/context/${cliTicketId}`, `${platformUrl}/`);
         url.searchParams.set('context', context);
         url.searchParams.set('mode', 'run');
         const response = await fetch(url.toString(), {
@@ -345,14 +345,13 @@ export default function TicketDetailScreen() {
         setCopyingPromptContext(null);
       }
     },
-    [ticket]
+    [cliTicketId, ticket]
   );
 
   const handleCopyCliCommand = useCallback(async () => {
     if (!ticket) return;
     const selectedSelection =
       assignedSelection ?? resolvedAssignedSelection ?? DEFAULT_AGENT_MODEL_SELECTION;
-    const cliTicketId = ticket.ticket_id ?? ticket.id;
     await Clipboard.setStringAsync(
       buildCliLaunchCommand(selectedSelection.agent, cliTicketId, {
         model: selectedSelection.model,
@@ -364,9 +363,9 @@ export default function TicketDetailScreen() {
 
   const handleCopyTicketId = useCallback(async () => {
     if (!ticket) return;
-    await Clipboard.setStringAsync(ticket.ticket_id ?? ticket.id);
+    await Clipboard.setStringAsync(cliTicketId);
     Alert.alert('Copied', 'Ticket ID copied to clipboard.');
-  }, [ticket]);
+  }, [cliTicketId, ticket]);
 
   const handleDeleteTicket = useCallback(async () => {
     if (!ticket) return;
@@ -1396,7 +1395,7 @@ export default function TicketDetailScreen() {
       />
       <TicketDetailContent
         ticket={ticket}
-        ticketId={ticketId}
+        ticketId={cliTicketId}
         titleDraft={titleDraft}
         editingTitle={editingTitle}
         dueLabel={dueLabel}
