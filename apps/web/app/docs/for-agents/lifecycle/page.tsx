@@ -121,8 +121,9 @@ ovld protocol deliver \\
 - Every meaningful git-tracked file change must be represented in \`changeRationales\`.
 - Do not send \`file_changes\` as an artifact. The rationales are the first-class record.
 - Formatting-only noise can be skipped.
+- Use \`--payload-json\` when the complete delivery object fits inline and shell quoting is manageable.
 - Use \`--payload-file -\` and stream the full JSON on stdin for larger payloads. Do not mix
-  \`--payload-file\` with \`--artifacts-json\` or \`--change-rationales-json\`.
+  \`--payload-json\` or \`--payload-file\` with \`--summary\`, \`--artifacts-json\`, or \`--change-rationales-json\`.
 
 \`\`\`bash
 cat delivery.json | ovld protocol deliver \\

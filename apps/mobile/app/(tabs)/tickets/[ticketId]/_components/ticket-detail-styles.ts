@@ -372,6 +372,48 @@ export const createStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
       minHeight: 100
     },
+    draftTabsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingBottom: 10,
+      flexGrow: 0
+    },
+    draftTab: {
+      minWidth: 34,
+      height: 32,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.secondary
+    },
+    draftTabSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+    },
+    draftTabLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.mutedForeground
+    },
+    draftTabLabelSelected: {
+      color: colors.foreground
+    },
+    draftTabAdd: {
+      minWidth: 38
+    },
+    draftTabAddDisabled: {
+      opacity: 0.45
+    },
+    draftTabAddLabel: {
+      fontSize: 20,
+      fontWeight: '300',
+      color: colors.mutedForeground,
+      lineHeight: 22
+    },
     draftInput: {
       color: colors.foreground,
       fontSize: 14,

@@ -2,7 +2,11 @@
 
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import type { CreateProjectResult, SidebarProject } from '@/lib/actions/project-types';
+import {
+  type CreateProjectResult,
+  emptyProjectSshSettings,
+  type SidebarProject
+} from '@/lib/actions/project-types';
 import {
   createProject,
   deleteProjectAction,
@@ -84,14 +88,8 @@ function removeProjectFromCache(queryClient: QueryClient, projectId: string) {
 
 function emptySshFields() {
   return {
+    ...emptyProjectSshSettings(),
     localWorkingDirectory: null,
-    sshCommand: null,
-    remoteWorkingDirectory: null,
-    sshHost: null,
-    sshPort: null,
-    sshUser: null,
-    sshAuthMethod: null,
-    sshPrivateKeyPath: null,
     remoteHelperInstalledAt: null,
     remoteHelperVersion: null
   } as const;

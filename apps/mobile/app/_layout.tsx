@@ -8,13 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/lib/auth-context';
-import {
-  type ThemeColors,
-  ThemeProvider,
-  useThemeColors,
-  useThemedStyles,
-  useThemePreference
-} from '@/lib/colors';
+import { type ThemeColors, ThemeProvider, useThemedStyles, useThemePreference } from '@/lib/colors';
 import { NotificationsProvider } from '@/lib/notifications';
 import { SelectedProjectProvider } from '@/lib/selected-project-context';
 import { ServerConnectionsProvider } from '@/lib/server-connections-context';
@@ -55,7 +49,6 @@ function RootLayoutContent() {
     SplashScreen.hideAsync();
   }, []);
 
-  const colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
   const { resolvedTheme } = useThemePreference();
 

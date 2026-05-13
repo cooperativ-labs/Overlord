@@ -1,8 +1,10 @@
 'use client';
 
-import { useRef } from 'react';
+import { ArrowUpCircle, ChevronDown, Loader2 } from 'lucide-react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 
 import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
+import { CliQuickstart } from '@/components/features/CliQuickstart';
 import { InlineEditField, type InlineEditFieldHandle } from '@/components/features/InlineEditField';
 import {
   ObjectiveAttachmentList,
@@ -10,14 +12,21 @@ import {
   useObjectiveAttachmentState
 } from '@/components/features/ObjectiveAttachmentUpload';
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
-import { AgentSplitButtonLive } from '@/components/features/TicketLiveProvider';
+import { AgentSplitButtonLive, useTicketLive } from '@/components/features/TicketLiveProvider';
+import { Button } from '@/components/ui/button';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
+import { promoteFutureObjectiveAction } from '@/lib/actions/tickets';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import {
+  getAgentTypeByIdentifier,
   getLaunchAgentTypeByIdentifier,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
+import type { AgentCommands } from '@/lib/overlord/launch-commands';
 import { cn } from '@/lib/utils';
+
+const promoteFutureObjectiveActionWithRetry = withElectronActionRetry(promoteFutureObjectiveAction);
 
 type DraftObjectiveProps = {
   ticketId: string;
@@ -32,7 +41,7 @@ type DraftObjectiveProps = {
   assignedAgent?: TicketAssignedAgent | null;
   projectId?: string | null;
   agentFlags?: Partial<Record<LaunchAgentTypeValue, string[]>>;
-  agentCommands?: Record<LaunchAgentTypeValue, string>;
+  agentCommands?: AgentCommands;
   sshCommand?: string | null;
   remoteWorkingDirectory?: string | null;
   hasProjectWorkingDirectory?: boolean;
@@ -57,7 +66,22 @@ export function DraftObjective({
   hasProjectWorkingDirectory
 }: DraftObjectiveProps) {
   const editFieldRef = useRef<InlineEditFieldHandle>(null);
+  const [cliQuickstartOpen, setCliQuickstartOpen] = useState(false);
+  const [promoting, startPromoteTransition] = useTransition();
+  const { session, events } = useTicketLive();
+  const activeAgentType = getAgentTypeByIdentifier(session?.agent_identifier ?? null);
   const showAgentControls = assignedAgent !== undefined;
+  const isFuture = objectiveState === 'future';
+  const splitButtonCommands = useMemo<Record<LaunchAgentTypeValue, string>>(
+    () => ({
+      claude: agentCommands?.launchCommands?.claudeCode ?? '',
+      codex: agentCommands?.launchCommands?.codex ?? '',
+      cursor: agentCommands?.launchCommands?.cursor ?? '',
+      gemini: agentCommands?.launchCommands?.gemini ?? '',
+      opencode: agentCommands?.launchCommands?.opencode ?? ''
+    }),
+    [agentCommands]
+  );
   const {
     attachments,
     uploading,
@@ -78,6 +102,12 @@ export function DraftObjective({
     initialAttachments
   });
   const isSubmitted = objectiveState === 'submitted';
+
+  function handlePromoteFuture() {
+    startPromoteTransition(async () => {
+      await promoteFutureObjectiveActionWithRetry({ ticketId, objectiveId });
+    });
+  }
 
   return (
     <div
@@ -111,6 +141,7 @@ export function DraftObjective({
         initialValue={initialValue}
         inputClassName="text-base leading-relaxed max-h-[450px] overflow-y-auto"
         multiline
+        objectiveRowId={objectiveId || undefined}
         placeholder="Click to add an objective…"
         renderMarkdown
         seamless
@@ -139,6 +170,28 @@ export function DraftObjective({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          leadingToolbarExtras={
+            isFuture ? null : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-0.5 px-2 text-xs text-muted-foreground"
+                aria-expanded={cliQuickstartOpen}
+                aria-controls="draft-objective-cli-quickstart"
+                onClick={() => setCliQuickstartOpen(open => !open)}
+              >
+                CLI
+                <ChevronDown
+                  className={cn(
+                    'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
+                    cliQuickstartOpen && 'rotate-180'
+                  )}
+                  aria-hidden
+                />
+              </Button>
+            )
+          }
         >
           <ObjectiveMenuButton
             canMarkExecuted={canMarkExecuted}
@@ -155,33 +208,58 @@ export function DraftObjective({
                 initialSelection={assignedAgent ?? null}
                 persistSelection
               />
-              <AgentSplitButtonLive
-                assignedSelection={assignedAgent ?? null}
-                defaultAgent={
-                  assignedAgent ? getLaunchAgentTypeByIdentifier(assignedAgent.agent) : undefined
-                }
-                ticketId={ticketId}
-                organizationId={organizationId}
-                projectId={projectId ?? null}
-                agentFlags={agentFlags}
-                commands={
-                  agentCommands ?? {
-                    claude: '',
-                    codex: '',
-                    cursor: '',
-                    gemini: '',
-                    opencode: ''
+              {isFuture ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 px-3 text-xs"
+                  disabled={promoting}
+                  onClick={handlePromoteFuture}
+                >
+                  {promoting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ArrowUpCircle className="h-3.5 w-3.5" />
+                  )}
+                  Promote
+                </Button>
+              ) : (
+                <AgentSplitButtonLive
+                  assignedSelection={assignedAgent ?? null}
+                  defaultAgent={
+                    assignedAgent ? getLaunchAgentTypeByIdentifier(assignedAgent.agent) : undefined
                   }
-                }
-                workingDirectory={workingDirectory}
-                sshCommand={sshCommand ?? null}
-                remoteWorkingDirectory={remoteWorkingDirectory ?? null}
-                hasProjectWorkingDirectory={hasProjectWorkingDirectory ?? false}
-                size="sm"
-              />
+                  ticketId={ticketId}
+                  organizationId={organizationId}
+                  projectId={projectId ?? null}
+                  agentFlags={agentFlags}
+                  commands={splitButtonCommands}
+                  workingDirectory={workingDirectory}
+                  sshCommand={sshCommand ?? null}
+                  remoteWorkingDirectory={remoteWorkingDirectory ?? null}
+                  hasProjectWorkingDirectory={hasProjectWorkingDirectory ?? false}
+                  submitObjectiveId={objectiveId}
+                  size="sm"
+                />
+              )}
             </>
           ) : null}
         </ObjectiveAttachmentUploadTrigger>
+        {cliQuickstartOpen && !isFuture ? (
+          <div
+            id="draft-objective-cli-quickstart"
+            className="border-t border-border/40 bg-muted/10 px-2 py-2"
+          >
+            <CliQuickstart
+              variant="embedded"
+              activeAgentValue={activeAgentType?.value}
+              externalSessionId={session?.external_session_id ?? null}
+              hasExecutedObjectives={events.length > 0}
+              agentCommands={agentCommands}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

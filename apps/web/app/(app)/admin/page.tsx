@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation';
 
 import { AgentModelOfferingsPanel } from '@/components/features/admin/AgentModelOfferingsPanel';
+import { AppFeaturesPanel } from '@/components/features/admin/AppFeaturesPanel';
 import { SentryTestPanel } from '@/components/features/admin/SentryTestPanel';
 import { getAdminAgentModelsAction } from '@/lib/actions/admin-agent-models';
+import { getAdminAppFeaturesAction } from '@/lib/actions/admin-features';
 import { ADMIN_EMAIL, isAdminEmail } from '@/lib/auth/admin';
 import { createClientForRequest } from '@/supabase/utils/server';
 import { createServiceRoleClient } from '@/supabase/utils/service-role';
@@ -34,13 +36,15 @@ async function loadAdminData(): Promise<{
   accessRequests: AccessRequestRow[];
   feedbackItems: FeedbackRow[];
   agentModels: Awaited<ReturnType<typeof getAdminAgentModelsAction>>;
+  appFeatures: Awaited<ReturnType<typeof getAdminAppFeaturesAction>>;
 }> {
   const service = createServiceRoleClient();
 
   const [
     { data: accessRequests, error: accessError },
     { data: feedbackItems, error: feedbackError },
-    agentModels
+    agentModels,
+    appFeatures
   ] = await Promise.all([
     service
       .from('early_access_requests')
@@ -50,7 +54,8 @@ async function loadAdminData(): Promise<{
       .from('feedback')
       .select('id, description, screenshot_paths, user_id, created_at')
       .order('created_at', { ascending: false }),
-    getAdminAgentModelsAction()
+    getAdminAgentModelsAction(),
+    getAdminAppFeaturesAction()
   ]);
 
   if (accessError) {
@@ -87,6 +92,7 @@ async function loadAdminData(): Promise<{
 
   return {
     agentModels,
+    appFeatures,
     accessRequests: accessRequests ?? [],
     feedbackItems: feedbackWithEmails
   };
@@ -114,7 +120,7 @@ export default async function AdminPage() {
     redirect('/');
   }
 
-  const { accessRequests, feedbackItems, agentModels } = await loadAdminData();
+  const { accessRequests, feedbackItems, agentModels, appFeatures } = await loadAdminData();
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-slate-50">
@@ -131,6 +137,7 @@ export default async function AdminPage() {
         </section>
 
         <SentryTestPanel />
+        <AppFeaturesPanel initialFeatures={appFeatures} />
 
         <section className="rounded-[2rem] border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">

@@ -34,7 +34,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 const gemini = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
 /** Objectives in these states are never listed, sectioned, or pointed to for feed synthesis. */
-const OBJECTIVE_STATES_EXCLUDED_FROM_FEED_GENERATION = new Set(['draft', 'submitted']);
+const OBJECTIVE_STATES_EXCLUDED_FROM_FEED_GENERATION = new Set(['draft', 'future', 'submitted']);
 
 function isObjectiveIncludedInFeedGeneration({ state }: { state: string }): boolean {
   return !OBJECTIVE_STATES_EXCLUDED_FROM_FEED_GENERATION.has(state);
@@ -84,7 +84,6 @@ type ObjectiveSection = {
   title: string;
   state: string;
   position: number;
-  time: string | null;
   duration: string | null;
   events: number;
   takeaway: string;
@@ -647,18 +646,6 @@ function uniqueStrings(values: Array<string | null | undefined>, limit = 100): s
   ].slice(0, limit);
 }
 
-function formatTime(value: string | null | undefined): string | null {
-  if (!value) return null;
-  try {
-    return new Date(value).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-  } catch {
-    return null;
-  }
-}
-
 function normalizeFileChangeStatus(value: string | null | undefined): string {
   const normalized = value?.trim().toLowerCase();
   if (normalized === 'added' || normalized === 'created') return 'added';
@@ -724,7 +711,6 @@ function buildObjectiveSections(
       title: generated?.title ?? objective.objective.slice(0, 120),
       state: normalizeObjectiveState(objective.state),
       position: index,
-      time: formatTime(objective.created_at),
       duration: objective.state === 'executing' ? 'ongoing' : null,
       events: objectiveEvents.length,
       takeaway:

@@ -63,6 +63,8 @@ type ObjectiveAttachmentUploadTriggerProps = {
   onDrop: (event: React.DragEvent) => void;
   compact?: boolean;
   toolbar?: boolean;
+  /** Shown immediately after the attach (paperclip) control in toolbar mode. */
+  leadingToolbarExtras?: React.ReactNode;
   children?: React.ReactNode;
 };
 
@@ -326,6 +328,7 @@ export function ObjectiveAttachmentUploadTrigger({
   onDrop,
   compact = false,
   toolbar = false,
+  leadingToolbarExtras,
   children
 }: ObjectiveAttachmentUploadTriggerProps) {
   if (!objectiveId) {
@@ -344,6 +347,9 @@ export function ObjectiveAttachmentUploadTrigger({
       >
         <Paperclip className="h-3.5 w-3.5" />
       </Button>
+      {toolbar && leadingToolbarExtras ? (
+        <div className="flex shrink-0 items-center">{leadingToolbarExtras}</div>
+      ) : null}
       <div className="min-w-0 flex-1 text-xs text-muted-foreground">
         {isDragOver ? 'Drop to upload' : null}
       </div>

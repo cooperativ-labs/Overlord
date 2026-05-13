@@ -3,7 +3,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useTransition } from 'react';
 
-import { CliQuickstart } from '@/components/features/CliQuickstart';
 import { useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -30,33 +29,13 @@ type TicketPanelLiveProps = {
   workspaceRoot: string;
   workingDirectory?: string | null;
   hasProjectWorkingDirectory?: boolean;
-  claudeCommand?: string;
-  codexCommand?: string;
-  cursorCommand?: string;
-  geminiCommand?: string;
-  opencodeCommand?: string;
-  claudeResumeCommand?: string;
-  codexResumeCommand?: string;
-  cursorResumeCommand?: string;
-  geminiResumeCommand?: string;
-  opencodeResumeCommand?: string;
 };
 
 export function TicketPanelLive({
   ticketId,
   projectId,
   editorScheme,
-  workspaceRoot,
-  claudeCommand: _claudeCommand,
-  codexCommand: _codexCommand,
-  cursorCommand: _cursorCommand,
-  geminiCommand: _geminiCommand,
-  opencodeCommand: _opencodeCommand,
-  claudeResumeCommand: _claudeResumeCommand,
-  codexResumeCommand: _codexResumeCommand,
-  cursorResumeCommand: _cursorResumeCommand,
-  geminiResumeCommand: _geminiResumeCommand,
-  opencodeResumeCommand: _opencodeResumeCommand
+  workspaceRoot
 }: TicketPanelLiveProps) {
   const queryClient = useQueryClient();
   const { events, artifacts, fileChanges, session, sharedState } = useTicketLive();
@@ -100,23 +79,7 @@ export function TicketPanelLive({
 
   return (
     <>
-      <CliQuickstart
-        activeAgentValue={activeAgentType?.value}
-        externalSessionId={session?.external_session_id}
-        hasExecutedObjectives={events.length > 0}
-        claudeCommand={_claudeCommand}
-        codexCommand={_codexCommand}
-        cursorCommand={_cursorCommand}
-        geminiCommand={_geminiCommand}
-        opencodeCommand={_opencodeCommand}
-        claudeResumeCommand={_claudeResumeCommand}
-        codexResumeCommand={_codexResumeCommand}
-        cursorResumeCommand={_cursorResumeCommand}
-        geminiResumeCommand={_geminiResumeCommand}
-        opencodeResumeCommand={_opencodeResumeCommand}
-      />
       <Separator className="mb-10" />
-
       <section className="mb-6">
         <div className="mb-4 flex items-center gap-2">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">

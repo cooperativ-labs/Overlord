@@ -131,3 +131,148 @@ test('permission-request posts hook payload through protocol auth resolver', asy
   assert.equal(calls[0].body, '{}');
   assert.match(logs.join('\n'), /"ok": true/);
 });
+
+test('deliver accepts --payload-json and posts the full delivery payload', async () => {
+  const previousFetch = global.fetch;
+  const previousOverlordUrl = process.env.OVERLORD_URL;
+  const previousAgentToken = process.env.OVERLORD_ACCESS_TOKEN;
+  const previousOrganizationId = process.env.OVERLORD_ORGANIZATION_ID;
+  const previousLog = console.log;
+  const calls = [];
+  const logs = [];
+
+  try {
+    process.env.OVERLORD_URL = 'https://www.ovld.ai';
+    process.env.OVERLORD_ACCESS_TOKEN = 'test-agent-token';
+    process.env.OVERLORD_ORGANIZATION_ID = '42';
+
+    global.fetch = async (url, init = {}) => {
+      calls.push({
+        url: String(url),
+        method: init.method,
+        headers: init.headers,
+        body: init.body
+      });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+    console.log = value => {
+      logs.push(String(value));
+    };
+
+    await runProtocolCommand('deliver', [
+      '--session-key',
+      'session-123',
+      '--ticket-id',
+      '1:1022',
+      '--payload-json',
+      '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"ok"}],"changeRationales":[{"label":"Deliver inline payload","file_path":"packages/overlord-cli/bin/_cli/protocol.mjs","summary":"Added payload-json support.","why":"Agents should be able to submit full delivery JSON inline.","impact":"No temp file or stdin transport is required for compact payloads.","hunks":[{"header":"@@ -1120,6 +1120,22 @@"}]}]}',
+      '--skip-checkpoint',
+      '--skip-file-change-check'
+    ]);
+  } finally {
+    global.fetch = previousFetch;
+    console.log = previousLog;
+    if (previousOverlordUrl === undefined) delete process.env.OVERLORD_URL;
+    else process.env.OVERLORD_URL = previousOverlordUrl;
+    if (previousAgentToken === undefined) delete process.env.OVERLORD_ACCESS_TOKEN;
+    else process.env.OVERLORD_ACCESS_TOKEN = previousAgentToken;
+    if (previousOrganizationId === undefined) delete process.env.OVERLORD_ORGANIZATION_ID;
+    else process.env.OVERLORD_ORGANIZATION_ID = previousOrganizationId;
+  }
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://www.ovld.ai/api/protocol/deliver');
+  assert.equal(calls[0].method, 'POST');
+  assert.equal(calls[0].headers.Authorization, 'Bearer test-agent-token');
+  assert.equal(calls[0].headers['x-organization-id'], '1');
+  assert.deepEqual(JSON.parse(calls[0].body), {
+    sessionKey: 'session-123',
+    ticketId: '1:1022',
+    summary: 'Done',
+    artifacts: [{ type: 'note', label: 'Delivery', content: 'ok' }],
+    changeRationales: [
+      {
+        label: 'Deliver inline payload',
+        file_path: 'packages/overlord-cli/bin/_cli/protocol.mjs',
+        summary: 'Added payload-json support.',
+        why: 'Agents should be able to submit full delivery JSON inline.',
+        impact: 'No temp file or stdin transport is required for compact payloads.',
+        hunks: [{ header: '@@ -1120,6 +1120,22 @@' }]
+      }
+    ]
+  });
+  assert.match(logs.join('\n'), /"ok": true/);
+});
+
+test('deliver rejects conflicting payload inputs and summary/artifact/rationale flags', async () => {
+  await assert.rejects(
+    () =>
+      runProtocolCommand('deliver', [
+        '--session-key',
+        'session-123',
+        '--ticket-id',
+        '1:1022',
+        '--payload-json',
+        '{"summary":"Done"}',
+        '--summary',
+        'Done',
+        '--skip-checkpoint',
+        '--skip-file-change-check'
+      ]),
+    /Use either payload input or --summary\/--summary-file, not both/
+  );
+
+  await assert.rejects(
+    () =>
+      runProtocolCommand('deliver', [
+        '--session-key',
+        'session-123',
+        '--ticket-id',
+        '1:1022',
+        '--payload-json',
+        '{"summary":"Done"}',
+        '--artifacts-json',
+        '[]',
+        '--skip-checkpoint',
+        '--skip-file-change-check'
+      ]),
+    /Use either payload input or --artifacts-json, not both/
+  );
+
+  await assert.rejects(
+    () =>
+      runProtocolCommand('deliver', [
+        '--session-key',
+        'session-123',
+        '--ticket-id',
+        '1:1022',
+        '--payload-json',
+        '{"summary":"Done"}',
+        '--change-rationales-json',
+        '[]',
+        '--skip-checkpoint',
+        '--skip-file-change-check'
+      ]),
+    /Use either payload input or change-rationale flags, not both/
+  );
+
+  await assert.rejects(
+    () =>
+      runProtocolCommand('deliver', [
+        '--session-key',
+        'session-123',
+        '--ticket-id',
+        '1:1022',
+        '--payload-json',
+        '{"summary":"Done"}',
+        '--payload-file',
+        './deliver.json',
+        '--skip-checkpoint',
+        '--skip-file-change-check'
+      ]),
+    /Use either --payload-file or --payload-json, not both/
+  );
+});

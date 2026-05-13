@@ -5,11 +5,15 @@ import { ProjectLayoutClient } from '@/components/features/projects/ProjectLayou
 import { TicketsBoardLoadingSkeleton } from '@/components/features/TicketsBoardLoadingSkeleton';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { PROJECT_BASE_SELECT } from '@/lib/actions/project-selects';
-import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
+import {
+  resolveProjectUserSshSettings,
+  resolveVisibleProjectSshSettings
+} from '@/lib/actions/project-types';
 import {
   getProjectUserLocalSettingsByProjectId,
   getProjectUserSshSettingsByProjectId
 } from '@/lib/actions/projects';
+import { isAppFeatureEnabled } from '@/lib/app-features';
 import { createClientForRequest } from '@/supabase/utils/server';
 
 import TicketsBoardContent from '../../tickets/(components)/TicketsBoardContent';
@@ -43,7 +47,10 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
     getProjectUserLocalSettingsByProjectId(supabase, user?.id, [project.id])
   ]);
   const projectUser = sshByProject.get(project.id);
-  const sshSettings = resolveProjectUserSshSettings(projectUser);
+  const sshEnabled = await isAppFeatureEnabled('ssh');
+  const sshSettings = resolveVisibleProjectSshSettings(resolveProjectUserSshSettings(projectUser), {
+    sshEnabled
+  });
   const projectUserLocal = localByProject.get(project.id);
   const projectWorkingDirectory = projectUserLocal?.local_working_directory ?? null;
 
@@ -89,6 +96,7 @@ export default async function ProjectLayout({ children, params }: LayoutProps) {
         projectEverhourProjectId={project.everhour_project_id}
         statuses={statuses ?? []}
         hasEverhourApiKey={hasEverhourApiKey}
+        sshFeatureEnabled={sshEnabled}
       >
         {children}
       </ProjectLayoutClient>

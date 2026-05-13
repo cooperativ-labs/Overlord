@@ -88,7 +88,7 @@ If you receive a prompt with a specified ticket ID, adhere to the following. If 
      --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
    \`\`\`
 
-   For larger or quote-sensitive deliveries, prefer a single JSON payload on stdin:
+   Use \`--payload-json\` when the full delivery object fits comfortably inline. For larger or quote-sensitive deliveries, prefer a single JSON payload on stdin:
    \`\`\`bash
    ovld protocol deliver --session-key <sessionKey> --ticket-id $TICKET_ID --payload-file -
    \`\`\`
@@ -261,7 +261,7 @@ When done, deliver with artifacts and change rationales:
 \`\`\`bash
 ovld protocol deliver --session-key <sessionKey> --ticket-id $TICKET_ID --summary "Narrative: what you did, next steps." --artifacts-json '[{"type":"next_steps","label":"Next steps","content":"..."}]' --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
 \`\`\`
-For larger delivery JSON, prefer \`--payload-file -\` with stdin so no scratch file needs to be created or removed. If you use a JSON file for delivery transport, keep it ephemeral scratch data outside the repository and remove it after the protocol call.
+Use \`--payload-json\` for compact inline delivery objects. For larger delivery JSON, prefer \`--payload-file -\` with stdin so no scratch file needs to be created or removed. If you use a JSON file for delivery transport, keep it ephemeral scratch data outside the repository and remove it after the protocol call.
 
 Rules:
 - Always attach first and deliver last.

@@ -82,6 +82,7 @@ type ProjectSettingsModalProps = {
     isDefault: boolean;
   }>;
   hasEverhourApiKey: boolean;
+  sshFeatureEnabled: boolean;
   initialNav?: ProjectSettingsNavSection;
 };
 
@@ -103,6 +104,7 @@ export function ProjectSettingsModal({
   initialEverhourProjectId,
   initialStatuses,
   hasEverhourApiKey,
+  sshFeatureEnabled,
   initialNav
 }: ProjectSettingsModalProps) {
   const [activeNav, setActiveNav] = useState<string>('Workflow');
@@ -205,6 +207,7 @@ export function ProjectSettingsModal({
                   initialSshAuthMethod={initialSshAuthMethod}
                   initialSshPrivateKeyPath={initialSshPrivateKeyPath}
                   initialStatuses={initialStatuses}
+                  sshFeatureEnabled={sshFeatureEnabled}
                 />
               )}
               {activeNav === 'Tags' && <TagsPage open={open} projectId={projectId} />}

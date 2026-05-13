@@ -60,6 +60,7 @@ type ProjectLayoutClientProps = {
     is_default: boolean;
   }>;
   hasEverhourApiKey: boolean;
+  sshFeatureEnabled: boolean;
 };
 
 export function ProjectLayoutClient({
@@ -79,7 +80,8 @@ export function ProjectLayoutClient({
   projectSshPrivateKeyPath,
   projectEverhourProjectId,
   statuses,
-  hasEverhourApiKey
+  hasEverhourApiKey,
+  sshFeatureEnabled
 }: ProjectLayoutClientProps) {
   const { isElectron } = useElectron();
   const pathname = usePathname();
@@ -149,6 +151,7 @@ export function ProjectLayoutClient({
       initialEverhourProjectId={projectEverhourProjectId}
       initialStatuses={initialStatuses}
       hasEverhourApiKey={hasEverhourApiKey}
+      sshFeatureEnabled={sshFeatureEnabled}
     >
       <ProjectSettingsUrlTrigger />
       <div className="flex flex-1 min-h-0 flex-col gap-5">
@@ -159,6 +162,7 @@ export function ProjectLayoutClient({
           initialWorkingDirectory={projectWorkingDirectory}
           initialSshCommand={projectSshCommand}
           initialRemoteWorkingDirectory={projectRemoteWorkingDirectory}
+          sshFeatureEnabled={sshFeatureEnabled}
         />
         {selectedSegment === 'current-changes' ? children : board}
         {selectedSegment === 'current-changes' ? null : children}

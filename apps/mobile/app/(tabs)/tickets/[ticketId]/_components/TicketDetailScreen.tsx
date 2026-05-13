@@ -64,6 +64,8 @@ export default function TicketDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [objectiveDraft, setObjectiveDraft] = useState('');
   const [savingObjective, setSavingObjective] = useState(false);
+  const [selectedDraftObjectiveId, setSelectedDraftObjectiveId] = useState<string | null>(null);
+  const [addingDraftObjective, setAddingDraftObjective] = useState(false);
   const [assignedSelection, setAssignedSelection] = useState<AgentModelSelection | null>(null);
   const [resolvedAssignedSelection, setResolvedAssignedSelection] =
     useState<AgentModelSelection | null>(null);
@@ -265,10 +267,41 @@ export default function TicketDetailScreen() {
   // Realtime updates for ticket detail
   useTicketRealtime(ticketId, loadData);
 
-  const draftObjective = useMemo(
-    () => objectives.find(objective => objective.state === 'draft') ?? null,
+  const draftObjectives = useMemo(
+    () =>
+      objectives
+        .filter(objective => objective.state === 'draft' || objective.state === 'future')
+        .slice()
+        .sort(
+          (left, right) =>
+            new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+        ),
     [objectives]
   );
+
+  const activeDraftObjective = useMemo(() => {
+    if (draftObjectives.length === 0) {
+      return null;
+    }
+    if (selectedDraftObjectiveId) {
+      return (
+        draftObjectives.find(objective => objective.id === selectedDraftObjectiveId) ??
+        draftObjectives[0] ??
+        null
+      );
+    }
+    return draftObjectives[0] ?? null;
+  }, [draftObjectives, selectedDraftObjectiveId]);
+
+  useEffect(() => {
+    if (
+      selectedDraftObjectiveId &&
+      !draftObjectives.some(objective => objective.id === selectedDraftObjectiveId)
+    ) {
+      setSelectedDraftObjectiveId(null);
+    }
+  }, [draftObjectives, selectedDraftObjectiveId]);
+
   const filteredEvents = useMemo(() => {
     if (activityFilter === 'completed') {
       return events.filter(event => event.event_type === 'deliver' || event.phase === 'complete');
@@ -369,7 +402,12 @@ export default function TicketDetailScreen() {
   const executedObjectives = useMemo(
     () =>
       objectives
-        .filter(objective => objective.state !== 'draft')
+        .filter(
+          objective =>
+            objective.state !== 'draft' &&
+            objective.state !== 'future' &&
+            objective.state !== 'submitted'
+        )
         .slice()
         .sort((left, right) => {
           return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
@@ -378,12 +416,12 @@ export default function TicketDetailScreen() {
   );
 
   useEffect(() => {
-    setObjectiveDraft(draftObjective?.objective ?? '');
-  }, [draftObjective?.id, draftObjective?.objective]);
+    setObjectiveDraft(activeDraftObjective?.objective ?? '');
+  }, [activeDraftObjective?.id, activeDraftObjective?.objective]);
 
   useEffect(() => {
-    setAssignedSelection(selectionFromAssignedAgent(draftObjective?.assigned_agent));
-  }, [draftObjective?.assigned_agent]);
+    setAssignedSelection(selectionFromAssignedAgent(activeDraftObjective?.assigned_agent));
+  }, [activeDraftObjective?.assigned_agent]);
 
   useEffect(() => {
     setAcceptanceCriteriaDraft(ticket?.acceptance_criteria ?? '');
@@ -430,13 +468,13 @@ export default function TicketDetailScreen() {
 
     try {
       const supabase = getSupabase();
-      const hasExistingDraft = Boolean(draftObjective);
+      const hasExistingDraft = Boolean(activeDraftObjective);
 
-      if (draftObjective) {
+      if (activeDraftObjective) {
         const { error } = await supabase
           .from('objectives')
           .update({ objective: trimmedObjective })
-          .eq('id', draftObjective.id);
+          .eq('id', activeDraftObjective.id);
 
         if (error) {
           throw new Error(error.message);
@@ -477,11 +515,48 @@ export default function TicketDetailScreen() {
     }
   }
 
+  async function handleAddDraftObjective() {
+    if (!ticket || addingDraftObjective) return;
+    const lastDraft = draftObjectives[draftObjectives.length - 1];
+    if (lastDraft && lastDraft.objective.trim() === '') {
+      Alert.alert('Add objective', 'Fill or save the empty objective before adding another.');
+      return;
+    }
+
+    setAddingDraftObjective(true);
+    try {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('objectives')
+        .insert({
+          ticket_id: ticket.id,
+          state: 'draft',
+          objective: ''
+        })
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        throw new Error(error?.message ?? 'Failed to add objective.');
+      }
+
+      setSelectedDraftObjectiveId(data.id);
+      await loadData();
+    } catch (error) {
+      Alert.alert(
+        'Unable to add objective',
+        error instanceof Error ? error.message : 'An unexpected error occurred.'
+      );
+    } finally {
+      setAddingDraftObjective(false);
+    }
+  }
+
   async function handleAssignedAgentChange(nextSelection: AgentModelSelection) {
-    if (!ticket || !draftObjective || savingAssignedAgent) return;
+    if (!ticket || !activeDraftObjective || savingAssignedAgent) return;
 
     const supabase = getSupabase();
-    const previousAssignedAgent = draftObjective?.assigned_agent ?? null;
+    const previousAssignedAgent = activeDraftObjective?.assigned_agent ?? null;
     const nextAssignedAgent = createAssignedAgent(nextSelection);
 
     setAssignedSelection(nextSelection);
@@ -491,7 +566,7 @@ export default function TicketDetailScreen() {
       const { error } = await supabase
         .from('objectives')
         .update({ assigned_agent: nextAssignedAgent })
-        .eq('id', draftObjective?.id ?? '');
+        .eq('id', activeDraftObjective?.id ?? '');
 
       if (error) {
         throw new Error(error.message);
@@ -601,7 +676,7 @@ export default function TicketDetailScreen() {
   }
 
   async function ensureDraftObjectiveId(): Promise<string | null> {
-    if (draftObjective?.id) return draftObjective.id;
+    if (activeDraftObjective?.id) return activeDraftObjective.id;
     const trimmed = objectiveDraft.trim();
     if (!trimmed) {
       Alert.alert('Objective required', 'Enter an objective before attaching files.');
@@ -1209,8 +1284,8 @@ export default function TicketDetailScreen() {
   }
 
   const normalizedObjectiveDraft = objectiveDraft.trim();
-  const normalizedSavedDraft = (draftObjective?.objective ?? '').trim();
-  const objectiveActionLabel = draftObjective
+  const normalizedSavedDraft = (activeDraftObjective?.objective ?? '').trim();
+  const objectiveActionLabel = activeDraftObjective
     ? normalizedSavedDraft
       ? 'Update Objective'
       : 'Save Objective'
@@ -1218,6 +1293,10 @@ export default function TicketDetailScreen() {
   const hasObjectiveChanges = normalizedObjectiveDraft !== normalizedSavedDraft;
   const canSaveObjective =
     !savingObjective && normalizedObjectiveDraft.length > 0 && hasObjectiveChanges;
+  const lastDraftForAddCheck = draftObjectives[draftObjectives.length - 1];
+  const addDraftObjectiveDisabled = Boolean(
+    lastDraftForAddCheck && lastDraftForAddCheck.objective.trim() === ''
+  );
   const normalizedCriteriaDraft = acceptanceCriteriaDraft.trim();
   const normalizedSavedCriteria = (ticket.acceptance_criteria ?? '').trim();
   const canSaveAcceptanceCriteria =
@@ -1340,6 +1419,14 @@ export default function TicketDetailScreen() {
         onChangeStatus={handleStatusChange}
         objectiveDraft={objectiveDraft}
         setObjectiveDraft={setObjectiveDraft}
+        draftObjectives={draftObjectives}
+        highlightedDraftObjectiveId={activeDraftObjective?.id ?? null}
+        onSelectDraftObjective={setSelectedDraftObjectiveId}
+        onAddDraftObjective={() => {
+          void handleAddDraftObjective();
+        }}
+        addDraftObjectiveDisabled={addDraftObjectiveDisabled}
+        addingDraftObjective={addingDraftObjective}
         executedObjectives={executedObjectives}
         expandedObjectiveIds={expandedObjectiveIds}
         toggleObjectiveExpanded={toggleObjectiveExpanded}
@@ -1358,7 +1445,7 @@ export default function TicketDetailScreen() {
         uploadingAttachment={uploadingAttachment}
         onAttachToObjective={handleAttachToObjective}
         onOpenAttachment={handleOpenAttachment}
-        draftObjectiveId={draftObjective?.id ?? null}
+        draftObjectiveId={activeDraftObjective?.id ?? null}
         assignedSelection={assignedSelection}
         savingAssignedAgent={savingAssignedAgent}
         onAssignedAgentChange={handleAssignedAgentChange}

@@ -35,7 +35,7 @@ export function applyMarkdownListContinuation({
   const lineStart = before.lastIndexOf('\n') + 1;
   const line = before.slice(lineStart);
 
-  if (/^\d+\.\s*$/.test(line)) {
+  if (/^(\s*)(\d+)\.\s*$/.test(line)) {
     return {
       applied: true,
       nextValue: before.slice(0, lineStart) + after,
@@ -43,7 +43,7 @@ export function applyMarkdownListContinuation({
     };
   }
 
-  if (/^[-*]\s*$/.test(line)) {
+  if (/^(\s*)[-*]\s*$/.test(line)) {
     return {
       applied: true,
       nextValue: before.slice(0, lineStart) + after,
@@ -51,13 +51,14 @@ export function applyMarkdownListContinuation({
     };
   }
 
-  const ordered = line.match(/^(\d+)\.\s+(\S[\s\S]*)$/);
+  const ordered = line.match(/^(\s*)(\d+)\.\s+(\S[\s\S]*)$/);
   if (ordered) {
-    const n = parseInt(ordered[1], 10);
+    const indent = ordered[1];
+    const n = parseInt(ordered[2], 10);
     if (Number.isNaN(n)) {
       return { applied: false };
     }
-    const insert = `\n${n + 1}. `;
+    const insert = `\n${indent}${n + 1}. `;
     return {
       applied: true,
       nextValue: before + insert + after,
@@ -65,10 +66,11 @@ export function applyMarkdownListContinuation({
     };
   }
 
-  const bullet = line.match(/^([-*])\s+(\S[\s\S]*)$/);
+  const bullet = line.match(/^(\s*)([-*])\s+(\S[\s\S]*)$/);
   if (bullet) {
-    const marker = bullet[1];
-    const insert = `\n${marker} `;
+    const indent = bullet[1];
+    const marker = bullet[2];
+    const insert = `\n${indent}${marker} `;
     return {
       applied: true,
       nextValue: before + insert + after,

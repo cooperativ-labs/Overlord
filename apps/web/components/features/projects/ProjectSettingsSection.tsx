@@ -27,6 +27,7 @@ type ProjectSettingsSectionProps = {
   initialWorkingDirectory: string | null;
   initialSshCommand: string | null;
   initialRemoteWorkingDirectory: string | null;
+  sshFeatureEnabled: boolean;
 };
 
 export function ProjectSettingsSection({
@@ -35,7 +36,8 @@ export function ProjectSettingsSection({
   initialColor,
   initialWorkingDirectory,
   initialSshCommand,
-  initialRemoteWorkingDirectory
+  initialRemoteWorkingDirectory,
+  sshFeatureEnabled
 }: ProjectSettingsSectionProps) {
   const { isElectron } = useElectron();
   const router = useRouter();
@@ -64,7 +66,7 @@ export function ProjectSettingsSection({
     ? 'Link a project directory to inspect current changes'
     : 'Open Current Changes';
   const localDirectoryLabel = hasSavedWorkingDirectory ? savedWorkingDirectory : 'configure';
-  const hasSshDirectory = Boolean(initialSshCommand?.trim());
+  const hasSshDirectory = sshFeatureEnabled && Boolean(initialSshCommand?.trim());
   const sshDirectoryLabel = initialRemoteWorkingDirectory?.trim() || 'configure';
   const sshTitle = hasSshDirectory
     ? `${initialSshCommand}${initialRemoteWorkingDirectory ? ` → ${initialRemoteWorkingDirectory}` : ''}`
@@ -194,6 +196,7 @@ export function ProjectSettingsSection({
               localDirectoryLabel={localDirectoryLabel}
               sshDirectoryLabel={sshDirectoryLabel}
               sshTitle={sshTitle}
+              sshFeatureEnabled={sshFeatureEnabled}
             />
           )}
 

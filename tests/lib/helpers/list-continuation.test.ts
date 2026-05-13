@@ -101,4 +101,46 @@ describe('applyMarkdownListContinuation', () => {
       }).applied
     ).toBe(false);
   });
+
+  it('preserves leading whitespace when continuing ordered lists', () => {
+    const value = '  1. first';
+    const pos = value.length;
+    const r = applyMarkdownListContinuation({
+      value,
+      selectionStart: pos,
+      selectionEnd: pos
+    });
+    expect(r.applied).toBe(true);
+    if (r.applied) {
+      expect(r.nextValue).toBe('  1. first\n  2. ');
+    }
+  });
+
+  it('preserves leading whitespace when continuing bullet lists', () => {
+    const value = '\t- item';
+    const pos = value.length;
+    const r = applyMarkdownListContinuation({
+      value,
+      selectionStart: pos,
+      selectionEnd: pos
+    });
+    expect(r.applied).toBe(true);
+    if (r.applied) {
+      expect(r.nextValue).toBe('\t- item\n\t- ');
+    }
+  });
+
+  it('clears an empty indented ordered list line', () => {
+    const value = 'x\n  1. ';
+    const pos = value.length;
+    const r = applyMarkdownListContinuation({
+      value,
+      selectionStart: pos,
+      selectionEnd: pos
+    });
+    expect(r.applied).toBe(true);
+    if (r.applied) {
+      expect(r.nextValue).toBe('x\n');
+    }
+  });
 });

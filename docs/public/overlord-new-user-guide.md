@@ -390,7 +390,7 @@ ovld protocol deliver \
   --change-rationales-json '[{"label":"Fix invite email fallback","file_path":"lib/actions/invites.ts","summary":"Restored SMTP fallback handling.","why":"The previous branch skipped provider fallback when the primary response was empty.","impact":"Invite emails retry through the configured fallback provider again.","hunks":[{"header":"@@ -42,7 +42,13 @@"}]}]'
 ```
 
-For larger delivery payloads, agents should prefer stdin so they do not create scratch JSON files:
+Use `--payload-json` when the complete delivery object fits comfortably inline. For larger delivery payloads, agents should prefer stdin so they do not create scratch JSON files:
 
 ```bash
 ovld protocol deliver --session-key <session-key> --ticket-id <ticket_id> --payload-file -

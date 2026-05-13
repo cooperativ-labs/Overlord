@@ -68,6 +68,18 @@ type ProjectSshSettings = Pick<
   | 'sshPrivateKeyPath'
 >;
 
+export function emptyProjectSshSettings(): ProjectSshSettings {
+  return {
+    sshCommand: null,
+    remoteWorkingDirectory: null,
+    sshHost: null,
+    sshPort: null,
+    sshUser: null,
+    sshAuthMethod: null,
+    sshPrivateKeyPath: null
+  };
+}
+
 function trimString(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -112,6 +124,17 @@ function normalizeProjectSshSettings(input: {
   };
 }
 
+export function resolveVisibleProjectSshSettings(
+  settings: ProjectSshSettings,
+  options?: { sshEnabled?: boolean }
+): ProjectSshSettings {
+  if (options?.sshEnabled === false) {
+    return emptyProjectSshSettings();
+  }
+
+  return settings;
+}
+
 export function resolveProjectUserSshSettings(
   projectUser?: Pick<
     ProjectUserSshSettingsRow,
@@ -124,15 +147,17 @@ export function resolveProjectUserSshSettings(
     | 'ssh_private_key_path'
   > | null
 ): ProjectSshSettings {
-  return normalizeProjectSshSettings({
-    sshCommand: projectUser?.ssh_command,
-    remoteWorkingDirectory: projectUser?.remote_working_directory,
-    sshHost: projectUser?.ssh_host,
-    sshPort: projectUser?.ssh_port,
-    sshUser: projectUser?.ssh_user,
-    sshAuthMethod: projectUser?.ssh_auth_method,
-    sshPrivateKeyPath: projectUser?.ssh_private_key_path
-  });
+  return resolveVisibleProjectSshSettings(
+    normalizeProjectSshSettings({
+      sshCommand: projectUser?.ssh_command,
+      remoteWorkingDirectory: projectUser?.remote_working_directory,
+      sshHost: projectUser?.ssh_host,
+      sshPort: projectUser?.ssh_port,
+      sshUser: projectUser?.ssh_user,
+      sshAuthMethod: projectUser?.ssh_auth_method,
+      sshPrivateKeyPath: projectUser?.ssh_private_key_path
+    })
+  );
 }
 
 export function buildLegacySshCommand(input: UpdateProjectSshConfigInput): string | null {

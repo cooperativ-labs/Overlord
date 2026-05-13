@@ -283,7 +283,9 @@ Optional:
 --summary-file <path>
 --artifacts-json <json>
 --artifacts-file <path|->
+--change-rationales-json <json>
 --change-rationales-file <path|->
+--payload-json <json>              # full { summary, artifacts, changeRationales } JSON inline
 --payload-file <path|->            # full { summary, artifacts, changeRationales } JSON
 --skip-checkpoint                  # bypass automatic local checkpoint creation
 --skip-file-change-check           # bypass local git vs changeRationales validation

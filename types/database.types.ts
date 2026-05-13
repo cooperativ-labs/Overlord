@@ -126,6 +126,30 @@ export type Database = {
           }
         ];
       };
+      app_features: {
+        Row: {
+          description: string;
+          is_enabled: boolean;
+          key: string;
+          name: string;
+          updated_at: string;
+        };
+        Insert: {
+          description: string;
+          is_enabled?: boolean;
+          key: string;
+          name: string;
+          updated_at?: string;
+        };
+        Update: {
+          description?: string;
+          is_enabled?: boolean;
+          key?: string;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       artifacts: {
         Row: {
           artifact_type: string;

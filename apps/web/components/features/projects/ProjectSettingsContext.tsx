@@ -82,6 +82,7 @@ type ProjectSettingsProviderProps = {
     isDefault: boolean;
   }>;
   hasEverhourApiKey: boolean;
+  sshFeatureEnabled: boolean;
 };
 
 export function ProjectSettingsProvider({
@@ -100,7 +101,8 @@ export function ProjectSettingsProvider({
   initialSshPrivateKeyPath,
   initialEverhourProjectId,
   initialStatuses,
-  hasEverhourApiKey
+  hasEverhourApiKey,
+  sshFeatureEnabled
 }: ProjectSettingsProviderProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialNav, setModalInitialNav] = useState<ProjectSettingsNavSection | undefined>();
@@ -112,15 +114,20 @@ export function ProjectSettingsProvider({
     initialWorkingDirectory.trim().length > 0 &&
     !isWorkingDirectoryNone(initialWorkingDirectory);
   const hasSshDirectory =
-    typeof initialSshCommand === 'string' && initialSshCommand.trim().length > 0;
+    sshFeatureEnabled &&
+    typeof initialSshCommand === 'string' &&
+    initialSshCommand.trim().length > 0;
   const localWorkingDirectory = hasLocalDirectory ? initialWorkingDirectory.trim() : null;
   const sshCommand = hasSshDirectory ? initialSshCommand.trim() : null;
   const remoteWorkingDirectory =
+    sshFeatureEnabled &&
     typeof initialRemoteWorkingDirectory === 'string' &&
     initialRemoteWorkingDirectory.trim().length > 0
       ? initialRemoteWorkingDirectory.trim()
       : null;
   const sshConnectionConfig = useMemo<SshConnectionConfig | null>(() => {
+    if (!sshFeatureEnabled) return null;
+
     const host = initialSshHost?.trim();
     const user = initialSshUser?.trim();
     if (host && user) {
@@ -139,6 +146,7 @@ export function ProjectSettingsProvider({
     initialSshPort,
     initialSshPrivateKeyPath,
     initialSshUser,
+    sshFeatureEnabled,
     sshCommand
   ]);
   const resolvedExecutionWorkspace = resolveExecutionWorkspace(
@@ -250,6 +258,7 @@ export function ProjectSettingsProvider({
         initialEverhourProjectId={initialEverhourProjectId}
         initialStatuses={initialStatuses}
         hasEverhourApiKey={hasEverhourApiKey}
+        sshFeatureEnabled={sshFeatureEnabled}
         initialNav={modalInitialNav}
       />
     </ProjectSettingsContext.Provider>

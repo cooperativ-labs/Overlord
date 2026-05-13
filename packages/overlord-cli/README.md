@@ -130,6 +130,8 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `attachment-download-url` - get a signed download URL for an existing objective attachment
 - `attachment-upload-file` - prepare, upload, and finalize a local objective attachment in one command
 
+`ovld protocol deliver` accepts either discrete flags like `--summary` / `--artifacts-json`, an inline full payload with `--payload-json '{"summary":"...","artifacts":[...],"changeRationales":[...]}'`, or a file/stdin payload with `--payload-file <path|->`.
+
 ## License
 
 Permission is granted to use this software for any purpose, free of charge. You may not modify, distribute, sublicense, or sell copies of the software without explicit permission from the author.

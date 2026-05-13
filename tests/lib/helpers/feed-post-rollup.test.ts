@@ -14,7 +14,6 @@ describe('normalizeFeedRollupObjectiveSections', () => {
         title: 'Second',
         state: 'completed',
         position: 1,
-        time: '1:00 PM',
         duration: '5m',
         events: 2,
         takeaway: 'T2',

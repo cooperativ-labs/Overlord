@@ -1122,14 +1122,28 @@ async function protocolDeliver(args) {
   const { sessionKey, ticketId } = resolveSessionFlags(flags);
   if (!sessionKey) throw new Error('--session-key is required (or set SESSION_KEY)');
   if (!ticketId) throw new Error('--ticket-id is required (or set TICKET_ID)');
+  if (flags['payload-file'] && flags['payload-json']) {
+    throw new Error('Use either --payload-file or --payload-json, not both');
+  }
   const deliverPayload = flags['payload-file']
     ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
-    : null;
-  const summary =
-    deliverPayload?.summary ??
-    (flags['summary-file']
+    : flags['payload-json']
+      ? parseJsonFlag('--payload-json', flags['payload-json'])
+      : null;
+  if (deliverPayload && (flags.summary || flags['summary-file'])) {
+    throw new Error('Use either payload input or --summary/--summary-file, not both');
+  }
+  const summary = deliverPayload
+    ? (() => {
+        const value = deliverPayload.summary;
+        if (typeof value !== 'string' || !value.trim()) {
+          throw new Error('payload input must include a non-empty summary');
+        }
+        return value;
+      })()
+    : flags['summary-file']
       ? await readTextFileOrStdin(String(flags['summary-file']), '--summary-file')
-      : requireFlag(flags, 'summary', undefined));
+      : requireFlag(flags, 'summary', undefined);
 
   const { platformUrl, bearerToken, localSecret, organizationId } =
     await resolveProtocolAuthForFlags(flags, ticketId);
@@ -1137,10 +1151,10 @@ async function protocolDeliver(args) {
 
   let artifacts = deliverPayload?.artifacts ?? [];
   if (deliverPayload && flags['artifacts-file']) {
-    throw new Error('Use either --payload-file or --artifacts-file, not both');
+    throw new Error('Use either payload input or --artifacts-file, not both');
   }
   if (deliverPayload && flags['artifacts-json']) {
-    throw new Error('Use either --payload-file or --artifacts-json, not both');
+    throw new Error('Use either payload input or --artifacts-json, not both');
   }
   if (flags['artifacts-file']) {
     artifacts = await readJsonFileOrStdin(String(flags['artifacts-file']), '--artifacts-file');
@@ -1149,7 +1163,7 @@ async function protocolDeliver(args) {
   }
 
   if (deliverPayload && (flags['change-rationales-file'] || flags['change-rationales-json'])) {
-    throw new Error('Use either --payload-file or change-rationale flags, not both');
+    throw new Error('Use either payload input or change-rationale flags, not both');
   }
 
   const changeRationales =
@@ -1943,6 +1957,7 @@ deliver:
     --session-key <key>
     --ticket-id <ticket_id>
     --summary <text> or --summary-file <path|->
+    or: --payload-json <json>
     or: --payload-file <path|-> containing { summary, artifacts, changeRationales }
   Optional:
     --artifacts-json <json>
@@ -1951,9 +1966,10 @@ deliver:
     --change-rationales-file <path|->
     --skip-file-change-check  Bypass local git vs changeRationales validation
   Notes:
+    Use --payload-json when the full delivery JSON fits comfortably inline.
     Use --payload-file - to read the full delivery JSON from stdin without creating a scratch file.
     Use --summary-file - to pipe just the summary text via stdin (avoids shell special-char issues).
-    Do not combine --payload-file with --artifacts-json/--artifacts-file or change-rationale flags.
+    Do not combine --payload-json/--payload-file with --summary/--summary-file, --artifacts-json/--artifacts-file, or change-rationale flags.
     In a git workspace, deliver validates that changed files are represented by changeRationales unless skipped.
 
 prompt:
@@ -2089,6 +2105,7 @@ Examples:
   ovld protocol attachment-download-url --session-key <key> --ticket-id <ticket_id> --attachment-id <attachment-id>
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done"
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --artifacts-file ./artifacts.json
+  ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-json '{"summary":"Done","artifacts":[{"type":"note","label":"Delivery","content":"..."}]}'
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file ./deliver.json
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check

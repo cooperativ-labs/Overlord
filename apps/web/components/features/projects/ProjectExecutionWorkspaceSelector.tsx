@@ -18,12 +18,14 @@ type ProjectExecutionWorkspaceSelectorProps = {
   localDirectoryLabel: string;
   sshDirectoryLabel: string;
   sshTitle?: string;
+  sshFeatureEnabled: boolean;
 };
 
 export function ProjectExecutionWorkspaceSelector({
   localDirectoryLabel,
   sshDirectoryLabel,
-  sshTitle
+  sshTitle,
+  sshFeatureEnabled
 }: ProjectExecutionWorkspaceSelectorProps) {
   const projectSettings = useProjectSettings();
   const { api } = useElectron();
@@ -96,7 +98,8 @@ export function ProjectExecutionWorkspaceSelector({
     }
   }
 
-  const sshWorkspaceAvailable = projectSettings.hasSshDirectory || Boolean(sshConfig);
+  const sshWorkspaceAvailable =
+    sshFeatureEnabled && (projectSettings.hasSshDirectory || Boolean(sshConfig));
 
   return (
     <>
@@ -156,40 +159,42 @@ export function ProjectExecutionWorkspaceSelector({
               </p>
             </div>
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="items-start gap-3"
-            onSelect={() => {
-              if (!sshWorkspaceAvailable) {
-                projectSettings.openProjectSettings();
-                return;
-              }
-              projectSettings.setExecutionWorkspace('ssh');
-              void checkConnection('ssh');
-            }}
-          >
-            <Server className="mt-0.5 h-4 w-4 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">Remote directory</span>
-                {activeExecutionWorkspace === 'ssh' ? (
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-primary">
-                    Active
-                  </span>
-                ) : null}
+          {sshFeatureEnabled ? (
+            <DropdownMenuItem
+              className="items-start gap-3"
+              onSelect={() => {
+                if (!sshWorkspaceAvailable) {
+                  projectSettings.openProjectSettings();
+                  return;
+                }
+                projectSettings.setExecutionWorkspace('ssh');
+                void checkConnection('ssh');
+              }}
+            >
+              <Server className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">Remote directory</span>
+                  {activeExecutionWorkspace === 'ssh' ? (
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-primary">
+                      Active
+                    </span>
+                  ) : null}
+                </div>
+                <p
+                  className={cn(
+                    'truncate text-xs',
+                    sshWorkspaceAvailable
+                      ? 'text-muted-foreground'
+                      : 'italic text-muted-foreground/80'
+                  )}
+                  title={sshTitle}
+                >
+                  {sshDirectoryLabel}
+                </p>
               </div>
-              <p
-                className={cn(
-                  'truncate text-xs',
-                  sshWorkspaceAvailable
-                    ? 'text-muted-foreground'
-                    : 'italic text-muted-foreground/80'
-                )}
-                title={sshTitle}
-              >
-                {sshDirectoryLabel}
-              </p>
-            </div>
-          </DropdownMenuItem>
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 

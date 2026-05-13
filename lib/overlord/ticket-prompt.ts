@@ -301,7 +301,7 @@ Where the stdin payload contains:
 }
 \`\`\`
 
-Prefer \`--payload-file -\` for large or quote-sensitive delivery payloads so no scratch file needs to be created or removed. If your runtime cannot provide stdin directly, \`--payload-file ./deliver.json\` remains supported; treat that file as ephemeral scratch data, never commit it, and remove it after the deliver call.
+Use \`--payload-json '{"summary":"...","artifacts":[...],"changeRationales":[...]}'\` when the full delivery payload fits comfortably inline. Prefer \`--payload-file -\` for large or quote-sensitive delivery payloads so no scratch file needs to be created or removed. If your runtime cannot provide stdin directly, \`--payload-file ./deliver.json\` remains supported; treat that file as ephemeral scratch data, never commit it, and remove it after the deliver call.
 
 ### Rules
 
@@ -425,7 +425,7 @@ Where the stdin payload contains:
 }
 \`\`\`
 
-Prefer stdin for large delivery payloads so no scratch file needs to be created or removed. If your runtime cannot provide stdin directly, \`--payload-file ./deliver.json\` remains supported; treat that file as ephemeral scratch data, never commit it, and remove it after the deliver call.
+Use \`--payload-json\` for compact inline delivery objects. Prefer stdin for large delivery payloads so no scratch file needs to be created or removed. If your runtime cannot provide stdin directly, \`--payload-file ./deliver.json\` remains supported; treat that file as ephemeral scratch data, never commit it, and remove it after the deliver call.
 
 ### 7 — Restart command
 

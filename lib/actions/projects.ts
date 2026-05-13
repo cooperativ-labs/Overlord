@@ -15,9 +15,11 @@ import {
   type ProjectUserLocalSettingsRow,
   type ProjectUserSshSettingsRow,
   resolveProjectUserSshSettings,
+  resolveVisibleProjectSshSettings,
   type SidebarProject,
   type UpdateProjectSshConfigInput
 } from '@/lib/actions/project-types';
+import { isAppFeatureEnabled } from '@/lib/app-features';
 import {
   getAuthDiagnostics,
   getServerActionRequestDiagnostics,
@@ -111,6 +113,7 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   const {
     data: { user }
   } = await supabase.auth.getUser();
+  const sshEnabled = await isAppFeatureEnabled('ssh');
 
   const { data, error } = await supabase
     .from('projects')
@@ -130,7 +133,10 @@ export async function getProjectsForCurrentUser(): Promise<SidebarProject[]> {
   return data.map(project => {
     const localSettings = localSettingsByProjectId.get(project.id);
     return {
-      ...resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id)),
+      ...resolveVisibleProjectSshSettings(
+        resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id)),
+        { sshEnabled }
+      ),
       id: project.id,
       name: project.name,
       color: project.color,
@@ -291,6 +297,11 @@ export async function deleteProjectAction(input: { projectId: string }): Promise
 export async function updateProjectSshConfigAction(
   input: UpdateProjectSshConfigInput
 ): Promise<void> {
+  const sshEnabled = await isAppFeatureEnabled('ssh');
+  if (!sshEnabled) {
+    throw new Error('SSH remote workspaces are currently disabled.');
+  }
+
   const supabase = await createClientForRequest();
   const {
     data: { user }

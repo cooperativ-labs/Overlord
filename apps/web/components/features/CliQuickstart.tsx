@@ -15,24 +15,17 @@ import {
   LAUNCH_AGENT_VALUES,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
-import { buildNativeResumeCommand } from '@/lib/overlord/launch-commands';
+import { AgentCommands, buildNativeResumeCommand } from '@/lib/overlord/launch-commands';
 
 type QuickstartCommands = Record<LaunchAgentTypeValue, string>;
 
 type CliQuickstartProps = {
+  /** `panel` keeps the collapsible section used in the live ticket panel; `embedded` is body-only for parent-controlled expand/collapse. */
+  variant?: 'panel' | 'embedded';
   activeAgentValue?: string | null;
   externalSessionId?: string | null;
   hasExecutedObjectives?: boolean;
-  claudeCommand?: string;
-  codexCommand?: string;
-  cursorCommand?: string;
-  geminiCommand?: string;
-  opencodeCommand?: string;
-  claudeResumeCommand?: string;
-  codexResumeCommand?: string;
-  cursorResumeCommand?: string;
-  geminiResumeCommand?: string;
-  opencodeResumeCommand?: string;
+  agentCommands?: AgentCommands;
 };
 
 function CommandCopyButton({ value }: { value: string }) {
@@ -73,26 +66,25 @@ function CommandRow({ label, command }: { label: string; command: string }) {
   );
 }
 
-export function CliQuickstart({
+function CliQuickstartBody({
   activeAgentValue = null,
   externalSessionId = null,
-  hasExecutedObjectives = false,
-  claudeCommand,
-  codexCommand,
-  cursorCommand,
-  geminiCommand,
-  opencodeCommand,
-  claudeResumeCommand,
-  codexResumeCommand,
-  cursorResumeCommand,
-  geminiResumeCommand,
-  opencodeResumeCommand
-}: CliQuickstartProps) {
+  agentCommands
+}: Omit<CliQuickstartProps, 'variant' | 'hasExecutedObjectives'>) {
   const defaultSelectedAgent: LaunchAgentTypeValue =
     activeAgentValue && LAUNCH_AGENT_VALUES.includes(activeAgentValue as LaunchAgentTypeValue)
       ? (activeAgentValue as LaunchAgentTypeValue)
       : 'claude';
   const [selectedAgent, setSelectedAgent] = useState<LaunchAgentTypeValue>(defaultSelectedAgent);
+
+  const { claudeCode, codex, cursor, gemini, opencode } = agentCommands?.launchCommands ?? {};
+  const {
+    claudeCode: claudeResumeCommand,
+    codex: codexResumeCommand,
+    cursor: cursorResumeCommand,
+    gemini: geminiResumeCommand,
+    opencode: opencodeResumeCommand
+  } = agentCommands?.resumeCommands ?? {};
 
   useEffect(() => {
     setSelectedAgent(defaultSelectedAgent);
@@ -100,13 +92,13 @@ export function CliQuickstart({
 
   const connectCommands = useMemo<QuickstartCommands>(
     () => ({
-      claude: claudeCommand ?? 'ovld launch claude',
-      codex: codexCommand ?? 'ovld launch codex',
-      cursor: cursorCommand ?? 'ovld launch cursor',
-      gemini: geminiCommand ?? 'ovld launch gemini',
-      opencode: opencodeCommand ?? 'ovld launch opencode'
+      claude: claudeCode ?? 'ovld launch claude',
+      codex: codex ?? 'ovld launch codex',
+      cursor: cursor ?? 'ovld launch cursor',
+      gemini: gemini ?? 'ovld launch gemini',
+      opencode: opencode ?? 'ovld launch opencode'
     }),
-    [claudeCommand, codexCommand, cursorCommand, geminiCommand, opencodeCommand]
+    [claudeCode, codex, cursor, gemini, opencode]
   );
 
   const overlordResumeCommands = useMemo<QuickstartCommands>(
@@ -135,6 +127,65 @@ export function CliQuickstart({
   );
 
   return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="mb-3 flex flex-wrap gap-2">
+        {LAUNCH_AGENT_VALUES.map(agentValue => {
+          const agent = getAgentTypeByValue(agentValue);
+          const isSelected = selectedAgent === agentValue;
+          return (
+            <Button
+              key={agent.value}
+              className="h-7 px-2 text-xs"
+              size="sm"
+              variant={isSelected ? 'default' : 'outline'}
+              onClick={() => setSelectedAgent(agentValue)}
+            >
+              {agent.label}
+            </Button>
+          );
+        })}
+      </div>
+      <div className="grid gap-2.5">
+        {externalSessionId ? (
+          <>
+            {selectedAgent === activeAgentValue && nativeResumeCommand ? (
+              <CommandRow label="Restart session" command={nativeResumeCommand} />
+            ) : null}
+            <CommandRow
+              label={
+                selectedAgent === activeAgentValue && nativeResumeCommand
+                  ? 'Restart session (Overlord wrapper)'
+                  : 'Restart session'
+              }
+              command={overlordResumeCommands[selectedAgent]}
+            />
+          </>
+        ) : (
+          <CommandRow label="Launch on this ticket" command={connectCommands[selectedAgent]} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function CliQuickstart({
+  variant = 'panel',
+  activeAgentValue = null,
+  externalSessionId = null,
+  hasExecutedObjectives: _hasExecutedObjectives = false,
+  agentCommands
+}: CliQuickstartProps) {
+  const bodyProps = {
+    activeAgentValue,
+    externalSessionId,
+    agentCommands
+  };
+
+  if (variant === 'embedded') {
+    return <CliQuickstartBody {...bodyProps} />;
+  }
+
+  return (
     <section className="mb-6">
       <Accordion type="single" collapsible>
         <AccordionItem value="cli-quickstart">
@@ -142,47 +193,7 @@ export function CliQuickstart({
             CLI Quickstart
           </AccordionTrigger>
           <AccordionContent>
-            <div className="rounded-lg border bg-muted/20 p-3">
-              <div className="mb-3 flex flex-wrap gap-2">
-                {LAUNCH_AGENT_VALUES.map(agentValue => {
-                  const agent = getAgentTypeByValue(agentValue);
-                  const isSelected = selectedAgent === agentValue;
-                  return (
-                    <Button
-                      key={agent.value}
-                      className="h-7 px-2 text-xs"
-                      size="sm"
-                      variant={isSelected ? 'default' : 'outline'}
-                      onClick={() => setSelectedAgent(agentValue)}
-                    >
-                      {agent.label}
-                    </Button>
-                  );
-                })}
-              </div>
-              <div className="grid gap-2.5">
-                {externalSessionId ? (
-                  <>
-                    {selectedAgent === activeAgentValue && nativeResumeCommand ? (
-                      <CommandRow label="Restart session" command={nativeResumeCommand} />
-                    ) : null}
-                    <CommandRow
-                      label={
-                        selectedAgent === activeAgentValue && nativeResumeCommand
-                          ? 'Restart session (Overlord wrapper)'
-                          : 'Restart session'
-                      }
-                      command={overlordResumeCommands[selectedAgent]}
-                    />
-                  </>
-                ) : (
-                  <CommandRow
-                    label="Launch on this ticket"
-                    command={connectCommands[selectedAgent]}
-                  />
-                )}
-              </div>
-            </div>
+            <CliQuickstartBody {...bodyProps} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

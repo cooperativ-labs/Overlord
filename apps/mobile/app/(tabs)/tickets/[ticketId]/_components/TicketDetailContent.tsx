@@ -61,6 +61,12 @@ export function TicketDetailContent({
   onChangeStatus,
   objectiveDraft,
   setObjectiveDraft,
+  draftObjectives,
+  highlightedDraftObjectiveId,
+  onSelectDraftObjective,
+  onAddDraftObjective,
+  addDraftObjectiveDisabled,
+  addingDraftObjective,
   executedObjectives,
   expandedObjectiveIds,
   toggleObjectiveExpanded,
@@ -123,6 +129,12 @@ export function TicketDetailContent({
   onChangeStatus: (nextStatus: string) => Promise<void>;
   objectiveDraft: string;
   setObjectiveDraft: (value: string) => void;
+  draftObjectives: Objective[];
+  highlightedDraftObjectiveId: string | null;
+  onSelectDraftObjective: (objectiveId: string) => void;
+  onAddDraftObjective: () => void;
+  addDraftObjectiveDisabled: boolean;
+  addingDraftObjective: boolean;
   executedObjectives: Objective[];
   expandedObjectiveIds: string[];
   toggleObjectiveExpanded: (objectiveId: string) => void;
@@ -351,6 +363,51 @@ export function TicketDetailContent({
           )}
 
           <View style={styles.draftBlock}>
+            {draftObjectives.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.draftTabsRow}
+              >
+                {draftObjectives.map((obj, index) => {
+                  const selected = obj.id === highlightedDraftObjectiveId;
+                  return (
+                    <Pressable
+                      key={obj.id}
+                      onPress={() => onSelectDraftObjective(obj.id)}
+                      style={({ pressed }) => [
+                        styles.draftTab,
+                        selected && styles.draftTabSelected,
+                        pressed && styles.pressed
+                      ]}
+                    >
+                      <Text
+                        style={[styles.draftTabLabel, selected && styles.draftTabLabelSelected]}
+                      >
+                        {index + 1}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  onPress={onAddDraftObjective}
+                  disabled={addDraftObjectiveDisabled || addingDraftObjective}
+                  style={({ pressed }) => [
+                    styles.draftTab,
+                    styles.draftTabAdd,
+                    (addDraftObjectiveDisabled || addingDraftObjective) &&
+                      styles.draftTabAddDisabled,
+                    pressed && styles.pressed
+                  ]}
+                >
+                  {addingDraftObjective ? (
+                    <ActivityIndicator size="small" color={colors.mutedForeground} />
+                  ) : (
+                    <Text style={styles.draftTabAddLabel}>+</Text>
+                  )}
+                </Pressable>
+              </ScrollView>
+            ) : null}
             <TextInput
               style={styles.draftInput}
               value={objectiveDraft}

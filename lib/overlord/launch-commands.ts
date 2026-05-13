@@ -70,6 +70,11 @@ export type ResumeCommands = {
   opencode: string;
 };
 
+export type AgentCommands = {
+  launchCommands?: LaunchCommands;
+  resumeCommands?: ResumeCommands;
+};
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
@@ -213,7 +218,9 @@ export function buildLaunchCommands({
  * Builds restart commands that use each agent's native resume flow.
  * The `overlord resume` subcommand fetches latest ticket context and
  * passes it as the first resumed prompt so new system messages are included.
+ *
  */
+
 export function buildResumeCommands({
   ticketId,
   organizationId

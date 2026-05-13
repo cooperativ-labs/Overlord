@@ -43,8 +43,8 @@ export function ObjectiveMenuButton({
     });
   }
 
-  const canShowMarkComplete = state !== 'complete';
-  const canShowMarkDraft = state !== 'draft';
+  const canShowMarkComplete = state !== 'complete' && state !== 'future';
+  const canShowMarkDraft = state !== 'draft' && state !== 'future';
 
   return (
     <DropdownMenu>

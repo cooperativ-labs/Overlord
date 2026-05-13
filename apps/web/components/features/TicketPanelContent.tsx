@@ -10,26 +10,32 @@ import { TicketLiveProvider } from '@/components/features/TicketLiveProvider';
 import { TicketObjectivesSection } from '@/components/features/TicketObjectivesSection';
 import { TicketPanelHeader } from '@/components/features/TicketPanelHeader';
 import { TicketPanelLive } from '@/components/features/TicketPanelLive';
-import { TicketProjectSelect } from '@/components/features/TicketProjectSelect';
-import { TicketStatusSelect } from '@/components/features/TicketStatusSelect';
 import { TicketTitleField } from '@/components/features/TicketTitleField';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { getAllAgentConfigsByUserIdAction } from '@/lib/actions/agent-config';
 import { listObjectiveAttachmentsAction } from '@/lib/actions/attachments';
 import { fetchProfileSettings } from '@/lib/actions/profile-settings';
-import { resolveProjectUserSshSettings } from '@/lib/actions/project-types';
+import {
+  resolveProjectUserSshSettings,
+  resolveVisibleProjectSshSettings
+} from '@/lib/actions/project-types';
 import {
   getProjectUserLocalSettingsByProjectId,
   getProjectUserSshSettingsByProjectId
 } from '@/lib/actions/projects';
 import { getTicketTagsAction } from '@/lib/actions/tags';
+import { isAppFeatureEnabled } from '@/lib/app-features';
 import { getEditorScheme, getPlatformUrl, getWorkspaceRoot } from '@/lib/env';
 import { listProjectFiles, resolveLinkedDirectory } from '@/lib/filesystem/project-file-tree';
 import type { LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
 import { parseObjectiveAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
 import { buildProjectPath } from '@/lib/helpers/ticket-path';
 import { getTicketIdentifier } from '@/lib/helpers/tickets';
-import { buildLaunchCommands, buildResumeCommands } from '@/lib/overlord/launch-commands';
+import {
+  type AgentCommands,
+  buildLaunchCommands,
+  buildResumeCommands
+} from '@/lib/overlord/launch-commands';
 import { createClientForRequest } from '@/supabase/utils/server';
 import type { Database } from '@/types/database.types';
 
@@ -192,14 +198,16 @@ export async function TicketPanelContent({
     (checkpointsResult.data ?? []).map(cp => [cp.objective_id, cp])
   );
   const editableObjective =
-    objectives?.find(objective => objective.state === 'draft') ??
     objectives?.find(objective => objective.state === 'submitted') ??
+    objectives?.find(objective => objective.state === 'draft') ??
     null;
   const assignedAgent = editableObjective
     ? parseObjectiveAssignedAgent(editableObjective.assigned_agent)
     : null;
   const projectOptionsRaw = projects ?? [];
   const projectIdsForSettings = projectOptionsRaw.map(project => project.id);
+  const sshEnabled = await isAppFeatureEnabled('ssh');
+  const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
   const [sshSettingsByProjectId, localSettingsByProjectId] = await Promise.all([
     getProjectUserSshSettingsByProjectId(supabase, user?.id, projectIdsForSettings),
     getProjectUserLocalSettingsByProjectId(supabase, user?.id, projectIdsForSettings)
@@ -208,7 +216,10 @@ export async function TicketPanelContent({
     ...project,
     local_working_directory:
       localSettingsByProjectId.get(project.id)?.local_working_directory ?? null,
-    ...resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id))
+    ...resolveVisibleProjectSshSettings(
+      resolveProjectUserSshSettings(sshSettingsByProjectId.get(project.id)),
+      { sshEnabled }
+    )
   }));
 
   const platformUrl = getPlatformUrl();
@@ -274,7 +285,7 @@ export async function TicketPanelContent({
   }
 
   const launchTicketId = ticket?.ticket_id || ticketId;
-  const { claudeCode, codex, cursor, gemini, opencode } = buildLaunchCommands({
+  const launchCommands = buildLaunchCommands({
     platformUrl,
     ticketId: launchTicketId,
     organizationId,
@@ -282,17 +293,12 @@ export async function TicketPanelContent({
     agentFlags,
     assignedAgent
   });
-  const {
-    claudeCode: claudeResume,
-    codex: codexResume,
-    cursor: cursorResume,
-    gemini: geminiResume,
-    opencode: opencodeResume
-  } = buildResumeCommands({
+  const resumeCommands = buildResumeCommands({
     platformUrl,
     ticketId: launchTicketId,
     organizationId
   });
+  const agentCommands: AgentCommands = { launchCommands, resumeCommands };
   const objectiveAttachments = await listObjectiveAttachmentsAction(ticketId).catch(() => []);
   const initialTags = ticket.project_id ? await getTicketTagsAction(ticketId).catch(() => []) : [];
 
@@ -350,6 +356,7 @@ export async function TicketPanelContent({
                   initialTitle={ticket.title ?? ''}
                   fallbackObjective={ticket.context ?? ''}
                   initialObjectives={objectives ?? []}
+                  futureObjectivesEnabled={futureObjectivesEnabled}
                 />
               </div>
 
@@ -390,33 +397,23 @@ export async function TicketPanelContent({
               ) : null}
             </div>
             <div className="flex flex-col pb-5">
-              {/* <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Objectives
-             </h2> */}
               <TicketObjectivesSection
                 ticketId={ticketId}
                 organizationId={organizationId}
                 objectives={objectives ?? []}
+                futureObjectivesEnabled={futureObjectivesEnabled}
                 objectiveAttachments={objectiveAttachments}
                 objectiveFileMentionPaths={objectiveFileMentionPaths}
                 workingDirectory={workingDirectory}
                 assignedAgent={assignedAgent}
                 projectId={activeProjectId}
                 agentFlags={agentFlags}
-                agentCommands={{
-                  claude: claudeCode,
-                  codex,
-                  cursor,
-                  gemini,
-                  opencode
-                }}
+                agentCommands={agentCommands}
                 sshCommand={projectSshCommand}
                 remoteWorkingDirectory={projectRemoteWorkingDirectory}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
                 checkpointsByObjectiveId={checkpointsByObjectiveId}
               />
-
-              {/* LaunchCommandBar is rendered inside TicketPanelLive to access real-time session state */}
             </div>
           </section>
           <section className="flex flex-col px-5 pt-5 ">
@@ -434,16 +431,6 @@ export async function TicketPanelContent({
                 workspaceRoot={workspaceRoot}
                 workingDirectory={workingDirectory}
                 hasProjectWorkingDirectory={hasProjectWorkingDirectory}
-                claudeCommand={claudeCode}
-                codexCommand={codex}
-                cursorCommand={cursor}
-                geminiCommand={gemini}
-                opencodeCommand={opencode}
-                claudeResumeCommand={claudeResume}
-                codexResumeCommand={codexResume}
-                cursorResumeCommand={cursorResume}
-                geminiResumeCommand={geminiResume}
-                opencodeResumeCommand={opencodeResume}
               />
             </ErrorBoundary>
           </section>

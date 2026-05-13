@@ -172,6 +172,18 @@ function ObjectiveItem({
     [section.body]
   );
 
+  const sectionTime = useMemo(() => {
+    if (!section.updated_at) return null;
+    try {
+      return new Date(section.updated_at).toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit'
+      });
+    } catch {
+      return null;
+    }
+  }, [section.updated_at]);
+
   return (
     <View style={styles.wrapper}>
       <View
@@ -195,10 +207,10 @@ function ObjectiveItem({
           <View style={styles.metaRow}>
             <Text style={styles.objMono}>OBJ {section.index}</Text>
             <Text style={[styles.stateMono, { color: stateColor }]}>{stateLabel}</Text>
-            {section.time ? (
+            {sectionTime ? (
               <>
                 <Text style={styles.metaDot}>·</Text>
-                <Text style={styles.metaTime}>{section.time}</Text>
+                <Text style={styles.metaTime}>{sectionTime}</Text>
               </>
             ) : null}
           </View>

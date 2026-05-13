@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605131058.0] - 2026-05-13:10:58
+
+### Added
+- Global **`app_features`** toggles (starting with **SSH remote workspaces** and **Future objectives**) plus an **Admin → App features** panel so operators can enable or disable product surfaces centrally.
+- **`future`** objective state with **one draft per ticket**, migrating older extra drafts to **`future`** so multi-objective planning can use placeholder rows when **Future objectives** is on (default off); promote a future row into the draft path when ready.
+- **`ovld protocol deliver`** supports **`--payload-json`** for inline structured delivery payloads alongside **`--payload-file`**, with stricter mutual exclusion against **`--summary`** / **`--summary-file`** and artifact flags.
+
+### Fixed
+- **Markdown list continuation** in objective editors keeps leading indentation when continuing nested ordered and bullet lists.
+- **Mark submitted objective executing** skips inserting a new draft when a **draft** row already exists, avoiding duplicate draft objectives on the same ticket.
+- **`submitDraftObjective`** can resolve a specific draft by **`draftObjectiveId`** when more than one planning row is in play.
+
+### Changed
+- **SSH** fields on project and member settings resolve to empty when the **SSH remote workspaces** feature flag is disabled, so remote UI stays consistent with rollout policy.
+- **`generate-feed-post`** treats **`future`** objectives like drafts for synthesis so placeholders do not appear in ticket rollup summaries.
+- **Project workflow** settings page layout and copy (execution workspace, JJ/Git guidance, and related controls).
+- **Ticket objectives** on web and mobile honor the **Future objectives** flag for visibility and editability of **`future`** rows.
+- **`upsertDraftObjective`** reads and updates only the ticket's **`draft`** row (not **`submitted`**) when merging the inline draft editor.
+
+### Security
+- None.
+
+### Test
+- Extend **`tests/cli-protocol.test.mjs`** for deliver payload inputs; add **`tests/lib/helpers/list-continuation.test.ts`** and **`tests/lib/actions/project-types.test.ts`** for indented list continuation and SSH visibility helpers.
+
+### Documentation
+- Refresh **protocol deliver** docs, **`overlord-cli` README**, **connector surfaces**, **`for-agents`** CLI and lifecycle pages, and **`overlord-ticket`** skills for **`--payload-json`** and the updated deliver flag rules.
+
+### Chore
+- Add migrations **`20260513102000_app_features.sql`**, **`20260513120000_add_future_objective_state.sql`**, **`20260513123000_allow_blank_future_objectives.sql`**, and **`20260513130000_add_future_objectives_app_feature.sql`**; regenerate **`types/database.types.ts`**; bump workspace and **`overlord-cli`** to **`5.2605131058.0`** / **`0.2605131058.0`**.
+
 ## [5.2605121205.0] - 2026-05-12:12:05
 
 ### Added

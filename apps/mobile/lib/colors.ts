@@ -5,7 +5,6 @@ import {
   createElement,
   type PropsWithChildren,
   useContext,
-  useEffect,
   useMemo,
   useState
 } from 'react';
@@ -89,6 +88,32 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export const colors = darkColors;
 
+function isThemePreference(value: string | null): value is ThemePreference {
+  return value === 'light' || value === 'dark' || value === 'system';
+}
+
+function applyNativeColorScheme(preference: ThemePreference) {
+  Appearance.setColorScheme(preference === 'system' ? 'unspecified' : preference);
+}
+
+function loadInitialThemePreference(): ThemePreference {
+  try {
+    const value = SecureStore.getItem(THEME_PREFERENCE_KEY);
+    return isThemePreference(value) ? value : 'system';
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[ThemeProvider] Failed to load theme preference:', error);
+    }
+
+    return 'system';
+  }
+}
+
+const initialThemePreference = loadInitialThemePreference();
+if (initialThemePreference !== 'system') {
+  applyNativeColorScheme(initialThemePreference);
+}
+
 function resolveThemePreference(
   preference: ThemePreference,
   systemScheme: ReturnType<typeof useColorScheme>
@@ -102,35 +127,10 @@ function resolveThemePreference(
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme();
-  const [preference, setPreferenceState] = useState<ThemePreference>('system');
-
-  useEffect(() => {
-    let cancelled = false;
-
-    SecureStore.getItemAsync(THEME_PREFERENCE_KEY)
-      .then(value => {
-        if (cancelled) return;
-        if (value === 'light' || value === 'dark' || value === 'system') {
-          setPreferenceState(value);
-        }
-      })
-      .catch(error => {
-        if (__DEV__) {
-          console.warn('[ThemeProvider] Failed to load theme preference:', error);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [preference, setPreferenceState] = useState<ThemePreference>(initialThemePreference);
 
   const resolvedTheme = resolveThemePreference(preference, systemScheme);
   const currentColors = resolvedTheme === 'light' ? lightColors : darkColors;
-
-  useEffect(() => {
-    Appearance.setColorScheme(preference === 'system' ? 'unspecified' : preference);
-  }, [preference]);
 
   const contextValue = useMemo<ThemeContextValue>(
     () => ({
@@ -138,6 +138,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       preference,
       resolvedTheme,
       async setPreference(nextPreference) {
+        applyNativeColorScheme(nextPreference);
         setPreferenceState(nextPreference);
 
         if (nextPreference === 'system') {

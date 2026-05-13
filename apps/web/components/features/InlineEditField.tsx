@@ -14,11 +14,15 @@ import {
 import { MarkdownContent } from '@/components/features/MarkdownContent';
 import { MentionableTextarea } from '@/components/features/MentionableTextarea';
 import { useWorkspaceFileTree } from '@/components/features/projects/useWorkspaceFileTree';
+import { updateObjectiveBodyAction } from '@/lib/actions/tickets';
 import { useUpdateTicketFieldsMutation } from '@/lib/client-data/tickets/mutations';
+import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
 import { convertInlineFileMentionsToMarkdown } from '@/lib/helpers/file-mentions';
 import type { AutoListContinuationMode } from '@/lib/helpers/list-continuation';
 import type { EditableTextareaHandle, TextareaHandle } from '@/lib/types/text-control';
 import { cn } from '@/lib/utils';
+
+const updateObjectiveBodyActionWithRetry = withElectronActionRetry(updateObjectiveBodyAction);
 
 export type InlineEditFieldHandle = {
   triggerAtMention: () => void;
@@ -50,6 +54,8 @@ type Props = {
   /** Ordered / bullet list continuation on Enter (multiline only). */
   autoListContinuation?: AutoListContinuationMode | false;
   children?: React.ReactNode;
+  /** When set with field objective, edits persist to this objectives row instead of upserting the latest draft. */
+  objectiveRowId?: string | null;
 };
 
 export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function InlineEditField(
@@ -68,7 +74,8 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
     variant = 'default',
     seamless = false,
     autoListContinuation = false,
-    children
+    children,
+    objectiveRowId
   }: Props,
   ref
 ) {
@@ -175,7 +182,15 @@ export const InlineEditField = forwardRef<InlineEditFieldHandle, Props>(function
       return;
     }
     startTransition(async () => {
-      await updateFieldsMutation.mutateAsync({ ticketId, patch: { [field]: value } });
+      if (field === 'objective' && objectiveRowId) {
+        await updateObjectiveBodyActionWithRetry({
+          ticketId,
+          objectiveId: objectiveRowId,
+          body: value
+        });
+      } else {
+        await updateFieldsMutation.mutateAsync({ ticketId, patch: { [field]: value } });
+      }
       setSavedValue(value);
       if (!alwaysEditing) {
         setEditing(false);

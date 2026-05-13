@@ -46,6 +46,7 @@ type WorkflowPageProps = {
     statusType: TicketStatusType;
     isDefault: boolean;
   }>;
+  sshFeatureEnabled: boolean;
 };
 
 export function WorkflowPage({
@@ -59,7 +60,8 @@ export function WorkflowPage({
   initialSshUser,
   initialSshAuthMethod,
   initialSshPrivateKeyPath,
-  initialStatuses
+  initialStatuses,
+  sshFeatureEnabled
 }: WorkflowPageProps) {
   const { api, isElectron } = useElectron();
   const updateWorkingDirectoryMutation = useUpdateProjectWorkingDirectoryMutation();
@@ -414,145 +416,148 @@ export function WorkflowPage({
         </div>
       ) : null}
 
-      {/* SSH / Remote workspace */}
-      <div className="grid gap-2">
-        <label className="text-xs font-medium text-muted-foreground">SSH / Remote workspace</label>
-        <p className="text-xs text-muted-foreground">
-          Launch agents on a remote server via SSH. The{' '}
-          <code className="rounded bg-muted px-1">ovld</code> CLI must be installed on the remote
-          server.
-        </p>
+      {sshFeatureEnabled ? (
         <div className="grid gap-2">
-          <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
+          <label className="text-xs font-medium text-muted-foreground">
+            SSH / Remote workspace
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Launch agents on a remote server via SSH. The{' '}
+            <code className="rounded bg-muted px-1">ovld</code> CLI must be installed on the remote
+            server.
+          </p>
+          <div className="grid gap-2">
+            <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
+              <input
+                type="text"
+                value={sshHost}
+                onChange={e => setSshHost(e.target.value)}
+                placeholder="Host, e.g. 10.0.0.5 or host.tailnet.ts.net"
+                className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <input
+                type="text"
+                value={sshPort}
+                onChange={e => setSshPort(e.target.value)}
+                placeholder="Port (22)"
+                inputMode="numeric"
+                className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
+              <input
+                type="text"
+                value={sshUser}
+                onChange={e => setSshUser(e.target.value)}
+                placeholder="User, e.g. jake"
+                className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <Select
+                value={sshAuthMethod}
+                onValueChange={value => setSshAuthMethod(value as ProjectSshAuthMethod)}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Auth method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="agent">ssh-agent</SelectItem>
+                  <SelectItem value="key">Private key</SelectItem>
+                  <SelectItem value="tailscale">Tailscale SSH</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {sshAuthMethod === 'key' ? (
+              <input
+                type="text"
+                value={sshPrivateKeyPath}
+                onChange={e => setSshPrivateKeyPath(e.target.value)}
+                placeholder="Private key path, e.g. ~/.ssh/id_ed25519"
+                className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            ) : null}
             <input
               type="text"
-              value={sshHost}
-              onChange={e => setSshHost(e.target.value)}
-              placeholder="Host, e.g. 10.0.0.5 or host.tailnet.ts.net"
+              value={remoteWorkingDirectory}
+              onChange={e => setRemoteWorkingDirectory(e.target.value)}
+              placeholder="Remote path, e.g. /home/user/projects/myapp"
               className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
             />
-            <input
-              type="text"
-              value={sshPort}
-              onChange={e => setSshPort(e.target.value)}
-              placeholder="Port (22)"
-              inputMode="numeric"
-              className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
-            <input
-              type="text"
-              value={sshUser}
-              onChange={e => setSshUser(e.target.value)}
-              placeholder="User, e.g. jake"
-              className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-            <Select
-              value={sshAuthMethod}
-              onValueChange={value => setSshAuthMethod(value as ProjectSshAuthMethod)}
-            >
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Auth method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="agent">ssh-agent</SelectItem>
-                <SelectItem value="key">Private key</SelectItem>
-                <SelectItem value="tailscale">Tailscale SSH</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {sshAuthMethod === 'key' ? (
-            <input
-              type="text"
-              value={sshPrivateKeyPath}
-              onChange={e => setSshPrivateKeyPath(e.target.value)}
-              placeholder="Private key path, e.g. ~/.ssh/id_ed25519"
-              className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          ) : null}
-          <input
-            type="text"
-            value={remoteWorkingDirectory}
-            onChange={e => setRemoteWorkingDirectory(e.target.value)}
-            placeholder="Remote path, e.g. /home/user/projects/myapp"
-            className="h-8 w-full rounded-md border bg-background px-2.5 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={handleSaveSshConfig}
-              disabled={sshSaveState === 'loading' || !sshHasUnsavedChanges}
-            >
-              {sshSaveState === 'loading' ? 'Saving…' : 'Save'}
-            </Button>
-            {hasSshConfig ? (
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-7 text-xs text-muted-foreground"
-                onClick={handleClearSshConfig}
-                disabled={sshSaveState === 'loading'}
+                className="h-7 text-xs"
+                onClick={handleSaveSshConfig}
+                disabled={sshSaveState === 'loading' || !sshHasUnsavedChanges}
               >
-                Clear
+                {sshSaveState === 'loading' ? 'Saving…' : 'Save'}
               </Button>
-            ) : null}
-            {sshSaveState === 'success' ? (
-              <span className="text-xs text-emerald-600">Saved</span>
-            ) : null}
+              {hasSshConfig ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground"
+                  onClick={handleClearSshConfig}
+                  disabled={sshSaveState === 'loading'}
+                >
+                  Clear
+                </Button>
+              ) : null}
+              {sshSaveState === 'success' ? (
+                <span className="text-xs text-emerald-600">Saved</span>
+              ) : null}
+            </div>
           </div>
+          {sshError ? <p className="text-xs text-destructive">{sshError}</p> : null}
+          {hasSshConfig && helperInstalled !== null ? (
+            <div className="flex items-center gap-2 pt-1">
+              {helperInstalled === false ? (
+                <button
+                  type="button"
+                  onClick={handleInstallHelper}
+                  disabled={installingHelper}
+                  className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 px-2 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  title="Install the Overlord remote helper on this host"
+                >
+                  {installingHelper ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Download className="h-3 w-3" />
+                  )}
+                  Install helper
+                </button>
+              ) : helperNeedsUpdate ? (
+                <button
+                  type="button"
+                  onClick={handleInstallHelper}
+                  disabled={installingHelper}
+                  className="inline-flex h-7 items-center gap-1 rounded-full border border-amber-500/60 px-2 text-[11px] text-amber-600 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  title={`Helper v${helperVersion ?? 'unknown'} installed; bundled version is newer. Click to update.`}
+                >
+                  {installingHelper ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Download className="h-3 w-3" />
+                  )}
+                  Update helper
+                </button>
+              ) : (
+                <span
+                  className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] text-muted-foreground"
+                  title={
+                    helperVersion ? `Remote helper v${helperVersion}` : 'Remote helper installed'
+                  }
+                >
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Helper ready
+                </span>
+              )}
+            </div>
+          ) : null}
         </div>
-        {sshError ? <p className="text-xs text-destructive">{sshError}</p> : null}
-        {hasSshConfig && helperInstalled !== null ? (
-          <div className="flex items-center gap-2 pt-1">
-            {helperInstalled === false ? (
-              <button
-                type="button"
-                onClick={handleInstallHelper}
-                disabled={installingHelper}
-                className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 px-2 text-[11px] text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                title="Install the Overlord remote helper on this host"
-              >
-                {installingHelper ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Download className="h-3 w-3" />
-                )}
-                Install helper
-              </button>
-            ) : helperNeedsUpdate ? (
-              <button
-                type="button"
-                onClick={handleInstallHelper}
-                disabled={installingHelper}
-                className="inline-flex h-7 items-center gap-1 rounded-full border border-amber-500/60 px-2 text-[11px] text-amber-600 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                title={`Helper v${helperVersion ?? 'unknown'} installed; bundled version is newer. Click to update.`}
-              >
-                {installingHelper ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Download className="h-3 w-3" />
-                )}
-                Update helper
-              </button>
-            ) : (
-              <span
-                className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] text-muted-foreground"
-                title={
-                  helperVersion ? `Remote helper v${helperVersion}` : 'Remote helper installed'
-                }
-              >
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                Helper ready
-              </span>
-            )}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
       <ProjectStatusSettings
         organizationId={organizationId}

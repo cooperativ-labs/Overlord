@@ -24,7 +24,6 @@ export type FeedRollupObjectiveSection = {
   title: string;
   state: string;
   position: number;
-  time: string | null;
   duration: string | null;
   events: number;
   takeaway: string;
@@ -125,7 +124,6 @@ export function normalizeFeedRollupObjectiveSections(raw: unknown): FeedRollupOb
       title: String(row.title ?? '').trim() || 'Objective',
       state: String(row.state ?? '').trim() || 'unknown',
       position,
-      time: optionalTrimmedString(row.time),
       duration: optionalTrimmedString(row.duration),
       events: typeof row.events === 'number' && Number.isFinite(row.events) ? row.events : 0,
       takeaway: String(row.takeaway ?? '').trim(),

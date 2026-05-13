@@ -7,6 +7,7 @@ import { getAllAgentConfigsAction } from '@/lib/actions/agent-config';
 import { generateTicketTitleAction } from '@/lib/actions/generate-title';
 import { fetchProfileCustomInstructions } from '@/lib/actions/profile-settings';
 import { getScheduledTicketVisibilityDaysForUser } from '@/lib/actions/scheduled-ticket-visibility-preference';
+import { isAppFeatureEnabled } from '@/lib/app-features';
 import type {
   BoardBootstrap,
   BoardDataset,
@@ -372,7 +373,8 @@ type PromptTicketSource = {
 
 async function resolvePromptTicketSource(
   supabase: ServerSupabase,
-  ticketId: string
+  ticketId: string,
+  opts?: { preferredObjectiveId?: string | null }
 ): Promise<{ error?: string; source?: PromptTicketSource }> {
   const { data: ticket, error } = await supabase
     .from('tickets')
@@ -384,6 +386,28 @@ async function resolvePromptTicketSource(
 
   if (error || !ticket) {
     return { error: error?.message ?? 'Ticket not found.' };
+  }
+
+  if (opts?.preferredObjectiveId) {
+    const { data: preferredRow, error: preferredError } = await supabase
+      .from('objectives')
+      .select('objective')
+      .eq('ticket_id', ticketId)
+      .eq('id', opts.preferredObjectiveId)
+      .maybeSingle();
+
+    if (preferredError) {
+      return { error: preferredError.message };
+    }
+
+    if (preferredRow?.objective && preferredRow.objective.trim().length > 0) {
+      return {
+        source: {
+          ticket,
+          latestObjective: preferredRow.objective
+        }
+      };
+    }
   }
 
   // Prefer the executing objective; fall back to the latest submitted objective.
@@ -438,10 +462,13 @@ async function resolvePromptTicketSource(
   };
 }
 
-export async function submitTicketObjectiveAction(ticketId: string): Promise<void> {
+export async function submitTicketObjectiveAction(
+  ticketId: string,
+  draftObjectiveId?: string | null
+): Promise<void> {
   const supabase = await createClientForRequest();
   await assertTicketAccess(supabase, ticketId);
-  const submission = await submitDraftObjective(supabase, ticketId);
+  const submission = await submitDraftObjective(supabase, ticketId, draftObjectiveId ?? undefined);
 
   if (submission.error) {
     throw new Error(submission.error);
@@ -1291,24 +1318,17 @@ export async function markObjectiveDraftAction(
     return;
   }
 
-  const otherObjectives = objectives.filter(o => o.id !== objectiveId);
+  const { error: demoteDraftsError } = await supabase
+    .from('objectives')
+    .update({ state: 'future', completed_at: null })
+    .eq('ticket_id', ticketId)
+    .eq('state', 'draft')
+    .neq('id', objectiveId);
 
-  // 2. Close out any other editable rows so the selected objective becomes the draft.
-  const otherEditableIds = otherObjectives
-    .filter(o => o.state === 'draft' || o.state === 'submitted')
-    .map(o => o.id);
-
-  if (otherEditableIds.length > 0) {
-    const { error: updateError } = await supabase
-      .from('objectives')
-      .update({ state: 'complete', completed_at: new Date().toISOString() })
-      .in('id', otherEditableIds);
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
+  if (demoteDraftsError) {
+    throw new Error(demoteDraftsError.message);
   }
 
-  // 3. Mark the target objective back to draft
   const { error: unexecuteError } = await supabase
     .from('objectives')
     .update({ state: 'draft', completed_at: null })
@@ -1318,7 +1338,7 @@ export async function markObjectiveDraftAction(
     throw new Error(unexecuteError.message);
   }
 
-  // 5. Log the event and revalidate
+  // Log the event and revalidate
   const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select('organization_id,project_id')
@@ -1332,6 +1352,189 @@ export async function markObjectiveDraftAction(
   await supabase.from('ticket_events').insert({
     event_type: 'system',
     summary: 'Objective marked draft.',
+    ticket_id: ticketId
+  });
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
+export async function updateObjectiveBodyAction({
+  ticketId,
+  objectiveId,
+  body
+}: {
+  ticketId: string;
+  objectiveId: string;
+  body: string;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  await assertTicketAccess(supabase, ticketId);
+
+  const { data: row, error: rowError } = await supabase
+    .from('objectives')
+    .select('id,state')
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId)
+    .maybeSingle();
+
+  if (rowError) {
+    throw new Error(rowError.message);
+  }
+  if (!row) {
+    throw new Error('Objective not found.');
+  }
+  if (row.state !== 'draft' && row.state !== 'future' && row.state !== 'submitted') {
+    throw new Error('Only draft, future, or submitted objectives can be edited here.');
+  }
+
+  const normalized = body.trim();
+  const { error: updateError } = await supabase
+    .from('objectives')
+    .update({ objective: normalized })
+    .eq('id', objectiveId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  const { data: ticket, error: ticketError } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+
+  if (ticketError || !ticket) {
+    throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
+export async function createEmptyDraftObjectiveAction({
+  ticketId
+}: {
+  ticketId: string;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  await assertTicketAccess(supabase, ticketId);
+  const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
+
+  const { data: editableObjectives, error: probeError } = await supabase
+    .from('objectives')
+    .select('id,objective,state,created_at')
+    .eq('ticket_id', ticketId)
+    .in('state', futureObjectivesEnabled ? ['draft', 'future'] : ['draft'])
+    .order('created_at', { ascending: true });
+
+  if (probeError) {
+    throw new Error(probeError.message);
+  }
+
+  const hasDraft = editableObjectives?.some(objective => objective.state === 'draft') ?? false;
+  const lastEditable = editableObjectives?.[editableObjectives.length - 1] ?? null;
+  if (hasDraft && lastEditable && lastEditable.objective.trim() === '') {
+    return;
+  }
+
+  const { error: insertError } = await supabase.from('objectives').insert({
+    ticket_id: ticketId,
+    state: futureObjectivesEnabled && hasDraft ? 'future' : 'draft',
+    objective: ''
+  });
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+
+  const { data: ticket, error: ticketError } = await supabase
+    .from('tickets')
+    .select('organization_id,project_id')
+    .eq('id', ticketId)
+    .single();
+
+  if (ticketError || !ticket) {
+    throw new Error(ticketError?.message ?? 'Ticket not found.');
+  }
+
+  revalidateTicketBoards();
+  revalidatePath(
+    buildProjectPath({ organizationId: ticket.organization_id, projectId: ticket.project_id })
+  );
+  revalidateTicketDetails([
+    { organizationId: ticket.organization_id, projectId: ticket.project_id, ticketId }
+  ]);
+}
+
+export async function promoteFutureObjectiveAction({
+  ticketId,
+  objectiveId
+}: {
+  ticketId: string;
+  objectiveId: string;
+}): Promise<void> {
+  const supabase = await createClientForRequest();
+  const ticket = await assertTicketAccess(supabase, ticketId);
+  const futureObjectivesEnabled = await isAppFeatureEnabled('future-objectives');
+
+  if (!futureObjectivesEnabled) {
+    throw new Error('Future objectives are disabled.');
+  }
+
+  const { data: objective, error: objectiveError } = await supabase
+    .from('objectives')
+    .select('id,state')
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId)
+    .maybeSingle();
+
+  if (objectiveError) {
+    throw new Error(objectiveError.message);
+  }
+  if (!objective) {
+    throw new Error('Objective not found.');
+  }
+  if (objective.state === 'draft') {
+    return;
+  }
+  if (objective.state !== 'future') {
+    throw new Error('Only future objectives can be promoted.');
+  }
+
+  const { error: demoteDraftsError } = await supabase
+    .from('objectives')
+    .update({ state: 'future', completed_at: null })
+    .eq('ticket_id', ticketId)
+    .eq('state', 'draft');
+
+  if (demoteDraftsError) {
+    throw new Error(demoteDraftsError.message);
+  }
+
+  const { error: promoteError } = await supabase
+    .from('objectives')
+    .update({ state: 'draft', completed_at: null })
+    .eq('id', objectiveId)
+    .eq('ticket_id', ticketId);
+
+  if (promoteError) {
+    throw new Error(promoteError.message);
+  }
+
+  await supabase.from('ticket_events').insert({
+    event_type: 'system',
+    summary: 'Future objective promoted to draft.',
     ticket_id: ticketId
   });
 
@@ -1505,11 +1708,21 @@ export async function deleteTicketAction(
 export async function getTicketPromptForCopy(
   ticketId: string,
   launchMode: PromptLaunchMode = 'run',
-  context?: PromptContext
+  context?: PromptContext,
+  preferredObjectiveId?: string | null
 ): Promise<{ error?: string; prompt?: string }> {
   const supabase = await createClientForRequest();
-  await submitDraftObjective(supabase, ticketId);
-  const { error, source } = await resolvePromptTicketSource(supabase, ticketId);
+  const submitResult = await submitDraftObjective(
+    supabase,
+    ticketId,
+    preferredObjectiveId ?? undefined
+  );
+  if (preferredObjectiveId && submitResult.error) {
+    return { error: submitResult.error };
+  }
+  const { error, source } = await resolvePromptTicketSource(supabase, ticketId, {
+    preferredObjectiveId: preferredObjectiveId ?? undefined
+  });
   if (error || !source) {
     return { error: error ?? 'Unable to load ticket prompt source.' };
   }
@@ -1558,9 +1771,10 @@ export async function getTicketPromptForCopy(
 
 export async function getTicketDiscussionPromptForCopy(
   ticketId: string,
-  context?: PromptContext
+  context?: PromptContext,
+  preferredObjectiveId?: string | null
 ): Promise<{ error?: string; prompt?: string }> {
-  return getTicketPromptForCopy(ticketId, 'ask', context);
+  return getTicketPromptForCopy(ticketId, 'ask', context, preferredObjectiveId);
 }
 
 /** Full ask-mode prompt for discussing a feed post (web clipboard; Electron uses context URL). */

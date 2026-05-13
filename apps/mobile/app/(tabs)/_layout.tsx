@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { QuickCreateTicketModal } from '@/components/QuickCreateTicketModal';
 import { useAuth } from '@/lib/auth-context';
-import { useThemeColors } from '@/lib/colors';
+import { useThemeColors, useThemePreference } from '@/lib/colors';
 import { Ionicons } from '@/lib/icons';
 
 function AddTicketAccessory({ onPress }: { onPress: () => void }) {
@@ -43,6 +43,7 @@ function AddTicketAccessory({ onPress }: { onPress: () => void }) {
 export default function TabLayout() {
   const { session, loading } = useAuth();
   const colors = useThemeColors();
+  const { resolvedTheme } = useThemePreference();
   const [quickCreateVisible, setQuickCreateVisible] = useState(false);
 
   if (loading) {
@@ -67,8 +68,10 @@ export default function TabLayout() {
   return (
     <>
       <NativeTabs
+        key={resolvedTheme}
         disableTransparentOnScrollEdge
         // minimizeBehavior="onScrollDown"
+        backgroundColor={colors.card}
         tintColor={colors.primary}
         labelStyle={{
           default: { color: colors.mutedForeground },

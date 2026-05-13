@@ -32,17 +32,20 @@ type TicketTitleFieldProps = {
   initialTitle: string;
   fallbackObjective: string;
   initialObjectives: ObjectiveRow[];
+  futureObjectivesEnabled?: boolean;
 };
 
 export function TicketTitleField({
   ticketId,
   initialTitle,
   fallbackObjective,
-  initialObjectives
+  initialObjectives,
+  futureObjectivesEnabled = false
 }: TicketTitleFieldProps) {
   const objectives = useTicketObjectivesRealtime({ ticketId, initialObjectives });
   const editableObjective =
     objectives.find(objective => objective.state === 'draft') ??
+    (futureObjectivesEnabled ? objectives.find(objective => objective.state === 'future') : null) ??
     objectives.find(objective => objective.state === 'submitted') ??
     null;
   const objectiveText = (editableObjective?.objective ?? fallbackObjective ?? '').trim();

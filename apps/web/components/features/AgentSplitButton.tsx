@@ -49,6 +49,8 @@ type AgentSplitButtonProps = {
   hasProjectWorkingDirectory?: boolean;
   agentSessionState?: SessionState | null;
   size?: AgentSplitButtonSize;
+  /** When launching from a specific draft card, submit that objective row instead of the latest draft. */
+  submitObjectiveId?: string | null;
 };
 
 const sizeStyles: Record<
@@ -118,7 +120,8 @@ export function AgentSplitButton({
   assignedSelection,
   hasProjectWorkingDirectory,
   agentSessionState,
-  size = 'default'
+  size = 'default',
+  submitObjectiveId
 }: AgentSplitButtonProps) {
   const [copied, setCopied] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -184,7 +187,8 @@ export function AgentSplitButton({
       const { error, prompt } = await getTicketPromptForCopy(
         ticketId,
         'run',
-        isCopyLocalValue ? 'cli' : 'web'
+        isCopyLocalValue ? 'cli' : 'web',
+        submitObjectiveId ?? undefined
       );
       if (error || !prompt) return;
       await navigator.clipboard.writeText(prompt);
@@ -196,7 +200,7 @@ export function AgentSplitButton({
     if (isElectron) {
       setIsLaunching(true);
       try {
-        await submitTicketObjectiveActionWithRetry(ticketId);
+        await submitTicketObjectiveActionWithRetry(ticketId, submitObjectiveId ?? undefined);
         await launchAgent({
           ticketId,
           agent: agentValue,
@@ -228,7 +232,7 @@ export function AgentSplitButton({
     } else {
       const command = commands?.[agentValue as LaunchAgentTypeValue];
       if (command) {
-        await submitTicketObjectiveAction(ticketId);
+        await submitTicketObjectiveAction(ticketId, submitObjectiveId ?? undefined);
         await navigator.clipboard.writeText(command);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);

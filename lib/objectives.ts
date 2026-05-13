@@ -91,7 +91,7 @@ export async function upsertDraftObjective(
     .from('objectives')
     .select('id,objective,state,assigned_agent')
     .eq('ticket_id', ticketId)
-    .in('state', ['draft', 'submitted'])
+    .eq('state', 'draft')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle<EditableObjective>();
@@ -124,21 +124,38 @@ export async function upsertDraftObjective(
   }
 }
 
-export async function submitDraftObjective(supabase: ObjectiveClient, ticketId: string) {
-  const { data: draft, error: draftError } = await supabase
+export async function submitDraftObjective(
+  supabase: ObjectiveClient,
+  ticketId: string,
+  draftObjectiveId?: string | null
+) {
+  let draftQuery = supabase
     .from('objectives')
     .select('id,objective,state,assigned_agent')
     .eq('ticket_id', ticketId)
-    .eq('state', 'draft')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle<DraftObjective>();
+    .eq('state', 'draft');
+
+  if (draftObjectiveId) {
+    draftQuery = draftQuery.eq('id', draftObjectiveId);
+  } else {
+    draftQuery = draftQuery.order('created_at', { ascending: false }).limit(1);
+  }
+
+  const { data: draft, error: draftError } = await draftQuery.maybeSingle<DraftObjective>();
 
   if (draftError) {
     throw new Error(draftError.message);
   }
 
   if (!draft) {
+    if (draftObjectiveId) {
+      return {
+        error: 'Draft objective not found.',
+        didSubmit: false,
+        submittedObjective: null,
+        submittedObjectiveId: null
+      };
+    }
     return { error: null, didSubmit: false, submittedObjective: null, submittedObjectiveId: null };
   }
 
@@ -226,14 +243,28 @@ export async function markSubmittedObjectiveExecuting(
     throw new Error(executeError.message);
   }
 
-  const { error: insertDraftError } = await supabase.from('objectives').insert({
-    state: 'draft',
-    objective: '',
-    ticket_id: ticketId,
-    created_by: createdBy ?? null
-  });
-  if (insertDraftError) {
-    throw new Error(insertDraftError.message);
+  const { data: existingDraftRow, error: existingDraftProbeError } = await supabase
+    .from('objectives')
+    .select('id')
+    .eq('ticket_id', ticketId)
+    .eq('state', 'draft')
+    .limit(1)
+    .maybeSingle();
+
+  if (existingDraftProbeError) {
+    throw new Error(existingDraftProbeError.message);
+  }
+
+  if (!existingDraftRow) {
+    const { error: insertDraftError } = await supabase.from('objectives').insert({
+      state: 'draft',
+      objective: '',
+      ticket_id: ticketId,
+      created_by: createdBy ?? null
+    });
+    if (insertDraftError) {
+      throw new Error(insertDraftError.message);
+    }
   }
 
   return {
