@@ -57,6 +57,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
     forwardedRef
   ) {
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const mentionListRef = React.useRef<HTMLDivElement>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const [mentionStart, setMentionStart] = React.useState<number | null>(null);
     const [mentionQuery, setMentionQuery] = React.useState('');
@@ -191,6 +192,14 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
     }, [mentionMenuOpen, onMentionMenuOpenChange]);
 
     React.useEffect(() => {
+      if (!mentionMenuOpen) return;
+      const listEl = mentionListRef.current;
+      if (!listEl) return;
+      const active = listEl.querySelector<HTMLElement>(`[data-mention-index="${mentionIndex}"]`);
+      active?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [mentionMenuOpen, mentionIndex]);
+
+    React.useEffect(() => {
       if (mentionPaths.length > 0) return;
       clearMentionState();
     }, [mentionPaths.length, clearMentionState]);
@@ -241,6 +250,7 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
 
     const mentionMenu = mentionMenuOpen ? (
       <div
+        ref={mentionListRef}
         className={cn(
           mentionMenuMode === 'portal'
             ? 'fixed z-50 w-max max-w-[min(64rem,calc(100vw-1rem))] overflow-x-auto overflow-y-auto rounded-md border bg-popover p-1 shadow-md'
@@ -264,9 +274,12 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
         {mentionResults.map((filePath, index) => (
           <button
             key={filePath}
+            data-mention-index={index}
             className={cn(
-              'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm',
-              index === mentionIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'
+              'block w-full whitespace-nowrap rounded px-2 py-1.5 text-left text-sm transition-colors',
+              index === mentionIndex
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-foreground hover:bg-muted'
             )}
             type="button"
             onMouseDown={event => {
@@ -275,7 +288,14 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
             }}
           >
             <span className="font-medium">@{getCollapsedFileMentionLabel(filePath)}</span>
-            <span className="ml-2 text-xs text-muted-foreground">{filePath}</span>
+            <span
+              className={cn(
+                'ml-2 text-xs',
+                index === mentionIndex ? 'text-primary-foreground/85' : 'text-muted-foreground'
+              )}
+            >
+              {filePath}
+            </span>
           </button>
         ))}
       </div>
