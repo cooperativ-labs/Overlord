@@ -1,10 +1,40 @@
 import { NextResponse } from 'next/server';
 
-import { assertOrgMembership, chunkUuidListForPostgrestNotIn } from '@/app/api/projects/_lib';
+import { assertOrgMembership } from '@/app/api/projects/_lib';
 import { buildCurrentChangePathVariants } from '@/components/features/projects/current-changes/helpers';
 import { createClientForRequest } from '@/supabase/utils/server';
+import type { Json } from '@/types/database.types';
 
 type RouteContext = { params: Promise<{ projectId: string }> };
+
+interface RpcFileChangeRow {
+  id: string;
+  file_name: string;
+  file_path: string;
+  label: string;
+  summary: string;
+  why: string;
+  impact: string;
+  change_kind: string;
+  attribution_source: string;
+  confidence: string;
+  hunks: Json;
+  created_at: string;
+  updated_at: string;
+  ticket_id: string;
+  event_id: string;
+  session_id: string;
+  checkpoint_id: string | null;
+  objective_id: string | null;
+  ticket_data: {
+    id: string;
+    ticket_id: string;
+    title: string;
+    status: string;
+    project_id: string;
+    status_type: string | null;
+  } | null;
+}
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
@@ -48,99 +78,30 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
 
-    const { data: orgStatusRows, error: orgStatusesError } = await supabase
-      .from('ticket_statuses')
-      .select('name,status_type')
-      .eq('organization_id', project.organization_id);
+    const { data: rpcRows, error: rpcError } = await supabase.rpc('get_project_file_changes', {
+      p_project_id: projectId,
+      p_file_paths: filePathVariants,
+      p_include_completed: includeCompleted
+    });
 
-    if (orgStatusesError) {
-      return NextResponse.json({ error: orgStatusesError.message }, { status: 500 });
-    }
-
-    const statusTypeByName = new Map((orgStatusRows ?? []).map(row => [row.name, row.status_type]));
-
-    let excludedTicketIds: string[] = [];
-    if (!includeCompleted && project.organization_id) {
-      const { data: terminalStatuses } = await supabase
-        .from('ticket_statuses')
-        .select('name')
-        .eq('organization_id', project.organization_id)
-        .or('status_type.eq.complete,name.ilike.cancelled');
-
-      const terminalStatusNames = [
-        ...new Set((terminalStatuses ?? []).map((s: { name: string }) => s.name))
-      ];
-
-      if (terminalStatusNames.length > 0) {
-        const { data: excludedTickets } = await supabase
-          .from('tickets')
-          .select('id')
-          .eq('project_id', projectId)
-          .in('status', terminalStatusNames);
-
-        excludedTicketIds = (excludedTickets ?? []).map((ticket: { id: string }) => ticket.id);
-      }
-    }
-
-    const FILE_CHANGE_SELECT =
-      'id,file_name,file_path,label,summary,why,impact,change_kind,attribution_source,confidence,hunks,created_at,updated_at,ticket_id,event_id,session_id,checkpoint_id,objective_id,tickets!inner(id,ticket_id,title,status,project_id)';
-
-    // PostgREST serialises .in() as a query-string param. With many long paths the URL can
-    // exceed the server limit and PostgREST returns 400 "Bad Request". Chunk to ~100 paths
-    // per request and union the results (same fix as chunkUuidListForPostgrestNotIn).
-    const FILE_PATH_CHUNK_SIZE = 100;
-
-    function buildBaseQuery(pathChunk: string[] | null) {
-      let q = supabase
-        .from('file_changes')
-        .select(FILE_CHANGE_SELECT)
-        .eq('tickets.project_id', projectId)
-        .order('created_at', { ascending: false });
-      if (pathChunk) q = q.in('file_path', pathChunk);
-      for (const notInChunk of chunkUuidListForPostgrestNotIn(excludedTicketIds)) {
-        q = q.not('ticket_id', 'in', `(${notInChunk.join(',')})`);
-      }
-      return q;
-    }
-
-    const pathChunks: Array<string[] | null> =
-      filePathVariants.length === 0
-        ? [null]
-        : Array.from(
-            { length: Math.ceil(filePathVariants.length / FILE_PATH_CHUNK_SIZE) },
-            (_, i) =>
-              filePathVariants.slice(i * FILE_PATH_CHUNK_SIZE, (i + 1) * FILE_PATH_CHUNK_SIZE)
-          );
-
-    const chunkResults = await Promise.all(pathChunks.map(chunk => buildBaseQuery(chunk)));
-
-    const fileChangeError = chunkResults.find(r => r.error)?.error ?? null;
-    if (fileChangeError) {
-      console.error('[file-changes] supabase query error', {
+    if (rpcError) {
+      console.error('[file-changes] rpc error', {
         projectId,
         filePathCount: filePaths.length,
         filePathVariantCount: filePathVariants.length,
-        chunkCount: pathChunks.length,
-        code: fileChangeError.code,
-        message: fileChangeError.message
+        code: rpcError.code,
+        message: rpcError.message
       });
-      return NextResponse.json({ error: fileChangeError.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to load file changes.' }, { status: 500 });
     }
 
-    const seenIds = new Set<string>();
-    const fileChanges = chunkResults
-      .flatMap(r => r.data ?? [])
-      .filter(row => {
-        if (seenIds.has(row.id)) return false;
-        seenIds.add(row.id);
-        return true;
-      });
+    const fileChanges = (rpcRows ?? []) as RpcFileChangeRow[];
 
-    const eventIds = [...new Set((fileChanges ?? []).map(row => row.event_id))];
-    const sessionIds = [...new Set((fileChanges ?? []).map(row => row.session_id))];
+    const eventIds = [...new Set(fileChanges.map(row => row.event_id))];
+    const sessionIds = [...new Set(fileChanges.map(row => row.session_id))];
     const checkpointIds = [
-      ...new Set((fileChanges ?? []).map(row => row.checkpoint_id).filter(Boolean))
-    ];
+      ...new Set(fileChanges.map(row => row.checkpoint_id).filter(Boolean))
+    ] as string[];
 
     const [eventsResult, sessionsResult, checkpointsResult] = await Promise.all([
       eventIds.length
@@ -166,7 +127,7 @@ export async function GET(request: Request, { params }: RouteContext) {
             .select(
               'id,checkpoint_kind,git_commit_id,git_ref_name,head_sha,diff_stat,created_at,objective_id'
             )
-            .in('id', checkpointIds as string[])
+            .in('id', checkpointIds)
         : Promise.resolve({
             data: [] as Array<{
               id: string;
@@ -189,7 +150,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       );
     }
 
-    const ticketIds = [...new Set((fileChanges ?? []).map(row => row.ticket_id))];
+    const ticketIds = [...new Set(fileChanges.map(row => row.ticket_id))];
     const latestObjectiveAgentByTicket = new Map<string, string | null>();
 
     if (ticketIds.length > 0) {
@@ -219,12 +180,11 @@ export async function GET(request: Request, { params }: RouteContext) {
       (checkpointsResult.data ?? []).map(checkpoint => [checkpoint.id, checkpoint])
     );
 
-    // Resolve objective text for any objective_id we surfaced via checkpoints.
     const objectiveIds = new Set<string>();
     for (const checkpoint of checkpointsResult.data ?? []) {
       if (checkpoint.objective_id) objectiveIds.add(checkpoint.objective_id);
     }
-    for (const fileChange of fileChanges ?? []) {
+    for (const fileChange of fileChanges) {
       if (fileChange.objective_id) objectiveIds.add(fileChange.objective_id);
     }
     let objectivesById = new Map<string, { id: string; objective: string | null }>();
@@ -239,63 +199,59 @@ export async function GET(request: Request, { params }: RouteContext) {
     }
 
     return NextResponse.json({
-      fileChanges: [
-        ...(fileChanges ?? []).map(fileChange => {
-          const eventRecord = eventsById.get(fileChange.event_id) ?? null;
-          const checkpointRecord = fileChange.checkpoint_id
-            ? (checkpointsById.get(fileChange.checkpoint_id) ?? null)
-            : null;
-          const objectiveId = fileChange.objective_id ?? checkpointRecord?.objective_id ?? null;
-          const rawTickets = fileChange.tickets;
-          const ticketRow = Array.isArray(rawTickets) ? rawTickets[0] : rawTickets;
-          return {
-            attribution_source: fileChange.attribution_source,
-            change_kind: fileChange.change_kind,
-            confidence: fileChange.confidence,
-            created_at: fileChange.created_at,
-            event: eventRecord
-              ? {
-                  id: eventRecord.id,
-                  event_type: eventRecord.event_type,
-                  summary: eventRecord.summary,
-                  created_at: eventRecord.created_at
-                }
-              : null,
-            checkpoint: checkpointRecord
-              ? {
-                  id: checkpointRecord.id,
-                  checkpoint_kind: checkpointRecord.checkpoint_kind,
-                  created_at: checkpointRecord.created_at,
-                  diff_stat: checkpointRecord.diff_stat,
-                  git_commit_id: checkpointRecord.git_commit_id,
-                  git_ref_name: checkpointRecord.git_ref_name,
-                  head_sha: checkpointRecord.head_sha
-                }
-              : null,
-            checkpoint_id: fileChange.checkpoint_id,
-            objective_id: objectiveId,
-            objective: objectiveId ? (objectivesById.get(objectiveId) ?? null) : null,
-            file_name: fileChange.file_name,
-            file_path: fileChange.file_path,
-            hunks: fileChange.hunks,
-            id: fileChange.id,
-            impact: fileChange.impact,
-            label: fileChange.label,
-            session: sessionsById.get(fileChange.session_id) ?? null,
-            summary: fileChange.summary,
-            ticket: ticketRow
-              ? {
-                  ...ticketRow,
-                  status_type: statusTypeByName.get(ticketRow.status) ?? null,
-                  latest_objective_agent:
-                    latestObjectiveAgentByTicket.get(fileChange.ticket_id) ?? null
-                }
-              : null,
-            updated_at: fileChange.updated_at,
-            why: fileChange.why
-          };
-        })
-      ]
+      fileChanges: fileChanges.map(fileChange => {
+        const eventRecord = eventsById.get(fileChange.event_id) ?? null;
+        const checkpointRecord = fileChange.checkpoint_id
+          ? (checkpointsById.get(fileChange.checkpoint_id) ?? null)
+          : null;
+        const objectiveId = fileChange.objective_id ?? checkpointRecord?.objective_id ?? null;
+        const ticketRow = fileChange.ticket_data;
+        return {
+          attribution_source: fileChange.attribution_source,
+          change_kind: fileChange.change_kind,
+          confidence: fileChange.confidence,
+          created_at: fileChange.created_at,
+          event: eventRecord
+            ? {
+                id: eventRecord.id,
+                event_type: eventRecord.event_type,
+                summary: eventRecord.summary,
+                created_at: eventRecord.created_at
+              }
+            : null,
+          checkpoint: checkpointRecord
+            ? {
+                id: checkpointRecord.id,
+                checkpoint_kind: checkpointRecord.checkpoint_kind,
+                created_at: checkpointRecord.created_at,
+                diff_stat: checkpointRecord.diff_stat,
+                git_commit_id: checkpointRecord.git_commit_id,
+                git_ref_name: checkpointRecord.git_ref_name,
+                head_sha: checkpointRecord.head_sha
+              }
+            : null,
+          checkpoint_id: fileChange.checkpoint_id,
+          objective_id: objectiveId,
+          objective: objectiveId ? (objectivesById.get(objectiveId) ?? null) : null,
+          file_name: fileChange.file_name,
+          file_path: fileChange.file_path,
+          hunks: fileChange.hunks,
+          id: fileChange.id,
+          impact: fileChange.impact,
+          label: fileChange.label,
+          session: sessionsById.get(fileChange.session_id) ?? null,
+          summary: fileChange.summary,
+          ticket: ticketRow
+            ? {
+                ...ticketRow,
+                latest_objective_agent:
+                  latestObjectiveAgentByTicket.get(fileChange.ticket_id) ?? null
+              }
+            : null,
+          updated_at: fileChange.updated_at,
+          why: fileChange.why
+        };
+      })
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error.';
