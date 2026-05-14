@@ -5,7 +5,8 @@ import path from 'node:path';
 const SITE_URL = 'https://www.ovld.ai';
 const APP_DIR = path.join(process.cwd(), 'app');
 
-const EXCLUDED_GROUPS = new Set(['(app)', '(auth)']);
+const EXCLUDED_GROUPS = new Set(['(app)', '(auth)', '(quick)']);
+const EXCLUDED_PATHS = new Set(['/onboarding']);
 const EXTRA_PUBLIC_PATHS = ['/llms.txt', '/llms-full.txt'] as const;
 
 function isDynamicSegment(segment: string): boolean {
@@ -75,7 +76,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   for (const pageFile of pageFiles) {
     const routePath = toRoutePath(pageFile);
-    if (routePath) {
+    if (routePath && !EXCLUDED_PATHS.has(routePath)) {
       routes.add(routePath);
     }
   }
