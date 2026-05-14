@@ -68,13 +68,17 @@ ovld protocol deliver --session-key <sessionKey> \
 1. If the user wants to create tickets (and does not ask to start execution), use `/create` or run `ovld protocol create --agent cursor --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately.
+2. Default to `create` for new draft tickets. Only use `/prompt` or `ovld protocol prompt --agent cursor --objective "..."` when the user explicitly asks to create and execute immediately. If the work is already complete in chat and just needs to be recorded, use `ovld protocol record-work` instead.
 3. If the user already has a ticket ID and only wants to inspect it, use `/load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
 5. If the user wants to establish a persistent session with a ticket by ID, use `/attach` or run `ovld protocol attach --ticket-id <ticket_id>`.
 6. If the user wants to find a ticket by keyword/status/project/creator/date, run `ovld protocol search-tickets --query "..." --status next-up,execute`.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 8. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
+
+## Recording Completed Work From Chat
+
+Use `ovld protocol record-work` when the user has done work directly in chat (no attached ticket) and wants to record it as a ticket plus publish a feed post. This is distinct from `create` (drafts future work), `prompt` (creates + executes), and `deliver` (concludes an attached session). `record-work` creates a ticket in `review` with a completed objective and triggers the feed-post generator atomically. Project resolution mirrors `prompt`: cwd is matched against `project_user.local_working_directory`; if no match, ask the user for `--project-id` or pass `--personal`. Do NOT use for in-progress work.
 
 ## Change Rationales
 
@@ -137,7 +141,7 @@ Objective attachment uploads also expose two-step variants — `attachment-prepa
 ## Defaults And Notes
 
 - The Overlord API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt, but the CLI defaults them to `cursor`/`cli` (override with `--agent` / `--method`). The MCP tools default to `mcp`.
-- The Cursor local MCP stub exposes `attach`, `update`, and `deliver` only (same names as the hosted Overlord MCP core set).
+- The Cursor plugin ships the shared local `overlord-mcp.mjs` shim. Treat its tool list as the source of truth; it includes `record_work` alongside the core lifecycle tools.
 - `permission-request` is invoked by the installed permission hook; agents normally do not call it directly.
 - The `record_change_rationales` MCP tool and `ovld protocol record-change-rationales` CLI both write to the same `file_changes` table; pick whichever fits your runtime.
 
@@ -152,4 +156,4 @@ Objective attachment uploads also expose two-step variants — `attachment-prepa
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.9 -->
+<!-- version: 0.4.10 -->

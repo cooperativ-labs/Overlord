@@ -67,6 +67,7 @@ Posts are created server-side by the Supabase Edge Function `supabase/functions/
 The generator is invoked in these main flows:
 
 - `POST /api/protocol/deliver`: after an agent delivers a ticket and the ticket is moved to review.
+- `POST /api/protocol/record-work`: when already-completed chat work is recorded as a ticket in review and should immediately get a feed post.
 - `POST /api/protocol/update`: when a protocol update moves a ticket into a review-type status.
 - `markObjectiveExecutedAction`: when an objective is manually marked complete in the app.
 

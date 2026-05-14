@@ -84,7 +84,7 @@ Use this mode when the conversation starts normally and the user asks Claude to 
 1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent claude-code --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately.
+2. Default to `create` for new draft tickets. Only use `/overlord:prompt` or `ovld protocol prompt --agent claude-code --objective "..."` when the user explicitly asks to create and execute immediately. If the work is already complete in chat and just needs to be recorded, use `ovld protocol record-work` instead.
    `prompt` creates the ticket in `execute` status and attaches immediately.
 3. If the user already has a ticket ID and only wants to inspect it, use `/overlord:load` or run `ovld protocol load-context --ticket-id <ticket_id>`.
 4. If the user wants to route the current session onto an existing ticket by ID, use `/overlord:connect` or run `ovld protocol connect --ticket-id <ticket_id>`.
@@ -92,6 +92,46 @@ Use this mode when the conversation starts normally and the user asks Claude to 
 6. If the user wants to find a ticket but does not know the ID, use `ovld attach` for interactive ticket search and agent launch, or run `ovld protocol search-tickets --query "..." --status next-up,execute` and ask the user to confirm.
 7. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 8. Once you attach to a ticket, switch back to Mode 1 and follow the full ticket lifecycle.
+
+## Recording Completed Work From Chat
+
+Use this when the user has had a working conversation with the agent (no Overlord ticket attached) and now wants to record the outcome as a ticket — both for review and to publish a feed post about it. This is **distinct from `create` and from `deliver`**:
+
+- `create` makes a draft ticket for *future* work; nothing happens yet.
+- `prompt` creates a ticket and starts an execution session.
+- `deliver` concludes an *attached* session; the ticket already exists.
+- `record-work` creates the ticket *and* completes the objective *and* triggers the feed-post generator in a single call, with no session left open.
+
+Do NOT use `record-work` for in-progress work. Use it only when the work is already done in the chat.
+
+```bash
+ovld protocol record-work \
+  --objective "User asked me to X; I did Y by..." \
+  --summary  "Narrative for the feed post and reviewer." \
+  --change-rationales-file -
+```
+
+Or stream the full payload via stdin to avoid quote escaping:
+
+```bash
+ovld protocol record-work --payload-file - <<'EOF'
+{
+  "objective": "...",
+  "summary": "...",
+  "artifacts": [{"type": "next_steps", "label": "...", "content": "..."}],
+  "changeRationales": [{"label": "...", "file_path": "...", "summary": "...", "why": "...", "impact": "...", "hunks": [{"header": "@@ ..."}]}]
+}
+EOF
+```
+
+Project resolution mirrors `prompt`/`create`: cwd is matched against the caller's `project_user.local_working_directory`. If no match:
+
+1. **Ask the user for a `--project-id`** if the work is project-related. Show them a brief description of what you're about to record so they can pick the right project.
+2. If the user confirms the work is not tied to any project, pass `--personal` to create a private ticket.
+
+Validation: in a git workspace, `record-work` checks that uncommitted changes are represented by `changeRationales` and rejects if they aren't (same check as `deliver`). Pass `--skip-file-change-check` only when intentionally bypassing.
+
+The hosted MCP tool name is `record_work` (snake_case). It accepts the same fields as the CLI but in camelCase JSON. Use `record_work` over the `create_ticket` + `attach` + `deliver` sequence whenever the work is already done.
 
 ## Change Rationales
 
@@ -163,7 +203,7 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 ## Defaults And Notes
 
 - API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `claude-code`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
-- Hosted Overlord MCP (`/functions/v1/mcp`) uses the same canonical tool names as any local MCP shim that shells into `ovld protocol` (`attach`, `update`, `deliver`, …). Hosted calls use camelCase JSON keys (`ticketId`, `sessionKey`) matching `POST /api/protocol/*` bodies; the local shim uses snake_case keys mapped to CLI flags (`ticket_id`, `session_key`).
+- Hosted Overlord MCP (`/functions/v1/mcp`) uses the same canonical tool names as any local MCP shim that shells into `ovld protocol` (`attach`, `update`, `deliver`, `record_work`, …). Hosted calls use camelCase JSON keys (`ticketId`, `sessionKey`) matching `POST /api/protocol/*` bodies; the local shim uses snake_case keys mapped to CLI flags (`ticket_id`, `session_key`).
 - `permission-request` is invoked by the Claude Code permission hook installed by the bundle. Agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the same `file_changes` table. The dedicated CLI route is `POST /api/protocol/record-change-rationales`.
 - Objective attachment tools follow the `<verb>_<noun>` MCP naming: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.
@@ -182,4 +222,4 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 - Do not add or commit changes unless the user explicitly asks you to commit.
 - Delivery is the concluding step. After delivering, stop unless the user follows up or the ticket is reopened.
 
-<!-- version: 0.4.9 -->
+<!-- version: 0.4.10 -->

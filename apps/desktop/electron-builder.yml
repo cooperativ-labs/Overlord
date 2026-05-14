@@ -40,4 +40,4 @@ asarUnpack:
   - "plugins/claude/**/*"
   - "plugins/cursor/**/*"
 
-npmRebuild: true
+npmRebuild: false

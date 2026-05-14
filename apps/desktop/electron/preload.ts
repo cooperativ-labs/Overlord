@@ -152,6 +152,9 @@ const electronAPI = {
     configure: (options?: { projectDirectory?: string }) =>
       ipcRenderer.invoke('agent-permissions:configure', options)
   },
+  feedWindow: {
+    open: () => ipcRenderer.invoke('feed-window:open')
+  },
   quickTask: {
     getHotkey: () =>
       ipcRenderer.invoke('quick-task:get-hotkey') as Promise<{

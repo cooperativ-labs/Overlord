@@ -228,6 +228,45 @@ export const loadContextSchema = z.object({
   ticketId: ticketIdSchema
 });
 
+/**
+ * record-work: create a completed ticket from chat in one step.
+ * Used when an agent has done work directly in a chat (no live session) and
+ * wants to record it as a ticket in `review` with a completed objective, then
+ * trigger the feed-post generator. Project resolution follows the same
+ * workingDirectory → projectId precedence as `prompt`/`create`, but if neither
+ * resolves the caller may pass `personal: true` to create a private ticket.
+ */
+export const recordWorkSchema = z.object({
+  title: z.string().trim().max(180).optional().default(''),
+  objective: agentText(20_000),
+  summary: agentText(20_000),
+  changeRationales: z.array(changeRationaleSchema).max(50).optional().default([]),
+  artifacts: z
+    .array(
+      z.object({
+        type: z
+          .enum(['next_steps', 'test_results', 'migration', 'decision', 'note', 'url'])
+          .describe('Artifact type'),
+        label: z.string().trim().min(1).max(160),
+        uri: z.string().trim().max(1_024).optional(),
+        content: agentTextOptional(100_000).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional().default({})
+      })
+    )
+    .optional()
+    .default([]),
+  acceptanceCriteria: agentTextOptional(20_000).optional().default(''),
+  availableTools: agentTextOptional(20_000).optional().default(''),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  projectId: z.string().optional(),
+  personal: z.boolean().optional().default(false),
+  workingDirectory: z.string().trim().max(1024).optional(),
+  delegate: z.string().trim().max(120).optional(),
+  agentIdentifier: z.string().trim().min(1).max(120),
+  connectionMethod: connectionMethodSchema.default('rest'),
+  metadata: z.record(z.string(), z.unknown()).optional().default({})
+});
+
 /** spawn: create a new ticket and immediately connect to it */
 export const spawnSchema = z.object({
   title: z.string().trim().max(180).optional().default(''),

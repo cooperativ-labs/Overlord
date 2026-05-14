@@ -2,7 +2,7 @@
   "name": "Overlord",
   "description": "Overlord is a platform for managing AI agent workflows.",
   "author": "Overlord",
-  "version": "5.2605131312.0",
+  "version": "5.2605141444.0",
   "private": true,
   "main": "apps/desktop/dist-electron/main.js",
   "workspaces": [
@@ -140,7 +140,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.2.1",
-    "electron": "^40.6.0",
+    "electron": "^42.0.1",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.27.3",
     "eslint": "^10.0.0",
@@ -167,6 +167,9 @@
     "vercel": "^50.17.1",
     "vite": "^8.0.1",
     "wait-on": "^8.0.3"
+  },
+  "resolutions": {
+    "node-abi": "^4.31.0"
   },
   "packageManager": "yarn@4.14.1"
 }

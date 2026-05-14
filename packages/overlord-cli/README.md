@@ -117,6 +117,7 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `search-tickets` - find tickets by keyword, status, project, creator, or update date
 - `create` - create a draft ticket without attaching (standalone or follow-up)
 - `prompt` - create a ticket and attach to it immediately (`spawn` is a backward-compatible alias)
+- `record-work` - record already-completed chat work as a ticket in review with a completed objective and trigger feed-post generation
 - `update` - post progress, activity events, and optional change rationales
 - `record-change-rationales` - persist structured change rationales without a normal progress update
 - `ask` - post a blocking question and move the ticket to review
@@ -129,6 +130,8 @@ Agents can find docs here: https://www.ovld.ai/docs/for-agents
 - `attachment-finalize-upload` - finalize an uploaded objective attachment row after storage upload
 - `attachment-download-url` - get a signed download URL for an existing objective attachment
 - `attachment-upload-file` - prepare, upload, and finalize a local objective attachment in one command
+
+Use `create` for future work you want to track, `prompt` for work that should start immediately, and `record-work` for work that was already completed in chat and now needs a review ticket plus feed post.
 
 `ovld protocol deliver` accepts either discrete flags like `--summary` / `--artifacts-json`, an inline full payload with `--payload-json '{"summary":"...","artifacts":[...],"changeRationales":[...]}'`, or a file/stdin payload with `--payload-file <path|->`.
 

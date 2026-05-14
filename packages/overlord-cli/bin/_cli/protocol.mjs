@@ -1683,6 +1683,120 @@ async function protocolCreateTicket(args) {
 }
 
 // ---------------------------------------------------------------------------
+// record-work (one-shot: create ticket in review + completed objective + feed post)
+// ---------------------------------------------------------------------------
+
+async function protocolRecordWork(args) {
+  const flags = parseFlags(args);
+
+  if (flags['payload-file'] && flags['payload-json']) {
+    throw new Error('Use either --payload-file or --payload-json, not both');
+  }
+  const payload = flags['payload-file']
+    ? await readJsonFileOrStdin(String(flags['payload-file']), '--payload-file')
+    : flags['payload-json']
+      ? parseJsonFlag('--payload-json', flags['payload-json'])
+      : null;
+
+  if (payload && (flags.summary || flags['summary-file'])) {
+    throw new Error('Use either payload input or --summary/--summary-file, not both');
+  }
+  if (payload && (flags.objective || flags['objective-file'])) {
+    throw new Error('Use either payload input or --objective/--objective-file, not both');
+  }
+
+  const objective = payload
+    ? (() => {
+        const value = payload.objective;
+        if (typeof value !== 'string' || !value.trim()) {
+          throw new Error('payload input must include a non-empty objective');
+        }
+        return value;
+      })()
+    : flags['objective-file']
+      ? await readTextFileOrStdin(String(flags['objective-file']), '--objective-file')
+      : requireFlag(flags, 'objective', undefined);
+
+  const summary = payload
+    ? (() => {
+        const value = payload.summary;
+        if (typeof value !== 'string' || !value.trim()) {
+          throw new Error('payload input must include a non-empty summary');
+        }
+        return value;
+      })()
+    : flags['summary-file']
+      ? await readTextFileOrStdin(String(flags['summary-file']), '--summary-file')
+      : requireFlag(flags, 'summary', undefined);
+
+  let artifacts = payload?.artifacts ?? [];
+  if (payload && (flags['artifacts-file'] || flags['artifacts-json'])) {
+    throw new Error('Use either payload input or artifact flags, not both');
+  }
+  if (flags['artifacts-file']) {
+    artifacts = await readJsonFileOrStdin(String(flags['artifacts-file']), '--artifacts-file');
+  } else if (flags['artifacts-json']) {
+    artifacts = parseJsonFlag('--artifacts-json', flags['artifacts-json']);
+  }
+
+  if (payload && (flags['change-rationales-file'] || flags['change-rationales-json'])) {
+    throw new Error('Use either payload input or change-rationale flags, not both');
+  }
+  const changeRationales = payload?.changeRationales ?? (await resolveChangeRationales(flags));
+
+  // record-work has no live session, but the same git-changed-files guard
+  // helps catch missing rationales. Apply the same opt-out semantics as deliver.
+  validateDeliverFileChanges(flags, changeRationales);
+
+  const personal = Boolean(flags.personal);
+  const workingDirectory =
+    flags['working-directory'] ?? (!flags['project-id'] && !personal ? process.cwd() : undefined);
+
+  const agentIdentifier = resolveProtocolAgentIdentifier(flags);
+  const modelIdentifier = resolveProtocolModelIdentifier(flags);
+
+  const body = {
+    objective,
+    summary,
+    artifacts,
+    changeRationales,
+    agentIdentifier,
+    connectionMethod: String(flags.method ?? 'cli'),
+    metadata: await resolveProtocolMetadata(flags, { cwd: process.cwd() }),
+    ...(flags.title ? { title: String(flags.title) } : {}),
+    ...(flags.priority ? { priority: String(flags.priority) } : {}),
+    ...(flags['project-id'] ? { projectId: String(flags['project-id']) } : {}),
+    ...(personal ? { personal: true } : {}),
+    ...(workingDirectory ? { workingDirectory: String(workingDirectory) } : {}),
+    ...(flags['acceptance-criteria']
+      ? { acceptanceCriteria: String(flags['acceptance-criteria']) }
+      : {}),
+    ...(flags['available-tools'] ? { availableTools: String(flags['available-tools']) } : {}),
+    delegate: resolveProtocolTicketDelegate(flags, modelIdentifier, agentIdentifier)
+  };
+
+  const { platformUrl, bearerToken, localSecret, organizationId } =
+    await resolveProtocolAuthForFlags(flags);
+  const timeoutMs = resolveTimeout(flags);
+
+  const data = await apiPost(
+    platformUrl,
+    bearerToken,
+    localSecret,
+    organizationId,
+    '/api/protocol/record-work',
+    body,
+    timeoutMs
+  );
+  console.log(JSON.stringify(data, null, 2));
+
+  const ticketId = data.ticket?.ticket_id ?? data.ticket?.id ?? data.ticket?.ticketId;
+  if (ticketId) {
+    process.stderr.write(`\nTICKET_ID=${ticketId}\n`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // search-tickets (find tickets by query/status/project/created_by/dates)
 // ---------------------------------------------------------------------------
 
@@ -1792,6 +1906,7 @@ Subcommands:
   discuss-objective          Mark a draft objective as submitted (ready for review/execution)
   create                    Create a draft ticket without attaching (follow-up or standalone)
   prompt                    Create a ticket and attach to it immediately
+  record-work               Record completed-from-chat work as a ticket in review + feed post (no attach)
   update                    Post progress, activity events, and optional change rationales
   record-change-rationales  Persist structured change rationales without a progress update
   ask                       Post a blocking question and move the ticket to review
@@ -2063,6 +2178,45 @@ create:
   Notes:
     Standalone create auto-discovers the project from the current working directory unless --personal is set.
     Follow-up create requires both --session-key and --ticket-id.
+    Use create for future work. If the work is already complete and only needs to be recorded,
+    use \`record-work\` instead.
+
+record-work:
+  Purpose:
+    Record work the agent already completed in a chat as a ticket in \`review\` status
+    with a completed objective, then trigger the feed-post generator. No session is
+    left open — use this INSTEAD OF \`create\` + \`attach\` + \`deliver\` for "log what we
+    just did" flows. Do NOT use this for in-progress work; use \`prompt\` for that.
+  Required:
+    --objective <text> or --objective-file <path|->   What was asked / what was done
+    --summary   <text> or --summary-file   <path|->   Narrative for feed post + reviewer
+    or: --payload-json <json>
+    or: --payload-file <path|-> containing { objective, summary, artifacts, changeRationales }
+  Optional:
+    --title <text>            Auto-derived from objective if omitted
+    --priority <level>        low | medium | high | urgent
+    --project-id <id>         Skip cwd resolution and use this project explicitly
+    --working-directory <path> Override cwd for project resolution
+    --personal                Create a private ticket when no project should be associated
+    --artifacts-json <json>
+    --artifacts-file <path|->
+    --change-rationales-json <json>
+    --change-rationales-file <path|->
+    --skip-file-change-check  Bypass local git vs changeRationales validation
+    --acceptance-criteria <text>
+    --available-tools <text>
+    --delegate <model>
+    --agent <identifier>
+    --model <identifier>
+  Notes:
+    Project resolution mirrors \`prompt\`: if --project-id is not set and --personal is not used,
+    the CLI sends cwd as workingDirectory and the API matches it against your configured
+    project_user.local_working_directory rows. If no match, the API returns 400 — re-run with
+    --project-id <id> or --personal.
+    Use this for completed-from-chat work. If you still need to execute the work, use \`create\`
+    for a draft ticket or \`prompt\` to create and start execution immediately.
+    In a git workspace, record-work validates that changed files are represented by
+    changeRationales unless --skip-file-change-check is set.
 
 attachment-list:
   Required:
@@ -2151,6 +2305,10 @@ Examples:
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --payload-file -
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --skip-file-change-check
   ovld protocol deliver --session-key <key> --ticket-id <ticket_id> --summary "Done" --timeout 60000
+  ovld protocol record-work --objective "User asked for X; I did Y" --summary "What I did and why" --change-rationales-json '[...]'
+  ovld protocol record-work --payload-file - <<'EOF'
+    {"objective":"...","summary":"...","artifacts":[...],"changeRationales":[...]}
+EOF
 `);
     return;
   }
@@ -2189,6 +2347,10 @@ Examples:
   }
   if (subcommand === 'prompt' || subcommand === 'spawn') {
     await protocolPrompt(args);
+    return;
+  }
+  if (subcommand === 'record-work') {
+    await protocolRecordWork(args);
     return;
   }
   if (subcommand === 'attachment-list') {

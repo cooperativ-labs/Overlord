@@ -394,6 +394,58 @@ const tools = [
     subcommand: 'deliver'
   },
   {
+    name: 'record_work',
+    description:
+      'Record completed-from-chat work as a ticket in `review` status with a completed objective, then trigger feed-post generation. Use this INSTEAD OF create_ticket + attach + deliver for "log what we just did" flows. Project resolution mirrors `prompt`: if project_id is omitted, working_directory is matched against project_user.local_working_directory. When neither resolves, pass personal: true. Do not use for in-progress work.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objective: {
+          type: 'string',
+          description: 'What was asked / what was done. Stored as a completed objective.'
+        },
+        summary: {
+          type: 'string',
+          description: 'Narrative for feed post + reviewer.'
+        },
+        title: { type: 'string' },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        project_id: { type: 'string' },
+        working_directory: { type: 'string' },
+        personal: { type: 'boolean' },
+        acceptance_criteria: { type: 'string' },
+        available_tools: { type: 'string' },
+        delegate: { type: 'string' },
+        artifacts: { type: 'array' },
+        change_rationales: { type: 'array' },
+        skip_file_change_check: { type: 'boolean' }
+      },
+      required: ['objective', 'summary']
+    },
+    toCliFlags: args => ({
+      'payload-file': '-',
+      title: args.title,
+      priority: args.priority,
+      'project-id': args.project_id,
+      'working-directory': args.working_directory,
+      personal: args.personal,
+      'acceptance-criteria': args.acceptance_criteria,
+      'available-tools': args.available_tools,
+      delegate: args.delegate,
+      'skip-file-change-check': args.skip_file_change_check
+    }),
+    toCliStdin: args =>
+      JSON.stringify({
+        objective: args.objective,
+        summary: args.summary,
+        ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}),
+        ...(Array.isArray(args.change_rationales)
+          ? { changeRationales: args.change_rationales }
+          : {})
+      }),
+    subcommand: 'record-work'
+  },
+  {
     name: 'list_attachments',
     description:
       'List objective attachments visible to the current ticket session. Returns attachment IDs needed by get_attachment_download_url, plus their objective_id, label, content_type, file_size, and storage_path.',

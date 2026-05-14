@@ -218,6 +218,14 @@ ovld protocol discover-project
 ovld protocol create --agent codex --objective "Capture follow-up work from this repository"
 ```
 
+When the work is already done in chat and you want to record it after the fact, use `record-work` instead of `create`:
+
+```bash
+ovld protocol record-work \
+  --objective "User asked me to investigate the billing regression and summarize the fix." \
+  --summary "Confirmed the root cause, implemented the fix, added verification, and recorded the rationale."
+```
+
 Use `--project-id` when you want to bypass automatic project discovery:
 
 ```bash
@@ -272,9 +280,10 @@ Agents should use the protocol equivalents:
 ```bash
 ovld protocol create --agent codex --objective "Investigate why invite emails are not sending"
 ovld protocol prompt --agent codex --objective "Fix the invite email regression"
+ovld protocol record-work --objective "User asked me to X; I completed it in chat." --summary "Narrative for review and feed post."
 ```
 
-Default to `create` when you only want to capture work. Use `prompt` when you explicitly want to start execution immediately.
+Default to `create` when you want to capture future work as a draft. Use `prompt` when you explicitly want to start execution immediately. Use `record-work` when the work is already done in chat and should be recorded as a ticket in `review` with a generated feed post.
 
 ### 2. Launch the Agent
 
@@ -397,6 +406,25 @@ ovld protocol deliver --session-key <session-key> --ticket-id <ticket_id> --payl
 ```
 
 Deliveries move the ticket into review. A human can then inspect the summary, artifacts, changes, and rationales before deciding what to do next.
+
+### 7. Record Completed Work From Chat
+
+When the agent already completed the work directly in chat and there is no attached session to deliver, use `record-work` instead of `create` + `attach` + `deliver`:
+
+```bash
+ovld protocol record-work --payload-file - <<'EOF'
+{
+  "objective": "User asked me to fix the invite email regression and explain the change.",
+  "summary": "Fixed the fallback path, added verification, and documented the behavior for review.",
+  "artifacts": [{"type":"test_results","label":"Verification","content":"Targeted invite email tests passed."}],
+  "changeRationales": [{"label":"Restore fallback path","file_path":"lib/actions/invites.ts","summary":"Reintroduced SMTP fallback handling.","why":"The primary branch could return no provider and drop the send path.","impact":"Invite emails now retry through the configured fallback provider.","hunks":[{"header":"@@ -42,7 +42,13 @@"}]}]
+}
+EOF
+```
+
+Use this only for already-completed work. If the work still needs to happen, use `create` or `prompt` instead.
+
+Project resolution follows the same working-directory rules as `create` and `prompt`. If Overlord cannot match the current directory to a project, ask for `--project-id`. Use `--personal` only when the work is not tied to any project.
 
 ## Change Rationales
 

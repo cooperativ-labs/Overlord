@@ -20,6 +20,7 @@ import {
 import { configureAgentPermissions } from '../services/agent-permissions';
 import { AppUpdaterService } from '../services/app-updater';
 import { type CliInstallResult, getCliInstallStatus, installCli } from '../services/cli-installer';
+import { openFeedWindow } from '../services/feed-window';
 import {
   getOverlordPluginStatus,
   installOverlordPlugin,
@@ -142,6 +143,11 @@ export function registerAppIpc({
     await Sentry.flush(2_000);
 
     return { ok: true, eventId };
+  });
+
+  ipcMain.handle('feed-window:open', () => {
+    openFeedWindow();
+    return true;
   });
 
   ipcMain.handle('quick-task:get-hotkey', () => {

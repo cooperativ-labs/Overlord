@@ -2,6 +2,7 @@
 
 import {
   ChevronDown,
+  ExternalLink,
   GraduationCap,
   ListChecks,
   MessageSquarePlus,
@@ -380,6 +381,14 @@ export function AppSidebar({
                     <span>Feed</span>
                   </Link>
                 </SidebarMenuButton>
+                {isElectron && (
+                  <SidebarMenuAction
+                    title="Pop out feed"
+                    onClick={() => window.electronAPI?.feedWindow.open()}
+                  >
+                    <ExternalLink />
+                  </SidebarMenuAction>
+                )}
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={isMyTicketsActive} tooltip="My Tickets">

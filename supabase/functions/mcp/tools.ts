@@ -609,6 +609,109 @@ export const TOOLS = [
     }
   },
   {
+    name: 'record_work',
+    annotations: {
+      title: 'Record Completed Work From Chat',
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false
+    },
+    description:
+      'Record work that the agent already completed inside a chat as a ticket in `review` status with a completed objective, then trigger feed-post generation. Use this INSTEAD OF create_ticket + attach + deliver for "log what we just did" flows. Do NOT use this for in-progress work — use `attach` (existing ticket) or `prompt` (new) for that. Project resolution follows the same workingDirectory → projectId precedence as `prompt`/`create_ticket`. If neither resolves a project, pass `personal: true` to create a private ticket. The objective should describe what was asked/done; the summary is the narrative shown to reviewers and used by the feed-post generator.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objective: {
+          type: 'string',
+          description: 'What was asked / what was done. Stored as a completed objective.'
+        },
+        summary: {
+          type: 'string',
+          description:
+            'Narrative for the feed post and reviewer. What you did, decisions, next steps.'
+        },
+        title: {
+          type: 'string',
+          description: 'Optional title. Auto-derived from objective if omitted.'
+        },
+        priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
+        projectId: {
+          type: 'string',
+          description: 'Explicit project UUID. Skips workingDirectory resolution.'
+        },
+        workingDirectory: {
+          type: 'string',
+          description:
+            'Absolute path of the repository root. Matched against project_user.local_working_directory when projectId is not provided.'
+        },
+        personal: {
+          type: 'boolean',
+          description:
+            'Create a private ticket without any project association. Use only when the work is not tied to any project.'
+        },
+        acceptanceCriteria: { type: 'string' },
+        availableTools: { type: 'string' },
+        delegate: { type: 'string' },
+        agentIdentifier: {
+          type: 'string',
+          description: 'The agent identifier doing the recording.'
+        },
+        metadata: { type: 'object' },
+        artifacts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: {
+                type: 'string',
+                enum: ['next_steps', 'test_results', 'migration', 'decision', 'note', 'url']
+              },
+              label: { type: 'string' },
+              content: { type: 'string' },
+              uri: { type: 'string' },
+              metadata: { type: 'object' }
+            },
+            required: ['type', 'label']
+          }
+        },
+        changeRationales: {
+          type: 'array',
+          description:
+            'Structured rationale records for meaningful file changes. Required when the workspace has uncommitted changes; otherwise optional.',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              file_path: { type: 'string' },
+              summary: { type: 'string' },
+              why: { type: 'string' },
+              impact: { type: 'string' },
+              change_kind: { type: 'string' },
+              attribution_source: { type: 'string' },
+              confidence: { type: 'string' },
+              hunks: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    header: { type: 'string' },
+                    old_start: { type: 'number' },
+                    old_lines: { type: 'number' },
+                    new_start: { type: 'number' },
+                    new_lines: { type: 'number' }
+                  }
+                }
+              }
+            },
+            required: ['label', 'file_path', 'summary', 'why', 'impact']
+          }
+        }
+      },
+      required: ['objective', 'summary']
+    }
+  },
+  {
     name: 'save_ticket_draft',
     annotations: {
       title: 'Save Ticket Draft',

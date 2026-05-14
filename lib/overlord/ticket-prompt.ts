@@ -479,6 +479,7 @@ ${settingsJson}
 - \`ask\` — ask a blocking question
 - \`read_context\` / \`write_context\` — persist findings across sessions
 - \`deliver\` — deliver completed work
+- \`record_work\` — record completed-from-chat work as a ticket in \`review\` with a completed objective and trigger feed-post generation in one call (use instead of \`create_ticket\` + \`attach\` + \`deliver\` when the work is already done in the chat)
 - \`create_ticket\` — create a follow-up ticket; set \`executionTarget\` to \`"agent"\` for computer-executable work or \`"human"\` for tasks requiring human presence/judgment`;
 }
 

@@ -442,6 +442,7 @@ when one surface changes, check the others against this table.
 | create (follow-up)            | `POST /api/protocol/create-ticket`                | `create` (with session flags)    | `create_ticket`                                |
 | create (standalone)           | `POST /api/protocol/tickets`                      | `create` (no session flags)      | —                                              |
 | prompt                        | `POST /api/protocol/prompt`                       | `prompt`                         | —                                              |
+| record-work                   | `POST /api/protocol/record-work`                  | `record-work`                    | `record_work`                                  |
 | update                        | `POST /api/protocol/update`                       | `update`                         | `update`                                       |
 | hook-event                    | `POST /api/protocol/hook-event`                   | `hook-event`                     | `record_hook_event`                            |
 | record-change-rationales      | `POST /api/protocol/record-change-rationales`     | `record-change-rationales`       | `record_change_rationales`                     |
@@ -463,6 +464,7 @@ Notes:
 - `agentIdentifier` and `connectionMethod` are required by the API but defaulted client-side: CLI defaults to `<agent>`/`cli`, MCP defaults to `mcp`.
 - Organization scope for ticket-scoped protocol calls is resolved in this order: organization id embedded in human-readable `ticket_id` (for example `1:899`), then explicit `--organization-id` / `x-organization-id`, then stored OAuth organization.
 - `deliver` accepts optional `artifacts` (defaults to `[]`), `changeRationales`, `snapshot`, and `checkpoint` metadata — same as `deliverSchema` in `/Users/jake/Development/Cooperativ/Overlord/lib/overlord/validation.ts`. The CLI can send the full delivery object via `--payload-json <json>` or `--payload-file <path|->`; when either full-payload flag is used, do not also pass `--summary`, `--artifacts-*`, or `--change-rationales-*`. CLI delivery also supports local-only `--checkpoint-backend <auto|jj|git>` and `--skip-checkpoint` flags; the MCP local shim exposes matching `checkpoint_backend` and `skip_checkpoint` parameters when it routes through the CLI.
+- `record-work` is the completed-from-chat path. Use it when work is already done and you need a ticket in `review` plus feed-post generation without opening an attached session. Keep its required fields (`objective`, `summary`) and project-resolution behavior aligned across API, CLI, hosted MCP, the local shim, and plugin guidance.
 - `permission-request` is invoked by the installed permission hook/rules, not by agent logic.
 - `hook-event` is invoked by installed lifecycle hooks (`UserPromptSubmit` today; `Stop` reserved for future use) and intentionally does not require `sessionKey`.
 - `prompt` (formerly `spawn`) creates and executes a ticket immediately. The CLI accepts `spawn` as a backward-compatible alias.

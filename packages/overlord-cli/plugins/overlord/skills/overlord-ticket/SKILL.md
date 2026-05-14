@@ -72,7 +72,7 @@ ovld protocol deliver --session-key <sessionKey> \
 1. If the user wants to create tickets (and does not ask to start execution), run `ovld protocol create --agent codex --objective "..."`.
    - When `--session-key` and `--ticket-id` are provided, it creates a follow-up draft.
    - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord `local_working_directory`, then creates a standalone draft.
-2. Default to `create` for new tickets. Only use `ovld protocol prompt --agent codex --objective "..."` when the user explicitly asks to create and execute immediately.
+2. Default to `create` for new draft tickets. Only use `ovld protocol prompt --agent codex --objective "..."` when the user explicitly asks to create and execute immediately. If the work is already complete in chat and just needs to be recorded, use `ovld protocol record-work` instead.
    `prompt` creates the ticket in `execute` status and attaches immediately.
 3. If the user wants to inspect an existing ticket without starting work, use `ovld protocol load-context --ticket-id <ticket_id>`.
 4. If the user wants to work an existing ticket, attach with `ovld protocol attach --ticket-id <ticket_id>` and then switch to Mode 1. Use `ovld protocol connect --ticket-id <ticket_id>` instead when you only need a session key without the full ticket payload.
@@ -104,6 +104,23 @@ Pass `--execution-target agent` or `--execution-target human` (default: `human`)
 - **`human`** — any task requiring human presence or judgment: setting credentials or tokens in a third-party UI (e.g. Vercel, AWS), sending physical mail, making a product or business decision, physical-world actions.
 
 When in doubt, ask yourself: _can this be done entirely inside a terminal or browser by an AI without human intervention?_ If yes → `agent`. If it requires a human to log in, decide, or act in the real world → `human`.
+
+## Recording Completed Work From Chat
+
+Use `ovld protocol record-work` (hosted MCP: `record_work`) when the user has done work directly in a chat (no attached ticket) and now wants to record it as a ticket *and* publish a feed post about it. Distinct from `create` (drafts future work), `prompt` (creates and starts execution), and `deliver` (concludes an attached session). `record-work` creates the ticket in `review` with a completed objective and triggers the feed-post generator atomically; no session is left open.
+
+```bash
+ovld protocol record-work --payload-file - <<'EOF'
+{
+  "objective": "User asked me to X; I did Y...",
+  "summary": "Narrative for feed post + reviewer.",
+  "artifacts": [...],
+  "changeRationales": [...]
+}
+EOF
+```
+
+Project resolution mirrors `prompt`/`create`: cwd is matched against `project_user.local_working_directory`. If no match, ask the user for `--project-id`; if the work is not tied to any project, pass `--personal`. In a git workspace, `record-work` validates uncommitted changes are represented by `changeRationales` unless `--skip-file-change-check` is set. Do NOT use for in-progress work.
 
 ## Change Rationales
 
@@ -142,7 +159,7 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 ## Defaults And Notes
 
 - API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `codex`/`cli`; the hosted MCP defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
-- Hosted MCP and the local `overlord-mcp.mjs` shim use the same **tool names** (\`attach\`, \`update\`, \`deliver\`, …). The shim uses **snake_case** JSON keys (\`ticket_id\`, \`session_key\`) that map to CLI flags; hosted MCP uses **camelCase** (\`ticketId\`, \`sessionKey\`) matching REST bodies.
+- Hosted MCP and the local `overlord-mcp.mjs` shim use the same **tool names** (\`attach\`, \`update\`, \`deliver\`, \`record_work\`, …). The shim uses **snake_case** JSON keys (\`ticket_id\`, \`session_key\`) that map to CLI flags; hosted MCP uses **camelCase** (\`ticketId\`, \`sessionKey\`) matching REST bodies.
 - `permission-request` is invoked by the local Codex plugin's permission rules; agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the `file_changes` table; the dedicated route is `POST /api/protocol/record-change-rationales`.
 - Objective attachment MCP tools use `<verb>_<noun>` names — `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.
@@ -158,4 +175,4 @@ The `attach` and `load-context` responses already include `attachments` and `obj
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, always include `--organization-id <id>` — use the organization ID from the ticket prompt context to select the organization non-interactively and avoid a blocking TTY prompt.
 
-<!-- version: 0.4.9 -->
+<!-- version: 0.4.10 -->

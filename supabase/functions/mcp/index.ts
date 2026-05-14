@@ -27,6 +27,7 @@ import { handleDiscussObjective } from './handlers/discuss-objective.ts';
 import { handleReadContext } from './handlers/read-context.ts';
 import { handleRecordChangeRationales } from './handlers/record-change-rationales.ts';
 import { handleRecordHookEvent } from './handlers/record-hook-event.ts';
+import { handleRecordWork } from './handlers/record-work.ts';
 import { handleSaveTicketDraft } from './handlers/save-ticket-draft.ts';
 import { handleSearchTickets } from './handlers/search-tickets.ts';
 import { handleUpdate } from './handlers/update.ts';
@@ -263,6 +264,8 @@ Deno.serve(async (req: Request) => {
         result = await handleWriteContext(supabase, toolArgs, requestContext);
       } else if (toolName === 'deliver') {
         result = await handleDeliver(supabase, toolArgs, requestContext);
+      } else if (toolName === 'record_work') {
+        result = await handleRecordWork(supabase, toolArgs, requestContext);
       } else if (toolName === 'create_ticket') {
         result = await handleCreateTicket(supabase, toolArgs, requestContext);
       } else if (toolName === 'discover_project') {

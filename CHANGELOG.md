@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.2605141444.0] - 2026-05-14:14:44
+
+### Added
+- **`POST /api/protocol/record-work`** with **`ovld protocol record-work`**, hosted MCP **`record_work`**, and local MCP shim wiring — capture already-finished chat work as a **review** ticket with a **completed** objective, **deliver**-style artifacts and **change rationales**, and ticket rollup **feed-post** generation in one call (no **`attach`** session).
+- **Desktop “Pop out feed”**: **Electron** opens a dedicated **`/feed-window`** page (**`FeedList`**) with a draggable title strip, persists **window bounds**, and the web sidebar shows the control when running inside the desktop shell.
+
+### Fixed
+- None.
+
+### Changed
+- None.
+
+### Security
+- None.
+
+### Documentation
+- Extend **connector surfaces**, **`overlord-ticket`** skills (**Claude Code**, **Codex**, **Cursor**), **`overlord-cli` README**, **`feed-page-functionality`**, and **`overlord-new-user-guide`** for **`record-work`** vs **`create`** / **`prompt`** / **`deliver`**, and the pop-out feed window.
+
+### Chore
+- Extend **`protocol.mjs`** and **`overlord-mcp.mjs`** for **`record-work`**; update **`types/electron.d.ts`** for **`feedWindow`**; bump **workspace** to **`5.2605141444.0`** and **`overlord-cli`** to **`5.2605141447.0`**.
+
 ## [5.2605131312.0] - 2026-05-13:13:12
 
 ### Added

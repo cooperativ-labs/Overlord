@@ -309,6 +309,9 @@ interface ElectronAPI {
     get: <T = unknown>(key: string) => Promise<T>;
     set: (key: string, value: unknown) => Promise<void>;
   };
+  feedWindow: {
+    open: () => Promise<boolean>;
+  };
   quickTask: {
     getHotkey: () => Promise<{ accelerator: string; defaultAccelerator: string }>;
     setHotkey: (

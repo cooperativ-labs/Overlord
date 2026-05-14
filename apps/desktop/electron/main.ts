@@ -14,6 +14,7 @@ import { registerTerminalIpc } from './ipc/terminal';
 import { registerAppMenu } from './services/app-menu';
 import { AppUpdaterService } from './services/app-updater';
 import { setElectronCredentialsProfile } from './services/electron-credentials';
+import { initFeedWindow } from './services/feed-window';
 import {
   installAuthHeaderInjector,
   installRendererResponseHeaders
@@ -398,6 +399,7 @@ app.whenReady().then(async () => {
   unsubscribeAppMenu = registerAppMenu({ appUpdater, isDev });
 
   initQuickTaskWindow({ platformUrl, isDev });
+  initFeedWindow({ platformUrl });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
