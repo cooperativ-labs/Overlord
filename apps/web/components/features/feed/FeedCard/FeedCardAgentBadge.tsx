@@ -22,7 +22,7 @@ export function FeedCardAgentBadge({ agentIdentifier, state }: FeedCardAgentBadg
           height={10}
           className={agentType.invertDark ? 'dark:invert' : ''}
         />
-        {agentType.label}
+        {/* {agentType.label} */}
         {isExecuting ? (
           <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
         ) : null}
