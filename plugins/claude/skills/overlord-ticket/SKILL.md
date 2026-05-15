@@ -172,6 +172,15 @@ ovld protocol discover-project
 
 You can override with `--project-id` or `--working-directory` if needed.
 
+### Devices and checkout paths
+
+Device rows use **(organization_id, user_id, device_fingerprint)**, so the same physical machine can register independently in each org you belong to. Persist a fingerprint per workstation, upsert via `ovld protocol get-device`, then maintain checkout paths via `list-project-resources`, `add-project-resource`, `update-project-resource`, and `update-device` (`ovld protocol help` lists flags).
+
+```bash
+ovld protocol get-device --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+ovld protocol list-project-resources --project-id <project_uuid> --device-fingerprint "$OVERLORD_DEVICE_FINGERPRINT"
+```
+
 ### Choosing `--execution-target`
 
 Pass `--execution-target agent` or `--execution-target human` (default: `human`) when creating tickets.
@@ -206,7 +215,7 @@ This keeps the ticket feed readable while preserving the full document in versio
 ## Defaults And Notes
 
 - API requires `agentIdentifier` and `connectionMethod` on attach/connect/prompt. The CLI defaults them to `claude-code`/`cli`; the MCP tool defaults to `mcp`. Override with `--agent` / `--method` when calling from a different runtime.
-- Hosted Overlord MCP (`/functions/v1/mcp`) uses the same canonical tool names as any local MCP shim that shells into `ovld protocol` (`attach`, `update`, `deliver`, …). Hosted calls use camelCase JSON keys (`ticketId`, `sessionKey`) matching `POST /api/protocol/*` bodies; the local shim uses snake_case keys mapped to CLI flags (`ticket_id`, `session_key`).
+- Hosted Overlord MCP (`/functions/v1/mcp`) uses the same canonical tool names as the local shim that shells into `ovld protocol` (`attach`, `update`, `deliver`, `get_device`, `list_project_resources`, …). Hosted calls use camelCase JSON keys (`ticketId`, `sessionKey`, `deviceFingerprint`) matching `POST /api/protocol/*` bodies; the local shim uses snake_case keys mapped to CLI flags (`ticket_id`, `session_key`, `device_fingerprint`).
 - `permission-request` is invoked by the Claude Code permission hook installed by the bundle. Agents do not normally call it directly.
 - `record_change_rationales` (MCP) and `ovld protocol record-change-rationales` (CLI) both write to the same `file_changes` table. The dedicated CLI route is `POST /api/protocol/record-change-rationales`.
 - Objective attachment tools follow the `<verb>_<noun>` MCP naming: `list_attachments`, `prepare_attachment_upload`, `finalize_attachment_upload`, `get_attachment_download_url`, `upload_attachment_file`. CLI commands use `attachment-*` and require `--objective-id` for upload/finalize.

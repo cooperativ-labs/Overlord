@@ -231,6 +231,28 @@ export async function updateProjectWorkingDirectoryAction(input: {
     throw new Error(error.message ?? 'Failed to update project working directory.');
   }
 
+  // Mirror to project_resource_directories so the new resolver sees the value.
+  if (normalized) {
+    const { data: existing } = await supabase
+      .from('project_resource_directories')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('project_id', input.projectId)
+      .is('device_id', null)
+      .eq('directory_path', normalized)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from('project_resource_directories').insert({
+        user_id: user.id,
+        project_id: input.projectId,
+        device_id: null,
+        directory_path: normalized,
+        is_primary: true
+      });
+    }
+  }
+
   revalidateProjectPaths(input.projectId);
 }
 

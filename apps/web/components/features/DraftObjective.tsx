@@ -155,7 +155,7 @@ export function DraftObjective({
         className={cn(
           'relative group/future',
           isFuture &&
-          'max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out hover:max-h-[500px] focus-within:max-h-[500px]'
+            'max-h-[3.25rem] overflow-hidden transition-[max-height] duration-200 ease-in-out hover:max-h-[500px] focus-within:max-h-[500px]'
         )}
       >
         <InlineEditField
@@ -166,7 +166,7 @@ export function DraftObjective({
           field="objective"
           fileMentionPaths={fileMentionPaths}
           initialValue={initialValue}
-          inputClassName={cn("text-base leading-relaxed", isFuture ? 'text-muted-foreground' : '')}
+          inputClassName={cn('text-base leading-relaxed', isFuture ? 'text-muted-foreground' : '')}
           multiline
           objectiveRowId={objectiveId || undefined}
           objectiveState={objectiveState}

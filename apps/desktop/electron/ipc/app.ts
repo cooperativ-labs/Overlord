@@ -1,5 +1,7 @@
 import * as Sentry from '@sentry/electron/main';
 import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -85,6 +87,38 @@ export function registerAppIpc({
 
   ipcMain.handle('app:get-platform-url', () => platformUrl);
   ipcMain.handle('app:get-connector-url', () => connectorUrl);
+
+  ipcMain.handle('app:get-host-metadata', () => {
+    return { hostname: os.hostname(), platform: process.platform };
+  });
+
+  ipcMain.handle('app:get-device-identity', async () => {
+    const deviceFilePath = path.join(app.getPath('userData'), 'overlord-device.json');
+    let deviceFingerprint: string;
+    try {
+      const raw = await fs.readFile(deviceFilePath, 'utf8');
+      const parsed = JSON.parse(raw) as { deviceFingerprint?: unknown };
+      const fp =
+        typeof parsed.deviceFingerprint === 'string' ? parsed.deviceFingerprint.trim() : '';
+      if (!fp) {
+        throw new Error('missing deviceFingerprint');
+      }
+      deviceFingerprint = fp;
+    } catch {
+      deviceFingerprint = randomUUID();
+      await fs.mkdir(path.dirname(deviceFilePath), { recursive: true });
+      await fs.writeFile(
+        deviceFilePath,
+        `${JSON.stringify({ deviceFingerprint }, null, 2)}\n`,
+        'utf8'
+      );
+    }
+    return {
+      deviceFingerprint,
+      hostname: os.hostname(),
+      platform: process.platform
+    };
+  });
 
   ipcMain.handle('app:notify', (_event, payload: { title?: string; body?: string }) => {
     const title = payload.title?.trim();

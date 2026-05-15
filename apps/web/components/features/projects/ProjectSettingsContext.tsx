@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState
-} from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 
 import type { ProjectSettingsNavSection } from '@/components/modals/ProjectSettingsModal';
 import { ProjectSettingsModal } from '@/components/modals/ProjectSettingsModal';
@@ -24,15 +16,12 @@ export type ProjectExecutionWorkspace = 'local' | 'ssh';
 export const PROJECT_EXECUTION_WORKSPACE_KEY = 'overlord-project-execution-workspace';
 export const WORKSPACE_CHANGED_EVENT = 'overlord-workspace-changed';
 
+/** @deprecated Project execution is always treated as local; SSH workspace selection is disabled. */
 export function resolveExecutionWorkspace(
-  preferredWorkspace: ProjectExecutionWorkspace,
-  hasLocalDirectory: boolean,
-  hasSshDirectory: boolean
+  _preferredWorkspace: ProjectExecutionWorkspace,
+  _hasLocalDirectory: boolean,
+  _hasSshDirectory: boolean
 ): ProjectExecutionWorkspace {
-  if (preferredWorkspace === 'ssh' && hasSshDirectory) return 'ssh';
-  if (preferredWorkspace === 'local' && hasLocalDirectory) return 'local';
-  if (hasLocalDirectory) return 'local';
-  if (hasSshDirectory) return 'ssh';
   return 'local';
 }
 
@@ -106,8 +95,6 @@ export function ProjectSettingsProvider({
 }: ProjectSettingsProviderProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialNav, setModalInitialNav] = useState<ProjectSettingsNavSection | undefined>();
-  const [executionWorkspace, setExecutionWorkspaceState] =
-    useState<ProjectExecutionWorkspace>('local');
 
   const hasLocalDirectory =
     typeof initialWorkingDirectory === 'string' &&
@@ -149,65 +136,21 @@ export function ProjectSettingsProvider({
     sshFeatureEnabled,
     sshCommand
   ]);
-  const resolvedExecutionWorkspace = resolveExecutionWorkspace(
-    executionWorkspace,
-    hasLocalDirectory,
-    hasSshDirectory
-  );
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const storedValue = window.localStorage.getItem(
-      `${PROJECT_EXECUTION_WORKSPACE_KEY}:${projectId}`
-    );
-    const preferredWorkspace =
-      storedValue === 'ssh' || storedValue === 'local'
-        ? storedValue
-        : hasLocalDirectory
-          ? 'local'
-          : hasSshDirectory
-            ? 'ssh'
-            : 'local';
-    setExecutionWorkspaceState(
-      resolveExecutionWorkspace(preferredWorkspace, hasLocalDirectory, hasSshDirectory)
-    );
-  }, [hasLocalDirectory, hasSshDirectory, projectId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(
-      `${PROJECT_EXECUTION_WORKSPACE_KEY}:${projectId}`,
-      resolvedExecutionWorkspace
-    );
-  }, [projectId, resolvedExecutionWorkspace]);
 
   const openProjectSettings = useCallback((initialNav?: ProjectSettingsNavSection) => {
     setModalInitialNav(initialNav);
     setModalOpen(true);
   }, []);
 
-  const setExecutionWorkspace = useCallback(
-    (workspace: ProjectExecutionWorkspace) => {
-      const resolved = resolveExecutionWorkspace(workspace, hasLocalDirectory, hasSshDirectory);
-      setExecutionWorkspaceState(resolved);
-      // Dispatch a custom event so components outside this provider (e.g. the SidePanel)
-      // can react to workspace changes via useWorkspacePreference.
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent(WORKSPACE_CHANGED_EVENT, {
-            detail: { projectId, workspace: resolved }
-          })
-        );
-      }
-    },
-    [hasLocalDirectory, hasSshDirectory, projectId]
-  );
+  const setExecutionWorkspace = useCallback((_workspace: ProjectExecutionWorkspace) => {
+    // Execution is always local; SSH workspace selection is disabled.
+  }, []);
 
   const value: ProjectSettingsContextValue = useMemo(
     () => ({
       projectId,
       openProjectSettings,
-      executionWorkspace: resolvedExecutionWorkspace,
+      executionWorkspace: 'local',
       setExecutionWorkspace,
       hasLocalDirectory,
       hasSshDirectory,
@@ -215,13 +158,10 @@ export function ProjectSettingsProvider({
       sshCommand,
       sshConnectionConfig,
       remoteWorkingDirectory,
-      effectiveWorkingDirectory:
-        resolvedExecutionWorkspace === 'local' ? localWorkingDirectory : null,
-      effectiveSshCommand: resolvedExecutionWorkspace === 'ssh' ? sshCommand : null,
-      effectiveSshConnectionConfig:
-        resolvedExecutionWorkspace === 'ssh' ? sshConnectionConfig : null,
-      effectiveRemoteWorkingDirectory:
-        resolvedExecutionWorkspace === 'ssh' ? remoteWorkingDirectory : null
+      effectiveWorkingDirectory: localWorkingDirectory,
+      effectiveSshCommand: null,
+      effectiveSshConnectionConfig: null,
+      effectiveRemoteWorkingDirectory: null
     }),
     [
       hasLocalDirectory,
@@ -229,11 +169,10 @@ export function ProjectSettingsProvider({
       localWorkingDirectory,
       openProjectSettings,
       projectId,
-      remoteWorkingDirectory,
-      resolvedExecutionWorkspace,
       setExecutionWorkspace,
       sshCommand,
-      sshConnectionConfig
+      sshConnectionConfig,
+      remoteWorkingDirectory
     ]
   );
 

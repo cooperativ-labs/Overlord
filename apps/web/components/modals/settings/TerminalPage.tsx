@@ -22,7 +22,6 @@ import {
   getEditorSchemeLabel
 } from '@/lib/helpers/editor-scheme';
 
-type TerminalSettingsProfileId = 'local' | 'server';
 type TerminalProfileState = {
   terminalApp: string;
   terminalLaunchMode: string;
@@ -66,6 +65,16 @@ const tmuxHostTerminalOptions = [
 
 const DEFAULT_TMUX_COMMAND = 'tmux new-session bash {script}';
 
+const PROFILE_KEYS = {
+  app: 'externalTerminalApp',
+  launchMode: 'externalTerminalLaunchMode',
+  customHotkey: 'externalTerminalCustomHotkey',
+  customApp: 'customExternalTerminalApp',
+  tmuxHostApp: 'externalTerminalTmuxHostApp',
+  customTmuxHostApp: 'customExternalTerminalTmuxHostApp',
+  tmuxCommand: 'externalTerminalTmuxCommand'
+} as const;
+
 const DEFAULT_TERMINAL_PROFILE: TerminalProfileState = {
   terminalApp: 'default',
   terminalLaunchMode: 'tab',
@@ -76,46 +85,10 @@ const DEFAULT_TERMINAL_PROFILE: TerminalProfileState = {
   terminalTmuxCommand: DEFAULT_TMUX_COMMAND
 };
 
-const TERMINAL_PROFILE_KEYS: Record<
-  TerminalSettingsProfileId,
-  {
-    app: string;
-    launchMode: string;
-    customHotkey: string;
-    customApp: string;
-    tmuxHostApp: string;
-    customTmuxHostApp: string;
-    tmuxCommand: string;
-  }
-> = {
-  local: {
-    app: 'externalTerminalApp',
-    launchMode: 'externalTerminalLaunchMode',
-    customHotkey: 'externalTerminalCustomHotkey',
-    customApp: 'customExternalTerminalApp',
-    tmuxHostApp: 'externalTerminalTmuxHostApp',
-    customTmuxHostApp: 'customExternalTerminalTmuxHostApp',
-    tmuxCommand: 'externalTerminalTmuxCommand'
-  },
-  server: {
-    app: 'serverExternalTerminalApp',
-    launchMode: 'serverExternalTerminalLaunchMode',
-    customHotkey: 'serverExternalTerminalCustomHotkey',
-    customApp: 'customServerExternalTerminalApp',
-    tmuxHostApp: 'serverExternalTerminalTmuxHostApp',
-    customTmuxHostApp: 'customServerExternalTerminalTmuxHostApp',
-    tmuxCommand: 'serverExternalTerminalTmuxCommand'
-  }
-};
-
 export function TerminalPage({ open }: { open: boolean }) {
   const { api, isElectron } = useElectron();
-  const [terminalProfiles, setTerminalProfiles] = useState<
-    Record<TerminalSettingsProfileId, TerminalProfileState>
-  >({
-    local: DEFAULT_TERMINAL_PROFILE,
-    server: DEFAULT_TERMINAL_PROFILE
-  });
+  const [terminalProfile, setTerminalProfile] =
+    useState<TerminalProfileState>(DEFAULT_TERMINAL_PROFILE);
   const [editorScheme, setEditorScheme] = useState(DEFAULT_EDITOR_SCHEME);
   const [editorSchemeLoading, setEditorSchemeLoading] = useState(false);
   const [editorSchemeError, setEditorSchemeError] = useState<string | null>(null);
@@ -162,138 +135,75 @@ export function TerminalPage({ open }: { open: boolean }) {
   useEffect(() => {
     if (!api || !open) return;
     Promise.all([
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.app),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.launchMode),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customApp),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customHotkey),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.tmuxHostApp),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.customTmuxHostApp),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.local.tmuxCommand),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.app),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.launchMode),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customApp),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customHotkey),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.tmuxHostApp),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.customTmuxHostApp),
-      api.settings.get<string>(TERMINAL_PROFILE_KEYS.server.tmuxCommand)
+      api.settings.get<string>(PROFILE_KEYS.app),
+      api.settings.get<string>(PROFILE_KEYS.launchMode),
+      api.settings.get<string>(PROFILE_KEYS.customApp),
+      api.settings.get<string>(PROFILE_KEYS.customHotkey),
+      api.settings.get<string>(PROFILE_KEYS.tmuxHostApp),
+      api.settings.get<string>(PROFILE_KEYS.customTmuxHostApp),
+      api.settings.get<string>(PROFILE_KEYS.tmuxCommand)
     ]).then(
       ([
-        localAppValue,
-        localLaunchModeValue,
-        localCustomAppValue,
-        localCustomHotkeyValue,
-        localTmuxHostAppValue,
-        localCustomTmuxHostAppValue,
-        localTmuxCommandValue,
-        serverAppValue,
-        serverLaunchModeValue,
-        serverCustomAppValue,
-        serverCustomHotkeyValue,
-        serverTmuxHostAppValue,
-        serverCustomTmuxHostAppValue,
-        serverTmuxCommandValue
+        appValue,
+        launchModeValue,
+        customAppValue,
+        customHotkeyValue,
+        tmuxHostAppValue,
+        customTmuxHostAppValue,
+        tmuxCommandValue
       ]) => {
-        setTerminalProfiles({
-          local: {
-            terminalApp: localAppValue || DEFAULT_TERMINAL_PROFILE.terminalApp,
-            terminalLaunchMode: localLaunchModeValue || DEFAULT_TERMINAL_PROFILE.terminalLaunchMode,
-            customTerminalApp:
-              typeof localCustomAppValue === 'string'
-                ? localCustomAppValue
-                : DEFAULT_TERMINAL_PROFILE.customTerminalApp,
-            terminalCustomHotkey:
-              typeof localCustomHotkeyValue === 'string'
-                ? localCustomHotkeyValue
-                : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey,
-            terminalTmuxHostApp:
-              localTmuxHostAppValue || DEFAULT_TERMINAL_PROFILE.terminalTmuxHostApp,
-            customTerminalTmuxHostApp:
-              typeof localCustomTmuxHostAppValue === 'string'
-                ? localCustomTmuxHostAppValue
-                : DEFAULT_TERMINAL_PROFILE.customTerminalTmuxHostApp,
-            terminalTmuxCommand:
-              typeof localTmuxCommandValue === 'string' && localTmuxCommandValue.trim().length > 0
-                ? localTmuxCommandValue
-                : DEFAULT_TERMINAL_PROFILE.terminalTmuxCommand
-          },
-          server: {
-            terminalApp: serverAppValue || localAppValue || DEFAULT_TERMINAL_PROFILE.terminalApp,
-            terminalLaunchMode:
-              serverLaunchModeValue ||
-              localLaunchModeValue ||
-              DEFAULT_TERMINAL_PROFILE.terminalLaunchMode,
-            customTerminalApp:
-              typeof serverCustomAppValue === 'string'
-                ? serverCustomAppValue
-                : typeof localCustomAppValue === 'string'
-                  ? localCustomAppValue
-                  : DEFAULT_TERMINAL_PROFILE.customTerminalApp,
-            terminalCustomHotkey:
-              typeof serverCustomHotkeyValue === 'string'
-                ? serverCustomHotkeyValue
-                : typeof localCustomHotkeyValue === 'string'
-                  ? localCustomHotkeyValue
-                  : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey,
-            terminalTmuxHostApp:
-              serverTmuxHostAppValue ||
-              localTmuxHostAppValue ||
-              DEFAULT_TERMINAL_PROFILE.terminalTmuxHostApp,
-            customTerminalTmuxHostApp:
-              typeof serverCustomTmuxHostAppValue === 'string'
-                ? serverCustomTmuxHostAppValue
-                : typeof localCustomTmuxHostAppValue === 'string'
-                  ? localCustomTmuxHostAppValue
-                  : DEFAULT_TERMINAL_PROFILE.customTerminalTmuxHostApp,
-            terminalTmuxCommand:
-              typeof serverTmuxCommandValue === 'string' && serverTmuxCommandValue.trim().length > 0
-                ? serverTmuxCommandValue
-                : typeof localTmuxCommandValue === 'string' &&
-                    localTmuxCommandValue.trim().length > 0
-                  ? localTmuxCommandValue
-                  : DEFAULT_TERMINAL_PROFILE.terminalTmuxCommand
-          }
+        setTerminalProfile({
+          terminalApp: appValue || DEFAULT_TERMINAL_PROFILE.terminalApp,
+          terminalLaunchMode: launchModeValue || DEFAULT_TERMINAL_PROFILE.terminalLaunchMode,
+          customTerminalApp:
+            typeof customAppValue === 'string'
+              ? customAppValue
+              : DEFAULT_TERMINAL_PROFILE.customTerminalApp,
+          terminalCustomHotkey:
+            typeof customHotkeyValue === 'string'
+              ? customHotkeyValue
+              : DEFAULT_TERMINAL_PROFILE.terminalCustomHotkey,
+          terminalTmuxHostApp: tmuxHostAppValue || DEFAULT_TERMINAL_PROFILE.terminalTmuxHostApp,
+          customTerminalTmuxHostApp:
+            typeof customTmuxHostAppValue === 'string'
+              ? customTmuxHostAppValue
+              : DEFAULT_TERMINAL_PROFILE.customTerminalTmuxHostApp,
+          terminalTmuxCommand:
+            typeof tmuxCommandValue === 'string' && tmuxCommandValue.trim().length > 0
+              ? tmuxCommandValue
+              : DEFAULT_TERMINAL_PROFILE.terminalTmuxCommand
         });
       }
     );
   }, [api, open]);
 
-  async function updateTerminalProfile(
-    profileId: TerminalSettingsProfileId,
-    field: keyof TerminalProfileState,
-    value: string
-  ) {
-    setTerminalProfiles(current => ({
+  async function updateTerminalProfile(field: keyof TerminalProfileState, value: string) {
+    setTerminalProfile(current => ({
       ...current,
-      [profileId]: {
-        ...current[profileId],
-        [field]: value
-      }
+      [field]: value
     }));
-    const profileKeys = TERMINAL_PROFILE_KEYS[profileId];
+
     const settingKeyByField: Record<keyof TerminalProfileState, string> = {
-      terminalApp: profileKeys.app,
-      terminalLaunchMode: profileKeys.launchMode,
-      terminalCustomHotkey: profileKeys.customHotkey,
-      customTerminalApp: profileKeys.customApp,
-      terminalTmuxHostApp: profileKeys.tmuxHostApp,
-      customTerminalTmuxHostApp: profileKeys.customTmuxHostApp,
-      terminalTmuxCommand: profileKeys.tmuxCommand
+      terminalApp: PROFILE_KEYS.app,
+      terminalLaunchMode: PROFILE_KEYS.launchMode,
+      terminalCustomHotkey: PROFILE_KEYS.customHotkey,
+      customTerminalApp: PROFILE_KEYS.customApp,
+      terminalTmuxHostApp: PROFILE_KEYS.tmuxHostApp,
+      customTerminalTmuxHostApp: PROFILE_KEYS.customTmuxHostApp,
+      terminalTmuxCommand: PROFILE_KEYS.tmuxCommand
     };
     const settingKey = settingKeyByField[field];
     await api?.settings.set(settingKey, value);
   }
 
-  function handleTerminalCustomHotkeyKeyDown(
-    profileId: TerminalSettingsProfileId,
-    event: KeyboardEvent<HTMLInputElement>
-  ) {
+  function handleTerminalCustomHotkeyKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     event.preventDefault();
     event.stopPropagation();
 
     if (event.key === 'Tab') return;
 
     if (event.key === 'Backspace' || event.key === 'Delete') {
-      void updateTerminalProfile(profileId, 'terminalCustomHotkey', '');
+      void updateTerminalProfile('terminalCustomHotkey', '');
       return;
     }
 
@@ -320,7 +230,7 @@ export function TerminalPage({ open }: { open: boolean }) {
 
     if (parts.length === 0) return;
 
-    void updateTerminalProfile(profileId, 'terminalCustomHotkey', parts.join(' + '));
+    void updateTerminalProfile('terminalCustomHotkey', parts.join(' + '));
   }
 
   function isTmuxLikeProfile(profile: TerminalProfileState) {
@@ -329,6 +239,19 @@ export function TerminalPage({ open }: { open: boolean }) {
     const normalized = profile.customTerminalApp.trim().toLowerCase();
     return normalized.includes('tmux') || normalized.includes('cmux');
   }
+
+  const profile = terminalProfile;
+  const isTmuxLike = isTmuxLikeProfile(profile);
+  const isTmux = profile.terminalApp === 'tmux';
+  const supportsLaunchModeSelection =
+    !isTmuxLike &&
+    profile.terminalApp !== 'ghostty' &&
+    profile.terminalApp !== 'alacritty' &&
+    profile.terminalApp !== 'kitty';
+  const usesCustomLaunchMode = profile.terminalLaunchMode === 'custom';
+  const selectedTerminalLabel =
+    externalTerminalAppOptions.find(opt => opt.value === profile.terminalApp)?.label ??
+    'your terminal';
 
   return (
     <div className="grid gap-6">
@@ -349,264 +272,171 @@ export function TerminalPage({ open }: { open: boolean }) {
           Terminal agent controls are only available in the Overlord desktop app.
         </div>
       )}
-      {(['local'] as const).map(profileId => {
-        const profile = terminalProfiles[profileId];
-        const isTmuxLike = isTmuxLikeProfile(profile);
-        const isTmux = profile.terminalApp === 'tmux';
-        const supportsLaunchModeSelection =
-          !isTmuxLike &&
-          profile.terminalApp !== 'ghostty' &&
-          profile.terminalApp !== 'alacritty' &&
-          profile.terminalApp !== 'kitty';
-        const usesCustomLaunchMode = profile.terminalLaunchMode === 'custom';
-        const selectedTerminalLabel =
-          externalTerminalAppOptions.find(opt => opt.value === profile.terminalApp)?.label ??
-          'your terminal';
-        const prefix = 'local';
-
-        return (
-          <div key={profileId} className="grid gap-4 rounded-lg border p-4">
-            <div className="grid gap-1">
-              <h3 className="text-sm font-medium">Local terminal settings</h3>
+      <div className="grid gap-4 rounded-lg border p-4">
+        <div className="grid gap-1">
+          <h3 className="text-sm font-medium">Terminal settings</h3>
+          <p className="text-xs text-muted-foreground">
+            Overlord opens this terminal application when launching an agent locally.
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="local-terminal-app">External terminal application</Label>
+          <Select
+            value={profile.terminalApp}
+            onValueChange={value => void updateTerminalProfile('terminalApp', value)}
+            disabled={!isElectron}
+          >
+            <SelectTrigger id="local-terminal-app">
+              <SelectValue placeholder="Select terminal" />
+            </SelectTrigger>
+            <SelectContent>
+              {externalTerminalAppOptions.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {profile.terminalApp === 'custom' && (
+            <div className="grid gap-2">
+              <Label htmlFor="local-custom-terminal-app">Custom terminal name or path</Label>
+              <Input
+                id="local-custom-terminal-app"
+                placeholder="Example: cmux or /Applications/cmux.app"
+                value={profile.customTerminalApp}
+                onChange={event =>
+                  void updateTerminalProfile('customTerminalApp', event.target.value)
+                }
+                disabled={!isElectron}
+              />
               <p className="text-xs text-muted-foreground">
-                Overlord opens this terminal on your machine for every agent launch — including SSH
-                launches, where this terminal is the one that runs the ssh command.
+                Overlord will open this app and type the launch command into the active terminal
+                session.
               </p>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor={`${prefix}-terminal-app`}>External terminal application</Label>
+          )}
+          {isTmux && (
+            <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+              <div className="grid gap-2">
+                <Label htmlFor="local-tmux-host-app">Run tmux in</Label>
+                <Select
+                  value={profile.terminalTmuxHostApp}
+                  onValueChange={value => void updateTerminalProfile('terminalTmuxHostApp', value)}
+                  disabled={!isElectron}
+                >
+                  <SelectTrigger id="local-tmux-host-app">
+                    <SelectValue placeholder="Select terminal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tmuxHostTerminalOptions.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {profile.terminalTmuxHostApp === 'custom' && (
+                <div className="grid gap-2">
+                  <Label htmlFor="local-custom-tmux-host-app">
+                    Custom host terminal name or path
+                  </Label>
+                  <Input
+                    id="local-custom-tmux-host-app"
+                    placeholder="Example: WezTerm or /Applications/WezTerm.app"
+                    value={profile.customTerminalTmuxHostApp}
+                    onChange={event =>
+                      void updateTerminalProfile('customTerminalTmuxHostApp', event.target.value)
+                    }
+                    disabled={!isElectron}
+                  />
+                </div>
+              )}
+              <div className="grid gap-2">
+                <Label htmlFor="local-tmux-command">tmux launch command</Label>
+                <Textarea
+                  id="local-tmux-command"
+                  placeholder={DEFAULT_TMUX_COMMAND}
+                  value={profile.terminalTmuxCommand}
+                  onChange={event =>
+                    void updateTerminalProfile('terminalTmuxCommand', event.target.value)
+                  }
+                  disabled={!isElectron}
+                  rows={2}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use {'{script}'} where Overlord should insert the generated launch script.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="grid gap-2">
+          {supportsLaunchModeSelection && (
+            <>
+              <Label htmlFor="local-terminal-launch-mode">When opening a terminal</Label>
               <Select
-                value={profile.terminalApp}
-                onValueChange={value => void updateTerminalProfile(profileId, 'terminalApp', value)}
+                value={profile.terminalLaunchMode}
+                onValueChange={value => void updateTerminalProfile('terminalLaunchMode', value)}
                 disabled={!isElectron}
               >
-                <SelectTrigger id={`${prefix}-terminal-app`}>
-                  <SelectValue placeholder="Select terminal" />
+                <SelectTrigger id="local-terminal-launch-mode">
+                  <SelectValue placeholder="Select behavior" />
                 </SelectTrigger>
                 <SelectContent>
-                  {externalTerminalAppOptions.map(opt => (
+                  {externalTerminalLaunchModeOptions.map(opt => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {profile.terminalApp === 'custom' && (
-                <div className="grid gap-2">
-                  <Label htmlFor={`${prefix}-custom-terminal-app`}>
-                    Custom terminal name or path
-                  </Label>
-                  <Input
-                    id={`${prefix}-custom-terminal-app`}
-                    placeholder="Example: cmux or /Applications/cmux.app"
-                    value={profile.customTerminalApp}
-                    onChange={event =>
-                      void updateTerminalProfile(profileId, 'customTerminalApp', event.target.value)
-                    }
-                    disabled={!isElectron}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Overlord will open this app and type the launch command into the active terminal
-                    session.
-                  </p>
-                </div>
-              )}
-              {isTmux && (
-                <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
-                  <div className="grid gap-2">
-                    <Label htmlFor={`${prefix}-tmux-host-app`}>Run tmux in</Label>
-                    <Select
-                      value={profile.terminalTmuxHostApp}
-                      onValueChange={value =>
-                        void updateTerminalProfile(profileId, 'terminalTmuxHostApp', value)
-                      }
-                      disabled={!isElectron}
-                    >
-                      <SelectTrigger id={`${prefix}-tmux-host-app`}>
-                        <SelectValue placeholder="Select terminal" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tmuxHostTerminalOptions.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {profile.terminalTmuxHostApp === 'custom' && (
-                    <div className="grid gap-2">
-                      <Label htmlFor={`${prefix}-custom-tmux-host-app`}>
-                        Custom host terminal name or path
-                      </Label>
-                      <Input
-                        id={`${prefix}-custom-tmux-host-app`}
-                        placeholder="Example: WezTerm or /Applications/WezTerm.app"
-                        value={profile.customTerminalTmuxHostApp}
-                        onChange={event =>
-                          void updateTerminalProfile(
-                            profileId,
-                            'customTerminalTmuxHostApp',
-                            event.target.value
-                          )
-                        }
-                        disabled={!isElectron}
-                      />
-                    </div>
-                  )}
-                  <div className="grid gap-2">
-                    <Label htmlFor={`${prefix}-tmux-command`}>tmux launch command</Label>
-                    <Textarea
-                      id={`${prefix}-tmux-command`}
-                      placeholder={DEFAULT_TMUX_COMMAND}
-                      value={profile.terminalTmuxCommand}
-                      onChange={event =>
-                        void updateTerminalProfile(
-                          profileId,
-                          'terminalTmuxCommand',
-                          event.target.value
-                        )
-                      }
-                      disabled={!isElectron}
-                      rows={2}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Use {'{script}'} where Overlord should insert the generated launch script.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="grid gap-2">
-              {supportsLaunchModeSelection && (
-                <>
-                  <Label htmlFor={`${prefix}-terminal-launch-mode`}>When opening a terminal</Label>
-                  <Select
-                    value={profile.terminalLaunchMode}
-                    onValueChange={value =>
-                      void updateTerminalProfile(profileId, 'terminalLaunchMode', value)
-                    }
-                    disabled={!isElectron}
+              {usesCustomLaunchMode && (
+                <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="size-4 shrink-0"
                   >
-                    <SelectTrigger id={`${prefix}-terminal-launch-mode`}>
-                      <SelectValue placeholder="Select behavior" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {externalTerminalLaunchModeOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {usesCustomLaunchMode && (
-                    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="size-4 shrink-0"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      This mode uses a custom keystroke to trigger your terminal layout, which may
-                      sometimes cause Overlord to launch the agent incorrectly.
-                    </div>
-                  )}
-                </>
+                    <path
+                      fillRule="evenodd"
+                      d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  This mode uses a custom keystroke to trigger your terminal layout, which may
+                  sometimes cause Overlord to launch the agent incorrectly.
+                </div>
               )}
-              {!supportsLaunchModeSelection && (
-                <p className="text-xs text-muted-foreground">
-                  {isTmux
-                    ? 'tmux-based terminals run your launch command in a fresh host terminal so multiple agent runs can coexist.'
-                    : isTmuxLike
-                      ? 'tmux-like terminals open a fresh instance so multiple agent runs can coexist.'
-                      : 'This terminal opens directly into a new session for each launch.'}
-                </p>
-              )}
-              <div className="grid gap-2">
-                <Label htmlFor={`${prefix}-terminal-custom-hotkey`}>Custom hotkey</Label>
-                <Input
-                  id={`${prefix}-terminal-custom-hotkey`}
-                  placeholder="Press the key combination to use (e.g. Cmd + D)"
-                  value={profile.terminalCustomHotkey}
-                  onKeyDown={event => handleTerminalCustomHotkeyKeyDown(profileId, event)}
-                  readOnly
-                  disabled={!isElectron}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your
-                  preferred split or focus behavior, then type the launch command.
-                </p>
-              </div>
-            </div>
+            </>
+          )}
+          {!supportsLaunchModeSelection && (
+            <p className="text-xs text-muted-foreground">
+              {isTmux
+                ? 'tmux-based terminals run your launch command in a fresh host terminal so multiple agent runs can coexist.'
+                : isTmuxLike
+                  ? 'tmux-like terminals open a fresh instance so multiple agent runs can coexist.'
+                  : 'This terminal opens directly into a new session for each launch.'}
+            </p>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="local-terminal-custom-hotkey">Custom hotkey</Label>
+            <Input
+              id="local-terminal-custom-hotkey"
+              placeholder="Press the key combination to use (e.g. Cmd + D)"
+              value={profile.terminalCustomHotkey}
+              onKeyDown={event => handleTerminalCustomHotkeyKeyDown(event)}
+              readOnly
+              disabled={!isElectron}
+            />
+            <p className="text-xs text-muted-foreground">
+              Overlord will activate {selectedTerminalLabel}, send this hotkey to trigger your
+              preferred split or focus behavior, then type the launch command.
+            </p>
           </div>
-        );
-      })}
-      {(() => {
-        const serverProfile = terminalProfiles.server;
-        const serverUsesTmux = isTmuxLikeProfile(serverProfile);
-        return (
-          <div className="grid gap-4 rounded-lg border p-4">
-            <div className="grid gap-1">
-              <h3 className="text-sm font-medium">Server terminal settings</h3>
-              <p className="text-xs text-muted-foreground">
-                Controls how the agent runs on the remote host after Overlord connects via SSH from
-                your local terminal. The local terminal app above is still the one that opens.
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="server-remote-multiplexer">Remote multiplexer</Label>
-              <Select
-                value={serverUsesTmux ? 'tmux' : 'none'}
-                onValueChange={value =>
-                  void updateTerminalProfile(
-                    'server',
-                    'terminalApp',
-                    value === 'tmux' ? 'tmux' : 'default'
-                  )
-                }
-                disabled={!isElectron}
-              >
-                <SelectTrigger id="server-remote-multiplexer">
-                  <SelectValue placeholder="Select behavior" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Run the agent directly</SelectItem>
-                  <SelectItem value="tmux">Run the agent inside tmux</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                tmux keeps the agent alive on the server if your SSH session drops and lets you
-                re-attach from another terminal.
-              </p>
-            </div>
-            {serverUsesTmux && (
-              <div className="grid gap-2">
-                <Label htmlFor="server-tmux-command">Remote tmux launch command</Label>
-                <Textarea
-                  id="server-tmux-command"
-                  placeholder={DEFAULT_TMUX_COMMAND}
-                  value={serverProfile.terminalTmuxCommand}
-                  onChange={event =>
-                    void updateTerminalProfile('server', 'terminalTmuxCommand', event.target.value)
-                  }
-                  disabled={!isElectron}
-                  rows={2}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Runs on the remote host. Use {'{script}'} where Overlord should insert the path of
-                  the generated agent launch script on the server.
-                </p>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+        </div>
+      </div>
       <div className="grid gap-2">
         <Label htmlFor="editor-scheme-select">File links</Label>
         <Select value={editorScheme} onValueChange={setEditorScheme} disabled={editorSchemeLoading}>

@@ -19,6 +19,14 @@ type ProjectUserMatchRow = {
   projects: { id: string; organization_id: number } | null;
 };
 
+type ResourceDirectoryMatchRow = {
+  directory_path: string;
+  device_id: string | null;
+  project_id: string;
+  user_id: string;
+  projects: { id: string; organization_id: number } | null;
+};
+
 function normalizeDirPath(dir: string): string {
   let normalized = dir.trim();
   if (normalized.startsWith('~')) {
@@ -32,22 +40,72 @@ function normalizeDirPath(dir: string): string {
   return normalized.toLowerCase();
 }
 
+function scorePathMatch(normalizedDir: string, normalizedCwd: string): number | null {
+  if (normalizedDir === normalizedCwd) return normalizedDir.length + 1;
+  if (normalizedCwd.startsWith(normalizedDir + '/')) return normalizedDir.length;
+  return null;
+}
+
 /**
  * Resolve the project_user row for the caller, given the authenticated
- * `userId` and the working directory reported by the agent. Returns the
- * project_user id plus derived project + user identifiers.
+ * `userId` and the working directory reported by the agent.
  *
- * Matching: exact normalized match first, then parent-directory match. If the
- * user has project_user rows for multiple projects that could match, we prefer
- * the longest (most specific) match.
+ * Looks first at project_resource_directories (preferring rows with a matching
+ * device_id, then any user-scoped row), then falls back to the legacy
+ * project_user.local_working_directory column. Once a project is matched, the
+ * project_user row for (userId, projectId) is returned.
  */
 export async function resolveProjectUserForAgent(
   supabase: SupabaseClient<Database>,
-  params: { userId: string; workingDirectory: string | null | undefined }
+  params: { userId: string; workingDirectory: string | null | undefined; deviceId?: string | null }
 ): Promise<ResolvedProjectUser | null> {
-  const { userId, workingDirectory } = params;
+  const { userId, workingDirectory, deviceId } = params;
   if (!workingDirectory?.trim()) return null;
 
+  const normalizedCwd = normalizeDirPath(workingDirectory);
+
+  // 1. project_resource_directories — prefer device-scoped rows when matching.
+  const { data: resourceRows } = await supabase
+    .from('project_resource_directories')
+    .select('directory_path, device_id, project_id, user_id, projects!inner(id, organization_id)')
+    .eq('user_id', userId);
+
+  const resources = (resourceRows ?? []) as unknown as ResourceDirectoryMatchRow[];
+  if (resources.length > 0) {
+    let best: { row: ResourceDirectoryMatchRow; score: number; deviceBoost: number } | null = null;
+    for (const row of resources) {
+      const score = scorePathMatch(normalizeDirPath(row.directory_path), normalizedCwd);
+      if (score === null) continue;
+      const deviceBoost = deviceId && row.device_id === deviceId ? 1 : 0;
+      if (
+        !best ||
+        deviceBoost > best.deviceBoost ||
+        (deviceBoost === best.deviceBoost && score > best.score)
+      ) {
+        best = { row, score, deviceBoost };
+      }
+    }
+    if (best?.row.projects) {
+      // Look up the project_user row for (userId, projectId).
+      const { data: pu } = await supabase
+        .from('project_user')
+        .select('id, local_working_directory')
+        .eq('user_id', userId)
+        .eq('project_id', best.row.project_id)
+        .maybeSingle();
+      if (pu) {
+        return {
+          projectUserId: pu.id,
+          userId,
+          projectId: best.row.project_id,
+          organizationId: best.row.projects.organization_id,
+          localWorkingDirectory: pu.local_working_directory ?? best.row.directory_path
+        };
+      }
+    }
+  }
+
+  // 2. Legacy project_user.local_working_directory fallback.
   const { data } = await supabase
     .from('project_user')
     .select('id, user_id, project_id, local_working_directory, projects!inner(id, organization_id)')
@@ -57,23 +115,17 @@ export async function resolveProjectUserForAgent(
   const rows = (data ?? []) as unknown as ProjectUserMatchRow[];
   if (rows.length === 0) return null;
 
-  const normalizedCwd = normalizeDirPath(workingDirectory);
-
   let best: { row: ProjectUserMatchRow; matchLength: number } | null = null;
   for (const row of rows) {
     if (!row.local_working_directory) continue;
-    const normalizedDir = normalizeDirPath(row.local_working_directory);
-    const isExact = normalizedDir === normalizedCwd;
-    const isParent = normalizedCwd.startsWith(normalizedDir + '/');
-    if (!isExact && !isParent) continue;
-    const score = normalizedDir.length + (isExact ? 1 : 0);
+    const score = scorePathMatch(normalizeDirPath(row.local_working_directory), normalizedCwd);
+    if (score === null) continue;
     if (!best || score > best.matchLength) {
       best = { row, matchLength: score };
     }
   }
 
   if (!best || !best.row.projects) return null;
-
   return {
     projectUserId: best.row.id,
     userId: best.row.user_id,

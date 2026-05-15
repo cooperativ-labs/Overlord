@@ -337,6 +337,53 @@ export type Database = {
         };
         Relationships: [];
       };
+      devices: {
+        Row: {
+          created_at: string;
+          device_fingerprint: string;
+          hostname: string | null;
+          id: string;
+          label: string;
+          last_seen_at: string | null;
+          organization_id: number;
+          platform: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          device_fingerprint: string;
+          hostname?: string | null;
+          id?: string;
+          label: string;
+          last_seen_at?: string | null;
+          organization_id: number;
+          platform?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          device_fingerprint?: string;
+          hostname?: string | null;
+          id?: string;
+          label?: string;
+          last_seen_at?: string | null;
+          organization_id?: number;
+          platform?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'devices_organization_id_fkey';
+            columns: ['organization_id'];
+            isOneToOne: false;
+            referencedRelation: 'organizations';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
       early_access_requests: {
         Row: {
           created_at: string;
@@ -1030,6 +1077,57 @@ export type Database = {
             columns: ['ticket_id'];
             isOneToOne: false;
             referencedRelation: 'tickets';
+            referencedColumns: ['id'];
+          }
+        ];
+      };
+      project_resource_directories: {
+        Row: {
+          created_at: string;
+          device_id: string | null;
+          directory_path: string;
+          id: string;
+          is_primary: boolean;
+          label: string | null;
+          project_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          device_id?: string | null;
+          directory_path: string;
+          id?: string;
+          is_primary?: boolean;
+          label?: string | null;
+          project_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          device_id?: string | null;
+          directory_path?: string;
+          id?: string;
+          is_primary?: boolean;
+          label?: string | null;
+          project_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'project_resource_directories_device_id_fkey';
+            columns: ['device_id'];
+            isOneToOne: false;
+            referencedRelation: 'devices';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'project_resource_directories_project_id_fkey';
+            columns: ['project_id'];
+            isOneToOne: false;
+            referencedRelation: 'projects';
             referencedColumns: ['id'];
           }
         ];
@@ -1907,6 +2005,10 @@ export type Database = {
         Args: { p_ticket_id: string };
         Returns: string;
       };
+      generate_device_label: {
+        Args: { hostname: string; org_id: number; platform: string };
+        Returns: string;
+      };
       generate_ticket_identifier: {
         Args: { p_organization_id: number };
         Returns: string;
@@ -1957,6 +2059,10 @@ export type Database = {
       };
       resolve_ticket_objective_id: {
         Args: { p_ticket_id: string };
+        Returns: string;
+      };
+      sanitize_device_label_candidate: {
+        Args: { raw: string };
         Returns: string;
       };
       schedule_days_of_week_is_valid: {

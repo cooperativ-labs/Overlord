@@ -268,7 +268,10 @@ export const recordWorkSchema = z.object({
   delegate: z.string().trim().max(120).optional(),
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
-  metadata: z.record(z.string(), z.unknown()).optional().default({})
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  deviceFingerprint: z.string().trim().max(128).optional(),
+  deviceHostname: z.string().trim().max(256).optional(),
+  devicePlatform: z.string().trim().max(64).optional()
 });
 
 /** spawn: create a new ticket and immediately connect to it */
@@ -287,12 +290,23 @@ export const spawnSchema = z.object({
   parentTicketId: z.string().optional(),
   agentIdentifier: z.string().trim().min(1).max(120),
   connectionMethod: connectionMethodSchema.default('rest'),
-  metadata: z.record(z.string(), z.unknown()).optional().default({})
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  deviceFingerprint: z.string().trim().max(128).optional(),
+  deviceHostname: z.string().trim().max(256).optional(),
+  devicePlatform: z.string().trim().max(64).optional()
 });
+
+/** Optional device-identifying fields accepted on protocol calls. */
+const deviceFingerprintSchema = z.string().trim().max(128).optional();
+const deviceHostnameSchema = z.string().trim().max(256).optional();
+const devicePlatformSchema = z.string().trim().max(64).optional();
 
 /** discover-project: resolve a project from working directory */
 export const discoverProjectSchema = z.object({
-  workingDirectory: z.string().trim().min(1).max(1024)
+  workingDirectory: z.string().trim().min(1).max(1024),
+  deviceFingerprint: deviceFingerprintSchema,
+  deviceHostname: deviceHostnameSchema,
+  devicePlatform: devicePlatformSchema
 });
 
 export const attachmentPrepareUploadSchema = z.object({
@@ -336,3 +350,61 @@ export const attachmentGetDownloadUrlSchema = z
     message: 'attachmentId or storagePath is required.',
     path: ['attachmentId']
   });
+
+// ---------------------------------------------------------------------------
+// Device management
+// ---------------------------------------------------------------------------
+
+/** Matches `devices_label_format` in the database. */
+export const DEVICE_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+
+/** get-device: identify (and upsert) the calling device */
+export const getDeviceSchema = z.object({
+  deviceFingerprint: z.string().trim().min(1).max(128),
+  deviceHostname: z.string().trim().max(256).optional(),
+  devicePlatform: z.string().trim().max(64).optional()
+});
+
+/** update-device: rename the device label */
+export const updateDeviceSchema = z.object({
+  deviceFingerprint: z.string().trim().min(1).max(128),
+  label: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(
+      DEVICE_LABEL_REGEX,
+      'Label must be lowercase kebab-case (letters, numbers, hyphens; 1–64 chars).'
+    )
+});
+
+// ---------------------------------------------------------------------------
+// Project resource directories
+// ---------------------------------------------------------------------------
+
+/** list-project-resources: list resource directories for a project */
+export const listProjectResourcesSchema = z.object({
+  projectId: z.string().uuid(),
+  deviceFingerprint: z.string().trim().max(128).optional()
+});
+
+/** add-project-resource: register a new directory for a project */
+export const addProjectResourceSchema = z.object({
+  projectId: z.string().uuid(),
+  directoryPath: z.string().trim().min(1).max(1024),
+  label: z.string().trim().max(160).optional(),
+  isPrimary: z.boolean().optional().default(false),
+  deviceFingerprint: z.string().trim().min(1).max(128),
+  deviceHostname: z.string().trim().max(256).optional(),
+  devicePlatform: z.string().trim().max(64).optional()
+});
+
+/** update-project-resource: update path, label, or primary status of a directory */
+export const updateProjectResourceSchema = z.object({
+  resourceId: z.string().uuid(),
+  deviceFingerprint: z.string().trim().min(1).max(128),
+  directoryPath: z.string().trim().min(1).max(1024).optional(),
+  label: z.string().trim().max(160).nullable().optional(),
+  isPrimary: z.boolean().optional()
+});

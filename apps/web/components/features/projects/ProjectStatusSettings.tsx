@@ -81,13 +81,16 @@ type ProjectStatusSettingsProps = {
   projectId: string;
   initialStatuses: StatusRow[];
   defaultExpanded?: boolean;
+  /** Render inline without the collapsible accordion wrapper. */
+  noCollapsible?: boolean;
 };
 
 export function ProjectStatusSettings({
   organizationId,
   projectId,
   initialStatuses,
-  defaultExpanded = false
+  defaultExpanded = false,
+  noCollapsible = false
 }: ProjectStatusSettingsProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const initialQueryStatuses = useMemo(
@@ -305,6 +308,113 @@ export function ProjectStatusSettings({
     pendingReorder ||
     pendingRenameName !== null;
 
+  const body = (
+    <div className="grid gap-3">
+      <div className="grid gap-2 rounded-md border p-3">
+        {statuses.length > 0 ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleStatusDragEnd}
+          >
+            <SortableContext
+              items={statuses.map(status => status.name)}
+              strategy={verticalListSortingStrategy}
+            >
+              {statuses.map(status => (
+                <SortableStatusRow
+                  key={status.name}
+                  status={status}
+                  isDefault={defaultStatusName === status.name}
+                  editingStatusName={editingStatusName}
+                  editingNameValue={editingNameValue}
+                  hasPendingMutation={hasPendingMutation}
+                  onSetDefault={handleSetDefault}
+                  onDeleteStatus={handleDeleteStatus}
+                  onStartRename={handleStartRename}
+                  onSaveRename={handleSaveRename}
+                  onCancelRename={handleCancelRename}
+                  setEditingNameValue={setEditingNameValue}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          <p className="text-xs text-muted-foreground">No statuses found for this organization.</p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={statusName}
+          onChange={event => setStatusName(event.target.value)}
+          placeholder="e.g. qa-ready"
+          className="h-8 min-w-[220px] flex-1"
+          disabled={addButtonState === 'loading'}
+          aria-label="New status name"
+        />
+        <select
+          className="h-8 min-w-[150px] cursor-pointer rounded-md border bg-transparent px-2 text-sm"
+          value={statusType}
+          onChange={event => setStatusType(event.target.value as TicketStatusType)}
+          disabled={addButtonState === 'loading'}
+          aria-label="Status type"
+        >
+          {statusTypeOptions.map(option => {
+            const isOptionLocked = isLockedStatusType(option.value, statusTypeUsage);
+
+            return (
+              <option key={option.value} value={option.value} disabled={isOptionLocked}>
+                {option.label}
+              </option>
+            );
+          })}
+        </select>
+        <LoadingButton
+          buttonState={addButtonState}
+          setButtonState={setAddButtonState}
+          text="Add status"
+          loadingText="Adding…"
+          successText="Added"
+          errorText="Retry"
+          reset
+          size="sm"
+          variant="outline"
+          onClick={handleAddStatus}
+          disabled={statusName.trim().length === 0 || selectedStatusTypeIsTaken}
+          className="h-8"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Names are normalized to lowercase with hyphens and must include at least three letters.
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Execute and review can only be assigned once per organization.
+        {statusTypeUsage.execute
+          ? ` Execute is already assigned to ${statusTypeUsage.execute}.`
+          : ' Execute is available.'}
+        {statusTypeUsage.review
+          ? ` Review is already assigned to ${statusTypeUsage.review}.`
+          : ' Review is available.'}
+      </p>
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+
+  if (noCollapsible) {
+    return (
+      <div className="grid gap-3 md:max-w-2xl">
+        <div>
+          <p className="eyebrow">Task Statuses</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {statuses.length} statuses define board columns across this organization.
+          </p>
+        </div>
+        {body}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-5 md:max-w-2xl">
       <Collapsible open={statusesOpen} onOpenChange={setStatusesOpen} className="rounded-md border">
@@ -325,101 +435,7 @@ export function ProjectStatusSettings({
           </CollapsibleTrigger>
         </div>
 
-        <CollapsibleContent className="border-t px-3 py-3">
-          <div className="grid gap-3">
-            <div className="grid gap-2 rounded-md border p-3">
-              {statuses.length > 0 ? (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleStatusDragEnd}
-                >
-                  <SortableContext
-                    items={statuses.map(status => status.name)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {statuses.map(status => (
-                      <SortableStatusRow
-                        key={status.name}
-                        status={status}
-                        isDefault={defaultStatusName === status.name}
-                        editingStatusName={editingStatusName}
-                        editingNameValue={editingNameValue}
-                        hasPendingMutation={hasPendingMutation}
-                        onSetDefault={handleSetDefault}
-                        onDeleteStatus={handleDeleteStatus}
-                        onStartRename={handleStartRename}
-                        onSaveRename={handleSaveRename}
-                        onCancelRename={handleCancelRename}
-                        setEditingNameValue={setEditingNameValue}
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  No statuses found for this organization.
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                value={statusName}
-                onChange={event => setStatusName(event.target.value)}
-                placeholder="e.g. qa-ready"
-                className="h-8 min-w-[220px] flex-1"
-                disabled={addButtonState === 'loading'}
-                aria-label="New status name"
-              />
-              <select
-                className="h-8 min-w-[150px] cursor-pointer rounded-md border bg-transparent px-2 text-sm"
-                value={statusType}
-                onChange={event => setStatusType(event.target.value as TicketStatusType)}
-                disabled={addButtonState === 'loading'}
-                aria-label="Status type"
-              >
-                {statusTypeOptions.map(option => {
-                  const isOptionLocked = isLockedStatusType(option.value, statusTypeUsage);
-
-                  return (
-                    <option key={option.value} value={option.value} disabled={isOptionLocked}>
-                      {option.label}
-                    </option>
-                  );
-                })}
-              </select>
-              <LoadingButton
-                buttonState={addButtonState}
-                setButtonState={setAddButtonState}
-                text="Add status"
-                loadingText="Adding…"
-                successText="Added"
-                errorText="Retry"
-                reset
-                size="sm"
-                variant="outline"
-                onClick={handleAddStatus}
-                disabled={statusName.trim().length === 0 || selectedStatusTypeIsTaken}
-                className="h-8"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Names are normalized to lowercase with hyphens and must include at least three
-              letters.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Execute and review can only be assigned once per organization.
-              {statusTypeUsage.execute
-                ? ` Execute is already assigned to ${statusTypeUsage.execute}.`
-                : ' Execute is available.'}
-              {statusTypeUsage.review
-                ? ` Review is already assigned to ${statusTypeUsage.review}.`
-                : ' Review is available.'}
-            </p>
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
-          </div>
-        </CollapsibleContent>
+        <CollapsibleContent className="border-t px-3 py-3">{body}</CollapsibleContent>
       </Collapsible>
     </div>
   );

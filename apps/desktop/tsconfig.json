@@ -22,5 +22,5 @@
     "sourceMap": true,
     "skipLibCheck": true
   },
-  "include": ["electron/**/*.ts", "../../lib/ssh/**/*.ts"]
+  "include": ["electron/**/*.ts"]
 }

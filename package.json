@@ -116,7 +116,6 @@
     "remark-gfm": "^4.0.1",
     "resend": "^6.9.2",
     "sonner": "^2.0.7",
-    "ssh2": "^1.16.0",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.13"
@@ -137,7 +136,6 @@
     "@types/pg": "^8.16.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@types/ssh2": "^1.15.1",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.2.1",

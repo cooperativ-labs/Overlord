@@ -185,29 +185,6 @@ run(
 );
 
 // ---------------------------------------------------------------------------
-// Step 5.5 — Prepare bundled remote helper resources
-// ---------------------------------------------------------------------------
-
-const remoteAgentResourcesDir = resolve(
-  ROOT,
-  'apps',
-  'desktop',
-  'electron',
-  'resources',
-  'remote-agent'
-);
-rmSync(remoteAgentResourcesDir, { recursive: true, force: true });
-mkdirSync(remoteAgentResourcesDir, { recursive: true });
-
-copyFileSync(
-  resolve(ROOT, 'apps', 'remote-agent', 'scripts', 'install.sh'),
-  resolve(remoteAgentResourcesDir, 'install.sh')
-);
-run(
-  'npx esbuild apps/remote-agent/src/server.ts --bundle --platform=node --target=node20 --format=esm --outfile=apps/desktop/electron/resources/remote-agent/server.mjs'
-);
-
-// ---------------------------------------------------------------------------
 // Step 6 — electron-builder
 // ---------------------------------------------------------------------------
 

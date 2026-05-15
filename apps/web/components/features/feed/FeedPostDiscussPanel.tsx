@@ -65,11 +65,11 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
     projectId: post.project_id,
     workingDirectory: project?.localWorkingDirectory ?? null,
     sshCommand: project?.sshCommand ?? null,
-    remoteWorkingDirectory: project?.remoteWorkingDirectory ?? null
+    remoteWorkingDirectory: project?.remoteWorkingDirectory ?? null,
+    isElectron
   });
   const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
   const effectiveSshCommand = workspace.effectiveSshCommand;
-  const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
   const hasSshConfig = Boolean(effectiveSshCommand?.trim());
   const localDirAccess = useLocalDirectoryAccess({
     workingDirectory: effectiveWorkingDirectory,
@@ -120,7 +120,7 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
     }
 
     if (!canRunAgent || !hasResolvedModel) {
-      toast.error('Configure a working directory or SSH workspace for this project first.');
+      toast.error('Configure a working directory for this project first.');
       return;
     }
 
@@ -134,8 +134,6 @@ export function FeedPostDiscussPanel({ post, project }: FeedPostDiscussPanelProp
         launchMode: 'ask',
         model: agentModelSelection.model ?? undefined,
         thinking: agentModelSelection.thinking ?? undefined,
-        sshCommand: effectiveSshCommand ?? undefined,
-        remoteWorkingDirectory: effectiveRemoteWorkingDirectory ?? undefined,
         projectId: post.project_id,
         feedPostId: post.id,
         initialQuestion: trimmed

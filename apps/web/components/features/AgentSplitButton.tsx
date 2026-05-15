@@ -136,16 +136,18 @@ export function AgentSplitButton({
     projectId,
     workingDirectory,
     sshCommand,
-    remoteWorkingDirectory
+    remoteWorkingDirectory,
+    isElectron
   });
   const ACTIVE_SESSION_STATES: SessionState[] = ['attached', 'blocked', 'idle'];
   const effectiveSelection: AgentModelSelection = assignedSelection ?? selection;
   const hasResolvedSelection = assignedSelection !== null || selectionLoaded;
   const effectiveWorkingDirectory = workspace.effectiveWorkingDirectory;
   const effectiveSshCommand = workspace.effectiveSshCommand;
-  const effectiveRemoteWorkingDirectory = workspace.effectiveRemoteWorkingDirectory;
+  const isRunning = agentSessionState === 'attached';
 
   const isActive =
+    !isRunning &&
     isAgentIdentifierMatch(effectiveSelection.agent, activeAgentIdentifier) &&
     agentSessionState !== null &&
     ACTIVE_SESSION_STATES.includes(agentSessionState ?? 'idle');
@@ -160,7 +162,9 @@ export function AgentSplitButton({
   const canRunAgent = hasSshConfig || localDirAccess;
   const isCopySelectedAgent = selectedAgent === 'copy-local' || selectedAgent === 'copy-cloud';
   const isDisabled =
-    (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
+    isRunning ||
+    (!canRunAgent && !isCopySelectedAgent) ||
+    (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
   const defaultActionLabel = isElectron ? 'Run' : 'For CLI';
   const primaryActionLabel = isCopySelectedAgent
@@ -225,8 +229,6 @@ export function AgentSplitButton({
           thinking: options?.useStoredModelPreference
             ? (effectiveSelection.thinking ?? undefined)
             : undefined,
-          sshCommand: effectiveSshCommand ?? undefined,
-          remoteWorkingDirectory: effectiveRemoteWorkingDirectory ?? undefined,
           projectId: projectId ?? undefined
         });
       } catch (error) {
@@ -290,9 +292,11 @@ export function AgentSplitButton({
         <span className={cn('inline-flex', isDisabled && 'cursor-not-allowed')}>{runButton}</span>
       </TooltipTrigger>
       <TooltipContent side="top" hidden={!isDisabled}>
-        {!canRunAgent && !isCopySelectedAgent
-          ? 'First set a project directory in the project settings.'
-          : 'Loading your agent model selection.'}
+        {isRunning
+          ? 'An agent is already running on this ticket.'
+          : !canRunAgent && !isCopySelectedAgent
+            ? 'First set a project directory in the project settings.'
+            : 'Loading your agent model selection.'}
       </TooltipContent>
     </Tooltip>
   );
@@ -300,7 +304,8 @@ export function AgentSplitButton({
   return (
     <div
       className={cn(
-        'inline-flex items-stretch rounded-md border border-input bg-background text-sm shadow-sm transition-all hover:bg-accent hover:text-accent-foreground',
+        'inline-flex items-stretch rounded-md border border-input bg-background text-sm shadow-sm transition-all',
+        !isDisabled && 'hover:bg-accent hover:text-accent-foreground',
         isActive &&
           'animate-pulse border-emerald-600/80 ring-1 ring-emerald-600/70 shadow-[0_0_10px_3px_hsl(var(--emerald-600)/0.4)]'
       )}
@@ -312,10 +317,12 @@ export function AgentSplitButton({
           <button
             type="button"
             className={cn(
-              'inline-flex cursor-pointer items-center rounded-r-md border-l transition-colors',
-              'hover:bg-accent hover:text-accent-foreground',
+              'inline-flex items-center rounded-r-md border-l transition-colors',
+              !isDisabled && 'cursor-pointer hover:bg-accent hover:text-accent-foreground',
+              isDisabled && 'cursor-not-allowed',
               styles.caretButton
             )}
+            disabled={isDisabled}
           >
             <ChevronDown className={cn(styles.chevron, 'text-muted-foreground')} />
           </button>

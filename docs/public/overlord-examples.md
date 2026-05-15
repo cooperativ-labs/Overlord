@@ -22,6 +22,10 @@ Each time the user sends the ticket back, the agent receives the original ticket
 
 This is the core value to explain to users: Overlord lets a ticket evolve through multiple agent passes without losing the plan, rationale, or review history.
 
+## Devices and checkout registration
+
+Agents should know that checkout paths resolve against **devices** keyed by `(organization, user, device fingerprint)`. The same laptop can participate in multiple orgs without colliding IDs. Hosted MCP exposes `get_device`, `update_device`, `list_project_resources`, `add_project_resource`, and `update_project_resource`; CLI parity lives under `ovld protocol help`. Before registering a checkout path from automation, register the device fingerprint for the authenticated organization.
+
 ## Example Ticket 1: Mobile Light And Dark Mode Audit
 
 ### Prompt

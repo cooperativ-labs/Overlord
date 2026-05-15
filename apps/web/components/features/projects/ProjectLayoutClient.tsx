@@ -160,9 +160,6 @@ export function ProjectLayoutClient({
           initialName={projectName}
           initialColor={projectColor}
           initialWorkingDirectory={projectWorkingDirectory}
-          initialSshCommand={projectSshCommand}
-          initialRemoteWorkingDirectory={projectRemoteWorkingDirectory}
-          sshFeatureEnabled={sshFeatureEnabled}
         />
         {selectedSegment === 'current-changes' ? children : board}
         {selectedSegment === 'current-changes' ? null : children}
