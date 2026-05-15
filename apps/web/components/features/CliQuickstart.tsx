@@ -43,24 +43,31 @@ function CommandCopyButton({ value }: { value: string }) {
   }
 
   return (
-    <Button className="h-7 gap-1.5 px-2 text-xs" size="sm" variant="outline" onClick={handleCopy}>
+    <Button
+      className="h-7 gap-1.5 px-2 text-xs"
+      size="sm"
+      variant="ghost"
+      onClick={handleCopy}
+      aria-label="Copy command"
+    >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? 'Copied' : 'Copy'}
     </Button>
   );
 }
 
 function CommandRow({ label, command }: { label: string; command: string }) {
   return (
-    <div className="rounded-md border bg-background/80 p-2.5">
+    <div className="rounded-md border bg-background/80 p-2.5 min-w-[325px]">
       <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 whitespace-pre-wrap break-words rounded bg-muted/60 px-2 py-1.5 text-xs">
+      <div className="flex items-center ">
+        <code className="relative min-w-0 flex-1 whitespace-pre-wrap wrap-break-word rounded bg-muted/60 px-2 pr-8 py-1.5 text-xs gap-2">
           {command}
+          <div className="absolute right-0 top-0">
+            <CommandCopyButton value={command} />
+          </div>
         </code>
-        <CommandCopyButton value={command} />
       </div>
     </div>
   );
@@ -127,7 +134,7 @@ function CliQuickstartBody({
   );
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
+    <div className=" bg-muted/20 ">
       <div className="mb-3 flex flex-wrap gap-2">
         {LAUNCH_AGENT_VALUES.map(agentValue => {
           const agent = getAgentTypeByValue(agentValue);

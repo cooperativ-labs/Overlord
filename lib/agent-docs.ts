@@ -49,7 +49,7 @@ ${docLinks}
 
 Overlord exposes a hosted MCP endpoint at \`/api/mcp\`. The full tool definitions are available publicly (no auth required) at:
 
-- [MCP tool definitions](/api/mcp/tools): JSON array of all MCP tool schemas (name, description, inputSchema).
+- [MCP tool catalog](/.well-known/overlord-mcp-tools.json): JSON object with a \`tools\` array (name, description, inputSchema for every hosted tool).
 
 ## Complete Agent Context
 

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [5.2605150751.0] - 2026-05-15:07:51
 
 ### Added
-- **Public MCP tool catalog** at **`GET /api/mcp/tools`** (no auth): Next.js proxies the Supabase edge **`/mcp/tools`** route so agents can fetch every hosted tool’s name, description, and input schema without a session.
+- **Public MCP tool catalog** at **`GET /.well-known/overlord-mcp-tools.json`** (no auth): static JSON manifest of every hosted tool schema, linked from OAuth protected-resource metadata via **`tool_catalog`**. Legacy **`/api/mcp/tools`** redirects to the well-known URL. **`POST /api/mcp`** **`tools/list`** is also public; all other MCP methods require OAuth.
 - **`/agent-docs`** and agent doc indexes now embed live **`ovld protocol help`** (from **`docs/public/ovld-protocol-help.txt`**, regenerated on web prebuild) and point agents at the public MCP tools endpoint.
 - **`scripts/generate-protocol-help.mjs`** plus web **`prebuild`**: capture **`ovld protocol help`** and build **`lib/agent-docs-manifest.json`** from **`docs/public/*.md`** on each build (skips gracefully when **`ovld`** is unavailable so CI still succeeds).
 - **Desktop pop-out feed → main window navigation**: ticket links in **`/feed-window`** call **`app:navigate-main`** IPC; the main shell listens via **`MainWindowNavigationBridge`** and routes in-app without losing the feed window.

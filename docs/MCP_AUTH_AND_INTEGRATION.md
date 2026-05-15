@@ -69,7 +69,20 @@ OAuth-capable MCP clients discover auth via protected-resource metadata:
 | `GET /api/mcp/.well-known/oauth-protected-resource` | Legacy discovery path (backward compat) |
 | `GET /.well-known/oauth-authorization-server` | Proxies Supabase's RFC 8414 metadata (backward compat for older spec clients) |
 
-The protected-resource metadata points to `<supabase_url>/auth/v1` as the authorization server and declares `openid email profile` scopes.
+The protected-resource metadata points to `<supabase_url>/auth/v1` as the authorization server and declares `openid email profile` scopes. It also includes:
+
+- `tool_catalog` — public JSON manifest of every MCP tool schema (no auth)
+- `resource_documentation` — human-readable agent docs at `/agent-docs`
+
+### Public tool catalog
+
+| Path | Purpose |
+|------|---------|
+| `GET /.well-known/overlord-mcp-tools.json` | Canonical static tool catalog (`{ "tools": [...] }`) |
+| `GET /api/mcp/tools` | Legacy path; 308 redirect to the well-known catalog |
+| `POST /api/mcp` with `tools/list` | MCP-native schema discovery (no auth) |
+
+All other MCP methods (`initialize`, `tools/call`, etc.) require a valid OAuth bearer token.
 
 `DELETE /api/mcp` proxies session termination (MCP Streamable HTTP).
 

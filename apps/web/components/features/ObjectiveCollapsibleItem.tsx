@@ -66,13 +66,11 @@ export function ObjectiveCollapsibleItem({
         {isExecuting && (
           <div className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_linear_infinite] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent " />
         )}
-        <div
-          className={' flex items-center gap-1 overflow-hidden rounded-md pr-1 hover:bg-background'}
-        >
+        <div className={' flex items-center overflow-hidden rounded-md pr-1 hover:bg-background'}>
           <CollapsibleTrigger asChild>
             <button
               className={cn(
-                'relative flex flex-1 items-center justify-between rounded-md px-3 py-2 text-left overflow-hidden min-w-0',
+                'relative flex flex-1 items-center justify-between rounded-md pl-3 pr-1 py-2 text-left overflow-hidden min-w-0',
                 !isExecuting && 'hover:bg-background'
               )}
               type="button"

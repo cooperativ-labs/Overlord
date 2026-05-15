@@ -216,12 +216,6 @@ export default function TicketListCard({
             >
               {getDisplayTitle(ticket)}
             </span>
-            {ticket.delegate ? (
-              <span className="mt-0.5 flex items-center gap-0.5 text-[10px] text-orange-600">
-                <Bot className="h-2.5 w-2.5 shrink-0" />
-                <span className="max-w-[140px] truncate">Created by {ticket.delegate}</span>
-              </span>
-            ) : null}
             {ticket.tags && ticket.tags.length > 0 ? (
               <div className="mt-0.5 flex flex-wrap items-center gap-1">
                 {ticket.tags.map(tag => (
@@ -244,6 +238,16 @@ export default function TicketListCard({
 
           {/* Right metadata row */}
           <div className="flex shrink-0 items-center gap-2">
+            {/* Agent-created badge */}
+            {ticket.delegate ? (
+              <span
+                title={`${ticket.delegate} created this ticket`}
+                className="flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-medium bg-orange-400/10 text-orange-600 border border-orange-400/30"
+              >
+                <Bot className="h-2.5 w-2.5 shrink-0" />
+                <span>created</span>
+              </span>
+            ) : null}
             {/* Project name (cross-project list views) */}
             {showProjectName && ticket.project_name ? (
               <span className="hidden truncate max-w-[100px] text-[10px] text-muted-foreground sm:inline">

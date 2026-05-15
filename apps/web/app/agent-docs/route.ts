@@ -24,12 +24,14 @@ ${toc}
 
 ## Tool Definitions
 
-Overlord exposes a hosted MCP endpoint. The full tool definitions — name, description, and input schema for every tool — are available as a public JSON array (no auth required):
+Overlord exposes a hosted MCP endpoint. The full tool definitions — name, description, and input schema for every tool — are available as a public JSON catalog (no auth required):
 
-- **Endpoint:** \`/api/mcp/tools\`
-- **URL:** [https://www.ovld.ai/api/mcp/tools](https://www.ovld.ai/api/mcp/tools)
+- **Endpoint:** \`/.well-known/overlord-mcp-tools.json\`
+- **URL:** [https://www.ovld.ai/.well-known/overlord-mcp-tools.json](https://www.ovld.ai/.well-known/overlord-mcp-tools.json)
 
-Fetch this endpoint to discover every MCP tool an agent can invoke through Overlord.
+The same catalog URL is linked from \`tool_catalog\` in MCP OAuth protected-resource metadata. \`POST /api/mcp\` with \`tools/list\` also returns schemas without auth; \`tools/call\` and all ticket operations require OAuth.
+
+Legacy \`/api/mcp/tools\` redirects to the well-known catalog.
 
 ## CLI for Agents
 

@@ -149,8 +149,8 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
       (filePath: string) => {
         const textArea = textareaRef.current as
           | (TextareaHandle & {
-            selectionStart: number | null;
-          })
+              selectionStart: number | null;
+            })
           | null;
         if (!textArea || mentionStart === null || !filePath) return;
 
@@ -260,14 +260,14 @@ export const MentionableTextarea = React.forwardRef<HTMLTextAreaElement, Mention
         style={
           mentionMenuMode === 'portal'
             ? {
-              top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
-              bottom:
-                mentionMenuPlacement === 'top'
-                  ? window.innerHeight - menuPosition.top
-                  : undefined,
-              left: menuPosition.left,
-              maxHeight: mentionMenuMaxHeight
-            }
+                top: mentionMenuPlacement === 'top' ? undefined : menuPosition.top,
+                bottom:
+                  mentionMenuPlacement === 'top'
+                    ? window.innerHeight - menuPosition.top
+                    : undefined,
+                left: menuPosition.left,
+                maxHeight: mentionMenuMaxHeight
+              }
             : undefined
         }
       >

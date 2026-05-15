@@ -1,7 +1,11 @@
 export type AgentTypeValue = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode';
 export type LaunchAgentTypeValue = AgentTypeValue;
 export type CopyPromptAgentTypeValue = AgentTypeValue;
-export type AgentSelectorValue = LaunchAgentTypeValue | 'copy-local' | 'copy-cloud';
+export type AgentSelectorValue =
+  | LaunchAgentTypeValue
+  | 'copy-local'
+  | 'copy-cloud'
+  | 'copy-terminal';
 
 export type AgentType = {
   value: AgentTypeValue;
@@ -73,8 +77,13 @@ export const COPY_PROMPT_AGENT_VALUES: readonly CopyPromptAgentTypeValue[] = [
 export const AGENT_SELECTOR_VALUES: readonly AgentSelectorValue[] = [
   ...LAUNCH_AGENT_VALUES,
   'copy-local',
-  'copy-cloud'
+  'copy-cloud',
+  'copy-terminal'
 ];
+
+export function isLaunchAgentTypeValue(value: string): value is LaunchAgentTypeValue {
+  return LAUNCH_AGENT_VALUES.includes(value as LaunchAgentTypeValue);
+}
 
 export function getAgentTypeByValue(value: AgentTypeValue): AgentType {
   return agentTypesByValue[value];

@@ -312,7 +312,7 @@ export async function TicketPanelContent({
       initialSession={agentSession ?? null}
       initialSharedState={state ?? []}
     >
-      <div className="flex h-full flex-col bg-card">
+      <div className="flex h-full flex-col bg-card min-w-[400px]">
         <TicketPanelHeader
           ticketId={ticketId}
           ticketIdentifier={ticketIdentifier}

@@ -1,9 +1,14 @@
 'use client';
 
-import { FileText, ImageIcon, Loader2, Paperclip, Trash2, Upload, X } from 'lucide-react';
+import { FileText, ImageIcon, Loader2, Paperclip, Plus, Trash2, Upload, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
+import {
+  ToolbarOverflowCompactProvider,
+  useToolbarOverflowCompactState
+} from '@/components/features/ToolbarOverflowCompact';
 import { Button } from '@/components/ui/button';
+import { type FileDropZoneRootProps, useFileDropZone } from '@/components/ui/file-drop-zone';
 import {
   deleteObjectiveAttachmentAction,
   finalizeObjectiveAttachmentUploadAction,
@@ -58,13 +63,13 @@ type ObjectiveAttachmentUploadTriggerProps = {
   isDragOver: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onInputChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onDragOver: (event: React.DragEvent) => void;
-  onDragLeave: (event: React.DragEvent) => void;
-  onDrop: (event: React.DragEvent) => void;
+  dropZoneProps?: FileDropZoneRootProps;
   compact?: boolean;
   toolbar?: boolean;
   /** Shown immediately after the attach (paperclip) control in toolbar mode. */
   leadingToolbarExtras?: React.ReactNode;
+  /** When true, drag/drop handlers are omitted; a parent element must host the drop zone. */
+  omitDropZone?: boolean;
   children?: React.ReactNode;
 };
 
@@ -87,7 +92,6 @@ export function useObjectiveAttachmentState({
   const [attachments, setAttachments] = useState<ObjectiveAttachment[]>(initialAttachments);
   const [uploading, setUploading] = useState<UploadingFile[]>([]);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
-  const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = useCallback(
@@ -152,32 +156,10 @@ export function useObjectiveAttachmentState({
     [objectiveId, ticketId]
   );
 
-  const handleDragOver = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (objectiveId) setIsDragOver(true);
-    },
-    [objectiveId]
-  );
-
-  const handleDragLeave = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setIsDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setIsDragOver(false);
-      if (event.dataTransfer.files.length > 0) {
-        handleFiles(event.dataTransfer.files);
-      }
-    },
-    [handleFiles]
-  );
+  const { isDragOver, rootProps: dropZoneProps } = useFileDropZone({
+    onDrop: handleFiles,
+    disabled: !objectiveId
+  });
 
   const handleInputChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,9 +211,8 @@ export function useObjectiveAttachmentState({
     isDragOver,
     inputRef,
     handleInputChange,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
+    onDropFiles: handleFiles,
+    dropZoneProps,
     handleDownload,
     handleDelete,
     dismissUploadingItem
@@ -323,20 +304,28 @@ export function ObjectiveAttachmentUploadTrigger({
   isDragOver,
   inputRef,
   onInputChange,
-  onDragOver,
-  onDragLeave,
-  onDrop,
+  dropZoneProps,
   compact = false,
   toolbar = false,
   leadingToolbarExtras,
+  omitDropZone = false,
   children
 }: ObjectiveAttachmentUploadTriggerProps) {
+  const toolbarRowRef = useRef<HTMLDivElement>(null);
+  const toolbarCompact = useToolbarOverflowCompactState(toolbarRowRef);
+
   if (!objectiveId) {
     return null;
   }
 
   const triggerRow = (
-    <div className={cn('flex items-center gap-2', toolbar ? 'px-2 py-1.5' : '')}>
+    <div
+      ref={toolbar ? toolbarRowRef : undefined}
+      className={cn(
+        'flex items-center gap-2',
+        toolbar ? 'min-w-0 overflow-hidden px-2 py-1.5' : ''
+      )}
+    >
       <Button
         type="button"
         size="icon"
@@ -345,13 +334,13 @@ export function ObjectiveAttachmentUploadTrigger({
         onClick={() => inputRef.current?.click()}
         aria-label="Upload objective attachment"
       >
-        <Paperclip className="h-3.5 w-3.5" />
+        <Plus size={18} />
       </Button>
       {toolbar && leadingToolbarExtras ? (
         <div className="flex shrink-0 items-center">{leadingToolbarExtras}</div>
       ) : null}
       <div className="min-w-0 flex-1 text-xs text-muted-foreground">
-        {isDragOver ? 'Drop to upload' : null}
+        {isDragOver && !omitDropZone ? 'Drop to upload' : null}
       </div>
       {attachmentsCount > 0 ? (
         <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
@@ -359,28 +348,33 @@ export function ObjectiveAttachmentUploadTrigger({
         </span>
       ) : null}
       <input ref={inputRef} type="file" multiple className="hidden" onChange={onInputChange} />
-      {children}
+      {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
     </div>
   );
 
+  const toolbarRow = toolbar ? (
+    <ToolbarOverflowCompactProvider compact={toolbarCompact}>
+      {triggerRow}
+    </ToolbarOverflowCompactProvider>
+  ) : (
+    triggerRow
+  );
+
   if (toolbar) {
-    return (
-      <div onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
-        {triggerRow}
-      </div>
-    );
+    if (omitDropZone) {
+      return toolbarRow;
+    }
+    return <div {...dropZoneProps}>{toolbarRow}</div>;
   }
 
   return (
     <div
       className={cn(
         'mt-2 rounded-md border border-dashed transition-colors',
-        isDragOver ? 'border-primary bg-primary/5' : 'border-border/70',
+        isDragOver ? 'border-primary bg-primary/5 m-2 blur-sm' : 'border-border/70',
         compact ? 'px-2 py-2' : 'px-3 py-2'
       )}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
+      {...dropZoneProps}
     >
       <div className="flex items-center gap-2">
         <Button
@@ -393,7 +387,7 @@ export function ObjectiveAttachmentUploadTrigger({
         >
           <Upload className="h-3.5 w-3.5" />
         </Button>
-        <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1 text-xs text-muted-foreground">
           {isDragOver ? 'Drop to upload' : hasItems ? 'Attachments' : 'Attach files'}
         </div>
@@ -425,9 +419,7 @@ export function ObjectiveAttachmentUpload({
     isDragOver,
     inputRef,
     handleInputChange,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
+    dropZoneProps,
     handleDownload,
     handleDelete,
     dismissUploadingItem
@@ -459,9 +451,7 @@ export function ObjectiveAttachmentUpload({
         isDragOver={isDragOver}
         inputRef={inputRef}
         onInputChange={handleInputChange}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        dropZoneProps={dropZoneProps}
         compact={compact}
         toolbar={toolbar}
       >

@@ -46,6 +46,7 @@ import {
 import {
   AGENT_SELECTOR_VALUES,
   type AgentSelectorValue,
+  AgentTypeValue,
   getAgentTypeByValue
 } from '@/lib/helpers/agent-types';
 import { cn } from '@/lib/utils';
@@ -79,32 +80,32 @@ type SlashStatusEntry = {
 
 type AgentPluginInstallOption =
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'bundle';
-      bundleAgent: BundleAgent;
-      supportNote?: string;
-    }
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'bundle';
+    bundleAgent: BundleAgent;
+    supportNote?: string;
+  }
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'service';
-      serviceKey: 'overlord-plugin';
-      supportNote?: string;
-    }
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'service';
+    serviceKey: 'overlord-plugin';
+    supportNote?: string;
+  }
   | {
-      key: string;
-      agentKey: string;
-      label: string;
-      description: string;
-      kind: 'slash';
-      slashAgent: SlashAgent;
-      supportNote?: string;
-    };
+    key: string;
+    agentKey: string;
+    label: string;
+    description: string;
+    kind: 'slash';
+    slashAgent: SlashAgent;
+    supportNote?: string;
+  };
 
 type PluginActionMeta = {
   label: 'Install' | 'Update' | 'Repair' | 'Remove';
@@ -136,9 +137,7 @@ const AGENT_LABELS: Record<string, string> = {
   opencode: 'OpenCode'
 };
 
-function getAgentSelectorLabel(agentValue: AgentSelectorValue): string {
-  if (agentValue === 'copy-local') return 'Copy Local';
-  if (agentValue === 'copy-cloud') return 'Copy Cloud';
+function getAgentSelectorLabel(agentValue: AgentTypeValue): string {
   return getAgentTypeByValue(agentValue).label;
 }
 
@@ -283,7 +282,7 @@ function AgentNameWithLogo({
     return <span>{label}</span>;
   }
 
-  const agentType = getAgentTypeByValue(agent);
+  const agentType = getAgentTypeByValue(agent as AgentTypeValue);
 
   return (
     <span className="flex items-center gap-2">
@@ -351,7 +350,7 @@ function DefaultAgentSelector() {
         value={selection}
         onChange={setSelection}
         onAgentSelect={selectAgent}
-        inline
+
       />
     </div>
   );
@@ -869,7 +868,7 @@ export function CliPage({ open }: { open: boolean }) {
 
       {isElectron ? (
         <>
-          <Accordion type="multiple" className="grid gap-1">
+          <Accordion type="multiple" className="grid gap-1 last:border-b">
             <AccordionItem value="default-agent" className="rounded-md border px-3">
               <AccordionTrigger className="hover:no-underline">
                 <div className="grid gap-1">
@@ -877,7 +876,7 @@ export function CliPage({ open }: { open: boolean }) {
                   <p className="text-xs text-muted-foreground font-normal">
                     <AgentNameWithLogo
                       agent={selectedDefaultAgentTrigger}
-                      label={getAgentSelectorLabel(selectedDefaultAgentTrigger)}
+                      label={getAgentSelectorLabel(selectedDefaultAgentTrigger as AgentTypeValue)}
                     />
                   </p>
                 </div>
@@ -901,7 +900,7 @@ export function CliPage({ open }: { open: boolean }) {
                           <SelectItem key={agentValue} value={agentValue}>
                             <AgentNameWithLogo
                               agent={agentValue}
-                              label={getAgentSelectorLabel(agentValue)}
+                              label={getAgentSelectorLabel(agentValue as AgentTypeValue)}
                             />
                           </SelectItem>
                         ))}
@@ -993,11 +992,10 @@ export function CliPage({ open }: { open: boolean }) {
                     </button>
                   </div>
                   <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs">
-                    {`ovld restart ${selectedLocalAgent}${
-                      (agentFlags[selectedLocalAgent] ?? []).length > 0
-                        ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
-                        : ''
-                    }`}
+                    {`ovld restart ${selectedLocalAgent}${(agentFlags[selectedLocalAgent] ?? []).length > 0
+                      ? ` ${(agentFlags[selectedLocalAgent] ?? []).join(' ')}`
+                      : ''
+                      }`}
                   </pre>
                 </div>
               </div>
@@ -1017,7 +1015,7 @@ export function CliPage({ open }: { open: boolean }) {
             <code className="rounded bg-muted px-1">/spawn</code>.
           </p>
         </div>
-        <Accordion type="multiple" className="flex flex-col gap-2">
+        <Accordion type="multiple" className="flex flex-col gap-2 ">
           {AGENT_PLUGIN_GROUPS.map(group => {
             const options = AGENT_PLUGIN_OPTIONS.filter(option => option.agentKey === group.key);
 
@@ -1040,7 +1038,7 @@ export function CliPage({ open }: { open: boolean }) {
               <AccordionItem
                 key={group.key}
                 value={group.key}
-                className="rounded-md border bg-muted/30 px-3"
+                className="rounded-md border bg-muted/30 px-3 last:border-b"
               >
                 <AccordionTrigger className="hover:no-underline">
                   <div className="grid gap-1">
@@ -1188,25 +1186,25 @@ export function CliPage({ open }: { open: boolean }) {
                                       ? bundleStatus?.status === 'installed'
                                         ? handleUninstallBundle(bundleStatus.agent, option.key)
                                         : bundleStatus?.status === 'partial' ||
-                                            bundleStatus?.status === 'error'
+                                          bundleStatus?.status === 'error'
                                           ? handleRepairBundle(bundleStatus.agent, option.key)
                                           : handleInstallBundle(option.bundleAgent, option.key)
                                       : option.kind === 'service'
                                         ? serviceStatus?.status === 'installed'
                                           ? handleUninstallService(option.key)
                                           : serviceStatus?.status === 'partial' ||
-                                              serviceStatus?.status === 'error'
+                                            serviceStatus?.status === 'error'
                                             ? handleRepairService(option.key)
                                             : handleInstallService(option.key)
                                         : !slashStatus || slashStatus.status === 'not_installed'
                                           ? handleInstallSlashCommands(
-                                              option.slashAgent,
-                                              option.key
-                                            )
+                                            option.slashAgent,
+                                            option.key
+                                          )
                                           : handleUninstallSlashCommands(
-                                              option.slashAgent,
-                                              option.key
-                                            );
+                                            option.slashAgent,
+                                            option.key
+                                          );
                                   if (isRemove || option.kind === 'slash') {
                                     void baseAction();
                                     return;
@@ -1266,62 +1264,62 @@ export function CliPage({ open }: { open: boolean }) {
       <div className="rounded-md border bg-muted/30 p-3 font-mono text-xs">
         <p className="mb-2 font-sans font-medium text-foreground">Top-level</p>
         <ul className="grid gap-1 text-muted-foreground">
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">ovld attach [ticketId] [agent]</code>{' '}
             interactive ticket picker + agent launcher
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">ovld create &lt;objective&gt;</code>{' '}
             create a ticket after numbered project selection
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">ovld prompt &lt;objective&gt;</code>{' '}
             create a ticket, then pick an agent by number and launch it
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1">ovld auth</code> login, status, logout
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1">ovld tickets</code> create, list
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1">ovld ticket</code> context
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">
               ovld protocol &lt;subcommand&gt;
             </code>{' '}
             attach, connect, load-context, spawn, update, ask, read-context, write-context, deliver,
             attachment-upload-file
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">ovld launch &lt;agent&gt;</code>{' '}
             launch agent on a ticket
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">ovld restart &lt;agent&gt;</code>{' '}
             resume an agent session
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1">ovld context</code> print ticket context
             (requires TICKET_ID)
           </li>
         </ul>
         <p className="mt-3 mb-2 font-sans font-medium text-foreground">Examples</p>
         <ul className="grid gap-1 text-muted-foreground">
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">
               ovld create &quot;Implement login page&quot;
             </code>{' '}
             — prompts for a numbered project choice, then creates the ticket
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1 break-all">
               ovld prompt &quot;Investigate flaky tests&quot;
             </code>{' '}
             — prompts for numbered project and agent choices, then launches the agent
           </li>
-          <li className="break-words">
+          <li className="wrap-break-word">
             <code className="rounded bg-muted px-1">ovld attach</code> — interactive: search
             tickets, pick agent
           </li>

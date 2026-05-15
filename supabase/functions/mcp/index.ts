@@ -35,6 +35,12 @@ import { handleWriteContext } from './handlers/write-context.ts';
 import { getUiResourceByUri, listUiResources } from './ui/resources.ts';
 import { resolveToken } from './auth.ts';
 import { negotiateProtocolVersion } from './protocol.ts';
+import {
+  buildPublicToolsCatalogBody,
+  isPublicMcpRpcMethod,
+  isPublicToolsCatalogRequest,
+  PUBLIC_TOOLS_CATALOG_CACHE_CONTROL
+} from './public-catalog.ts';
 import { buildCorsHeaders, rpcError, rpcResult } from './rpc.ts';
 import { TOOLS } from './tools.ts';
 import { validateToolInput } from './validate.ts';
@@ -60,16 +66,39 @@ function organizationIdFromRpcBody(body: any): number | null {
   );
 }
 
+function getPlatformOrigin(): string | null {
+  const platformUrl =
+    Deno.env.get('OVERLORD_URL')?.trim() || Deno.env.get('NEXT_PUBLIC_SITE_URL')?.trim();
+  if (!platformUrl) return null;
+
+  try {
+    return new URL(platformUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Build the Protected Resource Metadata document (RFC 9728).
  * This tells MCP clients where to find the authorization server.
  */
 function buildProtectedResourceMetadata() {
+  const platformOrigin = getPlatformOrigin();
+  const resource = platformOrigin
+    ? new URL('/api/mcp', platformOrigin).toString()
+    : `${SUPABASE_URL}/functions/v1/mcp`;
+
   return {
-    resource: `${SUPABASE_URL}/functions/v1/mcp`,
+    resource,
     authorization_servers: [`${SUPABASE_URL}/auth/v1`],
     scopes_supported: ['openid', 'email', 'profile'],
-    bearer_methods_supported: ['header']
+    bearer_methods_supported: ['header'],
+    ...(platformOrigin
+      ? {
+          tool_catalog: new URL('/.well-known/overlord-mcp-tools.json', platformOrigin).toString(),
+          resource_documentation: new URL('/agent-docs', platformOrigin).toString()
+        }
+      : {})
   };
 }
 
@@ -96,14 +125,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Public tool definitions — no auth required
-    if (url.pathname.endsWith('/tools')) {
-      return new Response(JSON.stringify({ tools: TOOLS }), {
+    // Public tool definitions — no auth required (?resource=tools works when /tools suffix is stripped)
+    if (isPublicToolsCatalogRequest(url)) {
+      return new Response(buildPublicToolsCatalogBody(), {
         status: 200,
         headers: {
           ...cors,
           'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=300, s-maxage=3600'
+          'Cache-Control': PUBLIC_TOOLS_CATALOG_CACHE_CONTROL
         }
       });
     }
@@ -127,6 +156,12 @@ Deno.serve(async (req: Request) => {
     body = await req.json();
   } catch {
     return rpcError(null, -32700, 'Parse error: invalid JSON.');
+  }
+
+  const { id, method } = body;
+
+  if (isPublicMcpRpcMethod(method)) {
+    return rpcResult(id, { tools: TOOLS });
   }
 
   const tokenCtx = await resolveToken(req, supabase, organizationIdFromRpcBody(body));
@@ -161,7 +196,7 @@ Deno.serve(async (req: Request) => {
     mcpSessionId: req.headers.get('mcp-session-id')?.trim() || null
   };
 
-  const { id, method, params } = body;
+  const { params } = body;
 
   // ---------------------------------------------------------------------------
   // MCP Lifecycle
@@ -202,10 +237,6 @@ Deno.serve(async (req: Request) => {
   // ---------------------------------------------------------------------------
   // Tools
   // ---------------------------------------------------------------------------
-
-  if (method === 'tools/list') {
-    return rpcResult(id, { tools: TOOLS });
-  }
 
   if (method === 'resources/list') {
     return rpcResult(id, { resources: listUiResources() });

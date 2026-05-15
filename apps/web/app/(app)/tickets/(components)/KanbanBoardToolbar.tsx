@@ -1,6 +1,6 @@
 'use client';
 
-import { Columns3, Eye, EyeOff, Settings } from 'lucide-react';
+import { Columns3, Eye, EyeOff, LucideFolderClosed, Settings } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import ScheduledTicketVisibilityControl from './ScheduledTicketVisibilityControl';
+import { projectFilterTriggerLabel } from './ticket-toolbar-helpers';
 import type { TicketTagFilterOption } from './TicketListView.types';
 import TicketsViewControls from './TicketsViewControls';
 import { TicketTagFilterDropdown } from './TicketTagFilterDropdown';
@@ -30,20 +31,6 @@ type ToolbarColumn = {
 };
 
 const UNCATEGORIZED_COLUMN_ID = '__uncategorized';
-
-function projectFilterTriggerLabel({
-  filteredProjectIds,
-  projectOptions
-}: {
-  filteredProjectIds: string[];
-  projectOptions: ProjectOption[];
-}): string {
-  if (filteredProjectIds.length === 0) return 'All Projects';
-  if (filteredProjectIds.length === 1) {
-    return projectOptions.find(p => p.id === filteredProjectIds[0])?.name ?? 'Project';
-  }
-  return `${filteredProjectIds.length} projects`;
-}
 
 export default function KanbanBoardToolbar({
   initialView,
@@ -89,8 +76,11 @@ export default function KanbanBoardToolbar({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
-                <Eye className="h-4 w-4" />
-                {projectFilterTriggerLabel({ filteredProjectIds, projectOptions })}
+                <LucideFolderClosed className="h-4 w-4" />
+                {projectFilterTriggerLabel({
+                  filterProjectIds: filteredProjectIds,
+                  projectOptions
+                })}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-52">

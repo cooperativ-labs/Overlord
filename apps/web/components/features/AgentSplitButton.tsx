@@ -19,6 +19,7 @@ import { readDefaultAgentTriggerFromStorage } from '@/lib/helpers/agent-trigger'
 import {
   type AgentSelectorValue,
   isAgentIdentifierMatch,
+  isLaunchAgentTypeValue,
   type LaunchAgentTypeValue
 } from '@/lib/helpers/agent-types';
 import type { TicketAssignedAgent } from '@/lib/helpers/ticket-assigned-agent';
@@ -100,10 +101,14 @@ const sizeStyles: Record<
 
 const submitTicketObjectiveActionWithRetry = withElectronActionRetry(submitTicketObjectiveAction);
 
-const COPY_OPTIONS: { value: 'copy-local' | 'copy-cloud'; label: string }[] = [
-  { value: 'copy-local', label: 'Copy Local' },
-  { value: 'copy-cloud', label: 'Copy Cloud' }
-];
+const COPY_PROMPT_LABELS = {
+  'copy-local': 'For Local',
+  'copy-cloud': 'For Cloud'
+} as const;
+
+type CopyPromptOption = keyof typeof COPY_PROMPT_LABELS;
+
+const COPY_PROMPT_OPTIONS: CopyPromptOption[] = ['copy-local', 'copy-cloud'];
 
 export function AgentSplitButton({
   selectedAgent,
@@ -157,7 +162,11 @@ export function AgentSplitButton({
   const isDisabled =
     (!canRunAgent && !isCopySelectedAgent) || (!isCopySelectedAgent && !hasResolvedSelection);
   const styles = sizeStyles[size];
-  const primaryActionLabel = isElectron ? 'Run' : 'CLI copy';
+  const defaultActionLabel = isElectron ? 'Run' : 'For CLI';
+  const primaryActionLabel = isCopySelectedAgent
+    ? COPY_PROMPT_LABELS[selectedAgent as CopyPromptOption]
+    : defaultActionLabel;
+  const PrimaryActionIcon = isCopySelectedAgent || !isElectron ? Copy : Bot;
 
   const appliedStoredDefaultRef = useRef(false);
 
@@ -197,6 +206,8 @@ export function AgentSplitButton({
       return;
     }
 
+    if (!isLaunchAgentTypeValue(agentValue)) return;
+
     if (isElectron) {
       setIsLaunching(true);
       try {
@@ -230,7 +241,7 @@ export function AgentSplitButton({
         setIsLaunching(false);
       }
     } else {
-      const command = commands?.[agentValue as LaunchAgentTypeValue];
+      const command = commands?.[agentValue];
       if (command) {
         await submitTicketObjectiveAction(ticketId, submitObjectiveId ?? undefined);
         await navigator.clipboard.writeText(command);
@@ -258,10 +269,8 @@ export function AgentSplitButton({
     >
       {isLaunching ? (
         <Loader2 className={cn(styles.loader, 'animate-spin')} />
-      ) : isCopySelectedAgent ? (
-        <Copy className={styles.icon} />
       ) : (
-        <Bot className={styles.icon} />
+        <PrimaryActionIcon className={styles.icon} />
       )}
       <span
         className={cn(
@@ -270,13 +279,7 @@ export function AgentSplitButton({
           isActive && 'text-emerald-600 animate-pulse'
         )}
       >
-        {copied
-          ? `${isCopySelectedAgent ? (selectedAgent === 'copy-local' ? 'Copy Local' : 'Copy Cloud') : primaryActionLabel} ✓`
-          : isCopySelectedAgent
-            ? selectedAgent === 'copy-local'
-              ? 'Copy Local'
-              : 'Copy Cloud'
-            : primaryActionLabel}
+        {copied ? `${primaryActionLabel} ✓` : primaryActionLabel}
       </span>
     </button>
   );
@@ -318,7 +321,20 @@ export function AgentSplitButton({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[170px]">
-          {COPY_OPTIONS.map(({ value, label }) => (
+          <DropdownMenuItem
+            className="gap-2 text-xs"
+            onClick={() => {
+              onSelectAgent(effectiveSelection.agent);
+              void handleLaunch(effectiveSelection.agent, {
+                useStoredModelPreference: true
+              });
+            }}
+          >
+            {isElectron ? <Bot className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            <span>{defaultActionLabel}</span>
+            {!isCopySelectedAgent && <Check className="ml-auto h-3 w-3 text-muted-foreground" />}
+          </DropdownMenuItem>
+          {COPY_PROMPT_OPTIONS.map(value => (
             <DropdownMenuItem
               key={value}
               className="gap-2 text-xs"
@@ -328,7 +344,7 @@ export function AgentSplitButton({
               }}
             >
               <Copy className="h-3.5 w-3.5" />
-              <span>{label}</span>
+              <span>{COPY_PROMPT_LABELS[value]}</span>
               {value === selectedAgent && (
                 <Check className="ml-auto h-3 w-3 text-muted-foreground" />
               )}

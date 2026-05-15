@@ -1,4 +1,8 @@
-import { LAUNCH_AGENT_VALUES, type LaunchAgentTypeValue } from '@/lib/helpers/agent-types';
+import {
+  isLaunchAgentTypeValue,
+  LAUNCH_AGENT_VALUES,
+  type LaunchAgentTypeValue
+} from '@/lib/helpers/agent-types';
 import type { AgentConfig } from '@/lib/schemas/agent-config';
 
 export type AgentModelSelection = {
@@ -14,10 +18,6 @@ const DEFAULT_SELECTION: AgentModelSelection = {
   model: null,
   thinking: null
 };
-
-function isLaunchAgentTypeValue(value: string): value is LaunchAgentTypeValue {
-  return LAUNCH_AGENT_VALUES.includes(value as LaunchAgentTypeValue);
-}
 
 function resolveAgentConfigSelection(
   config?: AgentConfig

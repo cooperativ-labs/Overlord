@@ -1,4 +1,4 @@
-import { getPlatformUrl, getSupabaseUrl } from '@/lib/env';
+import { buildAppMcpProtectedResourceMetadata } from '@/lib/mcp/oauth-metadata';
 
 /**
  * Protected Resource Metadata (RFC 9728).
@@ -21,23 +21,12 @@ export async function OPTIONS() {
 }
 
 export async function GET() {
-  const supabaseUrl = getSupabaseUrl();
-  const platformUrl = getPlatformUrl();
-
-  return new Response(
-    JSON.stringify({
-      resource: `${platformUrl}/api/mcp`,
-      authorization_servers: [`${supabaseUrl}/auth/v1`],
-      scopes_supported: ['openid', 'email', 'profile'],
-      bearer_methods_supported: ['header']
-    }),
-    {
-      status: 200,
-      headers: {
-        ...CORS_HEADERS,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=3600'
-      }
+  return new Response(JSON.stringify(buildAppMcpProtectedResourceMetadata()), {
+    status: 200,
+    headers: {
+      ...CORS_HEADERS,
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=3600'
     }
-  );
+  });
 }

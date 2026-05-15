@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpCircle, ChevronDown, Loader2 } from 'lucide-react';
+import { ArrowUpCircle, ChevronDown, Loader2, SquareTerminal, Upload } from 'lucide-react';
 import { useMemo, useRef, useState, useTransition } from 'react';
 
 import { AgentModelChooserButton } from '@/components/features/AgentModelChooserButton';
@@ -14,6 +14,7 @@ import {
 import { ObjectiveMenuButton } from '@/components/features/ObjectiveMenuButton';
 import { AgentSplitButtonLive, useTicketLive } from '@/components/features/TicketLiveProvider';
 import { Button } from '@/components/ui/button';
+import { FileDropZone } from '@/components/ui/file-drop-zone';
 import type { ObjectiveAttachment } from '@/lib/actions/attachments';
 import { promoteFutureObjectiveAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -93,9 +94,8 @@ export function DraftObjective({
     isDragOver,
     inputRef,
     handleInputChange,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
+    onDropFiles,
+    dropZoneProps,
     handleDownload,
     handleDelete,
     dismissUploadingItem
@@ -113,9 +113,23 @@ export function DraftObjective({
   }
 
   return (
-    <div
+    <FileDropZone
+      onDrop={onDropFiles}
+      disabled={!objectiveId}
+      dragState={{ isDragOver, rootProps: dropZoneProps }}
+      overlay={
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-[inherit] bg-emerald-500/15 backdrop-blur-xs ring-2 ring-inset ring-emerald-500/35"
+          aria-hidden
+        >
+          <Upload className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+            Drop to upload
+          </span>
+        </div>
+      }
       className={cn(
-        'relative w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40',
+        'w-full overflow-hidden rounded-xl border border-border/60 transition-all focus-within:ring-1 focus-within:ring-ring/40 min-w-[350px]',
         isSubmitted && 'border-sky-400/45 bg-sky-500/3 focus-within:ring-sky-400/30'
       )}
     >
@@ -166,15 +180,13 @@ export function DraftObjective({
         />
         <ObjectiveAttachmentUploadTrigger
           toolbar
+          omitDropZone
           objectiveId={objectiveId}
           attachmentsCount={attachments.length}
           hasItems={hasItems}
           isDragOver={isDragOver}
           inputRef={inputRef}
           onInputChange={handleInputChange}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
           leadingToolbarExtras={
             isFuture ? null : (
               <Button
@@ -186,7 +198,7 @@ export function DraftObjective({
                 aria-controls="draft-objective-cli-quickstart"
                 onClick={() => setCliQuickstartOpen(open => !open)}
               >
-                CLI
+                <SquareTerminal size={16} />
                 <ChevronDown
                   className={cn(
                     'h-3.5 w-3.5 shrink-0 transition-transform duration-200',
@@ -206,7 +218,6 @@ export function DraftObjective({
           />
           {showAgentControls ? (
             <>
-              <div className="mx-1 h-4 w-px bg-border/50" />
               <AgentModelChooserButton
                 ticketId={ticketId}
                 objectiveId={objectiveId}
@@ -254,7 +265,7 @@ export function DraftObjective({
         {cliQuickstartOpen && !isFuture ? (
           <div
             id="draft-objective-cli-quickstart"
-            className="border-t border-border/40 bg-muted/10 px-2 py-2"
+            className="border-t border-border/40 bg-muted/10 p-4"
           >
             <CliQuickstart
               variant="embedded"
@@ -266,6 +277,6 @@ export function DraftObjective({
           </div>
         ) : null}
       </div>
-    </div>
+    </FileDropZone>
   );
 }

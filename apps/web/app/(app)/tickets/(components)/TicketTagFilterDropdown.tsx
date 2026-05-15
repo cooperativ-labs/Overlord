@@ -15,7 +15,7 @@ import {
 import type { TicketTagFilterOption } from './TicketListView.types';
 
 function getTagFilterLabel(selectedTagIds: string[], tagOptions: TicketTagFilterOption[]): string {
-  if (selectedTagIds.length === 0) return 'All tags';
+  if (selectedTagIds.length === 0) return 'All';
   if (selectedTagIds.length === 1) {
     return tagOptions.find(tag => tag.id === selectedTagIds[0])?.label ?? 'Tag';
   }

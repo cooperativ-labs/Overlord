@@ -1,6 +1,6 @@
 'use client';
 
-import { Filter } from 'lucide-react';
+import { Filter, LucideFolderClosed } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import ScheduledTicketVisibilityControl from './ScheduledTicketVisibilityControl';
+import { projectFilterTriggerLabel } from './ticket-toolbar-helpers';
 import { formatStatusLabel } from './ticket-view-helpers';
 import type {
   SortKey,
@@ -21,20 +22,6 @@ import type {
 } from './TicketListView.types';
 import TicketsViewControls from './TicketsViewControls';
 import { TicketTagFilterDropdown } from './TicketTagFilterDropdown';
-
-function listProjectFilterTriggerLabel({
-  filterProjectIds,
-  projectOptions
-}: {
-  filterProjectIds: string[];
-  projectOptions: TicketListProjectOption[];
-}): string {
-  if (filterProjectIds.length === 0) return 'All projects';
-  if (filterProjectIds.length === 1) {
-    return projectOptions.find(p => p.id === filterProjectIds[0])?.name ?? 'Project';
-  }
-  return `${filterProjectIds.length} projects`;
-}
 
 type TicketListToolbarProps = {
   initialView: string;
@@ -149,7 +136,8 @@ export function TicketListToolbar({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-1.5">
-                    {listProjectFilterTriggerLabel({ filterProjectIds, projectOptions })}
+                    <LucideFolderClosed className="h-3.5 w-3.5" />
+                    {projectFilterTriggerLabel({ filterProjectIds, projectOptions })}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-48">

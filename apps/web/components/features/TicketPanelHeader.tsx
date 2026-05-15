@@ -50,9 +50,11 @@ export function TicketPanelHeader({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <div className="flex items-center justify-between gap-2 px-2 py-1.5 text-sm">
-            <span>Copy ticket ID</span>
+            <span>
+              Ticket ID: <strong>{ticketIdentifier}</strong>
+            </span>
             <CopyTicketIdentifierButton
-              value={ticketId}
+              value={ticketIdentifier}
               ariaLabel="Copy full ticket identifier"
               className="inline-flex h-6 w-6 items-center justify-center rounded-sm hover:bg-accent"
             />

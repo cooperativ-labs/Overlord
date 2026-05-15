@@ -9,8 +9,10 @@ import {
   useAgentModelPreference,
   useAgentModels
 } from '@/components/features/AgentModelSelector';
+import { useToolbarOverflowCompact } from '@/components/features/ToolbarOverflowCompact';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AgentModel } from '@/lib/actions/agent-models';
 import { updateTicketAssignedAgentAction } from '@/lib/actions/tickets';
 import { withElectronActionRetry } from '@/lib/electron-auth/action-retry';
@@ -55,6 +57,7 @@ export function AgentModelChooserButton({
   onSelectionChange,
   persistSelection = true,
   onOpenChange,
+  compact: compactProp,
   className
 }: {
   ticketId?: string | null;
@@ -64,6 +67,8 @@ export function AgentModelChooserButton({
   onSelectionChange?: (selection: AgentModelSelection) => void;
   persistSelection?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Icon-only trigger; also set automatically when the toolbar row overflows. */
+  compact?: boolean;
   className?: string;
 }) {
   const { selection: preferenceSelection, setSelection: setPreferenceSelection } =
@@ -102,8 +107,12 @@ export function AgentModelChooserButton({
     // don't override the user's pick with a stale prop or a preference broadcast.
   }, [initialSelection, preferenceSelection]);
 
+  const toolbarCompact = useToolbarOverflowCompact();
+  const compact = compactProp ?? toolbarCompact;
   const agent = getAgentTypeByValue(selection.agent);
   const label = getSelectionLabel(models, selection.model);
+  const tooltipLabel = `${agent.label} · ${label}`;
+  const triggerLabel = compact ? tooltipLabel : undefined;
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -112,24 +121,35 @@ export function AgentModelChooserButton({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          className={cn('h-8 max-w-[230px] gap-2 px-3 text-xs', className)}
-          size="sm"
-          variant="outline"
-          disabled={disabled}
-        >
-          <Image
-            src={agent.icon}
-            alt={`${agent.label} icon`}
-            width={14}
-            height={14}
-            className={cn('h-3.5 w-3.5', agent.invertDark ? 'dark:invert' : '')}
-          />
-          <span>{label}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
+      <Tooltip open={open ? false : undefined}>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              className={cn(
+                'h-8 gap-2 text-xs',
+                compact ? 'shrink-0 px-2' : 'max-w-[230px] px-3',
+                className
+              )}
+              size="sm"
+              variant="outline"
+              disabled={disabled}
+              aria-label={triggerLabel}
+            >
+              <Image
+                src={agent.icon}
+                alt=""
+                width={14}
+                height={14}
+                aria-hidden
+                className={cn('h-3.5 w-3.5 shrink-0', agent.invertDark ? 'dark:invert' : '')}
+              />
+              {compact ? null : <span className="truncate">{label}</span>}
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top">{tooltipLabel}</TooltipContent>
+      </Tooltip>
       <PopoverContent
         align="start"
         collisionPadding={{ left: 8, right: 8 }}

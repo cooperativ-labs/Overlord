@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreHorizontal, Trash2 } from 'lucide-react';
+import { MoreHorizontal, MoreVertical, Trash2 } from 'lucide-react';
 import { useTransition } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -68,7 +68,7 @@ export function ObjectiveMenuButton({
           variant="ghost"
           onClick={event => event.stopPropagation()}
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreVertical className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

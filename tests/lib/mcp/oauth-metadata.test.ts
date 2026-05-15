@@ -23,7 +23,9 @@ describe('MCP OAuth metadata helpers', () => {
       resource: 'https://www.ovld.ai/api/mcp',
       authorization_servers: ['https://zitmmhvbilhjjdwgxlfm.supabase.co/auth/v1'],
       scopes_supported: ['openid', 'email', 'profile'],
-      bearer_methods_supported: ['header']
+      bearer_methods_supported: ['header'],
+      tool_catalog: 'https://www.ovld.ai/.well-known/overlord-mcp-tools.json',
+      resource_documentation: 'https://www.ovld.ai/agent-docs'
     });
   });
 

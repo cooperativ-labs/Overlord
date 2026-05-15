@@ -22,7 +22,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from './sheet';
 
 const STORAGE_KEY = 'side-panel-width';
 const DEFAULT_WIDTH = 480;
-const MIN_WIDTH = 320;
+const MIN_WIDTH = 400;
 const MAX_WIDTH = 800;
 
 // ---------------------------------------------------------------------------

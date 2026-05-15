@@ -1,8 +1,8 @@
-import { getSupabaseUrl } from '@/lib/env';
 import {
   buildAppMcpProtectedResourceMetadata,
   MCP_RESOURCE_METADATA_LEGACY_PATH
 } from '@/lib/mcp/oauth-metadata';
+import { getAppMcpToolCatalogUrl } from '@/lib/mcp/public-tools-catalog';
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -29,16 +29,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
   const { path } = await params;
 
   if (isPublicToolsPath(path)) {
-    const upstream = await fetch(`${getSupabaseUrl()}/functions/v1/mcp/tools`);
-    const body = await upstream.text();
-    return new Response(body, {
-      status: upstream.status,
-      headers: {
-        ...CORS_HEADERS,
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=300, s-maxage=3600'
-      }
-    });
+    const catalogUrl = getAppMcpToolCatalogUrl(new URL(request.url).origin);
+    return Response.redirect(catalogUrl, 308);
   }
 
   if (!isProtectedResourceMetadataPath(path)) {

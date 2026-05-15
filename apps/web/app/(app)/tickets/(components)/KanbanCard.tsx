@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Bot } from 'lucide-react';
+import { Bot, Tag } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { DeleteTicketButton } from '@/components/features/DeleteTicketButton';
@@ -174,9 +174,10 @@ function KanbanCardBody({
 }) {
   return (
     <CardContent className="flex h-full flex-col p-0 pt-3  ">
-      <div className="px-3">
+      <div className="px-3 space-y-3">
         <div className="min-w-0">
           <h4 className="text-sm leading-snug font-semibold">{getDisplayTitle(ticket)}</h4>
+
           <div className="mt-3.5 flex items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               <ProjectColorDot color={ticket.project_color} name={ticket.project_name} />
@@ -191,12 +192,36 @@ function KanbanCardBody({
             <div className="flex shrink-0 items-center gap-1.5">
               <ExecutionTargetBadge executionTarget={ticket.execution_target} className="text-xs" />
               {ticket.schedule_id ? <ScheduleBadge /> : null}
+              {ticket.objectives_executed_count && ticket.objectives_executed_count > 0 ? (
+                <span
+                  className="text-[10px] text-muted-foreground tabular-nums"
+                  title={`${ticket.objectives_executed_count} objective${ticket.objectives_executed_count === 1 ? '' : 's'} executed`}
+                >
+                  {ticket.objectives_executed_count}×
+                </span>
+              ) : null}
             </div>
           </div>
           {showOrganizationName && ticket.organization_name ? (
             <p className="mt-0.5 text-xs text-muted-foreground">{ticket.organization_name}</p>
           ) : null}
         </div>
+        {ticket.tags && ticket.tags.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {ticket.tags.map(tag => (
+              <span
+                key={tag.tagDefinitionId}
+                className="inline-flex items-center gap-0.5 rounded px-1 py-0 text-[10px] font-medium text-muted-foreground bg-muted"
+                style={
+                  tag.color ? { backgroundColor: `${tag.color}22`, color: tag.color } : undefined
+                }
+              >
+                <Tag className="h-2 w-2 shrink-0" />
+                {tag.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
       {ticket.delegate ? (
         <div className="mt-2 flex items-center bg-orange-400/10 gap-1 border-t border-orange-400/60 px-3  text-orange-600 py-1">
